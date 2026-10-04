@@ -21,14 +21,16 @@ COPY server/model-routes.example.json ./model-routes.json
 RUN python -c "import urllib.request; urllib.request.urlretrieve('https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem', '/srv/napkin/rds-ca.pem')" \
  && chmod 644 /srv/napkin/rds-ca.pem
 
-RUN useradd --uid 10001 --user-group --no-create-home napkin
+# The run ledger (napkin/metrics.py) writes under /srv/napkin/runs; the task's disk is scratch.
+RUN useradd --uid 10001 --user-group --no-create-home napkin \
+ && mkdir -p /srv/napkin/runs/metrics && chown -R napkin:napkin /srv/napkin/runs
 USER napkin
 
 ENV PATH=/srv/napkin/server/.venv/bin:$PATH \
     NAPKIN_MEASURES=/srv/napkin/layers-service/data/measures.json \
     PGSSLROOTCERT=/srv/napkin/rds-ca.pem \
     NAPKIN_HOST=0.0.0.0 \
-    NAPKIN_PORT=8080
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=4).status==200 else 1)"
+    NAPKIN_PORT=8798
+EXPOSE 8798
+HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8798/healthz',timeout=4).status==200 else 1)"
 CMD ["python", "-m", "napkin.app"]

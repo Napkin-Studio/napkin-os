@@ -16,10 +16,11 @@ terraform {
 data "aws_caller_identity" "me" {}
 
 locals {
-  apps   = toset(["web", "middleware"])
-  https  = var.certificate_arn != ""
-  ns     = "svc.${var.name}"
-  mw_url = "http://middleware.${local.ns}:8080"
+  apps    = toset(["web", "middleware"])
+  https   = var.certificate_arn != ""
+  ns      = "svc.${var.name}"
+  mw_port = 8798 # the middleware refuses 8080 (local development keeps it for napkin-web)
+  mw_url  = "http://middleware.${local.ns}:${local.mw_port}"
 }
 
 # ── images ────────────────────────────────────────────────────────────────────
@@ -213,8 +214,8 @@ resource "aws_security_group" "middleware" {
   description = "Middleware tasks: reached by napkin-web only"
   vpc_id      = var.vpc_id
   ingress {
-    from_port       = 8080
-    to_port         = 8080
+    from_port       = local.mw_port
+    to_port         = local.mw_port
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
@@ -410,10 +411,10 @@ resource "aws_ecs_task_definition" "middleware" {
     name         = "middleware"
     image        = "${aws_ecr_repository.app["middleware"].repository_url}:bootstrap"
     essential    = true
-    portMappings = [{ containerPort = 8080, protocol = "tcp" }]
+    portMappings = [{ containerPort = local.mw_port, protocol = "tcp" }]
     environment = [for k, v in merge({
       NAPKIN_HOST         = "0.0.0.0"
-      NAPKIN_PORT         = "8080"
+      NAPKIN_PORT         = tostring(local.mw_port)
       NAPKIN_MODEL_API    = "bedrock"
       NAPKIN_MODEL_REGION = var.region
     }, var.middleware_env) : { name = k, value = v }]
