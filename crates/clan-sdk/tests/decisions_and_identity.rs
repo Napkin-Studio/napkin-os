@@ -1,0 +1,490 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! Typed decisions survive every write path, merges refuse to fold
+//! disagreeing verdicts, and a document keeps its identity across revisions.
+
+use clan_sdk::{
+    create, fork, merge, pack, patch_data_with, patch_decision, patch_state, render, validate,
+    AgentOutput, ClanBuilder, ClanFile, CreateOptions, Decision, DecisionChain, DecisionEntry,
+    HumanPayload, Manifest, MergeOptions, MergeReport, PackOptions, PatchDataOptions,
+    MANIFEST_PATH, MERGE_REPORT_PATH,
+};
+use serde_json::json;
+
+const CHAIN: &str = "agent/decision-chain.yaml";
+const RESEARCH_CHAIN: &str = include_str!("fixtures/research-decision-chain.yaml");
+
+fn doc() -> ClanFile {
+    ClanFile::from_bytes(
+        create(CreateOptions {
+            title: "Identity".into(),
+            brief: "a brief".into(),
+            document_type: None,
+            no_render: false,
+            schema: None,
+        })
+        .unwrap(),
+    )
+    .unwrap()
+}
+
+fn open(bytes: Vec<u8>) -> ClanFile {
+    ClanFile::from_bytes(bytes).unwrap()
+}
+
+/// Rebuild `clan` with `path` replaced and the manifest edited in place — no
+/// new revision.
+fn rebuilt(
+    clan: &ClanFile,
+    path: &str,
+    bytes: &[u8],
+    edit: impl FnOnce(&mut Manifest),
+) -> ClanFile {
+    let mut manifest = clan.manifest().clone();
+    edit(&mut manifest);
+    let mut b = ClanBuilder::new(manifest);
+    for (p, v) in clan.read_all_entries().unwrap() {
+        if p != MANIFEST_PATH && p != path {
+            b.add_entry(p, v);
+        }
+    }
+    b.add_entry(path, bytes.to_vec());
+    open(b.build().unwrap())
+}
+
+fn chain_of(clan: &ClanFile) -> DecisionChain {
+    DecisionChain::from_yaml(&clan.read_entry(CHAIN).unwrap()).unwrap()
+}
+
+fn entries_as_values(yaml: &[u8]) -> Vec<serde_yaml::Value> {
+    let v: serde_yaml::Value = serde_yaml::from_slice(yaml).unwrap();
+    v["decisions"].as_sequence().unwrap().clone()
+}
+
+fn strict_ok(clan: &ClanFile) {
+    let report = validate(clan);
+    assert!(report.is_content_valid(), "{}", report.display());
+}
+
+// ── typed decisions ──────────────────────────────────────────────────────
+
+#[test]
+fn research_chain_keeps_every_field_through_patch_data() {
+    let base = doc();
+    let clan = rebuilt(&base, CHAIN, RESEARCH_CHAIN.as_bytes(), |_| {});
+    strict_ok(&clan);
+
+    let mut typed = Decision {
+        kind: Some("edit".into()),
+        actor: Some("human:u_aoife".into()),
+        targets: vec!["7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.name".into()],
+        ..Default::default()
+    };
+    typed
+        .extra
+        .insert("future_field".into(), serde_yaml::Value::from(true));
+    let next = open(
+        patch_data_with(
+            &clan,
+            &json!({"campaign": {"name": "Midweek"}}),
+            PatchDataOptions {
+                append_keys: vec![],
+                decision: Some(DecisionEntry {
+                    agent_name: "human".into(),
+                    action: "patch-data".into(),
+                    rationale: "Named it.".into(),
+                    pinned: false,
+                    fields_changed: Some(vec!["campaign".into()]),
+                    typed: Some(typed),
+                }),
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    strict_ok(&next);
+
+    let before = entries_as_values(RESEARCH_CHAIN.as_bytes());
+    let after = entries_as_values(&next.read_entry(CHAIN).unwrap());
+    assert_eq!(after.len(), before.len() + 1);
+    // Every original entry — typed fields, unknown fields (flags, source,
+    // wrote_fact, material_read, abstained) and all — is exactly as it was.
+    assert_eq!(&after[1..], &before[..]);
+
+    let newest = &chain_of(&next).decisions[0];
+    assert!(newest.id.as_deref().unwrap().starts_with("d_"));
+    assert_eq!(newest.kind.as_deref(), Some("edit"));
+    assert_eq!(newest.actor.as_deref(), Some("human:u_aoife"));
+    assert_eq!(newest.fields_changed, vec!["campaign".to_string()]);
+    assert_eq!(newest.extra["future_field"], serde_yaml::Value::from(true));
+}
+
+#[test]
+fn every_new_decision_gets_a_stable_id() {
+    let clan = doc();
+    let next = open(
+        patch_decision(
+            &clan,
+            DecisionEntry {
+                agent_name: "a".into(),
+                action: "b".into(),
+                rationale: "c".into(),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    let id = chain_of(&next).decisions[0].id.clone().unwrap();
+    // Editing the rationale later does not move the id.
+    let again = open(patch_state(&next, &json!({"x": 1})).unwrap());
+    assert_eq!(
+        chain_of(&again).decisions[0].id.as_deref(),
+        Some(id.as_str())
+    );
+}
+
+#[test]
+fn agent_json_decisions_carry_typed_fields_but_not_attribution() {
+    let out = AgentOutput::from_json(
+        &json!({
+            "mode": "data-update",
+            "structured": {"a": 1},
+            "decision": {
+                "agent": "extractor", "action": "extract", "rationale": "r",
+                "kind": "edit", "cites": ["mat_email01"],
+                "actor": "human:forged", "handler": "forged@1.0"
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let next = open(pack(&doc(), out, PackOptions::default(), None).unwrap());
+    let d = &chain_of(&next).decisions[0];
+    assert_eq!(d.kind.as_deref(), Some("edit"));
+    assert_eq!(d.cites, vec!["mat_email01".to_string()]);
+    assert_eq!(
+        d.actor, None,
+        "the actor comes from the context, not the body"
+    );
+    assert_eq!(d.handler, None);
+    assert!(d.id.is_some());
+}
+
+fn verdict_entry(agent: &str, judged: &str, polarity: &str, code: &str) -> DecisionEntry {
+    DecisionEntry {
+        agent_name: agent.into(),
+        action: "verdict".into(),
+        rationale: format!("{agent} says {polarity}"),
+        typed: Some(Decision {
+            kind: Some("verdict".into()),
+            polarity: Some(polarity.into()),
+            reason_code: Some(code.into()),
+            targets: vec![format!("doc#decisions[{judged}]")],
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+/// A root with one decision to judge, forked into two branches that each
+/// record a verdict on it.
+fn judged_merge(a: (&str, &str), b: (&str, &str)) -> (ClanFile, String) {
+    let root = open(
+        patch_decision(
+            &doc(),
+            DecisionEntry {
+                agent_name: "extractor".into(),
+                action: "extract".into(),
+                rationale: "Read the email.".into(),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    let judged = chain_of(&root).decisions[0].id.clone().unwrap();
+    let branches = fork(&root, &["alpha".into(), "beta".into()]).unwrap();
+    let mut it = branches.into_iter();
+    let alpha = open(it.next().unwrap().1);
+    let beta = open(it.next().unwrap().1);
+    let alpha =
+        open(patch_decision(&alpha, verdict_entry("alpha", &judged, a.0, a.1), None).unwrap());
+    let beta = open(patch_decision(&beta, verdict_entry("beta", &judged, b.0, b.1), None).unwrap());
+    let outcome = merge(&[alpha, beta], MergeOptions::default()).unwrap();
+    (open(outcome.bytes), judged)
+}
+
+#[test]
+fn disagreeing_verdicts_on_one_decision_are_a_conflict_not_a_fold() {
+    let (merged, judged) = judged_merge(("good", "client_words"), ("bad", "other"));
+    let report = MergeReport::from_yaml(&merged.read_entry(MERGE_REPORT_PATH).unwrap()).unwrap();
+    assert_eq!(report.unresolved, 1);
+    let c = &report.conflicts[0];
+    assert_eq!(c.decision.as_deref(), Some(judged.as_str()));
+    assert_eq!(c.key, format!("decisions[{judged}]"));
+    assert_eq!(c.losers.len(), 1);
+    // Both verdicts stay in the chain; nothing was picked.
+    let chain = chain_of(&merged);
+    let polarities: Vec<_> = chain
+        .decisions
+        .iter()
+        .filter_map(|d| d.polarity.as_deref())
+        .collect();
+    assert!(polarities.contains(&"good") && polarities.contains(&"bad"));
+    strict_ok(&merged);
+
+    // A resolve decision targeting the judged decision settles it.
+    let settled = open(
+        patch_decision(
+            &merged,
+            DecisionEntry {
+                agent_name: "human".into(),
+                action: "resolve".into(),
+                rationale: "The planner's reading stands.".into(),
+                typed: Some(Decision {
+                    kind: Some("resolve".into()),
+                    targets: vec![judged.clone()],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    let report = MergeReport::from_yaml(&settled.read_entry(MERGE_REPORT_PATH).unwrap()).unwrap();
+    assert_eq!(report.unresolved, 0);
+    assert!(report.conflicts.is_empty());
+    strict_ok(&settled);
+}
+
+#[test]
+fn agreeing_verdicts_fold() {
+    let (merged, _) = judged_merge(("good", "client_words"), ("good", "client_words"));
+    let report = MergeReport::from_yaml(&merged.read_entry(MERGE_REPORT_PATH).unwrap()).unwrap();
+    assert_eq!(report.unresolved, 0);
+}
+
+// ── document identity ────────────────────────────────────────────────────
+
+#[test]
+fn document_id_survives_every_write_path() {
+    let clan = doc();
+    let identity = clan.manifest().document_id().to_string();
+    assert_eq!(
+        clan.manifest().document_id.as_deref(),
+        Some(identity.as_str())
+    );
+
+    let check = |next: &ClanFile, what: &str| {
+        assert_eq!(next.manifest().document_id(), identity, "{what}");
+        assert_eq!(
+            next.manifest().document_id.as_deref(),
+            Some(identity.as_str()),
+            "{what}: declared, not just derived"
+        );
+        assert_ne!(
+            next.manifest().id,
+            clan.manifest().id,
+            "{what}: new revision"
+        );
+        assert!(validate(next).is_valid(), "{what}");
+    };
+
+    let patched =
+        open(patch_data_with(&clan, &json!({"a": 1}), PatchDataOptions::default(), None).unwrap());
+    check(&patched, "patch-data");
+
+    for mode in ["data-update", "designed", "full-html", "patch-html"] {
+        let human = mode.ends_with("html").then(|| HumanPayload {
+            html: "<p>hello</p>".into(),
+            css: None,
+            assets: Default::default(),
+            patch_selector: Some("section".into()),
+            patch_action: Some("append".into()),
+        });
+        let out = AgentOutput {
+            mode: mode.into(),
+            structured: json!({"b": 2}),
+            design: (mode == "designed").then(|| json!({})),
+            human,
+            decision: None,
+        };
+        let next = open(pack(&clan, out, PackOptions::default(), None).unwrap());
+        check(&next, mode);
+    }
+
+    let decided = open(
+        patch_decision(
+            &patched,
+            DecisionEntry {
+                agent_name: "a".into(),
+                action: "b".into(),
+                rationale: "c".into(),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    check(&decided, "patch-decision");
+    check(
+        &open(patch_state(&decided, &json!({"s": 1})).unwrap()),
+        "patch-state",
+    );
+    check(&open(render(&decided).unwrap()), "render");
+
+    let branches = fork(&clan, &["alpha".into(), "beta".into()]).unwrap();
+    let branches: Vec<ClanFile> = branches.into_iter().map(|(_, b)| open(b)).collect();
+    for b in &branches {
+        check(b, "fork: a branch is the same document");
+    }
+    let merged = open(merge(&branches, MergeOptions::default()).unwrap().bytes);
+    check(&merged, "merge");
+}
+
+#[test]
+fn an_older_file_adopts_its_id_on_the_first_write() {
+    // A manifest written before document_id existed.
+    let clan = doc();
+    let old_id = clan.manifest().id.clone();
+    let state = clan.read_entry("agent/state.yaml").unwrap();
+    let legacy = rebuilt(&clan, "agent/state.yaml", &state, |m| m.document_id = None);
+    assert_eq!(legacy.manifest().document_id, None);
+    assert_eq!(legacy.document_id(), old_id, "falls back to id");
+    strict_ok(&legacy);
+    // Round-trips without growing a field it did not have.
+    assert!(!String::from_utf8(legacy.manifest().to_yaml().unwrap())
+        .unwrap()
+        .contains("document_id"));
+
+    let next = open(
+        patch_data_with(&legacy, &json!({"a": 1}), PatchDataOptions::default(), None).unwrap(),
+    );
+    assert_eq!(
+        next.manifest().document_id.as_deref(),
+        Some(old_id.as_str())
+    );
+    assert_ne!(next.manifest().id, old_id);
+    let after =
+        open(patch_data_with(&next, &json!({"a": 2}), PatchDataOptions::default(), None).unwrap());
+    assert_eq!(after.document_id(), old_id);
+}
+
+// ── structured reasoning ─────────────────────────────────────────────────
+
+const REASONED_CHAIN: &str = "decisions:
+- id: d_01JB0PIN0001
+  kind: pin
+  agent: start_campaign@1.0
+  actor: process:middleware
+  action: research_merge
+  rationale: 'Pinned 2 facts. Because: CSO and SIMI both state 41% for IE'
+  reasoning:
+    decided: Pinned 2 facts.
+    because:
+    - point: CSO and SIMI both state 41% for IE
+      cites: [f_01JB0IE0001, src_cso, src_simi]
+    rejected:
+    - option: the blog's 45%
+      why: tertiary and alone
+    certainty: { level: high, why: 'primary tier, corroborated' }
+    would_change_if: a newer CSO release revises it
+  timestamp: 2026-09-24T10:00:00Z
+- agent: human
+  action: patch-data
+  rationale: Named it.
+  timestamp: 2026-09-24T09:00:00Z
+";
+
+#[test]
+fn reasoning_is_validated_where_present_and_not_required() {
+    let base = doc();
+    // A chain where one decision reasons and a person's edit does not.
+    let clan = rebuilt(&base, CHAIN, REASONED_CHAIN.as_bytes(), |_| {});
+    strict_ok(&clan);
+    let chain = chain_of(&clan);
+    assert_eq!(
+        chain.decisions[0].reasoning.as_ref().unwrap().because[0].cites,
+        vec!["f_01JB0IE0001", "src_cso", "src_simi"]
+    );
+    assert!(chain.decisions[1].reasoning.is_none());
+
+    // A broken shape is reported, entry by entry.
+    let broken = REASONED_CHAIN
+        .replace("level: high", "level: sure")
+        .replace("    decided: Pinned 2 facts.\n", "    decided: ''\n");
+    let report = validate(&rebuilt(&base, CHAIN, broken.as_bytes(), |_| {}));
+    let text = report.display();
+    assert!(!report.is_content_valid());
+    assert!(
+        text.contains("entry 0 (pin): reasoning.decided is empty"),
+        "{text}"
+    );
+    assert!(text.contains("\"sure\" is not one of"), "{text}");
+}
+
+#[test]
+fn reasoning_survives_patch_data_and_pack() {
+    let base = doc();
+    let clan = rebuilt(&base, CHAIN, REASONED_CHAIN.as_bytes(), |_| {});
+    let before = entries_as_values(REASONED_CHAIN.as_bytes());
+
+    // A person's patch-data with reasoning of its own.
+    let body = json!({ "agent": "human", "action": "patch-data", "rationale": "",
+                       "reasoning": { "decided": "Kept the IE share.",
+                                      "because": [{ "point": "the client's own tracker agrees" }],
+                                      "rejected": [], "only_option": "nothing else was on the table",
+                                      "certainty": { "level": "medium", "why": "one tracker" },
+                                      "would_change_if": "the tracker is revised" } });
+    let typed: Decision = serde_json::from_value(json!({
+        "agent": "", "action": "", "rationale": "", "timestamp": "",
+        "reasoning": body["reasoning"] }))
+    .unwrap();
+    let next = open(
+        patch_data_with(
+            &clan,
+            &json!({"campaign": {"name": "Midweek"}}),
+            PatchDataOptions {
+                append_keys: vec![],
+                decision: Some(DecisionEntry {
+                    agent_name: "human".into(),
+                    action: "patch-data".into(),
+                    rationale: "Kept it.".into(),
+                    pinned: false,
+                    fields_changed: None,
+                    typed: Some(typed),
+                }),
+            },
+            None,
+        )
+        .unwrap(),
+    );
+    strict_ok(&next);
+    let after = entries_as_values(&next.read_entry(CHAIN).unwrap());
+    assert_eq!(&after[1..], &before[..], "the older entries are untouched");
+    let newest = &chain_of(&next).decisions[0];
+    assert_eq!(
+        newest.reasoning.as_ref().unwrap().only_option.as_deref(),
+        Some("nothing else was on the table")
+    );
+
+    // An agent's output carrying reasoning in its decision.
+    let out = AgentOutput::from_json(
+        &json!({ "mode": "data-update", "structured": { "b": 2 },
+                 "decision": { "agent": "analysis-model", "action": "set b", "rationale": "r",
+                               "reasoning": body["reasoning"] } })
+        .to_string(),
+    )
+    .unwrap();
+    let packed = open(pack(&next, out, PackOptions::default(), None).unwrap());
+    let d = &chain_of(&packed).decisions[0];
+    assert_eq!(d.reasoning.as_ref().unwrap().decided, "Kept the IE share.");
+    assert_eq!(
+        chain_of(&packed).decisions[2].reasoning,
+        chain_of(&clan).decisions[0].reasoning
+    );
+}

@@ -1,0 +1,1819 @@
+<!-- The OS's fields: the components every Napkin app shows recorded data with.
+     Spliced into a template at its clan-fields marker by the packer
+     (crates/clan-sdk/examples/shared/app_ui.rs), after the agent figures.
+     Hand-written; the contract is docs/contracts/clan-fields.md. -->
+<style id="clan-fields-css">
+/* Tokens come from the app (the studio's set); each has a fallback so the
+   fields still read in a page that defines none. */
+:root,clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources,clan-tray,.clf-drawer,.clf-scrim,.clf-toast{
+  --clf-ink:var(--ink,#14161B); --clf-ink2:var(--ink2,#4A4F5C); --clf-ink3:var(--ink3,#737987);
+  --clf-paper:var(--paper,#FFFFFF); --clf-soft:var(--soft,#F5F6F8); --clf-line:var(--line,#D6DAE2); --clf-line2:var(--line-soft,#E7E9EE);
+  --clf-create:var(--create,#FF4F2E); --clf-create-soft:var(--create-soft,#FFF1EE); --clf-create-ink:var(--create-ink,#B8321A);
+  --clf-green-soft:var(--green-soft,#DCFCE7); --clf-green-ink:var(--green-ink,#146C35);
+  --clf-amber:var(--amber,#F5A524); --clf-amber-soft:var(--amber-soft,#FEF3DC); --clf-amber-ink:var(--amber-ink,#8A5A00);
+  --clf-chart:var(--clf-chart-1,#2F64F5); --clf-chart2:var(--clf-chart-2,#9DB5F8);
+  --clf-mono:var(--mono,"Geist Mono",ui-monospace,Menlo,Consolas,monospace);
+  --clf-ease:var(--ease,cubic-bezier(.2,.8,.2,1));
+}
+clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources{display:contents}
+clan-field[as="big"],clan-field[as="stat"],clan-chart,clan-quote,clan-gap,clan-sources{display:block}
+clan-tray{display:block}
+.clf-lock{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px;flex:none}
+
+/* ── a field ─────────────────────────────────────────────────────────── */
+.clf{all:unset;cursor:pointer;border-radius:6px;transition:background .15s var(--clf-ease);color:inherit}
+.clf:hover{background:color-mix(in srgb,var(--clf-ink) 5%,transparent)}
+.clf:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-src{font-family:var(--clf-mono);font-size:10.5px;letter-spacing:.02em;color:var(--clf-ink3);white-space:nowrap;font-weight:400}
+.clf-src::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:1px;opacity:.7}
+.clf.in{display:inline;padding:0 2px;font-weight:600;font-variant-numeric:tabular-nums;border-bottom:1.5px solid color-mix(in srgb,var(--clf-ink) 22%,transparent)}
+.clf.in .clf-src{margin-left:4px}
+.clf.in.txt{font-weight:inherit;border-bottom-style:dotted}
+.clf.big,.clf.stat{display:grid;gap:4px;padding:6px;margin:-6px}
+.clf.big .v{font-size:clamp(34px,5vw,54px);font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+.clf.stat .v{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums}
+.clf.big .c,.clf.stat .c{font-size:13.5px;color:var(--clf-ink2);line-height:1.35}
+.clf.cell{display:inline-grid;justify-items:end;padding:2px 4px;margin:-2px -4px}
+.clf.cell .v{font-weight:700;font-variant-numeric:tabular-nums}
+.clf.claim{display:inline;padding:1px 2px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.clf .tag{display:inline-flex;align-items:center;gap:4px;font-family:var(--clf-mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:1px 7px;vertical-align:2px;white-space:nowrap;font-weight:500;text-decoration:none}
+.clf.s-check.claim{background:var(--clf-create-soft);border-bottom:1.5px dashed var(--clf-create)}
+.clf.s-check .tag,.clf.s-contest .tag{background:var(--clf-create);color:#fff}
+.clf.s-check.big .v,.clf.s-check.stat .v{text-decoration:underline dashed var(--clf-create) 2px;text-underline-offset:6px}
+.clf.s-verified .tag{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf.s-rejected,.clf.s-replaced{text-decoration:line-through;text-decoration-color:var(--clf-create);color:var(--clf-ink3)}
+.clf.s-rejected .tag,.clf.s-replaced .tag{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf.s-contest .split-v{display:inline-flex;align-items:baseline;gap:6px}
+.clf.s-contest .split-v s{text-decoration:none;opacity:.55;font-weight:400}
+.clf.s-contest.in{border-bottom:1.5px dashed var(--clf-create)}
+.clf.low .tag.conf-l{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf.conf.in,.clf.conf.claim{background:repeating-linear-gradient(135deg,transparent 0 5px,color-mix(in srgb,var(--clf-ink) 7%,transparent) 5px 6px)}
+.clf-cite{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:var(--clf-mono);font-size:10.5px;letter-spacing:.02em;color:var(--clf-ink3);border:1px solid var(--clf-line);border-radius:999px;padding:0 7px;line-height:17px;vertical-align:1px;white-space:nowrap;margin-left:2px}
+.clf-cite:hover{border-color:var(--clf-ink3);color:var(--clf-ink)}
+.clf-cite:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-cite.s-check{border-color:var(--clf-create);color:var(--clf-create-ink)}
+/* a value a person owns: text, edited in edit mode */
+.clf.txt-f{display:inline;padding:0 2px;border-radius:4px}
+.clf.txt-f.blk{display:block;padding:2px 4px;margin:-2px -4px}
+.clf .org{font-family:var(--clf-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--clf-ink3);margin-left:5px;white-space:nowrap}
+.clf .empty{color:var(--clf-ink3);font-style:italic}
+.clf-editing .clf.editable{outline:1.5px dashed var(--clf-chart);outline-offset:2px;cursor:text}
+.clf-editing .clf.editable::after{content:"✎";font-size:11px;color:var(--clf-chart);margin-left:4px}
+.clf-editing .clf.correctable{outline:1.5px dashed color-mix(in srgb,var(--clf-chart) 55%,transparent);outline-offset:2px}
+.clf-ed{display:grid;gap:10px;margin:4px 0;padding:12px;border:1.5px solid var(--clf-chart);border-radius:14px;background:var(--clf-paper)}
+.clf-ed textarea,.clf-ed > input{font:inherit;font-size:15px;color:var(--clf-ink);background:var(--clf-paper);border:1px solid var(--clf-line);border-radius:8px;padding:6px 8px;width:100%}
+.clf-ed textarea{min-height:70px;resize:vertical}
+.clf-ed .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.clf-ed .hint{font-size:13px;color:var(--clf-ink3)}
+.clf-ed .clf-err{margin:0}
+/* wording a person may rewrite (edit mode), anywhere a page marks it */
+.clf-editing [data-clan-text]{outline:1.5px dashed color-mix(in srgb,var(--clf-chart) 60%,transparent);outline-offset:3px;border-radius:4px;cursor:text}
+.clf-editing [data-clan-text]:hover{outline-color:var(--clf-chart)}
+@keyframes clf-flash{0%,60%{outline-color:var(--clf-chart);background:color-mix(in srgb,var(--clf-chart) 14%,transparent)}100%{outline-color:transparent;background:transparent}}
+.clf-flash{outline:2px solid transparent;outline-offset:3px;border-radius:4px;animation:clf-flash 2.2s ease-out}
+[data-clan-text][contenteditable="true"]{outline:2px solid var(--clf-chart)!important;background:color-mix(in srgb,var(--clf-chart) 6%,transparent)}
+.clf-edited{position:relative}
+.clf-editing .clf-edited::before{content:"edited";position:absolute;top:-15px;right:0;font-family:var(--clf-mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--clf-green-ink)}
+.clf-textbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 12px;padding:12px;border:1.5px solid var(--clf-chart);border-radius:14px;background:var(--clf-paper);font-size:13.5px;color:var(--clf-ink2)}
+.clf-textbar .clf-err{margin:0;width:100%}
+.clf-textbar .note{flex:1 1 100%;font-size:13px;color:var(--clf-ink3)}
+.clf-why{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%}
+.clf-why > b{flex:1 1 100%;font-size:15px;font-weight:600;color:var(--clf-ink)}
+.clf-why input{flex:1 1 100%;min-width:0;min-height:44px;font:inherit;font-size:15px;color:var(--clf-ink);background:var(--clf-paper);border:1.5px solid var(--clf-line);border-radius:12px;padding:8px 14px}
+.clf-why .chip{min-height:40px;border:1.5px solid var(--clf-line);background:var(--clf-paper);color:var(--clf-ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:14px;cursor:pointer}
+.clf-why .chip:hover{border-color:var(--clf-ink3)}
+.clf-why .chip[aria-pressed="true"]{border-color:var(--clf-ink);background:var(--clf-ink);color:var(--clf-paper)}
+.clf-missing{font-size:12.5px;font-style:italic;color:var(--clf-create-ink);border:1px dashed var(--clf-create);border-radius:6px;padding:0 6px}
+/* a value that needs a person (flagged, marked wrong) or has a proposal waiting */
+.clf.txt-f.s-check{background:var(--clf-create-soft);border-bottom:1.5px dashed var(--clf-create)}
+.clf.txt-f .tag{margin-left:5px}
+
+/* ── client review: a part's controls and the client's answer on it ──── */
+.clf-part{display:grid;gap:8px;margin:8px 0 4px;font-size:14px;line-height:1.4;font-weight:400;font-style:normal;letter-spacing:0;text-transform:none;text-align:left;color:var(--clf-ink)}
+.clf-part-marked{background:linear-gradient(90deg,color-mix(in srgb,var(--clf-amber) 14%,transparent),transparent 70%);border-radius:8px}
+.clf-part-t{justify-self:start;min-height:44px;border:1.5px dashed var(--clf-line);background:transparent;color:var(--clf-ink);border-radius:12px;padding:8px 14px;font:inherit;font-size:14.5px;font-weight:600;cursor:pointer}
+.clf-part-t:hover{border-color:var(--clf-ink3)}
+.clf-part-t[aria-pressed="true"]{border-style:solid;background:var(--clf-amber-ink);border-color:var(--clf-amber-ink);color:#fff}
+.clf-part-t.rj[aria-pressed="true"]{background:var(--clf-create-ink);border-color:var(--clf-create-ink)}
+.clf-part textarea{font:inherit;font-size:15px;color:var(--clf-ink);background:var(--clf-paper);border:1.5px solid var(--clf-line);border-radius:12px;padding:10px 12px;min-height:64px;width:100%;box-sizing:border-box;resize:vertical}
+.clf-chip{justify-self:start;display:inline-flex;align-items:center;gap:6px;min-height:40px;max-width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:999px;padding:6px 14px;font:inherit;font-size:13.5px;font-weight:600;line-height:1.3;text-align:left;cursor:pointer;background:var(--clf-soft);color:var(--clf-ink2)}
+.clf-chip.ok{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf-chip.chg{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf-chip.rj{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf-chip.sug{background:var(--clf-soft);color:var(--clf-ink);border:1px dashed var(--clf-chart)}
+.clf-chip.stale{background:var(--clf-soft);color:var(--clf-ink2);border:1px dashed var(--clf-ink3)}
+.clf-chip:hover{border-color:var(--clf-ink3)}
+.clf-chip:focus-visible,.clf-part-t:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-pop{display:grid;gap:10px;padding:14px 16px;border:1.5px solid var(--clf-ink);border-radius:14px;background:var(--clf-paper);box-shadow:3px 3px 0 var(--clf-ink);color:var(--clf-ink)}
+.clf-pop > b{font-size:15.5px}
+.clf-pop .clf-q{font-size:15px}
+.clf-pop p{margin:0}
+.clf-strength{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--clf-ink2)}
+.clf-strength i{width:9px;height:9px;border-radius:50%;background:var(--clf-green-ink);flex:none}
+.clf-strength.weak i{background:var(--clf-amber)}
+
+/* ── a chart, a quote, a gap, the sources ────────────────────────────── */
+.clf-chart{display:block;width:100%}
+.clf-chart .eb{display:block;font-family:var(--clf-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--clf-ink3);margin-bottom:8px}
+.clf-chart svg{display:block;width:100%;max-width:600px;height:auto;overflow:visible}
+.clf-chart .mark{cursor:pointer}
+.clf-chart .mark:focus{outline:none}
+.clf-chart .mark:hover .bar,.clf-chart .mark:focus-visible .bar,.clf-chart .mark:hover circle,.clf-chart .mark:focus-visible circle{stroke:var(--clf-create);stroke-width:2}
+.clf-chart .foot{font-family:var(--clf-mono);font-size:10.5px;color:var(--clf-ink3);margin-top:6px}
+.clf-quote{all:unset;cursor:pointer;display:grid;gap:14px;border-radius:8px;color:inherit}
+.clf-quote blockquote{margin:0;font-size:clamp(22px,3.2vw,34px);line-height:1.2;font-weight:700;letter-spacing:-.02em;max-width:28ch;text-wrap:balance}
+.clf-quote blockquote::before{content:"\201C"}
+.clf-quote blockquote::after{content:"\201D"}
+.clf-quote .by{font-size:13px;color:var(--clf-ink2)}
+.clf-gap{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;border:1px dashed var(--clf-line);border-radius:14px;padding:14px 16px;color:inherit}
+.clf-gap .ic{width:28px;height:28px;border-radius:50%;border:1.5px dashed var(--clf-ink3);display:grid;place-items:center;font-family:var(--clf-mono);font-size:13px;color:var(--clf-ink3)}
+.clf-gap b{display:block;font-size:14.5px}
+.clf-gap span span{font-size:13px;color:var(--clf-ink2)}
+.clf-sources{display:grid;gap:10px}
+.clf-sources h2{font-size:14px;font-weight:700;margin:0}
+.clf-sources ol{margin:0;padding:0;list-style:none;display:grid;gap:2px}
+.clf-srcrow{all:unset;cursor:pointer;display:grid;grid-template-columns:2.2ch 1fr auto;gap:10px;align-items:baseline;padding:6px 8px;margin:0 -8px;border-radius:8px;font-size:13.5px;color:inherit}
+.clf-srcrow:hover{background:color-mix(in srgb,var(--clf-ink) 5%,transparent)}
+.clf-srcrow .n{font-family:var(--clf-mono);font-size:11px;color:var(--clf-ink3)}
+.clf-srcrow .m{font-size:12px;color:var(--clf-ink3);white-space:nowrap}
+.clf-srcrow small{color:var(--clf-ink2);font-size:12.5px}
+.clf-srcrow.more .n{visibility:hidden}
+
+/* ── the tray: what needs a person, computed by the host ─────────────── */
+/* Under the OS's glass chrome (clan:insets): the page blurs what scrolls
+   beneath the shell's bar and footer itself. The shell cannot blur a frame
+   drawn apart from it, so the frost is made here, and the shell's tint lies
+   over it. Nothing when there is no glass (the insets are 0). */
+html::before,html::after{content:"";position:fixed;left:0;right:0;z-index:2147483000;pointer-events:none;
+  -webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6)}
+html::before{top:0;height:var(--clan-top,0px)}
+html::after{bottom:0;height:var(--clan-bottom,0px)}
+.clf-tray{position:sticky;top:var(--clan-top,0px);z-index:19;background:var(--clf-paper);border-bottom:1px solid var(--clf-line);box-shadow:0 1px 2px rgba(20,32,64,.06),0 8px 24px rgba(40,64,120,.07)}
+.clf-tray-in{max-width:1120px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.clf-tray .who{display:flex;align-items:center;gap:10px;min-width:0}
+.clf-tray .who .agent-figure{width:30px;height:40px}
+.clf-tray .count{font-weight:700;font-size:14.5px;white-space:nowrap}
+.clf-tray .count.zero{color:var(--clf-green-ink)}
+.clf-tray .items{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 300px;min-width:0}
+.clf-titem{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--clf-line);background:var(--clf-paper);border-radius:999px;padding:3px 10px 3px 8px;font:inherit;font-size:12.5px;cursor:pointer;max-width:100%;color:inherit}
+.clf-titem:hover{border-color:var(--clf-create)}
+.clf-titem .k{font-family:var(--clf-mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--clf-create-ink);flex:none}
+.clf-titem .x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.clf-titem .off{font-size:11px;color:var(--clf-ink3);flex:none}
+.clf-locked{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--clf-green-ink)}
+.clf-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--clf-line);background:var(--clf-paper);border-radius:999px;padding:7px 14px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;color:var(--clf-ink)}
+.clf-btn:hover{border-color:var(--clf-ink3)}
+.clf-btn.primary{background:var(--clf-ink);border-color:var(--clf-ink);color:var(--clf-paper)}
+.clf-btn.danger{color:var(--clf-create-ink);border-color:color-mix(in srgb,var(--clf-create) 45%,var(--clf-line))}
+.clf-btn[disabled]{opacity:.45;cursor:not-allowed}
+.clf-btn .n{font-family:var(--clf-mono);font-size:11px;background:var(--clf-create);color:#fff;border-radius:999px;padding:0 6px}
+/* An answer a person gives: big, plain, one tap. */
+.clf-btn.big{min-height:48px;padding:12px 20px;font-size:15.5px;font-weight:600;border:1.5px solid var(--clf-ink);border-radius:14px;white-space:normal;text-align:left;justify-content:center}
+.clf-btn.big:hover:not([disabled]){box-shadow:3px 3px 0 var(--clf-ink)}
+.clf-btn.big.danger{border-color:var(--clf-create-ink)}
+.clf-btn.quiet{border-color:var(--clf-line)}
+.clf-btn:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+
+/* ── the evidence drawer ─────────────────────────────────────────────── */
+.clf-scrim{position:fixed;inset:0;background:rgba(10,12,16,.28);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s var(--clf-ease)}
+.clf-scrim.on{opacity:1;pointer-events:auto}
+.clf-drawer{position:fixed;top:var(--clan-top,0px);right:var(--clan-right,0px);bottom:var(--clan-bottom,0px);width:min(460px,100%);z-index:41;background:var(--clf-paper);color:var(--clf-ink);box-shadow:0 2px 6px rgba(20,32,64,.08),0 24px 60px rgba(40,64,120,.18);transform:translateX(104%);transition:transform .28s var(--clf-ease);display:flex;flex-direction:column;font-size:14px;line-height:1.5}
+.clf-drawer.on{transform:none}
+.clf-dh{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--clf-line2)}
+.clf-dh .crumb{flex:1;min-width:0;margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em;line-height:1.25;color:var(--clf-ink)}
+.clf-ib{border:1px solid var(--clf-line);background:var(--clf-paper);color:var(--clf-ink);border-radius:999px;width:44px;height:44px;display:grid;place-items:center;cursor:pointer;flex:none}
+.clf-ib:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-ib[hidden]{display:none}
+.clf-db{overflow:auto;padding:20px 20px 28px;display:grid;gap:20px;align-content:start}
+.clf-dv{display:grid;gap:6px}
+.clf-dv .v{font-size:clamp(40px,11vw,52px);font-weight:800;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums}
+.clf-dv .stmt{font-size:20px;font-weight:700;letter-spacing:-.01em;line-height:1.3}
+.clf-dv .c{font-size:15px;color:var(--clf-ink2)}
+.clf-pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;border-radius:999px;padding:3px 10px;background:var(--clf-soft);color:var(--clf-ink2);width:max-content;max-width:100%}
+.clf-pill.check{background:var(--clf-create-soft);color:var(--clf-create-ink)}
+.clf-pill.ok{background:var(--clf-green-soft);color:var(--clf-green-ink)}
+.clf-pill.warn{background:var(--clf-amber-soft);color:var(--clf-amber-ink)}
+.clf-pill.conf{background:var(--clf-soft);color:var(--clf-ink);border:1px dashed var(--clf-ink3)}
+.clf-pills{display:flex;flex-wrap:wrap;gap:6px}
+.clf-sec{display:grid;gap:8px}
+.clf-sec > h3{font-size:15px;font-weight:700;color:var(--clf-ink);margin:0}
+.clf-sec > h3.ask{font-size:19px;letter-spacing:-.01em}
+.clf-q{margin:0;padding:14px 16px 14px 18px;background:var(--clf-soft);border-left:3px solid var(--clf-ink3);border-radius:4px 12px 12px 4px;font-size:16px;line-height:1.5}
+/* A client's words are shown as typed: their line breaks and spaces kept. */
+.clf-q.said{white-space:pre-wrap;overflow-wrap:anywhere}
+.clf-q.said::before{content:"\201C"}
+.clf-q.said::after{content:"\201D"}
+.clf-q mark{background:color-mix(in srgb,var(--clf-amber) 40%,transparent);color:inherit;border-radius:3px;padding:0 2px}
+.clf-by{margin:0;font-size:14px;color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-by b{font-weight:600;color:var(--clf-ink)}
+.clf-by a{color:var(--clf-chart);font-weight:500;text-decoration:none;white-space:nowrap}
+.clf-by a:hover{text-decoration:underline}
+/* The agent that recorded a thing says so, in its own words and signed. */
+.clf-say-row{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:end}
+.clf-say-row .agent-figure{width:40px;height:53px}
+.clf-say{position:relative;margin:0 0 14px;background:var(--clf-paper);border:1.5px solid var(--clf-ink);border-radius:16px;padding:10px 14px;font-size:15px;line-height:1.4;box-shadow:3px 3px 0 var(--clf-ink);color:var(--clf-ink)}
+.clf-say::after{content:"";position:absolute;left:-8px;bottom:12px;width:12px;height:12px;background:var(--clf-paper);border-left:1.5px solid var(--clf-ink);border-bottom:1.5px solid var(--clf-ink);transform:rotate(45deg)}
+.clf-say .who{display:block;font-family:var(--clf-mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--clf-ink3);margin-bottom:2px}
+.clf-say p{margin:0}
+.clf-answers{display:grid;gap:10px}
+.clf-ex{margin:0;font-size:13.5px;line-height:1.45;color:var(--clf-ink2)}
+.clf-more{font-size:13px;color:var(--clf-ink3)}
+.clf-more > summary{cursor:pointer;min-height:36px;display:flex;align-items:center;gap:6px;list-style:none;color:var(--clf-ink2);font-weight:500}
+.clf-more > summary::-webkit-details-marker{display:none}
+.clf-more > summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);margin:0 4px 0 2px;flex:none}
+.clf-more[open] > summary::before{transform:rotate(45deg)}
+.clf-more > summary:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px;border-radius:6px}
+.clf-more[open] > summary{margin-bottom:8px}
+.clf-card{border:1px solid var(--clf-line2);border-radius:12px;padding:14px;display:grid;gap:8px}
+.clf-card .t{font-weight:600;font-size:14.5px;line-height:1.3}
+.clf-card dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px}
+.clf-card dt{color:var(--clf-ink3)}
+.clf-card dd{margin:0;color:var(--clf-ink2);overflow-wrap:anywhere}
+.clf-card a{color:var(--clf-chart);font-size:13px;font-weight:500;text-decoration:none;width:max-content}
+.clf-card a:hover{text-decoration:underline}
+.clf-rows{display:grid;gap:6px}
+.clf-row{all:unset;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:baseline;min-height:44px;box-sizing:border-box;padding:10px 14px;border:1px solid var(--clf-line);border-radius:12px;font-size:14.5px;color:inherit}
+.clf-row:hover{border-color:var(--clf-ink3)}
+.clf-row:focus-visible{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-row b{font-variant-numeric:tabular-nums}
+.clf-row small{display:block;color:var(--clf-ink3);font-size:13px}
+.clf-acts{display:flex;flex-wrap:wrap;gap:10px}
+.clf-form{display:grid;gap:14px;padding:16px;border:1.5px solid var(--clf-line);border-radius:14px}
+.clf-form.bare{border:0;padding:0}
+.clf-form > b{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.clf-form label{display:grid;gap:6px;font-size:15px;font-weight:600;color:var(--clf-ink)}
+.clf-form textarea,.clf-form input[type="text"],.clf-form input[type="url"]{font:inherit;font-size:15px;font-weight:400;color:var(--clf-ink);background:var(--clf-paper);border:1.5px solid var(--clf-line);border-radius:12px;padding:10px 12px;min-height:48px;box-sizing:border-box;width:100%}
+.clf-form textarea{min-height:76px;resize:vertical}
+.clf-form .req{color:var(--clf-create-ink);font-size:13px;font-weight:500}
+.clf-form .opt{color:var(--clf-ink3);font-size:13px;font-weight:400}
+/* One button per value: the radio is there for the form, the label is what a person taps. */
+.clf-opt{position:relative;display:grid;gap:6px;padding:14px 16px;border:1.5px solid var(--clf-ink);border-radius:14px;cursor:pointer;background:var(--clf-paper)}
+.clf-opt:hover{box-shadow:3px 3px 0 var(--clf-ink)}
+.clf-opt input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.clf-optsrc{margin:-2px 0 4px 16px;font-size:13px}
+.clf-optsrc a{color:var(--clf-ink);text-underline-offset:3px}
+.clf-opt:focus-within{outline:2px solid var(--clf-create);outline-offset:2px}
+.clf-opt:has(input:checked){background:var(--clf-ink);color:var(--clf-paper)}
+.clf-opt:has(input:checked) .q,.clf-opt:has(input:checked) .s{color:inherit;opacity:.85}
+.clf-opt .v{font-size:26px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.clf-opt .v.long{font-size:17px;font-weight:700;line-height:1.35;letter-spacing:-.005em}
+.clf-opt .q{font-size:14.5px;font-weight:400;color:var(--clf-ink2)}
+.clf-opt .s{font-size:13.5px;font-weight:400;color:var(--clf-ink3)}
+.clf-then{display:none;gap:14px}
+.clf-form:has(input[name="pick"]:checked) .clf-then{display:grid}
+.clf-form .clf-toggle{display:flex;align-items:start;gap:12px;font-size:15px;font-weight:500;color:var(--clf-ink);cursor:pointer;min-height:44px}
+.clf-toggle small{display:block;color:var(--clf-ink3);font-size:13px;font-weight:400}
+.clf-toggle input{margin-top:2px;width:22px;height:22px;flex:none;accent-color:var(--clf-ink)}
+.clf-hist{margin:0;padding:0;list-style:none;display:grid;gap:8px;font-size:14px;color:var(--clf-ink2)}
+.clf-hist li{display:grid;grid-template-columns:auto 1fr;gap:8px}
+.clf-hist li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--clf-ink3);margin-top:7px}
+.clf-err{font-size:14px;color:var(--clf-create-ink);background:var(--clf-create-soft);border-radius:10px;padding:8px 12px}
+.clf-muted{color:var(--clf-ink3);font-size:13.5px;margin:0}
+.clf-toast{position:fixed;left:50%;bottom:calc(20px + var(--clan-bottom,0px));transform:translate(-50%,20px);background:var(--clf-ink);color:var(--clf-paper);padding:12px 20px;border-radius:999px;font-size:15px;opacity:0;pointer-events:none;transition:all .25s var(--clf-ease);z-index:60;max-width:calc(100% - 32px)}
+.clf-toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ── the layout vocabulary an agent composes a report from ───────────── */
+.cl-report{background:var(--clf-paper);border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(20,32,64,.06),0 8px 24px rgba(40,64,120,.07)}
+.cl-head{padding:48px clamp(20px,5vw,64px) 36px;display:grid;gap:14px;border-bottom:1px solid var(--clf-line2)}
+.cl-head.compact{padding:32px clamp(20px,4vw,44px) 24px;gap:8px;border-bottom:2px solid var(--clf-ink)}
+.cl-eyebrow{font-family:var(--clf-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--clf-ink3)}
+.cl-title{margin:0;font-size:clamp(28px,4.4vw,46px);line-height:1.05;font-weight:800;letter-spacing:-.03em;max-width:22ch;text-wrap:balance}
+.cl-head.compact .cl-title{font-size:clamp(24px,3.4vw,32px);line-height:1.12;max-width:30ch}
+.cl-dek{font-size:17px;color:var(--clf-ink2);max-width:60ch;margin:0}
+.cl-nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));border-bottom:1px solid var(--clf-line2);padding-inline:calc(clamp(20px,5vw,64px) - clamp(12px,2vw,24px))}
+.cl-nums > *{padding:26px clamp(12px,2vw,24px);border-left:1px solid var(--clf-line2)}
+.cl-nums > :first-child{border-left:0}
+.cl-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);padding:40px clamp(20px,5vw,64px)}
+.cl-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(20px,4vw,48px);align-items:start}
+.cl-prose{display:grid;gap:14px;align-content:start}
+.cl-prose p,.cl-block > p{margin:0;max-width:62ch;font-size:16px;line-height:1.55}
+.cl-report h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.15;text-wrap:balance}
+.cl-report h3{margin:0;font-size:16px;font-weight:700}
+.cl-label{margin:0;font-family:var(--clf-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--clf-ink3);font-weight:500}
+.cl-figure{display:grid;gap:10px;align-content:start}
+.cl-cap{font-size:12.5px;color:var(--clf-ink3)}
+.cl-band{padding:44px clamp(20px,5vw,64px);background:var(--clf-ink);color:var(--clf-paper);--ink:var(--clf-paper);--ink2:color-mix(in srgb,var(--clf-paper) 72%,transparent);--ink3:color-mix(in srgb,var(--clf-paper) 55%,transparent);--line:color-mix(in srgb,var(--clf-paper) 22%,transparent);--line-soft:color-mix(in srgb,var(--clf-paper) 14%,transparent);--paper:var(--clf-ink)}
+.cl-band[data-tone="soft"]{background:var(--clf-soft);color:var(--clf-ink);--ink:initial;--ink2:initial;--ink3:initial;--line:initial;--line-soft:initial;--paper:initial}
+.cl-block{padding:40px clamp(20px,5vw,64px);display:grid;gap:18px;border-top:1px solid var(--clf-line2)}
+.cl-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.cl-grid > *{padding:24px clamp(20px,4vw,44px);display:grid;gap:12px;align-content:start}
+.cl-grid > * + *{border-left:1px solid var(--clf-line2)}
+.cl-callout{border:1px dashed var(--clf-line);border-radius:16px;padding:20px;display:grid;gap:14px}
+.cl-row{display:flex;flex-wrap:wrap;gap:28px}
+.cl-table{width:100%;border-collapse:collapse;font-size:14px}
+.cl-table td,.cl-table th{padding:9px 0;border-bottom:1px solid var(--clf-line2);vertical-align:top;text-align:left;font-weight:400}
+.cl-table td:first-child,.cl-table th:first-child{color:var(--clf-ink2);padding-right:12px}
+.cl-table td:last-child{text-align:right}
+.cl-list{margin:0;padding:0;list-style:none;display:grid;gap:12px;counter-reset:m}
+.cl-list > li{display:grid;grid-template-columns:22px 1fr;gap:6px;font-size:15px}
+.cl-list > li::before{counter-increment:m;content:counter(m);font-family:var(--clf-mono);font-size:12px;color:var(--clf-ink3);padding-top:2px}
+.cl-foot{padding:32px clamp(20px,5vw,64px) 40px;border-top:1px solid var(--clf-line2);background:var(--clf-soft)}
+@media (max-width:860px){.cl-cols,.cl-split,.cl-grid{grid-template-columns:minmax(0,1fr)}.cl-grid > * + *{border-left:0;border-top:1px solid var(--clf-line2)}}
+/* On a phone a long publisher breaks rather than push the column past the card. */
+@media (max-width:620px){.clf-drawer{top:auto;height:88%;width:100%;border-radius:18px 18px 0 0;transform:translateY(104%)}.clf-titem .x{max-width:170px}.clf-src{white-space:normal;overflow-wrap:anywhere}
+  .clf-db{padding:16px 16px 24px}.clf-acts > .clf-btn.big,.clf-textbar > .clf-btn,.clf-ed .row > .clf-btn,.clf-pop .clf-acts > .clf-btn{flex:1 1 100%}}
+@media (prefers-reduced-motion:reduce){.clf-drawer,.clf-scrim,.clf-toast,.clf{transition:none}.clf-flash{animation:none}}
+</style>
+<script>
+/* The OS's fields. Everything a field shows comes from the record the host
+   keeps (window.__CLAN__.data: the projection of pins, findings and sources,
+   the selection, the materials) and from the host's own decision view
+   (clan://decisions): the kind of field and what it asks of a person are the
+   record's, never the tag's. Every action is one host route; the reply
+   carries the document as it now stands, which replaces the page's copy. */
+var ClanFields=(function(){
+  var SCHEME=(navigator.userAgent.indexOf('Windows')!==-1)?'http://clan.localhost':'clan://localhost';
+  var VIEW=null, STACK=[], DRAWER=null, EDIT=false;
+  var TICK='<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>';
+  var LOCK='<svg class="clf-lock" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>';
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function obj(v){ return v&&typeof v==='object'&&!Array.isArray(v)?v:{}; }
+  function arr(v){ return Array.isArray(v)?v:[]; }
+  function data(){ return obj((window.__CLAN__||{}).data); }
+  function proj(){ return obj(data().projection); }
+  function pins(){ return obj(proj().pins); }
+  function findings(){ return obj(proj().findings); }
+  function sources(){ return obj(proj().sources); }
+  function upstreams(){ return obj(data().upstream); }
+  function passages(){ return obj(data().passages); }
+  function captures(){ return obj(obj(data().capture).items); }
+  function materials(){ return obj(data().materials); }
+  // The document's own contests, then each one it carried from upstream. The
+  // frozen copy never changes: a carried contest is settled by a `resolve` in
+  // this chain on its upstream address, and shows as that (Contract 4 §7.2).
+  var CT={d:null, v:null, list:[]};
+  function contests(){
+    if(CT.d===data()&&CT.v===VIEW) return CT.list;
+    var own=arr(obj(data().selection).contested), seen={}, out=own.slice(), ups=upstreams();
+    own.forEach(function(c){ if(c) seen[c.id]=1; });
+    Object.keys(ups).forEach(function(uid){
+      arr(obj(obj(ups[uid]).selection).contested).forEach(function(c){
+        if(!c||seen[c.id]) return; seen[c.id]=1;
+        var r=c.status==='open'?carriedResolve(uid,c.id):null, x={carried:uid};
+        if(r){ x.status='resolved'; x.chosen=arr(r.cites)[0]; x.reason=r.rationale; x.decided_by=r.id; }
+        out.push(Object.assign({},c,x));
+      });
+    });
+    CT={d:data(), v:VIEW, list:out};
+    return out;
+  }
+  function carriedResolve(uid,ct){
+    var a=uid+'#selection.contested['+ct+']';
+    var b=arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{}; return d.kind==='resolve'&&!b.superseded&&arr(d.targets).indexOf(a)!==-1; })[0];
+    return b?b.decision:null;
+  }
+  // What a person calls the document a thing was carried from.
+  function upTitle(uid){ var u=obj(upstreams()[uid]), c=obj(u.campaign), n=obj(c.name).value||c.name;
+    return typeof n==='string'&&n?'“'+n+'”':typeof u.project_name==='string'&&u.project_name?'“'+u.project_name+'”':'the document this one started from'; }
+  function gaps(){ return arr(obj(data().selection).gaps); }
+  function contest(id){ return contests().filter(function(c){ return c.id===id; })[0]||null; }
+  function gap(id){ return gaps().filter(function(g){ return g.id===id; })[0]||null; }
+  function edits(){ return obj((window.__CLAN__||{}).edits); }
+  function docId(){ if(VIEW&&VIEW.document_id) return VIEW.document_id; var m=obj((window.__CLAN__||{}).manifest); return m.document_id||m.id||''; }
+  function yr(d){ return d?String(d).slice(0,4):''; }
+  // Dates in plain words: 'March 2025' for when a source came out, '28 Sept'
+  // for when the crew read it. What is not a date is shown as it is.
+  var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var MON=['Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
+  function dparts(d){ var m=/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:[T ].*)?$/.exec(String(d||'').trim()); return m&&(!m[2]||+m[2]>=1&&+m[2]<=12)?{y:+m[1],m:m[2]?+m[2]:0,d:m[3]?+m[3]:0,t:(/[T ](\d{2}:\d{2})/.exec(String(d))||[])[1]||''}:null; }
+  function monthYear(d){ var p=dparts(d); return p?(p.m?MONTHS[p.m-1]+' ':'')+p.y:String(d||''); }
+  function plainDate(d){ var p=dparts(d); return p?(p.d?p.d+' ':'')+monthYear(d):String(d||''); }
+  function dayMonth(d,time){ var p=dparts(d); if(!p||!p.d) return monthYear(d);
+    return p.d+' '+MON[p.m-1]+(p.y!==new Date().getFullYear()?' '+p.y:'')+(time&&p.t?', '+p.t:''); }
+  // A publisher the sources name in more than one way ("ShelfLife Magazine",
+  // "Shelflife Magazine, 2026") reads as one: the first spelling, without the
+  // year. Display only; the records keep what they say.
+  function pubStrip(n){ return String(n||'').replace(/[\s,;:·(\-–—]*\(?\b(?:19|20)\d{2}\)?[\s.]*$/,'').trim()||String(n||'').trim(); }
+  function pubKey(n){ return pubStrip(n).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
+  var PUBS={of:null,name:{}};
+  function pubName(n){
+    if(!n) return '';
+    var S=sources();
+    if(PUBS.of!==S){ PUBS={of:S,name:{}}; Object.keys(S).forEach(function(id){ var p=S[id]&&S[id].publisher, k=p&&pubKey(p); if(k&&!PUBS.name[k]) PUBS.name[k]=pubStrip(p); }); }
+    return PUBS.name[pubKey(n)]||pubStrip(n);
+  }
+  function uniqNames(list){ var seen={}, out=[]; list.forEach(function(n){ var k=pubKey(n)||String(n); if(n&&!seen[k]){ seen[k]=1; out.push(pubName(n)||n); } }); return out; }
+  function andList(xs){ return xs.length<2?(xs[0]||''):xs.slice(0,-1).join(', ')+' and '+xs[xs.length-1]; }
+
+  // ── values and labels ───────────────────────────────────────────────
+  function fmt(p){
+    if(!p) return '';
+    var v=p.value, u=p.unit;
+    if(typeof v==='number'){
+      if(u==='proportion') return (Math.round(v*1000)/10)+'%';
+      if(u==='eur') return '€'+short(v);
+      if(u==='gbp') return '£'+short(v);
+      if(u==='usd') return '$'+short(v);
+      if(u==='count'||u==='units') return short(v);
+      return short(v)+(u?' '+u:'');
+    }
+    if(typeof v==='boolean') return v?'yes':'no';
+    return String(v);
+  }
+  function short(n){
+    var a=Math.abs(n);
+    if(a>=1e9) return (Math.round(n/1e8)/10)+'bn';
+    if(a>=1e6) return (Math.round(n/1e5)/10)+'m';
+    if(a>=1e4) return (Math.round(n/100)/10)+'k';
+    return String(Math.round(n*100)/100);
+  }
+  function label(p){
+    if(!p) return '';
+    var k=String(p.key||'').split('.').slice(1).join(' ')||String(p.key||'');
+    k=k.replace(/_(eur|gbp|usd)$/,'').replace(/_/g,' ').replace(/\byoy\b/,'year on year');
+    return k.charAt(0).toUpperCase()+k.slice(1)+(p.market?' · '+country(p.market):'');
+  }
+  // "IE" → "Ireland", as the report names a market; the code where the browser has no name.
+  var REGIONS;
+  function country(c){
+    if(REGIONS===undefined){ try{ REGIONS=new Intl.DisplayNames(['en'],{type:'region'}); }catch(e){ REGIONS=null; } }
+    try{ return (REGIONS&&REGIONS.of(String(c)))||String(c); }catch(e){ return String(c); }
+  }
+  function srcOf(p){ var s=arr(p&&p.sources).filter(function(x){ return /^src_/.test(x); })[0]; return s?{id:s, rec:sources()[s]||null}:null; }
+  // A person's own verification or correction: "you" when it is the viewer.
+  function isYou(actor){ return arr(VIEW&&VIEW.decisions).some(function(b){ return b.who&&b.who.you&&b.decision&&b.decision.actor===actor; }); }
+  function whoOfSrc(rec){ return /^human:/.test(rec.uri||'')?rec.uri:'human:'+(rec.publisher||'someone'); }
+  // On the web a person's id is their account's UUID: never shown as a name.
+  var OPAQUE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // A person's id back as their name: hyphens were spaces, and a word held
+  // wholly as letter codes (a name in another script) is spelt out again.
+  function nameOfId(n){ return String(n||'').split('-').map(function(w){ return /^(\.[0-9a-f]{2,4})+$/.test(w)?w.slice(1).split('.').map(function(h){ return String.fromCharCode(parseInt(h,16)); }).join(''):w; }).join(' '); }
+  function personName(uri){ if(isYou(uri)) return 'you'; var n=String(uri).replace(/^human:/,''); return OPAQUE.test(n)?'someone':nameOfId(n); }
+  // What a person wrote, without the "<their id>: " an older note began with.
+  function saidBy(q,rec){ var id=String(rec&&rec.publisher||''); q=String(q); return id&&q.indexOf(id+': ')===0?q.slice(id.length+2):q; }
+  function srcShort(p){ var s=srcOf(p); if(!s||!s.rec) return s?'source details missing':'';
+    if(s.rec.tier==='reviewer-verified') return (/correct/.test(s.rec.title||'')?'corrected by ':'checked by ')+personName(whoOfSrc(s.rec));
+    if(/^material:/.test(s.rec.uri||'')) return 'your file'+(s.rec.title?' '+s.rec.title:'');
+    return (pubName(s.rec.publisher)||s.rec.domain||'source')+(s.rec.published_at?' · '+yr(s.rec.published_at):''); }
+  // Where a source came from, in plain words: 'ShelfLife Magazine · March 2025
+  // · we read it on 28 Sept'.
+  function srcLine(rec,p){
+    rec=rec||{}; var read=rec.retrieved_at||(p&&p.retrieved_at);
+    return [pubName(rec.publisher)||rec.domain||'',rec.published_at?monthYear(rec.published_at):'',read?'we read it on '+dayMonth(read):''].filter(Boolean).join(' · ');
+  }
+
+  // ── who in the crew recorded a thing ────────────────────────────────
+  // The agent that made the newest decision on the path, as the crew names it
+  // (the judge checks things and never records them, so it is passed over);
+  // failing that, the researcher whose lens the key's namespace names (the
+  // server's KEY_LENS: a namespace is a word of its lens's name, and these
+  // extra namespaces map as it maps them).
+  var NS_EXTRA={share:'market_structure',awareness:'brands_positioning',launch:'brands_positioning',product:'brands_positioning'};
+  function crew(){ return typeof NapkinAgents==='object'&&NapkinAgents?NapkinAgents:null; }
+  // The crew member a decision is by. A client-review suggestion is the host's
+  // matcher (process:host, handler client_parts_match; in an older chain the
+  // middleware's find_client_parts): shown as the extract agent's reading of
+  // the client's words.
+  function ellisKey(){ var A=crew(); return A?A.forWork('read')||'':''; }
+  function crewKey(d){
+    var A=crew(); d=d||{}; if(!A) return null;
+    if(/^(client_parts_match|find_client_parts)\b/.test(d.handler||'')||d.agent==='find_client_parts'||d.agent==='client_parts_match'||d.action==='suggest_part') return ellisKey()||null;
+    return A.ofDecision?A.ofDecision(d):null;
+  }
+  function lensOfKey(key){
+    // A contest's key carries its entity first: "category/x.y:codes.dominant_code".
+    var A=crew(), ns=String(key||'').split(':').pop().split('.')[0]; if(!A||!ns) return '';
+    return NS_EXTRA[ns]||arr(A.lenses).filter(function(l){ return l.split('_').indexOf(ns)!==-1; })[0]||'';
+  }
+  function agentOf(path,key,work){
+    var A=crew(); if(!A) return '';
+    var ds=arr(VIEW&&VIEW.decisions);
+    for(var i=0;i<ds.length;i++){ if(!arr(ds[i].targets).some(function(t){ return t.path===path; })) continue;
+      var k=crewKey(ds[i].decision); if(k&&k!=='judge'&&A.given[k]) return k; }
+    if(work) return A.forWork(work)||'';
+    var l=lensOfKey(key); return l?A.forWork('research',l)||'':'';
+  }
+  // A figure by agent key, through the crew's own work names.
+  function figOf(k,o){
+    var A=crew(); if(!A||!k) return '';
+    var ws=['read','synthesise','draft','judge'];
+    for(var i=0;i<ws.length;i++) if(A.forWork(ws[i])===k) return A.figure(ws[i],o);
+    var l=arr(A.lenses).filter(function(x){ return A.forWork('research',x)===k; })[0];
+    return l?A.figure('research',o,l):'';
+  }
+  // The agent says it, in first person, signed by name.
+  function say(k,text,state){
+    var A=crew(); if(!A||!k||!A.given[k]) return '';
+    return '<div class="clf-say-row">'+figOf(k,{decorative:true,state:state||'idle'})+'<div class="clf-say"><span class="who">'+esc(A.who(k))+'</span><p>'+text+'</p></div></div>';
+  }
+  function givenOf(k){ var A=crew(); return A&&A.given[k]||''; }
+
+  // ── what the record says about a ref ────────────────────────────────
+  // By prefix first; otherwise a data path of one segment or more. A path
+  // into what the host writes (projection, upstream) is not a field.
+  var PATH=/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/;
+  function isPath(ref){ return PATH.test(ref)&&!/^(?:projection|upstream)(?:\.|$)/.test(ref); }
+  function kindOf(ref){
+    ref=String(ref==null?'':ref);
+    if(/^f_/.test(ref)) return 'pin';
+    if(/^fi_/.test(ref)) return 'finding';
+    if(/^ct_/.test(ref)) return 'contest';
+    if(/^gap_/.test(ref)) return 'gap';
+    if(/^src_/.test(ref)) return 'source';
+    if(/^psg_/.test(ref)) return 'passage';
+    if(/^cap_/.test(ref)) return 'capture';
+    if(/^mat_/.test(ref)) return 'material';
+    if(/^cite:/.test(ref)) return 'cite';
+    if(isPath(ref)) return 'path';
+    return null;
+  }
+  function openContestOf(fid){ return contests().filter(function(c){ return c.status==='open'&&arr(c.values).some(function(v){ return v.fact_id===fid; }); })[0]||null; }
+  function marks(path){
+    // The newest classify mark nothing superseded, on this path.
+    var ds=arr(VIEW&&VIEW.decisions);
+    for(var i=0;i<ds.length;i++){ var b=ds[i], d=b.decision||{};
+      if(d.kind!=='classify'||b.superseded) continue;
+      if(arr(b.targets).some(function(t){ return t.path===path; })) return d; }
+    return null;
+  }
+  function confidential(ref){
+    var k=kindOf(ref);
+    if(k==='pin'){ var p=pins()[ref]; var m=marks('facts['+ref+']');
+      if(m&&m.licence) return !(m.licence.model&&m.licence.export&&m.licence.corpus);
+      return !!(p&&p.licence==='client-confidential'); }
+    if(k==='finding'){ var f=findings()[ref]; var m2=marks('findings['+ref+']');
+      if(m2&&m2.licence) return !(m2.licence.model&&m2.licence.export&&m2.licence.corpus);
+      return arr(f&&f.cites).some(confidential); }
+    if(k==='material'){ var mt=materials()[ref]; var m3=marks('materials['+ref+']');
+      if(m3&&m3.licence) return !(m3.licence.model&&m3.licence.export&&m3.licence.corpus);
+      return !!(mt&&mt.licence==='client-confidential'); }
+    return false;
+  }
+  function stateOf(ref){
+    var k=kindOf(ref);
+    if(k==='pin'){ var p=pins()[ref]; if(!p) return 'missing'; if(p.replaced_by) return 'replaced'; if(openContestOf(ref)) return 'contest'; return 'sourced'; }
+    if(k==='finding'){ var f=findings()[ref]; if(!f) return 'missing'; return f.status==='proposed'?'check':f.status; }
+    if(k==='contest'){ var c=contest(ref); if(!c) return 'missing'; return c.status==='open'?'contest':'resolved'; }
+    return 'sourced';
+  }
+  // A contest shows as its choice once resolved; a replaced pin as what replaced it.
+  function shownPin(ref){
+    var k=kindOf(ref);
+    if(k==='contest'){ var c=contest(ref); if(c&&c.status==='resolved') return pins()[c.chosen]?c.chosen:null; return null; }
+    return ref;
+  }
+
+  // ── data a person owns: a path into the data, an envelope or a plain value
+  function at(path){ return String(path).split('.').reduce(function(v,k){ return v==null?undefined:v[k]; }, data()); }
+  function envAt(path){ var v=at(path); return (v&&typeof v==='object'&&!Array.isArray(v)&&'value' in v&&'origin' in v)?v:null; }
+  function valueAt(path){ var e=envAt(path); return e?e.value:at(path); }
+  function textOf(v){
+    if(v==null||v==='') return '';
+    if(typeof v==='string'||typeof v==='number') return String(v);
+    if(typeof v==='boolean') return v?'yes':'no';
+    if(Array.isArray(v)) return v.map(function(x){ return typeof x==='object'&&x?(x.name||x.statement||x.label||x.ref||''):String(x); }).filter(Boolean).join(', ');
+    return v.name||v.definition||v.statement||v.label||'';
+  }
+  // What a person can type: a string, a number, a list of plain values, a named thing.
+  function editableValue(v){
+    if(v==null||typeof v==='string'||typeof v==='number') return true;
+    if(Array.isArray(v)) return v.every(function(x){ return typeof x==='string'; });
+    return typeof v==='object'&&typeof v.name==='string'&&Object.keys(v).every(function(k){ return k==='name'||k==='ref'; });
+  }
+  function fromText(old,t){
+    t=String(t).trim();
+    if(Array.isArray(old)) return t.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+    if(typeof old==='number'){ var n=Number(t.replace(/,/g,'')); return isNaN(n)?t:n; }
+    if(old&&typeof old==='object'&&'name' in old){
+      var slug=t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+      var kind=String(old.ref||'brand/x').split('/')[0];
+      return t===old.name?old:{ref:kind+'/'+(slug||'unnamed'), name:t};
+    }
+    return t;
+  }
+  var ORIGIN={extracted:'from your material', proposed:'proposed', confirmed:'confirmed', stated:'you said'};
+
+  // ── where a bare value came from: the decision that wrote it ─────────
+  // A brief's fields are bare values; their provenance is the path's current
+  // writing decision: the newest that wrote it (napkin.middleware/1 §10.5's
+  // rule, the host's `wrote`), an edit or a resolve, not superseded and not a
+  // proposal (Contract 5 §6).
+  function blockOf(id){ return id?arr(VIEW&&VIEW.decisions).filter(function(b){ return b.decision&&b.decision.id===id; })[0]||null:null; }
+  function isEdit(d){ return d.kind?d.kind==='edit':/^(?:confirm|edit|patch-data)/.test(d.action||''); }
+  function qualify(t){ t=String(t||''); return t.indexOf('#')!==-1?t:upstreams()[t]?t+'#':docId()+'#'+t; }
+  function wroteKey(d,key){
+    var top=key.split(/[.[]/)[0], ts=arr(d.targets);
+    if(ts.length){ var a=docId()+'#'+key, b=docId()+'#'+top; return ts.some(function(t){ t=qualify(t); return t===a||t===b; }); }
+    if(arr(d.fields_changed).indexOf(top)===-1) return false;
+    if(key===top) return true;
+    // `top.<leaf>` the action names, as the view writes it: none but this one.
+    var re=new RegExp('(^|[^A-Za-z0-9_.])'+top+'\\.([A-Za-z0-9_]+)','g'), m, ok=true, act=String(d.action||'');
+    while((m=re.exec(act))) if(top+'.'+m[2]!==key) ok=false;
+    return ok;
+  }
+  function writerOf(path){
+    var ds=arr(VIEW&&VIEW.decisions);
+    for(var i=0;i<ds.length;i++){ var b=ds[i], d=b.decision||{};
+      if(b.superseded||d.superseded_by||d.action==='propose'||!(isEdit(d)||d.kind==='resolve')) continue;
+      if(wroteKey(d,path)) return {block:b, at:i}; }
+    return null;
+  }
+  // A proposal newer than what wrote the path, offering something else.
+  function proposalOf(path){
+    var w=writerOf(path), lim=w?w.at:Infinity, ds=arr(VIEW&&VIEW.decisions), me=docId()+'#'+path;
+    for(var i=0;i<ds.length&&i<lim;i++){ var b=ds[i], d=b.decision||{};
+      if(b.superseded||d.superseded_by||d.action!=='propose'||!('proposed_value' in d)) continue;
+      if(!arr(d.targets).some(function(t){ return qualify(t)===me; })) continue;
+      return JSON.stringify(d.proposed_value)===JSON.stringify(valueAt(path))?null:b; }
+    return null;
+  }
+  function isPerson(d){ return /^human(?::|$)/.test(d.actor||d.agent||''); }
+  function provenance(path){
+    var env=envAt(path); if(env) return ORIGIN[env.origin]||env.origin||'';
+    var w=writerOf(path); if(!w) return '';
+    var b=w.block, d=b.decision||{}, act=String(d.action||'');
+    if(isPerson(d)) return b.who&&b.who.you?'you said':personName(/^human:/.test(d.actor||'')?d.actor:'human:'+(b.who&&b.who.name||'someone'))+' said';
+    if(act==='extract') return 'from your material';
+    if(act==='draft'||act==='regenerate'){ var g=givenOf(crewKey(d)); return 'drafted by '+(g||'the agent'); }
+    if(act==='seed') return 'carried over';
+    // Not the client's words: what the research gave, or the crew's assumption.
+    if(act==='from_research') return 'from the research';
+    if(act==='assume') return 'assumed: confirm with the client';
+    return '';
+  }
+  // What needs a person on this path, from the host's list: a field citing a
+  // rejected point, a bad verdict nobody answered, a client's request.
+  function needsAt(path){ var me=docId()+'#'+path; return arr(VIEW&&VIEW.attention).filter(function(a){ return a.address===me; }); }
+  // (A client's answer on a part shows as its chip, beside the part.)
+  var NEED_TAG={flagged_field:'needs changing',bad_verdict:'marked wrong'};
+
+  // ── the host ────────────────────────────────────────────────────────
+  function post(route, body){
+    return fetch(SCHEME+route,{method:'POST',body:JSON.stringify(body||{})})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'status '+r.status}; }).then(function(j){ if(!r.ok&&j&&j.ok!==false) j.ok=false; return j; }); })
+      .then(function(res){
+        if(res&&res.clan&&res.clan.data){
+          window.__CLAN__.data=res.clan.data;
+          if(res.clan.edits) window.__CLAN__.edits=res.clan.edits;
+          window.dispatchEvent(new CustomEvent('clan:dataupdated',{detail:{source:'review',version:res.clan.version}}));
+        }
+        return res;
+      });
+  }
+  // What went wrong, in words a person reads: the host's reason when it is a
+  // sentence, never a code or a record's id.
+  var OFFLINE='That did not go through. Check your connection and try again.';
+  function errorOf(res){ if(!res) return 'No answer came back. Please try again.'; var m=typeof res.error==='string'?res.error:res.error&&res.error.message; if(m) return plainErr(m); if(res.ok===false) return 'That was not accepted. Please try again.'; return ''; }
+  function plainErr(m){ m=String(m).replace(/^[A-Z0-9_]{3,}:\s*/,'').replace(/\b(?:fi|f|ct|gap|src)_[A-Za-z0-9_-]+\b/g,'it').trim();
+    return /\s/.test(m)&&!/^(?:status|error|http)\s*\d+$/i.test(m)?m.charAt(0).toUpperCase()+m.slice(1):'Something went wrong. Please try again.'; }
+  // Each read says so (`clan:viewloaded`), for an app that shows what needs a
+  // person its own way.
+  function loadView(){
+    return fetch(SCHEME+'/decisions').then(function(r){ return r.ok?r.json():null; })
+      .then(function(v){ VIEW=v; }).catch(function(){ VIEW=null; })
+      .then(function(){ window.dispatchEvent(new CustomEvent('clan:viewloaded')); });
+  }
+
+  // ── rendering ───────────────────────────────────────────────────────
+  // What cannot be shown says so in plain words; the record's ids stay out of it.
+  function missing(why){ return '<span class="clf-missing" title="'+esc(why)+'">'+esc(why.charAt(0).toLowerCase()+why.slice(1))+'</span>'; }
+  function tagFor(st){
+    return st==='check'?'<span class="tag">please check</span>':st==='verified'?'<span class="tag">'+TICK+'checked</span>'
+      :st==='rejected'?'<span class="tag">marked wrong</span>':st==='contest'?'<span class="tag">sources disagree</span>'
+      :st==='replaced'?'<span class="tag">replaced</span>':'';
+  }
+  function renderField(el){
+    var ref=el.getAttribute('ref')||'', as=el.getAttribute('as')||'inline', k=kindOf(ref), st=stateOf(ref);
+    var cls={big:'big',stat:'stat',cell:'cell',claim:'claim'}[as]||'in';
+    if(k==='path'){ renderPath(el, ref, as); return; }
+    if(k==='passage'||k==='capture'||k==='material'){ renderEvidence(el, ref, k, as, cls); return; }
+    if(k==='pin'){
+      // A pin a person corrected, or picked against, shows what replaced it.
+      var seen={}, cur=ref;
+      while(pins()[cur]&&pins()[cur].replaced_by&&pins()[pins()[cur].replaced_by.fact_id]&&!seen[cur]){ seen[cur]=1; cur=pins()[cur].replaced_by.fact_id; }
+      if(cur!==ref){ el.setAttribute('data-shows',cur); var hold=el.getAttribute('ref'); el.setAttribute('ref',cur); renderField(el); el.setAttribute('ref',hold);
+        var b=el.querySelector('.clf'); if(b){ b.insertAdjacentHTML('beforeend',' <span class="tag" style="background:var(--clf-green-soft);color:var(--clf-green-ink)">updated</span>'); } return; }
+    }
+    if(st==='missing'||!(k==='pin'||k==='finding'||k==='contest')){ el.innerHTML=missing('This is no longer in the document'); return; }
+    var conf=confidential(ref), cap=el.getAttribute('caption'), tag=tagFor(st), h='', aria='';
+    if(k==='finding'){
+      var f=findings()[ref]; h=(conf?LOCK:'')+esc(f.statement)+' '+tag; aria=f.statement;
+      if(as!=='claim') cls='claim';
+    } else if(k==='contest'&&st==='contest'){
+      var c=contest(ref), vs=arr(c.values);
+      var v='<span class="split-v">'+vs.map(function(x){ return esc(fmt(x)); }).join('<s>or</s>')+'</span>';
+      h=valueShape(as,v,cap||c.key,'',tag,false); aria=(cap||c.key)+': sources disagree';
+    } else {
+      var id=shownPin(ref)||ref, p=pins()[id];
+      if(k==='contest'&&!p){ el.innerHTML=missing('The picked value is no longer in the document'); return; }
+      var pst=k==='contest'?'resolved':st;
+      h=valueShape(as,esc(fmt(p)),cap||label(p),srcShort(p),tagFor(pst),conf||confidential(id));
+      if(typeof p.value==='string'&&cls==='in') cls='in txt';
+      if(p.confidence==='low'&&(as==='big'||as==='stat')) h+=' <span class="tag conf-l">not very sure</span>';
+      aria=(cap||label(p))+': '+fmt(p);
+    }
+    el.innerHTML='<button type="button" class="clf '+cls+' s-'+st+(conf?' conf':'')+(k==='pin'?' correctable':'')+'" data-ref="'+esc(ref)+'" aria-label="'+esc(aria+' — where this came from')+'">'+h+'</button>';
+  }
+  function renderPath(el, path, as){
+    if(el.querySelector('.clf-ed')) return; // being edited: leave it be
+    // Locked, only a part reopened for the client's change may be edited.
+    var v=valueAt(path), t=textOf(v), ok=editableValue(v)&&canEdit(path);
+    var org=provenance(path), need=needsAt(path).filter(function(a){ return NEED_TAG[a.code]; })[0], prop=!need&&proposalOf(path);
+    var block=as==='block'||as==='big'||(typeof v==='string'&&v.length>80);
+    el.innerHTML='<button type="button" class="clf txt-f'+(block?' blk':'')+(ok?' editable':'')+(need?' s-check':prop?' low':'')+'" data-ref="'+esc(path)+'" aria-label="'+esc((el.getAttribute('caption')||path)+': '+(t||'nothing yet')+(need?' — '+NEED_TAG[need.code]:prop?' — a new version is proposed':''))+'">'
+      +(t?esc(t):'<span class="empty">nothing yet</span>')+(org?'<span class="org">'+esc(org)+'</span>':'')
+      +(need?'<span class="tag">'+esc(NEED_TAG[need.code])+'</span>':prop?'<span class="tag conf-l">proposed</span>':'')+'</button>';
+  }
+  // A passage, a capture item or a material, as a field shows it.
+  // A material by its name; the person's own typed words have none worth showing.
+  function matName(m){ return !m?'Your material':m.kind==='prompt'||m.name==='prompt'?'What you typed':m.name||'Your material'; }
+  var MAT_KIND={prompt:'your prompt',client_brief:'the client’s brief',email:'an email',deck:'a deck',image:'an image',other:'a file'};
+  function renderEvidence(el, ref, k, as, cls){
+    var cap=el.getAttribute('caption'), h='', aria='', low=false;
+    if(k==='passage'){ var ps=passages()[ref]; if(!ps){ el.innerHTML=missing('This is no longer in the document'); return; }
+      h=esc(ps.citation||ps.section||ps.source||'A passage')+'<span class="clf-src">'+esc(scopeWord(ps.scope))+'</span>'; aria=ps.citation||'A passage'; if(cls==='in') cls='in txt'; }
+    else if(k==='capture'){ var c=captures()[ref]; if(!c){ el.innerHTML=missing('This is no longer in the document'); return; }
+      var m=materials()[c.material_id], assumed=c.status==='assumption'; low=assumed;
+      h=valueShape(as,esc(textOf(c.value)),cap||words(c.key||''),assumed?'':(m?'from '+(m.name||'your material'):'from your material'),assumed?'<span class="tag conf-l">assumed</span>':'',false);
+      aria=(cap||words(c.key||''))+': '+textOf(c.value)+(assumed?' (assumed)':''); if(cls==='in'&&typeof c.value==='string') cls='in txt'; }
+    else { var mt=materials()[ref]; if(!mt){ el.innerHTML=missing('This is no longer in the document'); return; }
+      var conf=confidential(ref); h=(conf?LOCK:'')+esc(mt.name||'A file')+'<span class="clf-src">'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</span>'; aria=mt.name||'A file'; if(cls==='in') cls='in txt'; }
+    el.innerHTML='<button type="button" class="clf '+cls+(low?' low':'')+'" data-ref="'+esc(ref)+'" aria-label="'+esc(aria+' — where this came from')+'">'+h+'</button>';
+  }
+  function scopeWord(s){ s=String(s||''); return s==='house'?'Napkin’s library':/^agency/.test(s)?'your agency’s library':'the library'; }
+  // A key or a path in words: "single_minded_proposition" → "Single minded proposition".
+  function words(p){ var s=String(p||'').split('.').pop().replace(/_/g,' '); return s.charAt(0).toUpperCase()+s.slice(1); }
+  // Opens an editor on a value a person owns, in edit mode or for a client's
+  // request (opts: why, the reason to start from; answers, the client's part
+  // answer the edit answers; label; done, called when it closes).
+  function editPath(el, path, opts){
+    opts=opts||{};
+    var env=envAt(path), v=valueAt(path), long=typeof v==='string'&&(v.length>60||/prose|problem|objective|audience|background|insight|statement|proposition/.test(path));
+    var list=Array.isArray(v), t=textOf(v), ro=reopenedOf(path), answers=opts.answers||(ro&&ro.answers)||'';
+    el.innerHTML='<div class="clf-ed" role="group" aria-label="Edit '+esc(opts.label||el.getAttribute('caption')||words(path))+'">'
+      +(long?'<textarea>'+esc(t)+'</textarea>':'<input type="text" value="'+esc(t)+'">')
+      +(list?'<span class="hint">Put a comma between each one.</span>':'')
+      +whyRow()+'<div class="clf-err" hidden></div><div class="row"><button type="button" class="clf-btn big primary" data-clf-save>Save</button><button type="button" class="clf-btn big quiet" data-clf-cancel>Cancel</button><span class="hint">Once you save, the crew will not write over it.</span></div></div>';
+    wireWhy(el.querySelector('.clf-ed'));
+    if(opts.why){ var w0=el.querySelector('[data-why]'); w0.value=opts.why; w0.dispatchEvent(new Event('input')); }
+    var box=el.querySelector('.clf-ed textarea, .clf-ed > input'); box.focus(); if(box.setSelectionRange) box.setSelectionRange(box.value.length,box.value.length);
+    function done(){ if(opts.done) opts.done(); else renderPath(el, path, el.getAttribute('as')); }
+    function save(){
+      var next=fromText(v, box.value), btns=el.querySelectorAll('button');
+      if(JSON.stringify(next)===JSON.stringify(v)){ done(); return; }
+      var why=String(el.querySelector('[data-why]').value||'').trim();
+      if(!why){ var e0=el.querySelector('.clf-err'); e0.textContent='Say why you are changing it: tap a reason or type one.'; e0.hidden=false; el.querySelector('[data-why]').focus(); return; }
+      Array.prototype.forEach.call(btns,function(b){ b.disabled=true; });
+      var body={path:path, value:next, gate:(env&&env.gate)||el.getAttribute('gate')||'', rationale:why}; if(answers) body.answers=answers;
+      post('/edit',body).then(function(res){
+        if(res&&res.ok){ loadView(); toast('Saved'); if(el.isConnected) done(); return; }
+        Array.prototype.forEach.call(btns,function(b){ b.disabled=false; });
+        var e=el.querySelector('.clf-err'); e.textContent='That did not save. '+(errorOf(res)||'Please try again.'); e.hidden=false;
+      },function(){ var e=el.querySelector('.clf-err'); e.textContent=OFFLINE; e.hidden=false; Array.prototype.forEach.call(btns,function(b){ b.disabled=false; }); });
+    }
+    el.querySelector('[data-clf-save]').onclick=save;
+    el.querySelector('[data-clf-cancel]').onclick=done;
+    box.addEventListener('keydown',function(e){ if(e.key==='Escape'){ e.preventDefault(); done(); } else if(e.key==='Enter'&&(!long||e.metaKey||e.ctrlKey)){ e.preventDefault(); save(); } });
+  }
+  function valueShape(as,v,cap,src,tag,conf){
+    if(as==='big'||as==='stat') return '<span class="v">'+v+'</span><span class="c">'+(conf?LOCK:'')+esc(cap)+'</span>'+(src?'<span class="clf-src">'+esc(src)+'</span>':'')+(tag?'<span>'+tag+'</span>':'');
+    if(as==='cell') return '<span class="v">'+(conf?LOCK:'')+v+'</span>'+(tag||(src?'<span class="clf-src">'+esc(src)+'</span>':''));
+    return (conf?LOCK:'')+v+(src?'<span class="clf-src">'+esc(src)+'</span>':'')+(tag?' '+tag:'');
+  }
+
+  function chartLabels(el, ps){
+    var given=(el.getAttribute('labels')||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    if(given.length===ps.length) return given;
+    var mk={}, ys={}; ps.forEach(function(p){ mk[p.market||'']=1; ys[yr(p.as_of)]=1; });
+    if(Object.keys(mk).length===ps.length) return ps.map(function(p){ return p.market; });
+    if(Object.keys(ys).length===ps.length) return ps.map(function(p){ return yr(p.as_of); });
+    return ps.map(function(p){ return label(p).split(' · ')[0]; });
+  }
+  function renderChart(el){
+    var refs=(el.getAttribute('refs')||'').split(/\s+/).filter(Boolean), kind=el.getAttribute('kind')||'bar', title=el.getAttribute('title')||'';
+    var rows=refs.map(function(r){ return {ref:r, p:pins()[r]}; });
+    var absent=rows.filter(function(x){ return !x.p||typeof x.p.value!=='number'; }).map(function(x){ return x.ref; });
+    rows=rows.filter(function(x){ return x.p&&typeof x.p.value==='number'; });
+    if(!rows.length){ el.innerHTML=missing('No numbers are saved for this chart yet'); return; }
+    var ps=rows.map(function(x){ return x.p; }), labels=chartLabels(el,ps), svg='';
+    function mark(x,i,inner){ return '<g class="mark" tabindex="0" role="button" data-ref="'+esc(x.ref)+'" aria-label="'+esc(labels[i]+': '+fmt(x.p)+' — where this came from')+'">'+inner+'</g>'; }
+    if(kind==='line'){
+      var W=520,H=el.hasAttribute('compact')?150:250,pl=44,pr=64,pt=18,pb=26, vals=ps.map(function(p){ return p.value; });
+      var lo=Math.min.apply(0,vals), hi=Math.max.apply(0,vals), span=(hi-lo)||Math.abs(hi)||1;
+      lo=lo-span*0.15; hi=hi+span*0.15;
+      var X=function(i){ return pl+(rows.length===1?0:i*(W-pl-pr)/(rows.length-1)); }, Y=function(v){ return pt+(hi-v)*(H-pt-pb)/(hi-lo); };
+      var grid=''; for(var g=0;g<=3;g++){ var gv=lo+(hi-lo)*g/3; grid+='<line x1="'+pl+'" x2="'+(W-pr+8)+'" y1="'+Y(gv)+'" y2="'+Y(gv)+'" stroke="var(--clf-line2)"/><text x="'+(pl-8)+'" y="'+(Y(gv)+4)+'" text-anchor="end" font-size="11" fill="var(--clf-ink3)" font-family="var(--clf-mono)">'+esc(fmt({value:gv,unit:ps[0].unit}))+'</text>'; }
+      var pts=rows.map(function(x,i){ return X(i)+','+Y(x.p.value); });
+      var area='M'+X(0)+','+Y(lo)+' L'+pts.join(' L')+' L'+X(rows.length-1)+','+Y(lo)+'Z';
+      var ms=rows.map(function(x,i){ var last=i===rows.length-1;
+        return mark(x,i,'<rect x="'+(X(i)-16)+'" y="'+pt+'" width="32" height="'+(H-pt-pb)+'" fill="transparent"/><circle cx="'+X(i)+'" cy="'+Y(x.p.value)+'" r="'+(last?5.5:4)+'" fill="'+(last?'var(--clf-chart)':'var(--clf-paper)')+'" stroke="var(--clf-chart)" stroke-width="2"/>'
+          +'<text x="'+X(i)+'" y="'+(H-6)+'" text-anchor="middle" font-size="11" fill="var(--clf-ink3)" font-family="var(--clf-mono)">'+esc(labels[i])+'</text>'
+          +(last?'<text x="'+(X(i)+10)+'" y="'+(Y(x.p.value)+4)+'" font-size="12.5" font-weight="700" fill="var(--clf-ink)">'+esc(fmt(x.p))+'</text>':'')); }).join('');
+      svg='<svg viewBox="0 0 '+W+' '+H+'" role="group" aria-label="'+esc(title)+'">'+grid+'<path d="'+area+'" fill="var(--clf-chart)" opacity=".1"/><polyline points="'+pts.join(' ')+'" fill="none" stroke="var(--clf-chart)" stroke-width="2.2" stroke-linejoin="round"/>'+ms+'</svg>';
+    } else if(kind==='stack'){
+      var W3=520,bh=44,xp=0, total=ps.reduce(function(a,p){ return a+p.value; },0), unitMax=ps[0].unit==='proportion'?1:Math.max(total,1e-9);
+      var parts=rows.map(function(x,i){ var w=W3*x.p.value/unitMax, g=mark(x,i,'<rect class="bar" x="'+xp+'" y="0" width="'+Math.max(w-2,1)+'" height="'+bh+'" rx="4" fill="'+(i%2?'var(--clf-chart2)':'var(--clf-chart)')+'"/><text x="'+(xp+10)+'" y="27" font-size="14" font-weight="700" fill="'+(i%2?'var(--clf-ink)':'#fff')+'">'+esc(fmt(x.p))+'</text><text x="'+xp+'" y="'+(bh+20)+'" font-size="12" fill="var(--clf-ink2)">'+esc(labels[i])+'</text>'); xp+=w; return g; }).join('');
+      var rest=el.getAttribute('rest');
+      if(rest&&xp<W3-4) parts+='<rect x="'+xp+'" y="0" width="'+(W3-xp)+'" height="'+bh+'" rx="4" fill="none" stroke="var(--clf-ink3)" stroke-dasharray="3 3"/><text x="'+(xp+8)+'" y="'+(bh+20)+'" font-size="12" fill="var(--clf-ink3)">'+esc(rest)+'</text>';
+      svg='<svg viewBox="0 0 '+W3+' '+(bh+28)+'" role="group" aria-label="'+esc(title)+'">'+parts+'</svg>';
+    } else {
+      var W2=520,row=38,lw=Math.min(210,Math.max(80,Math.max.apply(0,labels.map(function(l){ return String(l).length; }))*7.4+12)),vw=W2-lw-70,mx=Math.max.apply(0,ps.map(function(p){ return p.value; }))||1;
+      if(ps.every(function(p){ return p.unit==='proportion'; })) mx=Math.max(mx,0.0001);
+      svg='<svg viewBox="0 0 '+W2+' '+(rows.length*row+8)+'" role="group" aria-label="'+esc(title)+'">'+rows.map(function(x,i){ var y=i*row+4, w=Math.max(vw*x.p.value/mx,1);
+        return mark(x,i,'<rect x="0" y="'+y+'" width="'+W2+'" height="'+(row-6)+'" fill="transparent"/><text x="0" y="'+(y+20)+'" font-size="13" fill="var(--clf-ink2)">'+esc(labels[i])+'</text><rect x="'+lw+'" y="'+(y+6)+'" width="'+vw+'" height="20" rx="4" fill="var(--clf-line2)"/><rect class="bar" x="'+lw+'" y="'+(y+6)+'" width="'+w+'" height="20" rx="4" fill="var(--clf-chart)"/><text x="'+(lw+w+8)+'" y="'+(y+21)+'" font-size="13" font-weight="700" fill="var(--clf-ink)">'+esc(fmt(x.p))+'</text>'); }).join('')+'</svg>';
+    }
+    var srcs=uniqNames(ps.map(function(p){ return srcShort(p).split(' · ')[0]; }).filter(Boolean));
+    el.innerHTML='<div class="clf-chart">'+(title?'<span class="eb">'+esc(title)+'</span>':'')+svg+'<div class="foot">'+rows.length+' number'+(rows.length===1?'':'s')+(srcs.length?' · from '+esc(andList(srcs)):'')+(absent.length?' · '+absent.length+' not shown: no number saved':'')+'</div></div>';
+  }
+  // A sentence's evidence, when it states no figure of its own: who says so.
+  function renderCite(el){
+    var refs=(el.getAttribute('refs')||'').split(/[\s,]+/).filter(Boolean), who=[], check=false;
+    refs.forEach(function(r){ var k=kindOf(r);
+      if(k==='pin'&&pins()[r]){ var s=srcShort(pins()[r]).split(' · ')[0]; if(s) who.push(s); }
+      else if(k==='finding'&&findings()[r]){ if(findings()[r].status==='proposed') check=true; who.push('worked out'); }
+      else if(k==='contest'){ check=check||stateOf(r)==='contest'; who.push('sources disagree'); }
+      else if(k==='passage'&&passages()[r]) who.push(scopeWord(passages()[r].scope));
+      else if(k==='capture'&&captures()[r]) who.push('your material');
+      else if(k==='material'&&materials()[r]) who.push(materials()[r].name||'your material'); });
+    who=uniqNames(who);
+    if(!who.length){ el.innerHTML=missing('No source for this'); return; }
+    el.innerHTML='<button type="button" class="clf-cite'+(check?' s-check':'')+'" data-ref="cite:'+esc(refs.join(','))+'" aria-label="'+esc('Where this came from: '+andList(who))+'">'+esc(who[0])+(who.length>1?' +'+(who.length-1):'')+'</button>';
+  }
+  function renderQuote(el){
+    var ref=el.getAttribute('ref')||'', p=pins()[ref], s=srcOf(p), sid=el.getAttribute('source')||(s&&s.id), q=p&&obj(p.quotes)[sid];
+    if(!p||!q){ el.innerHTML=missing('No quote is saved for this'); return; }
+    var rec=sources()[sid]||{};
+    el.innerHTML='<button type="button" class="clf-quote" data-ref="'+esc(ref)+'"><blockquote>'+esc(q)+'</blockquote><span class="by">'+esc([pubName(rec.publisher),rec.title].filter(Boolean).join(', ')||'A source')+'</span></button>';
+  }
+  function renderGap(el){
+    var g=gap(el.getAttribute('ref')||'');
+    if(!g){ el.innerHTML=missing('This is no longer in the document'); return; }
+    var tried=arr(g.sources_tried||g.tried);
+    el.innerHTML='<button type="button" class="clf-gap" data-ref="'+esc(g.id)+'"><span class="ic" aria-hidden="true">?</span><span><b>'+esc(g.wanted||g.key||g.id)+'</b><span>'+esc(g.note||'')+(tried.length?' We looked in '+tried.length+' place'+(tried.length===1?'':'s')+', but found nothing we could quote.':'')+'</span></span></button>';
+  }
+  function renderSources(el){
+    var S=sources(), ids=Object.keys(S), used={};
+    Object.keys(pins()).forEach(function(k){ arr(pins()[k].sources).forEach(function(s){ used[s]=(used[s]||0)+1; }); });
+    contests().forEach(function(c){ arr(c.values).forEach(function(v){ if(!pins()[v.fact_id]) arr(v.sources).forEach(function(s){ used[s]=(used[s]||0)+1; }); }); });
+    if(!ids.length){ el.innerHTML=''; return; }
+    // One number per publisher: its other pieces follow it, named once.
+    var order=[], by={};
+    ids.forEach(function(id){ var s=S[id]||{}, k=pubKey(s.publisher)||'\u0000'+(s.domain||id); if(!by[k]){ by[k]=[]; order.push(k); } by[k].push(id); });
+    var n=0, rows=[];
+    order.forEach(function(k){ by[k].forEach(function(id,j){ var s=S[id]||{}, name=pubName(s.publisher)||s.domain||'A source';
+      rows.push('<li><button type="button" class="clf-srcrow'+(j?' more':'')+'" data-ref="'+esc(id)+'"><span class="n">'+(j?'':++n)+'</span><span>'+(j?'':esc(name))+(s.title?(j?'':' — ')+esc(s.title):j?esc(name):'')+(s.tier?' <small>· '+esc(tierWord(s.tier))+'</small>':'')+'</span><span class="m">'+(used[id]||0)+' fact'+(used[id]===1?'':'s')+'</span></button></li>'); }); });
+    el.innerHTML='<section class="clf-sources"><h2>'+esc(el.getAttribute('title')||'Sources')+' ('+order.length+')</h2><ol>'+rows.join('')+'</ol></section>';
+  }
+
+  // ── the tray ────────────────────────────────────────────────────────
+  function refOfAddress(a){
+    var p=String(a||'').split('#')[1]||'', m=p.match(/^(?:findings|facts|materials)\[([^\]]+)\]$/)||p.match(/^selection\.contested\[([^\]]+)\]$/);
+    return m?m[1]:p;
+  }
+  // What a person would call the thing a ref names.
+  function named(ref){
+    var k=kindOf(ref);
+    if(k==='finding') return (findings()[ref]||{}).statement||'';
+    if(k==='pin') return label(pins()[ref]);
+    if(k==='contest'){ var c=contest(ref), v=c&&arr(c.values)[0]; return v?label(v.pin||pins()[v.fact_id]||{key:c.key}):''; }
+    return '';
+  }
+  // The lock: an approve, not superseded, on THIS document (Contract 4 §7.1).
+  // A carried approve targets the parent: history, not the lock. The newest
+  // is the lock when a document was locked again after a part was reopened.
+  function lockDecision(){ var id=docId();
+    return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
+      return d.kind==='approve'&&!b.superseded&&!d.superseded_by&&(arr(b.targets).some(function(t){ return t&&t.here&&!t.path; })||(!!id&&arr(d.targets).some(function(t){ return t===id||t===id+'#'; }))); })[0]||null; }
+  function reopenedParts(){ return arr(obj(VIEW&&VIEW.lock).reopened); }
+  function renderTray(el){
+    if(!VIEW){ el.innerHTML=''; return; }
+    var lock=lockDecision(), items=arr(VIEW.attention).filter(function(a){ return a.blocks_lock; }), noun=el.getAttribute('noun')||'report', open=lock?reopenedParts():[];
+    var h='<div class="clf-tray" role="region" aria-label="What needs you"><div class="clf-tray-in">';
+    if(lock&&!open.length){ h+='<span class="clf-locked">'+TICK+' Locked by '+esc(lock.who&&lock.who.you?'you':lock.who&&lock.who.name?personName('human:'+String(lock.who.name).replace(/^human:/,'')):'a person')+' · '+esc(plainDate(String(lock.decision.timestamp||'').slice(0,10)))+'</span><span class="items"><span class="clf-muted">Changes from here make a new version.</span></span>'; }
+    else {
+      var fig=typeof NapkinAgents==='object'?NapkinAgents.figure('judge',{state:items.length?'needs-you':'idle',decorative:true}):'';
+      h+='<span class="who">'+fig+'<span class="count'+(items.length?'':' zero')+'">'+(items.length?items.length+' thing'+(items.length===1?'':'s')+' need'+(items.length===1?'s':'')+' you':'Nothing needs you')+'</span></span>';
+      h+='<span class="items">'+(open.length&&!items.length?'<span class="clf-muted">'+esc(andList(open.map(function(r){ return r.label; })))+(open.length===1?' is':' are')+' open for the change the client asked for. Lock it again when you are done.</span>':'')
+        +items.map(function(a){ var ref=refOfAddress(a.address), shown=!!document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
+        return '<button type="button" class="clf-titem" data-ref="'+esc(ref)+'" data-note="'+esc(a.text)+'"><span class="k">'+esc(a.can_set_aside?'Carried over':KIND_LABEL[a.code]||'Needs you')+'</span><span class="x">'+esc(a.can_set_aside?carriedName(a):named(ref)||a.label||a.text)+'</span>'+(shown?'':'<span class="off">not on this page</span>')+'</button>'; }).join('')+'</span>';
+      h+='<button type="button" class="clf-btn primary" data-clf-lock'+(items.length?' disabled title="Everything listed has to be settled first"':'')+'>Lock the '+esc(noun)+(open.length?' again':'')+(items.length?' <span class="n">'+items.length+'</span>':'')+'</button>';
+    }
+    el.innerHTML=h+'</div></div>';
+  }
+  var KIND_LABEL={finding_on_excluded_fact:'Rests on a fact marked wrong',open_contest:'Sources disagree',unverified_finding:'Is this right?',flagged_field:'Needs changing',bad_verdict:'Marked wrong',unmerged_branch:'Copy not brought back',client_rejected:'Client rejected',client_rejected_parts_unknown:'Which parts?'};
+  function cssEsc(s){ return String(s).replace(/["\\]/g,'\\$&'); }
+
+  // ── carried items nothing here can settle ───────────────────────────
+  // A field of the research frozen in this document that rests on a point
+  // marked wrong here, work an agent never brought back into it, two agents
+  // it left disagreeing: each is the research's to settle. Until it does, a
+  // person may set it aside, with a reason (OS-layer contract §7.2.1).
+  function carriedAt(ref){ return arr(VIEW&&VIEW.attention).filter(function(a){ return a.can_set_aside&&a.blocks_lock&&!!a.address&&(a.address===ref||refOfAddress(a.address)===ref); }); }
+  function setAsideOf(ref){ return arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
+    return d.action==='set_aside'&&!b.superseded&&!d.superseded_by&&arr(b.targets).some(function(t){ return !t.here&&(t.address===ref||refOfAddress(t.address)===ref); }); })[0]||null; }
+  function carriedFrom(address){ return upTitle(String(address||'').split('#')[0]); }
+  function carriedName(a){ var p=String(a.address||'').split('#')[1]||'', m;
+    if(a.code==='unmerged_branch') return 'Work not brought back into '+carriedFrom(a.address);
+    if((m=/^merge-report\[(.*)\]$/.exec(p))) return /^decisions\[/.test(m[1])?'Agents disagree on a call':'Agents disagree on '+words(m[1]).toLowerCase();
+    if(/^selection\.contested\[/.test(p)){ var k=String(a.label||'').replace(/^Contest · /,'').split(':').pop().split('@')[0]; return k?'Sources disagree on '+words(k).toLowerCase():'Sources disagree'; }
+    return a.label||words(p); }
+  var CARRIED_WHY={
+    flagged_field:'It rests on a point marked wrong here. It belongs to {from}, so it cannot be changed here.',
+    unmerged_branch:'An agent did this work in {from}, and it was never brought back into it.',
+    open_contest:'Two agents working on {from} disagreed here, and nobody picked one.',
+    contest:'The sources {from} used disagree here, and this copy holds none of their values to pick from.'};
+  function carriedBlock(items){
+    var a=items[0], from=carriedFrom(a.address), noun=trayNoun();
+    var h='<div class="clf-dv"><span class="stmt">'+esc(carriedName(a))+'</span><div class="clf-pills"><span class="clf-pill check">Carried over from '+esc(from)+'</span></div></div>'
+      +'<p class="clf-ex">'+esc(String(CARRIED_WHY[/#selection\.contested\[/.test(a.address||'')?'contest':a.code]||'It came with {from}.').replace('{from}',from))+' It is settled there. Until it is, it stops you locking this '+esc(noun)+'.</p>';
+    if(locked()) return h;
+    return h+'<div class="clf-sec" data-clf-anchor><h3 class="ask">Can this '+esc(noun)+' go ahead without it?</h3>'
+      +'<div class="clf-answers"><button type="button" class="clf-btn big primary" data-clf="aside" data-target="'+esc(a.address)+'">Set aside, with a reason</button></div>'
+      +'<p class="clf-muted">Your reason is kept with this '+esc(noun)+'. Nothing in '+esc(from)+' changes.</p></div>';
+  }
+  function asideForm(target){
+    var noun=trayNoun();
+    return '<form class="clf-form" data-clf-form="aside" data-target="'+esc(target)+'"><label><span>Why can this '+esc(noun)+' go ahead without it? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
+      +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Set aside, with a reason</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
+      +'<p class="clf-muted">Your reason is kept with this '+esc(noun)+', and it no longer stops the lock.</p></form>';
+  }
+  function asideDone(b){ var d=b.decision||{};
+    return '<div class="clf-dv"><span class="stmt">'+esc(arr(b.targets).map(function(t){ return t.label; })[0]||'Carried over')+'</span><div class="clf-pills"><span class="clf-pill ok">'+TICK+' Set aside</span></div></div>'
+      +'<p class="clf-by"><b>'+esc(whoDid(b))+'</b> set it aside'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+'</p>'
+      +(d.rationale?'<blockquote class="clf-q said">'+esc(d.rationale)+'</blockquote>':''); }
+
+  // ── the drawer ──────────────────────────────────────────────────────
+  function ensureDrawer(){
+    if(DRAWER) return DRAWER;
+    var scrim=document.createElement('div'); scrim.className='clf-scrim';
+    var d=document.createElement('aside'); d.className='clf-drawer'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-hidden','true'); d.setAttribute('aria-labelledby','clf-dtitle');
+    d.innerHTML='<div class="clf-dh"><button type="button" class="clf-ib" data-clf="back" aria-label="Back" hidden><svg width="16" height="16" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 2 4 7l5 5"/></svg></button><h2 class="crumb" id="clf-dtitle"></h2><button type="button" class="clf-ib" data-clf="close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2 2l8 8M10 2 2 10"/></svg></button></div><div class="clf-db"></div>';
+    var t=document.createElement('div'); t.className='clf-toast'; t.setAttribute('role','status'); t.setAttribute('aria-live','polite');
+    document.body.appendChild(scrim); document.body.appendChild(d); document.body.appendChild(t);
+    scrim.addEventListener('click',close);
+    d.addEventListener('click',onDrawerClick);
+    d.addEventListener('submit',onDrawerSubmit);
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&d.classList.contains('on')) close(); });
+    DRAWER={scrim:scrim, el:d, body:d.querySelector('.clf-db'), crumb:d.querySelector('.crumb'), back:d.querySelector('[data-clf="back"]'), toast:t};
+    return DRAWER;
+  }
+  function toast(msg){ var t=ensureDrawer().toast; t.textContent=msg; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(function(){ t.classList.remove('on'); },2600); }
+  function open(ref,push,note){ ensureDrawer(); if(!push) STACK=[]; STACK.push({ref:ref,note:note||''}); draw(); DRAWER.el.classList.add('on'); DRAWER.el.setAttribute('aria-hidden','false'); DRAWER.scrim.classList.add('on'); setTimeout(function(){ DRAWER.el.querySelector('[data-clf="close"]').focus(); },50); }
+  function close(){ if(!DRAWER) return; DRAWER.el.classList.remove('on'); DRAWER.el.setAttribute('aria-hidden','true'); DRAWER.scrim.classList.remove('on'); STACK=[]; }
+  function top(){ return STACK[STACK.length-1]||{}; }
+  function locked(){ return !!lockDecision(); }
+
+  // A source in plain words: who published it, when, and when we read it; the
+  // rest of its record folds away under "More about this source".
+  function tierWord(t){ return t==='reviewer-verified'?'checked by a person':String(t||'').replace(/[-_]+/g,' '); }
+  function openLink(uri){ return /^https?:\/\//.test(uri||'')?'<a href="'+esc(uri)+'" target="_blank" rel="noopener noreferrer">Open it ↗</a>':''; }
+  function srcCard(sid,p,unfold){
+    var s=sources()[sid];
+    if(/^human:/.test(sid)) return '<p class="clf-by">'+TICK+' Checked by <b>'+esc(personName(sid))+'</b></p>';
+    if(s&&s.tier==='reviewer-verified'){ var web=/^https?:/.test(s.uri||'');
+      return '<p class="clf-by">'+(/correct/.test(s.title||'')?'Corrected':'Checked')+' by <b>'+esc(personName(whoOfSrc(s)))+'</b>'+(s.retrieved_at?' on '+esc(dayMonth(s.retrieved_at)):'')
+        +' · '+(web?'from '+esc(s.domain||s.uri)+' · '+openLink(s.uri):(isYou(whoOfSrc(s))?'from what you know':'from what they know'))+'</p>'; }
+    if(!s) return '<p class="clf-muted">We no longer have the details of this source: it was saved before sources were kept with the document.</p>';
+    var name=pubName(s.publisher)||s.domain||'', rest=srcLine(s,p).slice(name.length).replace(/^ · /,''), link=openLink(s.uri);
+    var more=[s.title?['What it is',s.title]:null, s.tier?['Kind of source',tierWord(s.tier)]:null, s.published_at?['Came out',plainDate(s.published_at)]:null,
+      s.retrieved_at?['We read it',dayMonth(s.retrieved_at,true)]:null, s.licence?['Licence',s.licence]:null, (s.domain||s.uri)?['Web address',s.domain||s.uri]:null].filter(Boolean);
+    return '<p class="clf-by">'+(name?'<b>'+esc(name)+'</b>':'')+(rest?(name?' · ':'')+esc(rest):'')+(link?(name||rest?' · ':'')+link:'')+'</p>'
+      +(more.length?'<details class="clf-more"'+(unfold?' open':'')+'><summary>More about this source</summary><div class="clf-card"><dl>'+more.map(function(x){ return '<dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd>'; }).join('')+'</dl></div></details>':'');
+  }
+  // Mark where the quote states the value, in whichever of the ways sources
+  // write a number it uses: "23%", "23 per cent", "€412 million", "412m".
+  function quoteBlock(q,p){
+    var text=String(q), lower=text.toLowerCase(), at=-1, len=0;
+    spellings(p).some(function(c){ var i=lower.indexOf(c.toLowerCase()); if(i!==-1){ at=i; len=c.length; return true; } return false; });
+    var h=at===-1?esc(text):esc(text.slice(0,at))+'<mark>'+esc(text.slice(at,at+len))+'</mark>'+esc(text.slice(at+len));
+    return '<blockquote class="clf-q said">'+h+'</blockquote>';
+  }
+  function spellings(p){
+    if(!p||p.value==null) return [];
+    var v=p.value, out=[];
+    if(typeof v!=='number') return [String(v)];
+    if(p.unit==='proportion'){ var pc=Math.round(v*1000)/10; return [pc+'%',pc+' per cent',pc+' percent',pc+'pc',String(pc)]; }
+    var a=Math.abs(v);
+    if(a>=1e9){ var bn=Math.round(v/1e8)/10; out.push(bn+' billion',bn+'bn',bn+'b'); }
+    if(a>=1e6){ var mn=Math.round(v/1e5)/10; out.push(mn+' million',mn+'m',mn+' mn'); }
+    if(a>=1e3){ var k=Math.round(v/100)/10; out.push(k+' thousand',k+'k'); }
+    try{ out.push(v.toLocaleString('en-IE')); }catch(e){}
+    out.push(v.toFixed&&v%1?v.toFixed(2):String(v), String(v));
+    return out;
+  }
+  function evidence(p){
+    var h='', qs=obj(p.quotes), srcs=arr(p.sources).filter(function(s){ return /^src_|^human:/.test(s); });
+    if(!srcs.length) return '<p class="clf-muted">No source was saved for this.</p>';
+    srcs.forEach(function(sid){ var q=qs[sid], rec=sources()[sid], person=rec&&rec.tier==='reviewer-verified';
+      h+='<div class="clf-sec"><h3>'+(q?(person?(isYou(whoOfSrc(rec))?'What you said':'What they said'):'What the source says'):'The source')+'</h3>'
+        +(q?(person?'<blockquote class="clf-q said">'+esc(saidBy(q,rec))+'</blockquote>':quoteBlock(q,p)):'')+srcCard(sid,p)+'</div>'; });
+    return h;
+  }
+  // The publishers a set of pins was taken from, each named once.
+  function pubsOf(ids){ return uniqNames(ids.map(function(c){ var s=srcOf(pins()[c]); return s&&s.rec&&s.rec.tier!=='reviewer-verified'?s.rec.publisher||s.rec.domain||'':''; }).filter(Boolean)); }
+  function bolds(xs){ return andList(xs.map(function(x){ return '<b>'+esc(x)+'</b>'; })); }
+  var SURE={high:'very sure',medium:'fairly sure',low:'not very sure'};
+  function pills(ref){
+    var st=stateOf(ref), h='';
+    var pp=pins()[ref], ps=pp&&srcOf(pp), byPerson=ps&&ps.rec&&ps.rec.tier==='reviewer-verified';
+    if(byPerson&&st==='sourced') st='by-person';
+    if(st==='contest'&&carriedAt(ref).length) st='contest-carried';  // nothing here to pick: only to set aside
+    h+={'by-person':'<span class="clf-pill ok">'+TICK+' '+esc(srcShort(pp).replace(/^./,function(c){ return c.toUpperCase(); }))+'</span>',sourced:'<span class="clf-pill">Found in a source · the words match</span>',check:'<span class="clf-pill check">Worked out by the crew · please check</span>',verified:'<span class="clf-pill ok">'+TICK+' Checked</span>',rejected:'<span class="clf-pill check">Marked wrong</span>',contest:'<span class="clf-pill check">Sources disagree · pick one</span>','contest-carried':'<span class="clf-pill check">Sources disagree</span>',resolved:'<span class="clf-pill ok">'+TICK+' Picked</span>',replaced:'<span class="clf-pill check">Replaced by a person’s pick</span>'}[st]||'';
+    if(confidential(ref)) h+='<span class="clf-pill conf">'+LOCK+'Private</span>';
+    var p=pins()[ref]; if(p&&p.confidence&&p.confidence!=='high') h+='<span class="clf-pill warn">'+esc(SURE[p.confidence]?SURE[p.confidence].replace(/^./,function(c){ return c.toUpperCase(); }):p.confidence)+'</span>';
+    if(p&&p.stale) h+='<span class="clf-pill warn">Out of date: a newer number is saved</span>';
+    return '<div class="clf-pills">'+h+'</div>';
+  }
+  // What happened to a thing, in plain words: who did what, when, and why.
+  var DID={verdict:'checked it',verify:'said it is right',classify:'set who may see it',edit:'changed it',correct:'corrected it',resolve:'picked a value',approve:'locked it',finding:'worked it out',pin:'saved it',claim:'saved it',
+    client_review:'recorded the client’s answer',unlock:'opened it for the client’s change',backref:'noted it was used'};
+  var DID_ACTION={propose:'proposed a new version',suggest_part:'thinks the client meant it',dismiss_part:'said the client did not mean it',looks_right:'said it looks right',set_aside:'set it aside',seed:'carried it over',extract:'took it from your material',draft:'drafted it',regenerate:'drafted it again',look:'changed the look'};
+  function whoDid(b){
+    var d=b.decision||{}, A=crew(), k=crewKey(d);
+    if(b.who&&b.who.you) return 'You';
+    if(k&&A.given[k]) return A.given[k];
+    var n=b.who&&b.who.name||(/^human:/.test(d.actor||'')?d.actor:'');
+    return n?personName(/^human:/.test(n)?n:'human:'+n).replace(/^./,function(c){ return c.toUpperCase(); }):'The crew';
+  }
+  function history(path){
+    var ds=arr(VIEW&&VIEW.decisions).filter(function(b){ return arr(b.targets).some(function(t){ return t.path===path; }); });
+    if(!ds.length) return '';
+    return '<details class="clf-more"><summary>What happened to it ('+ds.length+')</summary><ul class="clf-hist">'+ds.slice(0,6).map(function(b){ var d=b.decision||{};
+      var did=DID_ACTION[d.action]||(d.kind==='verdict'?(d.polarity==='bad'?'said it is wrong':'said it is right'):DID[d.kind]||'changed it');
+      return '<li><span><b>'+esc(whoDid(b))+'</b> '+did+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(d.rationale?' — “'+esc(d.rationale.length>160?d.rationale.slice(0,157)+'…':d.rationale)+'”':'')+'</span></li>'; }).join('')+'</ul></details>';
+  }
+  function wrote(ref){
+    var el=document.querySelector('clan-field[ref="'+cssEsc(ref)+'"],clan-field[data-shows="'+cssEsc(ref)+'"],clan-quote[ref="'+cssEsc(ref)+'"],clan-gap[ref="'+cssEsc(ref)+'"]');
+    if(!el){ var c=document.querySelectorAll('clan-chart'); for(var i=0;i<c.length;i++){ if((' '+c[i].getAttribute('refs')+' ').indexOf(' '+ref+' ')!==-1){ el=c[i]; break; } } }
+    return '<details class="clf-more"><summary>How the '+esc(trayNoun())+' shows this</summary>'+(el?'<pre class="clf-q" style="font-family:var(--clf-mono);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere">'+esc(el.outerHTML.replace(/>[\s\S]*<\//,'></'))+'</pre>':'<p class="clf-muted">This page does not show it. It is still saved, so it stays on the list at the top.</p>')+'</details>';
+  }
+  // "Keep it private", with what private means, under every review.
+  function privBlock(){
+    return '<div class="clf-answers"><button type="button" class="clf-btn big quiet" data-clf="conf">'+LOCK+'Keep it private</button><p class="clf-ex">Private keeps it out of the agency’s shared memory, so work for other clients never learns from it. The client still sees it, and our agents still use it on this document.</p></div>';
+  }
+  function confForm(ref,target){
+    return '<form class="clf-form" data-clf-form="classify" data-target="'+esc(target)+'"><b>Keep it private</b>'
+      +(confidential(ref)?'<p class="clf-muted">It is already private. What you choose now replaces what was chosen before.</p>':'')
+      +'<p class="clf-ex">Tick what may still happen with it. Anything you leave unticked is kept from it.</p>'
+      +'<label class="clf-toggle"><input type="checkbox" name="model" checked><span>Our agents may read it<small>If not ticked, no agent reads it, not even the agency’s own.</small></span></label>'
+      +'<label class="clf-toggle"><input type="checkbox" name="export" checked><span>It may go in files you send out<small>If not ticked, it is left out of anything that leaves the workspace.</small></span></label>'
+      +'<label class="clf-toggle"><input type="checkbox" name="corpus"><span>Other campaigns may learn from it<small>If not ticked, it stays out of the agency’s shared memory.</small></span></label>'
+      +'<label><span>Why keep it private? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
+      +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it private</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div></form>';
+  }
+  function correctForm(ref,p){
+    return '<form class="clf-form" data-clf-form="correct"><b>What is the right value?</b>'
+      +'<label>The right value<input type="text" name="value" value="'+esc(fmt(p))+'"></label>'
+      +'<label><span>Where is it from? <span class="opt">A link. Leave it empty if you just know it.</span></span><input type="url" name="src" placeholder="https://"></label>'
+      +'<label><span>Why is the old one wrong? <span class="req">needed</span></span><textarea name="why"></textarea></label>'
+      +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Save the right value</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
+      +'<p class="clf-muted">Your value goes into the agency’s shared memory, with you as its source. The old one stays on record, marked as replaced.</p></form>';
+  }
+  function badForm(target){
+    return '<form class="clf-form" data-clf-form="bad" data-target="'+esc(target)+'"><label><span>What is wrong with it? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
+      +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big danger">Mark it wrong</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div></form>';
+  }
+  var STATUS_WORD={proposed:'please check',verified:'checked',rejected:'marked wrong'};
+  function gone(){ return '<p class="clf-muted">This is no longer in the document.</p>'; }
+  // What the document is called: the tray's noun, else the page's own
+  // (<html data-clan-noun="brief">), else a report.
+  function trayNoun(){ var t=document.querySelector('clan-tray[noun]'); return t&&t.getAttribute('noun')||document.documentElement.getAttribute('data-clan-noun')||'report'; }
+  function judgeKey(){ var A=crew(); return A?A.forWork('judge')||'':''; }
+  function uniq(xs){ var s={}; return xs.filter(function(x){ if(!x||s[x]) return false; s[x]=1; return true; }); }
+  function clip(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; }
+  function plural(n,w){ return n+' '+w+(n===1?'':'s'); }
+  function becauseList(rs){ var bs=arr(obj(rs).because).filter(function(p){ return p&&p.point; });
+    return bs.length?'<ul class="clf-hist">'+bs.map(function(p){ return '<li><span>'+esc(p.point)+'</span></li>'; }).join('')+'</ul>':''; }
+  function attnOf(rs){ var a=obj(rs).attention; return (Array.isArray(a)?a:a?[a]:[]).filter(function(x){ return typeof x==='string'&&x; }); }
+
+  // Where a bare value came from: its current writing decision, with what it
+  // cites — the client's words, the library's passages, the facts with what
+  // their source says, the points the crew worked out — and why.
+  function writerBlock(ref){
+    var w=writerOf(ref); if(!w) return '';
+    var b=w.block, d=b.decision||{}, rs=obj(d.reasoning), h='';
+    var ids=uniq([].concat.apply(arr(d.cites),arr(rs.because).map(function(p){ return arr(p&&p.cites); })).map(String));
+    var caps=ids.filter(function(i){ return kindOf(i)==='capture'&&captures()[i]; }), psgs=ids.filter(function(i){ return kindOf(i)==='passage'&&passages()[i]; });
+    var fs=ids.filter(function(i){ return kindOf(i)==='pin'&&pins()[i]; }), fis=ids.filter(function(i){ return kindOf(i)==='finding'&&findings()[i]; });
+    var viaCap={}; caps.forEach(function(c){ viaCap[captures()[c].material_id]=1; });
+    var mats=ids.filter(function(i){ return kindOf(i)==='material'&&materials()[i]&&!viaCap[i]; });
+    if(isPerson(d)) h+='<p class="clf-by"><b>'+esc(whoDid(b))+'</b> wrote this'+(d.timestamp?' on '+esc(dayMonth(d.timestamp,true)):'')+(d.rationale?' — “'+esc(clip(d.rationale,200))+'”':'')+'</p>';
+    else {
+      var act=String(d.action||''), from=[];
+      if(caps.length||mats.length) from.push('your material');
+      if(psgs.length) from.push(plural(psgs.length,'passage')+' from the library');
+      if(fs.length) from.push(plural(fs.length,'fact'));
+      if(fis.length) from.push(plural(fis.length,'point')+' the crew worked out');
+      var line=act==='extract'?'I took this from your material.'
+        :act==='seed'?'This came over from '+upTitle(String(arr(d.cites)[0]||'').split('#')[0])+' when this document started from it.'
+        :(act==='draft'||act==='regenerate'?'I drafted this':'I wrote this')+(from.length?' from '+andList(from):'')+'.';
+      h+=say(crewKey(d),esc(line))||'<p class="clf-by">'+esc(line)+'</p>';
+    }
+    // The same words cited twice (two capture items saying one thing) show once.
+    var seenQ={}; caps=caps.filter(function(c){ var q=String(obj(captures()[c]).quote||''); if(!q) return true; if(seenQ[q]) return false; seenQ[q]=1; return true; });
+    if(caps.length) h+='<div class="clf-sec"><h3>What your material says</h3>'+caps.map(function(c){ var ci=captures()[c], m=materials()[ci.material_id];
+      return ci.quote?'<blockquote class="clf-q said">'+esc(ci.quote)+'</blockquote><p class="clf-by">'+esc(matName(m))+(ci.status==='assumption'?' · assumed, not said':'')+'</p>'
+        :'<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(textOf(ci.value))+'<small>'+(ci.status==='assumption'?'assumed, not said':'from your material')+'</small></span><b></b></button></div>'; }).join('')+'</div>';
+    if(mats.length) h+='<div class="clf-sec"><h3>From your material</h3><div class="clf-rows">'+mats.map(function(m){ var mt=materials()[m]; return '<button type="button" class="clf-row" data-open="'+esc(m)+'"><span>'+esc(mt.name||'A file')+'<small>'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</small></span><b></b></button>'; }).join('')+'</div></div>';
+    if(psgs.length) h+='<div class="clf-sec"><h3>What the library says</h3><div class="clf-rows">'+psgs.map(function(p){ var pg=passages()[p];
+      return '<button type="button" class="clf-row" data-open="'+esc(p)+'"><span>'+esc(pg.citation||'A passage')+(pg.text?'<small>“'+esc(clip(pg.text,180))+'”</small>':'')+'</span><b></b></button>'; }).join('')+'</div></div>';
+    if(fs.length) h+='<div class="clf-sec"><h3>The facts it uses</h3><div class="clf-rows">'+fs.map(function(f){ var p=pins()[f], s=srcOf(p), q=s&&obj(p.quotes)[s.id];
+      return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(label(p))+'<small>'+(q?'“'+esc(clip(q,160))+'” · ':'')+esc(srcShort(p))+'</small></span><b>'+(confidential(f)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
+    if(fis.length) h+='<div class="clf-sec"><h3>Points the crew worked out</h3><div class="clf-rows">'+fis.map(function(f){ var fi=findings()[f];
+      return '<button type="button" class="clf-row" data-open="'+esc(f)+'"><span>'+esc(fi.statement)+'<small>'+(fi.status==='proposed'?'derived by the agent · not checked yet':esc(STATUS_WORD[fi.status]||fi.status||''))+'</small></span><b></b></button>'; }).join('')+'</div></div>';
+    var why=becauseList(rs), sure=obj(rs.certainty);
+    if(why) h+='<details class="clf-more"><summary>Why it says this</summary>'+why+'</details>';
+    if(sure.level) h+='<p class="clf-muted">How sure: '+esc(SURE[sure.level]||sure.level)+(sure.why?'. '+esc(sure.why.charAt(0).toUpperCase()+sure.why.slice(1)):'')+'.</p>';
+    attnOf(rs).forEach(function(a){ h+='<p class="clf-muted">'+esc(a)+'</p>'; });
+    return h;
+  }
+  // A proposal the crew made for a value a person holds: shown, never applied.
+  function proposalBlock(ref){
+    var pb=proposalOf(ref); if(!pb) return '';
+    var d=pb.decision, w=writerOf(ref), mine=w&&w.block.who&&w.block.who.you;
+    return '<div class="clf-sec"><h3 class="ask">A new version is proposed</h3>'
+      +(say(crewKey(d),esc('I have a new version of this. '+(mine?'You':'A person')+' wrote the one here, so I did not change it.'))||'')
+      +'<blockquote class="clf-q">'+esc(textOf(d.proposed_value))+'</blockquote>'+(becauseList(d.reasoning)?'<details class="clf-more"><summary>Why this version</summary>'+becauseList(d.reasoning)+'</details>':'')
+      +(canEdit(ref)?'<div class="clf-answers"><button type="button" class="clf-btn big primary" data-clf="useprop" data-d="'+esc(d.id)+'">Use the proposal</button></div><p class="clf-muted">If you leave it, nothing changes.</p>':'')+'</div>';
+  }
+  // The Judge's verdicts on a path, and the answers a person gives them.
+  var RC={not_single_minded:'it says more than one thing',cliche:'it sounds like a cliché',off_strategy:'it does not follow from the rest of the brief',unfeasible:'it does not fit the budget'};
+  function acked(id){ return arr(VIEW&&VIEW.decisions).some(function(b){ var d=b.decision||{}; return !b.superseded&&d.action==='looks_right'&&arr(d.cites).indexOf(id)!==-1; }); }
+  // A bad verdict across fields is answered field by field: on this path
+  // (`me`, when given) it is open only while the host still lists it here.
+  function openVerdict(b,me){ var d=b.decision||{};
+    if(d.polarity==='bad') return arr(VIEW&&VIEW.attention).some(function(a){ return a.decision===d.id&&a.blocks_lock&&(!me||a.address===me); });
+    return !acked(d.id)&&(arr(b.attention).length>0||arr(VIEW&&VIEW.attention).some(function(a){ return a.decision===d.id; })); }
+  function verdictBlock(ref){
+    var me=docId()+'#'+ref;
+    var vs=arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
+      return (d.kind==='verdict'||d.polarity)&&!b.superseded&&d.action!=='looks_right'&&!isPerson(d)&&arr(d.targets).some(function(t){ return qualify(t)===me; }); });
+    if(!vs.length) return '';
+    var shown=vs.filter(function(b,i){ return i===0||openVerdict(b,me); }).slice(0,3), jk=judgeKey();
+    return '<div class="clf-sec"><h3>What '+esc(givenOf(jk)||'the Judge')+' thinks</h3>'+shown.map(function(b){
+      var d=b.decision, bad=d.polarity==='bad', open=openVerdict(b,me), k=crewKey(d)||jk, at=attnOf(d.reasoning)[0];
+      var text=bad?'I think this needs work'+(RC[d.reason_code]?': '+RC[d.reason_code]:'')+'.'+(d.rationale?' '+clip(d.rationale,280):'')
+        :'I checked it and it holds up.'+(at?' '+at:'');
+      var h=say(k,esc(text),bad&&open?'needs-you':'idle')||'<p class="clf-by">'+esc(text)+'</p>';
+      if(!bad&&acked(d.id)) h+='<p class="clf-muted">'+TICK+' Someone said it looks right.</p>';
+      if(bad&&!open) h+='<p class="clf-muted">'+TICK+' Answered here: it was changed since, or kept with a reason.</p>';
+      if(open&&!locked()) h+='<div class="clf-answers">'+(bad?'<button type="button" class="clf-btn big" data-clf="override">Override with a reason</button>'
+        :'<button type="button" class="clf-btn big primary" data-clf="ack" data-d="'+esc(d.id)+'">Looks right</button><button type="button" class="clf-btn big quiet" data-clf="pathbad">It’s wrong…</button>')+'</div>'
+        +(bad&&!editableValue(valueAt(ref))?'<p class="clf-muted">Or change it: choose <b>Edit</b> under More at the top, then tap it.</p>':'');
+      return h; }).join('')+'</div>';
+  }
+  // A fact a person marked wrong: it says so, with their reason, and what the
+  // crew does with it (the app takes it out and checks what rested on it), in
+  // place of "Is this right?", so it is never marked twice.
+  function wrongBlock(ref){
+    var me=docId()+'#facts['+ref+']';
+    var vb=arr(VIEW&&VIEW.decisions).filter(function(b){ var d=b.decision||{};
+      return d.kind==='verdict'&&d.polarity==='bad'&&!b.superseded&&isPerson(d)&&arr(d.targets).some(function(t){ return qualify(t)===me; }); })[0];
+    var ex=arr(obj(data().selection).excluded).filter(function(e){ return e&&e.fact_id===ref; })[0];
+    if(!vb&&!ex) return '';
+    var by=vb?(vb.who&&vb.who.you?'You':personName(vb.decision.actor||'')):'';
+    var why=(vb&&vb.decision.rationale)||(ex&&ex.reason)||'';
+    return '<div class="clf-sec" data-clf-anchor><h3 class="ask">'+(by?esc(by.charAt(0).toUpperCase()+by.slice(1))+' marked this wrong':'Marked wrong')+'</h3>'
+      +(why?'<blockquote class="clf-q said">'+esc(why)+'</blockquote>':'')
+      +'<p class="clf-ex">'+(ex?'It is taken out: nothing in the research uses it now. What rested on it was checked again without it, and anything that changed is in “What happened”.'
+        :'The crew is taking it out and checking everything that rested on it. That takes a minute or two; this changes when it is done.')+'</p></div>';
+  }
+  // What else needs a person on a path: a field resting on a point someone
+  // marked wrong, or a person's own "it's wrong" nobody has answered.
+  function needsBlock(ref){
+    return needsAt(ref).map(function(a){
+      if(a.code==='flagged_field'){ var fid=(/\b(fi_[A-Za-z0-9_-]+)/.exec(a.text||'')||[])[1], f=fid&&findings()[fid];
+        return '<div class="clf-sec"><h3 class="ask">This needs changing</h3><p class="clf-ex">It rests on a point someone marked wrong. Change it so it no longer uses that point, then lock the '+esc(trayNoun())+'.</p>'
+          +(f?'<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(fid)+'"><span>'+esc(f.statement)+'<small>marked wrong</small></span><b></b></button></div>':'')+'</div>'; }
+      if(a.code==='bad_verdict'){ var vb=blockOf(a.decision); if(vb&&!isPerson(vb.decision)) return ''; // the crew's: in its verdict below
+        return '<div class="clf-sec"><h3 class="ask">Someone said this is wrong</h3>'+(vb&&vb.decision.rationale?'<blockquote class="clf-q said">'+esc(vb.decision.rationale)+'</blockquote>':'')
+          +'<p class="clf-ex">Change it, or say why it is right as it is.</p>'+(!locked()?'<div class="clf-answers"><button type="button" class="clf-btn big" data-clf="override">Keep it, and say why</button></div>':'')+'</div>'; }
+      return '';
+    }).join('');
+  }
+  function overrideForm(target){
+    return '<form class="clf-form" data-clf-form="override" data-target="'+esc(target)+'"><label><span>Why is it right as it is? <span class="req">needed</span></span><textarea name="why" required></textarea></label>'
+      +'<div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Keep it as it is</button><button type="button" class="clf-btn big quiet" data-clf="redraw">Cancel</button></div>'
+      +'<p class="clf-muted">Your reason is kept with it, and the doubt is marked answered.</p></form>';
+  }
+  function draw(){
+    var t=top(), ref=t.ref, k=kindOf(ref), b='', crumb='Where this came from', L=locked();
+    DRAWER.back.hidden=STACK.length<2;
+    // Something carried over that nothing here can settle, and has no page
+    // of its own here: what it is, and "Set aside, with a reason".
+    var ca=carriedAt(ref), sa=!ca.length&&setAsideOf(ref);
+    if((ca.length||sa)&&(!k||(k==='path'&&valueAt(ref)==null))){
+      DRAWER.crumb.textContent='Carried over'; DRAWER.body.innerHTML=ca.length?carriedBlock(ca):asideDone(sa); return; }
+    if(t.note) b+='<p class="clf-err" style="background:var(--clf-soft);color:var(--clf-ink2)">'+esc(t.note)+'</p>';
+    if(k==='pin'){
+      var p=pins()[ref];
+      if(!p){ b+=gone(); }
+      else {
+        var ps=srcOf(p), byPerson=ps&&ps.rec&&ps.rec.tier==='reviewer-verified', pubs=pubsOf([ref]);
+        b+='<div class="clf-dv"><span class="v">'+(confidential(ref)?LOCK:'')+esc(fmt(p))+'</span><span class="c">'+esc(label(p))+(p.as_of?' · as of '+esc(plainDate(p.as_of)):'')+'</span>'+pills(ref)+'</div>';
+        if(!byPerson&&pubs.length) b+=say(agentOf('facts['+ref+']',p.key),'I found this in '+bolds(pubs)+'.'+(obj(p.quotes)[ps&&ps.id]?' The words below are exactly what it says.':'')+(p.confidence==='low'?' I am not very sure about it.':''));
+        if(p.replaced_by) b+='<button type="button" class="clf-row" data-open="'+esc(p.replaced_by.fact_id)+'"><span>Now replaced by<small>a person picked another value</small></span><b>'+esc(fmt(pins()[p.replaced_by.fact_id]))+'</b></button>';
+        var oc=openContestOf(ref); if(oc) b+='<button type="button" class="clf-row" data-open="'+esc(oc.id)+'"><span>Another source says something else<small>pick one before you lock the report</small></span><b>'+arr(oc.values).map(fmt).map(esc).join(' or ')+'</b></button>';
+        b+=evidence(p);
+        var wb=wrongBlock(ref);
+        if(wb) b+=wb;
+        else if(!L&&!p.replaced_by) b+=(t.fix?correctForm(ref,p):'')+'<div class="clf-sec" data-clf-anchor><h3 class="ask">Is this right?</h3><div class="clf-answers"><button type="button" class="clf-btn big primary" data-clf="good">Yes, this is right</button><button type="button" class="clf-btn big" data-clf="bad">No, this is wrong</button><button type="button" class="clf-btn big quiet" data-clf="fix">Change it to the right value</button></div>'+privBlock()+'</div>';
+        b+=history('facts['+ref+']');
+      }
+    } else if(k==='finding'){
+      var f=findings()[ref];
+      if(!f){ b+=gone(); }
+      else {
+        var cs=arr(f.cites), fp=pubsOf(cs);
+        b+='<div class="clf-dv"><span class="stmt">'+(confidential(ref)?LOCK:'')+esc(f.statement)+'</span>'+pills(ref)+'</div>';
+        b+=say(agentOf('findings['+ref+']',null,'synthesise'),'I worked this out from '+cs.length+' fact'+(cs.length===1?'':'s')+(fp.length?(fp.length===1&&cs.length>1?(cs.length===2?', both':', all')+' from ':', from ')+bolds(fp):'')+'.');
+        b+='<div class="clf-sec"><h3>The facts it rests on</h3><div class="clf-rows">'+cs.map(function(c){ var p=pins()[c];
+          return '<button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(p?label(p):'A fact')+'<small>'+esc(p?srcShort(p):'no longer in the document')+'</small></span><b>'+(confidential(c)?LOCK:'')+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
+        if(f.confidence) b+='<p class="clf-muted">How sure: '+esc(SURE[f.confidence]||f.confidence)+'. That is as sure as the least sure fact it rests on, never a guess of the crew’s own.</p>';
+        if(!L&&f.status==='proposed') b+='<form class="clf-form" data-clf-form="finding" data-clf-anchor><b>Is this right?</b><label><span>Anything to add? <span class="opt">Needed if it is wrong</span></span><textarea name="why"></textarea></label><div class="clf-err" hidden></div>'
+          +'<div class="clf-answers"><button type="submit" class="clf-btn big primary" value="verify">Yes, this is right</button><button type="submit" class="clf-btn big danger" value="reject">No, this is wrong</button></div>'+privBlock()
+          +'<p class="clf-muted">Yes saves it to the agency’s shared memory as checked by you. No keeps it on record, crossed out, and flags anything that rests on it.</p></form>';
+        b+=history('findings['+ref+']');
+      }
+    } else if(k==='contest'){
+      var c=contest(ref); crumb=arr(c&&c.values).length>2?'The sources disagree':'Two sources disagree';
+      if(!c){ b+=gone(); }
+      else {
+        var vs=arr(c.values), said=function(v){ var s=sources()[arr(v.sources)[0]]||{}; return [pubName(s.publisher)||s.domain||'',s.published_at?monthYear(s.published_at):''].filter(Boolean); };
+        b+='<div class="clf-dv"><span class="stmt">'+esc(named(ref))+'</span>'+pills(ref)+'</div>';
+        if(c.carried&&!(c.status==='open'&&(ca.length||sa))) b+='<p class="clf-muted">Carried over from '+esc(upTitle(c.carried))+'. '+(c.status==='open'?'Picking one here settles it in this document; the original keeps its own copy.':'It was settled in this document.')+'</p>';
+        if(c.status==='open'&&(ca.length||sa)){
+          // carried with no value this copy can take: nothing to pick here, only to set aside
+          b+='<div class="clf-sec">'+(ca.length?carriedBlock(ca):asideDone(sa))+'</div>';
+        } else if(c.status==='open'&&!L){
+          var from=String(vs[0]&&vs[0].from||'').split('/')[0], A=crew(), ak=agentOf('selection.contested['+ref+']',c.key)||(A&&arr(A.lenses).indexOf(from)!==-1?A.forWork('research',from)||'':'');
+          b+=say(ak,vs.map(function(v){ var w=said(v); return (w[0]?'<b>'+esc(w[0])+'</b>':'One source')+' says '+esc(fmt(v))+(w[1]?' ('+esc(w[1])+')':''); }).join('. ')+'.','needs-you');
+          b+='<form class="clf-form bare" data-clf-form="resolve"><div class="clf-sec"><h3 class="ask">Which one should the report use?</h3><div class="clf-answers">'+vs.map(function(v){ var sid=arr(v.sources)[0], s=sources()[sid]||{}, q=obj(v.quotes)[sid], line=srcLine(s,v);
+            return '<label class="clf-opt"><input type="radio" name="pick" value="'+esc(v.fact_id)+'" required><span class="v'+(fmt(v).length>24?' long':'')+'">'+esc(fmt(v))+'</span>'+(line?'<span class="s">'+esc(line)+(v.from==='pinned'?' · already in the report':'')+'</span>':'')+(q?'<span class="q">“'+esc(q)+'”</span>':'')+'</label>'+(/^https?:\/\//.test(s.uri||'')?'<p class="clf-optsrc">'+openLink(s.uri).replace('Open it ↗','Open the source ↗')+'</p>':''); }).join('')+'</div></div>'
+            +'<div class="clf-then"><label><span>Why this one? <span class="req">needed</span></span><textarea name="why" required></textarea></label><div class="clf-err" hidden></div><div class="clf-answers"><button type="submit" class="clf-btn big primary">Use this one</button></div><p class="clf-muted">'+(vs.length>2?'The others stay on record, marked as not picked.':'The other stays on record, marked as not picked.')+'</p></div></form>';
+        } else {
+          var ch=vs.filter(function(v){ return v.fact_id===c.chosen; })[0];
+          if(ch) b+='<button type="button" class="clf-row" data-open="'+esc(c.chosen)+'"><span>The report uses<small>'+esc(c.reason||'')+'</small></span><b>'+esc(fmt(ch))+'</b></button>';
+          vs.filter(function(v){ return v.fact_id!==c.chosen; }).forEach(function(v){ var w=said(v); b+='<p class="clf-muted">Not picked, kept on record: '+esc(fmt(v))+(w[0]?' from '+esc(w.join(', ')):'')+'.</p>'; });
+        }
+        b+=history('selection.contested['+ref+']');
+      }
+    } else if(k==='gap'){
+      var g=gap(ref), tried=g?arr(g.sources_tried||g.tried):[]; crumb='What we could not find';
+      if(!g) b+=gone();
+      else { b+='<div class="clf-dv"><span class="stmt">'+esc(g.wanted||g.key)+'</span><span class="c">'+esc(g.note||'')+'</span></div>';
+        if(tried.length) b+=say(agentOf(null,g.key),'I looked in '+tried.length+' place'+(tried.length===1?'':'s')+', but found nothing I could quote.')+'<div class="clf-sec"><h3>Where we looked</h3><ul class="clf-hist">'+tried.map(function(x){ return '<li><span>'+esc(x)+'</span></li>'; }).join('')+'</ul></div>'; }
+    } else if(k==='passage'){
+      var pg=passages()[ref];
+      if(!pg) b+=gone();
+      else { b+='<div class="clf-dv"><span class="stmt">'+esc(pg.citation||pg.section||'A passage')+'</span></div>';
+        if(pg.text) b+='<div class="clf-sec"><h3>What it says</h3><blockquote class="clf-q said">'+esc(pg.text)+'</blockquote></div>';
+        var pm=[pg.source?['From',pg.source]:null, pg.section?['Section',pg.section]:null, pg.pack?['Pack',pg.pack+(pg.pack_version?' · '+pg.pack_version:'')]:null, ['Whose library',scopeWord(pg.scope)],
+          pg.licence?['Licence',pg.licence]:null, pg.retrieved_at?['We read it',dayMonth(pg.retrieved_at,true)]:null].filter(Boolean);
+        b+='<div class="clf-card"><dl>'+pm.map(function(x){ return '<dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd>'; }).join('')+'</dl>'+openLink(pg.uri)+'</div>';
+        b+='<p class="clf-muted">A passage is an example the crew learned from, not evidence about this client.</p>'; }
+    } else if(k==='capture'){
+      var ci=captures()[ref], cm=ci&&materials()[ci.material_id];
+      if(!ci) b+=gone();
+      else { b+='<div class="clf-dv"><span class="stmt">'+esc(textOf(ci.value))+'</span><span class="c">'+esc(words(ci.key||''))+'</span><div class="clf-pills">'+(ci.status==='assumption'?'<span class="clf-pill warn">Assumed: your material does not say it</span>':'<span class="clf-pill">From your material · the words match</span>')+'</div></div>';
+        if(ci.quote) b+='<div class="clf-sec"><h3>What your material says</h3><blockquote class="clf-q said">'+esc(ci.quote)+'</blockquote></div>';
+        if(ci.material_id) b+='<div class="clf-rows"><button type="button" class="clf-row" data-open="'+esc(ci.material_id)+'"><span>'+esc(cm&&cm.name||'Your material')+'<small>'+esc(cm?MAT_KIND[cm.kind]||MAT_KIND.other:'no longer in the document')+'</small></span><b></b></button></div>';
+        if(!L) b+='<p class="clf-muted">To change it, press <b>Edit</b> at the top, then tap the part that uses it.</p>'; }
+    } else if(k==='material'){
+      var mt=materials()[ref]; crumb='About this file';
+      if(!mt) b+=gone();
+      else { b+='<div class="clf-dv"><span class="stmt">'+(confidential(ref)?LOCK:'')+esc(mt.name||'A file')+'</span><span class="c">'+esc(MAT_KIND[mt.kind]||MAT_KIND.other)+'</span>'+(confidential(ref)?'<div class="clf-pills"><span class="clf-pill conf">'+LOCK+'Private</span></div>':'')+'</div>';
+        var tr=obj(mt.transcribed), mm=[mt.received_at?['Arrived',dayMonth(mt.received_at,true)]:null, ['Read',mt.unread?'Nothing in it could be read':tr.model?'Read from the image by an agent':'Yes'], mt.licence?['Licence',mt.licence]:null].filter(Boolean);
+        b+='<div class="clf-card"><dl>'+mm.map(function(x){ return '<dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd>'; }).join('')+'</dl></div>';
+        if(!L) b+='<div class="clf-sec" data-clf-anchor>'+privBlock()+'</div>';
+        b+=history('materials['+ref+']'); }
+    } else if(k==='path'){
+      var env=envAt(ref), v=valueAt(ref), org=provenance(ref), cp=clientPart(ref), cs=clientSugg(ref)[0];
+      b+='<div class="clf-dv"><span class="stmt">'+(textOf(v)?esc(textOf(v)):'<span class="clf-muted">Nothing here yet</span>')+'</span>'+(org?'<div class="clf-pills"><span class="clf-pill">'+esc(org.charAt(0).toUpperCase()+org.slice(1))+'</span></div>':'')+'</div>';
+      b+=needsBlock(ref);
+      if(cp||cs) b+='<div class="clf-sec"><h3>What the client said</h3>'+popOf(ref,true)+'</div>';
+      if(env&&env.source&&env.source.quote) b+='<div class="clf-sec"><h3>What your material says</h3><blockquote class="clf-q said">'+esc(env.source.quote)+'</blockquote></div>';
+      if(env&&arr(env.fact_ids).length) b+='<div class="clf-sec"><h3>Worked out from</h3><div class="clf-rows">'+arr(env.fact_ids).map(function(c){ var p=pins()[c]; return '<button type="button" class="clf-row" data-open="'+esc(c)+'"><span>'+esc(p?label(p):'A fact')+'</span><b>'+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
+      if(!env) b+=writerBlock(ref);
+      b+=proposalBlock(ref)+verdictBlock(ref);
+      if(ca.length) b+='<div class="clf-sec">'+carriedBlock(ca)+'</div>';
+      if(canEdit(ref)&&editableValue(v)) b+=L?'<p class="clf-muted">It is open for the client’s change: tap it to change it.</p>':'<p class="clf-muted">To change it, choose <b>Edit</b> under More at the top, then tap it.</p>';
+      b+=history(ref);
+    } else if(k==='cite'){
+      b+='<div class="clf-rows">'+ref.slice(5).split(',').map(function(r){ var kk=kindOf(r), t='', v='';
+        if(kk==='pin'){ var p=pins()[r]; t=p?label(p):'A fact'; v=fmt(p); }
+        else if(kk==='finding'){ var f=findings()[r]||{}; t=f.statement||'A point the crew worked out'; v=STATUS_WORD[f.status]||''; }
+        else if(kk==='contest'){ t=named(r); v=stateOf(r)==='contest'?'sources disagree':'picked'; }
+        else if(kk==='passage'){ var pg=passages()[r]||{}; t=pg.citation||'A passage'; v='library'; }
+        else if(kk==='capture'){ var ci=captures()[r]||{}; t=textOf(ci.value)||'Something your material says'; v=ci.status==='assumption'?'assumed':'your material'; }
+        else if(kk==='material'){ var mt2=materials()[r]||{}; t=mt2.name||'A file'; v=MAT_KIND[mt2.kind]||''; }
+        return '<button type="button" class="clf-row" data-open="'+esc(r)+'"><span>'+esc(t)+'</span><b>'+esc(v)+'</b></button>'; }).join('')+'</div>';
+    } else if(k==='source'){
+      crumb='About this source'; var used=Object.keys(pins()).filter(function(x){ return arr(pins()[x].sources).indexOf(ref)!==-1; });
+      b+=srcCard(ref,null,true)+'<div class="clf-sec"><h3>What we took from it ('+used.length+')</h3><div class="clf-rows">'+used.map(function(x){ var p=pins()[x]; return '<button type="button" class="clf-row" data-open="'+esc(x)+'"><span>'+esc(label(p))+'</span><b>'+esc(fmt(p))+'</b></button>'; }).join('')+'</div></div>';
+    } else {
+      crumb='Needs a person'; if(!t.note) b+='<p class="clf-muted">This needs a person to look at it.</p>';
+    }
+    if(k&&k!=='source'&&k!=='cite') b+=wrote(ref);
+    DRAWER.crumb.textContent=crumb; DRAWER.body.innerHTML=b;
+  }
+  function showError(form,msg){ var e=form&&form.querySelector('.clf-err'); if(e){ e.textContent=msg; e.hidden=false; } else toast(msg); }
+  function act(route,body,form,done){
+    var btns=form?form.querySelectorAll('button'):[]; Array.prototype.forEach.call(btns,function(x){ x.disabled=true; });
+    return post(route,body).then(function(res){
+      Array.prototype.forEach.call(btns,function(x){ x.disabled=false; });
+      var err=errorOf(res); if(err&&!(res&&res.ok)){ showError(form,err); return; }
+      return loadView().then(function(){ refresh(); if(STACK.length) draw(); toast(done); });
+    },function(){ showError(form,OFFLINE); Array.prototype.forEach.call(btns,function(x){ x.disabled=false; }); });
+  }
+  function onDrawerClick(e){
+    // App frames are sandboxed without allow-forms, so a form never submits:
+    // a submit button acts on its click, in every frame alike.
+    var sb=e.target.closest('button[type="submit"]'), sf=sb&&sb.closest('form[data-clf-form]');
+    if(sf){ e.preventDefault(); onDrawerSubmit({preventDefault:function(){}, target:sf, submitter:sb}); return; }
+    var o=e.target.closest('[data-open]'); if(o){ open(o.getAttribute('data-open'),true); return; }
+    var a=e.target.closest('[data-clf]'); if(!a) return; var w=a.getAttribute('data-clf'), ref=top().ref, k=kindOf(ref);
+    var target=k==='path'?ref:(k==='pin'?'facts[':k==='material'?'materials[':'findings[')+ref+']';
+    // A path's own answers: the Judge's call accepted, its doubt overridden
+    // with a reason, a person's "it's wrong", a proposal used.
+    if(w==='ack'){ act('/acknowledge',{decision:a.getAttribute('data-d'),rationale:''},null,'Thanks. Saved as right.'); return; }
+    if(w==='override'||w==='pathbad'){
+      var host=a.closest('.clf-answers')||a, fb=document.createElement('div');
+      fb.innerHTML=w==='override'?overrideForm(target):badForm(target); host.replaceWith(fb.firstChild);
+      var ta=DRAWER.body.querySelector('form[data-clf-form="'+(w==='override'?'override':'bad')+'"] textarea'); if(ta) ta.focus(); return; }
+    if(w==='aside'){ var ah=a.closest('.clf-answers')||a, af=document.createElement('div'); af.innerHTML=asideForm(a.getAttribute('data-target')); ah.replaceWith(af.firstChild);
+      var at=DRAWER.body.querySelector('form[data-clf-form="aside"] textarea'); if(at) at.focus(); return; }
+    if(w==='useprop'){ var pb=blockOf(a.getAttribute('data-d')), ro=reopenedOf(ref); if(!pb) return;
+      var ub={path:ref,value:pb.decision.proposed_value,rationale:'Used proposal '+pb.decision.id}; if(ro) ub.answers=ro.answers;
+      act('/edit',ub,null,'Saved. The proposal is used.'); return; }
+    if(w==='close') close();
+    else if(w==='back'){ STACK.pop(); draw(); }
+    else if(w==='redraw') draw();
+    else if(w==='fix'){ top().fix=true; draw(); var inp=DRAWER.body.querySelector('form[data-clf-form="correct"] input[name="value"]'); if(inp) inp.focus(); }
+    else if(w==='good') act('/verdict',{target:target,polarity:'good',rationale:''},null,'Thanks. Saved as right.');
+    else if(w==='bad'||w==='conf'){
+      var box=document.createElement('div');
+      box.innerHTML=w==='conf'?confForm(ref,target):badForm(target);
+      var anchor=DRAWER.body.querySelector('[data-clf-anchor]'); if(anchor) anchor.replaceWith(box.firstChild); else DRAWER.body.appendChild(box.firstChild);
+      var first=DRAWER.body.querySelector('form[data-clf-form="'+(w==='conf'?'classify':'bad')+'"] textarea'); if(first&&w==='bad') first.focus();
+    }
+  }
+  function onDrawerSubmit(e){
+    e.preventDefault(); var form=e.target, kind=form.getAttribute('data-clf-form'), ref=top().ref, fd=new FormData(form), why=String(fd.get('why')||'').trim();
+    if(kind==='finding'){
+      var v=e.submitter&&e.submitter.value;
+      if(v==='reject'){ if(!why){ showError(form,'Say what is wrong, so the agent can fix it.'); return; }
+        act('/verdict',{target:'findings['+ref+']',polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.'); }
+      else act('/verify',{finding:ref,rationale:why},form,'Thanks. Saved to the agency\u2019s shared memory.');
+    } else if(kind==='resolve'){ if(!fd.get('pick')){ showError(form,'Pick one first.'); return; } if(!why){ showError(form,'Say why you picked this one.'); return; }
+      act('/resolve',{contest:ref,chosen:fd.get('pick'),rationale:why},form,'Saved. The report uses your pick.'); }
+    else if(kind==='correct'){ if(!String(fd.get('value')||'').trim()){ showError(form,'Write the right value.'); return; } if(!why){ showError(form,'Say why the old one is wrong.'); return; }
+      top().fix=false; act('/correct',{fact:ref,value:String(fd.get('value')).trim(),source_uri:String(fd.get('src')||'').trim(),rationale:why},form,'Saved. The old value is kept on record.'); }
+    else if(!why){ showError(form,kind==='bad'?'Say what is wrong, so it can be fixed.':kind==='aside'?'Say why this can go ahead without it.':'Say why, in a few words.'); return; }
+    else if(kind==='aside') act('/acknowledge',{target:form.getAttribute('data-target'),rationale:why},form,'Set aside. Your reason is kept with it.');
+    else if(kind==='classify') act('/classify',{target:form.getAttribute('data-target'),model:fd.get('model')==='on',export:fd.get('export')==='on',corpus:fd.get('corpus')==='on',rationale:why},form,'Saved. It is kept private.');
+    else if(kind==='bad') act('/verdict',{target:form.getAttribute('data-target'),polarity:'bad',rationale:why},form,'Thanks. Saved as wrong.');
+    else if(kind==='override') act('/verdict',{target:form.getAttribute('data-target'),polarity:'good',rationale:why},form,'Saved. It stays as it is, with your reason.');
+  }
+
+  // ── agent-written layouts ───────────────────────────────────────────
+  // What an agent may write: the layout vocabulary (cl-* classes), text, and
+  // the clan-* elements. No script, no style, no link, no event handler, no
+  // element or attribute outside these lists; what is dropped is dropped whole.
+  var TAGS={SECTION:1,DIV:1,HEADER:1,FOOTER:1,ARTICLE:1,ASIDE:1,H1:1,H2:1,H3:1,P:1,SPAN:1,STRONG:1,EM:1,B:1,I:1,SMALL:1,BR:1,HR:1,OL:1,UL:1,LI:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TD:1,TH:1,FIGURE:1,FIGCAPTION:1,BLOCKQUOTE:1,
+    'CLAN-FIELD':1,'CLAN-CITE':1,'CLAN-CHART':1,'CLAN-QUOTE':1,'CLAN-GAP':1,'CLAN-SOURCES':1,'CLAN-TRAY':1};
+  var ATTRS={'class':1,ref:1,refs:1,as:1,caption:1,kind:1,title:1,rest:1,labels:1,source:1,compact:1,colspan:1,rowspan:1,'data-tone':1};
+  function clean(node){
+    Array.prototype.slice.call(node.childNodes).forEach(function(n){
+      if(n.nodeType===3) return;
+      if(n.nodeType!==1||!TAGS[n.tagName]){ n.remove(); return; }
+      Array.prototype.slice.call(n.attributes).forEach(function(a){
+        var name=a.name.toLowerCase();
+        if(!ATTRS[name]) n.removeAttribute(a.name);
+        else if(name==='class') n.setAttribute('class',a.value.split(/\s+/).filter(function(c){ return /^cl-[a-z0-9-]+$|^compact$/.test(c); }).join(' '));
+      });
+      clean(n);
+    });
+    return node;
+  }
+  function layout(html){ var t=document.createElement('template'); t.innerHTML=String(html||''); return clean(t.content); }
+  function mount(el,html){ el.textContent=''; el.appendChild(layout(html)); stampTexts(el,'report:'+hash(String(html||''))); refresh(); }
+
+  // ── wording a person may rewrite ──────────────────────────────────
+  // Any element marked data-clan-text="<key>" shows the person's wording for
+  // that key when there is one, and is editable in edit mode. A layout's text
+  // blocks are marked when it is mounted, keyed by the layout itself.
+  var TEXT_BLOCKS='h1,h2,h3,p,li,blockquote,figcaption,td,th,.cl-eyebrow,.cl-dek,.cl-cap,.cl-label';
+  function hash(str){ var h=5381; for(var i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return (h>>>0).toString(36); }
+  function stampTexts(root, prefix){
+    var n=0;
+    Array.prototype.forEach.call(root.querySelectorAll(TEXT_BLOCKS),function(el){
+      if(el.closest('clan-field,clan-chart,clan-quote,clan-gap,clan-sources,clan-cite,clan-tray')) return;
+      if(el.querySelector(TEXT_BLOCKS)) return; // the innermost block is the text
+      if(!el.textContent.trim()&&!el.querySelector('clan-field,clan-cite')) return;
+      n++; if(!el.hasAttribute('data-clan-text')) el.setAttribute('data-clan-text', prefix+':b'+n);
+    });
+  }
+  // Every edit says why: typed, or one of the usual reasons.
+  var WHY_CHIPS=['Clearer wording','Fix a mistake','The client\u2019s words','Newer information'];
+  function whyRow(){ return '<div class="clf-why" role="group" aria-label="Why are you changing this?"><b aria-hidden="true">Why are you changing this?</b>'
+    +WHY_CHIPS.map(function(c){ return '<button type="button" class="chip" data-chip aria-pressed="false">'+esc(c)+'</button>'; }).join('')
+    +'<input type="text" data-why placeholder="Or say it in your own words" aria-label="Why are you changing this?"></div>'; }
+  // A tapped reason fills the box and shows as picked; typing unpicks it.
+  function wireWhy(box){
+    var i=box.querySelector('[data-why]');
+    function mark(){ Array.prototype.forEach.call(box.querySelectorAll('[data-chip]'),function(c){ c.setAttribute('aria-pressed',String(c.textContent===i.value.trim())); }); }
+    box.addEventListener('click',function(e){ var c=e.target.closest('[data-chip]'); if(!c) return; i.value=c.textContent; mark(); });
+    i.addEventListener('input',mark);
+  }
+  var PART={H1:'headline',H2:'heading',H3:'heading',P:'paragraph',LI:'list item',BLOCKQUOTE:'quote',FIGCAPTION:'caption',TD:'table cell',TH:'table heading'};
+  function partOf(el){ return PART[el.tagName]||(el.classList.contains('cl-dek')?'standfirst':el.classList.contains('cl-eyebrow')?'label':el.classList.contains('cl-cap')?'caption':'text'); }
+  function cleanHtml(h){ var d=document.createElement('div'); d.appendChild(layout(h)); return d.innerHTML; }
+  function applyTexts(){
+    var E=edits();
+    Array.prototype.forEach.call(document.querySelectorAll('[data-clan-text]'),function(el){
+      if(el.__clfEditing) return;
+      if(el.__clfOrig===undefined) el.__clfOrig=el.innerHTML;
+      var want=E[el.getAttribute('data-clan-text')];
+      if(typeof want==='string'&&want){
+        if(el.__clfShown!==want){ el.innerHTML=cleanHtml(want); el.__clfShown=want; }
+        el.classList.add('clf-edited'); el.title='Edited by a person';
+      } else if(el.__clfShown!=null){
+        el.innerHTML=el.__clfOrig; el.__clfShown=null; el.classList.remove('clf-edited'); el.removeAttribute('title');
+      }
+    });
+  }
+  function wordsOf(el){
+    var c=el.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.clf-part'),function(x){ x.remove(); }); // client review's controls are not wording
+    Array.prototype.forEach.call(c.querySelectorAll('clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources'),function(x){ x.innerHTML=''; x.removeAttribute('contenteditable'); });
+    Array.prototype.forEach.call(c.querySelectorAll('[contenteditable]'),function(x){ x.removeAttribute('contenteditable'); });
+    return c.innerHTML.replace(/&nbsp;/g,' ').trim();
+  }
+  function editText(el){
+    if(el.__clfEditing) return;
+    el.__clfEditing=true;
+    var before=el.innerHTML, key=el.getAttribute('data-clan-text'), was=wordsOf(el);
+    Array.prototype.forEach.call(el.querySelectorAll('clan-field,clan-cite,clan-chart,clan-quote,clan-gap'),function(x){ x.setAttribute('contenteditable','false'); });
+    el.setAttribute('contenteditable','true'); el.focus();
+    var bar=document.createElement('div'); bar.className='clf-textbar';
+    bar.innerHTML=whyRow()+'<div class="clf-err" hidden></div><button type="button" class="clf-btn big primary" data-t="save">Save</button><button type="button" class="clf-btn big quiet" data-t="cancel">Cancel</button>'
+      +(el.classList.contains('clf-edited')?'<button type="button" class="clf-btn big quiet" data-t="restore">Put back what the agent wrote</button>':'')
+      +'<span class="note">Your words are kept as your decision. The numbers in them stay up to date.</span>';
+    el.insertAdjacentElement('afterend',bar); wireWhy(bar);
+    var wasText=el.textContent.replace(/\s+/g,' ').trim();
+    function stop(){ el.removeAttribute('contenteditable'); el.__clfEditing=false; bar.remove(); refresh(); }
+    function fail(m){ var e=bar.querySelector('.clf-err'); e.textContent=m; e.hidden=false; Array.prototype.forEach.call(bar.querySelectorAll('button'),function(b){ b.disabled=false; }); }
+    function send(html, done){
+      Array.prototype.forEach.call(bar.querySelectorAll('button'),function(b){ b.disabled=true; });
+      post('/edit-text',{key:key, html:html, rationale:String((bar.querySelector('[data-why]')||{}).value||'').trim(), part:partOf(el), was:wasText}).then(function(res){
+        if(res&&res.ok){ loadView(); done(); toast(html?'Saved':'The agent\u2019s words are back'); return; }
+        fail('That did not save. '+(errorOf(res)||'Please try again.'));
+      },function(){ fail(OFFLINE); });
+    }
+    bar.addEventListener('click',function(e){
+      var t=e.target.closest('[data-t]'); if(!t) return; var w=t.getAttribute('data-t');
+      if(w==='cancel'){ el.innerHTML=before; stop(); }
+      else if(w==='save'){ var now=wordsOf(el); if(now===was){ stop(); return; } if(!el.textContent.trim()){ fail('Write something, or press Cancel.'); return; }
+        if(!String(bar.querySelector('[data-why]').value||'').trim()){ fail('Say why you are changing it: tap a reason or type one.'); bar.querySelector('[data-why]').focus(); return; }
+        send(now,function(){ el.__clfShown=now; stop(); }); }
+      else if(w==='restore'){ send('',function(){ el.__clfShown=''; el.innerHTML=el.__clfOrig; el.__clfShown=null; el.classList.remove('clf-edited'); stop(); }); }
+    });
+    el.addEventListener('keydown',function onKey(e){
+      if(!el.__clfEditing){ el.removeEventListener('keydown',onKey); return; }
+      if(e.key==='Escape'){ e.preventDefault(); bar.querySelector('[data-t="cancel"]').click(); }
+      else if(e.key==='Enter'&&(e.metaKey||e.ctrlKey||/^H[1-3]$/.test(el.tagName))){ e.preventDefault(); bar.querySelector('[data-t="save"]').click(); }
+    });
+    el.addEventListener('paste',function(e){ if(!el.__clfEditing) return; e.preventDefault(); var t=(e.clipboardData||window.clipboardData).getData('text/plain'); document.execCommand('insertText',false,t); });
+  }
+
+  // ── client review: the parts an app declares ──────────────────────────
+  // An app marks each part a client can answer about: data-clan-part="<data
+  // path>" data-clan-part-label="<plain label>", and optionally
+  // data-clan-part-aliases="a, b": other words a client calls it by, which
+  // the host's matcher looks for in the client's sentences (with the label
+  // and its last word, which it adds itself). The shell owns the mode
+  // (clan:clientmode) and records the answer (Contract 4 §7.5, §8.2); here
+  // the parts are collected and sent up (clan:parts), each gets "+ This part"
+  // while the mode asks for parts, and after, the client's answer beside it.
+  var CLIENT={on:false, answer:null}, MARKS={}, OPEN_PART=null, SENT_PARTS=null, PART_EDIT={};
+  var ANSWER_WORD={accepted:'Accepted',accepted_with_changes:'Accepted with changes',rejected:'Rejected'};
+  var REASON_WORD={off_brief:'off brief',wrong_audience:'wrong audience',tone:'tone',facts_wrong:'facts wrong',budget:'budget',other:'other'};
+  function wantsParts(){ return CLIENT.on&&(CLIENT.answer==='accepted_with_changes'||CLIENT.answer==='rejected'); }
+  // In document order, one per address; a part inside another is dropped (the
+  // host refuses the pair), and so is anything that is not a data path.
+  function declaredParts(){
+    var seen={}, out=[];
+    Array.prototype.forEach.call(document.querySelectorAll('[data-clan-part]'),function(el){
+      if(el.closest('.clf-drawer,.clf-part')) return;
+      var a=String(el.getAttribute('data-clan-part')||'').trim(), l=String(el.getAttribute('data-clan-part-label')||'').trim()||words(a);
+      if(!isPath(a)){ if(window.console) console.warn('data-clan-part must be a data path in dotted keys:',a); return; }
+      if(seen[a]) return; seen[a]=1;
+      out.push({address:a, label:l.length>80?l.slice(0,79)+'…':l, aliases:aliasesOf(el), el:el});
+    });
+    return out.filter(function(p){ return !out.some(function(q){ return q!==p&&p.address.indexOf(q.address+'.')===0; }); });
+  }
+  // "a, b" as a list: trimmed, one space inside, no empties or repeats (ignoring case).
+  function aliasesOf(el){
+    var out=[];
+    String(el.getAttribute('data-clan-part-aliases')||'').split(',').forEach(function(w){
+      w=w.trim().replace(/\s+/g,' ');
+      if(w&&w.length<=60&&out.length<12&&!out.some(function(o){ return o.toLowerCase()===w.toLowerCase(); })) out.push(w);
+    });
+    return out;
+  }
+  function partRef(p){ var r={address:p.address, label:p.label}; if(p.aliases&&p.aliases.length) r.aliases=p.aliases.slice(); return r; }
+  // Reduced motion: scrolls jump instead of gliding (the CSS rule only stops transitions).
+  function calm(){ try{ return !!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; } }
+  function toShell(m){ if(window.parent&&window.parent!==window) window.parent.postMessage(m,'*'); }
+  function postParts(force){
+    var ps=declaredParts().map(partRef), sig=JSON.stringify(ps);
+    if(!force&&sig===SENT_PARTS) return;
+    SENT_PARTS=sig; toShell({type:'clan:parts', parts:ps});
+  }
+  function postMark(a,marked,said){ toShell({type:'clan:part-mark', address:a, marked:!!marked, words:said||''}); }
+
+  // What /decisions says of client review, by this document's bare path.
+  function cview(){ return obj(VIEW&&VIEW.client); }
+  function herePath(a){ var s=String(a||''), i=s.indexOf('#'); return i===-1?s:s.slice(0,i)===docId()?s.slice(i+1):null; }
+  function clientPart(path){ return arr(cview().parts).filter(function(p){ return herePath(p.address)===path; })[0]||null; }
+  function clientSugg(path){ return arr(cview().suggestions).filter(function(x){ return herePath(x.address)===path; }); }
+  // A part answer's own words (`said`, typed under the part when it was
+  // marked): from the view, else from its decision. Never trimmed or clipped.
+  function partSaid(p){
+    var s=p&&typeof p.said==='string'?p.said:'', b=!s&&p?blockOf(p.decision):null;
+    if(!s&&b&&typeof b.decision.said==='string') s=b.decision.said;
+    return s.trim()?s:'';
+  }
+  // "<client> asked: …" for the edit, when the host's reply gives none: the
+  // part's own words, else the document's words (os-layer §8.2, item 3).
+  function askedReason(path){
+    var p=clientPart(path); if(!p) return '';
+    var an=clientAnswerOf(p.review)||{}, w=partSaid(p)||an.said||'';
+    w=String(w).replace(/\s+/g,' ').trim(); if(!w) return '';
+    var r=clientName(p.client||an.client)+' asked: '+w; return r.length>300?r.slice(0,299)+'…':r;
+  }
+  function clientAnswerOf(id){ var c=cview(); return arr(c.answers).filter(function(a){ return a.decision===id; })[0]||(c.answer&&c.answer.decision===id?c.answer:null); }
+  function reopenedOf(path){ path=String(path||''); return reopenedParts().filter(function(r){ var p=herePath(r.address); return p!=null&&(path===p||path.indexOf(p+'.')===0); })[0]||null; }
+  // A value may be changed: the document is open, or the path is at or inside
+  // a part reopened for a client's change (Contract 4 §7.5.6).
+  function canEdit(path){ return !locked()||!!reopenedOf(path); }
+  function clientName(c){ var n=String(obj(c).name||'').trim(); return n||'the client'; }
+  function firstName(c){ var n=String(obj(c).name||'').trim(); return n?n.split(/\s+/)[0]:'the client'; }
+  function possessive(n){ return n==='the client'?'the client’s':n+'’s'; }
+  function recorderOf(a){ var b=blockOf(a&&a.decision); if(b&&b.who&&b.who.you) return 'you'; var r=obj(a&&a.recorded_by), n=String(r.name||r.id||'');
+    return !n||OPAQUE.test(n)?'someone':nameOfId(n.replace(/^human:/,'')); }
+  // How strong the record is, in words (Contract 4 §7.5.8).
+  function strengthLine(a){
+    a=a||{}; var ev=obj(a.evidence), strong=ev.strength==='strong'||!!ev.asset, who=possessive(firstName(a.client)), rec=recorderOf(a);
+    // The same words as the shell's band and panel (review.ts recordedFrom).
+    var name=String(ev.asset||'').split('/').pop();
+    var line=ev.asset?(/\.pdf$/i.test(name)?'From the PDF '+firstName(a.client)+' sent, file attached':'From '+who+' email, file attached')
+      :a.channel==='pasted_email'?'From '+who+' email, pasted by '+rec
+      :a.channel==='call'?(rec==='you'?'Your':possessive(rec).replace(/^./,function(c){ return c.toUpperCase(); }))+' note of a call. Nothing attached'
+      :'Recorded by '+rec+'. Nothing attached';
+    return '<span class="clf-strength'+(strong?'':' weak')+'"><i aria-hidden="true"></i>'+esc((strong?'Strong record: ':'Weaker record: ')+line+'.')+'</span>';
+  }
+  // The chip beside a part: the client's answer on it, or Ellis's guess.
+  function chipOf(path){
+    var p=clientPart(path), sg=!p&&clientSugg(path)[0], cls, text;
+    if(p){
+      if(p.state==='accepted'){ cls=p.stale?'stale':'ok'; text=p.stale?'Client accepted an earlier version':'✓ Client accepted'; }
+      else if(p.answered){ cls='ok'; text='✓ Changed as '+firstName(p.client)+' asked · to send back'; }
+      else { cls=p.state==='rejected'?'rj':'chg'; text=(p.state==='rejected'?'✕ Client rejected':'✎ Client asked for a change')+(p.stale?' · changed since':''); }
+    } else if(sg){ cls='sug'; text=(givenOf(ellisKey())||'The crew')+' thinks this part · check it'; }
+    else return '';
+    return '<button type="button" class="clf-chip '+cls+'" data-clf-cr="chip" data-part="'+esc(path)+'" aria-expanded="'+(OPEN_PART===path)+'">'+esc(text)+'</button>';
+  }
+  // What the client said about a part: their words, the reason, how strong
+  // the record is, who recorded it; and, for a change asked or a rejection,
+  // "Make this change".
+  function popOf(path,inDrawer){
+    var p=clientPart(path), sg=!p&&clientSugg(path)[0], lk=locked(), h;
+    if(p){
+      var an=clientAnswerOf(p.review)||{}, fn=firstName(p.client||an.client), pb=blockOf(p.decision), by=pb&&pb.who&&pb.who.you?'you':pb?whoDid(pb):'someone';
+      h='<b>'+esc(ANSWER_WORD[p.state]||p.state)+'</b>';
+      var ps=partSaid(p);
+      // What the client said about this part, as typed under it: verbatim.
+      if(ps) h+='<p class="clf-muted">'+esc(an.channel==='call'?'Noted from the call, about this part:':'What '+fn+' said about this part:')+'</p><blockquote class="clf-q said">'+esc(ps)+'</blockquote>';
+      else if(p.quote) h+='<blockquote class="clf-q said">'+esc(p.quote)+'</blockquote>';
+      else if(an.said) h+=(an.channel==='call'?'<p class="clf-muted">'+esc(recorderOf(an)==='you'?'Your':possessive(recorderOf(an)).replace(/^./,function(c){ return c.toUpperCase(); }))+' note of what '+esc(fn)+' said on a call:</p>':'<p class="clf-muted">What '+esc(fn)+' said about the whole '+esc(trayNoun())+':</p>')+'<blockquote class="clf-q said">'+esc(an.said)+'</blockquote>';
+      else if(p.found_by!=='document') h+='<p class="clf-muted">No words for this part.</p>';
+      if(arr(an.reasons).length) h+='<p class="clf-ex">Reason: '+esc(arr(an.reasons).map(function(r){ return REASON_WORD[r]||r; }).join(', '))+'</p>';
+      h+=strengthLine(an);
+      h+='<p class="clf-ex">'+esc(p.found_by==='agent'?'Part found by '+(givenOf(ellisKey())||'the crew')+' in '+possessive(fn)+' words, confirmed by '+by.replace(/^You$/,'you')
+        :p.found_by==='document'?clientName(p.client||an.client)+' accepted the whole '+trayNoun()
+        :'Part marked by '+by.replace(/^You$/,'you'))+(an.at?' · recorded by '+recorderOf(an)+' on '+dayMonth(an.at):'')+'.</p>';
+      if(p.stale&&!p.answered) h+='<p class="clf-muted">This part has changed since '+esc(fn)+' saw it.</p>';
+      if(p.answered) h+='<p class="clf-muted">Changed since, with a reason. Lock it again and send '+esc(fn)+' the new version.</p>';
+      if(p.state!=='accepted'&&!p.answered&&lk) h+='<div class="clf-acts"><button type="button" class="clf-btn big primary" data-clf-cr="make" data-part="'+esc(path)+'" data-answer="'+esc(p.decision)+'">Make this change</button></div>'
+        +(p.reopened?'<p class="clf-muted">It is open for this change now.</p>':'');
+    } else if(sg){
+      var sa=clientAnswerOf(sg.review)||{}, sn=firstName(sa.client);
+      h='<b>'+esc((givenOf(ellisKey())||'The crew')+' thinks '+sn+' meant this part')+'</b>'
+        +(sg.quote?'<blockquote class="clf-q said">'+esc(sg.quote)+'</blockquote>':'')
+        +'<p class="clf-ex">'+esc(ANSWER_WORD[sg.answer]||sg.answer)+'. Only a suggestion until someone confirms it.</p>'+strengthLine(sa)
+        +'<div class="clf-acts"><button type="button" class="clf-btn big primary" data-clf-cr="yes" data-s="'+esc(sg.decision)+'">Yes, this part</button><button type="button" class="clf-btn big quiet" data-clf-cr="no" data-s="'+esc(sg.decision)+'">Not this part</button></div>';
+    } else return '';
+    return inDrawer?'<div class="clf-pop" style="box-shadow:none">'+h+'</div>':'<div class="clf-pop" role="group" aria-label="'+esc('What the client said about this part')+'">'+h+'</div>';
+  }
+  function markCtl(path,label){
+    var m=MARKS[path], on=!!(m&&m.marked), rj=CLIENT.answer==='rejected';
+    return '<button type="button" class="clf-part-t'+(rj?' rj':'')+'" data-clf-cr="mark" data-part="'+esc(path)+'" aria-pressed="'+on+'" aria-label="'+esc((on?'Marked: ':'Mark ')+label)+'">'+(on?(rj?'✕ They rejected this part':'✎ They want this changed'):'+ This part')+'</button>'
+      +(on?'<textarea rows="2" data-clf-cr-words data-part="'+esc(path)+'" placeholder="What they said about it, if you know (optional)" aria-label="'+esc('What they said about '+label+' (optional)')+'">'+esc(m.words||'')+'</textarea>':'');
+  }
+  // What a part's box holds now; the sig says when it must be redrawn, so
+  // typing in a box never redraws it.
+  function partBody(p){
+    if(PART_EDIT[p.address]) return null; // an editor is open in it
+    if(CLIENT.on){ if(!wantsParts()) return {sig:'',html:''};
+      var on=!!(MARKS[p.address]&&MARKS[p.address].marked); return {sig:'m|'+CLIENT.answer+'|'+on, html:markCtl(p.address,p.label)}; }
+    var chip=chipOf(p.address); if(!chip) return {sig:'',html:''};
+    var h=chip+(OPEN_PART===p.address?popOf(p.address):''); return {sig:h, html:h};
+  }
+  var INLINE=/^(?:SPAN|A|B|I|EM|STRONG|SMALL|BUTTON|LABEL|INPUT|TEXTAREA|SELECT|IMG|P|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|CLAN-[A-Z]+)$/;
+  function boxFor(el){ var b=el.__clfBox; return b&&b.isConnected&&(b.parentNode===el||el.nextElementSibling===b)?b:null; }
+  function makeBox(el,a){
+    var b=document.createElement('div'); b.className='clf-part'; b.setAttribute('data-part',a); b.__owner=el;
+    if(INLINE.test(el.tagName)||el.closest('[data-clan-text]')) el.insertAdjacentElement('afterend',b); else el.appendChild(b);
+    el.__clfBox=b; return b;
+  }
+  var SYNC_T=0;
+  function syncParts(){
+    var ps=declaredParts(), live=[];
+    ps.forEach(function(p){
+      p.el.classList.toggle('clf-part-marked',!!(wantsParts()&&MARKS[p.address]&&MARKS[p.address].marked));
+      var box=boxFor(p.el), body=partBody(p);
+      if(box) live.push(box);
+      if(!body) return;
+      if(!body.html){ if(box){ box.remove(); live.pop(); } p.el.__clfBox=null; return; }
+      if(!box){ box=makeBox(p.el,p.address); live.push(box); }
+      if(box.__sig!==body.sig){ box.innerHTML=body.html; box.__sig=body.sig; }
+    });
+    // What a part no longer declared, or no longer on the page, left behind.
+    Array.prototype.forEach.call(document.querySelectorAll('.clf-part'),function(b){ if(live.indexOf(b)===-1) b.remove(); });
+    Array.prototype.forEach.call(document.querySelectorAll('.clf-part-marked'),function(el){ if(!ps.some(function(p){ return p.el===el; })) el.classList.remove('clf-part-marked'); });
+    postParts();
+  }
+  function soon(){ if(!SYNC_T) SYNC_T=setTimeout(function(){ SYNC_T=0; syncParts(); },40); }
+  // The app redraws its parts as it likes; a redraw that drops a part's box
+  // brings it back. Our own boxes, the drawer and the toast are not a change.
+  function ours(n){ return n.nodeType===1&&!!(n.classList.contains('clf-part')||n.closest&&n.closest('.clf-part,.clf-drawer,.clf-toast,.clf-scrim')); }
+  function watchParts(){
+    if(!window.MutationObserver||!document.body) return;
+    new MutationObserver(function(ms){
+      if(ms.every(function(m){ var ns=Array.prototype.slice.call(m.addedNodes).concat(Array.prototype.slice.call(m.removedNodes));
+        return m.type==='attributes'?false:ours(m.target)||(ns.length>0&&ns.every(function(n){ return n.nodeType!==1||ours(n); })); })) return;
+      soon();
+    }).observe(document.body,{childList:true, subtree:true, attributes:true, attributeFilter:['data-clan-part','data-clan-part-label','data-clan-part-aliases']});
+  }
+  function setClientMode(on,answer){
+    var was=CLIENT.on;
+    if(!on) MARKS={}; // leaving the mode discards what was not saved, as edit mode does
+    CLIENT={on:!!on, answer:on&&ANSWER_WORD[answer]?answer:null};
+    if(on&&!wantsParts()){ Object.keys(MARKS).forEach(function(a){ if(MARKS[a].marked) postMark(a,false,''); }); MARKS={}; }
+    OPEN_PART=null;
+    document.documentElement.classList.toggle('clf-client',CLIENT.on);
+    syncParts(); if(CLIENT.on&&!was) postParts(true);
+  }
+  function refocus(path,what){ var el=document.querySelector('.clf-part[data-part="'+cssEsc(path)+'"] [data-clf-cr="'+what+'"]'); if(el) el.focus(); }
+  // "Make this change": reopen that one part for the client's request, then
+  // edit it with the reason filled in; the edit says which answer it answers.
+  function makeChange(path,answer,btn){
+    var ro=reopenedOf(path);
+    if(ro){ var ub=blockOf(ro.decision); editPart(path,(ub&&ub.decision.rationale)||'',ro.answers); return; }
+    if(btn) btn.disabled=true;
+    post('/client-review/reopen',{answer:answer}).then(function(res){
+      if(!res||!res.ok){ if(btn) btn.disabled=false; toast(errorOf(res)||'That did not go through. Please try again.'); return; }
+      return loadView().then(function(){ OPEN_PART=null; refresh(); editPart(herePath(res.address)||path,res.reason||askedReason(path),res.answers||answer); });
+    },function(){ if(btn) btn.disabled=false; toast(OFFLINE); });
+  }
+  // Edit one part: the app's own editor when it takes it (it cancels
+  // clan:editpart), else the field showing it, else an editor in its box.
+  // The shell is asked for edit mode (clan:edit-request), which it owns; the
+  // editor opens once edit mode is on, since an app redraws its parts then
+  // and would close an editor opened before (or after a wait, if the shell
+  // never turns it on).
+  var PENDING_EDIT=null;
+  function editPart(path,why,answers){
+    if(EDIT){ openPart(path,why,answers); return; }
+    clearTimeout(editPart.t);
+    PENDING_EDIT={path:path, why:why, answers:answers};
+    toShell({type:'clan:edit-request', address:path});
+    editPart.t=setTimeout(runPendingEdit,1500);
+  }
+  function runPendingEdit(){ clearTimeout(editPart.t); var p=PENDING_EDIT; PENDING_EDIT=null; if(p) openPart(p.path,p.why,p.answers); }
+  function openPart(path,why,answers){
+    var ev=new CustomEvent('clan:editpart',{cancelable:true, detail:{path:path, reason:why, answers:answers}});
+    if(!window.dispatchEvent(ev)) return;
+    var part=declaredParts().filter(function(p){ return p.address===path; })[0], sel='clan-field[ref="'+cssEsc(path)+'"]';
+    var fld=part&&(part.el.matches(sel)?part.el:part.el.querySelector(sel))||document.querySelector(sel);
+    var label=part&&part.label||words(path);
+    if(fld){ if(fld.scrollIntoView) fld.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'}); editPath(fld,path,{why:why, answers:answers, label:label}); return; }
+    if(!part){ toast('That part is not on this page'); return; }
+    if(!editableValue(valueAt(path))){ toast('This part is changed in the app itself.'); return; }
+    var box=boxFor(part.el)||makeBox(part.el,path); PART_EDIT[path]=true; box.__sig=null;
+    if(box.scrollIntoView) box.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});
+    editPath(box,path,{why:why, answers:answers, label:label, done:function(){ delete PART_EDIT[path]; box.innerHTML=''; box.__sig=null; syncParts(); }});
+  }
+  // A click on a part's control, or in a client answer the drawer shows.
+  function onClientClick(t){
+    var w=t.getAttribute('data-clf-cr'), path=t.getAttribute('data-part')||'';
+    if(w==='mark'){ if(!wantsParts()) return true; var m=MARKS[path]||{marked:false,words:''}; m.marked=!m.marked; if(!m.marked) m.words=''; MARKS[path]=m;
+      postMark(path,m.marked,m.words); syncParts(); refocus(path,'mark'); return true; }
+    if(w==='chip'){ OPEN_PART=OPEN_PART===path?null:path; syncParts(); refocus(path,'chip'); return true; }
+    if(w==='make'){ if(DRAWER&&DRAWER.el.contains(t)) close(); makeChange(path||(top().ref||''),t.getAttribute('data-answer'),t); return true; }
+    if(w==='yes'||w==='no'){
+      Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=true; });
+      post('/client-review/confirm',{suggestion:t.getAttribute('data-s'),confirm:w==='yes'}).then(function(res){
+        if(!res||!res.ok){ Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=false; }); toast(errorOf(res)||'That did not go through. Please try again.'); return; }
+        return loadView().then(function(){ refresh(); if(DRAWER&&DRAWER.el.classList.contains('on')) draw(); toast(w==='yes'?'Saved. That part has the client’s answer.':'Saved. Not that part.'); });
+      },function(){ Array.prototype.forEach.call(t.parentNode.querySelectorAll('button'),function(b){ b.disabled=false; }); toast(OFFLINE); });
+      return true; }
+    return false;
+  }
+
+  // ── wiring ──────────────────────────────────────────────────────────
+  // One element that cannot render shows as missing; it never stops the rest.
+  function each(sel,fn){
+    Array.prototype.forEach.call(document.querySelectorAll(sel),function(el){
+      try{ fn(el); }catch(e){ el.innerHTML=missing('This part could not be shown'); if(window.console) console.error(el.tagName.toLowerCase(),el.getAttribute('ref')||el.getAttribute('refs')||'',e); }
+    });
+  }
+  function refresh(){
+    applyTexts();
+    each('clan-field',renderField); each('clan-cite',renderCite); each('clan-chart',renderChart);
+    each('clan-quote',renderQuote); each('clan-gap',renderGap); each('clan-sources',renderSources); each('clan-tray',renderTray);
+    try{ syncParts(); }catch(e){ if(window.console) console.error('client review parts',e); }
+  }
+  document.addEventListener('click',function(e){
+    var cr=e.target.closest&&e.target.closest('[data-clf-cr]'); if(cr&&onClientClick(cr)){ e.preventDefault(); return; }
+    if(DRAWER&&DRAWER.el.contains(e.target)) return;
+    if(e.target.closest('.clf-part')) return; // a part's own controls
+    if(EDIT&&!locked()){
+      var tx=e.target.closest('[data-clan-text]');
+      if(tx&&tx.__clfEditing&&!e.target.closest('[data-ref]')) return; // typing
+      if(tx&&!e.target.closest('[data-ref]')&&!e.target.closest('.clf-textbar')){ e.preventDefault(); editText(tx); return; }
+    }
+    var lb=e.target.closest('[data-clf-lock]');
+    if(lb){ var tr=lb.closest('clan-tray'), noun=tr&&tr.getAttribute('noun')||'report'; act('/approve',{},null,'The '+noun+' is locked. This version is the final one.'); return; }
+    var t=e.target.closest('[data-ref]'); if(!t) return;
+    if(!t.closest('clan-field,clan-cite,clan-chart,clan-quote,clan-gap,clan-sources,clan-tray')) return;
+    var ref=t.getAttribute('data-ref');
+    // A part reopened for a client's change is edited with a tap, locked or not.
+    if(t.classList.contains('editable')&&kindOf(ref)==='path'&&(EDIT&&canEdit(ref)||locked()&&reopenedOf(ref))){ editPath(t.closest('clan-field'), ref); return; }
+    if(EDIT&&!locked()&&kindOf(ref)==='pin'&&t.classList.contains('correctable')){ open(ref); top().fix=true; draw(); return; }
+    if(t.classList.contains('clf-titem')){ var el=document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'}); open(ref,false,kindOf(ref)&&kindOf(ref)!=='path'?'':t.getAttribute('data-note')); return; }
+    open(ref);
+  });
+  document.addEventListener('keydown',function(e){ var m=e.target.closest&&e.target.closest('.clf-chart .mark'); if(m&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); open(m.getAttribute('data-ref')); } });
+  window.addEventListener('clan:dataupdated',function(){ loadView().then(refresh); });
+  // What they said about a part the client answered about, as it is typed.
+  document.addEventListener('input',function(e){
+    var t=e.target.closest&&e.target.closest('[data-clf-cr-words]'); if(!t) return;
+    var a=t.getAttribute('data-part'), m=MARKS[a]; if(!m||!m.marked) return;
+    m.words=t.value; postMark(a,true,t.value);
+  });
+  // Edit mode is the OS's (the toolbar's Edit); the bridge announces it.
+  window.addEventListener('clan:editmode',function(e){
+    EDIT=!!(e.detail&&e.detail.active);
+    document.documentElement.classList.toggle('clf-editing',EDIT);
+    // Leaving edit mode closes every editor still open; what was not saved
+    // is put back as it was.
+    if(!EDIT){
+      Array.prototype.forEach.call(document.querySelectorAll('.clf-textbar [data-t="cancel"],[data-clf-cancel]'),function(b){ b.click(); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-clan-text][contenteditable]'),function(x){ x.removeAttribute('contenteditable'); x.__clfEditing=false; });
+    }
+    refresh();
+    // "Make this change" waiting for edit mode: after the app's own redraw.
+    if(EDIT&&PENDING_EDIT) setTimeout(runPendingEdit,0);
+  });
+  // The OS's decision panel asks to show one thing: a pin, finding, contest,
+  // gap or source opens its evidence; a data path is the app's to show
+  // (`clan:focus`). Only the shell above this frame may ask.
+  // Client review is the shell's mode too: it says when it is on and what the
+  // client answered (`clan:clientmode`), and may ask for the parts again.
+  window.addEventListener('message',function(e){
+    var m=e.data; if(e.source!==window.parent||!m) return;
+    if(m.type==='clan:clientmode'){ setClientMode(!!m.on,m.answer||null); return; }
+    if(m.type==='clan:parts?'){ postParts(true); return; }
+    if(m.type!=='clan:open') return;
+    var ref=String(m.ref||'');
+    // A piece of the page's wording (`text[<key>]`): scroll to it and mark it.
+    var tk=/^text\[(.+)\]$/.exec(ref);
+    if(tk){
+      var tx=document.querySelector('[data-clan-text="'+cssEsc(tk[1])+'"]');
+      if(!tx){ toast('That wording is no longer on the page'); return; }
+      if(tx.scrollIntoView) tx.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});
+      tx.classList.remove('clf-flash'); void tx.offsetWidth; tx.classList.add('clf-flash');
+      setTimeout(function(){ tx.classList.remove('clf-flash'); },2200);
+      return;
+    }
+    var el=ref&&document.querySelector('[data-ref="'+cssEsc(ref)+'"]:not(.clf-titem)');
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});
+    // A data path no field on the page shows is the app's to show.
+    if(kindOf(ref)&&!(kindOf(ref)==='path'&&!el)) open(ref);
+    else window.dispatchEvent(new CustomEvent('clan:focus',{detail:{path:m.path||ref}}));
+  });
+  function start(){ watchParts(); loadView().then(refresh); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+
+  return {refresh:refresh, reload:function(){ return loadView().then(refresh); }, open:open, layout:layout, mount:mount,
+          format:fmt, label:label, kindOf:kindOf, stateOf:stateOf,
+          // The host's decision view as last read (null until it is), and the lock.
+          view:function(){ return VIEW; }, locked:lockDecision,
+          // The parts this page declares for client review, as sent to the shell.
+          parts:function(){ return declaredParts().map(partRef); }};
+})();
+</script>

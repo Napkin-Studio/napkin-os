@@ -1,0 +1,13 @@
+<svg width="128" height="128" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Napkin Studio OS">
+  <title>Napkin Studio OS</title>
+  <!-- The studio mark (src/brand/StudioMark.tsx): one disc, four quarters,
+       turned -45°: Create up, Produce right, Learn down, Plan left. The
+       light palette's values, since a favicon cannot read the tokens. -->
+  <clipPath id="disc"><circle cx="11" cy="11" r="11"/></clipPath>
+  <g clip-path="url(#disc)" transform="rotate(-45 11 11)">
+    <rect x="0" y="0" width="11" height="11" fill="#14161B"/>
+    <rect x="11" y="0" width="11" height="11" fill="#FF4F2E"/>
+    <rect x="0" y="11" width="11" height="11" fill="#DADDE3"/>
+    <rect x="11" y="11" width="11" height="11" fill="#8B919E"/>
+  </g>
+</svg>

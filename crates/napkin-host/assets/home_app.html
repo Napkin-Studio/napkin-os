@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Napkin Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@400..500&display=swap" />
+<style>
+  /* The home screen, in the Napkin Studio OS design language: the shell's
+     tokens (app/src/index.css), Geist, ink for "do it", Create as the one
+     accent. The shell's top bar carries the product name, so this page shows
+     none: only the apps, each under its own name and mark, and what was
+     opened last. The shell pushes its colour scheme in (clan:colorscheme →
+     data-color-scheme); with no attribute the OS preference decides. */
+  :root{
+    color-scheme:light;
+    --paper:#FFFFFF; --card:#FFFFFF; --soft:#F5F6F8; --soft-2:#F2F3F6;
+    --line:#D6DAE2; --line-soft:#E7E9EE;
+    --ink:#14161B; --ink2:#4A4F5C; --ink3:#737987;
+    --plan:#14161B; --plan-fg:#FFFFFF; --create:#FF4F2E; --produce:#8B919E; --learn:#DADDE3;
+    --status-red:#FF4F2E;
+    --shadow-soft:0 10px 30px rgba(20,30,60,.08); --shadow-pill:0 1px 3px rgba(20,22,27,.1);
+    --f-display:'Geist','Helvetica Neue',Arial,sans-serif;
+    --f-mono:'Geist Mono',ui-monospace,Menlo,monospace;
+    --r-pill:999px; --r-card:12px; --r-panel:18px;
+    --ease:cubic-bezier(.2,.8,.2,1); --dur:.35s;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      color-scheme:dark;
+      --paper:#0F1114; --card:#161A1F; --soft:#1B1F25; --soft-2:#22262D;
+      --line:#2A2F38; --line-soft:#22262D;
+      --ink:#F2F3F5; --ink2:#A6ACB8; --ink3:#7A808C;
+      --plan:#F2F3F5; --plan-fg:#0F1114; --learn:#3A3F48;
+      --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-pill:0 1px 3px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-color-scheme="dark"]{
+    color-scheme:dark;
+    --paper:#0F1114; --card:#161A1F; --soft:#1B1F25; --soft-2:#22262D;
+    --line:#2A2F38; --line-soft:#22262D;
+    --ink:#F2F3F5; --ink2:#A6ACB8; --ink3:#7A808C;
+    --plan:#F2F3F5; --plan-fg:#0F1114; --learn:#3A3F48;
+    --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-pill:0 1px 3px rgba(0,0,0,.5);
+  }
+
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--f-display);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:0 24px}
+  button{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid var(--create);outline-offset:2px}
+  .col{width:100%;max-width:760px}
+
+  .hero{margin:10vh 0 34px}
+  .h1{font-size:clamp(34px,5.4vw,52px);font-weight:800;letter-spacing:-.045em;line-height:1.02;text-wrap:balance}
+  .eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+
+  .sec{display:flex;align-items:center;gap:12px;margin:30px 0 14px}
+  .sec i{flex:1;height:1px;background:var(--line-soft)}
+  .sec .n{font-family:var(--f-mono);font-size:11px;color:var(--ink3)}
+
+  /* Apps: one card each, under the app's own mark. */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:14px}
+  .app{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-height:128px;padding:16px;
+    border-radius:var(--r-card);border:1px solid var(--line);background:var(--card);text-align:left;cursor:pointer;
+    transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease),transform var(--dur) var(--ease)}
+  .app:hover{border-color:var(--ink);box-shadow:var(--shadow-soft);transform:translateY(-1px)}
+  .app:disabled{cursor:progress;transform:none}
+  .app .nm{font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+  .app .sub{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink3);margin-top:3px}
+  .app .err{font-size:12px;line-height:1.4;color:var(--status-red)}
+  /* The app's identity: its declared icon when the library can show one,
+     otherwise its initial on a rounded square (the studio's own mark is the
+     disc; an app never wears it). The tile is the app's zone colour. Every
+     app installed today is a Plan tool, so Plan is the tile: ink, inverting
+     in dark like the rest of the studio's ink. An SVG mark (data:image/svg+xml)
+     is a shape, not a picture: it is used as a mask and painted in the zone's
+     foreground, so one mark reads in light and dark. Any other icon (a PNG,
+     a URL) is shown as it is. */
+  .icon{width:44px;height:44px;flex:none;border-radius:var(--r-card);display:flex;align-items:center;justify-content:center;
+    background:var(--plan);color:var(--plan-fg);font-size:19px;font-weight:700;letter-spacing:-.03em;overflow:hidden}
+  .icon img{width:100%;height:100%;object-fit:cover;display:block}
+  .icon .mk{width:100%;height:100%;display:block;background:currentColor;
+    -webkit-mask:var(--mark) center/100% 100% no-repeat;mask:var(--mark) center/100% 100% no-repeat}
+  .app.open{border-style:dashed;background:transparent;color:var(--ink2);align-items:center;justify-content:center;gap:8px}
+  .app.open:hover{border-color:var(--ink2);box-shadow:none;color:var(--ink)}
+  .app.open .plus{width:22px;height:22px;color:var(--ink3)}
+  .app.open .nm{font-size:13px;font-weight:500}
+
+  /* Recent: hairline rows. */
+  .recents{border-top:1px solid var(--line-soft)}
+  .rec{width:100%;display:flex;align-items:center;gap:14px;padding:12px 10px;border:0;border-bottom:1px solid var(--line-soft);
+    background:none;text-align:left;cursor:pointer;border-radius:0;transition:background var(--dur) var(--ease)}
+  .rec:hover{background:var(--soft)}
+  .rec .ri{width:32px;height:32px;flex:none;border-radius:9px;background:var(--soft-2);color:var(--ink2);display:flex;align-items:center;justify-content:center}
+  .rec:hover .ri{background:var(--card)}
+  .rec .ri svg{width:15px;height:15px}
+  .rec .rb{flex:1;min-width:0}
+  .rec .rt{font-size:13.5px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .rd{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.03em;color:var(--ink3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .go{width:14px;height:14px;flex:none;color:var(--ink3);transition:transform var(--dur) var(--ease),color var(--dur) var(--ease)}
+  .rec:hover .go{color:var(--ink);transform:translateX(2px)}
+
+  .note{font-size:13px;line-height:1.55;color:var(--ink2);padding:4px 2px}
+  .note code{font-family:var(--f-mono);font-size:.92em}
+  .note.err{color:var(--ink)}
+  .note.err::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--status-red);margin-right:8px;vertical-align:1px}
+  .wait{display:flex;align-items:center;min-height:128px;padding:0 4px}
+  [hidden]{display:none!important}
+
+  .foot{margin-top:auto;padding:40px 0 24px;display:flex;justify-content:center}
+  .by{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.04em;color:var(--ink3)}
+  .by b{font-weight:600}
+
+  /* The OS loading sign — a hand-kept copy of app/src/brand/logoSpinnerMarkup.ts. */
+  .napkin-spinner{display:inline-flex;align-items:center;gap:10px;color:var(--ink2);font:500 13px/1 var(--f-display);letter-spacing:-.01em}
+  .napkin-spinner-mark{display:block;flex-shrink:0;animation:napkin-spinner-turn 1.6s var(--ease) infinite}
+  .napkin-spinner-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  @keyframes napkin-spinner-turn{0%{transform:rotate(0)}25%{transform:rotate(90deg)}50%{transform:rotate(180deg)}75%{transform:rotate(270deg)}100%{transform:rotate(360deg)}}
+  @keyframes napkin-spinner-breathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.86);opacity:.55}}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{transition:none!important}
+    .napkin-spinner .napkin-spinner-mark{animation:napkin-spinner-breathe 2.4s ease-in-out infinite}
+  }
+  @media (max-width:520px){
+    body{padding:0 16px}
+    .hero{margin:6vh 0 22px}
+    .grid{grid-template-columns:1fr 1fr;gap:10px}
+    .app{min-height:118px;padding:14px}
+  }
+</style>
+</head>
+<body>
+  <div class="col">
+    <div class="hero">
+      <h1 class="h1">Let&rsquo;s start here.</h1>
+    </div>
+
+    <div class="sec"><span class="eyebrow">Apps</span><i></i><span class="n" id="appsCount"></span></div>
+    <div class="wait" id="appsWait"></div>
+    <div class="grid" id="apps" hidden></div>
+    <div class="note" id="appsEmpty" hidden>No apps installed yet. Open a <code>.clan</code> template, or run <code>clan app init</code>.</div>
+    <div class="note err" id="appsErr" hidden>The app library could not be read.</div>
+
+    <div class="sec"><span class="eyebrow">Recent</span><i></i></div>
+    <div class="wait" id="recentsWait"></div>
+    <div class="recents" id="recents" hidden></div>
+    <div class="note" id="recentsEmpty" hidden>No documents yet &mdash; open an app to make one.</div>
+    <div class="note err" id="recentsErr" hidden>Recent documents could not be read.</div>
+  </div>
+
+  <div class="foot">
+    <span class="by">powered by
+      <svg width="13" height="13" viewBox="0 0 100 100" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="5" stroke-linecap="round">
+        <path d="M70 24 37 21 18 50 37 79 70 76"/>
+        <g fill="currentColor" stroke="none"><circle cx="70" cy="24" r="8"/><circle cx="37" cy="21" r="8"/><circle cx="18" cy="50" r="9.5"/><circle cx="37" cy="79" r="8"/><circle cx="70" cy="76" r="8"/></g>
+      </svg>
+      <b>CLAN</b></span>
+  </div>
+
+<script>
+  var clanScheme = navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function show(id, on){ $(id).hidden = !on; }
+
+  // The OS loading sign: the studio mark turning a quarter at a time. Each
+  // copy gets its own clip id: a clipPath inside a hidden copy clips nothing.
+  var spinnerSeq = 0;
+  function spinner(label, size){
+    size = size || 28;
+    var clip = 'napkin-spinner-clip-' + (++spinnerSeq);
+    return '<span class="napkin-spinner" role="status" aria-live="polite">'
+      + '<svg class="napkin-spinner-mark" width="'+size+'" height="'+size+'" viewBox="0 0 22 22" aria-hidden="true">'
+      + '<clipPath id="'+clip+'"><circle cx="11" cy="11" r="11"/></clipPath>'
+      + '<g clip-path="url(#'+clip+')" transform="rotate(-45 11 11)">'
+      + '<rect x="0" y="0" width="11" height="11" fill="var(--plan)"/><rect x="11" y="0" width="11" height="11" fill="var(--create)"/>'
+      + '<rect x="0" y="11" width="11" height="11" fill="var(--learn)"/><rect x="11" y="11" width="11" height="11" fill="var(--produce)"/>'
+      + '</g></svg>'
+      + (label ? '<span>'+esc(label)+'</span>' : '<span class="napkin-spinner-sr">Loading</span>')
+      + '</span>';
+  }
+  $('appsWait').innerHTML = spinner('Reading your apps…', 20);
+  $('recentsWait').innerHTML = spinner('Reading recent documents…', 20);
+
+  var ICON_DOC = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.8h5.2L12.5 5v9.2H4z"/><path d="M9 1.8V5.2h3.4M6.2 8.4h4M6.2 11h4"/></svg>';
+  var ICON_GO = '<svg class="go" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5"/></svg>';
+  var ICON_PLUS = '<svg class="plus" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M11 5v12M5 11h12"/></svg>';
+
+  // An app's own mark: its declared icon when it is something a page can show
+  // (a URL or data: URI), else its initial. An SVG data: mark is painted in
+  // the tile's colours (see .icon .mk); it must not carry a double quote.
+  function mark(app){
+    var ic = app.icon || '';
+    if (/^data:image\/svg\+xml[,;]/.test(ic) && ic.indexOf('"') < 0)
+      return '<div class="icon" aria-hidden="true"><span class="mk" style="--mark:url(&quot;'+esc(ic)+'&quot;)"></span></div>';
+    if (/^(data:image\/|https?:\/\/)/.test(ic)) return '<div class="icon"><img alt="" src="'+esc(ic)+'"></div>';
+    return '<div class="icon" aria-hidden="true">'+esc((app.name||'?').trim().slice(0,1).toUpperCase())+'</div>';
+  }
+
+  function when(iso){
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    var now = new Date(), time = d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+    if (d.toDateString() === now.toDateString()) return 'today ' + time;
+    return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric'}) + ' ' + time;
+  }
+
+  function post(path, body){
+    return fetch(clanScheme + path, {method:'POST', body: body ? JSON.stringify(body) : undefined}).then(function(r){
+      if (r.ok) return r;
+      return r.text().then(function(t){
+        var msg = t; try { msg = JSON.parse(t).error || t; } catch(e){}
+        throw new Error(msg || ('HTTP ' + r.status));
+      });
+    });
+  }
+
+  var appNames = {};
+  var recentList = null;
+
+  // Apps. Click = start a new document from that app; the shell opens it.
+  fetch(clanScheme + '/apps').then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(apps){
+    var grid = $('apps');
+    apps.forEach(function(app){
+      appNames[app.app_id] = app.name;
+      var el = document.createElement('button'); el.type = 'button'; el.className = 'app';
+      var idle = mark(app) + '<div><div class="nm">'+esc(app.name)+'</div><div class="sub">v'+esc(app.version)+' · new document</div></div>';
+      el.innerHTML = idle;
+      el.addEventListener('click', function(){
+        el.disabled = true;
+        el.innerHTML = spinner('', 44) + '<div><div class="nm">'+esc(app.name)+'</div><div class="sub">opening…</div></div>';
+        post('/launch', {app_id: app.app_id}).then(function(){
+          // The shell swaps this page out; if it has not after a while, give the card back.
+          setTimeout(function(){ el.disabled = false; el.innerHTML = idle; }, 8000);
+        }).catch(function(e){
+          el.disabled = false;
+          el.innerHTML = idle + '<div class="err">Couldn&rsquo;t open: '+esc(e.message)+'</div>';
+        });
+      });
+      grid.appendChild(el);
+    });
+    var open = document.createElement('button'); open.type = 'button'; open.className = 'app open';
+    open.innerHTML = ICON_PLUS + '<div class="nm">Open a .clan file</div>';
+    open.addEventListener('click', function(){ post('/open-file').catch(function(){}); });
+    grid.appendChild(open);
+    $('appsCount').textContent = apps.length ? String(apps.length) : '';
+    show('appsWait', false); show('apps', true); show('appsEmpty', !apps.length);
+    if (recentList) renderRecent(recentList); // names may have arrived after the list
+  }).catch(function(){
+    show('appsWait', false); show('appsErr', true);
+  });
+
+  // Recent documents. Click = open that .clan.
+  function renderRecent(list){
+    var box = $('recents'); box.innerHTML = '';
+    list.forEach(function(d){
+      var el = document.createElement('button'); el.type = 'button'; el.className = 'rec';
+      var app = appNames[d.app_id];
+      var meta = [app && app !== d.title ? app : '', when(d.updated_at)].filter(Boolean).join(' · ');
+      el.innerHTML = '<div class="ri">'+ICON_DOC+'</div><div class="rb"><div class="rt">'+esc(d.title||'Untitled')+'</div>'
+        + '<div class="rd">'+esc(meta)+'</div></div>' + ICON_GO;
+      el.addEventListener('click', function(){ post('/open', {path: d.path}).catch(function(){}); });
+      box.appendChild(el);
+    });
+    show('recents', list.length > 0); show('recentsEmpty', !list.length);
+  }
+  fetch(clanScheme + '/recent').then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(list){
+    recentList = list;
+    show('recentsWait', false);
+    renderRecent(list);
+  }).catch(function(){
+    show('recentsWait', false); show('recentsErr', true);
+  });
+</script>
+</body>
+</html>

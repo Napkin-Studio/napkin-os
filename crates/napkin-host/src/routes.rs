@@ -1,0 +1,706 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! The `clan://` API surface — the provenance-native rendering environment an
+//! app inside a `.clan` file talks to.
+//!
+//! Exact-path routing (`uri.contains` would confuse `/patch` with
+//! `/patch-data`). Every handler here is a pure function of the request, the
+//! session and the config: it returns a [`HostResponse`] carrying the bytes to
+//! send back plus any [`HostEvent`]s the shell must act on. That is what makes
+//! the same routing table serve a custom URI scheme on the desktop and plain
+//! HTTP on the web.
+
+use serde_json::Value;
+
+use crate::config::{agent_base_url, HostConfig};
+use crate::ctx::Ctx;
+use crate::error::HostError;
+use crate::event::HostEvent;
+#[cfg(feature = "native")]
+use crate::export::write_temp_html;
+use crate::library::{
+    create_instance, scan_apps, scan_recent, spinoff_document_as, spinoff_targets, Backref,
+};
+#[cfg(feature = "native")]
+use crate::proxy::api_proxy;
+use crate::session::{Applied, Session, TRUSTED_CAPABILITIES};
+
+pub struct HostRequest {
+    pub path: String,
+    pub query: String,
+    pub body: Vec<u8>,
+}
+
+impl HostRequest {
+    pub fn new(path: impl Into<String>, query: impl Into<String>, body: Vec<u8>) -> Self {
+        Self {
+            path: path.into(),
+            query: query.into(),
+            body,
+        }
+    }
+
+    fn body_str(&self) -> String {
+        String::from_utf8(self.body.clone()).unwrap_or_default()
+    }
+
+    /// The request body as JSON, or `Null` if it is absent or malformed —
+    /// routes that use this validate the fields they need instead.
+    fn body_json(&self) -> Value {
+        serde_json::from_str(&self.body_str()).unwrap_or(Value::Null)
+    }
+}
+
+pub struct HostResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+    pub events: Vec<HostEvent>,
+}
+
+/// Every route the sandbox can reach answers with CORS open: the app runs in an
+/// opaque-origin frame and sends no credentials, so the token in its URL — not
+/// the origin — is the authority.
+fn cors() -> Vec<(String, String)> {
+    vec![("Access-Control-Allow-Origin".into(), "*".into())]
+}
+
+impl HostResponse {
+    pub fn new(status: u16, content_type: &str, body: Vec<u8>) -> Self {
+        let mut headers = cors();
+        headers.push(("Content-Type".into(), content_type.into()));
+        Self {
+            status,
+            headers,
+            body,
+            events: Vec::new(),
+        }
+    }
+
+    pub fn json(status: u16, value: &Value) -> Self {
+        Self::new(
+            status,
+            "application/json",
+            serde_json::to_vec(value).unwrap_or_default(),
+        )
+    }
+
+    pub fn error(status: u16, msg: &str) -> Self {
+        Self::json(status, &serde_json::json!({ "ok": false, "error": msg }))
+    }
+
+    pub fn ok_json() -> Self {
+        Self::json(200, &serde_json::json!({ "ok": true }))
+    }
+
+    /// 200 with an empty body and no content type — what the fire-and-forget
+    /// routes (`/patch`, `/snapshot`) have always returned.
+    pub fn empty() -> Self {
+        Self {
+            status: 200,
+            headers: cors(),
+            body: Vec::new(),
+            events: Vec::new(),
+        }
+    }
+
+    /// 404 with no body and no CORS header — an unknown path is not part of
+    /// the API surface at all.
+    pub fn unknown_route() -> Self {
+        Self {
+            status: 404,
+            headers: Vec::new(),
+            body: Vec::new(),
+            events: Vec::new(),
+        }
+    }
+
+    pub fn with_event(mut self, e: HostEvent) -> Self {
+        self.events.push(e);
+        self
+    }
+
+    pub fn with_events(mut self, events: impl IntoIterator<Item = HostEvent>) -> Self {
+        self.events.extend(events);
+        self
+    }
+}
+
+/// The events a write fans out: the ones its changes carry, or — when it
+/// changed nothing — the same notice built from its reply. `/patch` and
+/// `/patch-data` have always told the shell on an unchanged edit too, and a
+/// frozen app may be listening for it.
+fn notify_even_if_unchanged(done: &Applied, notice: fn(Value) -> HostEvent) -> Vec<HostEvent> {
+    if done.noop {
+        vec![notice(done.reply.clone())]
+    } else {
+        done.events.clone()
+    }
+}
+
+impl From<HostError> for HostResponse {
+    fn from(e: HostError) -> Self {
+        HostResponse::error(e.status, &e.message)
+    }
+}
+
+/// Parse `k=v&k=v` query strings (small, dependency-free).
+pub fn query_param(query: &str, key: &str) -> Option<String> {
+    query.split('&').find_map(|kv| {
+        let (k, v) = kv.split_once('=')?;
+        if k == key {
+            Some(uri_decode(&v.replace('+', " ")))
+        } else {
+            None
+        }
+    })
+}
+
+/// `%XX` escapes decoded as UTF-8 (a value `encodeURIComponent` wrote); a malformed escape is kept
+/// as it stands.
+pub fn uri_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// `encodeURIComponent`: what a browser sent for a name, so a file stored under that spelling is found.
+pub fn uri_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for &c in s.as_bytes() {
+        if c.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&c) {
+            out.push(c as char);
+        } else {
+            out.push_str(&format!("%{c:02X}"));
+        }
+    }
+    out
+}
+
+/// True for the routes that must be awaited. The desktop shell spawns these so
+/// the WebView loop never blocks; everything else it answers inline.
+///
+/// Without the `native` feature there are none: the one network route belongs
+/// to the page, which holds the credentials, and never reaches the host.
+pub fn is_async(path: &str) -> bool {
+    cfg!(feature = "native") && path == "/api-proxy"
+}
+
+/// Dispatch any route, including the async ones, as the session's own
+/// context — the local user, on the desktop and in the browser.
+pub async fn handle_async(
+    session: &Session,
+    cfg: &dyn HostConfig,
+    req: HostRequest,
+) -> HostResponse {
+    dispatch_async(session.ctx(), session, cfg, req).await
+}
+
+/// Dispatch every synchronous route as the session's own context. `/api-proxy`
+/// is the one route this cannot serve — see [`handle_async`].
+pub fn handle(session: &Session, cfg: &dyn HostConfig, req: HostRequest) -> HostResponse {
+    dispatch(session.ctx(), session, cfg, req)
+}
+
+/// [`handle_async`] under a context the shell resolved for this request. A
+/// server that authenticates each request calls this; nothing in the request
+/// can change who it runs as.
+pub async fn dispatch_async(
+    ctx: &Ctx,
+    session: &Session,
+    cfg: &dyn HostConfig,
+    req: HostRequest,
+) -> HostResponse {
+    #[cfg(feature = "native")]
+    if req.path == "/correct" {
+        return match crate::proxy::correct(ctx, session, cfg, &req.body_str()).await {
+            Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
+            Err(e) => e.into(),
+        };
+    }
+    #[cfg(feature = "native")]
+    if req.path == "/verify" {
+        return match crate::proxy::verify(ctx, session, cfg, &req.body_str()).await {
+            Ok((mut v, events)) => {
+                // Parsed already by the verify itself, so it holds.
+                let finding = crate::ops::review::parse_verify(&req.body_str())
+                    .map(|(f, _)| f)
+                    .unwrap_or_default();
+                with_backrefs(session, ctx, &mut v, &Backref::Verified { finding });
+                HostResponse::json(200, &v).with_events(events)
+            }
+            Err(e) => e.into(),
+        };
+    }
+    #[cfg(feature = "native")]
+    if req.path == "/api-proxy" {
+        return match api_proxy(ctx, session, cfg, &req.body_str()).await {
+            Ok((v, events)) => HostResponse::json(200, &v).with_events(events),
+            Err(e) => e.into(),
+        };
+    }
+    dispatch(ctx, session, cfg, req)
+}
+
+/// Run a review operation and answer with its reply, fanning out its events.
+fn review(
+    session: &Session,
+    ctx: &Ctx,
+    op: impl FnOnce(&Ctx, &crate::document::Document) -> crate::error::HostResult<crate::ops::Outcome>,
+) -> HostResponse {
+    review_then(session, ctx, op, |_| {})
+}
+
+/// [`review`], with `then` given the reply once the decision is written —
+/// and the open document holds it — to add to before it is sent.
+fn review_then(
+    session: &Session,
+    ctx: &Ctx,
+    op: impl FnOnce(&Ctx, &crate::document::Document) -> crate::error::HostResult<crate::ops::Outcome>,
+    then: impl FnOnce(&mut Value),
+) -> HostResponse {
+    match session.perform(ctx, op) {
+        Ok(done) => {
+            let mut reply = done.reply;
+            reply["clan"] = session.document_now().unwrap_or(Value::Null);
+            then(&mut reply);
+            HostResponse::json(200, &reply).with_events(done.events)
+        }
+        Err(e) => e.into(),
+    }
+}
+
+/// After a child's `/approve`, `/resolve` or `/verify`, tell its parents
+/// (Contract 4 §7.4) and say so in the reply: `backrefs: [{document_id,
+/// decision}]`, one per backref written — empty when the decision touched
+/// nothing carried, or no parent is in the store.
+fn with_backrefs(session: &Session, ctx: &Ctx, reply: &mut Value, backref: &Backref) {
+    let written = match reply.get("decision").and_then(Value::as_str) {
+        Some(decision) => session.write_backrefs_as(ctx, decision, backref),
+        None => Vec::new(),
+    };
+    reply["backrefs"] = serde_json::json!(written);
+}
+
+/// The ancestor a `/resolve` reply's contest is on, when it is not this
+/// document: its first target is the contest's address (Contract 4 §8.1,
+/// item 2), `<id>#selection.contested[<ct>]`.
+fn carried_contest(reply: &Value, here: &str) -> Option<(String, String)> {
+    let first = reply.pointer("/targets/0")?.as_str()?;
+    let (on, path) = first.split_once('#')?;
+    let ct = path
+        .strip_prefix("selection.contested[")?
+        .strip_suffix(']')?;
+    (on != here).then(|| (on.to_string(), ct.to_string()))
+}
+
+/// [`handle`] under a context the shell resolved for this request.
+pub fn dispatch(
+    ctx: &Ctx,
+    session: &Session,
+    cfg: &dyn HostConfig,
+    req: HostRequest,
+) -> HostResponse {
+    let path = req.path.as_str();
+    match path {
+        #[cfg(feature = "native")]
+        "/api-proxy" => HostResponse::error(500, "/api-proxy must be dispatched asynchronously"),
+        // A browser build has no network behind it and no middleware: a task
+        // is answered, plainly, that none is configured.
+        #[cfg(not(feature = "native"))]
+        "/api-proxy" => HostResponse::json(200, &crate::ops::middleware::no_middleware()),
+
+        "/edit-mode" => HostResponse::new(
+            200,
+            "text/plain",
+            if session.edit_mode() {
+                b"true".to_vec()
+            } else {
+                b"false".to_vec()
+            },
+        ),
+
+        "/document" => HostResponse::new(200, "text/html", session.preview_html().into_bytes()),
+
+        "/snapshot" => {
+            if let Ok(html) = String::from_utf8(req.body.clone()) {
+                let _ = session.snapshot_as(ctx, &html);
+            }
+            HostResponse::empty()
+        }
+
+        "/patch" => match session.handle_patch_request_as(ctx, &req.body_str()) {
+            Some(done) => {
+                let events = notify_even_if_unchanged(&done, HostEvent::PatchSaved);
+                HostResponse::empty().with_events(events)
+            }
+            None => HostResponse::empty(),
+        },
+
+        "/patch-data" => match session.patch_data_as(ctx, &req.body_str()) {
+            Ok(done) => {
+                let events = notify_even_if_unchanged(&done, HostEvent::DataChanged);
+                HostResponse::json(200, &done.reply).with_events(events)
+            }
+            Err(e) => e.into(),
+        },
+
+        "/fork" => match session.fork_as(ctx, &req.body_str()) {
+            Ok(done) => HostResponse::json(200, &done.reply).with_events(done.events),
+            Err(e) => e.into(),
+        },
+
+        "/upload-asset" => {
+            let name = query_param(&req.query, "name").unwrap_or_default();
+            let agent = query_param(&req.query, "agent");
+            match session.upload_asset_as(ctx, &name, agent.as_deref(), req.body) {
+                Ok(done) => HostResponse::json(200, &done.reply).with_events(done.events),
+                Err(e) => e.into(),
+            }
+        }
+
+        "/chain" => match session.chain_json() {
+            Ok(v) => HostResponse::json(200, &v),
+            Err(e) => e.into(),
+        },
+
+        // A person's review decisions (Contract 4 §8). Each records one
+        // decision as the person in `ctx`, with what it changes.
+        "/verdict" => review(session, ctx, |c, d| {
+            crate::ops::review::verdict(c, d, crate::ops::review::Verdict::parse(&req.body_str())?)
+        }),
+        "/classify" => review(session, ctx, |c, d| {
+            crate::ops::review::classify(c, d, crate::ops::review::Classify::parse(&req.body_str())?)
+        }),
+        "/resolve" => {
+            let body = req.body_str();
+            review_then(
+                session,
+                ctx,
+                |c, d| crate::ops::review::resolve(c, d, crate::ops::review::Resolve::parse(&body)?),
+                |reply| {
+                    let here = reply.pointer("/clan/id").and_then(Value::as_str).unwrap_or("");
+                    match carried_contest(reply, here) {
+                        Some((upstream, contest)) => {
+                            let chosen = crate::ops::review::Resolve::parse(&body)
+                                .map(|r| r.chosen)
+                                .unwrap_or_default();
+                            let backref = Backref::Resolved { upstream, contest, chosen };
+                            with_backrefs(session, ctx, reply, &backref);
+                        }
+                        None => reply["backrefs"] = serde_json::json!([]),
+                    }
+                },
+            )
+        }
+        "/edit-text" => review(session, ctx, |c, d| {
+            crate::ops::review::edit_text(c, d, crate::ops::review::parse_edit_text_full(&req.body_str())?)
+        }),
+        "/edit" => review(session, ctx, |c, d| {
+            crate::ops::review::edit(c, d, crate::ops::review::parse_edit(&req.body_str())?)
+        }),
+        #[cfg(feature = "native")]
+        "/correct" => HostResponse::error(500, "/correct must be dispatched asynchronously"),
+        #[cfg(not(feature = "native"))]
+        "/correct" => HostResponse::error(
+            503,
+            "Correcting a fact needs the middleware, to write it to the agency's knowledge; this build has none.",
+        ),
+        "/acknowledge" => review(session, ctx, |c, d| {
+            crate::ops::review::acknowledge(c, d, &crate::ops::review::parse_acknowledge(&req.body_str())?)
+        }),
+        "/approve" => review_then(
+            session,
+            ctx,
+            |c, d| crate::ops::review::approve(c, d, &crate::ops::review::parse_approve(&req.body_str())?),
+            |reply| with_backrefs(session, ctx, reply, &Backref::Used),
+        ),
+        #[cfg(feature = "native")]
+        "/verify" => HostResponse::error(500, "/verify must be dispatched asynchronously"),
+        #[cfg(not(feature = "native"))]
+        "/verify" => HostResponse::error(
+            503,
+            "Verifying needs the middleware, to write the finding to the agency's knowledge; this build has none.",
+        ),
+
+        // A client's answer to the locked document (Contract 4 §8.2). Which
+        // parts the words were about is the host's own word match — no
+        // middleware, so every build answers it the same way.
+        "/client-review" => review(session, ctx, |c, d| {
+            crate::ops::client_review::record(c, d, crate::ops::client_review::ClientReview::parse(&req.body_str())?)
+        }),
+        "/client-review/confirm" => review(session, ctx, |c, d| {
+            crate::ops::client_review::confirm(c, d, crate::ops::client_review::parse_confirm(&req.body_str())?)
+        }),
+        "/client-review/reopen" => review(session, ctx, |c, d| {
+            crate::ops::client_review::reopen(c, d, &crate::ops::client_review::parse_reopen(&req.body_str())?)
+        }),
+
+        // What changed upstream since this document was spun off — a read,
+        // for any actor, locked or not (Contract 4 §8.1, item 6).
+        "/upstream" => match session.upstream_as(ctx) {
+            Ok(v) => HostResponse::json(200, &v),
+            Err(e) => e.into(),
+        },
+
+        // The decision view the shell's OS layer renders: every decision,
+        // newest first, with what needs a person — derived here, not by the app.
+        "/decisions" => match session.read(|d| crate::ops::decisions::decisions_for(d, Some(ctx.actor.as_str()))) {
+            Ok(v) => HostResponse::json(200, &serde_json::json!(v)),
+            Err(e) => e.into(),
+        },
+
+        // Launcher routes — let a home CLAN app list and launch apps.
+        "/apps" => HostResponse::json(200, &serde_json::json!(scan_apps(&**session.store()))),
+        "/recent" => HostResponse::json(200, &serde_json::json!(scan_recent(&**session.store()))),
+
+        "/open" => match req.body_json().get("path").and_then(|x| x.as_str()) {
+            Some(p) => HostResponse::ok_json().with_event(HostEvent::OpenDocument(p.to_string())),
+            None => HostResponse::error(400, "missing path"),
+        },
+
+        // Whether a middleware request can go anywhere, so an app that runs
+        // on the middleware can say so plainly on open instead of failing on
+        // the first task. Only presence — never the endpoint or its secret.
+        "/middleware" => HostResponse::json(
+            200,
+            &serde_json::json!({
+                "api": crate::ops::middleware::API,
+                "configured": cfg!(feature = "native")
+                    && crate::config::configured(cfg, crate::ops::middleware::REQUEST_KIND),
+            }),
+        ),
+
+        "/agent-endpoint" => {
+            HostResponse::json(200, &serde_json::json!({ "endpoint": agent_base_url(cfg) }))
+        }
+
+        "/launch" => {
+            let v = req.body_json();
+            let app_id = v.get("app_id").and_then(|x| x.as_str()).unwrap_or("");
+            let title = v.get("title").and_then(|x| x.as_str()).map(String::from);
+            if app_id.is_empty() {
+                return HostResponse::error(400, "missing app_id");
+            }
+            match create_instance(&**session.store(), app_id, title) {
+                Ok(id) => {
+                    // Tell the shell to open the freshly created .clan.
+                    HostResponse::json(
+                        200,
+                        &serde_json::json!({ "ok": true, "path": id.to_string() }),
+                    )
+                    .with_event(HostEvent::OpenDocument(id.to_string()))
+                }
+                Err(e) => HostResponse::error(422, &e.message),
+            }
+        }
+
+        // What can this document become? The apps that have declared they will
+        // take it as a spin-off source — a brief offering to become a
+        // production, rather than the user having to know an app id.
+        "/spinoff-targets" => HostResponse::json(
+            200,
+            &serde_json::json!(spinoff_targets(
+                &**session.store(),
+                session.app_id().as_deref(),
+            )),
+        ),
+
+        // Branch the open document into another app, carrying its data and its
+        // decisions. Like /launch, the new file is opened by the shell.
+        "/spinoff" => {
+            let v = req.body_json();
+            let app_id = v.get("app_id").and_then(|x| x.as_str()).unwrap_or("");
+            if app_id.is_empty() {
+                return HostResponse::error(400, "missing app_id");
+            }
+            let title = v.get("title").and_then(|x| x.as_str()).map(String::from);
+            let map = v.get("map").and_then(|x| x.as_str()).map(String::from);
+            let Some(source) = session.current_id() else {
+                return HostError::no_file_open().into();
+            };
+            match spinoff_document_as(&**session.store(), ctx, &source, app_id, title, map) {
+                Ok(id) => HostResponse::json(
+                    200,
+                    &serde_json::json!({ "ok": true, "path": id.to_string() }),
+                )
+                .with_event(HostEvent::OpenDocument(id.to_string())),
+                // Carries the real status: 404 when the app is not installed,
+                // 422 when the target refuses this source or an upstream app
+                // is given a map, 403 when the source is another tenant's.
+                Err(e) => e.into(),
+            }
+        }
+
+        // The host owns the file dialog; ask the shell to run it.
+        "/open-file" => HostResponse::ok_json().with_event(HostEvent::OpenFileRequest),
+
+        "/set-title" => match req.body_json().get("title").and_then(|x| x.as_str()) {
+            Some(t) if !t.trim().is_empty() => match session.set_title_as(ctx, t) {
+                Ok(done) => HostResponse::json(200, &done.reply).with_events(done.events),
+                Err(e) => e.into(),
+            },
+            _ => HostResponse::error(400, "missing title"),
+        },
+
+        // A doc (e.g. a locked brief) asks the shell to export/save it.
+        "/request-save" => HostResponse::ok_json().with_event(HostEvent::RequestSave),
+
+        "/export" => {
+            // LEGACY / imperative-fallback path. The app builds its own
+            // standalone HTML in JS and pushes it here. Prefer the host-owned
+            // export (composes via the SDK from the file's data — bindings,
+            // assets, brand chrome, provenance) so export is uniform and works
+            // headless. This path remains for apps whose print layout is
+            // genuinely code (e.g. brief-maker's report builder).
+            let v = req.body_json();
+            let kind = v.get("kind").and_then(|x| x.as_str()).unwrap_or("html");
+            let kind = if kind == "pdf" { "pdf" } else { "html" };
+            let filename = v
+                .get("filename")
+                .and_then(|x| x.as_str())
+                .unwrap_or("brief");
+            let html = v.get("html").and_then(|x| x.as_str()).unwrap_or("");
+            if html.trim().is_empty() {
+                return HostResponse::error(400, "missing html");
+            }
+            // Native: stash it and let the shell pick a destination.
+            #[cfg(feature = "native")]
+            {
+                match write_temp_html(html) {
+                    Ok(tmp) => HostResponse::ok_json().with_event(HostEvent::ExportRequest {
+                        kind: kind.to_string(),
+                        filename: filename.to_string(),
+                        tmp_html: tmp,
+                    }),
+                    Err(e) => HostResponse::error(500, &e.message),
+                }
+            }
+            // Browser: there is nowhere to stash it, so hand the document back
+            // and let the page turn it into a download.
+            #[cfg(not(feature = "native"))]
+            {
+                HostResponse::json(
+                    200,
+                    &serde_json::json!({
+                        "ok": true, "kind": kind, "filename": filename, "html": html,
+                    }),
+                )
+            }
+        }
+
+        "/set-context" => {
+            let v = req.body_json();
+            let md = v.get("markdown").and_then(|x| x.as_str()).unwrap_or("");
+            let append = v.get("append").and_then(|x| x.as_bool()).unwrap_or(false);
+            if md.trim().is_empty() {
+                return HostResponse::error(400, "missing markdown");
+            }
+            match session.set_context_as(ctx, md, append) {
+                Ok(done) => HostResponse::json(200, &done.reply).with_events(done.events),
+                Err(e) => e.into(),
+            }
+        }
+
+        // Scoped host capabilities — only for trusted (signed) apps.
+        "/capabilities" => {
+            let trusted = session.trusted();
+            let allowed: Vec<&str> = if trusted {
+                TRUSTED_CAPABILITIES.to_vec()
+            } else {
+                vec![]
+            };
+            HostResponse::json(
+                200,
+                &serde_json::json!({ "trusted": trusted, "allowed": allowed }),
+            )
+        }
+
+        "/notify" => {
+            if !session.trusted() {
+                return HostResponse::error(
+                    403,
+                    "capability 'notify' requires a signed (trusted) app",
+                );
+            }
+            let v = req.body_json();
+            HostResponse::ok_json().with_event(HostEvent::Notify {
+                title: v
+                    .get("title")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("Napkin")
+                    .to_string(),
+                body: v
+                    .get("body")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            })
+        }
+
+        "/set-theme" => {
+            // Recolor the viewer chrome — a scoped capability only a signed
+            // (trusted) app may use.
+            if !session.trusted() {
+                return HostResponse::error(
+                    403,
+                    "capability 'set-theme' requires a signed (trusted) app",
+                );
+            }
+            // Pass the theme object straight through to the shell.
+            HostResponse::ok_json().with_event(HostEvent::ThemeChanged(req.body_json()))
+        }
+
+        p if p.starts_with("/assets/") => {
+            let rel = p.strip_prefix("/assets/").unwrap_or("");
+            // a URL's path arrives percent-encoded; a file uploaded before names were decoded is
+            // stored under that spelling, one uploaded since under the name itself: try both
+            let found = session.serve_asset(rel).or_else(|e| {
+                let plain = uri_decode(rel);
+                if plain != rel { session.serve_asset(&plain) } else { Err(e) }
+            });
+            match found {
+                Ok((ct, bytes)) => {
+                    let mut resp = HostResponse::new(200, &ct, bytes);
+                    resp.headers
+                        .push(("Cache-Control".into(), "no-cache".into()));
+                    resp
+                }
+                Err(e) => e.into(),
+            }
+        }
+
+        _ => HostResponse::unknown_route(),
+    }
+}
+
+#[cfg(test)]
+mod uri_tests {
+    use super::*;
+
+    #[test]
+    fn an_uploaded_name_is_decoded_and_its_old_spelling_can_be_rebuilt() {
+        // the owner's tender files, 2026-10-01: stored as `a%20b.pdf`, asked for as `a b.pdf`
+        let sent = "2_Samaritans%20nfpPublic%20Ireland%20EDITED.pdf";
+        assert_eq!(query_param(&format!("name={sent}&agent=human"), "name").unwrap(),
+                   "2_Samaritans nfpPublic Ireland EDITED.pdf");
+        assert_eq!(uri_encode("2_Samaritans nfpPublic Ireland EDITED.pdf"), sent);
+        assert_eq!(uri_decode("caf%C3%A9%20%E2%82%AC.pdf"), "café €.pdf");
+        assert_eq!(uri_decode("100%"), "100%");
+        assert_eq!(uri_decode("a%zzb"), "a%zzb");
+    }
+}

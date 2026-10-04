@@ -1,0 +1,568 @@
+/* Shell chrome: the document toolbar, side panels, menus and dialogs, in the
+   studio's design language — pill buttons, mono eyebrows, frosted bars, soft
+   blue-tinted shadows. Colours come only from the tokens in index.css, so
+   every piece follows light, dark and an app's clan://set-theme.
+
+   Ink is the "do it" colour (filled buttons, the on state of a toggle);
+   --accent (Create unless an app recolours it) is kept for the one thing
+   that should catch the eye. */
+
+/* ── buttons ─────────────────────────────────────────────────────────────── */
+
+.ch-btn {
+  height: 30px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.ch-btn:hover { background: var(--soft); }
+.ch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ch-btn svg { flex-shrink: 0; }
+
+/* Primary action: filled ink, like the design's "yes". */
+.ch-btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.ch-btn-primary:hover:not(:disabled) { background: var(--ink2); border-color: var(--ink2); }
+
+/* A toggle that is on: the segmented control's selected look — raised card,
+   ink outline — so an open panel reads as "on" without shouting. */
+.ch-btn[aria-pressed='true'] {
+  background: var(--soft-2);
+  border-color: var(--ink);
+  box-shadow: var(--shadow-pill);
+}
+
+/* Square-ish icon button. */
+.ch-btn-icon { width: 30px; padding: 0; }
+
+/* Borderless, for close buttons and quiet actions. */
+.ch-btn-quiet { border-color: transparent; background: transparent; color: var(--ink2); }
+.ch-btn-quiet:hover { background: var(--soft); color: var(--ink); }
+
+.ch-btn-danger { color: var(--danger); }
+
+/* Needs attention (no API key yet). */
+.ch-btn-attn { border-color: var(--accent); }
+
+/* Floating over a view with no chrome of its own. */
+.ch-btn-floating {
+  position: fixed;
+  top: 14px;
+  z-index: 50;
+  height: 32px;
+  background: var(--frost);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-pill);
+}
+
+/* ── chips (status pills) ────────────────────────────────────────────────── */
+
+.ch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--ink2);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ch-chip-ok { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-fg); }
+.ch-chip-warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); cursor: help; }
+.ch-chip-accent {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--card));
+  color: var(--accent);
+}
+.ch-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ── the document toolbar ────────────────────────────────────────────────── */
+
+.ch-bar {
+  position: relative;
+  z-index: 30;
+  flex-shrink: 0;
+  height: var(--toolbar-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--frost);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--line-soft);
+  user-select: none;
+}
+.ch-bar-home {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  margin-right: 2px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.ch-bar-home:hover { background: var(--soft); }
+.ch-bar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ch-bar-sep { width: 1px; height: 18px; background: var(--line-soft); margin: 0 2px; }
+
+/* "Saved": a quiet status, not a button. The green dot is the design's ok. */
+.ch-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-size: 12.5px;
+  color: var(--ink3);
+  white-space: nowrap;
+  cursor: default;
+}
+.ch-saved::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--status-green); }
+
+/* A document's thin accent strip, recoloured by the app's theme (shown only
+   when there is one — see "the accent strip" below). */
+.ch-strip { flex-shrink: 0; background: var(--accent); }
+
+.ch-footer {
+  flex-shrink: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--line-soft);
+  background: var(--paper);
+}
+
+/* ── side panels (details, agent) ────────────────────────────────────────── */
+
+.ch-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--paper);
+}
+.ch-side-left { width: 260px; border-right: 1px solid var(--line-soft); }
+.ch-side-right { width: 360px; border-left: 1px solid var(--line-soft); }
+.ch-side-scroll { overflow-y: auto; }
+
+.ch-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 10px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ch-section { padding: 16px; border-bottom: 1px solid var(--line-soft); }
+.ch-section > .eyebrow { margin-bottom: 10px; }
+
+.ch-row { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.ch-row:last-child { margin-bottom: 0; }
+.ch-key { font-size: 11.5px; color: var(--ink3); }
+.ch-val { font-size: 12.5px; color: var(--ink); word-break: break-all; }
+.ch-mono { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink2); word-break: break-all; }
+.ch-empty { padding: 20px 16px; color: var(--ink2); font-size: 12.5px; line-height: 1.5; }
+
+/* Segmented control, as in the studio's top bar. */
+.ch-seg {
+  display: flex;
+  gap: 2px;
+  margin: 10px 12px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--soft-2);
+}
+.ch-seg button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  opacity: 0.55;
+  padding: 6px 10px;
+  border-radius: var(--r-pill);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.ch-seg button:hover { opacity: 0.8; }
+.ch-seg button[aria-selected='true'] { opacity: 1; background: var(--card); box-shadow: var(--shadow-pill); }
+
+.ch-pre {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--ink2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── menus ───────────────────────────────────────────────────────────────── */
+
+.ch-menu-anchor { position: relative; }
+.ch-menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+.ch-menu {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  z-index: 41;
+  min-width: 260px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line-soft);
+  /* Opaque: inside the bar's own backdrop filter a second one cannot blur the
+     frame underneath, so frost would let the app show through the menu. */
+  background: var(--card);
+  box-shadow: var(--shadow-soft);
+}
+.ch-menu-item {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ch-menu-item:hover,
+.ch-menu-item:focus-visible { background: var(--soft); }
+.ch-menu-item:focus-visible { outline: 2px solid var(--create); outline-offset: -2px; }
+.ch-menu-item small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 400; color: var(--ink2); }
+/* A group of items that belong apart (continue in another app; the file's details). */
+.ch-menu-apart { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line-soft); }
+
+/* ── dialogs and drawers ─────────────────────────────────────────────────── */
+
+.ch-scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--ink-fixed) 32%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.ch-scrim-right { justify-content: flex-end; align-items: stretch; padding: 0; }
+
+.ch-dialog {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  border-radius: var(--r-panel);
+  border: 1px solid var(--line-soft);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.ch-dialog h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; }
+.ch-dialog p { font-size: 13.5px; line-height: 1.55; color: var(--ink2); }
+.ch-dialog code { font-family: var(--f-mono); font-size: 0.92em; }
+.ch-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+.ch-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--dur) var(--ease);
+}
+.ch-input:focus { border-color: var(--ink); }
+.ch-warn { font-size: 12px; line-height: 1.5; color: var(--warn); }
+
+/* A large choice button: title and a hint underneath. */
+.ch-choice {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.ch-choice:hover { background: var(--soft); }
+.ch-choice small { display: block; margin-top: 3px; font-size: 12px; font-weight: 400; color: var(--ink2); }
+.ch-choice-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.ch-choice-primary:hover { background: var(--ink2); border-color: var(--ink2); }
+.ch-choice-primary small { color: inherit; opacity: 0.72; }
+
+/* App tile / monogram: the app's initial on a rounded square. Square, not a
+   disc, so it never reads as the studio's own mark. */
+.ch-monogram {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-card);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* Lineage drawer. */
+.ch-drawer {
+  width: 380px;
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  overflow-y: auto;
+  background: var(--paper);
+  border-left: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-soft);
+}
+.ch-node {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.ch-node-current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+}
+.ch-connector { align-self: center; width: 1px; height: 18px; background: var(--line); }
+
+/* ── notices ─────────────────────────────────────────────────────────────── */
+
+/* A shell-level error across the top. Red is the design's stop colour (it is
+   the accent), so it is only a dot and a tint; the message stays ink. */
+.ch-banner {
+  position: relative;
+  z-index: 60;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--status-red) 30%, var(--line-soft));
+  background: color-mix(in srgb, var(--status-red) 7%, var(--paper));
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ch-banner-dot { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--status-red); }
+.ch-banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ch-banner-text strong { font-weight: 600; margin-right: 4px; }
+.ch-banner .ch-mono { font-size: 11.5px; }
+
+/* Toast: a card in the corner; the dot carries the tone. */
+.ch-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 200;
+  width: min(340px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line-soft);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.ch-toast-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ch-toast-title .ch-chip-dot { width: 7px; height: 7px; color: var(--status-green); }
+.ch-toast[data-error] .ch-toast-title .ch-chip-dot { color: var(--status-red); }
+.ch-toast-body { padding-left: 15px; font-size: 12.5px; line-height: 1.45; color: var(--ink2); overflow-wrap: anywhere; }
+
+/* ── the accent strip, only when an app has a theme ──────────────────────── */
+
+/* The strip is how a trusted app's clan://set-theme shows in the chrome. With
+   no theme there is nothing to show, and the bar looks as it does at home:
+   the OS layer does not change colour when an app opens. App.tsx writes the
+   theme inline on <html>, so its presence is visible to CSS. */
+.ch-strip { height: 0; transition: height var(--dur) var(--ease); }
+:root[style*='--accent'] .ch-strip { height: 3px; }
+
+/* ── narrow ──────────────────────────────────────────────────────────────── */
+
+/* The document bar wraps instead of clipping. With only Saved, Share and More
+   on it there is usually room for one row; a long title or a badge pushes the
+   actions onto the next. */
+@media (max-width: 760px) {
+  .ch-bar {
+    height: auto;
+    min-height: var(--toolbar-h);
+    flex-wrap: wrap;
+    row-gap: 8px;
+    column-gap: 6px;
+    padding: 9px 12px;
+  }
+  .ch-bar-sep { display: none; }
+  .ch-bar-title { flex: 1 1 120px; }
+  .ch-bar .ch-btn { height: 28px; padding: 0 11px; font-size: 12px; }
+  .ch-bar .ch-btn-icon { width: 28px; padding: 0; }
+  /* More may wrap to the left of the second row: hang its menu from the bar,
+     full width, so it never opens off the screen. */
+  .ch-bar .ch-menu-anchor { position: static; }
+  .ch-bar .ch-menu { top: calc(100% + 4px); left: 12px; right: 12px; min-width: 0; max-width: none; }
+  .ch-side-left, .ch-side-right { position: absolute; top: 0; bottom: 0; z-index: 20; box-shadow: var(--shadow-soft); }
+  .ch-side-left { left: 0; width: min(300px, 86vw); }
+  .ch-side-right { right: 0; width: min(360px, 92vw); }
+  .ch-toast { right: 16px; bottom: 16px; }
+  /* The right end of the footer holds the decisions toggle (DecisionPanel.css). */
+  .ch-footer { justify-content: flex-start; padding-left: 14px; }
+}
+
+/* Edit mode: the one place the shell says the document is open for editing. */
+.ch-btn.ch-btn-editing,
+.ch-btn.ch-btn-editing:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+/* the sidebar's "Made from" link back to the document this one was spun off from */
+.ch-link{border:0;background:none;padding:2px 0;font:inherit;font-size:12.5px;color:var(--ink,inherit);
+  text-decoration:underline;text-underline-offset:3px;cursor:pointer;white-space:nowrap}
+.ch-link:hover{opacity:.75}
+
+/* ── glass chrome ────────────────────────────────────────────────────────────
+   An app that asks for it (clan:chrome, mode glass) is shown full-bleed, with
+   the bar, the footer and the "What happened" rail lying over it as a thin
+   frosted layer: the document shows through, softened, so the chrome takes
+   the document's own colour and light without the app setting any of the
+   shell's. The glass is light — a veil, not a slab — and the chrome's own ink
+   stays on it, so it reads in either scheme. The app is told what the glass
+   covers (clan:insets) and keeps its content clear of it. */
+.ch-top { flex-shrink: 0; position: relative; z-index: 30; }
+.ch-doc-glass { position: relative; }
+.ch-doc-glass > .ch-top { position: absolute; top: 0; left: 0; right: 0; }
+.ch-doc-glass > .ch-work { position: absolute; inset: 0; }
+.ch-doc-glass > .ch-footer { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; }
+.ch-doc-glass .ch-work-main { background: transparent; }
+.ch-doc-glass .ch-work-main > :not(.ch-frame) { margin-top: var(--glass-top, 0px); }
+.ch-doc-glass .ch-side { padding-top: var(--glass-top, 0px); padding-bottom: var(--glass-bottom, 0px); }
+.ch-doc-glass {
+  /* The shell cannot blur the app's frame (it is drawn apart): an app under
+     glass frosts the strip beneath the bar and footer itself (the OS fields'
+     html::before/::after), and this tint lies over that frost. */
+  --glass: color-mix(in srgb, var(--glass-tint, var(--paper)) 58%, transparent);
+  --glass-strong: color-mix(in srgb, var(--glass-tint, var(--paper)) 90%, transparent);
+  --glass-edge: color-mix(in srgb, var(--ink) 9%, transparent);
+  --glass-hi: color-mix(in srgb, white 45%, transparent);
+  --glass-blur: blur(44px) saturate(1.8);
+}
+:root[data-theme='dark'] .ch-doc-glass { --glass: color-mix(in srgb, var(--glass-tint, var(--paper)) 62%, transparent); --glass-hi: color-mix(in srgb, white 8%, transparent); }
+.ch-doc-glass .ch-bar,
+.ch-doc-glass .ch-footer {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+.ch-doc-glass .ch-bar { border-bottom: 1px solid var(--glass-edge); box-shadow: inset 0 -1px 0 var(--glass-hi), 0 6px 18px -14px rgba(0, 0, 0, 0.35); }
+.ch-doc-glass .ch-footer { border-top: 1px solid var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi); }
+/* buttons on the glass are glass too: a brighter pane with a lit top edge */
+.ch-doc-glass .ch-bar .ch-btn {
+  background: color-mix(in srgb, var(--card) 52%, transparent);
+  border-color: var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.ch-doc-glass .ch-bar .ch-btn:hover { background: color-mix(in srgb, var(--card) 78%, transparent); }
+.ch-doc-glass .ch-bar .ch-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); box-shadow: none; }
+.ch-doc-glass .ch-bar-home:hover { background: color-mix(in srgb, var(--card) 55%, transparent); }
+/* the rail and the open panel lie over the right edge */
+.ch-doc-glass .ch-work > .dp-rail,
+.ch-doc-glass .ch-work > .dp-panel {
+  position: absolute;
+  top: var(--glass-top, 0px);
+  bottom: var(--glass-bottom, 0px);
+  right: 0;
+  z-index: 25;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-left: 1px solid var(--glass-edge);
+}
+.ch-doc-glass .ch-work > .dp-rail { background: var(--glass); box-shadow: inset 1px 0 0 var(--glass-hi); }
+.ch-doc-glass .ch-work > .dp-rail:hover { background: color-mix(in srgb, var(--glass-tint, var(--paper)) 92%, transparent); }
+/* A panel of reading is solid, in the document's own colour: its text reads
+   first, and the page beneath (which the shell cannot blur) never shows through. */
+.ch-doc-glass .ch-work > .dp-panel {
+  background: var(--glass-tint, var(--paper));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: -18px 0 40px -28px rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 760px) {
+  .ch-doc-glass .ch-work > .dp-rail { position: fixed; top: auto; bottom: 4px; right: 10px; border-left: 0; }
+  .ch-doc-glass .ch-work > .dp-panel { position: fixed; top: 0; bottom: 0; background: var(--paper); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .ch-doc-glass { --glass: var(--paper); --glass-strong: var(--paper); }
+}

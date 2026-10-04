@@ -1,0 +1,253 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'feature/**' ]
+  pull_request:
+
+# Cancel superseded runs on the same ref (e.g. force-pushes to a PR branch).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust — fmt · clippy · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      # Everything except the Tauri app, whose Rust needs GTK/WebKit system
+      # deps and so is built in the `desktop` job below. napkin-host holds the
+      # host logic (and its tests) that used to live in app/src-tauri, where
+      # nothing in CI ever compiled or ran it; napkin-web is the HTTP shell.
+      - name: Format
+        run: cargo fmt -p clan-sdk -p clan-cli -p napkin-host -p napkin-web -- --check
+
+      # Clippy reports lints but does not block the build (no `-D warnings`)
+      # while pre-existing lint debt is paid down. Tighten later by adding
+      # `-- -D warnings` once the backlog is clear.
+      - name: Clippy
+        run: cargo clippy -p clan-sdk -p clan-cli -p napkin-host -p napkin-web --all-targets
+
+      - name: Test
+        run: cargo test -p clan-sdk -p clan-cli -p napkin-host -p napkin-web --all-targets
+
+  frontend:
+    name: Frontend — lint · tsc · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # The shell's unit tests: Node's own runner, over esbuild bundles.
+      - name: Unit tests
+        run: npm test
+
+      # `npm run build` is `tsc -b && vite build`, so this covers the
+      # TypeScript type-check gate as well as the production build.
+      - name: Type-check & build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Packaging gate. Nothing else in CI compiles app/src-tauri or goes anywhere
+  # near tauri-action, so before this job every packaging break reached us only
+  # at release time, after a tag was already public. v1.2.0 shipped with no
+  # desktop bundles at all because app/package.json had no `tauri` script and
+  # tauri-action runs `npm run tauri build` — a one-line fault the release
+  # surfaced and CI could not.
+  #
+  # Runs the Linux release path minus the slow parts: the real `npm run tauri
+  # build` entry point, beforeBuildCommand, the clan-app compile, and a .deb
+  # bundle. AppImage is skipped (~80 MB and a linuxdeploy download); macOS and
+  # Windows bundling stay release-only, since they need their own runners.
+  # ---------------------------------------------------------------------------
+  desktop:
+    name: Desktop — tauri build (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same set the release workflow installs; WebKitGTK is what app/src-tauri
+      # needs to compile at all.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            file \
+            libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: tauri-app
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      # tauri.linux.conf.json maps binaries/clan -> /usr/bin/clan via deb.files,
+      # so bundling fails with `"binaries/clan" does not exist` unless the CLI is
+      # staged first — exactly as the release workflow does it.
+      - name: Stage CLI into Linux packages
+        run: |
+          cargo build -p clan-cli --release
+          mkdir -p app/src-tauri/binaries
+          cp target/release/clan app/src-tauri/binaries/clan
+
+      # Invoked the way tauri-action invokes it, so a missing or renamed script
+      # fails here rather than in a release.
+      - name: Build app + bundle .deb
+        working-directory: app
+        run: npm run tauri -- build --bundles deb
+
+  engine:
+    name: Engine — offline pytest (network blocked)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The light dependencies only: the suite fakes every model call, and the heavy
+      # optional links (torch / sentence-transformers / the vendor SDK) are imported
+      # lazily by the modules that need them.
+      - name: Install dependencies
+        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest
+
+      # BRIEF_TESTS_OFFLINE=1 makes every outbound socket connection raise (rag/conftest.py),
+      # so a test that quietly reaches a hosted endpoint fails here instead of passing on
+      # the network. The local vector index is git-ignored; the one test that needs it skips.
+      - name: RAG + brief pipeline tests
+        working-directory: engine/rag
+        env:
+          BRIEF_TESTS_OFFLINE: "1"
+        run: python -m pytest -q -p no:cacheprovider
+
+      - name: Agent-server tests
+        working-directory: engine/agent-server
+        env:
+          BRIEF_TESTS_OFFLINE: "1"
+        run: python -m pytest -q -p no:cacheprovider
+
+      - name: Mock-agent tests
+        working-directory: mock-agent
+        run: python -m pytest -q -p no:cacheprovider
+
+  conformance:
+    name: CLI conformance harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build clan CLI (release)
+        run: cargo build -p clan-cli --release
+
+      # Deterministic black-box assertions against the built binary.
+      # Exits non-zero on the number of hard failures.
+      - name: Run conformance harness
+        run: node test-sandbox/pipeline/conformance.mjs --clan "${{ github.workspace }}/target/release/clan"
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report
+          path: conformance.json
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # The browser build. napkin-host compiles to wasm32 with `native` off — no
+  # filesystem, no subprocess, no outbound HTTP — which is what lets the shell
+  # run with no server at all. It is easy to break by accident: one `std::fs`
+  # in a shared module and the browser build is gone, while every native build
+  # stays green. So it is checked here.
+  # ---------------------------------------------------------------------------
+  wasm:
+    name: Browser — wasm32 host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+
+      - name: Build the SDK and the host for the browser
+        run: |
+          cargo build -p clan-sdk --target wasm32-unknown-unknown
+          cargo build -p napkin-host --no-default-features --target wasm32-unknown-unknown
+          cargo build -p napkin-wasm --target wasm32-unknown-unknown
+
+  middleware:
+    name: Middleware (server/, fake components)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Test
+        working-directory: server
+        run: uv run --python 3.12 pytest -q

@@ -1,0 +1,2377 @@
+<!DOCTYPE html>
+<html lang="en" data-clan-noun="brief">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brief Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* Brief Maker, in the Napkin Studio OS design language (tokens as the
+     shell's app/src/index.css). The OS top bar carries the product; this app
+     carries its own identity only: its mark and name, on Plan.
+
+     One look: the brief is made of paper. Warm, fibrous paper on a warm desk;
+     the brief's header is a manila folder cover with a tab, its title on a
+     pasted label; the brief itself is a sheet tucked under it, the edges of
+     the pad beneath; buttons are pressed card; the crew speak on paper slips;
+     the parts being written are index cards. Every surface is lit from the top
+     left and lifts off what it sits on.
+
+     Dark is the same paper in low light (the OS's colour scheme, pushed in as
+     data-color-scheme, or the OS preference): dark warm stock, light warm ink,
+     the same grain and the same lift.
+
+     Two token layers, as in the shell:
+     - design tokens (--paper, --ink, --plan, --create …)
+     - the legacy names the components read (--bg, --surface, --border, --text,
+       --muted, --accent, --btnText, --fieldFont, --bg2). */
+  :root{
+    color-scheme:light;
+    /* the desk, the sheet, and the card things are cut from */
+    --desk:#EFE7D8; --paper:#FBF7EE; --card:#FCF9F2; --soft:#F1EADC; --soft-2:#EAE1CF;
+    --line:#D9CDB6; --line-soft:#E6DCCA;
+    --ink:#221D15; --ink2:#4A4236; --ink3:#71675A;
+    --create:#C9462A; --create-2:#A9371F; --create-soft:#F5E1D5; --create-ink:#9E321A; --produce:#8F8676; --learn:#DDD3C1;
+    --plan:#221D15; --plan-fg:#FCF9F2; --plan-eye:#FCF9F2; --produce-eye:#221D15; --learn-eye:#221D15;
+    --green:#5E8A35; --green-soft:#E4EBD2; --green-ink:#3D5A1E;
+    --amber-dot:#C98A1B; --amber-soft:#F4E7C6; --amber-ink:#704C00;
+    /* the folder: manila card, its darker fold, its edge, and what is written on it */
+    --folder:#E7D5AC; --folder-2:#DCC48F; --folder-edge:#C4AA75; --folder-ink:#2E2416;
+    --label:#FDFAF3;
+    --frost:rgba(252,249,242,.85);
+    /* light from the top left; shadows are warm, never grey */
+    --lift:0 1px 1px rgba(70,50,20,.10),0 2px 4px -1px rgba(70,50,20,.10),0 14px 26px -16px rgba(70,50,20,.38);
+    --lift-sm:0 1px 1px rgba(70,50,20,.12),0 4px 10px -6px rgba(70,50,20,.32);
+    --edge-hi:inset 0 1px 0 rgba(255,255,255,.7);
+    --shadow:var(--lift); --shadow-pill:var(--lift-sm);
+    --ease:cubic-bezier(.2,.8,.2,1);
+    --r-pill:999px; --r-card:10px; --r-panel:14px;
+    --ui:"Geist","Helvetica Neue",Arial,system-ui,sans-serif;
+    --serif:'Iowan Old Style','Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;
+    --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    /* paper fibres: a fine noise, warm brown, a few per cent */
+    --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .42  0 0 0 0 .33  0 0 0 0 .2  0 0 0 .085 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    /* longer fibres, for the folder's card */
+    --fibre:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.02 .6' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .38  0 0 0 0 .28  0 0 0 0 .12  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+
+    /* legacy / themeable names → design tokens */
+    --bg:var(--desk); --bg2:var(--soft); --surface:var(--card); --border:var(--line);
+    --text:var(--ink); --muted:var(--ink2); --accent:var(--create); --accent2:var(--create);
+    --btnText:#FFFFFF; --fieldFont:var(--serif);
+    /* the screen's one primary action: a pressed card in stamp red */
+    --go:var(--create); --go-2:var(--create-2); --goText:#FFF8F0;
+    --ok:var(--green-ink); --amber:var(--amber-ink); --indigo:var(--ink);
+    --faint:var(--ink3); --tint:var(--soft); --tint-2:var(--soft-2); --rule:var(--line-soft);
+    --sec:var(--create-ink); --primary:var(--ink); --primaryText:var(--card); --sel:var(--surface);
+    /* the folder band: ground, what is written on it, and its quieter lines */
+    --zone-bg:var(--folder); --zone-fg:var(--folder-ink);
+    --zone-2:rgba(46,36,22,.74); --zone-3:rgba(46,36,22,.62); --zone-line:rgba(46,36,22,.2); --zone-tint:rgba(255,250,236,.4);
+  }
+  /* Dark paper: the same sheets in low light. */
+  @media (prefers-color-scheme:dark){
+    :root:not([data-color-scheme="light"]){
+      color-scheme:dark;
+      --desk:#1B1814; --paper:#2A251F; --card:#2E2922; --soft:#26221C; --soft-2:#332D25;
+      --line:#4A4137; --line-soft:#3B342B;
+      --ink:#EEE6D6; --ink2:#CDBFA9; --ink3:#A39681;
+      --create:#E0704C; --create-2:#C65A37; --create-soft:#3B2419; --create-ink:#F2A584; --learn:#4A4137;
+      --plan:#EEE6D6; --plan-fg:#2A251F; --plan-eye:#2A251F; --produce-eye:#EEE6D6; --learn-eye:#EEE6D6;
+      --green:#8DB35E; --green-soft:#28301D; --green-ink:#B8D58F; --amber-soft:#382D16; --amber-ink:#EAC67A;
+      --folder:#4B3F2D; --folder-2:#3F3425; --folder-edge:#2C241A; --folder-ink:#F1E7D2; --label:#332D25;
+      --frost:rgba(42,37,31,.85);
+      --lift:0 1px 1px rgba(0,0,0,.35),0 2px 4px -1px rgba(0,0,0,.35),0 16px 28px -16px rgba(0,0,0,.7);
+      --lift-sm:0 1px 1px rgba(0,0,0,.4),0 4px 10px -6px rgba(0,0,0,.6);
+      --edge-hi:inset 0 1px 0 rgba(255,240,215,.07);
+      --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .95  0 0 0 0 .88  0 0 0 0 .74  0 0 0 .06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      --fibre:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.02 .6' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .95  0 0 0 0 .85  0 0 0 0 .66  0 0 0 .05 0'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+      --goText:#FFF6EC;
+      --zone-2:rgba(241,231,210,.78); --zone-3:rgba(241,231,210,.62); --zone-line:rgba(241,231,210,.18); --zone-tint:rgba(241,231,210,.07);
+    }
+  }
+  :root[data-color-scheme="dark"]{
+    color-scheme:dark;
+    --desk:#1B1814; --paper:#2A251F; --card:#2E2922; --soft:#26221C; --soft-2:#332D25;
+    --line:#4A4137; --line-soft:#3B342B;
+    --ink:#EEE6D6; --ink2:#CDBFA9; --ink3:#A39681;
+    --create:#E0704C; --create-2:#C65A37; --create-soft:#3B2419; --create-ink:#F2A584; --learn:#4A4137;
+    --plan:#EEE6D6; --plan-fg:#2A251F; --plan-eye:#2A251F; --produce-eye:#EEE6D6; --learn-eye:#EEE6D6;
+    --green:#8DB35E; --green-soft:#28301D; --green-ink:#B8D58F; --amber-soft:#382D16; --amber-ink:#EAC67A;
+    --folder:#4B3F2D; --folder-2:#3F3425; --folder-edge:#2C241A; --folder-ink:#F1E7D2; --label:#332D25;
+    --frost:rgba(42,37,31,.85);
+    --lift:0 1px 1px rgba(0,0,0,.35),0 2px 4px -1px rgba(0,0,0,.35),0 16px 28px -16px rgba(0,0,0,.7);
+    --lift-sm:0 1px 1px rgba(0,0,0,.4),0 4px 10px -6px rgba(0,0,0,.6);
+    --edge-hi:inset 0 1px 0 rgba(255,240,215,.07);
+    --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .95  0 0 0 0 .88  0 0 0 0 .74  0 0 0 .06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    --fibre:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.02 .6' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .95  0 0 0 0 .85  0 0 0 0 .66  0 0 0 .05 0'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+    --goText:#FFF6EC;
+    --zone-2:rgba(241,231,210,.78); --zone-3:rgba(241,231,210,.62); --zone-line:rgba(241,231,210,.18); --zone-tint:rgba(241,231,210,.07);
+  }
+
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  /* What the OS's glass chrome covers (clan:insets): the page starts below the
+     bar, ends above the footer and keeps clear of the rail; it scrolls under them. */
+  body{padding:var(--clan-top,0px) var(--clan-right,0px) var(--clan-bottom,0px) 0}
+  html{scroll-padding-top:var(--clan-top,0px)}
+  /* The desk: warm paper with its grain, lit from the top left, its corners a little darker. */
+  body{background-color:var(--bg);background-image:var(--grain),radial-gradient(130% 90% at 15% 0%,color-mix(in srgb,var(--paper) 70%,transparent),transparent 62%),radial-gradient(150% 120% at 50% 45%,transparent 60%,rgba(70,50,20,.07) 100%);background-attachment:fixed;color:var(--text);font-family:var(--ui);font-size:14.5px;-webkit-font-smoothing:antialiased;line-height:1.5;min-height:100%;transition:background-color .45s var(--ease),color .3s var(--ease)}
+  button,input,select,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  [hidden]{display:none!important}
+  .ic{width:15px;height:15px;flex:none;display:block}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .app{max-width:1120px;margin:0 auto;padding:24px 28px 110px;min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1}
+
+  /* ---------- the folder ----------
+     The brief's header is the cover of a manila folder: card with long
+     fibres, lit from the top left, a tab on its top edge, a crease along the
+     fold, and the brief tucked out from under it. The figures are drawn in
+     the folder's ink, their eyes in its card. */
+  .band{position:relative;color:var(--zone-fg);border-radius:4px 14px 6px 6px;
+    background:var(--fibre),var(--grain),radial-gradient(120% 140% at 12% 0%,rgba(255,250,236,.45),transparent 55%),linear-gradient(172deg,var(--folder) 0%,var(--folder-2) 100%);
+    border:1px solid var(--folder-edge);
+    box-shadow:inset 0 1px 0 rgba(255,250,236,.55),inset 0 -1px 0 rgba(0,0,0,.08),0 1px 1px rgba(70,50,20,.14),0 20px 34px -20px rgba(70,50,20,.5);
+    --ink:var(--zone-fg); --plan:var(--zone-fg); --plan-eye:var(--folder)}
+  :root[data-color-scheme="dark"] .band{box-shadow:inset 0 1px 0 rgba(255,240,215,.1),inset 0 -1px 0 rgba(0,0,0,.3),0 1px 1px rgba(0,0,0,.4),0 20px 34px -20px rgba(0,0,0,.8)}
+  @media (prefers-color-scheme:dark){:root:not([data-color-scheme="light"]) .band{box-shadow:inset 0 1px 0 rgba(255,240,215,.1),inset 0 -1px 0 rgba(0,0,0,.3),0 1px 1px rgba(0,0,0,.4),0 20px 34px -20px rgba(0,0,0,.8)}}
+  /* the tab, cut from the same card, on the folder's top edge */
+  .band::before{content:"";position:absolute;left:22px;top:-15px;width:min(210px,40%);height:16px;border-radius:9px 9px 0 0;
+    background:var(--fibre),linear-gradient(180deg,color-mix(in srgb,var(--folder) 88%,white),var(--folder));
+    border:1px solid var(--folder-edge);border-bottom:0;box-shadow:inset 0 1px 0 rgba(255,250,236,.5)}
+  /* the crease the folder bends along */
+  .band::after{content:"";position:absolute;left:14px;right:14px;bottom:9px;height:0;border-top:1px solid rgba(70,50,20,.14);box-shadow:0 1px 0 rgba(255,250,236,.35);pointer-events:none}
+  .band .agent-figure .af-shadow{opacity:.18}
+  .ident{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:600;letter-spacing:-.01em}
+  .ident svg{width:22px;height:22px;flex:none;display:block}
+  .ident .kind{font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-left:4px}
+  .band .eyebrow{color:var(--zone-3)}
+
+  /* ---------- the crew speaks: a speech bubble, signed ----------
+     First person, from the agent doing the work. The tail inherits the
+     bubble's ground and border, so a variant only restyles the bubble. */
+  /* a slip of paper, its corner tail cut from the same sheet */
+  .say{position:relative;display:block;background:var(--grain),linear-gradient(180deg,var(--card),color-mix(in srgb,var(--card) 92%,var(--soft-2)));color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:15px;line-height:1.42;text-align:left;box-shadow:var(--edge-hi),var(--lift-sm);transition:background-color .35s var(--ease),border-color .35s var(--ease),color .35s var(--ease),box-shadow .35s var(--ease)}
+  .say::after{content:"";position:absolute;left:22px;bottom:-7px;width:12px;height:12px;background:var(--card);border:0 solid;border-color:inherit;border-right-width:1px;border-bottom-width:1px;transform:rotate(45deg) skew(8deg,8deg)}
+  .say.up::after{bottom:auto;top:-8px;transform:rotate(225deg) skew(8deg,8deg)}
+  .say.left::after{left:-8px;bottom:14px;transform:rotate(135deg) skew(8deg,8deg)}
+  .say .sayer{display:block;font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+  .say b{font-weight:700}
+  /* the one working now, and the one who needs the person */
+  .say.now{border-color:color-mix(in srgb,var(--go) 55%,var(--line));box-shadow:var(--edge-hi),inset 3px 0 0 var(--go),var(--lift-sm)}
+  .say.warn{border-color:color-mix(in srgb,var(--create) 60%,var(--line));box-shadow:var(--edge-hi),inset 3px 0 0 var(--create),var(--lift-sm)}
+  /* On the folder the slips are paper laid on card. */
+  .band .say{color:var(--ink)}
+  .band .say .sayer{color:var(--faint)}
+  /* answers are buttons */
+  .answers{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .answers button{font-size:14px;font-weight:600;border:1px solid var(--line);background:linear-gradient(180deg,var(--card),var(--soft));color:inherit;border-radius:10px;padding:8px 14px;min-height:40px;cursor:pointer;box-shadow:var(--edge-hi),0 1px 0 rgba(70,50,20,.12);transition:box-shadow .15s var(--ease),transform .15s var(--ease)}
+  .answers button:hover{box-shadow:var(--edge-hi),var(--lift-sm)}
+  .answers button:active{transform:translateY(1px);box-shadow:inset 0 1px 2px rgba(70,50,20,.18)}
+
+  /* ---------- start: one question, one box, the crew standing on it ---------- */
+  .intake{flex:1;display:flex;flex-direction:column;align-items:center;gap:22px;padding:4px 0 24px}
+  .intake > .ident{align-self:flex-start}
+  .hello{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;max-width:680px}
+  .hello .h1{font-size:clamp(32px,4.6vw,48px);font-weight:800;letter-spacing:-.035em;line-height:1.04;text-wrap:balance;transition:color .35s var(--ease)}
+  .hello .lede{color:var(--muted);font-size:17px;line-height:1.5;max-width:560px;transition:color .35s var(--ease)}
+  .stage{width:min(760px,100%);display:flex;flex-direction:column}
+.madefrom{margin-top:6px;font-size:13.5px;color:var(--ink2)}
+.madefrom b{color:var(--ink);font-weight:600}
+.madefrom .linkbtn{padding:2px 0;font-size:13.5px}
+#redraft.armed{border-color:var(--ink);color:var(--ink)}
+  .onbox{position:relative;z-index:2;display:flex;justify-content:center;align-items:flex-end;gap:64px;min-height:200px;padding:0 24px}
+  .onbox .m{position:relative;display:flex;flex-direction:column;align-items:center;border-radius:12px}
+  .onbox .agent-figure{width:64px;height:85px;margin-bottom:-7px}
+  .onbox .first,.onbox .tip{position:absolute;bottom:calc(100% + 8px);z-index:3;width:max-content}
+  .onbox .first{left:-6px;max-width:min(340px,70vw);transition:opacity .15s var(--ease)}
+  .onbox .tip{left:50%;transform:translateX(-50%);max-width:min(260px,62vw);opacity:0;pointer-events:none;transition:opacity .15s var(--ease)}
+  .onbox .tip .say::after{left:calc(50% - 7px)}
+  .onbox .m:last-child .tip{left:auto;right:-6px;transform:none}
+  .onbox .m:last-child .tip .say::after{left:auto;right:22px}
+  .onbox .m:hover .tip,.onbox .m:focus .tip{opacity:1}
+  .onbox:has(.m:not(.lead):hover) .first,.onbox:has(.m:not(.lead):focus) .first{opacity:0}
+  /* the box is a card laid on the desk: you write on it */
+  .composer{position:relative;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;background:var(--grain),linear-gradient(180deg,var(--paper),var(--card));border:1px solid var(--line);border-radius:18px;padding:8px 8px 8px 22px;box-shadow:var(--edge-hi),var(--lift);transition:background-color .35s var(--ease),border-color .35s var(--ease),box-shadow .2s var(--ease)}
+  .composer:focus-within{border-color:color-mix(in srgb,var(--go) 45%,var(--line));box-shadow:var(--edge-hi),0 0 0 4px color-mix(in srgb,var(--go) 16%,transparent),var(--lift)}
+  .composer textarea{flex:1 1 260px;min-width:0;height:52px;min-height:52px;max-height:320px;resize:none;border:none;outline:none;background:transparent;color:var(--text);font-size:18px;line-height:1.45;padding:13px 0;align-self:center}
+  .composer textarea::placeholder{color:var(--faint)}
+  .attach{width:52px;height:52px;border-radius:50%;background:linear-gradient(180deg,var(--card),var(--soft-2));border:1px solid var(--line);color:var(--text);display:grid;place-items:center;cursor:pointer;flex:none;box-shadow:var(--edge-hi),0 1px 0 rgba(70,50,20,.12);transition:box-shadow .2s var(--ease)}
+  .attach:hover{box-shadow:var(--edge-hi),var(--lift-sm)}
+  .attach .ic{width:21px;height:21px}
+  .attach:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+  /* the one primary action: a raised stamp-red card that presses in */
+  .go{cursor:pointer;border:1px solid var(--go-2);border-radius:14px;background:linear-gradient(180deg,color-mix(in srgb,var(--go) 88%,white),var(--go) 55%,var(--go-2));color:var(--goText);text-shadow:0 1px 0 rgba(0,0,0,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 2px 0 var(--go-2),0 8px 16px -10px rgba(120,40,20,.55);min-height:52px;padding:14px 24px;font-size:16.5px;font-weight:600;letter-spacing:-.01em;display:inline-flex;align-items:center;justify-content:center;gap:9px;white-space:nowrap;flex:none;transition:background-color .35s var(--ease),box-shadow .2s var(--ease),transform .2s var(--ease),opacity .2s var(--ease)}
+  .go:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 2px 0 var(--go-2),0 12px 22px -10px rgba(120,40,20,.6)}
+  .go:active{transform:translateY(2px);box-shadow:inset 0 2px 3px rgba(0,0,0,.2),0 0 0 var(--go-2)}
+  .go:disabled{opacity:.5;cursor:default;box-shadow:none}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%;padding:0 8px 6px 0}
+  .chips:empty{display:none}
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;background:var(--grain),var(--soft);color:var(--text);border:1px solid var(--line);border-radius:6px;box-shadow:var(--edge-hi),0 1px 0 rgba(70,50,20,.1);padding:4px 6px 4px 10px;max-width:100%}
+  .chip .ic{width:13px;height:13px;color:var(--faint)}
+  .chip .x{cursor:pointer;color:var(--faint);width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border:0;background:none}
+  .chip .x:hover{background:var(--surface);color:var(--text)}
+  #intakeStatus{margin-top:12px;text-align:center}
+  #intakeStatus:empty{display:none}
+  .note{font-size:13px;color:var(--faint);line-height:1.5}
+  .note.err{color:var(--create-ink)}
+  .nomw{display:flex;gap:12px;align-items:flex-end;margin-top:14px}
+  .nomw .agent-figure{width:40px;height:53px;flex:none}
+  .nomw .say{flex:1;min-width:0}
+  /* files dropped anywhere on the page */
+  .dropveil{position:fixed;inset:10px;z-index:60;border:3px dashed var(--go);border-radius:24px;background:color-mix(in srgb,var(--bg) 82%,transparent);display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--text)}
+
+  /* ---------- working: the crew introduce themselves, with their live status ---------- */
+  .proc{flex:1;display:none;flex-direction:column;align-items:center;gap:28px;padding:4px 0 24px}
+  .proc.on{display:flex}
+  .procS.err{color:var(--create-ink);font-weight:500}
+  .meet{width:min(980px,100%);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
+  .mate{display:flex;flex-direction:column;align-items:flex-start;gap:14px;min-width:0;transition:opacity .3s var(--ease)}
+  .mfig{height:96px;display:flex;align-items:flex-end;padding-left:12px}
+  .mfig .agent-figure{width:68px;height:91px}
+  .mate .say{width:100%;font-size:15.5px}
+  .mate .say.up::after{left:34px}
+  .mate .st{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:14px;color:var(--muted)}
+  .mate .st.ok{color:var(--ok)}
+  .mate .st.err{color:var(--create-ink)}
+  .mate .pbar{display:block;height:7px;border-radius:6px;background:var(--tint-2);box-shadow:inset 0 1px 2px rgba(70,50,20,.2);overflow:hidden}
+  .mate .pbar i{display:block;height:100%;background:var(--go);border-radius:6px;transition:width .4s var(--ease)}
+  .mate.next{opacity:.75}
+  .procActs{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .procActs:empty{display:none}
+  .procActs .stopq{flex-basis:100%;text-align:center;font-size:15px;color:var(--ink2)}
+  .parts{width:min(980px,100%)}
+  .parts summary{cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;font-size:14px;font-weight:500;color:var(--muted)}
+  .parts summary::before{content:"";width:0;height:0;border-left:6px solid currentColor;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;transition:transform .2s var(--ease)}
+  .parts[open] summary::before{transform:rotate(90deg)}
+  .parts summary:hover{color:var(--text)}
+  .parts .tiles{margin-top:8px}
+  .later{font-size:14px;color:var(--muted);text-align:center;max-width:62ch}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+  /* each part being written is an index card: a ruled head line, lifted off the desk */
+  .tile{display:flex;gap:10px;align-items:flex-start;padding:11px 12px 12px 8px;border:1px solid var(--line);border-radius:4px;background:var(--grain),linear-gradient(180deg,transparent 30px,color-mix(in srgb,var(--create) 30%,transparent) 30px,color-mix(in srgb,var(--create) 30%,transparent) 31px,transparent 31px),var(--card);min-height:74px;box-shadow:var(--edge-hi),var(--lift-sm);transition:border-color .3s var(--ease),background .3s var(--ease)}
+  .tile .agent-figure{width:24px;height:32px;margin-top:2px}
+  .tile .tb{min-width:0;flex:1}
+  .tile .ts{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .tile .tl{font-size:13px;font-weight:600;letter-spacing:-.01em;margin-top:1px}
+  .tile .tv{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tile.work .tv{color:var(--faint)}
+  .tile.work .tv::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4,end) infinite}
+  .tile.done{border-color:var(--border)}
+  .tile.done .tv{color:var(--text)}
+  .tile.skip{background:transparent;border-style:dashed;box-shadow:none}
+  .tile.kept{background:var(--tint)}
+  .tile.wait{opacity:.72}
+  .tile.fail{border-color:transparent;background:var(--create-soft);color:var(--create-ink)}
+  .tile.fail .tv,.tile.fail .ts{color:var(--create-ink)}
+  .tile.fail{--ink:var(--create-ink);--plan:var(--create-ink);--plan-eye:var(--create-soft)}
+  .tile.prop{border-color:transparent;background:var(--amber-soft)}
+  .tile.prop .tv{color:var(--amber-ink)}
+  .tile .nofig{width:24px;flex:none}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+  /* ---------- the brief ---------- */
+  #structured{display:none}
+  .docband{padding:22px 24px 22px;display:grid;gap:16px;z-index:1}
+  .dtop{display:flex;align-items:flex-start;gap:12px 18px;flex-wrap:wrap}
+  .spacer{flex:1}
+  .proj.derived{opacity:.82}
+  .dtitle{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-top:6px}
+  /* the title, typed on a label pasted on the folder */
+  .proj{display:table;font-size:clamp(28px,4.2vw,44px);font-weight:800;letter-spacing:-.045em;line-height:1.04;text-wrap:balance;max-width:24ch;margin-top:12px;color:var(--ink);
+    background:var(--grain),linear-gradient(180deg,var(--label),color-mix(in srgb,var(--label) 94%,var(--soft-2)));padding:12px 18px 14px;border:1px solid color-mix(in srgb,var(--folder-edge) 70%,var(--line));border-radius:3px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 1px 1px rgba(70,50,20,.16),0 8px 14px -10px rgba(70,50,20,.5)}
+  .cli{color:var(--zone-2);font-size:15px;margin-top:6px}
+  .cli:empty{display:none}
+  /* buttons on the folder: paper tabs laid on the card */
+  .bghost{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;background:var(--grain),linear-gradient(180deg,var(--card),var(--soft));border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:8px 14px;min-height:40px;cursor:pointer;white-space:nowrap;box-shadow:var(--edge-hi),0 1px 1px rgba(70,50,20,.16),0 4px 8px -6px rgba(70,50,20,.4);transition:box-shadow .2s var(--ease),transform .15s var(--ease)}
+  .bghost:hover{box-shadow:var(--edge-hi),var(--lift-sm)}
+  .bghost:active{transform:translateY(1px);box-shadow:inset 0 1px 2px rgba(70,50,20,.2)}
+  /* Dara and Jude say where the brief stands, from real state */
+  .bcrew{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 22px}
+  .bcrew:empty{display:none}
+  .bcrew .pair{display:flex;align-items:flex-end;gap:12px;min-width:0;flex:1 1 300px;max-width:480px}
+  .bcrew .agent-figure{width:40px;height:53px;flex:none}
+  .bcrew .say{flex:1;min-width:0;font-size:14.5px}
+  .flag{--ink:var(--create-ink);--plan:var(--create-ink);--plan-eye:var(--create-soft)}
+  .linkbtn{font-size:14px;background:none;border:0;padding:8px 0;min-height:40px;color:var(--zone-fg);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .ghost,.save-as{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;background:var(--grain),linear-gradient(180deg,var(--card),var(--soft));border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 14px;cursor:pointer;white-space:nowrap;box-shadow:var(--edge-hi),0 1px 0 rgba(70,50,20,.14);transition:border-color .2s var(--ease),box-shadow .2s var(--ease),transform .2s var(--ease)}
+  .ghost:hover,.save-as:hover{box-shadow:var(--edge-hi),var(--lift-sm)}
+  .ghost:active,.save-as:active{transform:translateY(1px);box-shadow:inset 0 1px 2px rgba(70,50,20,.2)}
+  .ghost.big{font-size:15px;padding:11px 20px;min-height:46px}
+  /* The sheet: the brief, a page of the pad tucked out from under the
+     folder. Lit from the top left, fibres in it, its edges a shade warmer
+     than its middle, the edges of two more sheets under it, and it lifts off
+     the desk with a soft contact shadow. */
+  .sheet{position:relative;z-index:0;max-width:860px;width:calc(100% - 68px);margin:-12px auto 0;border:1px solid var(--line);border-radius:3px;padding:clamp(40px,6vw,68px) clamp(22px,7vw,76px) clamp(40px,6vw,68px);
+    background:var(--grain),radial-gradient(120% 90% at 18% 0%,color-mix(in srgb,var(--paper) 60%,white 40%),transparent 60%),radial-gradient(140% 120% at 50% 40%,transparent 62%,rgba(120,96,56,.07) 100%),linear-gradient(180deg,var(--paper),color-mix(in srgb,var(--paper) 94%,var(--soft-2)));
+    box-shadow:0 1px 1px rgba(60,44,20,.08),0 5px 0 -2px var(--soft),0 5px 0 -1px var(--line),0 10px 0 -5px var(--soft-2),0 10px 0 -4px var(--line),0 3px 6px -2px rgba(60,44,20,.10),0 30px 50px -26px rgba(60,44,20,.40);
+    transition:background-color .45s var(--ease),border-color .45s var(--ease)}
+  .docband{z-index:1}
+  :root[data-color-scheme="dark"] .sheet{background:var(--grain),radial-gradient(120% 90% at 18% 0%,rgba(255,240,215,.05),transparent 60%),linear-gradient(180deg,var(--paper),color-mix(in srgb,var(--paper) 90%,black))}
+  @media (prefers-color-scheme:dark){:root:not([data-color-scheme="light"]) .sheet{background:var(--grain),radial-gradient(120% 90% at 18% 0%,rgba(255,240,215,.05),transparent 60%),linear-gradient(180deg,var(--paper),color-mix(in srgb,var(--paper) 90%,black))}}
+  #fields .row{border-top-color:color-mix(in srgb,var(--line) 70%,transparent)}
+  .sechead{border-top-color:var(--line)}
+  .lab{color:var(--ink2)}
+
+
+  .sechead{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--sec);margin:44px 0 6px;padding-top:20px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:10px}
+  #fields > .sechead:first-child{border-top:none;margin-top:18px}
+  .row{padding:20px 0 22px;border-top:1px solid var(--rule);position:relative}
+  .sechead + .row{border-top:none}
+  .lab{display:flex;align-items:center;gap:9px;min-height:28px;font-size:12.5px;font-weight:600;letter-spacing:-.005em;color:var(--muted);flex-wrap:wrap}
+  .lockbadge{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.04em;line-height:17px;padding:0 8px;border-radius:var(--r-pill);color:var(--amber-ink);background:var(--amber-soft)}
+  .lockbadge .ic{width:10px;height:10px}
+  /* who wrote this field, and the way into why */
+  .prov{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:transparent;border-radius:var(--r-pill);padding:1px 10px 1px 4px;font-size:11.5px;font-weight:500;color:var(--muted);cursor:pointer;line-height:22px;transition:border-color .2s var(--ease),color .2s var(--ease)}
+  .prov:hover,.prov[aria-expanded="true"]{border-color:var(--faint);color:var(--text)}
+  .prov .agent-figure{width:14px;height:19px;margin:0 -1px}
+  .prov .you{width:16px;height:16px;border-radius:50%;border:1.2px solid currentColor;font-size:8.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+  .prov .q{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .ctrls{margin-left:auto;display:flex;gap:4px;opacity:0;transition:opacity .18s var(--ease)}
+  .row:hover .ctrls,.row:focus-within .ctrls{opacity:1}
+  @media (hover:none) and (pointer:coarse){.ctrls{opacity:1}}
+  .iconbtn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:linear-gradient(180deg,var(--card),var(--soft));box-shadow:var(--edge-hi),0 1px 0 rgba(70,50,20,.12);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s var(--ease),color .15s var(--ease),box-shadow .15s var(--ease);line-height:1}
+  .iconbtn .ic{width:14px;height:14px}
+  .iconbtn:hover{border-color:var(--faint);color:var(--text);box-shadow:var(--shadow-pill)}
+  .iconbtn:disabled{cursor:default}
+  .iconbtn.on{border-color:transparent;color:var(--amber-ink);background:var(--amber-soft)}
+  .val{font-family:var(--fieldFont);font-size:16.5px;line-height:1.68;color:var(--text);margin-top:6px;white-space:pre-wrap;max-width:64ch}
+  .val.empty{color:var(--faint);font-family:var(--ui);font-size:14px}
+  .val ul{margin:2px 0 0;padding-left:18px;white-space:normal}
+  .val li{margin:4px 0}
+  .val li::marker{color:var(--faint)}
+  .val.spp{font-size:clamp(22px,3vw,28px);line-height:1.2;font-weight:700;letter-spacing:-.03em;max-width:32ch}
+  .regen-now{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--muted)}
+  .regen-now .agent-figure{width:21px;height:28px}
+
+  /* why: the decision behind the field, in the spec's reasoning shape */
+  .why{margin-top:10px;border-left:2px solid var(--border);padding:4px 0 4px 14px;display:grid;gap:8px;max-width:72ch}
+  .why .wh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .why .wh b{color:var(--text);font-weight:600}
+  .why .wh .agent-figure{width:18px;height:24px}
+  .why .you{width:18px;height:18px;border-radius:50%;border:1.2px solid currentColor;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700}
+  .why .wh time{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .rsn{font-size:13.5px;color:var(--text);display:grid;gap:6px}
+  .rsn p{margin:0}
+  .rsn .rl{display:inline-block;min-width:10.5em;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-right:6px}
+  .rsn ul{margin:2px 0 0;padding-left:18px;display:grid;gap:3px}
+  .rsn .m{color:var(--muted)}
+  .cite{display:inline-block;font-family:var(--mono);font-size:10.5px;background:var(--tint);border-radius:6px;padding:0 6px;color:var(--muted);margin-left:5px;vertical-align:1px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;padding:0 8px;border-radius:var(--r-pill);border:1px solid var(--border);color:var(--muted);line-height:18px}
+  .pill.ok{background:var(--green-soft);border-color:transparent;color:var(--green-ink)}
+  .pill.alert{background:var(--create-soft);border-color:transparent;color:var(--create-ink)}
+  .flag{display:flex;gap:10px;align-items:flex-start;background:var(--create-soft);color:var(--create-ink);border-radius:10px;padding:8px 12px;font-size:13px}
+  .flag .agent-figure{width:18px;height:24px}
+  .vd{display:grid;gap:8px;border-top:1px dashed var(--rule);padding-top:8px}
+  .srcs .rl{display:block;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+  .srcs ul{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:8px}
+  .srcs blockquote{margin:0;font-family:var(--serif);font-size:14px;line-height:1.5;color:var(--text);border-left:2px solid var(--rule);padding-left:10px}
+  .srcs cite a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+  .srcs cite{display:block;font-style:normal;font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--faint);margin-top:3px;padding-left:12px}
+  .notes:empty{display:none}
+  .notes{display:grid;gap:8px;margin-top:10px;max-width:72ch}
+  .note-v,.note-p{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45}
+  .note-v{background:var(--grain),var(--create-soft);box-shadow:var(--edge-hi),var(--lift-sm);color:var(--create-ink);--ink:var(--create-ink);--plan:var(--create-ink);--plan-eye:var(--create-soft)}
+  .note-v p{margin:2px 0 0}
+  .note-v ul{margin:4px 0 4px;padding-left:18px}
+  .note-v .muted{color:inherit;opacity:.8}
+  .note-v p.fix{margin-top:6px}
+  .note-v a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+  .note-x{padding:7px 12px}
+  .note-v.flash,.note-p.flash,.row.flash{animation:vflash 1.2s ease-out}
+  @keyframes vflash{0%{box-shadow:0 0 0 3px var(--create-ink)}100%{box-shadow:0 0 0 0 transparent}}
+  @media (prefers-reduced-motion:reduce){.note-v.flash,.note-p.flash,.row.flash{animation:none}}
+  .note-p{background:var(--grain),var(--amber-soft);box-shadow:var(--edge-hi),var(--lift-sm);color:var(--text)}
+  .note-p .pb{min-width:0;flex:1;display:grid;gap:6px}
+  .note-p .pv{font-family:var(--fieldFont);font-size:15px;line-height:1.55;white-space:pre-wrap}
+  .note-p .pv ul{margin:0;padding-left:18px;white-space:normal}
+  .note-v .agent-figure,.note-p .agent-figure{width:18px;height:24px;flex:none}
+  .review{margin-top:8px}
+  .review[hidden]{display:none}
+  .dims{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;font-size:13.5px;max-width:72ch}
+  .dims .m{color:var(--muted)}
+  .earlier{font-size:12px;color:var(--faint)}
+  .earlier summary{cursor:pointer}
+  .earlier ol{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}
+  .earlier li{font-size:12.5px;color:var(--muted)}
+  .earlier li b{color:var(--text);font-weight:600}
+
+  .edit{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+  .edit textarea,.edit input[type=text]{width:100%;background:var(--surface);border:1px solid var(--faint);border-radius:var(--r-card);padding:10px 12px;color:var(--text);font-size:15px;outline:none;transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+  .edit textarea:focus,.edit input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+  .edit textarea{min-height:76px;resize:vertical;font-family:var(--fieldFont);line-height:1.55}
+  .edit .rat{border-color:var(--border);font-size:13px}
+  .edit textarea.rat{min-height:64px;font-family:inherit}
+  .ratlab{display:flex;flex-direction:column;gap:4px}
+  .ratlab>span{font-size:12.5px;font-weight:600;color:var(--muted)}
+  .editrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .editrow label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .editrow input[type=color]{width:26px;height:26px;border:1px solid var(--border);border-radius:50%;padding:1px;background:none;cursor:pointer}
+  .save{font-size:12.5px;font-weight:600;border-radius:var(--r-pill);padding:7px 15px;cursor:pointer;border:none;background:var(--primary);color:var(--primaryText)}
+  .cancel{font-size:12.5px;font-weight:500;border-radius:var(--r-pill);padding:6px 13px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted)}
+  .cancel:hover{color:var(--text);border-color:var(--faint)}
+  .muted{color:var(--faint);font-size:12.5px}
+
+  .boards{display:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px}
+  .boards.on{display:grid}
+  /* a picture the person sent, as a print with a white border */
+  .board{border:1px solid var(--line);border-radius:3px;overflow:hidden;background:var(--grain),var(--card);padding:7px 7px 0;position:relative;box-shadow:var(--lift-sm);transition:box-shadow .2s var(--ease)}
+  .board:hover{box-shadow:var(--shadow)}
+  .board img{width:100%;height:108px;object-fit:cover;display:block}
+  .board.big img{height:156px}
+  .board audio,.board video{width:100%;display:block}
+  .board .doc{display:flex;align-items:center;justify-content:center;height:108px;background:var(--tint);color:var(--faint)}
+  .board .doc .ic{width:28px;height:28px}
+  .board .nm{font-size:11px;color:var(--faint);padding:8px 10px;font-family:var(--mono);letter-spacing:.02em;word-break:break-all;border-top:1px solid var(--rule)}
+  /* tap a picture to take it out: it asks first, with two buttons */
+  .board{cursor:pointer}
+  .board:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  .board .ask{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px;background:color-mix(in srgb,var(--surface) 90%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);text-align:center;font-size:13.5px;font-weight:600;cursor:default}
+  .board .ask .answers{justify-content:center;margin-top:2px}
+  .board .ask .answers button{font-size:13px;padding:7px 12px;min-height:38px}
+  .board .ask .answers .out{color:var(--create-ink)}
+  .pnote{font-size:13.5px;color:var(--muted);margin-top:6px}
+  .addboard{border:1.5px dashed var(--border);border-radius:var(--r-card);min-height:148px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--faint);cursor:pointer;font-size:12.5px;text-align:center;padding:10px;transition:border-color .2s var(--ease),color .2s var(--ease),background .2s var(--ease)}
+  .addboard .ic{width:26px;height:26px}
+  .addboard:hover{border-color:var(--faint);color:var(--text);background:var(--tint)}
+  .addboard:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+
+  .footer{display:flex;align-items:center;gap:8px;margin-top:36px;padding-top:20px;border-top:1px solid var(--rule);flex-wrap:wrap}
+  .lock{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;letter-spacing:-.01em;border:1px solid var(--go-2);border-radius:12px;padding:12px 22px;min-height:46px;cursor:pointer;background:linear-gradient(180deg,color-mix(in srgb,var(--go) 88%,white),var(--go) 55%,var(--go-2));color:var(--goText);text-shadow:0 1px 0 rgba(0,0,0,.18);margin-right:4px;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 2px 0 var(--go-2),0 8px 16px -10px rgba(120,40,20,.55);transition:background-color .35s var(--ease),box-shadow .2s var(--ease),transform .2s var(--ease)}
+  .lock:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 2px 0 var(--go-2),0 12px 22px -10px rgba(120,40,20,.6)}
+  .lock:active{transform:translateY(2px);box-shadow:inset 0 2px 3px rgba(0,0,0,.2)}
+  .lock.locked{background:var(--green-soft);color:var(--green-ink);border-color:transparent;text-shadow:none;box-shadow:inset 0 1px 2px rgba(40,60,20,.18)}
+  .lock:disabled{opacity:.55;cursor:default;box-shadow:none;transform:none}
+  .lock .n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:11px;padding:0 6px;font-size:12px;background:color-mix(in srgb,var(--goText) 22%,transparent)}
+  /* What the lock waits for (the host's lock list): Jude names each, and a
+     tap opens it where it is settled — the part, or the evidence drawer. */
+  .locklist{flex-basis:100%;display:flex;gap:12px;align-items:flex-start;margin-top:10px}
+  .locklist .agent-figure{width:24px;height:32px;flex:none}
+  .locklist .lb{min-width:0;flex:1;display:grid;gap:8px;font-size:14px}
+  .lkitems{display:flex;flex-wrap:wrap;gap:8px}
+  .lkitem{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;min-height:44px;max-width:100%;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--grain),var(--card);color:var(--text);cursor:pointer;font-size:13.5px;line-height:1.3;box-shadow:var(--edge-hi),0 1px 0 rgba(70,50,20,.14);transition:box-shadow .15s var(--ease)}
+  .lkitem:hover{box-shadow:var(--edge-hi),var(--lift-sm)}
+  .lkitem .k{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .lkitem .x{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  /* A list part opens its evidence on a tap, as a clan-field does. */
+  .val.opens{cursor:pointer;border-radius:6px;transition:background .15s var(--ease)}
+  .val.opens:hover{background:color-mix(in srgb,var(--text) 5%,transparent)}
+  /* A brief started from research: what it carried, and what changed there
+     since (the notice on the design tokens, so it reads under a brand's colours) */
+  .fromup{width:100%;background:var(--grain),var(--card);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:18px 20px;margin-bottom:26px;display:grid;gap:12px;box-shadow:var(--edge-hi),var(--lift);transition:background-color .35s var(--ease),border-color .35s var(--ease)}
+  .fromup .fu-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .fromup .fu-t{font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+  .fromup blockquote{margin:0;font-family:var(--fieldFont);font-size:16px;line-height:1.5;border-left:3px solid var(--go);padding-left:12px}
+  .fromup .fu-n{font-size:14px;color:var(--muted)}
+  .fromup .fu-n b{color:var(--text);font-weight:600}
+  .fromup .note{text-align:left}
+  .upnote{display:flex;gap:10px;align-items:flex-start;background:var(--amber-soft);color:var(--ink);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45;margin:0 0 14px}
+  .upnote .ub{min-width:0;flex:1;display:grid;gap:6px}
+  .upnote ul{margin:0;padding-left:18px;display:grid;gap:4px}
+  .upnote .m{color:var(--ink2)}
+  .upnote details summary{cursor:pointer;min-height:32px;display:flex;align-items:center;font-weight:500}
+  .upnote .agent-figure{width:18px;height:24px;flex:none}
+  .footer .save-as{padding:9px 15px}
+  .footer .muted{margin-left:4px}
+  .status{display:inline-flex;align-items:center;gap:8px}
+  .status .agent-figure{width:18px;height:24px}
+
+  .foot{margin-top:auto;padding:28px 0 8px;display:flex;align-items:center;justify-content:center;gap:9px;font-size:11px;color:var(--faint);font-family:var(--mono);letter-spacing:.04em;flex-wrap:wrap;text-align:center}
+  .foot .dot{width:4px;height:4px;border-radius:50%;background:var(--faint)}
+  .toast{position:fixed;bottom:calc(22px + var(--clan-bottom,0px));left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:var(--r-pill);font-size:13px;font-weight:500;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .25s var(--ease),transform .25s var(--ease);z-index:50;max-width:calc(100vw - 32px)}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:860px){
+    .meet{grid-template-columns:1fr;gap:14px;max-width:560px}
+    .mfig{height:auto}
+    .mfig .agent-figure{width:52px;height:69px}
+  }
+  @media (max-width:640px){
+    .app{padding:12px 16px 90px}
+    .hello .h1{font-size:34px}
+    .hello .lede{font-size:15.5px}
+    .onbox{gap:40px;min-height:186px;padding:0 8px}
+    .onbox .agent-figure{width:44px;height:59px;margin-bottom:-6px}
+    .composer{padding:8px;border-radius:16px}
+    .composer textarea{flex-basis:100%;height:78px;min-height:78px;padding:10px 10px 4px;font-size:17px}
+    .go{flex:1;padding:14px 16px}
+    .chips{padding:0 4px 4px}
+    .docband{padding:18px 16px}
+    .sheet{width:calc(100% - 16px);padding:26px 16px 26px}
+    .bcrew .pair{flex-basis:100%}
+    .tiles{grid-template-columns:1fr 1fr;gap:8px}
+    .tile{min-height:64px;padding:9px 9px 10px 6px;gap:7px}
+    .tile .agent-figure{width:18px;height:24px}
+    .tile .tv{-webkit-line-clamp:1}
+    .rsn .rl{display:block;min-width:0}
+    .fromup{padding:14px;border-radius:18px}
+    .lkitem{flex:1 1 100%}
+  }
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}.tile.work .tv::after{animation:none;content:"…"}}
+</style>
+<!-- @napkin:agent-figures -->
+<!-- @napkin:clan-fields -->
+</head>
+<body>
+<div class="app">
+  <!-- PHASE 1 — START: one question, one box, the crew standing on it -->
+  <section class="intake" id="intake">
+    <div class="ident"><svg viewBox="0 0 44 44" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 8.5h14.2l5.8 5.8v21.2H12z M16.5 18h11v2.6h-11z M16.5 23h11v2.6h-11z M16.5 28h7v2.6h-7z"/><path fill="currentColor" opacity=".5" d="M27.4 7.6 33 13.2h-5.6z"/></svg>Brief Maker<span class="kind">Plan</span></div>
+    <div class="hello">
+      <h1 class="h1" id="introH">What’s the brief?</h1>
+      <p class="lede"><span id="ledeText">Paste the client’s words, or drop in their notes, deck or voice memo.</span></p>
+    </div>
+    <div class="stage">
+      <div class="fromup" id="fromUp" hidden></div>
+      <div class="onbox" id="introCrew"></div>
+      <div class="composer">
+        <label class="sr" for="prompt">The brief, in your words</label>
+        <textarea id="prompt" rows="1" placeholder="Paste what the client said, or tell us about the brief"></textarea>
+        <label class="attach" title="Add the client’s files"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 7.6 8.3 12.8a3.2 3.2 0 0 1-4.6-4.6l5.4-5.4a2.1 2.1 0 0 1 3 3L6.8 11a1.1 1.1 0 0 1-1.5-1.5l4.9-4.9"/></svg><span class="sr">Add the client’s files</span><input type="file" class="sr" id="addAny" multiple /></label>
+        <button type="button" class="go" id="genBtn">Write the brief</button>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="note" id="intakeStatus" role="status"></div>
+      <div class="nomw" id="noMw" hidden></div>
+    </div>
+  </section>
+
+  <!-- PHASE 2 — WORKING: the crew introduce themselves, each with their live status -->
+  <section class="proc" id="proc">
+    <div class="hello" aria-live="polite">
+      <h2 class="h1" id="procH">Meet your crew</h2>
+      <p class="lede procS" id="procS"></p>
+    </div>
+    <div class="meet" id="meet"></div>
+    <div class="procActs" id="procActs"></div>
+    <details class="parts"><summary>See each part as it’s written</summary><div class="tiles" id="tiles"></div></details>
+    <p class="later">You’ll see these names in every tool. The same crew works everywhere, and every part of the brief says who wrote it.</p>
+  </section>
+
+  <!-- PHASE 3 — THE BRIEF -->
+  <section id="structured">
+    <header class="band docband">
+      <div class="dtop">
+        <div><div class="ident" id="docIdent"></div><div class="proj" id="hProj"></div><div class="dtitle" id="hDerived" hidden></div><div class="cli" id="hCli"></div><div class="madefrom" id="madeFrom" hidden></div></div>
+        <span class="spacer"></span>
+        <button type="button" class="bghost" id="redraft" title="Run the whole crew again on the same ask: Ellis, Sam, Dara and Jude. Parts you wrote yourself are kept, with a suggestion beside them."><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5"/></svg>Draft it again</button>
+        <button type="button" class="bghost" id="newDraft" title="Start again from a new brief"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.2v9.6M3.2 8h9.6"/></svg>New brief</button>
+      </div>
+      <div class="bcrew" id="crewline" aria-live="polite"></div>
+    </header>
+
+    <div class="sheet">
+      <div class="upnote" id="upNote" role="status" hidden></div>
+      <div id="fields"></div>
+      <div class="review" id="review" hidden></div>
+
+      <div class="sechead" id="boardsHead" style="display:none">Your pictures</div>
+      <p class="pnote" id="boardsNote" hidden>From what you sent. Tap + to add more, or tap one to take it out.</p>
+      <div class="boards" id="boards"></div>
+
+      <div class="footer">
+        <button class="lock" id="lockBtn">Lock brief</button>
+        <button class="save-as" id="saveBtn"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5A1 1 0 0 1 4 2.5h6.3L13 5.2V12.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5v3h4v-3M5.5 13.5v-4h5v4"/></svg>Save as…</button>
+        <button class="save-as" id="exHtml" title="Export a clean standalone HTML report"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>HTML</button>
+        <button class="save-as" id="exPdf" title="Export a print-ready PDF"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>PDF</button>
+        <span class="muted" id="lockedBadge" style="display:none;color:var(--ok)">Locked for handoff</span>
+        <span class="muted status" id="status" role="status"></span>
+        <div class="locklist" id="lockList" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot"><span>Nothing gets lost.</span><span class="dot"></span><span>Every brief stored and searchable.</span></footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="dropveil" id="dropveil" hidden>Drop to add to your brief</div>
+
+<script>
+  var clanScheme = navigator.userAgent.includes('Windows') ? 'http://clan.localhost' : 'clan://localhost';
+  var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
+  function data(){ return (window.__CLAN__ && window.__CLAN__.data) || {}; }
+  function get(p){ return p.split('.').reduce(function(o,k){return (o==null)?undefined:o[k];}, data()); }
+  function patch(p,v,opts){ if(window.clan) return window.clan.patchData(p,v,opts||{actor:'human',pinned:false}); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function arr(v){ return Array.isArray(v)?v:[]; }
+  function assetUrl(n){ return clanScheme+'/assets/'+n; }
+  function valToText(v,t){ if(v==null) return ''; return t==='list'?(Array.isArray(v)?v.join('\n'):String(v)):String(v); }
+  function short(s,n){ n=n||48; s=String(s||''); return s.length>n?s.slice(0,n)+'…':s; }
+  function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on');},2100); }
+  function $(id){ return document.getElementById(id); }
+  // The figures come from the shared snippet the packer inlines (agentFigure).
+  // Opened from source with no snippet, the app still works, just without them.
+  function fig(key,o){ return typeof agentFigure==='function'?agentFigure(key,o):''; }
+  // Line icons (presentation only): 16-unit grid, 1.5 stroke, currentColor.
+  function ic(d){ return '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>'; }
+  var IC={
+    edit:ic('<path d="M10.6 2.9a1.5 1.5 0 0 1 2.1 2.1L5.5 12.2l-2.8.7.7-2.8z"/>'),
+    style:ic('<path d="M8 2.5a5.5 5.5 0 1 0 0 11c.8 0 1.2-.5 1.2-1.1 0-.9-.8-1.1-.8-1.9 0-.6.5-1 1.1-1h1.3a2.7 2.7 0 0 0 2.7-2.7C13.5 4.6 11 2.5 8 2.5z"/><circle cx="5.3" cy="7.3" r=".6" fill="currentColor"/><circle cx="7.4" cy="5" r=".6" fill="currentColor"/><circle cx="10.2" cy="5.6" r=".6" fill="currentColor"/>'),
+    regen:ic('<path d="M13 8a5 5 0 1 1-1.5-3.6"/><path d="M13 2.8v2.6h-2.6"/>'),
+    lock:ic('<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>'),
+    unlock:ic('<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.8-1"/>'),
+    image:ic('<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1"/><path d="m13.5 10.5-3-3-6 5.5"/>'),
+    audio:ic('<path d="M6 12V4l7-1.5v8"/><circle cx="4.5" cy="12" r="1.5"/><circle cx="11.5" cy="10.5" r="1.5"/>'),
+    video:ic('<rect x="2.5" y="4" width="8" height="8" rx="1.5"/><path d="m10.5 7 3-2v6l-3-2"/>'),
+    doc:ic('<path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3M6 9h4M6 11h3"/>'),
+    plus:ic('<path d="M8 3v10M3 8h10"/>')
+  };
+  // Brief Maker's mark (the same shape as icon.svg, which the home screen shows).
+  var MARK='<svg viewBox="0 0 44 44" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M12 8.5h14.2l5.8 5.8v21.2H12z M16.5 18h11v2.6h-11z M16.5 23h11v2.6h-11z M16.5 28h7v2.6h-7z"/><path fill="currentColor" opacity=".5" d="M27.4 7.6 33 13.2h-5.6z"/></svg>';
+  var IDENT=MARK+'Brief Maker<span class="kind">Creative brief</span>';
+
+  var FIELDS=[
+    {sec:'Identity',key:'project_name',label:'Project name',type:'text'},
+    {sec:'Identity',key:'client',label:'Client / brand',type:'text'},
+    {sec:'The brief',key:'background',label:'Background',type:'text'},
+    {sec:'Objectives',key:'objectives.commercial',label:'Commercial',type:'text'},
+    {sec:'Objectives',key:'objectives.behavioural',label:'Behavioural',type:'text'},
+    {sec:'Objectives',key:'objectives.attitudinal',label:'Attitudinal',type:'text'},
+    {sec:'Strategy',key:'audience',label:'Audience',type:'text'},
+    {sec:'Strategy',key:'competitor_context',label:'Competitor context',type:'text'},
+    {sec:'Strategy',key:'insight',label:'The insight',type:'text'},
+    {sec:'Strategy',key:'single_minded_proposition',label:'Single-minded proposition',type:'text',hero:true},
+    {sec:'Strategy',key:'reasons_to_believe',label:'Reasons to believe',type:'list'},
+    {sec:'Desired response',key:'desired_response.think',label:'Think',type:'text'},
+    {sec:'Desired response',key:'desired_response.feel',label:'Feel',type:'text'},
+    {sec:'Desired response',key:'desired_response.do',label:'Do',type:'text'},
+    {sec:'Execution',key:'tone_and_world',label:'Tone & world',type:'list'},
+    {sec:'Execution',key:'budget_and_scope',label:'Budget & scope',type:'text'},
+    {sec:'Execution',key:'mandatories',label:'Mandatories',type:'list'},
+    {sec:'Execution',key:'open_questions',label:'Open questions',type:'list'}
+  ];
+  var CONTENT_KEYS=FIELDS.map(function(f){return f.key;});
+  function hasVal(v){ return v!=null&&(Array.isArray(v)?v.length:String(v).trim()); }
+  function hasContent(){ return CONTENT_KEYS.some(function(k){return hasVal(get(k));}); }
+  // One look: the brief on warm paper, light or dark with the OS. A brief_style
+  // an older brief recorded (studio, brand) is kept in its data and not used.
+  function style(){ return 'basic'; }
+  function lockedList(){ var l=get('locked_fields'); return Array.isArray(l)?l:[]; }
+  function isLocked(k){ return lockedList().indexOf(k)!==-1; }
+  var forceIntake=false, handWrite=false, phase='intake';
+  // The shell's client review mode, as it last said (clan:clientmode).
+  var CLIENT={on:false, answer:null};
+
+  // ---------- the OS layer: the host's decision view, the lock, the parts ----------
+  // What needs a person and whether the brief may lock are the host's
+  // (clan://decisions, which the fields snippet reads and announces as
+  // clan:viewloaded). The brief is locked by an `approve` on it (os-layer
+  // §7.1); a brief made before that holds `data.locked` instead, which is
+  // still read, never written true.
+  function OSF(){ return typeof ClanFields==='object'&&ClanFields?ClanFields:null; }
+  function osView(){ var F=OSF(); return F&&F.view?F.view():null; }
+  function lockState(){ var v=osView(); return v&&v.lock&&typeof v.lock==='object'?v.lock:null; }
+  function approveLocked(){ var l=lockState(); return !!(l&&l.locked); }
+  function legacyLocked(){ return get('locked')===true&&!approveLocked(); }
+  function docLocked(){ return approveLocked()||get('locked')===true; }
+  // A part reopened for a client's request (os-layer §7.5.6): the one place a
+  // locked brief may be edited, through /edit, answering that request.
+  function reopenedOf(key){
+    var l=lockState(); if(!l) return null;
+    return arr(l.reopened).filter(function(r){ return pathOf(r.address)===key; })[0]||null;
+  }
+  function reopenReason(r){
+    var b=arr((osView()||{}).decisions).filter(function(x){ return x.decision&&x.decision.id===r.decision; })[0];
+    return b&&b.decision.rationale||'';
+  }
+  // A person may write the part now: not locked, or locked with it reopened.
+  function canWrite(key){ return !approveLocked()||!!reopenedOf(key); }
+  // A part as the client review and its chips name it (os-layer §7.5.1).
+  // Other words a client calls a part by, for the host's matcher in client
+  // review (data-clan-part-aliases): it finds a part in the client's sentence
+  // by its label, the label's last word, or one of these, as whole words.
+  var PART_ALIASES={
+    project_name:'project name, project, working title',
+    client:'client, brand',
+    background:'background, context, situation',
+    'objectives.commercial':'commercial objective, commercial, sales, revenue',
+    'objectives.behavioural':'behavioural objective, behavioural, behaviour',
+    'objectives.attitudinal':'attitudinal objective, attitudinal, attitude, perception',
+    audience:'audience, target, who',
+    competitor_context:'competitor context, competitors, competitor, competition',
+    insight:'insight, truth',
+    single_minded_proposition:'proposition, line, idea, smp',
+    reasons_to_believe:'reasons to believe, reasons, rtb, rtbs, proof points',
+    'desired_response.think':'what they should think',
+    'desired_response.feel':'what they should feel',
+    'desired_response.do':'what they should do, call to action',
+    tone_and_world:'tone, voice, feel',
+    budget_and_scope:'budget, cost, spend, scope',
+    mandatories:'mandatories, mandatory, must include',
+    open_questions:'open questions, questions'
+  };
+  function partLabel(f){
+    if(f.sec==='Objectives') return f.label+' objective';
+    if(f.sec==='Desired response') return 'What they should '+f.label.toLowerCase();
+    return f.label.replace(/^The /,'').replace(/^./,function(c){ return c.toUpperCase(); });
+  }
+  // The OS's evidence drawer opens on a data path once the snippet reads it
+  // as one (single-segment paths such as `insight` came with clan-fields.md §2.1).
+  function opensPath(key){ var F=OSF(); return !!(F&&F.kindOf&&F.kindOf(key)==='path'); }
+  // One host route, as the snippet posts them: the reply carries the document
+  // as it now stands, which replaces the page's copy.
+  function hostPost(route, body){
+    return fetch(clanScheme+route,{method:'POST',body:JSON.stringify(body||{})})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false,error:'status '+r.status}; }).then(function(j){ if(!r.ok&&j&&j.ok!==false) j.ok=false; return j; }); })
+      .then(function(res){
+        if(res&&res.clan&&res.clan.data&&window.__CLAN__){
+          window.__CLAN__.data=res.clan.data;
+          window.dispatchEvent(new CustomEvent('clan:dataupdated',{detail:{source:'review',version:res.clan.version}}));
+        }
+        return res;
+      });
+  }
+  function hostErrText(res){
+    var m=res&&(typeof res.error==='string'?res.error:res.error&&res.error.message);
+    m=String(m||'').replace(/^[A-Z0-9_]{3,}:\s*/,'').trim();
+    return /\s/.test(m)?m.charAt(0).toUpperCase()+m.slice(1):'That was not accepted. Please try again.';
+  }
+
+  // ---------- who does Brief Maker's work (decision N4, middleware-api §10) ----------
+  // Three workers, all real: the middleware reports which of them is on which
+  // field (`result.fields[key].by`), and the chain says which of them wrote
+  // or judged it. Who they are comes from the shared crew (NapkinAgents, in
+  // the snippet the packer inlines): Brief Maker reads, drafts and judges, and
+  // gets the agents every app uses for that work.
+  var CREW_OK=typeof NapkinAgents==='object';
+  var CREW=[
+    {w:'read',  k:'extract', name:'Extract'},
+    {w:'synthesise', k:'synthesis', name:'Synthesis'},
+    {w:'draft', k:'drafter', name:'Drafter'},
+    {w:'judge', k:'judge',   name:'Judge'}
+  ];
+  // Each agent goes by the name it introduces itself by, the same in every
+  // app (NapkinAgents.given). Without the snippet, the old role names stand.
+  if(CREW_OK) CREW.forEach(function(c){ c.k=NapkinAgents.forWork(c.w); c.name=NapkinAgents.given[c.k]||NapkinAgents.name[c.k]; });
+  var AGENT_NAME={}; CREW.forEach(function(c){ AGENT_NAME[c.k]=c.name; });
+  var ELLIS=AGENT_NAME.extract, SAM=AGENT_NAME.synthesis, DARA=AGENT_NAME.drafter, JUDE=AGENT_NAME.judge;
+  // How an agent signs what it says: "Jude · checks".
+  function sayer(k){ return (CREW_OK&&NapkinAgents.who(k))||AGENT_NAME[k]||''; }
+  // A speech bubble: the agent speaks in the first person, signed.
+  function say(k, html, cls){ return '<span class="say'+(cls?' '+cls:'')+'"><span class="sayer">'+esc(sayer(k))+'</span>'+html+'</span>'; }
+  var NUM=['no','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+  function num(n){ return NUM[n]||String(n); }
+  function Num(n){ var w=num(n); return w.charAt(0).toUpperCase()+w.slice(1); }
+  function parts(n){ return num(n)+' '+(n===1?'part':'parts'); }
+  // Who wrote a decision, as a person would say it: by what the write claimed
+  // (`agent`), not who was signed in when it landed (`actor`).
+  function isHuman(d){ return !!d&&(d.agent==='human'||/^human[:]/.test(String(d.agent||''))); }
+  // The shared crew's rule, the one the shell's decision panel uses. Anything
+  // it cannot place in Brief Maker is drafting, the one open-ended job here.
+  function agentKeyOf(d){
+    if(!d) return '';
+    // The host's client_parts_match (and, in an older chain, the middleware's
+    // find_client_parts it replaced) is Ellis reading the client's words.
+    if(/^(client_parts_match|find_client_parts)\b/.test(String(d.handler||d.agent||''))) return 'extract';
+    return (CREW_OK&&NapkinAgents.ofDecision(d))||'drafter';
+  }
+  function whoName(d){ return isHuman(d)?'You':(AGENT_NAME[agentKeyOf(d)]||d.agent); }
+  var YOU='<span class="you" aria-hidden="true">you</span>';
+  function whoMark(d){ return isHuman(d)?YOU:fig(agentKeyOf(d),{decorative:true}); }
+
+  // ---------- the decision chain: why each field says what it says ----------
+  // Read lazily from clan://chain (the context object leaves it out), newest
+  // first. A decision is about field K (top-level T) when its `targets` name
+  // <doc-id>#K or #T — how the middleware says what it wrote — or, with no
+  // targets, when its `fields_changed` holds T and, for a nested field, its
+  // action names no sibling (how a person's patch-data says it).
+  var CHAIN={state:'idle', decisions:[]}, chainT=null;
+  function loadChain(){
+    clearTimeout(chainT);
+    chainT=setTimeout(function(){
+      if(CHAIN.state==='idle') CHAIN.state='loading';
+      fetch(clanScheme+'/chain').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
+        .then(function(c){ CHAIN={state:'ok', decisions:arr(c&&c.decisions)}; })
+        .catch(function(e){ CHAIN={state:'unavailable', decisions:[], err:String(e&&e.message||e)}; })
+        .then(function(){ if(phase==='doc') refreshWhy(); });
+    }, 120);
+  }
+  function docId(){ var m=(window.__CLAN__&&window.__CLAN__.manifest)||{}; return m.document_id||m.id||''; }
+  // The dotted path an address names on this document (`#materials[mat_1]` is
+  // `materials.mat_1`), or null for an address elsewhere.
+  function pathOf(t){
+    t=String(t||''); var i=t.indexOf('#'); if(i<0) return null;
+    var doc=t.slice(0,i), id=docId();
+    if(id&&doc!==id) return null;
+    return t.slice(i+1).replace(/\[([^\]]+)\]/g,'.$1');
+  }
+  function names(d,key){
+    var top=key.split('.')[0], ts=arr(d.targets);
+    if(ts.length) return ts.some(function(t){ var p=pathOf(t); return p===key||p===top; });
+    if(arr(d.fields_changed).indexOf(top)===-1) return false;
+    if(key===top) return true;
+    var act=String(d.action||'');
+    // "edit objectives.feel" does not explain objectives.commercial.
+    return act.indexOf(top+'.')===-1 || act.indexOf(key)!==-1;
+  }
+  function about(key){ return CHAIN.decisions.filter(function(d){ return names(d,key); }); }
+  function isVerdict(d){ return d.kind==='verdict'||!!d.polarity; }
+  function isProposal(d){ return (d.kind||'edit')==='edit'&&d.action==='propose'; }
+  // A decision that writes a value, as the host counts one: an edit or a
+  // resolve, not a proposal and not superseded. A client's answer on a part,
+  // Ellis's suggestion, a reopen or a backref names the field but writes nothing.
+  function isWrite(d){ var k=d.kind; return !d.superseded_by&&d.action!=='propose'&&(k==='resolve'||(k?k==='edit':/^(confirm|edit|patch-data)/.test(String(d.action||'')))); }
+  // The decisions that wrote the field, newest first.
+  function decisionsFor(key){ return about(key).filter(isWrite); }
+  function newer(a,b){ return CHAIN.decisions.indexOf(a)<CHAIN.decisions.indexOf(b); }
+  // The latest verdict on the field, and whether it is a bad one nobody has
+  // answered: no person has written the field, or judged it, since.
+  // A bad verdict on the field is answered by a later decision by a person
+  // about it, or by a later good verdict on it that gives a reason — the Judge
+  // passing the redraft (the host's /decisions counts it the same way).
+  function reasonedGood(d){ return isVerdict(d)&&d.polarity==='good'&&!!(hasReasoning(d)||String(d.rationale||'').trim()); }
+  function verdictState(v,key){
+    var answered=v.polarity==='bad'&&about(key).some(function(d){ return newer(d,v)&&(isHuman(d)&&isWrite(d)||reasonedGood(d)); });
+    return {d:v, bad:v.polarity==='bad', open:v.polarity==='bad'&&!answered};
+  }
+  function verdictOf(key){
+    var v=about(key).filter(isVerdict)[0]; return v?verdictState(v,key):null;
+  }
+  // A cross-field verdict: one check across fields with different top-level
+  // keys (a coherence rule). A field's own verdict names only its own keys.
+  function topsOf(d){
+    var out=[]; arr(d.targets).forEach(function(t){ var p=pathOf(t); if(p==null) return; var top=p.split('.')[0]; if(out.indexOf(top)===-1) out.push(top); });
+    return out;
+  }
+  function isCross(d){ return isVerdict(d)&&topsOf(d).length>1; }
+  // The field's own latest verdict, and the cross-field checks that name it
+  // (the newest of each check, by what it decided).
+  function ownVerdictOf(key){
+    var v=about(key).filter(function(d){ return isVerdict(d)&&!isCross(d); })[0]; return v?verdictState(v,key):null;
+  }
+  function crossVerdictsOf(key){
+    var seen={}, out=[];
+    about(key).filter(isCross).forEach(function(d){
+      var k=(hasReasoning(d)?d.reasoning.decided:d.rationale)||d.id; if(seen[k]) return; seen[k]=1; out.push(verdictState(d,key));
+    });
+    return out;
+  }
+  // Where a cross-field verdict is shown in full: the first field it names,
+  // in the order the brief reads.
+  function homeOf(d){
+    var ts=arr(d.targets).map(pathOf);
+    for(var i=0;i<FIELDS.length;i++){ if(ts.indexOf(FIELDS[i].key)!==-1) return FIELDS[i]; }
+    return null;
+  }
+  var TOP_LABEL={objectives:'objectives', desired_response:'desired response'};
+  function acrossOf(d){
+    return topsOf(d).map(function(t){
+      if(TOP_LABEL[t]) return TOP_LABEL[t];
+      var f=FIELDS.filter(function(x){ return x.key===t; })[0]; return f?f.label.toLowerCase():t.replace(/_/g,' ');
+    });
+  }
+  function listWords(xs){ return xs.length<2?xs.join(''):xs.slice(0,-1).join(', ')+' and '+xs[xs.length-1]; }
+  // A verdict's reason and its fix, apart. The Judge now puts the reason in
+  // its first point and "Fix: …" in attention; older verdicts joined them in
+  // attention ("<check>: <reason> Fix: <fix> A person answers…").
+  var ANSWER_TAIL=/\s*A person answers this before the brief locks\.\s*$/;
+  function reasonFix(d){
+    var r=hasReasoning(d)?d.reasoning:null, a=String(r&&r.attention||''), i=a.indexOf('Fix: ');
+    var fix=i>=0?a.slice(i+5).replace(ANSWER_TAIL,'').trim():'';
+    var pre=(i>=0?a.slice(0,i):a.replace(ANSWER_TAIL,'')).trim();
+    var bs=r?arr(r.because):[], rule=bs.filter(function(b){ return /^The rule: /.test(String(b.point||'')); })[0];
+    var reason=pre?pre.replace(/^[a-z_ ]+:\s*/,''):(bs[0]?String(bs[0].point||''):(d.rationale||''));
+    // an older verdict's reason was cut mid-sentence: say so
+    if(pre&&reason&&!/[.!?…)'"’”]$/.test(reason)) reason+='…';
+    return {reason:reason, fix:fix, rule:rule?String(rule.point).replace(/^The rule: /,''):''};
+  }
+  // What the Judge wrote for the record, in plain words for a person: no check
+  // codes ("states_problem (llm): …", "Background fails why_now, is_tension.").
+  // The codes stay in the decision, and in a title for whoever debugs it. An
+  // attention opens with "<part> fails <checks>." when the part failed.
+  var CODES='[a-z0-9]+(?:_[a-z0-9]+)*(?:, [a-z0-9]+(?:_[a-z0-9]+)*)*';
+  function plainJudge(s, attn){
+    return String(s||'')
+      .replace(new RegExp('^\\s*[a-z0-9]+(?:_[a-z0-9]+)* \\((?:llm|auto|rule)\\):\\s*'),'')
+      .replace(attn?new RegExp('^.*? fails '+CODES+'\\.\\s*'):/$^/,'')
+      .replace(new RegExp('Left for a person: '+CODES+'(?: \\([^)]*\\))?\\.'),'Some of it needs a person to judge.')
+      .replace(/the rubric \([a-z0-9_]+\)/,'the rubric')
+      .trim().replace(/^[a-z]/,function(c){ return c.toUpperCase(); });
+  }
+  // A proposal waits for the person while nothing has written the field since,
+  // no decision names it, and nobody dismissed it. The newest one only.
+  function dismissed(){ return arr(get('dismissed_proposals')); }
+  function proposalOf(key){
+    var p=about(key).filter(isProposal)[0]; if(!p) return null;
+    if(dismissed().indexOf(p.id)!==-1) return null;
+    var since=about(key).some(function(d){ return isWrite(d)&&newer(d,p); });
+    var named=CHAIN.decisions.some(function(d){ return d!==p&&String(d.rationale||'').indexOf(p.id)!==-1; });
+    if(since||named) return null;
+    var v=p.proposed_value;
+    if(v===undefined) arr(LAST_PROPOSALS).some(function(x){ if(x&&x.decision===p.id){ v=x.value; return true; } return false; });
+    return v===undefined?null:{d:p, value:v};
+  }
+  var LAST_PROPOSALS=[];
+
+  // What a cite names, for a person: a passage by its citation, the client's
+  // words by their quote, a material by its name.
+  function passage(id){ var ps=get('passages'); return (ps&&typeof ps==='object')?ps[id]:null; }
+  function captureItem(id){ var c=get('capture'); return c&&c.items&&typeof c.items==='object'?c.items[id]:null; }
+  function citationOf(p){ return p.citation||[p.source,p.section].filter(Boolean).join(' › ')||p.uri||''; }
+  function citeLabel(id){
+    id=String(id||'');
+    if(/^psg_/.test(id)){ var p=passage(id); return p?citationOf(p):id; }
+    if(/^cap_/.test(id)) return captureItem(id)?'client’s words':id;
+    if(/^mat_/.test(id)){ var m=(get('materials')||{})[id]; return m&&m.name?m.name:id; }
+    if(id.indexOf('#')!==-1) return id.slice(id.indexOf('#')+1);
+    if(/^d_/.test(id)){ var d=CHAIN.decisions.filter(function(x){ return x.id===id; })[0]; if(d) return whoName(d)+' · '+(d.action||d.kind||'decision'); }
+    return id;
+  }
+  function citeChip(id){ return '<span class="cite" title="'+esc(id)+'">'+esc(short(citeLabel(id),42))+'</span>'; }
+  function fmtDate(iso){ var d=new Date(iso); if(isNaN(d)) return ''; return d.toLocaleDateString(undefined,{day:'numeric',month:'short'})+' '+d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }
+  function hasReasoning(d){ return d&&d.reasoning&&typeof d.reasoning==='object'&&d.reasoning.decided; }
+  // decided / because (with cites) / rejected / certainty / would change if.
+  function reasoningBlock(r){
+    var rej=arr(r.rejected), c=r.certainty||null;
+    return '<div class="rsn">'
+      +'<p><span class="rl">Decided</span>'+esc(plainJudge(r.decided))+'</p>'
+      +(arr(r.because).length?'<div><span class="rl">Because</span><ul>'+arr(r.because).map(function(b){
+          return '<li>'+esc(plainJudge(b.point))+arr(b.cites).map(citeChip).join('')+'</li>'; }).join('')+'</ul></div>':'')
+      +(rej.length?'<div><span class="rl">Rejected</span><ul>'+rej.map(function(x){ return '<li>'+esc(x.option)+' <span class="m">— '+esc(x.why)+'</span></li>'; }).join('')+'</ul></div>'
+        :(r.only_option?'<p><span class="rl">Only option</span><span class="m">'+esc(r.only_option)+'</span></p>':''))
+      +(c&&c.level?'<p><span class="rl">Certainty</span><span class="pill'+(c.level==='high'?' ok':c.level==='low'?' alert':'')+'">'+esc(c.level)+'</span> <span class="m">'+esc(c.why||'')+'</span></p>':'')
+      +(r.would_change_if?'<p><span class="rl">Would change if</span>'+esc(r.would_change_if)+'</p>':'')
+      +'</div>';
+  }
+  // Every id the decisions cite, in order, once.
+  function citesOf(ds){
+    var out=[];
+    ds.forEach(function(d){ if(!d) return;
+      arr(d.cites).concat(hasReasoning(d)?[].concat.apply([],arr(d.reasoning.because).map(function(b){ return arr(b.cites); })):[])
+        .forEach(function(c){ if(out.indexOf(c)===-1) out.push(c); }); });
+    return out;
+  }
+  // Where a research fact was read: its source record, in words.
+  function srcLine(s){
+    if(!s) return 'A source';
+    if(/^material:/.test(s.uri||'')) return 'Your file '+(s.title||'');
+    if(s.tier==='reviewer-verified') return 'Checked by a person';
+    var y=/^\d{4}/.exec(s.published_at||'');
+    return [s.publisher||s.domain, s.title].filter(Boolean).join(', ')+(y?' · '+y[0]:'');
+  }
+  // The passages, client words, research facts and points a field rests on, quoted.
+  function sourcesHtml(ids){
+    var pr=get('projection')||{}, P=pr.pins||{}, F=pr.findings||{}, S=pr.sources||{};
+    var h=ids.map(function(id){
+      var p=/^psg_/.test(id)?passage(id):null, c=/^cap_/.test(id)?captureItem(id):null;
+      if(/^f_/.test(id)&&P[id]){
+        var pn=P[id], sid=arr(pn.sources).filter(function(x){ return S[x]; })[0]||arr(pn.sources)[0], src=S[sid], q=(pn.quotes||{})[sid];
+        var web=src&&/^https?:\/\//.test(src.uri||'');
+        return '<li><blockquote>'+esc(short(q||String(pn.value),320))+'</blockquote><cite>'+esc(srcLine(src))
+          +(web?' · <a href="'+esc(src.uri)+'" target="_blank" rel="noopener noreferrer">Open it ↗</a>':'')+'</cite></li>';
+      }
+      if(/^fi_/.test(id)&&F[id]){ var fi=F[id], n=arr(fi.cites).length;
+        return '<li><blockquote>'+esc(short(fi.statement||'',320))+'</blockquote><cite>Worked out from '+n+' fact'+(n===1?'':'s')+' in the research'+(fi.status==='verified'?' · checked by a person':'')+'</cite></li>'; }
+      if(p) return '<li><blockquote>'+esc(short(p.text,320))+'</blockquote><cite>'+esc(citationOf(p))+'</cite></li>';
+      if(c&&(c.quote||c.value)) return '<li><blockquote>'+esc(short(c.quote||c.value,320))+'</blockquote><cite>The client'+(c.material_id?' · '+esc(citeLabel(c.material_id)):'')+(c.status==='assumption'?' · an assumption':'')+'</cite></li>';
+      return '';
+    }).join('');
+    return h?'<div class="srcs"><span class="rl">Sources</span><ul>'+h+'</ul></div>':'';
+  }
+  function verdictHtml(v){
+    var d=v.d, r=hasReasoning(d)?d.reasoning:null, look=r?plainJudge(r.attention,1):'';
+    return '<div class="vd'+(v.open?' open':'')+'">'
+      +'<div class="wh">'+fig('judge',{state:v.open?'needs-you':'idle',decorative:true})+'<b>'+esc(JUDE)+'</b>'
+      +(v.bad?'<span class="pill alert"'+(d.reason_code?' title="'+esc(d.reason_code)+'"':'')+'>failed</span>':'<span class="pill ok">passed</span>')
+      +'<time datetime="'+esc(d.timestamp)+'">'+esc(fmtDate(d.timestamp))+'</time></div>'
+      +(r?reasoningBlock(r):(d.rationale?'<p class="rsn">'+esc(d.rationale)+'</p>':''))
+      +(look?'<div class="flag">'+fig('judge',{state:'needs-you',decorative:true})+'<div><b>Look at this:</b> '+esc(look)+'</div></div>':'')
+      +'</div>';
+  }
+  function whyHtml(f){
+    if(CHAIN.state!=='ok') return '<div class="muted">'+(CHAIN.state==='unavailable'?'The decision chain is not available here.':'Reading the decision chain…')+'</div>';
+    var ds=decisionsFor(f.key), v=verdictOf(f.key);
+    if(!ds.length&&!v) return '<div class="muted">No decision in the chain names this field.</div>';
+    var h='', d=ds[0];
+    if(d){
+      var r=hasReasoning(d)?d.reasoning:null;
+      h+='<div class="wh">'+whoMark(d)+'<b>'+esc(whoName(d))+'</b><span>'+esc(d.action||'')+'</span><time datetime="'+esc(d.timestamp)+'">'+esc(fmtDate(d.timestamp))+'</time></div>';
+      h+=r?reasoningBlock(r):(d.rationale?'<p class="rsn">'+esc(d.rationale)+'</p>':'<p class="muted">No reason was recorded.</p>');
+      var look=r?plainJudge(r.attention,isVerdict(d)):'';
+      if(look) h+='<div class="flag">'+fig(agentKeyOf(d),{state:'needs-you',decorative:true})+'<div><b>Look at this:</b> '+esc(look)+'</div></div>';
+    }
+    if(v) h+=verdictHtml(v);
+    h+=sourcesHtml(citesOf([d, v&&v.d]));
+    if(ds.length>1) h+='<details class="earlier"><summary>'+(ds.length-1)+' earlier '+(ds.length===2?'decision':'decisions')+' on this field</summary><ol>'
+      +ds.slice(1,8).map(function(e){ return '<li><b>'+esc(whoName(e))+'</b> · '+esc(e.action||'')+' · '+esc(fmtDate(e.timestamp))+(e.rationale?' — '+esc(short(e.rationale,90)):'')+'</li>'; }).join('')+'</ol></details>';
+    return h;
+  }
+  var OPEN_WHY={};
+  function refreshWhy(){
+    document.querySelectorAll('#fields .row').forEach(function(row){
+      var f=FIELDS[+row.getAttribute('data-i')]; if(!f) return;
+      // An empty part drew no mark before the chain came; one judged since
+      // gets its mark now, after its label.
+      var ph=provHtml(f), p=row.querySelector('.prov'), lab=row.querySelector('.lab > span');
+      if(p) p.outerHTML=ph; else if(ph&&lab) lab.insertAdjacentHTML('afterend',ph);
+      var b=row.querySelector('.prov'); if(b) b.addEventListener('click',function(){ toggleWhy(row,f); });
+      var w=row.querySelector('.why'); if(w) w.innerHTML=whyHtml(f);
+      var n=row.querySelector('.notes'); if(n){ n.innerHTML=notesHtml(f); bindNotes(n,f); }
+    });
+    renderCrewline(); renderReview();
+  }
+  function provHtml(f){
+    var v=CHAIN.state==='ok'?verdictOf(f.key):null;
+    if(!hasVal(get(f.key))&&!v) return '';
+    var d=CHAIN.state==='ok'?decisionsFor(f.key)[0]:null, open=!!OPEN_WHY[f.key];
+    // An empty part shows who judged it: the Judge, or the person whose
+    // verdict (a doubt, or an override with a reason) is the latest on it.
+    var by=d||(v&&isHuman(v.d)?v.d:null);
+    var who=by?whoMark(by):(v?fig('judge',{decorative:true}):'');
+    return '<button type="button" class="prov act-why" aria-expanded="'+open+'" title="Where did this come from?">'
+      +who+(by?esc(whoName(by)):v?esc(JUDE):'')+'<span class="q">why?</span></button>';
+  }
+  function toggleWhy(row,f){
+    OPEN_WHY[f.key]=!OPEN_WHY[f.key];
+    var w=row.querySelector('.why'), b=row.querySelector('.prov');
+    if(OPEN_WHY[f.key]){
+      if(!w){ w=document.createElement('div'); w.className='why'; row.appendChild(w); }
+      w.hidden=false; w.innerHTML=whyHtml(f);
+    } else if(w) w.hidden=true;
+    if(b) b.setAttribute('aria-expanded', String(!!OPEN_WHY[f.key]));
+    if(CHAIN.state!=='ok') loadChain();
+  }
+  // Under a field: a verdict the Judge failed it with, and a proposal for a
+  // field a person holds — each asks for the person.
+  function notesHtml(f){
+    if(CHAIN.state!=='ok') return '';
+    var h='', v=ownVerdictOf(f.key), p=proposalOf(f.key), locked=docLocked();
+    crossVerdictsOf(f.key).forEach(function(c){ if(c.open) h+=crossNoteHtml(c,f); });
+    if(v&&v.open){
+      var r=hasReasoning(v.d)?v.d.reasoning:null, say=r?plainJudge(r.attention,1)||(arr(r.because).length?'':plainJudge(r.decided)):(v.d.rationale||'');
+      // A person's doubt is theirs, not the Judge's.
+      var byYou=isHuman(v.d);
+      h+='<div class="note-v"'+(v.d.reason_code?' title="'+esc(v.d.reason_code)+'"':'')+'>'+(byYou?whoMark(v.d):fig('judge',{state:'needs-you',decorative:true}))
+        +'<div><b>'+(byYou?esc(whoName(v.d))+' said this part needs another look':esc(JUDE)+': this part needs another look')+'</b>'
+        +(say?'<p>'+esc(say)+'</p>':'')
+        +(r&&arr(r.because).length?'<ul>'+arr(r.because).slice(0,3).map(function(b){ return '<li>'+esc(plainJudge(b.point))+'</li>'; }).join('')+'</ul>':'')
+        +'<span class="muted">Change it, or ask '+esc(DARA)+' to write it again.</span>'
+        // Or answer it with a reason, empty or not: the OS's drawer holds the
+        // override (a reasoned good verdict on the part).
+        +(!locked&&OSF()?'<div class="editrow"><button type="button" class="cancel act-override">'+(hasVal(get(f.key))?'Keep it as it is, and say why':'Leave it empty, and say why')+'</button></div>':'')
+        +'</div></div>';
+    }
+    if(p&&!locked){
+      var k=agentKeyOf(p.d), pv=f.type==='list'?'<ul>'+arr(Array.isArray(p.value)?p.value:[p.value]).map(function(x){ return '<li>'+esc(String(x))+'</li>'; }).join('')+'</ul>':esc(String(p.value));
+      h+='<div class="note-p">'+fig(k,{decorative:true})
+        +'<div class="pb"><div><b>'+esc(AGENT_NAME[k]||'The agent')+' suggests this</b> <span class="muted">— you hold this part, so it wasn’t changed</span></div>'
+        +'<div class="pv">'+pv+'</div>'
+        +'<div class="editrow"><button type="button" class="save act-accept">Use this</button><button type="button" class="cancel act-dismiss">Keep mine</button></div></div></div>';
+    }
+    return h;
+  }
+  // A cross-field verdict in full once, on the first field it names; on the
+  // others, one line that points there.
+  function crossNoteHtml(c,f){
+    var d=c.d, home=homeOf(d), code=d.reason_code?' title="'+esc(d.reason_code)+'"':'';
+    var across=listWords(acrossOf(d));
+    if(home&&home.key!==f.key){
+      return '<div class="note-v note-x"'+code+'>'+fig('judge',{state:'needs-you',decorative:true})
+        +'<div>Part of one check across '+esc(across)+': see <a href="#" class="act-goto" data-k="'+esc(home.key)+'">'+esc(home.key.indexOf('.')!==-1?home.sec+' › '+home.label:home.label)+'</a>.</div></div>';
+    }
+    var rf=reasonFix(d);
+    return '<div class="note-v" data-cross="'+esc(d.id||'')+'"'+code+'>'+fig('judge',{state:'needs-you',decorative:true})
+      +'<div><b>'+esc(JUDE)+' found a problem across '+esc(across)+'</b>'
+      +'<p>'+esc(rf.reason)+'</p>'
+      +(rf.fix?'<p class="fix"><b>Fix:</b> '+esc(rf.fix)+'</p>':'')
+      +(rf.rule?'<p class="muted">The rule: '+esc(rf.rule)+'</p>':'')
+      +'<span class="muted">Change any of these parts, or ask '+esc(DARA)+' to write them again. Someone answers this before the brief is locked.</span></div></div>';
+  }
+  function gotoField(key){
+    var i=-1; FIELDS.forEach(function(x,j){ if(x.key===key) i=j; });
+    var row=document.querySelector('#fields .row[data-i="'+i+'"]'); if(!row) return;
+    var t=row.querySelector('.note-v[data-cross]')||row.querySelector('.note-v,.note-p')||row;
+    t.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
+    t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
+  }
+  function bindNotes(el,f){
+    el.querySelectorAll('.act-goto').forEach(function(g){ g.addEventListener('click',function(e){ e.preventDefault(); gotoField(g.getAttribute('data-k')); }); });
+    var o=el.querySelector('.act-override'); if(o) o.addEventListener('click',function(){ var F=OSF(); if(F) F.open(f.key); });
+    var a=el.querySelector('.act-accept'), x=el.querySelector('.act-dismiss');
+    if(a) a.addEventListener('click',function(){ acceptProposal(f); });
+    if(x) x.addEventListener('click',function(){ dismissProposal(f); });
+  }
+  // Accepting is the person's write of the field, naming the proposal's
+  // decision (middleware-api §10.5); dismissing records that they saw it.
+  function acceptProposal(f){
+    var p=proposalOf(f.key); if(!p||!window.clan) return;
+    window.clan.patchData(f.key, p.value, {actor:'human', pinned:false, action:'accept proposal '+f.key,
+      rationale:'Accepted '+p.d.id+': '+(AGENT_NAME[agentKeyOf(p.d)]||'the agent')+'’s proposal for '+f.label.toLowerCase()+'.'}).then(function(){ loadChain(); });
+  }
+  function dismissProposal(f){
+    var p=proposalOf(f.key); if(!p) return;
+    patch('dismissed_proposals', dismissed().concat([p.d.id]), {actor:'human', pinned:false, action:'dismiss proposal '+f.key,
+      rationale:'Dismissed '+p.d.id+': kept '+f.label.toLowerCase()+' as it is.'});
+  }
+  // The header's crew: Dara says where the brief stands and Jude what it
+  // needs from the person, in their own words, from the chain. What waits
+  // for a person is the one place the header carries the accent.
+  // A part as a person says it: "the background", "the commercial objective".
+  function partName(f){
+    if(f.sec==='Objectives') return 'the '+f.label.toLowerCase()+' objective';
+    if(f.sec==='Desired response') return 'what they should '+f.label.toLowerCase();
+    return 'the '+f.label.toLowerCase().replace(/^the /,'');   // "The insight" is not "the the insight"
+  }
+  var SHOW_ME='<span class="answers"><button type="button" class="act-show">Show me</button></span>';
+  // The client's answer on the locked brief, when it answers this version
+  // (os-layer §7.5.3); the shell's band says it in full, the header only
+  // agrees with it.
+  function clientNow(){ var c=(osView()||{}).client, a=c&&c.answer; return a&&a.current?a:null; }
+  function clientFirst(a){ var n=String(a&&a.client&&a.client.name||'').trim(); return n?n.split(/\s+/)[0]:'the client'; }
+  function clientOpenParts(){ return arr(((osView()||{}).client||{}).parts).filter(function(p){ return p&&p.state!=='accepted'&&!p.answered; }); }
+  function addrLabel(a){ var f=fieldOfAddress(a.address); return a.label||(f?partLabel(f):pathOf(a.address)||''); }
+  function renderCrewline(){
+    var el=$('crewline'); if(!el) return;
+    var ok=CHAIN.state==='ok', by={}, filled=0, passed=0, failed=[], props=[], locked=docLocked();
+    var re=approveLocked()?arr((lockState()||{}).reopened):[], ca=approveLocked()?clientNow():null, caNo=!!ca&&ca.answer!=='accepted';
+    var whose=function(a){ var n=clientFirst(a); return n==='the client'?'the client’s':n+'’s'; };
+    FIELDS.forEach(function(f){
+      if(ok){
+        var v=ownVerdictOf(f.key), cx=crossVerdictsOf(f.key).some(function(c){ return c.open; });
+        if((v&&v.open)||cx) failed.push(f); else if(v&&!v.bad) passed++;
+        if(proposalOf(f.key)) props.push(f);
+      }
+      if(!hasVal(get(f.key))) return; filled++;
+      var d=ok?decisionsFor(f.key)[0]:null; if(d&&isHuman(d)) by.you=(by.you||0)+1; else if(d&&agentKeyOf(d)==='drafter') by.me=(by.me||0)+1;
+    });
+    // Dara: what is written, out of the brief's parts, and how many are hers
+    // (the parts she last wrote: the count the working screen gave), and a new
+    // version that waits for the person
+    var dt, dNeeds=!locked&&props.length>0, head=filled+' of its '+FIELDS.length+' parts '+(filled===1?'is':'are')+' written'+(by.me?', '+by.me+' of them by me':'');
+    if(!filled) dt='Nothing is written yet. Tap the pencil beside any part to write it.';
+    else if(re.length) dt='Your brief is locked, with '+listWords(re.map(addrLabel))+' open for '+whose(ca)+' change: '+head+'.';
+    else if(caNo) dt='Your brief is locked: '+head+'.';
+    else if(locked) dt='Your brief is locked and ready to hand over: '+head+'.';
+    else dt='Your brief is ready: '+head+'.'
+      +(by.you?' You wrote or changed '+num(by.you)+'.':'');
+    dt=esc(dt);
+    if(dNeeds) dt+=' <b>I’ve a new version of '+esc(listWords(props.map(partName)))+' for you.</b> You hold '+(props.length===1?'that part':'those parts')+', so I didn’t change '+(props.length===1?'it':'them')+'.';
+    var h='<div class="pair">'+fig('drafter',{state:dNeeds?'needs-you':'idle',decorative:true})
+      +say('drafter', dt+(dNeeds?SHOW_ME.replace('act-show','act-show" data-k="'+esc(props[0].key)):''), 'left'+(dNeeds?' warn':''))+'</div>';
+    // Jude: what the checks found, and what else the lock waits for (the
+    // host's lock list: what the research left open comes with the brief)
+    var others=lockOthers(), lockBy=approveLocked()?lockDecisionHere():null, LIST='<span class="answers"><button type="button" class="act-locklist">Show me</button></span>';
+    if(re.length){
+      // A part reopened for the client's change: what is open, and what the
+      // next lock still waits for (the host's list, which renderLock shows).
+      var all=lockItems(), rt=listWords(re.map(addrLabel))+' '+(re.length===1?'is':'are')+' open for '+whose(ca)+' change. Lock the brief again when the change is made.';
+      if(all.length) rt+=' Before it can lock again, '+num(all.length)+' '+(all.length===1?'thing needs':'things need')+' you.';
+      h+='<div class="pair">'+fig('judge',{state:'needs-you',decorative:true})+say('judge', esc(rt)+(all.length?LIST:''), 'left warn')+'</div>';
+    } else if(ca){
+      // The shell's band speaks for the client's answer; the header agrees
+      // with it rather than saying the brief is simply locked.
+      var op=clientOpenParts(), cn=clientFirst(ca), Cn=cn.charAt(0).toUpperCase()+cn.slice(1), ct;
+      if(!caNo) ct=Cn+' accepted this brief. It’s signed off.';
+      else if(op.length) ct=Cn+(ca.answer==='rejected'?' rejected ':' asked for a change on ')+listWords(op.map(addrLabel))+'. '+(op.length===1?'It’s':'Each is')+' shown on the part.';
+      else ct=Cn+(ca.answer==='rejected'?' rejected this brief.':' asked for changes to this brief.')+' Which parts they mean is not settled yet.';
+      h+='<div class="pair">'+fig('judge',{decorative:true})+say('judge', esc(ct), 'left')+'</div>';
+    } else if(lockBy){
+      var lw=lockBy.who&&lockBy.who.you?'You':lockBy.who&&lockBy.who.name||'Someone', lt=String(lockBy.decision.timestamp||'');
+      h+='<div class="pair">'+fig('judge',{decorative:true})+say('judge', esc('This brief is locked. '+lw+' agreed to it'+(lt?' on '+fmtDate(lt):'')+'. A change from here makes a new version.'), 'left')+'</div>';
+    } else if(ok||others.length){
+      var jt, jNeeds=!locked&&failed.length>0, jOthers=!locked&&others.length>0;
+      if(jNeeds) jt=esc(Num(failed.length)+' '+(failed.length===1?'part needs':'parts need')+' you: '+listWords(failed.map(partName))+'.')
+        +SHOW_ME.replace('act-show','act-show" data-k="'+esc(failed[0].key));
+      else if(!ok) jt='';
+      else if(passed) jt=esc('I checked '+parts(passed)+' and '+(passed===1?'it holds':'they hold')+' up.'+(jOthers?'':' Nothing needs you.'));
+      else jt=esc(filled?'I haven’t checked this brief. Ask '+DARA+' to write a part again and I’ll check it.':'When there’s something written, I’ll check it.');
+      if(jOthers) jt+=(jt?' ':'')+esc('Before the brief can lock, '+num(others.length)+' '+(jNeeds?'more ':'')+(others.length===1?'thing needs':'things need')+' you.')
+        +LIST;
+      h+='<div class="pair">'+fig('judge',{state:jNeeds||jOthers?'needs-you':'idle',decorative:true})+say('judge', jt, 'left'+(jNeeds||jOthers?' warn':''))+'</div>';
+    }
+    el.innerHTML=h;
+    el.querySelectorAll('.act-show').forEach(function(b){ b.addEventListener('click',function(){ gotoField(b.getAttribute('data-k')); }); });
+    el.querySelectorAll('.act-locklist').forEach(function(b){ b.addEventListener('click',function(){
+      var l=$('lockList'); if(!l||l.hidden) return; l.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
+      var first=l.querySelector('.lkitem'); if(first) first.focus({preventScroll:true}); }); });
+  }
+  // The Judge's review of the brief (review.judge) and the scorecard, in place
+  // of the old context panel.
+  // The scorecard's own words, said plainly: a verdict, each thing it looks at,
+  // and how healthy the brief is overall.
+  var VERDICT={pass:'Good', vague:'Too vague', missing:'Missing'};
+  var DIM={objectives_quality:'The objectives', audience_vividness:'How clearly the audience comes across',
+    single_minded_message:'One clear message', evaluation_criteria:'How the work will be judged',
+    budget_interlock:'Whether the budget fits the ambition', strategic_clarity:'A clear strategy', language:'Plain language'};
+  function dimName(k){ var s=DIM[k]||String(k||'').replace(/_/g,' '); return s.charAt(0).toUpperCase()+s.slice(1); }
+  function healthWords(n){ return n>=70?'in good shape':n<40?'needs work':'nearly there'; }
+  function renderReview(){
+    var el=$('review'); if(!el) return;
+    var rv=get('review'); if(!rv||typeof rv!=='object'||!rv.scorecard){ el.innerHTML=''; el.hidden=true; return; }
+    var sc=rv.scorecard, j=rv.judge;
+    var dims=arr(sc.dimensions).map(function(x){
+      return '<li><span class="pill'+(x.verdict==='pass'?' ok':x.verdict==='missing'?' alert':'')+'">'+esc(VERDICT[x.verdict]||x.verdict)+'</span> '+esc(dimName(x.dimension))+(x.fix&&x.verdict!=='pass'?' <span class="m">— '+esc(x.fix)+'</span>':'')+'</li>';
+    }).join('');
+    el.hidden=false;
+    el.innerHTML='<div class="sechead">'+esc(JUDE)+'’s review'+(j&&typeof j.health==='number'?' <span class="pill'+(j.health>=70?' ok':j.health<40?' alert':'')+'">'+esc(healthWords(j.health))+'</span>':'')+'</div>'
+      +(sc.summary?'<p class="val" style="font-size:14.5px">'+esc(sc.summary)+'</p>':'')
+      +(dims?'<ul class="dims">'+dims+'</ul>':'');
+  }
+
+  // ---------- colour maths (keeps chrome legible on any ground) ----------
+  function h2r(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(function(c){return c+c;}).join('');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+  function r2h(a){return '#'+a.map(function(x){return Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0');}).join('');}
+  function mix(a,b,t){var A=h2r(a),B=h2r(b);return r2h([0,1,2].map(function(i){return A[i]+(B[i]-A[i])*t;}));}
+  function lum(h){var a=h2r(h).map(function(v){v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4);});return .2126*a[0]+.7152*a[1]+.0722*a[2];}
+  function readable(on){return lum(on)>.5?'#0b0b10':'#ffffff';}
+  // HSL round-trip so the duotone partner is an on-hue rotation of the accent
+  // (not a mix with a fixed teal, which muddies arbitrary accents to grey).
+  function rgbToHsl(r,g,b){r/=255;g/=255;b/=255;var mx=Math.max(r,g,b),mn=Math.min(r,g,b),h,s,l=(mx+mn)/2;
+    if(mx===mn){h=s=0;}else{var d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);
+      switch(mx){case r:h=(g-b)/d+(g<b?6:0);break;case g:h=(b-r)/d+2;break;default:h=(r-g)/d+4;}h/=6;}
+    return [h*360,s,l];}
+  function hslToRgb(h,s,l){h=(h%360)/360;function f(p,q,t){if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;}
+    var r,g,b;if(s===0){r=g=b=l;}else{var q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;r=f(p,q,h+1/3);g=f(p,q,h);b=f(p,q,h-1/3);}return [r*255,g*255,b*255];}
+  function hueRotate(hex,deg){var c=h2r(hex),hsl=rgbToHsl(c[0],c[1],c[2]);return r2h(hslToRgb(hsl[0]+deg,hsl[1],hsl[2]));}
+  var DEF={bg:'#0F1114',text:'#F2F3F5',accent:'#FF4F2E'};   // the studio's dark paper, ink and Create accent
+  function derive(t){
+    var bg=t.bg||DEF.bg, text=t.text||DEF.text, accent=t.accent||DEF.accent;
+    return { bg:bg, text:text, accent:accent, accent2:hueRotate(accent,-62),
+      surface:mix(bg,text,.07), border:mix(bg,text,.17), muted:mix(text,bg,.42), btnText:readable(accent) };
+  }
+
+  // ---------- theme (immersive) — pass theme explicitly to avoid async lag ----------
+  function applyThemeLocal(t){
+    t=t||get('theme')||{}; var d=derive(t), r=document.documentElement.style;
+    r.setProperty('--bg',d.bg); r.setProperty('--text',d.text); r.setProperty('--accent',d.accent);
+    r.setProperty('--accent2',d.accent2); r.setProperty('--surface',d.surface);
+    r.setProperty('--border',d.border); r.setProperty('--muted',d.muted); r.setProperty('--btnText',d.btnText);
+    r.setProperty('--fieldFont', t.font||'var(--serif)');
+    if(t.grad && t.bg2){ r.setProperty('--bg2',t.bg2); document.body.classList.add('grad'); }
+    else { document.body.classList.remove('grad'); }
+  }
+  function resetThemeLocal(){
+    var r=document.documentElement.style;
+    ['--bg','--bg2','--text','--accent','--accent2','--surface','--border','--muted','--btnText','--fieldFont'].forEach(function(p){r.removeProperty(p);});
+    document.body.classList.remove('grad');
+  }
+  function pushThemeToViewer(t){
+    if(!(window.napkin && window.napkin.setTheme)) return;
+    var d=derive(t||get('theme')||{});
+    // app-only gradient: the viewer chrome gets the primary (solid) ground
+    window.napkin.setTheme({ bg:d.bg, surface:d.surface, border:d.border, muted:d.muted, accent:d.accent, text:d.text });
+  }
+  function resetViewerTheme(){ if(window.napkin && window.napkin.setTheme){ var d=derive({}); window.napkin.setTheme({bg:d.bg,surface:d.surface,border:d.border,muted:d.muted,accent:d.accent,text:d.text}); } }
+
+  // ---------- the look: warm paper, nothing to pick ----------
+  function applyModeChrome(){ resetThemeLocal(); resetViewerTheme(); }
+  // Ellis's words and the button on the start screen.
+  function syncKind(){
+    var fed=isResearchFed(), hi=fed?researchHi():'Hi, I’m '+ELLIS+'! Paste what the client said, or add their files. I’ll read it all, and we’ll write the brief together.';
+    $('genBtn').textContent=fed?'Draft from the research':'Write the brief';
+    var l=$('ellisLine'); if(l&&l.textContent!==hi) l.textContent=hi;
+  }
+
+  // ---------- phase routing ----------
+  function setPhase(p){
+    phase=p;
+    $('intake').style.display = p==='intake'?'flex':'none';
+    $('proc').classList.toggle('on', p==='proc');
+    $('structured').style.display = p==='doc'?'block':'none';
+  }
+  function render(){
+    if(phase!=='proc'){
+      var structured = (hasContent()||handWrite) && !forceIntake;
+      setPhase(structured?'doc':'intake');
+      applyModeChrome();
+    }
+    if(phase==='intake') renderIntake();
+    if(phase==='doc'){ renderStructured(); loadChain(); }
+    syncTitle();
+  }
+
+  // ---------- start ----------
+  // The crew stand on the box, built once so they keep their motion: Ellis
+  // greets; Dara and Jude say their line on hover or focus.
+  function buildIntroCrew(){
+    var el=$('introCrew'); if(el.childNodes.length) return;
+    el.innerHTML='<span class="m lead"><span class="first">'+say('extract','<span id="ellisLine" aria-live="polite"></span>')+'</span>'+fig('extract',{label:sayer('extract')})+'</span>'
+      +[['drafter','I’m '+DARA+'. I’ll write every part of the brief.'],['judge','I’m '+JUDE+'. I’ll check it all holds together.']].map(function(x){
+        return '<span class="m" tabindex="0" role="note" aria-label="'+esc(sayer(x[0])+': '+x[1])+'"><span class="tip" aria-hidden="true">'+say(x[0],esc(x[1]))+'</span>'+fig(x[0],{decorative:true})+'</span>';
+      }).join('');
+  }
+  function renderIntake(){
+    buildIntroCrew(); syncKind(); renderFromUp();
+    var nm=$('noMw'), off=noMiddleware();
+    nm.hidden=!off; $('genBtn').disabled=off;
+    if(off){
+      nm.innerHTML=fig('drafter',{decorative:true})+say('drafter', esc(NO_MW)+'<span class="answers"><button type="button" id="handBtn">Write it by hand</button></span>','left');
+      $('handBtn').addEventListener('click',function(){ handWrite=true; forceIntake=false; render(); });
+    }
+    var chips=$('chips'); chips.innerHTML='';
+    (data().reference_assets||[]).forEach(function(a,i){
+      var c=document.createElement('span'); c.className='chip';
+      c.innerHTML=(a.type==='image'?IC.image:a.type==='audio'?IC.audio:a.type==='video'?IC.video:IC.doc)+'<span>'+esc(a.label||a.name)+'</span><button type="button" class="x" title="Take it out" aria-label="Take out '+esc(a.label||a.name)+'">×</button>';
+      c.querySelector('.x').addEventListener('click',function(){var n=(data().reference_assets||[]).slice();n.splice(i,1);patch('reference_assets',n);});
+      chips.appendChild(c);
+    });
+  }
+  // The box grows with what is pasted into it; Ctrl/⌘+Enter writes the brief.
+  function growPrompt(){ var t=$('prompt'); t.style.height='auto'; t.style.height=Math.min(Math.max(t.scrollHeight,52),320)+'px'; }
+  $('prompt').addEventListener('input', growPrompt);
+  $('prompt').addEventListener('keydown',function(e){ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); $('genBtn').click(); } });
+
+  function fileType(f){var m=f.type||'';return m.indexOf('image/')===0?'image':m.indexOf('audio/')===0?'audio':m.indexOf('video/')===0?'video':'document';}
+  function uploadFiles(input, statusEl){ uploadList(input.files, statusEl, function(){ input.value=''; }); }
+  function uploadList(list, statusEl, done){
+    var files=Array.prototype.slice.call(list||[]); if(!files.length) return;
+    if(statusEl) statusEl.textContent='Adding '+files.length+' '+(files.length===1?'file':'files')+'…';
+    files.reduce(function(p,file,i){return p.then(function(){
+      var type=fileType(file), ext=(file.name.split('.').pop()||'bin').replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
+      var name=type+'-'+Date.now()+'-'+i+'.'+ext;
+      return file.arrayBuffer().then(function(buf){ return sha256Hex(buf).then(function(h){
+          return fetch(clanScheme+'/upload-asset?name='+encodeURIComponent(name)+'&agent=human',{method:'POST',body:buf})
+            .then(function(r){return r.json();}).then(function(res){if(res&&res.internal_path){var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});patch('reference_assets',n);}});
+        }); });
+    });},Promise.resolve()).then(function(){if(statusEl)statusEl.textContent='';if(done)done();});
+  }
+  $('addAny').addEventListener('change',function(){ uploadFiles(this, $('intakeStatus')); });
+  // Files dropped anywhere on the page are added, as the attach button adds
+  // them (not while the crew is working).
+  var dragN=0;
+  function hasFiles(e){ var t=e.dataTransfer&&e.dataTransfer.types; return !!t&&Array.prototype.indexOf.call(t,'Files')!==-1; }
+  function veil(on){ $('dropveil').hidden=!on; }
+  document.addEventListener('dragenter',function(e){ if(!hasFiles(e)||phase==='proc') return; e.preventDefault(); dragN++; veil(true); });
+  document.addEventListener('dragover',function(e){ if(!hasFiles(e)||phase==='proc') return; e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+  document.addEventListener('dragleave',function(e){ if(!hasFiles(e)) return; dragN=Math.max(0,dragN-1); if(!dragN) veil(false); });
+  document.addEventListener('drop',function(e){
+    if(!hasFiles(e)) return; e.preventDefault(); dragN=0; veil(false);
+    if(phase==='proc') return;
+    uploadList(e.dataTransfer.files, phase==='doc'?$('status'):$('intakeStatus'));
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // the middleware — clan.apiProxy('middleware', {task, input}) per the
+  // napkin.middleware/1 envelope (middleware-api §10). A draft is ONE long
+  // job: Extract, one Drafter per field in parallel, then the Judge. The view
+  // submits it and polls job_status; the HOST applies each reply's staged
+  // change and the view re-renders when it lands (clan:dataupdated). The view
+  // never writes what the middleware computed.
+  // ════════════════════════════════════════════════════════════════════════
+  var MW_API='napkin.middleware/1';
+  // Whether this workspace has a middleware: asked once on open (clan://middleware).
+  var MW={configured:null};
+  function checkMiddleware(){
+    fetch(clanScheme+'/middleware').then(function(r){ return r.ok?r.json():null; })
+      .then(function(v){ if(v&&typeof v.configured==='boolean'){ MW.configured=v.configured; render(); } })
+      .catch(function(){});
+  }
+  function noMiddleware(){ return MW.configured===false; }
+  var NO_MW='This workspace has no middleware set up, so the crew can’t write here. You can still write the brief by hand.';
+  function mwBody(res){ return (res && typeof res==='object' && 'ok' in res && 'data' in res)?res.data:res; }
+  function hostErr(res){
+    if(!res) return 'Empty reply from the host.';
+    if(res.error){
+      var e=res.error, st=res.status&&res.status!==200?' ('+res.status+')':'';
+      if(e&&e.type==='no_middleware'){ MW.configured=false; return NO_MW; }
+      return typeof e==='string'?e+st:(e.type?e.type+st+': ':'')+(e.message||JSON.stringify(e));
+    }
+    if(res.ok===false) return 'The host could not complete the call'+(res.status?' (status '+res.status+')':'')+'. Nothing was applied.';
+    var b=mwBody(res);
+    if(!b||typeof b!=='object'||b.api!==MW_API) return 'Not a '+MW_API+' reply'+(b&&b.api?' (got '+b.api+')':'')+'. Nothing was applied.';
+    return null;
+  }
+  function store(k, v){ try{ if(v==null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); }catch(e){} }
+  function stored(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
+  function jobKey(task, field){ return 'clan.brief.job.'+docId()+'.'+task+(field?'.'+field:''); }
+  // One job: {task, field, id, state, stage, progress, fields, proposals,
+  // summary, error, applied, reason}. `onUpdate` re-draws whatever shows it.
+  function runJob(j, input){
+    j.state='sending'; j.delay=900;
+    window.clan.apiProxy('middleware', {task:j.task, input:input}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
+  }
+  function onJobReply(j, res){
+    var err=hostErr(res);
+    if(err){ j.error=err; if(j.state==='sending'||j.state==='checking') j.state='unsent'; else j.state='stalled'; endJob(j); return; }
+    var b=mwBody(res);
+    j.error=null;
+    if(b.job&&typeof b.job==='object'){
+      j.id=b.job.id||j.id; j.state=b.job.state||j.state; j.stage=b.job.stage||j.stage; j.progress=b.job.progress||j.progress;
+      if(b.job.error) j.error=b.job.error.message||b.job.error.type||String(b.job.error);
+    }
+    if(b.result&&typeof b.result==='object'){
+      if(b.result.summary) j.summary=b.result.summary;
+      if(b.result.fields&&typeof b.result.fields==='object') j.fields=b.result.fields;
+      if(Array.isArray(b.result.proposals)){ j.proposals=b.result.proposals; LAST_PROPOSALS=b.result.proposals; }
+    }
+    if(b.change&&typeof b.change==='object'){ j.applied=b.change.applied; j.reason=b.change.reason; if(b.change.applied) loadChain(); }
+    if(j.id) store(jobKey(j.task,j.field), (j.state==='queued'||j.state==='running')?j.id:null);
+    if(j.state==='queued'||j.state==='running'){ j.onUpdate(j); clearTimeout(j.t); j.t=setTimeout(function(){ pollJob(j); }, j.delay); j.delay=Math.min(Math.round(j.delay*1.4), 5000); }
+    else endJob(j);
+  }
+  function pollJob(j){
+    window.clan.apiProxy('middleware', {task:'job_status', input:{job_id:j.id}}).then(function(r){ onJobReply(j, r); }, function(e){ unreachable(j, e); });
+  }
+  function unreachable(j, e){ j.error='The middleware could not be reached: '+(e&&e.message||e); j.state=j.state==='sending'?'unsent':'stalled'; endJob(j); }
+  function endJob(j){ store(jobKey(j.task,j.field), null); loadChain(); j.onEnd(j); }
+  // A person stops a job: the reply is the job's own, as a poll's.
+  function cancelJob(j){
+    if(!j||!j.id||j.stopping) return;
+    j.stopping=true; j.onUpdate(j);
+    window.clan.apiProxy('middleware', {task:'cancel_job', input:{job_id:j.id}}).then(function(r){
+      j.stopping=false; j.stopAsk=false; clearTimeout(j.t); onJobReply(j, r);
+    }, function(e){ j.stopping=false; j.onUpdate(j); toast('Not stopped: the middleware could not be reached ('+(e&&e.message||e)+').'); });
+  }
+
+  // ---------- working: the crew and a tile per field, as the job reports them ----------
+  var DRAFT=null;              // the running draft_brief job
+  var BUSY={extracting:1, drafting:1, judging:1, revising:1};
+  var STAGES=['extract','context','draft','judge'];
+  // Who works each stage: the context stage is Sam's, writing from the research.
+  var STAGE_K={extract:'extract', context:'synthesis', draft:'drafter', judge:'judge'};
+  function stateText(f, fs){
+    var v=get(f.key);
+    switch(fs.state){
+      case 'waiting': return 'Waiting';
+      case 'extracting': return ELLIS+' is reading what you sent';
+      case 'drafting': return fs.by==='synthesis'?SAM+' is writing it from the research':DARA+' is writing it';
+      case 'judging': return JUDE+' is checking it';
+      case 'revising': return DARA+' is rewriting it on '+JUDE+'’s note';
+      case 'done': return hasVal(v)?(Array.isArray(v)?v.join(' · '):String(v)):'Written';
+      case 'proposed': return 'You hold this part: suggested, not changed';
+      case 'absent': return 'Nothing in what you sent for this';
+      case 'kept': return 'Locked, kept as it is';
+      case 'failed': return JUDE+' turned it down twice, so it wasn’t written';
+      default: return fs.state||'Waiting';
+    }
+  }
+  function tileHtml(f, fs){
+    var st=fs.state||'waiting', busy=!!BUSY[st], by=fs.by||'';
+    var cls=busy?'work':st==='done'?'done':st==='failed'?'fail':st==='proposed'?'prop':st==='kept'?'kept':st==='absent'?'skip':'wait';
+    var who=by&&AGENT_NAME[by]?fig(by,{state:busy?'working':st==='failed'?'needs-you':'idle', label:AGENT_NAME[by]+' · '+f.label}):'<span class="nofig"></span>';
+    return '<div class="tile '+cls+'" data-key="'+esc(f.key)+'" data-state="'+esc(st)+'">'+who
+      +'<div class="tb"><div class="ts">'+esc(f.sec)+(by&&AGENT_NAME[by]?' · '+esc(AGENT_NAME[by]):'')+'</div><div class="tl">'+esc(f.label)+'</div><div class="tv">'+esc(stateText(f, fs))+'</div></div></div>';
+  }
+  // The crew's state from the fields: a worker works while a field it is on is
+  // busy; before that it waits, after its stage it is done.
+  function crewStates(j){
+    var fs=j.fields||{}, busy={extract:[], synthesis:[], drafter:[], judge:[]}, failed=0, passed=0;
+    FIELDS.forEach(function(f){ var x=fs[f.key]||{}; if(BUSY[x.state]&&busy[x.by]) busy[x.by].push(f.key); if(x.state==='failed') failed++; if(x.state==='done') passed++; });
+    var at=STAGES.indexOf(j.stage), end=j.state==='done';
+    function st(k, i){ return busy[k].length?'working':(end||at>i)?'done':at===i&&(j.state==='queued'||j.state==='running')?'working':'idle'; }
+    var label=function(k){ var f=FIELDS.filter(function(x){ return x.key===k; })[0]; return f?(f.sec==='Desired response'?'“'+f.label.toLowerCase()+'”':f.label.toLowerCase()):k; };
+    return {
+      states:{extract:st('extract',0), synthesis:st('synthesis',1), drafter:st('drafter',2), judge:end&&failed?'needs-you':st('judge',3)},
+      texts:{
+        extract:busy.extract.length?'Reading the material: '+busy.extract.length+' fields to capture.':at>0||end?'Read the material.':null,
+        synthesis:busy.synthesis.length?'Writing '+busy.synthesis.map(label).join(', ')+' from the research.':at>1||end?'Done.':null,
+        drafter:busy.drafter.length?busy.drafter.length+' drafting at once: '+busy.drafter.map(label).join(', ')+'.':at>2||end?'Drafts are in.':null,
+        judge:busy.judge.length?'Checking '+busy.judge.map(label).join(', ')+'.':end?('Passed '+passed+(failed?', failed '+failed:'')+'.'):null
+      }
+    };
+  }
+  // What each agent has had in hand in this job, so its count holds as the
+  // fields move on to the next agent: Ellis's parts (and those it filled),
+  // Dara's parts.
+  function track(j){
+    var fs=j.fields||{}; j.ek=j.ek||{}; j.eDone=j.eDone||{}; j.dk=j.dk||{}; j.sk=j.sk||{};
+    FIELDS.forEach(function(f){ var x=fs[f.key]; if(!x) return;
+      if(x.by==='extract'){ j.ek[f.key]=1; if(x.state==='done'||x.state==='proposed') j.eDone[f.key]=1; }
+      if(x.by==='drafter') j.dk[f.key]=1;
+      if(x.by==='synthesis') j.sk[f.key]=1; });
+  }
+  // Dara's parts, and how many are written: drafted (waiting for Jude),
+  // being checked, done or suggested, and those Jude turned down, which she
+  // still wrote, so the count never falls. What Jude turned down is his to say.
+  // `w` is what she has in the brief once the job is done: the same count the
+  // brief's header gives (inBrief), so the two always agree.
+  var WRITTEN={waiting:1, judging:1, done:1, proposed:1, revising:1, failed:1};
+  function daraCount(j){
+    var fs=j.fields||{}, n=0, k=0, w=0, props=[];
+    Object.keys(j.dk||{}).forEach(function(key){ var x=fs[key]||{}; if(x.state==='absent'||x.state==='kept') return; n++; if(WRITTEN[x.state]) k++;
+      if(x.state==='done') w++; if(x.state==='proposed') props.push(FIELDS.filter(function(f){ return f.key===key; })[0]); });
+    return {n:n, k:k, w:w, props:props.filter(Boolean)};
+  }
+  // "of the brief's 18 parts": what every count of parts is out of.
+  function ofAll(){ return ' of the brief’s '+FIELDS.length+' parts'; }
+  // What the person gave Ellis, in words: "your words and two files".
+  function sentWords(j){
+    var w=[], n=j&&j.sent?j.sent.files:arr(data().reference_assets).length;
+    if(j&&j.sent?j.sent.words:String(get('brief_input')||'').trim()) w.push('your words');
+    if(n) w.push(num(n)+' '+(n===1?'file':'files'));
+    return w.length?': '+listWords(w):'';
+  }
+  // Four of us: Sam plans the whole brief (and runs the research it needs) before Dara writes.
+  function meetOf(j){ return ['extract','synthesis','drafter','judge']; }
+  function renderProc(){
+    var j=DRAFT; if(!j) return;
+    track(j);
+    var c=crewStates(j), fs=j.fields||{}, at=STAGES.indexOf(j.stage);
+    var live=j.state==='queued'||j.state==='running'||j.state==='sending'||j.state==='checking';
+    var stopAt=!live&&j.state!=='done'?Math.max(at,0):-1;
+    var H={done:'Your brief is ready', failed:'We had to stop', unsent:'We couldn’t start', stalled:'We lost touch with the work', cancelled:'You stopped the draft'};
+    $('procH').textContent=H[j.state]||'Meet your crew';
+    var MEET=meetOf(j);
+    $('procS').textContent=j.error?j.error:j.state==='done'?'Opening it now…':j.state==='cancelled'?'What the crew had written before you stopped it stays in the brief.':(MEET.length===4?'Four':'Three')+' of us are on your brief. We’ll tell you what we’re doing as we go.';
+    $('procS').classList.toggle('err', !!j.error);
+    var d=daraCount(j), eN=Object.keys(j.eDone).length, failed=FIELDS.filter(function(f){ return (fs[f.key]||{}).state==='failed'; }).length;
+    var busyDraft=FIELDS.filter(function(f){ var x=fs[f.key]||{}; return x.by==='drafter'&&BUSY[x.state]; });
+    var st={extract:c.states.extract, synthesis:c.states.synthesis, drafter:c.states.drafter, judge:c.states.judge};
+    var sN=Object.keys(j.sk||{}).filter(function(k){ return (fs[k]||{}).state==='done'; }).length;
+    if(live&&at<=0&&st.extract==='idle') st.extract='working';   // sending, picking up: Ellis is first
+    var M={
+      extract:{
+        intro:st.extract==='done'?'<b>Hi, I’m '+esc(ELLIS)+'.</b> I read everything you sent'+esc(sentWords(j))+'.'
+          :'<b>Hi, I’m '+esc(ELLIS)+'.</b> I’m reading everything you sent'+esc(sentWords(j))+'.',
+        st:st.extract==='done'?['ok','✓ Done.'+(eN?' I picked out '+eN+ofAll()+'.':'')]
+          :['', j.state==='sending'||j.state==='checking'||j.state==='queued'?'Getting started…':'Reading now…']},
+      drafter:{
+        intro:st.drafter==='idle'&&at<2?'<b>I’m '+esc(DARA)+'.</b> I’ll write your whole brief from '+esc(SAM)+'’s plan.'
+          :st.drafter==='done'&&!d.n?'<b>I’m '+esc(DARA)+'.</b> There was nothing for me to write this time.'
+          :st.drafter==='done'&&!d.w?'<b>I’m '+esc(DARA)+'.</b> None of my parts went into the brief this time.'
+          :'<b>I’m '+esc(DARA)+'.</b> '+(st.drafter==='done'?'I wrote '+d.w:'I’m writing '+(d.n?d.n:'my share'))+esc(ofAll())+', all at once from '+esc(SAM)+'’s plan.',
+        st:st.drafter==='done'?['ok','✓ Done.'+(d.props.length?' I’ve a new version of '+esc(listWords(d.props.map(partName)))+' for you. You hold '+(d.props.length===1?'that part':'those parts')+', so I didn’t change '+(d.props.length===1?'it':'them')+'.':'')]
+          :st.drafter==='working'&&at===3?['', 'Rewriting '+esc(listWords(busyDraft.map(partName)))+' on '+esc(JUDE)+'’s note.']
+          :st.drafter==='working'?['', '<span class="pbar" aria-hidden="true"><i style="width:'+(d.n?Math.round(100*d.k/d.n):4)+'%"></i></span>'+(d.n?d.k+' of my '+d.n+' written':'Starting…')]
+          :['', 'Waiting for '+esc(SAM)]},
+      synthesis:{
+        intro:'<b>I’m '+esc(SAM)+'.</b> '+(st.synthesis==='done'?'I planned the whole brief and looked up what it needed.'
+          :'I plan the whole brief first, so every part serves one idea, and I look up what it needs.'),
+        st:st.synthesis==='done'?['ok','✓ Done. The plan is with '+esc(DARA)+'.']
+          :st.synthesis==='working'?['', 'Planning, then researching what the plan needs…']
+          :['', 'Waiting for '+esc(ELLIS)]},
+      judge:{
+        intro:'<b>And I’m '+esc(JUDE)+'.</b> '+(st.judge==='working'?'I’m reading the whole brief and checking what rests on the research.'
+          :st.judge==='done'||st.judge==='needs-you'?'I read the whole brief and checked what rests on the research.'
+          :'When '+esc(DARA)+'’s done, I read the whole brief, check what rests on the research, and tell you what needs you.'),
+        st:st.judge==='needs-you'?['err', '✓ Done. '+esc(Num(failed)+' '+(failed===1?'part needs':'parts need'))+' you.']
+          :st.judge==='done'?['ok','✓ Done. Every part I checked holds up.']
+          :st.judge==='working'?['', esc(c.texts.judge||'Checking…')]
+          :['', 'Waiting for '+esc(DARA)]}
+    };
+    var el=$('meet');
+    if(el.childNodes.length!==MEET.length) el.innerHTML=MEET.map(function(k){ return '<div class="mate" data-k="'+k+'"><div class="mfig"></div><div class="say up"></div></div>'; }).join('');
+    MEET.forEach(function(k,i){
+      var m=el.querySelector('.mate[data-k="'+k+'"]'), s=st[k], stop=stopAt>=0&&STAGE_K[STAGES[stopAt]]===k;
+      var fst=stop||s==='needs-you'?'needs-you':s==='working'?'working':'idle';
+      // redraw the figure only when its state changes, so it keeps its motion
+      if(m.getAttribute('data-st')!==fst){ m.setAttribute('data-st',fst); m.querySelector('.mfig').innerHTML=fig(k,{state:fst,label:sayer(k)}); }
+      var now=s==='working'&&live, warn=stop||s==='needs-you', next=!now&&!warn&&s==='idle';
+      m.className='mate'+(now?' now':'')+(next?' next':'');
+      var line=stop?['err', j.state==='cancelled'?'You stopped it here.':'I had to stop here.']:M[k].st;
+      m.querySelector('.say').className='say up'+(warn?' warn':now?' now':'');
+      m.querySelector('.say').innerHTML='<span class="sayer">'+esc(sayer(k))+'</span>'+M[k].intro+'<span class="st'+(line[0]?' '+line[0]:'')+'">'+line[1]+'</span>';
+    });
+    $('tiles').innerHTML=FIELDS.map(function(f){ return tileHtml(f, fs[f.key]||{state:isLocked(f.key)?'kept':'waiting', by:null}); }).join('');
+    var acts=$('procActs');
+    // Stop the draft: a person may cancel it at any stage (cancel_job). What
+    // the crew already sent stays; it writes nothing more.
+    var canStop=live&&j.id&&j.state!=='checking';
+    acts.innerHTML=!live&&j.state!=='done'?(hasContent()?'<button type="button" class="ghost big" id="procSee">See what was written</button>':'')+'<button type="button" class="ghost big" id="procBack">Back to the start</button>'
+      :canStop?(j.stopAsk?'<span class="stopq">Stop the draft? What’s written so far stays.</span><button type="button" class="ghost big" id="procStopYes"'+(j.stopping?' disabled':'')+'>'+(j.stopping?'Stopping…':'Yes, stop it')+'</button><button type="button" class="ghost big" id="procStopNo"'+(j.stopping?' disabled':'')+'>Keep going</button>'
+        :'<button type="button" class="ghost big" id="procStop">Stop the draft</button>'):'';
+    var stp=$('procStop'); if(stp) stp.addEventListener('click',function(){ j.stopAsk=true; renderProc(); var y=$('procStopYes'); if(y) y.focus(); });
+    var sno=$('procStopNo'); if(sno) sno.addEventListener('click',function(){ j.stopAsk=false; renderProc(); });
+    var syes=$('procStopYes'); if(syes) syes.addEventListener('click',function(){ cancelJob(j); });
+    var see=$('procSee'); if(see) see.addEventListener('click',function(){ DRAFT=null; forceIntake=false; setPhase('doc'); render(); });
+    var back=$('procBack'); if(back) back.addEventListener('click',function(){ DRAFT=null; forceIntake=true; setPhase('intake'); render(); });
+  }
+  function startDraft(prompt, atts, resumeId){
+    var j=DRAFT={task:'draft_brief', fields:{}, onUpdate:renderProc, onEnd:function(j){
+      renderProc();
+      if(j.state==='done') setTimeout(function(){ if(DRAFT!==j) return; DRAFT=null; forceIntake=false; setPhase('doc'); render(); window.scrollTo(0,0); }, reduce?200:1100);
+    }};
+    if(!resumeId) j.sent={words:!!String(prompt||'').trim(), files:arr(atts).length};
+    setPhase('proc'); window.scrollTo(0,0);
+    if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; renderProc(); pollJob(j); return; }
+    runJob(j, {prompt:prompt, attachments:atts});
+    renderProc();
+  }
+
+  // What the draft reads: each attached file by its asset name, the sha256 of
+  // its bytes, its type and where it lives (middleware-api §10.1). The host
+  // adds each one's extracted text, or a picture's bytes.
+  function hexOf(buf){ return Array.prototype.map.call(new Uint8Array(buf), function(x){ return ('0'+x.toString(16)).slice(-2); }).join(''); }
+  function sha256js(msg){
+    var K=[], H=[], P=[], n=2;
+    while(P.length<64){ var ok=true; for(var d=2;d*d<=n;d++) if(n%d===0){ ok=false; break; } if(ok) P.push(n); n++; }
+    P.forEach(function(p,i){ if(i<8) H[i]=(Math.pow(p,1/2)*0x100000000)|0; K[i]=(Math.pow(p,1/3)*0x100000000)|0; });
+    var l=msg.length, len=((l+9+63)>>6)<<6, m=new Uint8Array(len); m.set(msg); m[l]=0x80;
+    var hi=Math.floor(l/0x20000000), lo=(l*8)>>>0;
+    m[len-8]=hi>>>24; m[len-7]=(hi>>>16)&255; m[len-6]=(hi>>>8)&255; m[len-5]=hi&255;
+    m[len-4]=lo>>>24; m[len-3]=(lo>>>16)&255; m[len-2]=(lo>>>8)&255; m[len-1]=lo&255;
+    var w=new Array(64);
+    function rr(x,c){ return (x>>>c)|(x<<(32-c)); }
+    for(var o=0;o<len;o+=64){
+      var i;
+      for(i=0;i<16;i++) w[i]=(m[o+4*i]<<24)|(m[o+4*i+1]<<16)|(m[o+4*i+2]<<8)|m[o+4*i+3];
+      for(i=16;i<64;i++){ var x=w[i-15], y=w[i-2]; w[i]=(w[i-16]+(rr(x,7)^rr(x,18)^(x>>>3))+w[i-7]+(rr(y,17)^rr(y,19)^(y>>>10)))|0; }
+      var a=H[0],b=H[1],c=H[2],e=H[4],f=H[5],g=H[6],h=H[7],dd=H[3];
+      for(i=0;i<64;i++){
+        var t1=(h+(rr(e,6)^rr(e,11)^rr(e,25))+((e&f)^(~e&g))+K[i]+w[i])|0;
+        var t2=((rr(a,2)^rr(a,13)^rr(a,22))+((a&b)^(a&c)^(b&c)))|0;
+        h=g; g=f; f=e; e=(dd+t1)|0; dd=c; c=b; b=a; a=(t1+t2)|0;
+      }
+      H[0]=(H[0]+a)|0; H[1]=(H[1]+b)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+dd)|0; H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0;
+    }
+    return H.map(function(v){ return ('00000000'+(v>>>0).toString(16)).slice(-8); }).join('');
+  }
+  function sha256Hex(bytes){
+    bytes=new Uint8Array(bytes);
+    try{
+      if(window.crypto&&crypto.subtle&&crypto.subtle.digest)
+        return crypto.subtle.digest('SHA-256', bytes).then(hexOf, function(){ return sha256js(bytes); });
+    }catch(e){}
+    return Promise.resolve(sha256js(bytes));
+  }
+  function mediaTypeOf(name, given){
+    if(given) return given;
+    var e=(/\.([a-z0-9]+)$/i.exec(name||'')||[])[1]||'';
+    return {pdf:'application/pdf', txt:'text/plain', md:'text/markdown', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp',
+      docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'}[e.toLowerCase()]||'application/octet-stream';
+  }
+  // In a brief started from research, the client's files that came with it
+  // go too: they are the client's words, and capture reads them
+  // (middleware-api §10.13, item 2). The host adds each one's extracted text.
+  function attachmentsFor(){
+    var list=arr(data().reference_assets).slice(), names=list.map(function(a){ return a.name; });
+    upMaterials().forEach(function(m){ if(names.indexOf(m.name)===-1) list.push(m); });
+    return Promise.all(list.map(function(a){
+      var hash=/^[0-9a-f]{64}$/.test(a.sha256||'')?Promise.resolve(a.sha256):fetch(assetUrl(a.name)).then(function(r){ return r.arrayBuffer(); }).then(sha256Hex);
+      return hash.then(function(h){ return {name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; });
+    }));
+  }
+
+  // A draft: the planner's words (else the ask already recorded, else, in a
+  // brief started from research, the ask that started the research) and the
+  // client's files, the ones that came with the research included.
+  function draftNow(prompt){
+    var typed=!!prompt, ask=prompt||String(get('brief_input')||'').trim()||(isResearchFed()?upPrompt():'');
+    if(!window.clan){ $('intakeStatus').textContent='No host bridge — open this inside the studio.'; return; }
+    if(noMiddleware()){ renderIntake(); return; }
+    if(!ask&&!(data().reference_assets||[]).length&&!upMaterials().length){ $('intakeStatus').textContent='Say what the brief is, or attach the client’s material.'; return; }
+    $('intakeStatus').classList.remove('err'); $('intakeStatus').textContent='';
+    // The ask is the planner's own words: theirs to write.
+    var why=typed||!isResearchFed()?'The ask, in the planner’s words':'The ask that started the research “'+(upTitle()||'it')+'”, in the planner’s words';
+    var ready=(ask&&ask!==get('brief_input'))?Promise.resolve(patch('brief_input',ask,{actor:'human',pinned:false,action:'edit brief_input',rationale:why})):Promise.resolve();
+    ready.then(attachmentsFor).then(function(atts){ startDraft(ask, atts); })
+      .catch(function(e){ $('intakeStatus').textContent='Could not read the attachments: '+(e&&e.message||e); $('intakeStatus').classList.add('err'); });
+  }
+  $('genBtn').addEventListener('click',function(){ draftNow($('prompt').value.trim()); });
+
+  // On open: pick up a job this tab started on this document, with one free poll.
+  function resumeJobs(){
+    if(!(window.clan&&window.clan.apiProxy)) return;
+    var id=stored(jobKey('draft_brief'));
+    if(id) startDraft('', [], id);
+    FIELDS.forEach(function(f){ var rid=stored(jobKey('regenerate_field', f.key)); if(rid) regenField(f, '', rid); });
+  }
+
+  // A working title while project_name is empty: the product and the move the
+  // commercial objective names ("Relaunch Glenmore 12 to …" → "Glenmore 12
+  // relaunch"), else the client's name. Shown as derived, never written into
+  // project_name: Extract fills that only when the client's material names
+  // the project (capture.py), and a person names it otherwise.
+  var MOVES={relaunch:'relaunch',reintroduce:'relaunch',launch:'launch',introduce:'launch',reposition:'repositioning',
+    revitalise:'revival',revitalize:'revival',revive:'revival',grow:'growth',rebuild:'rebuild',defend:'defence'};
+  var NAME=/((?:[A-Z0-9][\w'’&.-]*)(?:\s+[A-Z0-9][\w'’&.-]*)*)/;
+  function derivedTitle(){
+    var obj=String(get('objectives.commercial')||'').trim(), client=String(get('client')||'').trim();
+    var base=client.replace(/\s+(distillery|distillers|brewery|ltd|limited|inc|plc|group|company|co)\.?$/i,'').trim();
+    var m=obj.match(new RegExp('^(\\w+)\\s+'+NAME.source));
+    if(m&&MOVES[m[1].toLowerCase()]) return m[2]+' '+MOVES[m[1].toLowerCase()];
+    // the product the objective names, when it carries the client's name
+    var first=base.split(/\s+/)[0];
+    if(first){
+      var at=obj.indexOf(first), n=at>=0?obj.slice(at).match(NAME):null;
+      if(n) return n[1]+' campaign';
+    }
+    return base?base+' campaign':'';
+  }
+
+  // ---------- a brief started from research (os-layer §5) ----------
+  // The research is frozen at data.upstream.<its document id>, read-only; its
+  // pins, findings and sources were merged into this brief's own, and its
+  // open items are on this brief's lock list. GET /upstream says whether the
+  // research has moved on since (§8.1, item 6).
+  function upKeys(){ var u=get('upstream'); return u&&typeof u==='object'&&!Array.isArray(u)?Object.keys(u):[]; }
+  function isResearchFed(){ return upKeys().length>0; }
+  var UP={state:'idle', res:null, t:null};
+  function upEntry(){ var r=UP.res; return r?arr(r.upstream).filter(function(e){ return e&&e.direct; })[0]||null:null; }
+  // The direct parent: the one lineage.carried names, else the only one there.
+  function directUpId(){ var ks=upKeys(), c=UP.res&&UP.res.carried&&UP.res.carried.document_id; return c&&ks.indexOf(c)!==-1?c:ks[0]||''; }
+  function upData(){ var id=directUpId(), u=get('upstream')||{}; return id&&u[id]&&typeof u[id]==='object'?u[id]:{}; }
+  function envVal(v){ return v&&typeof v==='object'&&!Array.isArray(v)&&'value' in v?v.value:v; }
+  // The research's name, as the research calls itself: its title, unless that
+  // is only the tool's own name (a report nobody named); else what the
+  // Research Tool titles it by (its brand and markets, else its working
+  // name), read from the frozen copy; else its brand's research.
+  var UP_MARKET={IE:'Ireland', GB:'Great Britain', UK:'the UK', US:'the US', FR:'France', DE:'Germany', ES:'Spain', IT:'Italy', NL:'the Netherlands'};
+  function upStoreTitle(){ var e=upEntry(); return String(e&&e.title||'').trim(); }
+  function upTitle(){
+    var c=upData().campaign||{}, n=envVal(c.name), t=upStoreTitle(), br=envVal(c.brand)||envVal(c.client_org), ms=arr(envVal(c.markets));
+    if(br&&typeof br==='object') br=br.name;   // a brand is {name, ref}
+    br=typeof br==='string'?br.trim():''; n=typeof n==='string'?n.trim():'';
+    if(t&&!/^(untitled.*|research( tool)?|campaign[ -]research.*)$/i.test(t)) return t;
+    if(envVal(c.brand)&&br&&ms.length) return br+' · '+listWords(ms.map(function(m){ return UP_MARKET[m]||String(m); }));
+    if(n) return n;
+    return br?br+' research':t;
+  }
+  function upHeadline(){
+    var r=upData().report||{}, h=r.headline; h=h&&typeof h==='object'?h.text:h;
+    if(typeof h==='string'&&h.trim()) return h.trim();
+    var s0=arr(r.summary)[0]; return s0&&typeof s0.text==='string'?s0.text:'';
+  }
+  // The planner's own words that started the research: the asks of its chat
+  // (the messages indexed as its prompt), in order; else every message of theirs.
+  function upPrompt(){
+    var ms=(upData().intake||{}).messages||{};
+    var ks=Object.keys(ms).filter(function(k){ var m=ms[k]; return m&&m.role==='user'&&String(m.text||'').trim(); });
+    ks.sort(function(a,b){ var x=String(ms[a].at||''), y=String(ms[b].at||''); return x<y?-1:x>y?1:a<b?-1:a>b?1:0; });
+    var asks=ks.filter(function(k){ return ms[k].material_id; }); if(asks.length) ks=asks;
+    return ks.map(function(k){ return String(ms[k].text).trim(); }).join('\n\n');
+  }
+  // The client's own material that travelled with the research: its frozen
+  // materials whose bytes are in this brief's assets, by the asset name the
+  // host finds each one's extracted text under.
+  function upMaterials(){
+    var ms=upData().materials||{}, have=window.__CLAN__&&window.__CLAN__.assets, out=[];
+    Object.keys(ms).forEach(function(id){
+      var m=ms[id]||{}; if(m.kind==='prompt'||!m.asset) return;
+      var name=String(m.asset).replace(/^(?:human\/)?assets\//,'');
+      if(!name||(have&&typeof have==='object'&&!have[name])) return;
+      out.push({name:name, label:m.name||name, sha256:String(m.sha256||'').replace(/^sha256:/,''), media_type:m.media_type||'', path:'human/assets/'+name});
+    });
+    return out;
+  }
+  // What the brief carries, counted from its own merged record.
+  function upCounts(){
+    var pr=get('projection')||{}, fs=pr.findings||{}, fk=Object.keys(fs);
+    return {findings:fk.length, checked:fk.filter(function(k){ return fs[k]&&fs[k].status==='verified'; }).length,
+      pins:Object.keys(pr.pins||{}).length, sources:Object.keys(pr.sources||{}).length,
+      open:arr((upData().selection||{}).contested).filter(function(c){ return c&&c.status==='open'; }).length};
+  }
+  function researchHi(){
+    var t=upTitle(), n=upMaterials().length;
+    return 'Hi, I’m '+ELLIS+'! This brief starts from the research'+(t?' “'+t+'”':'')+'. '
+      +(n?'I’ll read the client’s own words that came with it':'I’ll read the ask that started it')
+      +'. Add anything else they said, then draft it.';
+  }
+  function renderFromUp(){
+    var el=$('fromUp'), on=isResearchFed()&&phase==='intake';
+    $('introH').textContent=on?'Start from the research':'What’s the brief?';
+    $('ledeText').textContent=on?'The client’s words came with it. Add anything else they said, or draft it now.':'Paste the client’s words, or drop in their notes, deck or voice memo.';
+    $('prompt').placeholder=on?'Anything else the client said? (optional)':'Paste what the client said, or tell us about the brief';
+    el.hidden=!on; if(!on){ el.innerHTML=''; return; }
+    var t=upTitle(), hl=upHeadline(), c=upCounts(), mats=upMaterials(), items=lockItems(), n=[];
+    if(c.findings) n.push('<b>'+c.findings+'</b> '+(c.findings===1?'finding':'findings')+(c.checked?' ('+c.checked+' checked)':''));
+    if(c.pins) n.push('<b>'+c.pins+'</b> '+(c.pins===1?'fact':'facts'));
+    if(c.sources) n.push('<b>'+c.sources+'</b> '+(c.sources===1?'source':'sources'));
+    var ue=upEntry(), up_=ue&&ue.path;
+    var h='<div><div class="fu-k">From research</div><div class="fu-t">'+esc(t||'The research this brief started from')+'</div>'
+      +(up_?'<button type="button" class="linkbtn" id="openUpIn">Open the research ↗</button>':'')+'</div>'
+      +(hl?'<blockquote>'+esc(hl)+'</blockquote>':'')
+      +(n.length||c.open?'<p class="fu-n">'+(n.length?'It carries '+listWords(n)+'.':'')+(c.open?' Its sources disagree in '+esc(num(c.open))+' '+(c.open===1?'place':'places')+'.':'')+'</p>':'')
+      +'<p class="note">'+esc(mats.length
+        ?ELLIS+' reads the client’s own words that came with it ('+listWords(mats.map(function(m){ return m.label; }))+') and the ask that started the research. The research’s findings can back the insight and the proposition; they never stand in for what the client said.'
+        :'None of the client’s files came with the research, so '+ELLIS+' reads the ask that started it. Add the client’s words below if you have them.')+'</p>';
+    if(items.length) h+='<div class="locklist">'+lockListHtml(items, 'Before the brief can lock, '+(items.length===1?'this needs':'these need')+' you. Settle '+(items.length===1?'it':'them')+' now, or once the brief is drafted.')+'</div>';
+    var up=upNoteInner(); if(up) h+='<div class="upnote" role="status">'+up+'</div>';
+    el.innerHTML=h; bindLkItems(el);
+    var oi=$('openUpIn'); if(oi) oi.addEventListener('click',function(){
+      fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:up_})}); });
+  }
+  // "The research has changed since this brief started", and what changed:
+  // findings marked wrong there first, with where this brief uses them.
+  function upNoteInner(){
+    var e=upEntry(); if(!e||e.status!=='changed') return '';
+    var li=[], q=function(x){ return '“'+short(x||'a finding',140)+'”'; };
+    arr(e.findings).slice().sort(function(a,b){ return (a.change==='rejected'?0:1)-(b.change==='rejected'?0:1); }).forEach(function(x){
+      var used=arr(x.cited_by).map(fieldOfAddress).filter(Boolean).map(partName);
+      if(x.change==='rejected') li.push('<b>Marked wrong there:</b> '+esc(q(x.statement))+(x.reason?' <span class="m">'+esc('— '+x.reason)+'</span>':'')+(used.length?' '+esc('This brief uses it in '+listWords(used)+'.'):''));
+      else li.push(esc((x.change==='verified'?'Checked there: ':'New there: ')+q(x.statement)+'.'));
+    });
+    arr(e.contests).forEach(function(x){ var k=String(x.key||'a figure').replace(/[._]+/g,' ');
+      li.push(esc(x.change==='resolved'?'A value was picked there for '+k+(x.resolved_here?', and you picked one here too.':'.'):'Its sources now disagree about '+k+'.')); });
+    arr(e.pins).forEach(function(x){ var l=x.label||'a fact';
+      li.push(esc((x.change==='added'?'A new fact: ':x.change==='replaced'?'A fact was replaced: ':'A fact changed: ')+l+'.')); });
+    // Nothing itemised: say what kind of thing changed (the host gives only
+    // which members differ, no paths) and what to do about it.
+    if(!li.length){ var ch=e.changed||{}, w=[];
+      if(ch.data) w.push('its ask or its report was edited'); if(ch.facts) w.push('its facts changed'); if(ch.findings) w.push('its findings changed'); if(ch.sources) w.push('its sources changed');
+      if(w.length){ var w0=listWords(w); li.push(esc('In the research, '+w0+'. Open the research to see what changed, and bring anything you need into this brief yourself.')); } }
+    var ds=typeof e.decisions_since==='number'&&e.decisions_since>0?' '+Num(e.decisions_since)+' '+(e.decisions_since===1?'decision was':'decisions were')+' made there since.':'';
+    var shown=li.slice(0,5), rest=li.slice(5);
+    return '<div class="ub"><b>The research has changed since this brief started.</b>'
+      +'<span class="m">'+esc('This brief keeps the research as it was then; it doesn’t take the newer one on its own.'+ds)+'</span>'
+      +(shown.length?'<ul>'+shown.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>':'')
+      +(rest.length?'<details><summary>'+rest.length+' more '+(rest.length===1?'change':'changes')+'</summary><ul>'+rest.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul></details>':'')+'</div>';
+  }
+  function renderUpNote(el){ if(!el) return; var h=upNoteInner(); el.hidden=!h; el.innerHTML=h; }
+  // Read when the brief opens and after each write (a read, any actor, locked or not).
+  function loadUpstream(){
+    if(!isResearchFed()) return;
+    clearTimeout(UP.t);
+    UP.t=setTimeout(function(){
+      fetch(clanScheme+'/upstream').then(function(r){ return r.ok?r.json():null; })
+        .then(function(v){ if(v&&typeof v==='object'){ UP.res=v; UP.state='ok'; } }, function(){ UP.state='unavailable'; })
+        .then(function(){ if(phase==='intake'){ renderFromUp(); syncKind(); } else if(phase==='doc'){ renderUpNote($('upNote')); renderMadeFrom(); } syncTitle(); });
+    }, 300);
+  }
+
+  // ---------- structured ----------
+  var REGEN={};   // field key → true while its Drafter is redrafting it
+  function renderStructured(){
+    $('docIdent').innerHTML=IDENT;
+    renderMadeFrom();
+    $('redraft').hidden=approveLocked();
+    var pn=String(get('project_name')||'').trim(), dt=pn?'':derivedTitle();
+    $('hProj').textContent=pn||dt||'Untitled campaign';
+    $('hProj').classList.toggle('derived', !pn&&!!dt);
+    $('hDerived').hidden=!(!pn&&dt);
+    $('hDerived').textContent=!pn&&dt?'Working title, from the client and the commercial objective. The project name is empty.':'';
+    $('hCli').textContent=get('client')||'';
+    syncKind();
+    // While the shell records a client's answer, the parts stay as they are:
+    // the fields snippet has put its marks under them.
+    var host=$('fields'), keep=CLIENT.on&&host.childNodes.length, sec=null;
+    if(!keep){
+      host.innerHTML='';
+      FIELDS.forEach(function(f,i){
+        if(f.sec!==sec){ sec=f.sec; var h=document.createElement('div'); h.className='sechead'; h.textContent=f.sec; host.appendChild(h); }
+        var row=fieldRow(f,i); row.classList.add('t'+(i%4)); host.appendChild(row);   // Studio tints the parts in turn
+      });
+    }
+    // The pictures, sound and video the person sent, when there are any.
+    var showBoards=arr(data().reference_assets).length>0;
+    $('boardsHead').style.display=showBoards?'flex':'none';
+    $('boardsNote').hidden=!showBoards;
+    $('boards').classList.toggle('on',showBoards);
+    if(showBoards) renderBoards(false);
+    $('newDraft').hidden=approveLocked();
+    renderLock(); renderUpNote($('upNote'));
+    renderCrewline(); renderReview();
+    LOCK_SIG=lockSig();
+    // The clan-fields inside the rows render, and the snippet finds the
+    // parts again (and puts back what it shows under them).
+    var F=OSF(); if(F&&!keep) F.refresh();
+  }
+
+  function fieldStyle(key){ var fs=(get('field_styles')||{})[key]||{}; var s='';
+    if(fs.font) s+='font-family:'+fs.font+';'; if(fs.size) s+='font-size:'+fs.size+';'; if(fs.color) s+='color:'+fs.color+';'; return s; }
+
+  function fieldRow(f,i){
+    var row=document.createElement('div'); row.className='row'; row.setAttribute('data-i', String(i));
+    // A part the client review can name (the shared protocol: the snippet
+    // collects these in document order and hands them to the shell).
+    row.setAttribute('data-clan-part', f.key); row.setAttribute('data-clan-part-label', partLabel(f));
+    if(PART_ALIASES[f.key]) row.setAttribute('data-clan-part-aliases', PART_ALIASES[f.key]);
+    var v=get(f.key); var has=hasVal(v);
+    var st=fieldStyle(f.key); var sa=st?' style="'+st+'"':'';
+    var cls='val'+(f.hero?' spp':'');
+    // A written part opens the OS's evidence drawer: a text part is a
+    // clan-field (its words in this page's type; in the OS's edit mode a tap
+    // edits it through /edit), a list keeps its own list and opens the drawer
+    // on a tap. Without the snippet the words show as they always did.
+    var clf=f.type!=='list'&&opensPath(f.key), opens=f.type==='list'&&opensPath(f.key);
+    var reo=reopenedOf(f.key), writable=canWrite(f.key);
+    var valHtml = !has ? '<div class="val empty">'+(writable?'Nothing here yet. Tap the pencil to write it.':'Nothing here.')+'</div>'
+      : f.type==='list' ? '<div class="'+cls+(opens?' opens':'')+'"'+sa+(opens?' role="button" tabindex="0" title="Where this came from" aria-label="'+esc(f.label+': where this came from')+'"':'')+'><ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul></div>'
+      : '<div class="'+cls+'"'+sa+'>'+(clf?'<clan-field ref="'+esc(f.key)+'" as="block" caption="'+esc(partLabel(f))+'">'+esc(String(v))+'</clan-field>':esc(String(v)))+'</div>';
+    var locked=isLocked(f.key);
+    // Locked by an approve, a part offers nothing but its evidence; a part
+    // reopened for the client's request offers its pencil, and only that.
+    var ctrls=!approveLocked()
+      ? '<button class="iconbtn act-edit" title="Change this" aria-label="Change '+esc(f.label)+'">'+IC.edit+'</button>'+
+
+        '<button class="iconbtn act-regen" title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again')+'" aria-label="Write again: '+esc(f.label)+'"'+(REGEN[f.key]||noMiddleware()?' disabled':'')+'>'+IC.regen+'</button>'+
+        '<button class="iconbtn act-lock'+(locked?' on':'')+'" title="'+(locked?'Let the crew change this again':'Keep this as it is')+'" aria-label="'+(locked?'Unlock ':'Lock ')+esc(f.label)+'">'+(locked?IC.lock:IC.unlock)+'</button>'
+      : reo ? '<button class="iconbtn act-edit" title="Make the change the client asked for" aria-label="Make the change the client asked for: '+esc(f.label)+'">'+IC.edit+'</button>' : '';
+    row.innerHTML='<div class="lab"><span>'+esc(f.label)+'</span>'+
+      provHtml(f)+
+      (locked?' <span class="lockbadge">'+IC.lock+'locked</span>':'')+
+      (reo?' <span class="lockbadge">open for the client’s change</span>':'')+
+      (ctrls?'<span class="ctrls"'+(reo?' style="opacity:1"':'')+'>'+ctrls+'</span>':'')+'</div>'+valHtml+
+      regenLine(f)+
+      '<div class="notes">'+notesHtml(f)+'</div>'+
+      (OPEN_WHY[f.key]?'<div class="why">'+whyHtml(f)+'</div>':'');
+    var eb=row.querySelector('.act-edit'); if(eb) eb.addEventListener('click',function(){startEdit(row,f);});
+    var rb=row.querySelector('.act-regen'); if(rb) rb.addEventListener('click',function(){startRegen(row,f);});
+    var lb=row.querySelector('.act-lock'); if(lb) lb.addEventListener('click',function(){toggleLock(f);});
+    var sb=row.querySelector('.act-style'); if(sb) sb.addEventListener('click',function(){startStyle(row,f);});
+    var pb=row.querySelector('.prov'); if(pb) pb.addEventListener('click',function(){toggleWhy(row,f);});
+    var ov=row.querySelector('.val.opens');
+    if(ov){
+      // In the OS's edit mode a list is edited in the brief's own editor (one
+      // item per line); otherwise a tap shows where it came from.
+      var go=function(){ if(EDIT_MODE&&writable) startEdit(row,f); else { var F=OSF(); if(F) F.open(f.key); } };
+      ov.addEventListener('click',go);
+      ov.addEventListener('keydown',function(e){ if(e.target===ov&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); go(); } });
+    }
+    bindNotes(row.querySelector('.notes'), f);
+    return row;
+  }
+
+  function openInline(row, html){
+    if(row.querySelector('.edit')) return null;
+    var ctrls=row.querySelector('.ctrls'); if(ctrls) ctrls.style.visibility='hidden';
+    var valEl=row.querySelector('.val'); valEl.style.display='none';
+    var wrap=document.createElement('div'); wrap.className='edit'; wrap.innerHTML=html;
+    valEl.insertAdjacentElement('afterend',wrap);
+    wrap.__close=function(){wrap.remove();valEl.style.display='';if(ctrls)ctrls.style.visibility='';};
+    var c=wrap.querySelector('.cancel'); if(c) c.addEventListener('click',wrap.__close);
+    return wrap;
+  }
+
+  // per-field font / size / colour (immersive)
+  function startStyle(row,f){
+    var fs=(get('field_styles')||{})[f.key]||{};
+    var fonts=[['','Default'],['var(--serif)','Serif'],['var(--ui)','Sans'],['var(--mono)','Mono'],["Georgia,serif",'Georgia']];
+    var sizes=[['','Default'],['13px','S'],['15px','M'],['18px','L'],['22px','XL'],['28px','XXL']];
+    function opts(list,cur){ return list.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(cur||'')?' selected':'')+'>'+o[1]+'</option>';}).join(''); }
+    var wrap=openInline(row,
+      '<div class="editrow">'+
+        '<label>Font <select class="sfont">'+opts(fonts,fs.font)+'</select></label>'+
+        '<label>Size <select class="ssize">'+opts(sizes,fs.size)+'</select></label>'+
+        '<label>Colour <input type="color" class="scolor" value="'+(fs.color||get('theme.text')||DEF.text)+'" /></label>'+
+      '</div>'+
+      '<div class="editrow"><button class="save">Apply</button><button class="cancel">Cancel</button>'+
+      '<button class="cancel sreset">Reset field</button></div>');
+    if(!wrap) return;
+    function commit(reset){
+      var styles=Object.assign({},get('field_styles')||{});
+      if(reset){ delete styles[f.key]; }
+      else { var ns={}; var fo=wrap.querySelector('.sfont').value,sz=wrap.querySelector('.ssize').value,co=wrap.querySelector('.scolor').value;
+        if(fo)ns.font=fo; if(sz)ns.size=sz; if(co)ns.color=co; styles[f.key]=ns; }
+      patch('field_styles',styles,{actor:'human',pinned:false,action:'look',rationale:(reset?'Plain ':'Restyled ')+f.label});
+      wrap.__close();
+    }
+    wrap.querySelector('.save').addEventListener('click',function(){commit(false);});
+    wrap.querySelector('.sreset').addEventListener('click',function(){commit(true);});
+  }
+
+  // edit value + rationale + optional pin(=lock). On a locked brief it is the
+  // client's change to a reopened part (os-layer §7.5.5): an /edit that says
+  // why — the reason comes pre-filled — and answers the client's request.
+  function startEdit(row,f,given){
+    var reo=approveLocked()?(reopenedOf(f.key)||(given&&given.answers?{answers:given.answers}:null)):null;
+    if(approveLocked()&&!reo) return;
+    var cur=valToText(get(f.key),f.type);
+    var ctl = (f.type==='list')?'<textarea class="valctl" placeholder="one per line">'+esc(cur)+'</textarea>'
+      : (f.key.indexOf('name')===-1)?'<textarea class="valctl">'+esc(cur)+'</textarea>'
+      : '<input type="text" class="valctl" value="'+esc(cur)+'" />';
+    var reason=(given&&given.reason)||(reo?reopenReason(reo):'');
+    var wrap=openInline(row, ctl+
+      // The client's reason, shown whole under a label that says where it came from; still editable.
+      (reo?'<label class="ratlab"><span>'+(reason?'Reason, filled in for you':'Why this change? (needed)')+'</span><textarea class="rat" rows="3">'+esc(reason)+'</textarea></label>'
+        :'<input type="text" class="rat" placeholder="Why this change? (optional — recorded in the decision chain)" />')+
+      '<div class="editrow"><button class="save">Save</button><button class="cancel">Cancel</button>'+
+      (reo?'<span class="muted">The rest of the brief stays as the client saw it.</span>'
+        :'<label><input type="checkbox" class="pin" '+(isLocked(f.key)?'checked':'')+' /> Pin &amp; lock this field</label>')+
+      (f.type==='list'?'<span class="muted">one item per line</span>':'')+'</div>'+
+      (reo?'<div class="note err" hidden></div>':''));
+    if(!wrap) return;
+    wrap.querySelector('.valctl').focus();
+    if(reo){ wrap.querySelector('.save').addEventListener('click',function(){ saveClientChange(wrap,f,reo,(given&&given.answers)||reo.answers); }); return; }
+    wrap.querySelector('.save').addEventListener('click',function(){
+      var raw=wrap.querySelector('.valctl').value;
+      var value=f.type==='list'?raw.split('\n').map(function(s){return s.trim();}).filter(Boolean):raw;
+      var oldText=valToText(get(f.key),f.type), newText=valToText(value,f.type);
+      var changed=oldText!==newText;
+      var note=wrap.querySelector('.rat').value.trim();
+      var pinned=wrap.querySelector('.pin').checked;
+      if(changed){
+        var rationale=note||('Changed from "'+short(oldText)+'" to "'+short(newText)+'"');
+        window.clan.patchData(f.key,value,{actor:'human',pinned:pinned,action:'edit '+f.key,rationale:rationale});
+        if(f.key==='project_name'&&value) window.clan.setTitle(value);
+      }
+      setLock(f.key,pinned);
+      wrap.__close();
+    });
+  }
+  function saveClientChange(wrap,f,reo,answers){
+    var raw=wrap.querySelector('.valctl').value, btn=wrap.querySelector('.save'), err=wrap.querySelector('.note.err');
+    var value=f.type==='list'?raw.split('\n').map(function(s){return s.trim();}).filter(Boolean):raw;
+    var why=wrap.querySelector('.rat').value.trim();
+    function fail(m){ err.textContent=m; err.hidden=false; btn.disabled=false; }
+    if(valToText(value,f.type)===valToText(get(f.key),f.type)){ wrap.__close(); return; }
+    if(!why){ fail('Say why you are changing it.'); wrap.querySelector('.rat').focus(); return; }
+    btn.disabled=true;
+    hostPost('/edit',{path:f.key, value:value, rationale:why, answers:answers}).then(function(res){
+      if(res&&res.ok){ toast('Saved. Lock the brief again when it’s ready.'); var F=OSF(); if(F) F.reload(); if(wrap.isConnected) wrap.__close(); return; }
+      fail('That did not save. '+hostErrText(res));
+    },function(){ fail('That did not go through. Check your connection and try again.'); });
+  }
+  // "Make this change" (the fields snippet, after /client-review/reopen) on a
+  // part it cannot edit in place — a list — opens the brief's own editor with
+  // the returned reason and the part answer it answers.
+  window.addEventListener('clan:editpart',function(e){
+    var d=(e&&e.detail)||{}, key=String(d.path||d.address||'');
+    if(key.indexOf('#')!==-1) key=pathOf(key)||'';
+    var i=-1; FIELDS.forEach(function(x,j){ if(x.key===key) i=j; }); if(i<0) return;
+    var row=document.querySelector('#fields .row[data-i="'+i+'"]'); if(!row) return;
+    if(e.preventDefault) e.preventDefault();
+    row.scrollIntoView({behavior:reduce?'auto':'smooth',block:'center'});
+    startEdit(row, FIELDS[i], {reason:d.reason, answers:d.answers});
+  });
+
+  // regenerate with OPTIONAL guidance (transient)
+  function startRegen(row,f){
+    var wrap=openInline(row,
+      '<textarea placeholder="Anything for '+esc(DARA)+'? (optional) — e.g. punchier, lean into humour"></textarea>'+
+      '<div class="editrow"><button class="save">Write it again</button><button class="cancel">Cancel</button>'+
+      '<span class="muted">extra guidance is used for this redraft only</span></div>');
+    if(!wrap) return;
+    var ta=wrap.querySelector('textarea'); ta.focus();
+    wrap.querySelector('.save').addEventListener('click',function(){ var g=ta.value.trim(); wrap.__close(); regenField(f,g); });
+  }
+  function setStatus(html){ $('status').innerHTML=html||''; }
+  // Redraft one field: a regenerate_field job (middleware-api §10.10) — one
+  // Drafter, then the Judge. The host writes what passes; a field a person
+  // holds comes back as a proposal.
+  function regenField(f,guidance,resumeId){
+    if(!window.clan) return;
+    if(noMiddleware()){ setStatus(esc(NO_MW)); return; }
+    var j=REGEN[f.key]={task:'regenerate_field', field:f.key, fields:{}, onUpdate:function(){ if(phase==='doc') renderRegen(f); },
+      onEnd:function(j){
+        delete REGEN[f.key];
+        var fs=(j.fields||{})[f.key]||{};
+        if(j.error) setStatus(esc(j.error));
+        // the middleware's summary stays in the record; the person hears Jude
+        else if(fs.state==='failed') setStatus(esc(JUDE+': I turned down the new '+f.label.toLowerCase()+' twice, so it wasn’t written.'));
+        else if(fs.state==='proposed') setStatus(esc(DARA+' suggests a new '+f.label.toLowerCase()+': you hold that part, so it wasn’t changed.'));
+        else setStatus('');
+        if(phase==='doc') renderStructured();
+      }};
+    setStatus('');
+    if(phase==='doc') renderStructured();
+    if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; pollJob(j); return; }
+    var input={field:f.key}; if(guidance) input.guidance=guidance;
+    runJob(j, input);
+  }
+  // The row's live line: who is on the field right now, as the job says.
+  function regenLine(f){
+    var j=REGEN[f.key]; if(!j) return '';
+    var fs=(j.fields||{})[f.key]||{}, by=fs.by||'drafter', st=fs.state||'drafting';
+    var t=st==='judging'?JUDE+' is checking the new '+f.label.toLowerCase()+'…'
+      :st==='revising'?DARA+' is rewriting '+f.label.toLowerCase()+' on '+JUDE+'’s note…'
+      :j.state==='sending'?'Asking '+DARA+' to write '+f.label.toLowerCase()+' again…'
+      :DARA+' is writing '+f.label.toLowerCase()+' again…';
+    return '<div class="regen-now">'+fig(AGENT_NAME[by]?by:'drafter',{state:'working',label:(AGENT_NAME[by]||DARA)+' · '+f.label})+'<span>'+esc(t)+'</span></div>';
+  }
+  function renderRegen(f){
+    var i=FIELDS.indexOf(f), row=document.querySelector('#fields .row[data-i="'+i+'"]'); if(!row) return;
+    var old=row.querySelector('.regen-now'), h=regenLine(f);
+    if(old) old.outerHTML=h; else if(h){ var v=row.querySelector('.val'); if(v) v.insertAdjacentHTML('afterend', h); }
+  }
+
+  // lock toggle
+  function toggleLock(f){ setLock(f.key, !isLocked(f.key)); }
+  function setLock(key, on){
+    var cur=lockedList(); var has=cur.indexOf(key)!==-1;
+    if(on===has) return;
+    var next = on ? cur.concat([key]) : cur.filter(function(k){return k!==key;});
+    window.clan.patchData('locked_fields',next,{actor:'human',pinned:true,action:(on?'lock ':'unlock ')+key,rationale:(on?'Human locked ':'Human unlocked ')+key+' (protected from full regeneration)'});
+  }
+
+  // ---------- mood boards ("Your pictures") ----------
+  // Tapping one asks before it is taken out: two buttons, never a surprise.
+  var ASK_OUT=-1;
+  function renderBoards(big){
+    var box=$('boards'); box.innerHTML='';
+    var list=arr(data().reference_assets); if(ASK_OUT>=list.length) ASK_OUT=-1;
+    list.forEach(function(a,i){
+      var el=document.createElement('div'); el.className='board'+(big?' big':''); var url=assetUrl(a.name), nm=a.label||a.name;
+      var media=a.type==='audio'||a.type==='video';
+      var m=a.type==='image'?'<img src="'+url+'" alt=""/>':a.type==='audio'?'<audio controls src="'+url+'"></audio>':a.type==='video'?'<video controls src="'+url+'"></video>':'<div class="doc">'+IC.doc+'</div>';
+      el.tabIndex=0;
+      if(!media) el.setAttribute('role','button');
+      el.setAttribute('aria-label','Take out '+nm+'?');
+      el.innerHTML=m+'<div class="nm">'+esc(nm)+'</div>'
+        +(ASK_OUT===i?'<div class="ask" role="group" aria-label="Take out '+esc(nm)+'?"><span>Take this out?</span><span class="answers"><button type="button" class="out">Take it out</button><button type="button" class="keep">Keep it</button></span></div>':'');
+      function ask(){ ASK_OUT=i; renderBoards(big); var k=box.querySelector('.ask .keep'); if(k) k.focus(); }
+      el.addEventListener('click',function(e){ if(ASK_OUT===i||e.target.closest('audio,video')) return; ask(); });
+      el.addEventListener('keydown',function(e){ if(e.target===el&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); ask(); } });
+      var out=el.querySelector('.out'), keep=el.querySelector('.keep');
+      if(out) out.addEventListener('click',function(){ ASK_OUT=-1; var n=arr(data().reference_assets).slice(); n.splice(i,1); patch('reference_assets',n); });
+      if(keep) keep.addEventListener('click',function(){ ASK_OUT=-1; renderBoards(big); });
+      box.appendChild(el);
+    });
+    var add=document.createElement('label'); add.className='addboard';
+    add.innerHTML=IC.plus+'<div>Add more</div><input type="file" class="sr" multiple aria-label="Add pictures, sound or video" />';
+    add.querySelector('input').addEventListener('change',function(){ uploadFiles(this, $('status')); });
+    box.appendChild(add);
+  }
+
+  var EDIT_MODE=!!window.__clan_edit_mode;
+  window.addEventListener('clan:editmode',function(e){ EDIT_MODE=!!(e.detail&&e.detail.active); if(phase==='doc') renderStructured(); });
+
+  // ---------- export (HTML / PDF) ----------
+  // Build a clean, print-styled, standalone document from the brief data — a
+  // light "report" look regardless of the app's immersive theme, with the
+  // brand accent picked up from theme.accent. Images are inlined as data URIs
+  // so the file is fully self-contained.
+  function inlineImages(){
+    var imgs=(data().reference_assets||[]).filter(function(a){return a.type==='image';});
+    return Promise.all(imgs.map(function(a){
+      return fetch(assetUrl(a.name)).then(function(r){return r.blob();}).then(function(b){
+        return new Promise(function(res){var fr=new FileReader();fr.onload=function(){res({label:a.label||a.name,src:fr.result});};fr.onerror=function(){res(null);};fr.readAsDataURL(b);});
+      }).catch(function(){return null;});
+    })).then(function(arr){return arr.filter(Boolean);});
+  }
+  function exportField(f){
+    var v=get(f.key);
+    if(!hasVal(v)) return '';
+    var val=f.type==='list'
+      ? '<ul>'+(Array.isArray(v)?v:[v]).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join('')+'</ul>'
+      : '<p'+(f.hero?' class="spp"':'')+'>'+esc(String(v))+'</p>';
+    return '<div class="f"><div class="fl">'+esc(f.label)+'</div>'+val+'</div>';
+  }
+  function readsOnWhite(hex){
+    var m=/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex||'').trim()); if(!m) return false;
+    var h=m[1].length===3?m[1].replace(/./g,'$&$&'):m[1];
+    var l=[0,2,4].map(function(i){ var v=parseInt(h.substr(i,2),16)/255; return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4); });
+    return 1.05/(.2126*l[0]+.7152*l[1]+.0722*l[2]+.05)>=3;
+  }
+  function buildExportHTML(){
+    return inlineImages().then(function(images){
+      // Paper is white: a theme's pale accent would leave the headings faint,
+      // so an accent under 3:1 on white prints as the house accent's ink.
+      var accent=get('theme.accent')||'#FF4F2E';
+      if(!readsOnWhite(accent)) accent='#B8321A';
+      var proj=esc(workingTitle()||((window.__CLAN__||{}).manifest||{}).title||'Untitled brief');
+      var client=esc(get('client')||'');
+      var secs={},order=[];
+      FIELDS.forEach(function(f){ if(f.key==='project_name'||f.key==='client') return; var h=exportField(f); if(!h) return;
+        if(!secs[f.sec]){secs[f.sec]=[];order.push(f.sec);} secs[f.sec].push(h); });
+      var body=order.map(function(s){return '<section><h2>'+esc(s)+'</h2>'+secs[s].join('')+'</section>';}).join('');
+      var boards=images.length?'<section class="boards"><h2>Mood board</h2><div class="grid">'+
+        images.map(function(im){return '<figure><img src="'+im.src+'"/><figcaption>'+esc(im.label)+'</figcaption></figure>';}).join('')+'</div></section>':'';
+      var date=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+      var css="*{box-sizing:border-box;margin:0;padding:0}"
+        +"@page{margin:20mm}"
+        +"body{font-family:Georgia,'Times New Roman',serif;color:#1a1a1a;background:#fff;line-height:1.6;font-size:12pt;max-width:720px;margin:0 auto;padding:40px 30px}"
+        +".ey{font-family:ui-sans-serif,system-ui,sans-serif;font-size:9pt;letter-spacing:.18em;text-transform:uppercase;color:"+accent+"}"
+        +"h1{font-family:ui-sans-serif,system-ui,sans-serif;font-size:26pt;line-height:1.1;letter-spacing:-.02em;margin:6px 0 2px;color:#111}"
+        +".cli{color:#666;font-size:12pt}"
+        +"header{border-bottom:3px solid "+accent+";padding-bottom:14px;margin-bottom:24px}"
+        +"section{margin:0 0 22px;page-break-inside:avoid;break-inside:avoid}"
+        +"h2{font-family:ui-sans-serif,system-ui,sans-serif;font-size:10pt;letter-spacing:.12em;text-transform:uppercase;color:"+accent+";border-bottom:1px solid #e2e2e2;padding-bottom:5px;margin-bottom:12px}"
+        +".f{margin:0 0 13px;page-break-inside:avoid;break-inside:avoid}"
+        +".fl{font-family:ui-sans-serif,system-ui,sans-serif;font-size:8.5pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;margin-bottom:3px}"
+        +".f p.spp{font-size:16pt;line-height:1.35;color:#111}"
+        +".f ul{margin:2px 0 0 20px}.f li{margin:4px 0}"
+        +".boards .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}"
+        +"figure{page-break-inside:avoid;break-inside:avoid}figure img{width:100%;border-radius:6px;display:block}"
+        +"figcaption{font-family:ui-sans-serif,sans-serif;font-size:8pt;color:#9a9a9a;margin-top:4px}"
+        +"footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e2e2;font-family:ui-sans-serif,sans-serif;font-size:8.5pt;color:#767676;text-align:center}";
+      // NB: keep closing tags escaped (<\/head>, <\/body>) so the host's
+      // bridge/style injectors can never mistake these literals for the
+      // document's real closing tags.
+      return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>'+proj+'</title><style>'+css+'</style><\/head><body>'
+        +'<header><div class="ey">Creative brief</div><h1>'+proj+'</h1>'+(client?'<div class="cli">'+client+'</div>':'')+'</header>'
+        +body+boards
+        +'<footer>Generated with Napkin · powered by CLAN · '+esc(date)+'</footer>'
+        +'<\/body><\/html>';
+    });
+  }
+  function doExport(kind){
+    if(!(window.clan&&window.clan.exportDoc)){ toast('Export needs the Napkin host.'); return; }
+    toast('Preparing '+kind.toUpperCase()+'…');
+    buildExportHTML().then(function(html){
+      var base=(get('project_name')||'brief').replace(/[^\w.-]+/g,'-');
+      return window.clan.exportDoc(kind,base,html);
+    }).then(function(res){ if(res&&res.ok===false) toast('Could not start export.'); })
+      .catch(function(e){ toast('Export failed: '+e); });
+  }
+  $('exHtml').addEventListener('click',function(){ doExport('html'); });
+  $('exPdf').addEventListener('click',function(){ doExport('pdf'); });
+
+  // The shell's Export offers us the job before composing one from our markup —
+  // which, since this view renders from data at runtime, would be the empty
+  // intake form. Claim it and produce the real report instead.
+  window.addEventListener('clan:export',function(e){
+    e.preventDefault();
+    doExport((e.detail&&e.detail.kind)==='html'?'html':'pdf');
+  });
+
+  // ---------- footer actions ----------
+  $('newDraft').addEventListener('click',function(){ forceIntake=true; handWrite=false; render(); });
+  // Draft it again: the whole crew on the same ask and the same files. One click arms it, a second runs it,
+  // so a stray click never redrafts a brief.
+  (function(){
+    var b=$('redraft'), armed=null, label=b.innerHTML;
+    b.addEventListener('click',function(){
+      if(!armed){ b.innerHTML=label.replace('Draft it again','Click again to redraft'); b.classList.add('armed');
+        armed=setTimeout(function(){ armed=null; b.innerHTML=label; b.classList.remove('armed'); }, 4000); return; }
+      clearTimeout(armed); armed=null; b.innerHTML=label; b.classList.remove('armed');
+      draftNow('');
+    });
+  })();
+  // "Made from" the research this brief started from, with a way back to it.
+  function renderMadeFrom(){
+    var el=$('madeFrom'); if(!el) return;
+    if(!isResearchFed()){ el.hidden=true; el.innerHTML=''; return; }
+    var e=upEntry(), t=upTitle()||'the research', p=e&&e.path;
+    el.hidden=false;
+    el.innerHTML='Made from the research <b>'+esc(t)+'</b>'+(p?' · <button type="button" class="linkbtn" id="openUp">Open the research ↗</button>'
+      :(UP.state==='ok'?' · <span class="muted">not in this workspace</span>':''));
+    var o=$('openUp'); if(o) o.addEventListener('click',function(){
+      fetch(clanScheme+'/open',{method:'POST',body:JSON.stringify({path:p})}); });
+  }
+  $('saveBtn').addEventListener('click',function(){ if(window.clan&&window.clan.requestSave) window.clan.requestSave(); toast('Saving a copy of this .clan…'); });
+  // ---------- the lock: the shared one (os-layer §7) ----------
+  // Lock brief is /approve, which the host refuses while its lock list holds
+  // anything (carried items included); the button waits on lock.can_lock and
+  // Jude names what it waits for. There is no unlocking an approve: a
+  // client's change reopens one part (§7.5.6), and locking again closes it.
+  var KIND_WORD={open_contest:'Sources disagree', unverified_finding:'Is this right?', flagged_field:'Rests on something marked wrong',
+    bad_verdict:'Marked wrong', unmerged_branch:'Copy not brought back', client_rejected:'The client said no',
+    client_rejected_parts_unknown:'Which parts?'};
+  function refOfAddress(a){ var p=String(a||'').split('#')[1]||'', m=/^(?:findings|facts|materials)\[([^\]]+)\]$/.exec(p)||/^selection\.contested\[([^\]]+)\]$/.exec(p); return m?m[1]:p; }
+  function fieldOfAddress(a){ var p=pathOf(a); if(p==null) return null; return FIELDS.filter(function(f){ return f.key===p||p.indexOf(f.key+'.')===0; })[0]||null; }
+  // One line per part and kind: a part the whole-brief check and its own
+  // check both marked wrong is one thing to settle, not two.
+  function lockItems(){
+    var v=osView(), seen={}; if(!v) return [];
+    return arr(v.attention).filter(function(a){
+      if(!a||!a.blocks_lock) return false;
+      var k=a.code+'|'+(a.address||a.decision||a.text); if(seen[k]) return false; seen[k]=1; return true;
+    }).map(function(a){
+      return {code:a.code, text:a.text||'', label:a.label||'', address:a.address||'', ref:refOfAddress(a.address), field:fieldOfAddress(a.address)};
+    });
+  }
+  // What the lock waits for besides the parts Jude already names in his line.
+  function lockOthers(){ return lockItems().filter(function(x){ return !(x.field&&x.code==='bad_verdict'); }); }
+  function lockDecisionHere(){
+    return arr((osView()||{}).decisions).filter(function(b){ return b.decision&&b.decision.kind==='approve'&&!b.superseded&&arr(b.targets).some(function(t){ return t.here!==false; }); })[0]||null;
+  }
+  function lockSig(){ var l=lockState(); return l?[l.locked, l.can_lock, arr(l.reopened).map(function(r){ return r.address; }).join(',')].join('|'):''; }
+  var LOCK_SIG='';
+  function lkItemHtml(x){
+    return '<button type="button" class="lkitem" data-addr="'+esc(x.address)+'" data-ref="'+esc(x.ref)+'" data-note="'+esc(x.text)+'">'
+      +'<span class="k">'+esc(KIND_WORD[x.code]||'Needs you')+'</span><span class="x">'+esc(x.field?partLabel(x.field):(x.label||x.text))+'</span></button>';
+  }
+  // A part of this brief is settled at the part; anything else (a carried
+  // contest, a finding) in the OS's evidence drawer.
+  function bindLkItems(el){
+    el.querySelectorAll('.lkitem').forEach(function(b){ b.addEventListener('click',function(){
+      var f=fieldOfAddress(b.getAttribute('data-addr')), F=OSF(), ref=b.getAttribute('data-ref');
+      if(f&&phase==='doc'){ gotoField(f.key); return; }
+      if(F&&ref) F.open(ref, false, F.kindOf&&F.kindOf(ref)?'':b.getAttribute('data-note'));
+    }); });
+  }
+  function lockListHtml(items, lead){
+    var more=items.length>8?items.length-8:0;
+    return fig('judge',{state:'needs-you',decorative:true})+'<div class="lb"><div><b>'+esc(JUDE)+':</b> '+esc(lead)+'</div>'
+      +'<div class="lkitems">'+items.slice(0,8).map(lkItemHtml).join('')+'</div>'+(more?'<span class="muted">and '+more+' more, in the decision panel</span>':'')+'</div>';
+  }
+  function renderLock(){
+    var lb=$('lockBtn'), l=lockState(), A=approveLocked(), L=A||get('locked')===true, re=l?arr(l.reopened):[];
+    var again=A&&re.length>0, items=lockItems(), n=items.length, wait=!!l&&!l.can_lock;
+    $('lockedBadge').style.display=L&&!again?'inline':'none';
+    lb.classList.toggle('locked', L&&!again);
+    if(again){ lb.disabled=wait; lb.innerHTML='Lock the brief again'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
+    else if(A){ lb.disabled=true; lb.textContent='✓ Locked'; lb.title='Locked. A change from here makes a new version.'; }
+    else if(L){ lb.disabled=false; lb.textContent='✓ Locked'; lb.title='Unlock this brief'; }   // a brief locked before /approve
+    else { lb.disabled=wait; lb.innerHTML='Lock brief'+(wait&&n?' <span class="n">'+n+'</span>':''); lb.title=wait?'Everything listed below has to be settled first':''; }
+    var el=$('lockList'), show=(!L||again)&&n>0;
+    el.hidden=!show; if(!show){ el.innerHTML=''; return; }
+    el.innerHTML=lockListHtml(items, 'Before the brief can lock, '+(n===1?'this needs':'these need')+' you. Tap one to settle it.');
+    bindLkItems(el);
+  }
+  $('lockBtn').addEventListener('click',function(){
+    var lb=$('lockBtn'), l=lockState(), A=approveLocked();
+    // A brief locked by its old flag unlocks as it always did.
+    if(legacyLocked()){ patch('locked',false,{actor:'human',pinned:true,action:'unlock brief',rationale:'Brief unlocked'}); return; }
+    if(A&&!(l&&arr(l.reopened).length)) return;
+    if(l&&!l.can_lock){ renderLock(); return; }
+    if(!window.clan){ toast('Locking needs the Napkin host.'); return; }
+    lb.disabled=true;
+    hostPost('/approve',{rationale:A?'Brief locked again after the client’s change':'Brief locked for handoff'}).then(function(res){
+      var F=OSF(); if(F) F.reload();
+      if(!(res&&res.ok)){ lb.disabled=false; toast(hostErrText(res)); return; }
+      if(window.napkin&&window.napkin.notify) window.napkin.notify('Brief locked',(get('project_name')||'Brief')+' is ready for handoff.');
+      if(window.clan&&window.clan.requestSave) window.clan.requestSave();
+      toast('Locked & saved as "'+(get('project_name')||'brief')+'.clan"');
+    },function(){ lb.disabled=false; toast('That did not go through. Check your connection and try again.'); });
+  });
+
+  // ---------- the title: the working title, where the recent list and the top bar read it ----------
+  // The project name, else the working title from the client and the
+  // commercial objective. Set while the document wears a title nobody chose
+  // (untitled, the app's, the research's it was spun off from, or one set
+  // here); a title the person gave it is left alone.
+  var TITLE={done:'', last:''};
+  function workingTitle(){ return String(get('project_name')||'').trim()||derivedTitle(); }
+  function syncTitle(){
+    var t=workingTitle(), m=(window.__CLAN__||{}).manifest||{};
+    if(!t) return;
+    document.title=t+' · Brief';
+    if(TITLE.done===t||m.title===t||!(window.clan&&window.clan.setTitle)) return;
+    var cur=String(m.title||'').trim(), fed=isResearchFed(), ut=fed?upTitle():'', st=fed?upStoreTitle():'';
+    var ours=!cur||/^(untitled.*|new .*|brief( maker)?.*|creative brief.*|x)$/i.test(cur)||cur===TITLE.last||cur===derivedTitle()||(!!ut&&cur===ut)||(!!st&&cur===st);
+    if(!ours) return;
+    TITLE.done=t;
+    window.clan.setTitle(t).then(function(res){ if(res&&res.ok!==false){ m.title=t; TITLE.last=t; } else TITLE.done=''; }, function(){ TITLE.done=''; });
+  }
+
+  // ---------- the OS's decision panel and client review ----------
+  // The panel may ask for a draft or one part again (clan:run); these are the
+  // tasks it may ask for, each run as this view's own button runs it.
+  var RUNNABLE=['draft_brief','regenerate_field'];
+  function announce(){ try{ window.parent.postMessage({type:'clan:can-run', tasks:RUNNABLE}, '*'); }catch(e){} }
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||typeof m!=='object') return;
+    if(m.type==='clan:can-run?'){ announce(); return; }
+    // Client review is the shell's mode; the fields snippet draws it. The
+    // brief only holds its parts still while it is on, and catches up after.
+    if(m.type==='clan:clientmode'){ var was=CLIENT.on; CLIENT={on:!!m.on, answer:m.answer||null}; if(was&&!CLIENT.on&&phase==='doc') render(); return; }
+    if(m.type!=='clan:run'||RUNNABLE.indexOf(m.task)===-1) return;
+    var input=m.input&&typeof m.input==='object'?m.input:{};
+    if(docLocked()){ toast('The brief is locked, so the crew can’t write it again.'); return; }
+    if(noMiddleware()){ toast(NO_MW); return; }
+    if(m.task==='draft_brief'){ if(!DRAFT) draftNow(String(input.prompt||'').trim()); return; }
+    var f=FIELDS.filter(function(x){ return x.key===input.field; })[0]; if(!f||REGEN[f.key]) return;
+    if(phase!=='doc'){ forceIntake=false; render(); }
+    regenField(f, String(input.guidance||'').trim());
+    toast('Asking '+DARA+' to write '+partName(f)+' again.');
+  });
+  // The panel points at a part of the brief: show it.
+  window.addEventListener('clan:focus', function(e){
+    var p=String((e.detail&&e.detail.path)||''); if(p.indexOf('#')!==-1) p=pathOf(p)||'';
+    var f=FIELDS.filter(function(x){ return x.key===p||p.indexOf(x.key+'.')===0; })[0]; if(!f) return;
+    if(phase!=='doc'){ if(!hasContent()) return; forceIntake=false; render(); }
+    gotoField(f.key);
+  });
+  // The fields snippet has read the host's decision view again: the lock and
+  // what it waits for may have moved. A change to the lock redraws the parts
+  // (their controls follow it); anything else only the lock and the crew.
+  window.addEventListener('clan:viewloaded', function(){
+    if(phase==='doc'){ if(lockSig()!==LOCK_SIG) renderStructured(); else { renderLock(); renderCrewline(); } }
+    else if(phase==='intake') renderFromUp();
+  });
+
+  // ---------- boot ----------
+  render();
+  checkMiddleware();
+  resumeJobs();
+  announce();
+  loadUpstream();
+  // A write lands: re-render, and re-read the chain it was recorded in.
+  window.addEventListener('clan:dataupdated', function(){
+    if(phase==='proc') renderProc(); render();
+    loadUpstream();
+  });
+  // The OS toolbar shows whether this app is trusted; the app does not repeat it.
+  window.addEventListener('napkin:ready', function(){ applyModeChrome(); });
+  // The OS's chrome lies over the brief as glass: the paper shows through it.
+  // The shell says what it covers, and the page keeps clear of that.
+  window.addEventListener('message', function(e){
+    var m=e.data; if(e.source!==window.parent||!m||m.type!=='clan:insets') return;
+    var r=document.documentElement.style;
+    ['top','right','bottom'].forEach(function(k){ var v=+m[k]; r.setProperty('--clan-'+k, (v>=0&&v<600?v:0)+'px'); });
+    document.documentElement.classList.toggle('clan-glass', +m.top>0);
+  });
+  // The glass takes the desk's colour, light or dark; it is asked for again when the scheme changes.
+  function askGlass(){
+    var c=getComputedStyle(document.documentElement).getPropertyValue('--desk').trim();
+    try{ window.parent.postMessage({type:'clan:chrome', mode:'glass', tint:/^#[0-9a-f]{6}$/i.test(c)?c:null}, '*'); }catch(e){}
+  }
+  askGlass();
+  window.addEventListener('clan:colorscheme', function(){ setTimeout(askGlass, 0); });
+</script>
+</body>
+</html>

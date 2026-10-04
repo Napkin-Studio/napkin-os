@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = ["crates/clan-sdk", "crates/clan-cli", "crates/napkin-host", "crates/napkin-web", "crates/napkin-wasm", "app/src-tauri"]
+
+[workspace.package]
+# Single source of truth for CLI + Tauri bundle versions. CI overwrites this
+# from the pushed git tag (see .github/workflows/release.yml); this committed
+# value is the fallback for local / non-tag builds.
+version = "1.2.1"
+edition = "2021"
+license = "MPL-2.0"
+repository = "https://github.com/batunii/napkin-os"
+authors = ["Sai Eeshwar", "Shreyansh Soni"]
+rust-version = "1.74"
+description = "CLAN — Context and Live Agent Notation: a portable file format for agent-readable documents and pipelines."
+keywords = ["clan", "agent", "ai", "document", "pipeline"]
+categories = ["encoding", "file-formats", "parser-implementations"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4", "v5"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# default features pull resolve-http -> reqwest -> hyper -> tokio, which is a
+# non-starter for wasm32 and dead weight everywhere else: CLAN schemas are
+# embedded in the archive, so no $ref is ever resolved over the network.
+jsonschema = { version = "0.26", default-features = false }
+lol_html = "2.1.0"
+thiserror = "2"
+# App signing (registered-app trust gate): asymmetric ed25519 signatures.
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+tempfile = "3"

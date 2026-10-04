@@ -1,0 +1,185 @@
+# Campaign Research pipeline contract.
+# Travels verbatim into every instance (CLAN instantiation copies all members),
+# so any agent or backend continuing a Campaign Research .clan knows the pipeline
+# it must speak. This is a DECLARATION (decision M2): each task names a handler,
+# name@major, which the middleware resolves against its registry. An unknown
+# handler, task or version is a hard error, never a fall-through (M4).
+# No handler code exists for these yet. Contract: docs/contracts/campaign-clan.md.
+pipeline: napkin-campaign-research
+version: 1
+request_kind: middleware
+contract: campaign-clan/1          # docs/contracts/campaign-clan.md
+
+tasks:
+  extract_ask:
+    handler: extract_ask@1
+    reads:
+      - the user's prompt
+      - materials, with host-extracted text (the client's brief, deck or email is the source of record)
+      - brand layer — the roster row (category array, markets, client), performance facts
+      - category layer — the competitor set for the leaf, codes, rhythm
+    order:
+      - deterministic layer lookups; each value found is written origin proposed, citing the fact ids it pinned
+      - ONE enum-constrained structured-output call over the prompt and the materials; abstain where nothing supports a value
+      - confirm a short list only — category pick, market, subject vs comparator brands
+      - write back roster corrections to the brand layer
+    writes: campaign.* envelopes (origin extracted or proposed), shared/facts.yaml pins, materials
+    never:
+      - writes a field whose current origin is confirmed or stated, or that carries an unanswered bad verdict — it proposes instead, and a human decides
+      - defaults a field; an unsupported field is left out
+      - gates on the model's self-reported confidence
+    decision: one chain entry recording handler, backend, the materials read and every field it abstained on
+
+  research_lens:
+    handler: research_lens@1
+    fan_out: lens x market         # one run per (selection lens, campaign.markets[i]), in parallel
+    lenses: [market_structure, brands_positioning, consumer_culture, category_codes, rhythm_moments, media_spend, regulation_clearance, effectiveness_evidence]
+    branch: "agents/<user>.research_lens.<lens>-<market>/"   # user comes from Ctx, never the request
+    reads: retrieval pairs (below) for ONE market, plus the lens
+    writes:
+      - fact rows to the brand or category layer (needs no lease)
+      - on its branch: proposed pins, selection.lenses_run / coverage_by_market / gaps entries
+    merge: >
+      by entity + key + market. Same identity, same value: one pin, sources unioned.
+      Different market: two facts, two pins. Same identity, different values (including
+      a market-independent key two market runs disagree on): a contest in
+      selection.contested, status open, nothing picked. Merged coverage per lens:
+      filled only if filled in every market, empty only if empty in every market,
+      otherwise thin.
+
+  synthesise_findings:
+    handler: synthesise_findings@1
+    reads: shared/facts.yaml (pins only — never the raw layer)
+    writes: shared/findings.yaml entries, status proposed, method synthesis; may propose campaign.audience and campaign.in_market citing them
+    confidence: derived from the cited pins, never produced by the model
+    input: "{ lenses?, redo?: audience }"   # redo: audience — propose it again without rejected findings; replaces only an audience the agent proposed
+
+  # ---- the chat intake (docs/contracts/middleware-api.md §8, Contract 3 §16-17) ----
+  start_campaign:
+    handler: start_campaign@1
+    job: long                      # ONE middleware job; orchestration lives in the middleware (M1)
+    input: "{ prompt, attachments: [{ material_id, name, sha256, text? }] }"
+    stages: [extract, identify, select, research, synthesise, report]
+    stage_rules:
+      extract: as extract_ask (deterministic lookups, then ONE structured-output call), except campaign.brand, campaign.client_org and campaign.categories, which identify writes
+      identify: >
+        subject brand — exactly one brand clearly the client (named in the prompt as ours/the client,
+        a "Brand:" label, or the only brand in the material) is written extracted with its span; several
+        brands, or subject vs comparator unclear, is needs_input (options: the brands found + "None of
+        these"); none is needs_input, free text. Categories — from the brand's roster row, proposed citing
+        the pin; else a ranked array of at most two candidates is needs_input (options: the candidates +
+        "Something else"). Markets — none in the material is needs_input, free text. Never classify by
+        retrieving; never guess the subject brand.
+      select: which lenses x campaign.markets this prompt needs; the rest go to selection.lenses_skipped with the reason
+      research: as research_lens, over the selected lens x market pairs only
+      synthesise: as synthesise_findings
+      report: composes data.report from the document as the host holds it, once every earlier stage has landed
+    writes: campaign.* envelopes (extracted or proposed), materials, selection.*, shared/facts.yaml, shared/findings.yaml, intake.messages (role agent only), report
+    never:
+      - writes a field the person answered — the view writes the answer, confirmed or stated, as a human write
+      - writes a role user message, or a field whose origin is confirmed or stated
+    staged: a reply may carry a change for the stages finished since the previous one; every write in it carries a decision whose targets name it
+
+  answer_question:
+    handler: answer_question@1
+    continues: start_campaign      # the reply describes the start_campaign job; its task and handler are the job's
+    input: "{ job_id, question_id, option_id? | text? }"   # exactly one of option_id and text
+    precondition: the job is needs_input and question_id is job.question.id
+
+  compose_report:
+    handler: compose_report@1
+    job: short                     # done, with its change, in one response ("Refresh report")
+    input: "{}"
+    reads: the document as it now stands — campaign, selection, pins, findings (a rejected finding is never cited)
+    writes: report (replaced whole), one intake message (role agent, stage report)
+
+  ask_research:
+    handler: ask_research@1
+    job: long                      # one question; a search only when the facts here do not answer it
+    input: "{ question, lens? }"   # lens: the section it was asked in; none = something the research did not cover
+    order:
+      - ONE structured-output call answers it from the pins and findings the document holds; every sentence is cite-checked as a report claim
+      - jev says whether that answer answers the question; when it does not (or nothing could be said), the lens's researchers search with the question as their focus, and it is answered again over everything
+    writes: asks[<id>] (the question, its answer, whether it searched), and what a search found as pins, sources and contests
+    never:
+      - changes the lens's runs, coverage or gaps (a search on one question is not the lens's run)
+      - shows jev's scores on the page; they are in the decisions' reasoning
+    decision: check_answer (jev's verdict, search or not), the search's research decisions, then ask_research (the answer)
+
+  reconsider_fact:
+    handler: reconsider_fact@1
+    job: long                      # asked by the view once a person marks a fact wrong (a bad verdict on facts[...])
+    input: "{ fact_id, why, verdict_id? }"
+    order:
+      - the fact goes to selection.excluded with the person's reason; nothing cites it from here on
+      - every finding citing it is checked without it (nothing else left = it falls; otherwise jev says whether what remains still supports it)
+      - ONE structured-output call reworks the fallen findings from what remains (cite-checked, proposed for a person); each answer citing it is answered again; the report is recomposed without it
+    never:
+      - rejects a finding (a person's); the host flags a verified finding on an excluded fact until a person settles it
+    decision: reconsider_fact (what stood, what was reworked), then the reworked findings, the answers and the report
+
+  # ---- a person's review (Contract 3 §6.2, Contract 4 §4) ----
+  verify_finding:
+    handler: verify_finding@1
+    job: short                     # asked by the host's /verify, never by the view
+    input: "{ finding, by: human:<id>, decision_id }"
+    reads: the finding and the pins it cites
+    writes: >
+      the knowledge layer only — a human:<id> source at tier reviewer-verified, and the finding
+      as a fact, method synthesis, under the host's decision id. The host pins it and records
+      the verification; the reply's change is null.
+
+  correct_fact:
+    handler: correct_fact@1
+    job: short                     # asked by the host's /correct, never by the view
+    input: "{ fact, value, source_uri?, note, by: human:<id>, decision_id }"
+    writes: >
+      the knowledge layer only — the person as a source (or the link they gave), and a new
+      row for the same fact with their value; the host pins it and keeps the old pin, replaced.
+
+# R1 (Contract 4 §3): which middleware decisions must carry reasoning. The host
+# requires it on every pin, contest, finding and verdict, and every proposal,
+# whatever an app says; this adds the edits that write the agent-written parts
+# of a campaign. An edit that only posts a chat message (intake.messages) or
+# indexes a material may omit it (it should still send it).
+reasoning:
+  edits: [campaign, selection, report]
+
+# Campaign -> retrieval pairs. The handoff mapping is stored here so it travels
+# with every document. Scope (tenant, brand) is NEVER in this mapping: the
+# middleware injects it from Ctx.
+retrieval_pairs:
+  brand: campaign.brand.value.name
+  client: campaign.client_org.value.name
+  category: campaign.categories.value[*]          # one pair per category
+  campaign_type: campaign.campaign_type.value
+  problem: campaign.problem.value
+  objective: campaign.objective.value
+  audience: campaign.audience_stated.value
+  competitors: campaign.competitor_set.value[*].name
+  market: campaign.markets.value[*]               # one pair per market: one research run each
+
+# Per-field merge policy for branch merges (Contract 4 §4). ask is the default;
+# an undeclared field is ask; an unknown policy name is a hard error.
+merge_policies:
+  campaign.*: ask
+  selection.lenses_run: append
+  selection.gaps: append
+  selection.excluded: append
+  selection.contested: ask
+  selection.coverage: ask
+  selection.lenses_skipped: append
+  # A map keyed by message id: branches add keys and a key-wise union keeps both.
+  # Ids never collide across writers; the same id with different content is ask.
+  intake.messages: append
+  # A map keyed by ask id, one per question asked; the same key is the same answer.
+  asks: append
+  # Written by the middleware only and replaced wholesale on every write; the
+  # newest composition wins. The view flags it out of date against based_on.
+  report: last-write
+  # `projection` is deliberately absent: it is never merged, the host rebuilds it
+  # from shared/facts.yaml and shared/findings.yaml after the merge commits.
+
+errors: non-2xx status; the host strips error bodies. A 200 body must never
+  contain an `error` key. Extraction output is untrusted until validated against
+  agent/output-schema.json field by field (W1-C3 caution, until W2-M5).
