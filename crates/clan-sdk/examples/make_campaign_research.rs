@@ -204,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             app_id: APP_ID.into(),
             // 0.2: the Plan-zone identity; figures from the shared snippet.
             // 0.4: its card on the OS home (app.home).
-            version: "0.4.15".into(),
+            version: "0.4.16".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
@@ -222,6 +222,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 crew: vec!["extract".into(), "market_structure".into(), "positioning".into(), "culture".into(), "synthesis".into(), "drafter".into()],
                 noun: vec!["research".into(), "research".into()],
                 untitled: Some("Untitled research".into()),
+                // "Napkin Studio Research" in the OS bar; it shares the OS's face (Geist).
+                brand: Some("Research".into()),
+                ..Default::default()
             }),
         },
         MakeTemplateOptions::default(),

@@ -156,6 +156,18 @@ pub struct AppHome {
     /// A new document's name until it has its own: "Untitled brief".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub untitled: Option<String>,
+    /// The app's own name as the OS bar says it after "Napkin Studio":
+    /// "Research", "Briefs". Absent, the bar says the app's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brand: Option<String>,
+    /// The type that name is set in: a CSS font-family list, the app's own
+    /// face ("'Fraunces', Georgia, serif"). Absent, the OS's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brand_font: Option<String>,
+    /// Where that face loads from, when the OS does not carry it: a Google
+    /// Fonts stylesheet (https://fonts.googleapis.com/css2?...), nothing else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brand_font_url: Option<String>,
 }
 
 /// Declares what a template app accepts as a spin-off source and where the

@@ -13,6 +13,8 @@ import { signOut } from '../shell/signOut'
 import './chrome.css'
 
 interface Props {
+  /** The open document's tool: "Napkin Studio <name>" in the tool's colour and face. */
+  tool?: ToolBrand | null
   title?: string
   isTemplate?: boolean
   trusted?: boolean
@@ -188,8 +190,29 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
  * badge only when something is wrong with the file; "Done editing" in the bar
  * itself whenever edit mode is on, so it is never hidden while it is.
  */
+/** A tool as the bar names it: its own name, colour and face (its app.home). */
+export interface ToolBrand {
+  name: string
+  colour?: string | null
+  font?: string | null
+}
+
+/** "Napkin Studio" in the OS's face, then the tool's name in the tool's own. */
+function BarBrand({ tool, compact }: { tool?: ToolBrand | null; compact?: boolean }) {
+  if (!tool) return <StudioLogo size={15} compact={compact} />
+  return (
+    <span className="ch-brand">
+      <StudioLogo size={15} label="Napkin Studio" />
+      <span className="ch-brand-tool" style={{
+        ...(tool.colour ? { ['--tool' as string]: tool.colour } : {}),
+        ...(tool.font ? { fontFamily: tool.font } : {}),
+      }}>{tool.name}</span>
+    </span>
+  )
+}
+
 export default function Toolbar({
-  title, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
+  title, tool, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
   onClientReview, clientAnswered, clientMode, docPath, onSpinoff, sidebarOpen, loading, validation, saved,
 }: Props) {
   const invalid = !!validation && validation !== 'OK'
@@ -227,7 +250,7 @@ export default function Toolbar({
     return (
       <div className="ch-bar ch-bar-mode" role="region" aria-label="Client review">
         <button className="ch-bar-home" onClick={onHome} title="Back to the studio">
-          <StudioLogo size={15} compact />
+          <BarBrand tool={tool} compact />
         </button>
         <span className="ch-bar-title">{title ?? 'No file open'}</span>
         <span className="ch-modetag"><span className="ch-modetag-dot" aria-hidden />Client review</span>
@@ -243,7 +266,7 @@ export default function Toolbar({
   return (
     <div className="ch-bar">
       <button className="ch-bar-home" onClick={onHome} title="Back to the studio">
-        <StudioLogo size={15} compact />
+        <BarBrand tool={tool} compact />
       </button>
       <span className="ch-bar-title">{loading ? <LogoSpinner size="xs" label="Loading…" /> : (title ?? 'No file open')}</span>
       {isTemplate && <span className="ch-chip ch-chip-accent">Template</span>}

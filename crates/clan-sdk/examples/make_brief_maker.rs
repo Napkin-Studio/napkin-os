@@ -241,7 +241,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.6: a brief can start from research, carried whole.
             // 0.7: its card on the OS home (app.home).
             // 0.8: how the brief looks is one rolling entry (x-clan-appearance).
-            version: "0.9.3".into(),
+            version: "0.9.4".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some(SCHEMA_PATH.into()),
@@ -266,6 +266,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 crew: vec!["extract".into(), "drafter".into(), "judge".into()],
                 noun: vec!["brief".into(), "briefs".into()],
                 untitled: Some("Untitled brief".into()),
+                // "Napkin Studio Briefs" in the OS bar; it shares the OS's face (Geist).
+                brand: Some("Briefs".into()),
+                ..Default::default()
             }),
         },
         MakeTemplateOptions::default(),

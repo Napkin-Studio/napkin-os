@@ -82,6 +82,11 @@ export default function App() {
   const refreshApps = useCallback(async () => {
     try { setInstalled(await host.listApps()) } catch (e) { console.error(e) }
   }, [])
+  // Once at start too: a document opened straight from a link (or a reload)
+  // names its tool in the bar from this list, without the home ever showing.
+  // A load from the host: the state is set when it answers, not in the effect.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void refreshApps() }, [refreshApps])
 
   // Go home. The host still opens its home document, so its session stands
   // where it always has between documents, but the shell draws the home itself
@@ -366,6 +371,7 @@ export default function App() {
       {screen === 'app' && running ? (
         <AppHost
           running={running}
+          tool={installed.find(a => a.app_id === running.open.manifest.app?.app_id) ?? null}
           onOpenDocument={openPath}
           onHome={goHome}
           onOpenFile={handleOpenFile}

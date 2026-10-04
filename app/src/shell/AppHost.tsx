@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Toolbar from '../components/Toolbar'
+import Toolbar, { type ToolBrand } from '../components/Toolbar'
 import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import WorkspaceView from './WorkspaceView'
@@ -15,7 +15,7 @@ import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nou
 import type { Draft, Mark } from './clientReview/review'
 import { refreshApp } from './appExport'
 import { host } from '../host'
-import type { ClientPartRef, ClientWho } from '../host'
+import type { ClientPartRef, ClientWho, InstalledApp } from '../host'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import type { RunningApp } from './types'
 import { docTitle } from './docTitle'
@@ -23,6 +23,8 @@ import '../components/chrome.css'
 import './clientReview/ClientReview.css'
 
 interface Props {
+  /** The installed tool this document belongs to, when it is one (its app.home names it). */
+  tool?: InstalledApp | null
   running: RunningApp
   onHome: () => void
   onOpenFile: () => void
@@ -39,7 +41,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument }: Props) {
+export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool }: Props) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   // Edit mode is the OS's: the app's fields become editable while it is on.
@@ -50,6 +52,30 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // the bar and client review read the lock and the client's answers from it.
   const decisions = useDecisions(docPath)
   const noun = nounOf(open.manifest.app?.app_id)
+  // The tool, as its manifest names it (app.home.brand, else its name); a
+  // document made before tools named themselves still finds its tool.
+  const brand: ToolBrand | null = open.manifest.app ? {
+    name: tool?.home?.brand || tool?.name || open.manifest.app.name,
+    colour: tool?.home?.colour ?? null,
+    font: tool?.home?.brand_font ?? null,
+  } : null
+  const barTitle = open.is_template ? open.manifest.title
+    : docTitle(open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text
+  // The tab says it too: "Napkin Studio Research — Bulmers · Ireland".
+  const brandName = brand?.name
+  useEffect(() => {
+    document.title = brandName ? `Napkin Studio ${brandName} — ${barTitle}` : `${barTitle} — Napkin Studio`
+    return () => { document.title = 'Napkin Studio' }
+  }, [brandName, barTitle])
+  const fontUrl = tool?.home?.brand_font_url
+  useEffect(() => {
+    // A tool's own face loads once, from Google Fonts only (the shell's own source).
+    if (!fontUrl || !/^https:\/\/fonts\.googleapis\.com\/css2\?/.test(fontUrl)) return
+    if (document.querySelector(`link[data-tool-font="${CSS.escape(fontUrl)}"]`)) return
+    const l = document.createElement('link')
+    l.rel = 'stylesheet'; l.href = fontUrl; l.dataset.toolFont = fontUrl
+    document.head.appendChild(l)
+  }, [fontUrl])
 
   // ── client review (OS-layer contract §7.5) ──────────────────────────────
   // The shell's second mode, like edit mode: on only while the document is
@@ -202,7 +228,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       {/* Accent strip — recolors with a trusted app's theme (clan://set-theme). */}
       <div className="ch-strip" />
       <Toolbar
-        title={open.is_template ? open.manifest.title : docTitle(open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text}
+        title={barTitle}
+        tool={brand}
         isTemplate={open.is_template}
         trusted={open.trusted}
         onHome={onHome}

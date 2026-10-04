@@ -75,6 +75,12 @@ export interface AppHome {
   noun?: string[]
   /** A new document's name until it has its own. */
   untitled?: string
+  /** The app's own name after "Napkin Studio" in the OS bar: "Research". */
+  brand?: string
+  /** The CSS font-family that name is set in, when the app has its own face. */
+  brand_font?: string
+  /** A Google Fonts stylesheet for that face, when the OS does not carry it. */
+  brand_font_url?: string
 }
 
 /**

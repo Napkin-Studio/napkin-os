@@ -27,7 +27,7 @@ export function StudioMark({ size = 22, style, title }: { size?: number; style?:
 }
 
 /** Mark + "Napkin Studio OS". */
-export function StudioLogo({ size = 17, compact = false }: { size?: number; compact?: boolean }) {
+export function StudioLogo({ size = 17, compact = false, label }: { size?: number; compact?: boolean; label?: string }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--f-display)',
@@ -35,7 +35,7 @@ export function StudioLogo({ size = 17, compact = false }: { size?: number; comp
       whiteSpace: 'nowrap',
     }}>
       <StudioMark size={Math.round(size * 1.3)} />
-      {compact ? 'Napkin' : 'Napkin Studio OS'}
+      {label ?? (compact ? 'Napkin' : 'Napkin Studio OS')}
     </span>
   )
 }
