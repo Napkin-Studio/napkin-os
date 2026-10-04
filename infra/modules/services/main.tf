@@ -19,8 +19,8 @@ locals {
   apps    = toset(["web", "middleware"])
   https   = var.certificate_arn != ""
   ns      = "svc.${var.name}"
-  mw_port = 8798 # the middleware refuses 8080 (local development keeps it for napkin-web)
-  mw_url  = "http://middleware.${local.ns}:${local.mw_port}"
+  mw_port = 8798                                                      # the middleware refuses 8080 (local development keeps it for napkin-web)
+  mw_url  = "http://middleware.${local.ns}:${local.mw_port}/v1/tasks" # the endpoint, as workspace.yaml names it
 }
 
 # ── images ────────────────────────────────────────────────────────────────────
@@ -386,6 +386,7 @@ resource "aws_ecs_task_definition" "web" {
       { name = "NAPKIN_COGNITO_REGION", value = var.region },
       { name = "NAPKIN_COGNITO_CLIENT_ID", value = var.cognito_client_id },
       { name = "NAPKIN_PROXY_MIDDLEWARE_URL", value = local.mw_url },
+      { name = "NAPKIN_AGENT_CAP", value = "400" }, # task submissions per agency per server start (meter.rs)
     ], local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [])
     secrets = [{ name = "NAPKIN_SESSION_SECRET", valueFrom = var.session_secret_arn }]
     logConfiguration = {

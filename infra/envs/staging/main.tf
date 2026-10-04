@@ -278,6 +278,9 @@ module "services" {
     # it works as our own test tenant, whose database exists (agencies.sandbox).
     NAPKIN_DEV_ORG      = "org/sandbox"
     NAPKIN_MODEL_ROUTES = "/srv/napkin/server/model-routes.json"
+    # As the local stack runs it (napkin-os-wt/stack/start-integrate.sh)
+    NAPKIN_BRIEF_JUDGE        = "jev"
+    NAPKIN_BRIEF_RESEARCH_MAX = "6"
   }
   # The knowledge layers, in process (pg.py): the shared category database and
   # each agency's own. Each secret is the JSON the database module wrote.
