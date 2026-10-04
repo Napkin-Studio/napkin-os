@@ -10,6 +10,8 @@
 #   storage   S3: corpus (ingestion input), blobs, backups
 #   admin     an SSM-only host to run migrations, ingestion and psql
 #   identity  the Cognito user pool people sign in with (user@agency)
+#   services  stage 2: ECS Fargate (napkin-web behind a load balancer, the
+#             middleware on a private address), ECR, EFS, the deploy role
 #
 # Services (web, middleware, layers, retrieval) come in stage 2 and join the
 # `data_clients` security group to reach Aurora and Qdrant.
@@ -252,4 +254,21 @@ resource "aws_budgets_budget" "monthly" {
     notification_type          = "ACTUAL"
     subscriber_email_addresses = var.budget_emails
   }
+}
+
+# Stage 2: the services the pipeline deploys (napkin-web, the middleware).
+module "services" {
+  source                         = "../../modules/services"
+  name                           = local.name
+  region                         = var.region
+  vpc_id                         = module.network.vpc_id
+  public_subnet_ids              = module.network.public_subnet_ids
+  private_subnet_ids             = module.network.private_subnet_ids
+  data_clients_security_group_id = aws_security_group.data_clients.id
+  kms_key_arn                    = aws_kms_key.data.arn
+  session_secret_arn             = module.identity.session_secret_arn
+  cognito_client_id              = module.identity.client_id
+  github_repository              = var.github_repository
+  certificate_arn                = var.certificate_arn
+  middleware_count               = var.middleware_count
 }

@@ -107,10 +107,20 @@ pub fn agent_base_url(cfg: &dyn HostConfig) -> String {
     DEFAULT_AGENT_URL.to_string()
 }
 
+/// `NAPKIN_PROXY_<KIND>_URL` (`NAPKIN_PROXY_MIDDLEWARE_URL`): a kind's
+/// endpoint from the environment, for a container with no config file.
+fn env_endpoint(kind: &str) -> Option<String> {
+    let key = format!(
+        "NAPKIN_PROXY_{}_URL",
+        kind.to_ascii_uppercase().replace(['-', '.'], "_")
+    );
+    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
+}
+
 /// Resolve a `request_kind` to its endpoint + auth. A kind configured in
-/// `workspace.yaml` wins; otherwise everything falls back to the single uniform
-/// agent URL (env / `agent_url` / default) so one value serves every kind in
-/// dev. Returns `(url, auth_kind, key)`.
+/// `workspace.yaml` wins, then `NAPKIN_PROXY_<KIND>_URL`; otherwise everything
+/// falls back to the single uniform agent URL (env / `agent_url` / default) so
+/// one value serves every kind in dev. Returns `(url, auth_kind, key)`.
 pub fn resolve_proxy(cfg: &dyn HostConfig, kind: &str) -> (String, Option<String>, Option<String>) {
     if let Some(ws) = cfg.workspace() {
         if let Some(p) = ws.proxies.get(kind) {
@@ -118,13 +128,17 @@ pub fn resolve_proxy(cfg: &dyn HostConfig, kind: &str) -> (String, Option<String
             return (p.endpoint.clone(), p.auth_kind.clone(), key);
         }
     }
+    if let Some(url) = env_endpoint(kind) {
+        return (url, None, None);
+    }
     (agent_base_url(cfg), None, None)
 }
 
-/// True when `workspace.yaml` names an endpoint for `kind` itself, rather than
-/// leaving it to the agent-URL fallback.
+/// True when `workspace.yaml` or `NAPKIN_PROXY_<KIND>_URL` names an endpoint
+/// for `kind` itself, rather than leaving it to the agent-URL fallback.
 pub fn configured(cfg: &dyn HostConfig, kind: &str) -> bool {
     cfg.workspace()
         .and_then(|ws| ws.proxies.get(kind).map(|p| !p.endpoint.trim().is_empty()))
         .unwrap_or(false)
+        || env_endpoint(kind).is_some()
 }

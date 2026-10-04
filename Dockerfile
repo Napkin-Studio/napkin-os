@@ -69,9 +69,6 @@ COPY app/templates/ ./app/templates/
 # part of this image, so drop it rather than resolve its whole dependency tree.
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
 RUN cargo build --release -p napkin-web
-# Bake Brief Maker in, so a first visitor lands on a launcher with an app in it.
-RUN cargo run --release -p clan-sdk --example make_brief_maker \
- && mkdir -p /seed && mv brief-maker.app.clan /seed/
 
 # ── runtime ──────────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
@@ -87,13 +84,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copy but the binary, the shell, and one seed template.
 WORKDIR /srv/napkin
 COPY --from=host /src/target/release/napkin-web /usr/local/bin/napkin-web
-COPY --from=host /seed/ /srv/napkin/seed/
+# Every workspace starts with both tools (the example document is not a template).
+COPY --from=device /out/apps/ /srv/napkin/seed/
+RUN rm -f /srv/napkin/seed/*.example.clan
 COPY --from=shell /src/app/dist/ /srv/napkin/dist/
 
 ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_STATIC=/srv/napkin/dist \
     NAPKIN_WEB_SEED=/srv/napkin/seed \
     PORT=8080
+# Unprivileged, and the uid the EFS access point writes as (infra/modules/services).
+RUN useradd --uid 10001 --user-group --no-create-home napkin \
+ && mkdir -p /data && chown napkin:napkin /data
+USER napkin
 VOLUME ["/data"]
 EXPOSE 8080
 

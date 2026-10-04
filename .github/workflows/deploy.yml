@@ -1,0 +1,126 @@
+name: Deploy
+
+# A push to main builds both images and deploys staging. Production is the
+# same pipeline, run by hand (Actions → Deploy → Run workflow → production):
+# the organisation's plan has no reviewer gate on private repositories, so the
+# deliberate run is the approval. Only people with write access can run it.
+#
+# AWS is reached through an OIDC role (infra/modules/services: the main
+# branch only), named in the repository variables:
+#   AWS_REGION                       eu-west-1 by default
+#   AWS_DEPLOY_ROLE_ARN_STAGING      terraform output deploy_role_arn (staging)
+#   AWS_DEPLOY_ROLE_ARN_PRODUCTION   the same, from the production stack
+# Without the role for an environment the images are built and checked, and
+# nothing is pushed or deployed.
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [ staging, production ]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TARGET: ${{ inputs.environment || 'staging' }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+  ROLE: ${{ (inputs.environment || 'staging') == 'production' && vars.AWS_DEPLOY_ROLE_ARN_PRODUCTION || vars.AWS_DEPLOY_ROLE_ARN_STAGING }}
+
+jobs:
+  images:
+    name: Build ${{ inputs.environment || 'staging' }} images
+    runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.ecr.outputs.registry }}
+      pushed: ${{ steps.mode.outputs.push }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: mode
+        name: Push, or only build
+        run: |
+          if [ -n "$ROLE" ]; then echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No deploy role for $TARGET in the repository variables: building the images only."
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.mode.outputs.push == 'true'
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        if: steps.mode.outputs.push == 'true'
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: napkin-web (the studio)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: ${{ steps.mode.outputs.push == 'true' }}
+          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/web:${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Middleware
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          push: ${{ steps.mode.outputs.push == 'true' }}
+          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/middleware:${{ github.sha }}
+          cache-from: type=gha,scope=middleware
+          cache-to: type=gha,scope=middleware,mode=max
+
+  deploy:
+    name: Deploy ${{ inputs.environment || 'staging' }}
+    needs: images
+    if: needs.images.outputs.pushed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        service: [ middleware, web ]
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The service's current task definition, with this build's image in it.
+      - name: Current task definition
+        run: |
+          aws ecs describe-task-definition --task-definition "napkin-$TARGET-${{ matrix.service }}" \
+            --query taskDefinition > task.json
+
+      - id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task.json
+          container-name: ${{ matrix.service }}
+          image: ${{ needs.images.outputs.registry }}/napkin-${{ env.TARGET }}/${{ matrix.service }}:${{ github.sha }}
+
+      # A new revision, rolled out; ECS rolls back by itself when the new tasks
+      # do not come up healthy (the services' deployment circuit breaker).
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ matrix.service }}
+          cluster: napkin-${{ env.TARGET }}
+          wait-for-service-stability: ${{ matrix.service == 'web' }}

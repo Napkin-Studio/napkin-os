@@ -90,3 +90,21 @@ variable "monthly_card_budget_usd" {
   type        = number
   default     = 5
 }
+
+variable "github_repository" {
+  description = "owner/repo whose main branch deploys"
+  type        = string
+  default     = "Napkin-Studio/napkin-os"
+}
+
+variable "certificate_arn" {
+  description = "ACM certificate for the studio's HTTPS; empty serves HTTP on the load balancer's own name"
+  type        = string
+  default     = ""
+}
+
+variable "middleware_count" {
+  description = "Middleware tasks: 0 until the knowledge layers run on AWS"
+  type        = number
+  default     = 0
+}

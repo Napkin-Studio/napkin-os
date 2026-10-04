@@ -12,6 +12,10 @@ mock_provider "aws" {
   mock_data "aws_subnet" {
     defaults = { availability_zone = "eu-west-1a" }
   }
+  # a policy document plans as a JSON policy, as the real one renders
+  mock_data "aws_iam_policy_document" {
+    defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
+  }
   mock_resource "aws_rds_cluster" {
     defaults = {
       master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:eu-west-1:111111111111:secret:master", kms_key_id = "k", secret_status = "active" }]

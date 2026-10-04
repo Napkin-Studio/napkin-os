@@ -74,3 +74,16 @@ output "session_secret_arn" {
   description = "NAPKIN_SESSION_SECRET for napkin-web (Secrets Manager)"
   value       = module.identity.session_secret_arn
 }
+
+output "studio_url" {
+  value = module.services.url
+}
+
+output "deploy_role_arn" {
+  description = "Set as the GitHub variable AWS_DEPLOY_ROLE_ARN"
+  value       = module.services.deploy_role_arn
+}
+
+output "ecr" {
+  value = module.services.ecr
+}
