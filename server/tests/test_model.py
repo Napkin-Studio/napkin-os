@@ -319,6 +319,74 @@ def test_bedrock_refusing_structured_output_under_schema_auto_switches_that_mode
     assert u.by_model == {"anthropic.claude-opus-5": {"calls": 2, "input_tokens": 14, "output_tokens": 6}}
 
 
+def test_bedrock_refusing_one_schema_as_too_large_puts_only_that_schema_in_the_prompt():
+    # Bedrock, Opus 4.6 (2026-10-04): enforced schemas work, but a large one is a 400
+    # "The compiled grammar is too large ...". Only that schema moves to the prompt.
+    big = {**SCHEMA, "title": "big"}
+    calls = []
+
+    def handler(req):
+        import httpx2
+        body = json.loads(req.content)
+        calls.append(body)
+        fmt = (body.get("output_config") or {}).get("format")
+        if fmt and fmt.get("schema", {}).get("title") == "big":
+            return httpx2.Response(400, json={"type": "error", "error": {
+                "type": "invalid_request_error", "message": "The compiled grammar is too large, which would "
+                "cause performance issues. Simplify your tool schemas or reduce the number of strict tools."}})
+        return httpx2.Response(200, json=_message(json.dumps(GOOD)))
+
+    p = ModelPort(AnthropicWire(_mantle(handler, api_key="t"), api="bedrock"), "anthropic.claude-opus-4-6", 30)
+    u = Usage()
+    assert p.call("p", "s", {}, big, usage=u, attribution="t") == GOOD
+    assert len(calls) == 2 and "format" not in (calls[1].get("output_config") or {})
+    # the big schema goes straight to the prompt next time; a small one stays enforced
+    assert p.call("p", "s", {}, big, usage=u, attribution="t") == GOOD
+    assert "format" not in (calls[2].get("output_config") or {})
+    assert p.call("p", "s", {}, SCHEMA, usage=u, attribution="t") == GOOD
+    assert calls[3]["output_config"]["format"]["type"] == "json_schema"
+    assert len(calls) == 4
+
+
+@pytest.mark.parametrize("said", [
+    "The compiled grammar is too large, which would cause performance issues.",
+    "Schemas contains too many parameters with union types (18 parameters with type arrays or anyOf). This causes "
+    "exponential compilation cost. Reduce the number of nullable or union-typed parameters (limit: 16 parameters "
+    "with unions).",
+])
+def test_bedrock_compile_limits_move_only_that_schema_to_the_prompt(said):
+    calls = []
+
+    def handler(req):
+        import httpx2
+        body = json.loads(req.content)
+        calls.append(body)
+        if "format" in (body.get("output_config") or {}):
+            return httpx2.Response(400, json={"type": "error", "error": {"type": "invalid_request_error",
+                                                                          "message": said}})
+        return httpx2.Response(200, json=_message(json.dumps(GOOD)))
+
+    p = ModelPort(AnthropicWire(_mantle(handler, api_key="t"), api="bedrock"), "anthropic.claude-opus-4-6", 30)
+    assert p.call("p", "s", {}, SCHEMA, usage=Usage(), attribution="t") == GOOD
+    assert len(calls) == 2 and p._unenforced == set() and len(p._too_large) == 1
+
+
+def test_a_large_schema_under_schema_enforced_is_unsupported_and_never_resent():
+    calls = []
+
+    def handler(req):
+        import httpx2
+        calls.append(json.loads(req.content))
+        return httpx2.Response(400, json={"type": "error", "error": {
+            "type": "invalid_request_error", "message": "The compiled grammar is too large"}})
+
+    routes = Routes("bedrock", "anthropic.claude-opus-4-6", source='{"default": {"schema": "enforced"}}')
+    with pytest.raises(ModelError) as e:
+        ModelPort(AnthropicWire(_mantle(handler, api_key="t"), api="bedrock"), "anthropic.claude-opus-4-6", 30,
+                  routes=routes).call("p", "s", {}, SCHEMA, usage=Usage(), attribution="t")
+    assert e.value.kind == "unsupported" and len(calls) == 1
+
+
 def test_a_prompt_answer_that_does_not_validate_is_retried_with_the_error_then_fails():
     sdk = FakeSDK([('{"wrong": 1}', "end_turn", U()), ("still not it", "end_turn", U())])
     routes = Routes("anthropic", "claude-opus-5", source='{"default": {"schema": "prompt"}}')

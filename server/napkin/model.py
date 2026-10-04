@@ -30,6 +30,7 @@ No handler knows which wire is in use. Every wire's failures map to one
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import re
@@ -148,6 +149,13 @@ def check_images(images) -> list[dict]:
 
 # A 400 naming these means the endpoint refused structured output itself.
 _REFUSED_FORMAT = re.compile(r"output_config|json_schema|structured output|output format", re.I)
+# The endpoint enforces schemas for this model but will not compile this one
+# (Bedrock: "The compiled grammar is too large ..."): only this schema goes in
+# the prompt; smaller ones stay enforced.
+# Seen on Bedrock 2026-10-04: "The compiled grammar is too large ...", "Schemas contains too many
+# parameters with union types (18 ...) ... (limit: 16 parameters with unions)".
+_SCHEMA_TOO_LARGE = re.compile(r"grammar is too large|schemas? (contains|is) too|too many (strict tools|parameters|"
+                               r"properties)|union types|compilation cost|simplify your (tool )?schemas?", re.I)
 
 
 class AnthropicWire:
@@ -188,12 +196,20 @@ class AnthropicWire:
                 resp = self.client.with_options(timeout=timeout, max_retries=1).messages.create(**kwargs)
         except Exception as e:  # transport / API failure: mapped to a kind, attributable
             kind = _anthropic_kind(e)
+            said = str(getattr(e, "message", "") or e)
             if not prompt and kind == "invalid_request" and getattr(e, "status_code", None) == 400 \
-                    and _REFUSED_FORMAT.search(str(getattr(e, "message", "") or e)):
+                    and _SCHEMA_TOO_LARGE.search(said):
+                err = ModelError(f"{purpose}: the {self.api} endpoint will not compile this schema (too large)",
+                                 "unsupported")
+                err.scope = "schema"
+                raise err from e
+            if not prompt and kind == "invalid_request" and getattr(e, "status_code", None) == 400 \
+                    and _REFUSED_FORMAT.search(said):
                 # Not resent here: the port decides, by the route's schema mode (§1.9).
                 raise ModelError(f"{purpose}: the {self.api} endpoint refused output_config.format json_schema",
                                  "unsupported") from e
-            raise ModelError(f"{purpose}: the model call failed ({type(e).__name__})", kind) from e
+            # The provider's own reason (a request it refused says why), cut short; never the request.
+            raise ModelError(f"{purpose}: the model call failed ({type(e).__name__}: {said[:300]})", kind) from e
         u = getattr(resp, "usage", None)
         usage, breakdown = None, None
         if u is not None:
@@ -376,6 +392,7 @@ class ModelPort:
         self.timeout, self.max_tokens = timeout, max_tokens
         self.routes = routes or Routes(self.wire.api, model, vision_model)
         self._unenforced = set()      # models whose endpoint refused output_config.format (schema: auto)
+        self._too_large = set()       # (model, schema digest) the endpoint would not compile (schema: auto)
         self._unenforced_lock = threading.Lock()
 
     @property
@@ -405,13 +422,14 @@ class ModelPort:
         route = with_caller(self.routes.resolve(purpose, vision=vision), effort, max_tokens)
         model = model or route.model
         effort, max_tokens = route.effort, route.max_tokens
-        mode = "prompt" if route.schema == "prompt" or (route.schema == "auto" and model in self._unenforced) \
-            else "enforced"
+        api_schema = strip_unsupported(schema)
+        digest = hashlib.sha256(json.dumps(api_schema, sort_keys=True).encode()).hexdigest()[:16]
+        mode = "prompt" if route.schema == "prompt" or (route.schema == "auto" and (
+            model in self._unenforced or (model, digest) in self._too_large)) else "enforced"
         # Compact JSON: indentation was 5-21% of every payload's characters (21% of the report's), paid as input.
         user = f"Task: {purpose}\n\n<input>\n{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n</input>"
         first = {"role": "user", "text": user, "images": images}
         turns = [first]
-        api_schema = strip_unsupported(schema)
         validator = jsonschema.Draft202012Validator(schema)
         last_err = None
         for attempt in (1, 2):
@@ -424,14 +442,22 @@ class ModelPort:
                 except ModelError as e:
                     if e.kind != "unsupported" or mode != "enforced" or route.schema != "auto":
                         raise
-                    # schema: auto, and this endpoint does not enforce a schema for this model:
-                    # the schema goes in the prompt from now on, for this model (§1.9).
+                    # schema: auto, and this endpoint does not enforce a schema for this model
+                    # (or will not compile this one): the schema goes in the prompt from now
+                    # on, for this model or this schema (§1.9).
                     with self._unenforced_lock:
-                        if model not in self._unenforced:
-                            log.warning("model %s: the endpoint does not enforce a JSON schema for %s; "
-                                        "the schema goes in the prompt (validated here) [%s]", purpose, model,
-                                        attribution)
-                        self._unenforced.add(model)
+                        if getattr(e, "scope", None) == "schema":
+                            if (model, digest) not in self._too_large:
+                                log.warning("model %s: the endpoint will not compile this schema for %s (too "
+                                            "large); it goes in the prompt (validated here) [%s]", purpose, model,
+                                            attribution)
+                            self._too_large.add((model, digest))
+                        else:
+                            if model not in self._unenforced:
+                                log.warning("model %s: the endpoint does not enforce a JSON schema for %s; "
+                                            "the schema goes in the prompt (validated here) [%s]", purpose, model,
+                                            attribution)
+                            self._unenforced.add(model)
                     mode = "prompt"
                     reply = self.wire.send(schema=schema, schema_mode=mode, **send)
             except ModelError as e:

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import itertools
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -132,6 +133,8 @@ def layers(store):
     return store.open({"org": A, "brand": X})
 
 
+# Fact ids come back as documents carry them (upper-case hex); the database keeps
+# lower case (pg._doc_id), so a direct query lower-cases them.
 def owner_rows(pg, db: str, query: str, params=()):
     """Read as the superuser (no RLS): for checking what was or was not written."""
     with psycopg.connect(_as(pg["base"], f"{pg['run']}_{db}", pg["su"]), autocommit=True) as c:
@@ -206,10 +209,11 @@ def test_the_append_outcomes_on_one_identity(store, pg):
     d1 = dec()
     r1 = L.append(fact(0.2, entity=ent, sources=[s1], quotes={s1: "BEV share rose to 20 per cent"}), d1)
     assert set(r1) == ROW_KEYS
+    # ids as a document's schema takes them (campaign-research: ^f_[0-9A-Z]{6,}$), seeded rows' too
+    assert re.fullmatch(r"f_[0-9A-Z]{6,}", r1["id"]) and re.fullmatch(r"d_[0-9A-Z]{6,}", r1["decision"] or "d_X" * 3)
     assert r1["version"] == 1 and r1["status"] == "active" and r1["decision"] == d1["id"]
     assert r1["sources"] == [s1] and r1["source_records"][0]["quote"] == "BEV share rose to 20 per cent"
     assert r1["origin"] == origin_uri("category", ent, "market.value_growth_yoy", 1)
-    import re
     assert re.match(ORIGIN_RE, r1["origin"])
     assert r1["market"] == "IE" and r1["as_of"] == "2025-12-31" and r1["retrieved_at"] == "2026-09-20"
     # a category fact written under A is visible under B
@@ -231,7 +235,7 @@ def test_the_append_outcomes_on_one_identity(store, pg):
     r5 = L.append(fact(0.1, entity=ent, as_of="2024-12-31", sources=[s1], quotes={s1: "10 per cent in 2024"}),
                   dec())
     assert r5["version"] == 4 and r5["status"] == "superseded"   # history reads as not current
-    assert owner_rows(pg, "category", "SELECT status FROM layers.facts WHERE id = %s", (r5["id"],)) == [("history",)]
+    assert owner_rows(pg, "category", "SELECT status FROM layers.facts WHERE id = %s", (r5["id"].lower(),)) == [("history",)]
     assert r5["id"] not in {f["id"] for f in L.facts("category", ent, key="market.value_growth_yoy")}
     # versions count per entity + key across markets; the market filter sees the market and what applies to it
     r6 = L.append(fact(0.4, entity=ent, market="GB", sources=[s1], quotes={s1: "40 per cent in the UK"}), dec())
@@ -254,7 +258,7 @@ def test_the_quote_is_found_in_the_stored_passage_when_there_is_one(layers, pg):
     row = layers.append(fact(0.12, entity="category/alcohol.cider", sources=[sid],
                              quotes={sid: "grew by 12 per cent"}), dec())
     ev = owner_rows(pg, "category", "SELECT excerpt_id, quote_start FROM layers.evidence WHERE fact_id = %s",
-                    (row["id"],))
+                    (row["id"].lower(),))
     assert ev == [("exc_pgseeded", passage.index("grew by 12 per cent"))]
 
 
@@ -336,9 +340,9 @@ def test_scope_isolation_and_pins(store, pg):
     assert L.resolve("fact://category/automotive.ev_charging/market.nosuch@1") is None
     # the brand fact lives in A's database, its open source copied there with the same id
     assert owner_rows(pg, "agency_test_agency", "SELECT market, org, brand FROM layers.facts WHERE id = %s",
-                      (row["id"],)) == [("UNKNOWN", A, X)]
+                      (row["id"].lower(),)) == [("UNKNOWN", A, X)]
     assert owner_rows(pg, "agency_test_agency", "SELECT id FROM layers.sources WHERE id = %s", (s,)) == [(s,)]
-    assert owner_rows(pg, "category", "SELECT 1 FROM layers.facts WHERE id = %s", (row["id"],)) == []
+    assert owner_rows(pg, "category", "SELECT 1 FROM layers.facts WHERE id = %s", (row["id"].lower(),)) == []
 
 
 def test_a_confidential_source_backs_a_brand_fact_never_a_category_one(layers):
@@ -522,7 +526,7 @@ def test_a_qualifier_rides_in_the_key_and_tells_rows_of_one_measure_apart(store,
     assert lidl["key"] == "market.player_share.lidl" and {aldi["status"], lidl["status"]} == {"active"}
     assert aldi["origin"] == origin_uri("category", ent, "market.player_share.aldi", aldi["version"])
     assert owner_rows(pg, "category", "SELECT key, qualifier FROM layers.facts WHERE id = ANY (%s) ORDER BY qualifier",
-                      ([aldi["id"], lidl["id"]],)) == [("market.player_share", "aldi"), ("market.player_share", "lidl")]
+                      ([aldi["id"].lower(), lidl["id"].lower()],)) == [("market.player_share", "aldi"), ("market.player_share", "lidl")]
     # a key read matches the joined key exactly; a prefix read the measure and everything under it
     assert [r["id"] for r in L.facts("category", ent, key="market.player_share.aldi")] == [aldi["id"]]
     assert L.facts("category", ent, key="market.player_share") == []
@@ -612,3 +616,35 @@ def test_a_verified_finding_the_category_layer_refuses_is_kept_in_the_brand_laye
     row = caps.layers.resolve(result["pin"]["origin"])
     assert row and row["value"] == fi["statement"]
     assert owner_rows(pg, "category", "SELECT 1 FROM layers.facts WHERE key LIKE 'synthesis.%%'") == []
+
+
+def test_the_values_of_a_many_measure_are_rows_of_one_key_read_back_apart(store, pg):
+    """codes.dominant_code holds several conventions. The middleware names each value's identity
+    after the value (rules/merge.split_lists: codes.dominant_code.<slug>_<hash>); the layers store
+    the measure's own key, and read each row back under its value's name, so two codes never contest."""
+    from napkin.rules.merge import _slug
+    L = store.open({"org": A, "brand": X})
+    ent = "category/automotive.ev_charging"
+    s = L.add_source(src("https://example.org/pg/codes"))
+    a_txt, b_txt = "Range shown as a hero number", "Charging at home at night"
+    q = {s: "ads lead with range shown as a hero number, and charging at home at night"}
+    a = L.append(fact(a_txt, entity=ent, key=f"codes.dominant_code.{_slug(a_txt)}", unit="text", sources=[s],
+                      quotes=q), dec())
+    b = L.append(fact(b_txt, entity=ent, key=f"codes.dominant_code.{_slug(b_txt)}", unit="text", sources=[s],
+                      quotes=q), dec())
+    assert a["key"] == f"codes.dominant_code.{_slug(a_txt)}" and b["key"] == f"codes.dominant_code.{_slug(b_txt)}"
+    assert {a["status"], b["status"]} == {"active"}
+    assert owner_rows(pg, "category", "SELECT DISTINCT key FROM layers.facts WHERE id = ANY (%s)",
+                      ([a["id"].lower(), b["id"].lower()],)) == [("codes.dominant_code",)]
+    assert [r["id"] for r in L.facts("category", ent, key=a["key"])] == [a["id"]]
+    assert {r["id"] for r in L.facts("category", ent, key_prefix="codes.dominant_code")} == {a["id"], b["id"]}
+    assert L.resolve(a["origin"])["id"] == a["id"]
+    # one value with no name of its own is stored the same way and read back named
+    c_txt = "Silent cars in city streets"
+    c = L.append(fact(c_txt, entity=ent, key="codes.dominant_code", unit="text", sources=[s],
+                      quotes={s: "silent cars in city streets"}), dec())
+    assert c["key"] == f"codes.dominant_code.{_slug(c_txt)}"
+    # a last part that is not this value's name is not stripped: unlisted, refused
+    with pytest.raises(LayersError):
+        L.append(fact(c_txt, entity=ent, key="codes.dominant_code.something_else_abcdef", unit="text",
+                      sources=[s], quotes={s: "silent cars in city streets"}), dec())

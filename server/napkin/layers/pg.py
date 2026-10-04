@@ -257,6 +257,21 @@ class _Pool:
             self.drop(c)
 
 
+def _item_slug(v) -> str:
+    from ..rules.merge import _slug
+    return _slug(v)
+
+
+def _doc_id(i):
+    """A fact or decision id as documents carry it: the database's ids are
+    lowercase hex (`f_9f8305…`, the seeded research's and ours), and a
+    document's schema takes upper case (`^f_[0-9A-Z]{6,}$`). Hex upper-cases
+    without loss; no id is read back in, so the database keeps its own."""
+    if isinstance(i, str) and len(i) > 2 and i[1] == "_" and re.fullmatch(r"[0-9a-f]+", i[2:]):
+        return i[:2] + i[2:].upper()
+    return i
+
+
 class PgLayerStore:
     """`open(scope)` binds a scope and returns a `PgLayers`. Connections are
     made lazily: a paused Aurora is woken by the first call, not at startup."""
@@ -418,8 +433,9 @@ class PgLayers:
                 return st._measures
 
         def read(c):
-            return {r[0]: {"lens": r[1], "qualifier": r[2], "units": list(r[3])} for r in c.execute(
-                "SELECT key, lens, qualifier, units FROM layers.measures WHERE status <> 'retired'").fetchall()}
+            return {r[0]: {"lens": r[1], "qualifier": r[2], "units": list(r[3]), "cardinality": r[4]} for r in c.execute(
+                "SELECT key, lens, qualifier, units, cardinality FROM layers.measures WHERE status <> 'retired'"
+            ).fetchall()}
         got = self._run("category", "measures", read)
         with st._lock:
             st._measures, st._measures_at = got, time.monotonic()
@@ -440,6 +456,26 @@ class PgLayers:
     @staticmethod
     def _joined(key: str, qualifier: str | None) -> str:
         return key if qualifier is None else f"{key}.{qualifier_slug(qualifier)}"
+
+    def _many(self, key: str) -> bool:
+        m = self._measure_list().get(".".join(key.split(".")[:2]))
+        return bool(m) and m.get("cardinality") == "many"
+
+    def _stored(self, key: str, value=None) -> tuple[str, str | None]:
+        """The stored (key, qualifier) of a key as the middleware names it. A measure with
+        several values (cardinality many: codes, key moments) keeps them as rows of one
+        key; the middleware tells them apart by a last part naming the value
+        (`codes.dominant_code.price_led_ads_9f3ec2`, rules/merge._slug), which is not
+        stored. Given the value, that part must be the value's own; reading, its shape."""
+        parts = key.split(".")
+        last = parts[-1]
+        if len(parts) >= 3 and self._many(key):
+            if value is not None:
+                if isinstance(value, str) and last == _item_slug(value):
+                    key = ".".join(parts[:-1])
+            elif re.fullmatch(r"[a-z0-9_]*_[0-9a-f]{6}", last):
+                key = ".".join(parts[:-1])
+        return self._split(key)
 
     def vertical_of(self, leaf: str) -> dict | None:
         leaves, verts = self._tree()
@@ -513,12 +549,15 @@ class PgLayers:
             # published, else when it was read: the middleware's own fallback.
             as_of = _day(f["period_end"]) or (min(pubs) if pubs else (min(reads) if reads else created))
             key = self._joined(f["key"], f["qualifier"])
-            row = {"id": f["id"], "layer": f["layer"], "entity": f["entity"], "key": key,
+            value = _value_of(f)
+            if isinstance(value, str) and self._many(f["key"]):
+                key = f"{key}.{_item_slug(value)}"  # one value of several, named as the middleware names it
+            row = {"id": _doc_id(f["id"]), "layer": f["layer"], "entity": f["entity"], "key": key,
                    "market": None if f["market"] in NOT_A_PLACE else f["market"], "value": _value_of(f),
                    "unit": f["unit"], "as_of": as_of, "retrieved_at": max(reads) if reads else created,
                    "status": f["status"] if f["status"] in ("active", "contested", "superseded") else "superseded",
-                   "version": f["version"], "supersedes": f["supersedes"], "licence": f["licence"],
-                   "method": f["method"], "decision": f["decision_id"],
+                   "version": f["version"], "supersedes": _doc_id(f["supersedes"]), "licence": f["licence"],
+                   "method": f["method"], "decision": _doc_id(f["decision_id"]),
                    "origin": origin_uri(f["layer"], f["entity"], key, f["version"]),
                    "sources": list(recs), "source_records": list(recs.values())}
             if f["qualifier"] is not None:
@@ -553,7 +592,7 @@ class PgLayers:
         # reads the measure and the rows are matched on the key they read back as.
         if key is not None:
             sql += " AND f.key = %s"
-            args.append(self._split(key)[0])
+            args.append(self._stored(key)[0])
         if key_prefix is not None:
             parts = key_prefix.split(".")
             heads = [".".join(parts[:i]) for i in range(2, len(parts))]
@@ -582,7 +621,7 @@ class PgLayers:
         if layer == "brand":
             self._need_brand("resolve")
         sql = self._FACT_SELECT + "WHERE f.layer = %s AND f.entity = %s AND f.key = %s AND f.version = %s"
-        args: list = [layer, entity, self._split(key)[0], version]
+        args: list = [layer, entity, self._stored(key)[0], version]
         if layer == "brand":
             sql += " AND f.org = %s AND f.brand = %s"
             args += [self._org, self._brand]
@@ -792,7 +831,7 @@ class PgLayers:
             raise _refused(op, "no_evidence", "a fact needs at least one source with a verbatim quote "
                                               "(or a person's confirmation); none was given")
         market = fact.get("market")
-        key, qual = self._split(fact["key"])
+        key, qual = self._stored(fact["key"], fact.get("value"))
         if qual is not None:
             qual = self._qualifier_text(conn, fact["layer"], fact["entity"], key, qual)
         # A new row's id; unused when the fact corroborates. Replays are caught by
@@ -1030,7 +1069,7 @@ class PgLayers:
             self._note(c, brand_ref, name)
             got = {r["id"]: r for r in self._rows(c, c.execute(self._FACT_SELECT + "WHERE f.id = ANY (%s)",
                                                                 (ids,)).fetchall())}
-            rows = [got[i] for i in ids]
+            rows = [got[_doc_id(i)] for i in ids]
             self._idem_put(c, self._org, key, body_sha, {"facts": rows})
             return rows
         return self._run("agency", op, work)

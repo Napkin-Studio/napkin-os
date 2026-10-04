@@ -432,6 +432,7 @@ class PlannedBriefJob(BriefJob):
                                                 for n in r.propose_unlisted(unlisted)])
         existing = ctx_facts(self.clan)
         pinned = {(f.get("entity"), f.get("key"), f.get("market")): f for f in existing}
+        held = {f.get("id") for f in existing}
         merged = merge_rules.merge(cands, pinned, set())
         t = iso()
         # the layer row records the decision it was written with; its full reasoning is given below
@@ -446,8 +447,11 @@ class PlannedBriefJob(BriefJob):
             except Exception as e:  # noqa: BLE001 - one fact that will not write is left out, on record
                 rl.note("pin_failed", key=c.get("key"), error=f"{type(e).__name__}: {str(e)[:160]}")
                 continue
-            if (row["entity"], row["key"], row["market"]) in pinned:
+            # A fact the document holds stays as it is: a corroborated row comes back with its
+            # id and one more source, and a document never takes new content under an id it holds.
+            if (row["entity"], row["key"], row["market"]) in pinned or row["id"] in held:
                 continue
+            held.add(row["id"])
             pins.append(r._pin(row, c, dec["id"], t))
         if merged["contests"]:
             rl.note("research_contests", left_out=[ct["key"] for ct in merged["contests"]])
