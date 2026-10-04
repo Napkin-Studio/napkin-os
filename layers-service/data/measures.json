@@ -1,6 +1,7 @@
 {
- "about": "The fixed list of measures per lens (DRAFT, for a planner to approve). Drawn from the pilot's 410 keys and the Planner Research Taxonomy's standing questions. key = <lens prefix>.<measure>. cardinality: one = a single value per period (and per qualifier) whose rivals contest; many = a list whose items sit side by side and never contest. qualifier: what distinguishes one row of the measure from another (none, player, channel, segment, moment, statement, rule, body, parent, metric, campaign). group: which targeted search finds it (1-3 per lens).",
+ "about": "The fixed list of measures per lens (DRAFT, for a planner to approve). Drawn from the pilot's 410 keys and the Planner Research Taxonomy's standing questions. key = <lens prefix>.<measure>. cardinality: one = a single value per period (and per qualifier) whose rivals contest; many = a list whose items sit side by side and never contest. qualifier: what distinguishes one row of the measure from another (none, player, channel, segment, moment, statement, rule, body, parent, metric, campaign). group: which targeted search finds it (1-3 per lens). synonyms: names the extraction model or an older list used for the measure, rewritten to it before a fact is written; a synonym given as {name, qualifier} also fixes the qualifier (tv_share_of_spend is media.channel_share for 'tv'). The middleware's own list (server/napkin/measures.json) was folded in as synonyms on 2026-10-04; this is now the only list.",
  "status": "draft",
+ "status_note": "2026-10-04: synonyms folded in from the middleware's list; the list still awaits a planner's sign-off.",
  "lenses": {
   "market_structure": {
    "groups": {
@@ -19,7 +20,18 @@
      "cardinality": "one",
      "qualifier": "none",
      "group": 1,
-     "definition": "Total market value in the period."
+     "definition": "Total market value in the period.",
+     "synonyms": [
+      "size_eur",
+      "market_size",
+      "market_value_eur",
+      "market_size_eur",
+      "market_value",
+      "category_value",
+      "sales_value_eur",
+      "retail_value_eur",
+      "size"
+     ]
     },
     {
      "key": "market.size_volume",
@@ -30,7 +42,17 @@
      "cardinality": "one",
      "qualifier": "none",
      "group": 1,
-     "definition": "Total market volume in the period, in the unit stated (litres, cases, units)."
+     "definition": "Total market volume in the period, in the unit stated (litres, cases, units).",
+     "synonyms": [
+      "units_annual",
+      "annual_units",
+      "unit_sales",
+      "units_sold",
+      "registrations",
+      "new_registrations",
+      "volume_units",
+      "deliveries"
+     ]
     },
     {
      "key": "market.value_growth_yoy",
@@ -40,7 +62,16 @@
      "cardinality": "one",
      "qualifier": "none",
      "group": 1,
-     "definition": "Year-on-year change in market value."
+     "definition": "Year-on-year change in market value.",
+     "synonyms": [
+      "growth_yoy",
+      "yoy_growth",
+      "value_growth",
+      "market_growth",
+      "growth_rate",
+      "annual_growth",
+      "sales_growth_yoy"
+     ]
     },
     {
      "key": "market.volume_growth_yoy",
@@ -101,7 +132,15 @@
      "cardinality": "one",
      "qualifier": "player",
      "group": 2,
-     "definition": "A named player's or brand's share of the market."
+     "definition": "A named player's or brand's share of the market.",
+     "synonyms": [
+      "share",
+      "market_share",
+      "value_share",
+      "brand_share",
+      "sales_share",
+      "mkt_share"
+     ]
     },
     {
      "key": "market.top_n_share",
@@ -111,7 +150,33 @@
      "cardinality": "one",
      "qualifier": "metric",
      "group": 2,
-     "definition": "Combined share of the top N players (qualifier: e.g. 'top 5')."
+     "definition": "Combined share of the top N players (qualifier: e.g. 'top 5').",
+     "synonyms": [
+      {
+       "name": "top3_share",
+       "qualifier": "top 3"
+      },
+      {
+       "name": "concentration",
+       "qualifier": "top 3"
+      },
+      {
+       "name": "cr3",
+       "qualifier": "top 3"
+      },
+      {
+       "name": "top_three_share",
+       "qualifier": "top 3"
+      },
+      {
+       "name": "big_three_share",
+       "qualifier": "top 3"
+      },
+      {
+       "name": "top_players_share",
+       "qualifier": "top 3"
+      }
+     ]
     },
     {
      "key": "market.player_count",
@@ -163,7 +228,16 @@
      "cardinality": "many",
      "qualifier": "player",
      "group": 3,
-     "definition": "A merger, acquisition, entry or exit in the market."
+     "definition": "A merger, acquisition, entry or exit in the market.",
+     "synonyms": [
+      "acquisition",
+      "merger",
+      "m_and_a",
+      "market_entry",
+      "market_exit",
+      "deal",
+      "takeover"
+     ]
     }
    ]
   },
@@ -182,7 +256,17 @@
      "cardinality": "many",
      "qualifier": "player",
      "group": 1,
-     "definition": "A claim or line a brand uses about itself."
+     "definition": "A claim or line a brand uses about itself.",
+     "synonyms": [
+      "tagline",
+      "endline",
+      "slogan",
+      "strapline",
+      "positioning",
+      "positioning_statement",
+      "brand_promise",
+      "proposition"
+     ]
     },
     {
      "key": "positioning.asset",
@@ -192,7 +276,18 @@
      "cardinality": "many",
      "qualifier": "player",
      "group": 1,
-     "definition": "A distinctive brand asset (character, sound, visual, pack)."
+     "definition": "A distinctive brand asset (character, sound, visual, pack).",
+     "synonyms": [
+      "brand_asset",
+      "distinctive_asset",
+      "brand_assets",
+      "dba",
+      "mnemonic",
+      "sonic_logo",
+      "mascot",
+      "brand_colour",
+      "logo"
+     ]
     },
     {
      "key": "positioning.price_position",
@@ -212,7 +307,15 @@
      "cardinality": "many",
      "qualifier": "player",
      "group": 2,
-     "definition": "A product or range launch."
+     "definition": "A product or range launch.",
+     "synonyms": [
+      "launch_date",
+      "product_launch",
+      "release_date",
+      "launch_year",
+      "on_sale_date",
+      "market_launch"
+     ]
     },
     {
      "key": "positioning.campaign",
@@ -242,7 +345,16 @@
      "cardinality": "many",
      "qualifier": "player",
      "group": 2,
-     "definition": "An agency appointed or changed, and for what."
+     "definition": "An agency appointed or changed, and for what.",
+     "synonyms": [
+      "agency",
+      "agency_of_record",
+      "creative_agency",
+      "media_agency",
+      "aor",
+      "lead_agency",
+      "agency_move"
+     ]
     },
     {
      "key": "positioning.awareness_prompted",
@@ -252,7 +364,15 @@
      "cardinality": "one",
      "qualifier": "player",
      "group": 3,
-     "definition": "Prompted awareness of a brand."
+     "definition": "Prompted awareness of a brand.",
+     "synonyms": [
+      "aided_awareness",
+      "prompted_awareness",
+      "total_awareness",
+      "brand_awareness",
+      "awareness",
+      "recognition"
+     ]
     },
     {
      "key": "positioning.brand_count",
@@ -281,7 +401,16 @@
      "cardinality": "one",
      "qualifier": "segment",
      "group": 1,
-     "definition": "Share of households or adults who buy (qualifier: the population, e.g. 'all adults', '18-34')."
+     "definition": "Share of households or adults who buy (qualifier: the population, e.g. 'all adults', '18-34').",
+     "synonyms": [
+      "household_penetration",
+      "hh_penetration",
+      "usage_share",
+      "user_share",
+      "adoption_rate",
+      "ownership_share",
+      "incidence"
+     ]
     },
     {
      "key": "consumer.segment_share",
@@ -291,7 +420,14 @@
      "cardinality": "one",
      "qualifier": "segment",
      "group": 1,
-     "definition": "A buyer segment's share of buyers or spend."
+     "definition": "A buyer segment's share of buyers or spend.",
+     "synonyms": [
+      "segment_size",
+      "share_of_buyers",
+      "buyer_share",
+      "demographic_share",
+      "cohort_share"
+     ]
     },
     {
      "key": "consumer.occasion",
@@ -311,7 +447,43 @@
      "cardinality": "one",
      "qualifier": "statement",
      "group": 2,
-     "definition": "Share of people agreeing with a stated attitude (qualifier: the statement, short)."
+     "definition": "Share of people agreeing with a stated attitude (qualifier: the statement, short).",
+     "synonyms": [
+      "agree_share",
+      "agreement_share",
+      "sentiment_share",
+      "moderating_share",
+      "adults_moderating",
+      "concern_share",
+      {
+       "name": "purchase_intent_share",
+       "qualifier": "intend to buy"
+      },
+      {
+       "name": "purchase_intent",
+       "qualifier": "intend to buy"
+      },
+      {
+       "name": "intent_to_buy",
+       "qualifier": "intend to buy"
+      },
+      {
+       "name": "intention_to_purchase",
+       "qualifier": "intend to buy"
+      },
+      {
+       "name": "likely_to_buy_share",
+       "qualifier": "intend to buy"
+      },
+      {
+       "name": "plan_to_buy_share",
+       "qualifier": "intend to buy"
+      },
+      {
+       "name": "buying_intention",
+       "qualifier": "intend to buy"
+      }
+     ]
     },
     {
      "key": "consumer.attitude",
@@ -331,7 +503,16 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 2,
-     "definition": "A reason people do not buy or buy less."
+     "definition": "A reason people do not buy or buy less.",
+     "synonyms": [
+      "barrier_top",
+      "top_barrier",
+      "main_barrier",
+      "biggest_barrier",
+      "key_barrier",
+      "purchase_barrier",
+      "main_concern"
+     ]
     },
     {
      "key": "consumer.motivation",
@@ -351,7 +532,14 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 3,
-     "definition": "A live cultural tension the category sits in."
+     "definition": "A live cultural tension the category sits in.",
+     "synonyms": [
+      "tension",
+      "cultural_shift",
+      "consumer_trend",
+      "cultural_trend",
+      "insight"
+     ]
     },
     {
      "key": "consumer.trend",
@@ -379,7 +567,15 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 1,
-     "definition": "A convention most ads in the category follow."
+     "definition": "A convention most ads in the category follow.",
+     "synonyms": [
+      "category_code",
+      "convention",
+      "category_convention",
+      "ad_convention",
+      "trope",
+      "common_trope"
+     ]
     },
     {
      "key": "codes.visual_code",
@@ -419,7 +615,15 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 2,
-     "definition": "A convention described as tired or cliched."
+     "definition": "A convention described as tired or cliched.",
+     "synonyms": [
+      "tired_code",
+      "cliche",
+      "cliched_code",
+      "overused_code",
+      "stale_convention",
+      "category_cliche"
+     ]
     },
     {
      "key": "codes.challenger_code",
@@ -447,7 +651,16 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 1,
-     "definition": "A moment the category plans around (a season, event, holiday)."
+     "definition": "A moment the category plans around (a season, event, holiday).",
+     "synonyms": [
+      "moment",
+      "key_event",
+      "event",
+      "tentpole",
+      "cultural_moment",
+      "calendar_moment",
+      "key_date"
+     ]
     },
     {
      "key": "rhythm.launch_window",
@@ -457,7 +670,13 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 1,
-     "definition": "When launches usually happen."
+     "definition": "When launches usually happen.",
+     "synonyms": [
+      "launch_season",
+      "launch_months",
+      "launch_timing",
+      "release_window"
+     ]
     },
     {
      "key": "rhythm.cycle",
@@ -467,7 +686,15 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 1,
-     "definition": "A buying or contract cycle (renewals, contract ends, weather)."
+     "definition": "A buying or contract cycle (renewals, contract ends, weather).",
+     "synonyms": [
+      "purchase_cycle_months",
+      "replacement_cycle",
+      "ownership_period",
+      "holding_period",
+      "switching_cycle",
+      "repurchase_cycle"
+     ]
     },
     {
      "key": "rhythm.period_share_of_sales",
@@ -520,7 +747,17 @@
      "cardinality": "one",
      "qualifier": "parent",
      "group": 1,
-     "definition": "Total advertising spend (qualifier: 'whole market' or the category)."
+     "definition": "Total advertising spend (qualifier: 'whole market' or the category).",
+     "synonyms": [
+      "adspend_eur",
+      "ad_spend",
+      "adspend",
+      "advertising_spend",
+      "advertising_expenditure",
+      "media_spend",
+      "ad_investment",
+      "adex"
+     ]
     },
     {
      "key": "media.adspend_growth_yoy",
@@ -564,7 +801,76 @@
      "cardinality": "one",
      "qualifier": "channel",
      "group": 2,
-     "definition": "A channel's share of spend."
+     "definition": "A channel's share of spend.",
+     "synonyms": [
+      {
+       "name": "tv_share_of_spend",
+       "qualifier": "tv"
+      },
+      {
+       "name": "tv_share",
+       "qualifier": "tv"
+      },
+      {
+       "name": "tv_spend_share",
+       "qualifier": "tv"
+      },
+      {
+       "name": "television_share",
+       "qualifier": "tv"
+      },
+      {
+       "name": "share_of_spend_tv",
+       "qualifier": "tv"
+      },
+      {
+       "name": "tv_share_of_adspend",
+       "qualifier": "tv"
+      },
+      {
+       "name": "linear_tv_share",
+       "qualifier": "tv"
+      },
+      {
+       "name": "digital_share_of_spend",
+       "qualifier": "digital"
+      },
+      {
+       "name": "digital_share",
+       "qualifier": "digital"
+      },
+      {
+       "name": "online_share_of_spend",
+       "qualifier": "digital"
+      },
+      {
+       "name": "digital_spend_share",
+       "qualifier": "digital"
+      },
+      {
+       "name": "share_of_spend_digital",
+       "qualifier": "digital"
+      },
+      {
+       "name": "online_adspend_share",
+       "qualifier": "digital"
+      },
+      "share_of_spend",
+      "channel_mix",
+      "media_mix_share",
+      {
+       "name": "ooh_share_of_spend",
+       "qualifier": "ooh"
+      },
+      {
+       "name": "radio_share",
+       "qualifier": "radio"
+      },
+      {
+       "name": "social_share_of_spend",
+       "qualifier": "social"
+      }
+     ]
     },
     {
      "key": "media.share_of_voice",
@@ -574,7 +880,13 @@
      "cardinality": "one",
      "qualifier": "player",
      "group": 3,
-     "definition": "A brand's share of category advertising."
+     "definition": "A brand's share of category advertising.",
+     "synonyms": [
+      "sov",
+      "voice_share",
+      "share_of_adspend",
+      "adspend_share"
+     ]
     },
     {
      "key": "media.cost_of_attention",
@@ -586,7 +898,15 @@
      "cardinality": "one",
      "qualifier": "channel",
      "group": 3,
-     "definition": "Cost per thousand or per reach point in a channel."
+     "definition": "Cost per thousand or per reach point in a channel.",
+     "synonyms": [
+      "cpm_eur",
+      "cpm",
+      "cost_per_thousand",
+      "cpt",
+      "average_cpm",
+      "media_cost"
+     ]
     }
    ]
   },
@@ -605,7 +925,15 @@
      "cardinality": "many",
      "qualifier": "body",
      "group": 1,
-     "definition": "A code or law that applies to the category's marketing (qualifier: the body)."
+     "definition": "A code or law that applies to the category's marketing (qualifier: the body).",
+     "synonyms": [
+      "applicable_code",
+      "governing_code",
+      "advertising_code",
+      "applicable_law",
+      "rule_applies",
+      "legal_framework"
+     ]
     },
     {
      "key": "regulation.preclearance_required",
@@ -625,7 +953,39 @@
      "cardinality": "many",
      "qualifier": "rule",
      "group": 2,
-     "definition": "Something marketing may not do (timing, audience, placement, content)."
+     "definition": "Something marketing may not do (timing, audience, placement, content).",
+     "synonyms": [
+      "prohibited_claim",
+      "banned_claim",
+      "restricted_claim",
+      "cannot_say",
+      "claim_restriction",
+      "not_permitted",
+      {
+       "name": "restricted_hours",
+       "qualifier": "broadcast hours"
+      },
+      {
+       "name": "watershed",
+       "qualifier": "broadcast hours"
+      },
+      {
+       "name": "broadcast_watershed",
+       "qualifier": "broadcast hours"
+      },
+      {
+       "name": "time_restriction",
+       "qualifier": "broadcast hours"
+      },
+      {
+       "name": "ad_ban_hours",
+       "qualifier": "broadcast hours"
+      },
+      {
+       "name": "restricted_times",
+       "qualifier": "broadcast hours"
+      }
+     ]
     },
     {
      "key": "regulation.mandatory_copy",
@@ -635,7 +995,16 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 2,
-     "definition": "Wording or warnings that must appear."
+     "definition": "Wording or warnings that must appear.",
+     "synonyms": [
+      "mandatory_wording",
+      "required_copy",
+      "required_disclaimer",
+      "warning_text",
+      "health_warning",
+      "statutory_warning",
+      "legal_line"
+     ]
     },
     {
      "key": "regulation.substantiation",
@@ -655,7 +1024,33 @@
      "cardinality": "one",
      "qualifier": "rule",
      "group": 2,
-     "definition": "An age limit in the rules (qualifier: the rule, e.g. 'people shown in ads')."
+     "definition": "An age limit in the rules (qualifier: the rule, e.g. 'people shown in ads').",
+     "synonyms": [
+      {
+       "name": "min_age_depicted",
+       "qualifier": "people shown in ads"
+      },
+      {
+       "name": "min_age",
+       "qualifier": "people shown in ads"
+      },
+      {
+       "name": "minimum_age",
+       "qualifier": "people shown in ads"
+      },
+      {
+       "name": "age_depicted",
+       "qualifier": "people shown in ads"
+      },
+      {
+       "name": "model_age_min",
+       "qualifier": "people shown in ads"
+      },
+      {
+       "name": "performer_min_age",
+       "qualifier": "people shown in ads"
+      }
+     ]
     },
     {
      "key": "regulation.pending_change",
@@ -665,7 +1060,15 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 3,
-     "definition": "A proposed or scheduled change to the rules, with its date if known."
+     "definition": "A proposed or scheduled change to the rules, with its date if known.",
+     "synonyms": [
+      "rule_effective_date",
+      "effective_date",
+      "commencement_date",
+      "in_force_date",
+      "comes_into_force",
+      "implementation_date"
+     ]
     },
     {
      "key": "regulation.enforcement_case",
@@ -700,7 +1103,17 @@
      "cardinality": "many",
      "qualifier": "none",
      "group": 3,
-     "definition": "A grant or incentive available in the category."
+     "definition": "A grant or incentive available in the category.",
+     "synonyms": [
+      "grant_eur",
+      "grant_amount",
+      "subsidy",
+      "rebate",
+      "incentive_eur",
+      "purchase_grant",
+      "max_grant",
+      "ev_grant"
+     ]
     }
    ]
   },
@@ -718,7 +1131,16 @@
      "cardinality": "many",
      "qualifier": "campaign",
      "group": 1,
-     "definition": "A published effectiveness case: the brand, campaign and what it did."
+     "definition": "A published effectiveness case: the brand, campaign and what it did.",
+     "synonyms": [
+      "case_example",
+      "case_study",
+      "example_case",
+      "award_case",
+      "effie_winner",
+      "winning_case",
+      "launch_case"
+     ]
     },
     {
      "key": "effectiveness.case_result",
@@ -733,7 +1155,15 @@
      "cardinality": "one",
      "qualifier": "campaign",
      "group": 1,
-     "definition": "A measured result of a named campaign (qualifier: the campaign)."
+     "definition": "A measured result of a named campaign (qualifier: the campaign).",
+     "synonyms": [
+      "case_outcome",
+      "result",
+      "business_result",
+      "sales_uplift",
+      "roi_claim",
+      "effect"
+     ]
     },
     {
      "key": "effectiveness.award",

@@ -4,15 +4,21 @@
 returns a `Layers` whose methods take no scope argument: category facts are
 shared, brand facts are read and written under the bound (org, brand).
 
-The layers are a peripheral (peripherals.md §4, `napkin.layers/1`): the one
-implementation here is `HttpLayers` (`layers/http.py`), a client of the layers
-service; the middleware opens no database. Values cross the boundary as plain
-dicts.
+The layers are a peripheral (peripherals.md §4, `napkin.layers/1`) with two
+implementations: `HttpLayers` (`layers/http.py`), a client of a layers
+service (NAPKIN_LAYERS_URL), and `PgLayers` (`layers/pg.py`), the same
+protocol in process on the layers' Postgres databases (NAPKIN_LAYERS_DSN).
+Values cross the boundary as plain dicts.
 
 Fact rows (the fact envelope, Contract 3 §4, as the layer holds it):
   {id, layer, entity, key, market|None, value, unit, as_of, retrieved_at,
    status: active|contested|superseded, version, supersedes, licence, method,
    decision, sources: [src ids], source_records: [{id, uri, tier, domain, licence, ...}]}
+
+A fact's key is `<lens>.<measure>` from the measure list
+(layers-service/data/measures.json), and `<lens>.<measure>.<qualifier>` when
+the measure takes a qualifier (market.player_share.aldi): one key per thing
+measured, so entity + key + market tells Aldi's share from Lidl's.
 """
 
 from __future__ import annotations
@@ -31,6 +37,10 @@ class Layers(Protocol):
               key_prefix: str | None = None) -> list[dict]: ...
     def append(self, fact: dict, decision: dict) -> dict: ...
     def resolve(self, pin_uri: str) -> dict | None: ...
+    # a fact outside the measure list: never a fact; its measure is proposed, with
+    # the fact (as `append` takes it) for evidence, for a planner. True when the
+    # proposal was recorded; False when these layers take no proposals.
+    def propose_measure(self, fact: dict) -> bool: ...
 
     # sources
     def add_source(self, source: dict) -> str: ...

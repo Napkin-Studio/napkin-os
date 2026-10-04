@@ -97,6 +97,12 @@ variable "github_repository" {
   default     = "Napkin-Studio/napkin-os"
 }
 
+variable "github_repository_ids" {
+  description = "That repository in GitHub's immutable OIDC subject, owner@id/repo@id"
+  type        = string
+  default     = "Napkin-Studio@333384631/napkin-os@1404617212"
+}
+
 variable "certificate_arn" {
   description = "ACM certificate for the studio's HTTPS; empty serves HTTP on the load balancer's own name"
   type        = string
@@ -104,7 +110,7 @@ variable "certificate_arn" {
 }
 
 variable "middleware_count" {
-  description = "Middleware tasks: 0 until the knowledge layers run on AWS"
+  description = "Middleware tasks (the knowledge layers run in it, on Aurora: server/napkin/layers/pg.py)"
   type        = number
-  default     = 0
+  default     = 1
 }

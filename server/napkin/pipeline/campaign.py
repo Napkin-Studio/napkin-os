@@ -33,12 +33,14 @@ import re
 import threading
 import time
 import traceback
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from ..doc import (CAMPAIGN_FIELDS, GATES, LENS_NAMESPACE, LENS_TITLES, LENSES, STAGES, address, apply_patch,
                    build_materials, ctx_data, ctx_decisions, ctx_facts, ctx_findings, decision, deep_merge, field_paths,
                    get_dotted, human_owned, known_ids, market_list, read_of)
 from ..jobs import Abandoned, Cancelled, abandon, abandoned, bounded
 from ..layers import origin_uri
+from ..metrics import emit
 from ..model import ModelError
 from ..rules import identify as id_rules
 from ..rules import markets as market_rules
@@ -242,6 +244,7 @@ class CampaignJob:
         self._report_wait_from = None
         self._report_from = "landed"   # landed | working: which document the report composes from
         self._last_sent = set()        # the chunks the previous reply carried
+        self._identify_call: Future | None = None  # identify started beside extract
         self.latest_clan = clan
         self.W, self.W_facts, self.W_version, self.clan = {}, [], None, clan
         self.sync(clan)
@@ -372,6 +375,7 @@ class CampaignJob:
 
     def _loop(self):
         while True:
+            stalled = None
             with self.lock:
                 if self.state in ("done", "failed", "cancelled"):
                     return
@@ -426,9 +430,12 @@ class CampaignJob:
         (finished, or went on without it), False (asked the person), None (run
         it again). What it raises, however it fails, is a gap, never the end."""
         limit = self._limit("stage_timeout")
+        t_stage = time.monotonic()
         with self.caps.runlog.stage(stage):
             value, err, left = bounded(getattr(self, "stage_" + stage), limit, f"campaign-{self.id}-{stage}",
                                        stop=lambda: self.caps.jobs.cancelled)
+        emit("stage", stage=stage, secs=round(time.monotonic() - t_stage, 2),
+             finished=bool(value) and err is None and left is None, job=self.id)
         if self.caps.jobs.cancelled:
             if left is not None:
                 abandon(left)
@@ -454,6 +461,7 @@ class CampaignJob:
         return value
 
     def skip(self, stage, kind, detail, refused=None):
+        emit("stage", stage=stage, gap=True, error=kind, job=self.id)
         self.caps.runlog.gap(stage, kind, detail)
         self._record_skip(stage, kind, detail, refused)
 
@@ -555,6 +563,7 @@ class CampaignJob:
         self.add_chunk("research", patch, [own] + decs, text=text, msg_decision=own, gap=True)
 
     def fail(self, stage, etype, message):
+        emit("stage", stage=stage, failed=True, error=etype, job=self.id)
         """The runner itself failed (never a stage: a stage is a gap, see skip)."""
         try:
             d = decision(self.doc, self.did(stage, "failed"), "edit", self.handler, "stage_failed",
@@ -704,17 +713,36 @@ class CampaignJob:
                     return {"material_id": mat.id, "locator": mat.locator(m.start()), "quote": m.group(0)}
         return None
 
+    def _identify_request(self):
+        """The identify call's arguments. It reads only the material and the category tree, never what
+        extract writes, so it can run beside extract."""
+        leaves = self.caps.layers.leaves()
+        return (leaves, ("identify", IDENTIFY_SYSTEM,
+                         {"materials": extract_stage.material_payload(self.materials()),
+                          "category_tree": [{"code": l["code"], "name": l["name"], "vertical": l["vertical_name"]}
+                                            for l in leaves]},
+                         identify_schema([l["code"] for l in leaves])))
+
+    def start_identify_call(self):
+        """Starts the identify call beside extract (saves its ~14 s), only when identify will read it: a
+        brand, category or client the document does not hold yet. identify_raw collects the reply; an
+        error in the call surfaces there, in the identify stage, as before."""
+        camp = self.W.get("campaign") or {}
+        if self._identify_raw is not None or self._identify_call is not None or all(
+                camp.get(f) for f in ("brand", "categories", "client_org")):
+            return
+        _leaves, args = self._identify_request()
+        ex = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"identify-{self.id}")
+        self._identify_call = ex.submit(self.caps.model.structured, *args, max_tokens=8000)
+        ex.shutdown(wait=False)
+
     def identify_raw(self):
-        """ONE model call over the material, cached for the job."""
+        """ONE model call over the material, cached for the job (started beside extract when it can be)."""
         if self._identify_raw is None:
-            leaves = self.caps.layers.leaves()
+            leaves, args = self._identify_request()
+            call, self._identify_call = self._identify_call, None
             try:
-                raw = self.caps.model.structured(
-                    "identify", IDENTIFY_SYSTEM,
-                    {"materials": extract_stage.material_payload(self.materials()),
-                     "category_tree": [{"code": l["code"], "name": l["name"], "vertical": l["vertical_name"]}
-                                       for l in leaves]},
-                    identify_schema([l["code"] for l in leaves]), max_tokens=4000)
+                raw = call.result() if call is not None else self.caps.model.structured(*args, max_tokens=8000)
                 self._identify_failed = None
             except Exception as e:  # nothing read is nothing found: the rules ask the person instead
                 kind, detail = _why(e)
@@ -752,6 +780,7 @@ class CampaignJob:
 
     # -- stages -----------------------------------------------------------------
     def stage_extract(self):
+        self.start_identify_call()
         did = self.did("extract")
         result, change, hits = extract_stage.run_extract(self.doc, self.W_version, self.wclan(), self.inp,
                                                          self.handler, self.caps,
@@ -1187,7 +1216,7 @@ class CampaignJob:
                  "categories": [{"code": c, "name": (leaves.get(c) or {}).get("name", c),
                                  "regulated": (leaves.get(c) or {}).get("regulated")} for c in cats],
                  "lenses": [{"lens": l, "title": LENS_TITLES[l], "question": LENS_QUESTIONS[l][0]} for l in LENSES]},
-                SELECT_SCHEMA, max_tokens=2000)
+                SELECT_SCHEMA, max_tokens=4000)
         except Exception as e:  # no plan from the model: the default plan, every lens in every market
             kind, detail = _why(e)
             log.warning("start_campaign %s: select's model call did not answer (%s): %s", self.id, kind, detail)

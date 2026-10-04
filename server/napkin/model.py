@@ -39,6 +39,8 @@ import time
 import httpx
 import jsonschema
 
+from .metrics import emit, record
+
 log = logging.getLogger("napkin.model")
 
 IMAGE_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
@@ -114,8 +116,9 @@ class Reply:
     """What a wire returns: the text (or None), how it stopped, and the usage
     the provider reported (None when it reported none: never estimated)."""
 
-    def __init__(self, text, stop: str, usage: tuple[int, int] | None, detail: str = ""):
+    def __init__(self, text, stop: str, usage: tuple[int, int] | None, detail: str = "", breakdown: dict | None = None):
         self.text, self.stop, self.usage, self.detail = text, stop, usage, detail
+        self.breakdown = breakdown  # {"fresh", "cache_write", "cache_read"} input tokens, when the wire reports them
 
 
 def check_images(images) -> list[dict]:
@@ -192,21 +195,24 @@ class AnthropicWire:
                                  "unsupported") from e
             raise ModelError(f"{purpose}: the model call failed ({type(e).__name__})", kind) from e
         u = getattr(resp, "usage", None)
-        usage = None
+        usage, breakdown = None, None
         if u is not None:
-            usage = (int(getattr(u, "input_tokens", 0) or 0) + int(getattr(u, "cache_creation_input_tokens", 0) or 0)
-                     + int(getattr(u, "cache_read_input_tokens", 0) or 0), int(getattr(u, "output_tokens", 0) or 0))
+            fresh = int(getattr(u, "input_tokens", 0) or 0)
+            cw = int(getattr(u, "cache_creation_input_tokens", 0) or 0)
+            cr = int(getattr(u, "cache_read_input_tokens", 0) or 0)
+            usage = (fresh + cw + cr, int(getattr(u, "output_tokens", 0) or 0))
+            breakdown = {"fresh": fresh, "cache_write": cw, "cache_read": cr}
         text = next((b.text for b in getattr(resp, "content", None) or [] if getattr(b, "type", None) == "text"),
                     None)
         stop = getattr(resp, "stop_reason", None)
         if stop == "end_turn":
-            return Reply(text, "ok", usage)
+            return Reply(text, "ok", usage, breakdown=breakdown)
         if stop == "max_tokens":
-            return Reply(text, "truncated", usage)
+            return Reply(text, "truncated", usage, breakdown=breakdown)
         if stop == "refusal":
             cat = getattr(getattr(resp, "stop_details", None), "category", None)
-            return Reply(text, "refusal", usage, detail=str(cat or ""))
-        return Reply(text, "invalid", usage, detail=f"stop_reason {stop}")
+            return Reply(text, "refusal", usage, detail=str(cat or ""), breakdown=breakdown)
+        return Reply(text, "invalid", usage, detail=f"stop_reason {stop}", breakdown=breakdown)
 
 
 def _anthropic_kind(e) -> str:
@@ -401,7 +407,8 @@ class ModelPort:
         effort, max_tokens = route.effort, route.max_tokens
         mode = "prompt" if route.schema == "prompt" or (route.schema == "auto" and model in self._unenforced) \
             else "enforced"
-        user = f"Task: {purpose}\n\n<input>\n{json.dumps(payload, ensure_ascii=False, indent=1)}\n</input>"
+        # Compact JSON: indentation was 5-21% of every payload's characters (21% of the report's), paid as input.
+        user = f"Task: {purpose}\n\n<input>\n{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n</input>"
         first = {"role": "user", "text": user, "images": images}
         turns = [first]
         api_schema = strip_unsupported(schema)
@@ -412,19 +419,26 @@ class ModelPort:
             send = dict(model=model, system=system, turns=turns, purpose=purpose,
                         max_tokens=max_tokens or self.max_tokens, effort=effort, timeout=self.timeout, headers=headers)
             try:
-                reply = self.wire.send(schema=schema if mode == "prompt" else api_schema, schema_mode=mode, **send)
+                try:
+                    reply = self.wire.send(schema=schema if mode == "prompt" else api_schema, schema_mode=mode, **send)
+                except ModelError as e:
+                    if e.kind != "unsupported" or mode != "enforced" or route.schema != "auto":
+                        raise
+                    # schema: auto, and this endpoint does not enforce a schema for this model:
+                    # the schema goes in the prompt from now on, for this model (§1.9).
+                    with self._unenforced_lock:
+                        if model not in self._unenforced:
+                            log.warning("model %s: the endpoint does not enforce a JSON schema for %s; "
+                                        "the schema goes in the prompt (validated here) [%s]", purpose, model,
+                                        attribution)
+                        self._unenforced.add(model)
+                    mode = "prompt"
+                    reply = self.wire.send(schema=schema, schema_mode=mode, **send)
             except ModelError as e:
-                if e.kind != "unsupported" or mode != "enforced" or route.schema != "auto":
-                    raise
-                # schema: auto, and this endpoint does not enforce a schema for this model:
-                # the schema goes in the prompt from now on, for this model (§1.9).
-                with self._unenforced_lock:
-                    if model not in self._unenforced:
-                        log.warning("model %s: the endpoint does not enforce a JSON schema for %s; "
-                                    "the schema goes in the prompt (validated here) [%s]", purpose, model, attribution)
-                    self._unenforced.add(model)
-                mode = "prompt"
-                reply = self.wire.send(schema=schema, schema_mode=mode, **send)
+                emit("model", purpose=purpose, model=model, wire=self.wire.api, attempt=attempt, stop="error",
+                     error=getattr(e, "kind", type(e).__name__), secs=round(time.monotonic() - t0, 2),
+                     job=(headers or {}).get("X-Napkin-Job"), handler=(headers or {}).get("X-Napkin-Handler"))
+                raise
             if reply.usage is None:
                 log.warning("model %s: the response carried no usage; counted as zero [%s]", purpose, attribution)
                 usage.add(0, 0, model)
@@ -433,6 +447,15 @@ class ModelPort:
             log.info("model %s wire=%s model=%s effort=%s schema=%s attempt=%d stop=%s %.1fs [%s]", purpose,
                      self.wire.api, model, effort or "-", mode, attempt, reply.stop, time.monotonic() - t0,
                      attribution)
+            emit("model", purpose=purpose, model=model, wire=self.wire.api, attempt=attempt, stop=reply.stop,
+                 secs=round(time.monotonic() - t0, 2), input_tokens=(reply.usage or (None, None))[0],
+                 output_tokens=(reply.usage or (None, None))[1], max_tokens=max_tokens or self.max_tokens,
+                 effort=effort, schema_mode=mode, breakdown=reply.breakdown, job=(headers or {}).get("X-Napkin-Job"),
+                 handler=(headers or {}).get("X-Napkin-Handler"))
+            record("model_calls", purpose=purpose, model=model, attempt=attempt, stop=reply.stop, system=system,
+                   user=turns[-1]["text"] if len(turns) == 1 else turns[0]["text"], turns=len(turns), schema=schema,
+                   reply=reply.text, usage=reply.usage, breakdown=reply.breakdown, max_tokens=max_tokens or self.max_tokens,
+                   effort=effort, schema_mode=mode, job=(headers or {}).get("X-Napkin-Job"))
             if reply.stop == "truncated":
                 raise ModelError(f"{purpose}: the response was cut off at max_tokens", "truncated")
             if reply.stop == "refusal":

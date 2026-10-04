@@ -29,6 +29,7 @@ import time
 
 from . import runlog
 from .jobs import Cancelled
+from .metrics import emit
 from .model import ModelError, ModelPort, Usage
 from .research import ResearchError, ResearchPort
 from .retrieval import RetrievalError, RetrievalPort
@@ -134,6 +135,10 @@ class ResearchCap:
                                      urls=[x.get("url") for x in (out or {}).get("sources") or []][:12] or None,
                                      cost=tr.get("cost_usd"), cached=tr.get("cached"), error=err,
                                      queries=tr.get("queries") or None)
+                emit("research", lens=lens, market=market, secs=round(time.monotonic() - t0, 2),
+                     sources=len((out or {}).get("sources") or []), queries=len(tr.get("queries") or []),
+                     error=err.split(":", 1)[0] if err else None,
+                     job=self._attr.get("job"), handler=self._attr.get("handler"))
 
 
 class JevCap:

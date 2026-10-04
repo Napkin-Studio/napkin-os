@@ -424,7 +424,12 @@ class PlannedBriefJob(BriefJob):
         for u in units:
             rl.note("research_unit", lens=u["lens"], market=u["market"], sources=len(u["sources"]),
                     facts=len(u["cands"]), reused=u["reused"], gaps=len(u["gaps"]), error=u["error"])
-        cands = [c for u in units for c in u["cands"]]
+        # a fact outside the measure list is never written to the layers: its measure is proposed and the
+        # fact kept on record (a brief has no gaps list; the run log holds it)
+        cands, unlisted = r.split_listed(units)
+        if unlisted:
+            rl.note("unlisted_measures", notes=[{"key": n["key"], "note": n["note"]}
+                                                for n in r.propose_unlisted(unlisted)])
         existing = ctx_facts(self.clan)
         pinned = {(f.get("entity"), f.get("key"), f.get("market")): f for f in existing}
         merged = merge_rules.merge(cands, pinned, set())

@@ -30,6 +30,14 @@ def _h(*parts) -> int:
     return int(hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:8], 16)
 
 
+# The measure (on the measure list) the fake research's "<lens> indicator ... stood at N%" is extracted as,
+# per lens, and whether it is a number (a proportion) or, in a lens with no proportion, the figure as text.
+INDICATOR = {"market_structure": ("value_growth_yoy", True), "brands_positioning": ("awareness_prompted.all_brands", True),
+             "consumer_culture": ("penetration.all_adults", True), "category_codes": ("dominant_code", False),
+             "rhythm_moments": ("period_share_of_sales.peak", True), "media_spend": ("channel_share.tv", True),
+             "regulation_clearance": ("mandatory_copy", False), "effectiveness_evidence": ("case_result.campaign", True)}
+
+
 class FakeModel:
     """`client.with_options(...).messages.create(**kw)` -> a Messages-shaped response."""
 
@@ -148,16 +156,19 @@ class FakeModel:
                 if (x := re.search(r"indicator for [A-Z]{2} stood at (\d+)% in (\d{4})", q)):
                     ind.setdefault((x.group(1), x.group(2)), []).append({"source_id": s["source_id"],
                                                                           "quote": x.group(0)})
-                if (x := re.search(r"flagship launched in (\d{4})", q)):
+                if (x := re.search(r"counts (\d+) players", q)):
                     fl.setdefault(x.group(1), []).append({"source_id": s["source_id"], "quote": x.group(0)})
         cat = p["categories"][0]["code"]
+        name, numeric = INDICATOR[p["lens"]]
         for (v, y), ev in ind.items():
-            facts.append({"about": "category", "category": cat, "competitor": None, "key_suffix": "indicator",
-                          "value_number": int(v) / 100, "value_text": None, "value_boolean": None,
-                          "unit": "proportion", "as_of": f"{y}-12-31", "market_specific": True, "evidence": ev})
+            facts.append({"about": "category", "category": cat, "competitor": None, "key_suffix": name,
+                          "value_number": int(v) / 100 if numeric else None,
+                          "value_text": None if numeric else f"{v}%", "value_boolean": None,
+                          "unit": "proportion" if numeric else "text", "as_of": f"{y}-12-31",
+                          "market_specific": True, "evidence": ev})
         for y, ev in fl.items():
-            facts.append({"about": "category", "category": cat, "competitor": None, "key_suffix": "flagship_year",
-                          "value_number": None, "value_text": y, "value_boolean": None, "unit": "date",
+            facts.append({"about": "category", "category": cat, "competitor": None, "key_suffix": "player_count",
+                          "value_number": int(y), "value_text": None, "value_boolean": None, "unit": "count",
                           "as_of": None, "market_specific": False, "evidence": ev})
         return {"facts": facts, "not_found": [p["wanted"][-1]]}
 
@@ -179,10 +190,6 @@ class FakeModel:
         return {"findings": out, "audience": None}
 
     @staticmethod
-    def r_layout(p):
-        return fake_layout(p)
-
-    @staticmethod
     def r_report(p):
         secs, first = [], None
         for l in p["lenses"]:
@@ -196,7 +203,11 @@ class FakeModel:
                 "headline": {"text": f"{p['brand']}: the research is in.", "cites": [first]},
                 "summary": [{"text": "Read the sections below.", "cites": [first]},
                             {"text": "Nothing is cited here.", "cites": []}],
-                "sections": secs}
+                "sections": secs,
+                # the page the same call writes, with the mistakes the layout rule must catch
+                "html": fake_layout({"pins": [x for l in p["lenses"] for x in l["pins"]],
+                                     "findings": [x for l in p["lenses"] for x in l["findings"]],
+                                     "headline": {"text": f"{p['brand']}: the research is in."}})["html"]}
 
 
 def fake_layout(p):
@@ -221,7 +232,7 @@ def fake_layout(p):
 class FakeResearch:
     """The research port, deterministic: two corroborating sources (primary +
     secondary) on a per-market figure, and a tertiary source whose
-    market-independent year differs by market (so two markets contest it)."""
+    market-independent player count differs by market (so two markets contest it)."""
 
     def __init__(self, fail_on=None):
         self.calls = []
@@ -241,10 +252,10 @@ class FakeResearch:
                  "title": f"{lens} {market} (trade)", "retrieved_at": "2026-09-20", "published_at": None,
                  "excerpts": [f"Industry figures: {stat}"]}]
         if lens == "market_structure":
-            year = 2019 + (["IE", "GB", "FR", "DE"].index(market) if market in ("IE", "GB", "FR", "DE") else 0)
-            srcs.append({"id": "s3", "url": f"https://blog.example.net/{market.lower()}-flagship",
-                         "publisher": "A blog", "title": "Flagship", "retrieved_at": "2026-09-20", "published_at": None,
-                         "excerpts": [f"The category flagship launched in {year}, the blog says."]})
+            n = 19 + (["IE", "GB", "FR", "DE"].index(market) if market in ("IE", "GB", "FR", "DE") else 0)
+            srcs.append({"id": "s3", "url": f"https://blog.example.net/{market.lower()}-players",
+                         "publisher": "A blog", "title": "Players", "retrieved_at": "2026-09-20", "published_at": None,
+                         "excerpts": [f"The category counts {n} players, the blog says."]})
         return {"sources": srcs, "trace": {"backend": "fake", "queries": [query]}}
 
 

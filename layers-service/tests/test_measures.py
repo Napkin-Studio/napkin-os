@@ -106,3 +106,28 @@ def test_brand_facts_are_free_of_the_category_list_but_get_period_rules(session)
                      period=Y2025, period_basis="stated")
         assert r["outcome"] == "created"
         assert s.one("SELECT period_basis FROM layers.facts WHERE id = %s", (r["fact"],))[0] == "stated"
+
+
+def test_synonyms_name_other_words_for_a_listed_measure():
+    """The middleware's list was folded in as synonyms (2026-10-04): a plain name, or {name, qualifier} when the
+    old name fixes the qualifier. A synonym is never a listed name, and names one measure per lens. The seeding
+    ignores them (they are the middleware's to apply before a fact is written)."""
+    import json
+    from napkin_layers.migrate import MEASURES
+    doc = json.loads(MEASURES.read_text())
+    assert doc["status"] == "draft" and "2026-10-04" in doc["status_note"]
+    for lens, spec in doc["lenses"].items():
+        listed = {m["key"].split(".", 1)[1] for m in spec["measures"]}
+        seen = set()
+        for m in spec["measures"]:
+            for syn in m.get("synonyms", []):
+                name = syn if isinstance(syn, str) else syn["name"]
+                if not isinstance(syn, str):
+                    assert set(syn) == {"name", "qualifier"} and syn["qualifier"] and m["qualifier"] != "none"
+                assert name not in listed and name not in seen, (lens, name)
+                seen.add(name)
+    syns = {s if isinstance(s, str) else s["name"]: (m["key"], None if isinstance(s, str) else s["qualifier"])
+            for spec in doc["lenses"].values() for m in spec["measures"] for s in m.get("synonyms", [])}
+    assert syns["size_eur"] == ("market.size_value", None)
+    assert syns["tv_share_of_spend"] == ("media.channel_share", "tv")
+    assert syns["min_age_depicted"] == ("regulation.age_rule", "people shown in ads")

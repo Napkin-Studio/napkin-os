@@ -56,3 +56,6 @@ engine/rag/golden/labels/client/
 
 # Local secrets (RAG, NVIDIA, Qdrant keys)
 *.env
+
+# Research run measurements (server/tools)
+runs/metrics/

@@ -45,6 +45,12 @@ variable "github_repository" {
   type        = string
 }
 
+variable "github_repository_ids" {
+  description = "The same repository as GitHub's immutable OIDC subject names it, owner@id/repo@id (gh api repos/OWNER/REPO/actions/oidc/customization/sub); empty when it uses the name"
+  type        = string
+  default     = ""
+}
+
 variable "github_oidc_provider_arn" {
   description = "An existing token.actions.githubusercontent.com provider (one per account); empty creates it"
   type        = string
@@ -63,10 +69,34 @@ variable "web_count" {
   default     = 1
 }
 
+variable "web_cpu" {
+  description = "The studio task's CPU units (256 = a quarter vCPU); it waits on the middleware far more than it computes"
+  type        = number
+  default     = 256
+}
+
+variable "web_memory" {
+  description = "The studio task's memory in MiB; 1024 leaves room for headless Chromium's PDF exports"
+  type        = number
+  default     = 1024
+}
+
+variable "spot" {
+  description = "Run the tasks on Fargate Spot (about 70% cheaper; a task can be reclaimed with two minutes' warning and is replaced)"
+  type        = bool
+  default     = true
+}
+
 variable "middleware_count" {
   description = "Middleware tasks. 0 until the knowledge layers it requires (NAPKIN_LAYERS_URL) run on AWS"
   type        = number
   default     = 0
+}
+
+variable "middleware_secrets" {
+  description = "The middleware's secrets: environment variable name -> Secrets Manager ARN, read at task start"
+  type        = map(string)
+  default     = {}
 }
 
 variable "middleware_env" {

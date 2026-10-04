@@ -269,6 +269,38 @@ module "services" {
   session_secret_arn             = module.identity.session_secret_arn
   cognito_client_id              = module.identity.client_id
   github_repository              = var.github_repository
+  github_repository_ids          = var.github_repository_ids
   certificate_arn                = var.certificate_arn
   middleware_count               = var.middleware_count
+  middleware_env = {
+    NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
+    # Until the middleware takes its scope from the signed-in person's agency,
+    # it works as our own test tenant, whose database exists (agencies.sandbox).
+    NAPKIN_DEV_ORG      = "org/sandbox"
+    NAPKIN_MODEL_ROUTES = "/srv/napkin/server/model-routes.json"
+  }
+  # The knowledge layers, in process (pg.py): the shared category database and
+  # each agency's own. Each secret is the JSON the database module wrote.
+  middleware_secrets = merge({
+    NAPKIN_TAVILY_API_KEY = aws_secretsmanager_secret.tavily.arn
+    NAPKIN_JEV_API_KEY    = aws_secretsmanager_secret.jev.arn
+    NAPKIN_LAYERS_DSN     = module.databases.secret_arns["napkin_category"]
+    }, {
+    for slug in keys(var.agencies) :
+    "NAPKIN_LAYERS_AGENCY_DSN_${upper(replace(slug, "-", "_"))}" => module.databases.secret_arns["napkin_agency_${replace(slug, "-", "_")}"]
+  })
+}
+
+# jev (TypeSafe), the checker research, asks and briefs rely on. Value put by hand:
+#   aws secretsmanager put-secret-value --secret-id napkin-staging/research/jev-api-key --secret-string ...
+resource "aws_secretsmanager_secret" "jev" {
+  name       = "${local.name}/research/jev-api-key"
+  kms_key_id = aws_kms_key.data.arn
+}
+
+# Research's web search. Its value is put by hand, never in Terraform state:
+#   aws secretsmanager put-secret-value --secret-id napkin-staging/research/tavily-api-key --secret-string tvly-...
+resource "aws_secretsmanager_secret" "tavily" {
+  name       = "${local.name}/research/tavily-api-key"
+  kms_key_id = aws_kms_key.data.arn
 }

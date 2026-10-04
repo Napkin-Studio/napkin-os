@@ -53,6 +53,17 @@ resource "aws_ecs_cluster" "this" {
   name = var.name
 }
 
+# Spot runs the same tasks for about a third of the price; AWS may reclaim one
+# with two minutes' warning, and the service starts another.
+resource "aws_ecs_cluster_capacity_providers" "this" {
+  cluster_name       = aws_ecs_cluster.this.name
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+}
+
+locals {
+  capacity = var.spot ? "FARGATE_SPOT" : "FARGATE"
+}
+
 resource "aws_cloudwatch_log_group" "app" {
   for_each          = local.apps
   name              = "/napkin/${var.name}/${each.key}"
@@ -85,7 +96,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.session_secret_arn]
+    resources = concat([var.session_secret_arn], values(var.middleware_secrets))
   }
   statement {
     actions   = ["kms:Decrypt"]
@@ -131,6 +142,19 @@ data "aws_iam_policy_document" "middleware" {
       "arn:aws:bedrock:*::foundation-model/anthropic.claude-*",
       "arn:aws:bedrock:*:${data.aws_caller_identity.me.account_id}:inference-profile/*anthropic.claude-*",
     ]
+  }
+  # Research's failover: Nova 2 Lite with web grounding, on its US profile only
+  # (the only place grounding runs). The query text is all that goes there.
+  statement {
+    actions = ["bedrock:InvokeModel"]
+    resources = [
+      "arn:aws:bedrock:us-*::foundation-model/amazon.nova-2-lite-*",
+      "arn:aws:bedrock:us-*:${data.aws_caller_identity.me.account_id}:inference-profile/us.amazon.nova-2-lite-*",
+    ]
+  }
+  statement {
+    actions   = ["bedrock:InvokeTool"]
+    resources = ["arn:aws:bedrock::${data.aws_caller_identity.me.account_id}:system-tool/amazon.nova_grounding"]
   }
 }
 
@@ -230,7 +254,7 @@ resource "aws_efs_file_system" "web" {
 
 resource "aws_security_group" "efs" {
   name        = "${var.name}-efs"
-  description = "napkin-web's workspaces: NFS from web tasks"
+  description = "napkin-web workspaces: NFS from web tasks"
   vpc_id      = var.vpc_id
   ingress {
     from_port       = 2049
@@ -334,8 +358,8 @@ resource "aws_ecs_task_definition" "web" {
   family                   = "${var.name}-web"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024 # headless Chromium renders the PDF exports
+  cpu                      = var.web_cpu
+  memory                   = var.web_memory # headless Chromium renders the PDF exports
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.web.arn
   volume {
@@ -393,6 +417,7 @@ resource "aws_ecs_task_definition" "middleware" {
       NAPKIN_MODEL_API    = "bedrock"
       NAPKIN_MODEL_REGION = var.region
     }, var.middleware_env) : { name = k, value = v }]
+    secrets = [for k, v in var.middleware_secrets : { name = k, valueFrom = v }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -407,11 +432,14 @@ resource "aws_ecs_task_definition" "middleware" {
 # ── services ──────────────────────────────────────────────────────────────────
 
 resource "aws_ecs_service" "web" {
-  name                              = "web"
-  cluster                           = aws_ecs_cluster.this.id
-  task_definition                   = aws_ecs_task_definition.web.arn
-  desired_count                     = var.web_count
-  launch_type                       = "FARGATE"
+  name            = "web"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.web.arn
+  desired_count   = var.web_count
+  capacity_provider_strategy {
+    capacity_provider = local.capacity
+    weight            = 1
+  }
   health_check_grace_period_seconds = 60
   enable_execute_command            = true
   network_configuration {
@@ -430,7 +458,7 @@ resource "aws_ecs_service" "web" {
   lifecycle {
     ignore_changes = [task_definition] # the pipeline deploys revisions
   }
-  depends_on = [aws_lb_listener.http, aws_efs_mount_target.web]
+  depends_on = [aws_lb_listener.http, aws_efs_mount_target.web, aws_ecs_cluster_capacity_providers.this]
 }
 
 resource "aws_ecs_service" "middleware" {
@@ -438,7 +466,10 @@ resource "aws_ecs_service" "middleware" {
   cluster         = aws_ecs_cluster.this.id
   task_definition = aws_ecs_task_definition.middleware.arn
   desired_count   = var.middleware_count
-  launch_type     = "FARGATE"
+  capacity_provider_strategy {
+    capacity_provider = local.capacity
+    weight            = 1
+  }
   network_configuration {
     subnets         = var.private_subnet_ids
     security_groups = [aws_security_group.middleware.id, var.data_clients_security_group_id]
@@ -453,6 +484,7 @@ resource "aws_ecs_service" "middleware" {
   lifecycle {
     ignore_changes = [task_definition]
   }
+  depends_on = [aws_ecs_cluster_capacity_providers.this]
 }
 
 # ── the pipeline's way in: GitHub OIDC, main branch only ──────────────────────
@@ -479,11 +511,14 @@ data "aws_iam_policy_document" "deploy_trust" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # main only: a push to main, or a run of a workflow on main
+    # main only: a push to main, or a run of a workflow on main. GitHub names
+    # the repository by its ids in the subject (immutable subjects), by name
+    # in older repositories; either form is accepted.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/main"]
+      values = [for r in compact([var.github_repository, var.github_repository_ids]) :
+      "repo:${r}:ref:refs/heads/main"]
     }
   }
 }

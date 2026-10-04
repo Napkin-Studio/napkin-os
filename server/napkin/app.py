@@ -18,15 +18,17 @@ import threading
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import API, backend, registry, runlog, set_model_wire
+from . import API, backend, metrics, registry, runlog, set_model_wire
 from .capabilities import Capabilities
 from .config import Settings
 from .doc import STAGES
 from .jobs import JobStore, LongJob
 from .layers.http import HttpLayerStore
+from .layers.pg import PgLayerStore
 from .model import ModelPort, build_wire
 from .model_routes import Routes
 from .research import ResearchPort
+from .websearch import web_research
 from .retrieval import RetrievalPort
 from .util import TaskError, bad, iso
 
@@ -62,6 +64,8 @@ class Middleware:
         if research_port is None and settings.research_url:
             research_port = ResearchPort(settings.research_url, settings.research_timeout,
                                          token=settings.research_token)
+        elif research_port is None and settings.research_web:
+            research_port = web_research(settings, self.model_port)
         self.research_port = research_port
         if retrieval_port is None and settings.retrieval_url:
             retrieval_port = RetrievalPort(settings.retrieval_url, settings.retrieval_token, settings.retrieval_timeout)
@@ -74,10 +78,17 @@ class Middleware:
             except Exception as e:  # noqa: BLE001 - no jev: the check loop goes on unchecked
                 log.warning("jev not available: %s", e)
         if layer_store is None:
-            if not settings.layers_url:
-                raise SystemExit("NAPKIN_LAYERS_URL is required: the knowledge layers are a service "
-                                 "(napkin.layers/1); the middleware opens no database")
-            layer_store = HttpLayerStore(settings.layers_url, settings.layers_token, settings.layers_timeout)
+            if settings.layers_url:
+                layer_store = HttpLayerStore(settings.layers_url, settings.layers_token, settings.layers_timeout)
+            elif settings.layers_dsn:
+                try:
+                    layer_store = PgLayerStore(settings.layers_dsn, settings.layers_agency_dsn,
+                                               settings.layers_agency_dsns, settings.layers_timeout)
+                except ValueError as e:
+                    raise SystemExit(f"NAPKIN_LAYERS_DSN: {e}") from None
+            else:
+                raise SystemExit("NAPKIN_LAYERS_URL or NAPKIN_LAYERS_DSN is required: the knowledge layers are "
+                                 "a service (napkin.layers/1) or, in process, their Postgres databases")
         self.layer_store = layer_store
         self.jobs = JobStore()
         self.research_sem = threading.Semaphore(max(1, settings.research_concurrency))
@@ -292,12 +303,14 @@ def main():
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     settings = Settings.from_env()
+    metrics.enable_by_default()
     if settings.port in (8080, 8090, 8790, 8791, 8792, 8796):
         raise SystemExit(f"refusing to bind port {settings.port}")
     app = create_app(settings)
     log.info("%s on http://%s:%d/v1/tasks scope=%s model=%s/%s research=%s retrieval=%s layers=%s", API,
              settings.host, settings.port, settings.scope, settings.model_api, settings.model,
-             settings.research_url or "none", settings.retrieval_url or "none", settings.layers_url)
+             settings.research_url or "none", settings.retrieval_url or "none",
+             settings.layers_url or ("postgres (in process)" if settings.layers_dsn else "none"))
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="warning")
 
 

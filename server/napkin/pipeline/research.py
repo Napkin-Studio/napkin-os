@@ -8,7 +8,12 @@ Per unit (lens, market):
   2. each source is tiered by the domain policy and recorded in the layer;
   3. ONE structured-output call extracts facts, each with the exact quote and
      the source it came from. A fact whose quote is not in that source's
-     excerpts, or whose number is not in its quote, is rejected;
+     excerpts, or whose number is not in its quote, is rejected. Facts are
+     named by the measure list (napkin/measures.py, the list the layers
+     enforce): a name the model invents is rewritten through the list's
+     synonyms; a fact that still fits no measure (or not its units or
+     qualifier) is never written to the layers — the merge keeps it in the
+     document as a note carrying the fact and proposes its measure;
   4. a unit that fails (timeout, upstream error, invalid output) becomes a gap
      carrying its error — never a silent success.
 The client's own material (the documents attached to the campaign) is read
@@ -20,8 +25,9 @@ the shared category layer. Where it and the web disagree, the merge opens a
 contest like any other, and a person picks.
 Then, across units: the merge by entity + key + market (contests for
 disagreements, nothing picked), D1 — every fact is appended to the layers with
-the merge decision FIRST, then pinned from the row the layer returns —, and
-coverage per market and merged.
+the merge decision FIRST, then pinned from the row the layer returns; a write
+the layers refuse becomes a note, never a halted job —, and coverage per
+market and merged.
 """
 
 from __future__ import annotations
@@ -30,11 +36,15 @@ import datetime as _dt
 import logging
 import re
 import threading
+import time as _time
 from concurrent.futures import ThreadPoolExecutor
 
 from ..doc import (CONF, ISO_3166, LENS_NAMESPACE, LENSES, LICENCE_RANK, ctx_data, ctx_facts, decision,
                    field_value, lens_of_key, market_list, read_of)
 from ..layers import origin_uri
+from ..layers.http import LayersError
+from ..measures import BY_NAME, MEASURES, SYNONYM, UNITS as MEASURE_UNITS
+from ..metrics import UNIT, emit
 from ..rules import merge as merge_rules
 from ..rules.confidence import coverage_of, fact_confidence, merge_coverage
 from ..rules.figures import quote_supports
@@ -69,34 +79,46 @@ def material_excerpts(text: str, cap: int = MATERIAL_CHARS) -> list[str]:
 
 
 # The standing question each lens asks (Planner Research Taxonomy, panel 3),
-# and the facts it wants — the wanted keys become gaps when not found.
+# and the measures it wants (names on the measure list, napkin/measures.py) —
+# the wanted measures become gaps when not found.
 LENS_QUESTIONS = {
     "market_structure": ("Who is in the market and how big is it: players, shares, size, growth, consolidation.",
-                         ["size_eur", "units_annual", "value_growth_yoy", "share"]),
+                         ["size_value", "size_volume", "value_growth_yoy", "player_share"]),
     "brands_positioning": ("What each brand claims and stands for: lines, assets, launches, agency moves.",
-                           ["claim", "launch_date", "model_range", "awareness_prompted"]),
+                           ["claim", "launch", "awareness_prompted"]),
     "consumer_culture": ("Who buys and what is moving: segments, attitudes, cultural tensions.",
-                         ["purchase_intent_share", "barrier_top", "segment_share"]),
+                         ["attitude_share", "barrier", "segment_share"]),
     "category_codes": ("The conventions of advertising in the category: what every ad does, what is worn out.",
                        ["dominant_code", "worn_out_code"]),
     "rhythm_moments": ("When it happens: seasonal peaks, cycles, launch windows, events the category plans around.",
-                       ["peak_months", "key_moment"]),
+                       ["key_moment", "period_share_of_sales"]),
     "media_spend": ("Where the money goes: channels, share of spend, attention costs.",
-                    ["adspend_eur", "tv_share_of_spend", "digital_share_of_spend"]),
+                    ["adspend_total", "channel_share", "share_of_voice"]),
     "regulation_clearance": ("What you cannot say: codes, substantiation, mandatory copy, incentives and rules.",
-                             ["code_applies", "mandatory_copy", "grant_eur"]),
+                             ["code_applies", "mandatory_copy", "grant"]),
     "effectiveness_evidence": ("What has worked before: award cases, evidence on long vs short, share of voice.",
-                               ["published_cases", "case_example"]),
+                               ["case", "case_result"]),
 }
-UNITS = ["proportion", "eur", "gbp", "usd", "count", "units", "date", "text", "years", "months", "km", "kwh",
-         "code", "boolean"]
+# The units the extraction may answer in: every unit a measure allows, and a few
+# more a fact outside the list may need (it is proposed with its unit).
+UNITS = list(dict.fromkeys(["proportion", "eur", "gbp", "usd", "count", "units", "date", "text", "years", "months",
+                            "km", "kwh", "code", "boolean", *MEASURE_UNITS]))
+NUMERIC_UNITS = ("proportion", "eur", "gbp", "usd", "count", "units", "km", "kwh")
+UNLISTED = "not on the measure list: proposed"
 
 SYSTEM = """You extract facts for an advertising agency's research layer from web sources.
 You are given ONE research lens and ONE market, the campaign's subject brand, comparators and
 category leaves, and sources with verbatim excerpts. Extract only facts an excerpt states.
-Each fact: what it is about (the category, the subject brand, or a named comparator), a short
-snake_case key_suffix naming the measure, not the period (the lens namespace is added for you;
-the period goes in as_of, so "bev_share", never "bev_share_2025"), the value (a number, a short
+Each fact: what it is about (the category, the subject brand, or a named comparator), and its
+key_suffix: the measure it is, never the period (the lens namespace is added for you; the period
+goes in as_of). The input lists this lens's `measures`: each has a name, a definition, the units it
+allows and the kind of qualifier it takes. When a fact is one of them, use exactly that name as
+key_suffix and one of its units. When the measure's qualifier is not "none", add a dot and what this
+row is about (the player, channel, segment, moment, statement, rule, body, wider market, metric or
+campaign) in short lowercase words joined by underscores: player_share.aldi, channel_share.tv,
+penetration.18_34, top_n_share.top_5. When it is "none", add nothing. A measure whose cardinality is
+"many" is a list: give each item as its own fact. A fact that fits no listed measure is named x_ and a
+short snake_case name (x_share_of_volume): it is kept for a planner, not filed. The value (a number, a short
 text, or a boolean), its unit, as_of (the date the figure describes or was published,
 YYYY-MM-DD, never in the future, or null), whether it is specific to this market, and the
 evidence: the source_id and the exact quote from that source's excerpts (character for
@@ -156,6 +178,32 @@ def validate_research(clan: dict, inp: dict):
     return lenses, markets, cats[:2]
 
 
+QUERY_LIMIT = 480  # the research port refuses a question over 500 characters (peripherals.md section 2)
+
+
+def search_question(question: str, cat_names: list[str], market: str, brand: str | None, comparators: list[str],
+                    focus: str | None = None) -> str:
+    """The question sent to the research port. Comparators are added whole and in order until the next
+    one would pass QUERY_LIMIT; they only steer the search, and fact extraction still sees every one.
+    A brand or category name long enough to break the limit on its own is cut, never sent over.
+    `focus`: what the brief needs from this unit, kept ahead of the comparators."""
+    def base(cats):
+        return (f"{question} Category: {', '.join(cats)}. Market: {market_list([market])} ({market})."
+                + (f" Brand: {brand}." if brand else "")
+                + (f" What the brief needs: {focus}" if focus else ""))
+    head = base(cat_names)
+    if len(head) > QUERY_LIMIT:
+        head = base(cat_names[:1])
+    if len(head) > QUERY_LIMIT:
+        return head[:QUERY_LIMIT].rsplit(" ", 1)[0]
+    fitted: list[str] = []
+    for name in comparators:
+        if len(f"{head} Comparators: {', '.join(fitted + [name])}.") > QUERY_LIMIT:
+            break
+        fitted.append(name)
+    return f"{head} Comparators: {', '.join(fitted)}." if fitted else head
+
+
 def _date_ok(s) -> bool:
     return isinstance(s, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", s) is not None
 
@@ -190,6 +238,16 @@ class Researcher:
         self.leaf_names = {l["code"]: l["name"] for l in caps.layers.leaves()}
         self.done = 0
         self.hits = []
+        self._rows: dict = {}
+        self._rows_lock = threading.Lock()
+
+    def _entity_rows(self, layer: str, entity: str) -> list[dict]:
+        """Every current row the layers hold for an entity, read once per job. The reuse check of every lens and
+        market reads from this; nothing is written to the layers until the merge, so it cannot go stale in the run."""
+        with self._rows_lock:
+            if (layer, entity) not in self._rows:
+                self._rows[(layer, entity)] = self.caps.layers.facts(layer, entity)
+            return self._rows[(layer, entity)]
 
     # -- entities --------------------------------------------------------------
     def entities(self):
@@ -231,15 +289,32 @@ class Researcher:
 
     # -- one unit ----------------------------------------------------------------
     def unit(self, lens: str, market: str, focus: str | None = None) -> dict:
+        """One lens x market unit (see `_unit`); its outcome goes to the run ledger."""
+        t0 = _time.monotonic()
+        tok = UNIT.set(f"{lens}/{market}")
+        try:
+            u = self._unit(lens, market, focus)
+        finally:
+            UNIT.reset(tok)
+        emit("unit", lens=lens, market=market, secs=round(_time.monotonic() - t0, 2), reused=u["reused"],
+             sources=len(u["sources"]), facts=len(u["cands"]) - u["reused"], gaps=len(u["gaps"]), error=u["error"],
+             job=self.caps.attribution.get("job"))
+        return u
+
+    def _unit(self, lens: str, market: str, focus: str | None = None) -> dict:
         ns = LENS_NAMESPACE[lens]
         u = {"lens": lens, "market": market, "cands": [], "gaps": [], "reused": 0, "sources": [], "error": None,
              "queries": []}
         # 0. reuse what the layers already hold, fresh
         cutoff = (_dt.date.today() - _dt.timedelta(days=self.reuse_days)).isoformat()
         for entity, layer in self.entities():
-            for row in self.caps.layers.facts(layer, entity, key_prefix=ns, market=market):
+            for row in self._entity_rows(layer, entity):
+                if not (row["key"] == ns or row["key"].startswith(ns + ".")):
+                    continue  # another lens's facts
                 if row["status"] != "active" or row["retrieved_at"] < cutoff:
                     continue
+                if row["market"] != market:
+                    continue  # a fact naming no market comes back for every market; it says nothing about this one
                 u["cands"].append(self._cand_from_row(row, lens, market))
                 u["reused"] += 1
         mats = self.material_sources() if self.materials else []
@@ -271,11 +346,11 @@ class Researcher:
         if self.question_first and focus:
             query = (f"{focus} Market: {market_list([market])} ({market})."
                      + (f" About: {brand}, in {', '.join(cat_names)}." if brand else f" Category: {', '.join(cat_names)}."))
+            if len(query) > QUERY_LIMIT:
+                query = query[:QUERY_LIMIT].rsplit(" ", 1)[0]
         else:
-            query = (f"{question} Category: {', '.join(cat_names)}. Market: {market_list([market])} ({market})."
-                     + (f" Brand: {brand}." if brand else "")
-                     + (f" Comparators: {', '.join(c['name'] for c in self.comps)}." if self.comps else "")
-                     + (f" What the brief needs: {focus}" if focus else ""))
+            query = search_question(question, cat_names, market, brand,
+                                    [c["name"] for c in self.comps if c.get("name")], focus=focus)
         try:
             res = self.caps.research.search(query, lens, market, entity=self.subject["ref"] if self.subject else None,
                                             category=self.cats[0])
@@ -304,6 +379,9 @@ class Researcher:
         ns = LENS_NAMESPACE[lens]
         comp_names = [c["name"] for c in self.comps]
         payload = {"lens": lens, "lens_question": question, "key_namespace": ns, "wanted": wanted, "focus": focus,
+                   "measures": [{"name": m["name"], "definition": m["definition"], "units": m["units"],
+                                 "qualifier": m["qualifier"], "cardinality": m["cardinality"]}
+                                for m in MEASURES[lens]],
                    "market": market, "subject_brand": brand, "comparators": comp_names,
                    "categories": [{"code": c, "name": self.leaf_names.get(c, c)} for c in self.cats],
                    "sources": [{"source_id": s["sid"], "kind": "client_material" if s.get("material") else "web",
@@ -325,14 +403,17 @@ class Researcher:
                 u["cands"].append(c)
         if all(s.get("material") for s in srcs):
             return u  # only the client's material was read: what it does not say is not a gap of the lens
-        found = {c["key"].split(".", 1)[1] for c in u["cands"]}
+        found = {c["key"].split(".", 1)[1].split(".")[0] for c in u["cands"]  # a qualified name counts as its measure
+                 if c.get("listed", True)}
         for w in (raw.get("not_found") or []):
             w = re.sub(r"[^a-z0-9_]+", "_", str(w).lower()).strip("_")
             if w and w in wanted and w not in found:
                 u["gaps"].append(self._gap(lens, market, w, tried=[s["url"] for s in srcs]))
-        if not u["cands"] and not u["gaps"]:
+        if not any(c.get("listed", True) for c in u["cands"]) and not u["gaps"]:
             u["gaps"].append(self._gap(lens, market, wanted[0], tried=[s["url"] for s in srcs],
-                                       note="the sources held nothing that passed the quote check"))
+                                       note="the sources held nothing on the measure list that passed the quote "
+                                            "check" if u["cands"] else
+                                       "the sources held nothing that passed the quote check"))
         return u
 
     def _cand_from_row(self, row, lens, market) -> dict:
@@ -343,7 +424,10 @@ class Researcher:
                 "quotes": _row_quotes(row)}
 
     def _check(self, f: dict, lens: str, market: str, by_sid: dict) -> dict | None:
-        """The rules a model-extracted fact must pass."""
+        """The rules a model-extracted fact must pass. A fact that passes them is a candidate; it is `listed`
+        when it is a measure on the list, in one of the measure's units, with the qualifier the measure takes
+        (what the layers accept). An unlisted candidate is never written to the layers: the merge keeps it in
+        the document as a note and proposes its measure for a planner."""
         about = f.get("about")
         if about == "category":
             leaf = f.get("category") or self.cats[0]
@@ -359,24 +443,25 @@ class Researcher:
             entity, layer = comp["ref"], "category"
         else:
             return None
-        suffix = re.sub(r"[^a-z0-9_.]+", "_", str(f.get("key_suffix") or "").lower()).strip("._")
-        if not suffix:
+        head, qual = _name_and_qualifier(f.get("key_suffix"))
+        if not head:
             return None
-        key = f"{LENS_NAMESPACE[lens]}.{suffix}"
-        if not re.fullmatch(r"[a-z0-9_]+(\.[a-z0-9_]+)*", key):
-            return None
+        if (lens, head) in SYNONYM:  # a name the model invented, or the older list's, becomes the listed one
+            head, fixed = SYNONYM[(lens, head)]
+            qual = qualifier_slug(fixed) if fixed else qual
         unit = f.get("unit")
         if f.get("value_number") is not None:
             value = f["value_number"]
             if isinstance(value, float) and value.is_integer():
                 value = int(value)
-            if unit == "proportion" and not (0 <= value <= 1):
+            # a share lies between 0 and 1; a growth rate can fall, or more than double
+            if unit == "proportion" and "growth" not in head and not (0 <= value <= 1):
                 return None
         elif f.get("value_boolean") is not None:
             value, unit = bool(f["value_boolean"]), "boolean"
         elif isinstance(f.get("value_text"), str) and f["value_text"].strip():
             value = f["value_text"].strip()[:300]
-            if unit in ("proportion", "eur", "gbp", "usd", "count", "units", "km", "kwh"):
+            if unit in NUMERIC_UNITS:
                 return None  # a numeric unit needs a number
         else:
             return None
@@ -406,11 +491,16 @@ class Researcher:
         if as_of > retrieved_at:
             return None  # a fact cannot be true after it was learned
         mk = market if f.get("market_specific", True) else None
+        head, qual, unit, why = _on_the_list(lens, head, qual, value, unit)
+        key = f"{LENS_NAMESPACE[lens]}.{head}" + (f".{qual}" if qual else "")
+        if not re.fullmatch(r"[a-z0-9_]+(\.[a-z0-9_]+)*", key):
+            return None
         # The client's material is the client's: a fact resting on it stays at brand scope (C3).
         confidential = any(by_sid[s].get("material") for s in sources)
         return {"entity": entity, "key": key, "market": mk, "value": value, "unit": unit, "as_of": as_of,
                 "retrieved_at": retrieved_at, "layer": "brand" if confidential else layer, "lens": lens,
                 "run": f"{lens}/{market}", "sources": sources, "quotes": quotes, "method": "report",
+                "listed": why is None, **({"unlisted_why": why} if why else {}),
                 **({"confidential": True} if confidential else {}),
                 "records": [{"id": s, "tier": by_sid[s]["tier"], "domain": by_sid[s]["domain"],
                              "licence": by_sid[s].get("licence") or "open", "uri": by_sid[s]["url"]} for s in sources]}
@@ -446,7 +536,7 @@ class Researcher:
         sel = self.data.get("selection") or {}
         excluded = {e.get("fact_id") for e in (sel.get("excluded") or [])}
         open_keys = {c.get("key") for c in (sel.get("contested") or []) if c.get("status") == "open"}
-        cands = [c for u in units for c in u["cands"]]
+        cands, unlisted = self.split_listed(units)
         merged = merge_rules.merge(cands, pinned, open_keys)
         merge_did = uid("d_", doc, self.seed, "research-merge", self.lenses, self.markets, len(self.pairs))
         # The layer stores the decision with each fact it writes, before the
@@ -456,10 +546,16 @@ class Researcher:
                              f"Merged {len(units)} lens x market run(s) by entity + key + market; each fact is "
                              f"written to the layer with this decision before it is pinned.", [], [], timestamp=t_now)
 
-        # D1: write to the layers FIRST (with the decision), then pin from the row.
+        # A fact outside the measure list is never written to the layers: it is kept in the document as a
+        # note carrying the fact, and its measure is proposed for a planner.
+        notes = self.propose_unlisted(unlisted)
+        # D1: write to the layers FIRST (with the decision), then pin from the row. A write the layers
+        # refuse is a note too: no stage may halt a job.
         facts_append = []
         for c in merged["pins"]:
-            row = self._write(c, merge_dec, status="active")
+            row = self._write_or_note(c, merge_dec, "active", notes)
+            if row is None:
+                continue
             if row["id"] in pinned_ids or row["id"] in excluded or row["status"] == "superseded":
                 continue
             ident = (row["entity"], row["key"], row["market"])
@@ -481,7 +577,9 @@ class Researcher:
                 vals.append({"value": p["value"], "unit": p.get("unit"), "fact_id": p["id"], "from": "pinned",
                              "sources": list(p.get("sources", []))})
             for v in ct["values"]:
-                row = self._write(v, cdec, status="contested")
+                row = self._write_or_note(v, cdec, "contested", notes)
+                if row is None:
+                    continue
                 vals.append({"value": row["value"], "unit": row["unit"], "fact_id": row["id"],
                              "from": ", ".join(v["runs"]), "sources": list(v["sources"]),
                              "quotes": {s: q for s, q in (v.get("quotes") or {}).items() if s in v["sources"]},
@@ -502,7 +600,7 @@ class Researcher:
         by_market, runs, run_decs, gaps = {}, [], [], []
         for u in units:
             counts = [len(c["sources"]) if not c.get("row") else len({r["domain"] for r in c["records"]})
-                      for c in u["cands"]]
+                      for c in u["cands"] if c.get("listed", True)]
             cov = coverage_of(counts)
             by_market.setdefault(u["market"], {})[u["lens"]] = cov
             rdid = uid("d_", doc, self.seed, "run", u["lens"], u["market"])
@@ -531,6 +629,7 @@ class Researcher:
                 coverage[lens] = merge_coverage(vals)
         run_keys = {(r["lens"], r["market"]) for r in runs}
         all_runs = [x for x in (sel.get("lenses_run") or []) if (x.get("lens"), x.get("market")) not in run_keys] + runs
+        gaps += [n for n in notes if n["id"] not in {g["id"] for g in gaps}]
         gap_ids = {g["id"] for g in gaps}
         old_gaps = [g for g in (sel.get("gaps") or []) if g.get("id") not in gap_ids]
         ct_ids = {c["id"] for c in contests}
@@ -555,8 +654,13 @@ class Researcher:
             + (f", {n_reused} fact(s) reused from the layers" if n_reused else "")
             + ". Each fact was written to the layer with this decision before it was pinned; confidence is "
               "derived from source tier and corroboration.")
-        merge_dec["fields_changed"] = ["selection.coverage", "selection.coverage_by_market"]
-        rsn.give(merge_dec, merge_reasoning(facts_append, contests, gaps, len(units), n_reused))
+        if notes:
+            merge_dec["targets"] += [f"{doc}#selection.gaps[{n['id']}]" for n in notes]
+            merge_dec["rationale"] += (f" {len(notes)} fact(s) were kept as notes and not written to the layers "
+                                       f"(not on the measure list, or refused by the layers).")
+        merge_dec["fields_changed"] = ["selection.coverage", "selection.coverage_by_market"] + \
+            (["selection.gaps"] if notes else [])
+        rsn.give(merge_dec, merge_reasoning(facts_append, contests, gaps, len(units), n_reused, notes))
         srcs = {s["sid"]: s for u in units for s in u["sources"]}
         change = {"doc": doc, "base_version": self.base, "data_patch": {"selection": sel_patch},
                   "read": read_of(self.data, {"selection": sel_patch}),
@@ -598,17 +702,76 @@ class Researcher:
             out.append({k: v for k, v in rec.items() if v not in (None, "")})
         return out
 
+    # -- facts outside the measure list, and refused writes ---------------------
+    @staticmethod
+    def split_listed(units) -> tuple[list[dict], list[dict]]:
+        """(the candidates on the measure list, those outside it). A row reused from the layers is listed."""
+        cands = [c for u in units for c in u["cands"]]
+        return [c for c in cands if c.get("listed", True)], [c for c in cands if not c.get("listed", True)]
+
+    def propose_unlisted(self, unlisted: list[dict]) -> list[dict]:
+        """Each fact outside the measure list, kept as a note in the document (selection.gaps' shape, the fact
+        in its words), its measure proposed to the layers for a planner. A proposal that fails is said in the
+        note; it never stops the job."""
+        notes, seen = [], set()
+        for c in unlisted:
+            try:
+                done = self.caps.layers.propose_measure(self._fact_body(c))
+                reason = c.get("unlisted_why") or UNLISTED
+                if not done:
+                    reason = reason.replace(": proposed", ": kept here for a planner (these layers take no "
+                                                          "proposals)")
+            except Exception as e:  # noqa: BLE001 - a proposal is a courtesy to the planner, never a halt
+                log.warning("research: proposing %s failed: %s", c["key"], e)
+                reason = (c.get("unlisted_why") or UNLISTED).replace(
+                    ": proposed", f": kept here; the proposal failed ({str(e)[:120]})")
+            n = self._fact_note(c, reason)
+            if n["id"] not in seen:
+                seen.add(n["id"])
+                notes.append(n)
+        return notes
+
+    def _write_or_note(self, c: dict, dec: dict, status: str, notes: list) -> dict | None:
+        """`_write`, or None with the fact kept as a note when the layers refuse it."""
+        try:
+            return self._write(c, dec, status=status)
+        except LayersError as e:
+            log.warning("research: the layers refused %s: %s", c.get("key"), e)
+            n = self._fact_note(c, f"the layers refused it, so it is not filed: {str(e)[:200]}")
+            if n["id"] not in {x["id"] for x in notes}:
+                notes.append(n)
+            return None
+
+    def _fact_note(self, c: dict, reason: str) -> dict:
+        """A fact that is not filed, in a gap's shape: what it is, its value, period, source and quote."""
+        market = c.get("market") or c["run"].split("/", 1)[1]
+        uris = [r.get("uri") for r in c.get("records") or [] if r.get("uri")]
+        quote = next((q for q in (c.get("quotes") or {}).values() if isinstance(q, str) and q.strip()), None)
+        unit = "" if c.get("unit") in (None, "text") else f" {c['unit']}"
+        name = c["key"].split(".", 1)[1]
+        said = (f"{reason}. The fact: {c['key']} for {c['entity']} = {c['value']}{unit}, as of {c['as_of']}"
+                + (f", from {uris[0]}" if uris else "") + (f': "{quote[:300]}"' if quote else "") + ".")
+        return {"id": lid("gap_", self.doc, "note", c["entity"], c["key"], c.get("market"), repr(c["value"]),
+                          c["as_of"]),
+                "key": f"{c['entity']}:{c['key']}", "lens": c["lens"], "market": market,
+                "searched": f"{name.replace('_', ' ').replace('.', ': ')} for {c['entity']} in "
+                            f"{market_list([market])}",
+                "sources_tried": uris or [f"research:{c['run']}"], "note": said[:900]}
+
+    def _fact_body(self, c: dict) -> dict:
+        """The fact as the layers take it (Layers.append's `fact`)."""
+        lic = max((r.get("licence", "open") for r in c.get("records") or []), key=LICENCE_RANK.index,
+                  default="open")
+        return {"layer": c["layer"], "entity": c["entity"], "key": c["key"], "market": c.get("market"),
+                "value": c["value"], "unit": c["unit"], "as_of": c["as_of"], "retrieved_at": c["retrieved_at"],
+                "sources": c["sources"], "quotes": c.get("quotes") or {}, "licence": lic,
+                "method": c.get("method", "report")}
+
     def _write(self, c: dict, dec: dict, status: str) -> dict:
         # a layer row reused as it is; not when the client's material now backs it outside the brand layer
         if c.get("row") and status == "active" and not (c.get("confidential") and c["row"]["layer"] != "brand"):
             return c["row"]
-        lic = max((r.get("licence", "open") for r in c.get("records") or []), key=LICENCE_RANK.index,
-                  default="open")
-        return self.caps.layers.append({"layer": c["layer"], "entity": c["entity"], "key": c["key"],
-                                        "market": c.get("market"), "value": c["value"], "unit": c["unit"],
-                                        "as_of": c["as_of"], "retrieved_at": c["retrieved_at"],
-                                        "sources": c["sources"], "quotes": c.get("quotes") or {},
-                                        "licence": lic, "method": c.get("method", "report"),
+        return self.caps.layers.append({**self._fact_body(c),
                                         **({"status": "contested"} if status == "contested" else {})}, dec)
 
     def _pin(self, row: dict, c: dict, did: str, t_now: str) -> dict:
@@ -634,6 +797,40 @@ class Researcher:
             f["market"] = row["market"]
         assert f["confidence"] in CONF
         return f
+
+
+def qualifier_slug(text) -> str:
+    """A qualifier as one key segment: short lowercase words joined by underscores ("Top 3" -> top_3)."""
+    return re.sub(r"[^a-z0-9]+", "_", str(text or "").lower()).strip("_")[:80]
+
+
+def _name_and_qualifier(key_suffix) -> tuple[str, str]:
+    """(measure name, qualifier slug) from what the model wrote: `player_share.aldi` -> (player_share, aldi).
+    Everything after the first dot is the qualifier (one segment)."""
+    suffix = re.sub(r"[^a-z0-9_.]+", "_", str(key_suffix or "").lower()).strip("._")
+    head, _, rest = suffix.partition(".")
+    return head.strip("_"), qualifier_slug(rest)
+
+
+def _on_the_list(lens: str, head: str, qual: str, value, unit: str) -> tuple[str, str, str, str | None]:
+    """(name, qualifier, unit, why it is not listed or None). A listed measure in a unit it does not allow, or
+    without the qualifier it needs, is unlisted (the layers would refuse it). Two readings are not refusals:
+    a text value of a measure that takes text is in unit text (a launch written as a date is a launch), and a
+    list measure (cardinality many) that takes no qualifier drops one (the item is in the value)."""
+    m = None if head.startswith("x_") else BY_NAME.get((lens, head))
+    if m is None:
+        return head, qual, unit, UNLISTED
+    if unit not in m["units"] and isinstance(value, str) and "text" in m["units"]:
+        unit = "text"
+    if unit not in m["units"]:
+        return head, qual, unit, f"{UNLISTED} (in {unit}; {head} is measured in {', '.join(m['units'])})"
+    if m["qualifier"] == "none" and qual:
+        if m["cardinality"] == "many":
+            return head, "", unit, None
+        return head, qual, unit, f"{UNLISTED} ({head} takes no qualifier)"
+    if m["qualifier"] != "none" and not qual:
+        return head, qual, unit, f"{UNLISTED} ({head} needs a qualifier: the {m['qualifier']})"
+    return head, qual, unit, None
 
 
 def _row_quotes(row: dict) -> dict:
@@ -712,7 +909,7 @@ def run_reasoning(u, cov, reuse_days, doc) -> dict:
                     rejected=rejected, attention=attention)
 
 
-def merge_reasoning(pins, contests, gaps, n_units, n_reused) -> dict:
+def merge_reasoning(pins, contests, gaps, n_units, n_reused, notes=()) -> dict:
     """The merge: which facts were pinned and on what evidence. Certainty is
     the lowest derived confidence of the pins (source tier + independent
     corroboration), never an average and never the model's."""
@@ -727,6 +924,11 @@ def merge_reasoning(pins, contests, gaps, n_units, n_reused) -> dict:
                         "the runs disagree; the contest holds every value and nothing is picked") for c in contests]
     rejected.append(rsn.rej("pin a fact the layer has not recorded",
                             "every fact is written to its layer with this decision first, then pinned from the row"))
+    if notes:
+        because.append(rsn.point(f"{len(notes)} fact(s) were kept as notes, not filed: they are not on the measure "
+                                 f"list (proposed for a planner) or the layers refused them", [n["id"] for n in notes]))
+        rejected.append(rsn.rej("file a fact under a name the measure list does not have",
+                                "the layers speak only the measure list; a new measure is a planner's call"))
     counts = {l: sum(1 for f in pins if f["confidence"] == l) for l in rsn.LEVELS}
     level = rsn.lowest(f["confidence"] for f in pins) if pins else "low"
     basis = ("lowest derived confidence of the pins (source tier + independent corroboration): "

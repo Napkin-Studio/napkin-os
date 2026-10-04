@@ -291,6 +291,8 @@ them to Claude Code aliases:
 | Id the middleware may send | Mock runs `claude -p --model` | Wire |
 |---|---|---|
 | `claude-opus-5` | `opus` | both |
+| `claude-opus-5-5` | `claude-opus-5-5` (full id) | both |
+| `claude-sonnet-5-5` | `claude-sonnet-5-5` (full id) | both |
 | `claude-sonnet-5` | `sonnet` | both |
 | `claude-haiku-4-5` | `haiku` | both |
 | `claude-fable-5-1` | `fable` | both |
@@ -1067,11 +1069,11 @@ Environment only (`server/napkin/config.py`); handlers never see any of it.
 | `NAPKIN_MODEL_ROUTES` | unset | unset | a JSON file per environment (§1.9) |
 | `NAPKIN_MODEL_EXTRA_BODY` | unset | unset | e.g. `{"chat_template_kwargs":{"enable_thinking":false}}` for a NIM reasoning model |
 | `NAPKIN_MODEL_TIMEOUT` | `600` | `600` (never tune to the mock's latency) | `600` |
-| `NAPKIN_MODEL_CONCURRENCY` | `6` | `4` (= `MOCK_CONCURRENCY`) | provider limit |
+| `NAPKIN_MODEL_CONCURRENCY` | `8` | `8` (= `MOCK_CONCURRENCY`) | provider limit |
 | `NAPKIN_RESEARCH_URL` | unset (research units fail as gaps) | `http://127.0.0.1:8797` | the search service |
 | `NAPKIN_RESEARCH_TOKEN` | unset | unset | service token |
 | `NAPKIN_RESEARCH_TIMEOUT` | `900` | `900` | `900` |
-| `NAPKIN_RESEARCH_CONCURRENCY` | `4` | `4` | `4` |
+| `NAPKIN_RESEARCH_CONCURRENCY` | `8` | `8` | `8` |
 | `NAPKIN_RETRIEVAL_URL` | unset (drafters get no passages: fields certainty `low`, attention set) | `http://127.0.0.1:8797` | the retrieval service |
 | `NAPKIN_RETRIEVAL_TOKEN` | unset | unset | service token |
 | `NAPKIN_RETRIEVAL_TIMEOUT` | `120` | `240` (Claude picks) | `30` |

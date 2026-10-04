@@ -22,19 +22,34 @@ see any of it.
                                (napkin/model_routes.py). Unset = NAPKIN_MODEL for every call
   NAPKIN_MODEL_EXTRA_BODY      openai only: a JSON object merged into every request body
   NAPKIN_MODEL_TIMEOUT         seconds per HTTP attempt (600)
-  NAPKIN_MODEL_CONCURRENCY     model calls in flight at once, across jobs (6)
+  NAPKIN_MODEL_CONCURRENCY     model calls in flight at once, across jobs (8)
   NAPKIN_RESEARCH_URL          research service root; unset = research units fail as gaps
   NAPKIN_RESEARCH_TOKEN        its bearer token
   NAPKIN_RESEARCH_TIMEOUT      seconds per research call (900)
-  NAPKIN_RESEARCH_CONCURRENCY  research units in flight at once (4)
+  NAPKIN_RESEARCH_CONCURRENCY  research units in flight at once (8)
+  NAPKIN_RESEARCH_WEB          research in process, with no research service (napkin/websearch.py):
+                               tavily (Tavily, Nova grounding when it fails) | tavily-only | nova;
+                               unset = tavily when NAPKIN_TAVILY_API_KEY is set. NAPKIN_RESEARCH_URL wins
+  NAPKIN_TAVILY_API_KEY        Tavily's API key
+  NAPKIN_NOVA_REGION           where Nova web grounding runs (us-east-1; US regions only)
+  NAPKIN_NOVA_MODEL            the grounding model (us.amazon.nova-2-lite-v1:0)
   NAPKIN_RETRIEVAL_URL         retrieval service root; unset = drafters get no passages
   NAPKIN_RETRIEVAL_TOKEN       its bearer token
   NAPKIN_RETRIEVAL_TIMEOUT     seconds per retrieval call (120)
   NAPKIN_BRIEF_ENGINE_URL      the brief engine's agent server (engine/agent-server); set, draft_brief
                                is drafted by it (middleware-api.md §10.14); unset = the middleware's drafters
-  NAPKIN_LAYERS_URL            the layers service root (required to serve)
+  NAPKIN_LAYERS_URL            the layers service root; set, the layers are that service (HttpLayers)
   NAPKIN_LAYERS_TOKEN          its bearer token
-  NAPKIN_LAYERS_TIMEOUT        seconds per layers call (30)
+  NAPKIN_LAYERS_TIMEOUT        seconds per layers call, or per database connect and statement (30)
+  NAPKIN_LAYERS_DSN            no layers service: the layers in process on Postgres (napkin/layers/pg.py);
+                               the shared category database (napkin_category) as a libpq DSN/URI, or the
+                               database's Secrets Manager JSON {host, port, dbname, username, password,
+                               sslmode}. One of NAPKIN_LAYERS_URL or this is required to serve; the URL wins
+  NAPKIN_LAYERS_AGENCY_DSN     the agencies' own databases (napkin_agency_<slug>: the brand layer, brand names,
+                               client-confidential sources), a DSN with {agency} for the scope org's slug
+                               ('-' as '_'), e.g. postgresql://napkin_agency_{agency}_app@host/napkin_agency_{agency}
+  NAPKIN_LAYERS_AGENCY_DSN_<SLUG>  one agency's database, DSN or secret JSON (wins over the template);
+                               <SLUG> upper case, '-' as '_': NAPKIN_LAYERS_AGENCY_DSN_DEV_AGENCY for org/dev-agency
   NAPKIN_REUSE_DAYS            a layer fact younger than this is reused, not re-researched (30)
   NAPKIN_DEV_ORG / NAPKIN_DEV_BRAND  the fixed development tenant (org/dev-agency, brand/dev-brand)
   NAPKIN_TOKEN                 when set, requests must carry it (Bearer or x-api-key)
@@ -70,11 +85,15 @@ class Settings:
     model_routes: str | None = None
     model_extra_body: dict = field(default_factory=dict)
     model_timeout: float = 600.0
-    model_concurrency: int = 6
+    model_concurrency: int = 8
     research_url: str | None = None
     research_token: str | None = None
     research_timeout: float = 900.0
-    research_concurrency: int = 4
+    research_concurrency: int = 8
+    research_web: str = ""
+    tavily_api_key: str | None = None
+    nova_region: str = "us-east-1"
+    nova_model: str = "us.amazon.nova-2-lite-v1:0"
     retrieval_url: str | None = None
     retrieval_token: str | None = None
     retrieval_timeout: float = 120.0
@@ -91,6 +110,9 @@ class Settings:
     layers_url: str | None = None
     layers_token: str | None = None
     layers_timeout: float = 30.0
+    layers_dsn: str | None = None
+    layers_agency_dsn: str | None = None
+    layers_agency_dsns: dict = field(default_factory=dict)
     reuse_days: int = 30
     org: str = "org/dev-agency"
     brand: str = "brand/dev-brand"
@@ -123,11 +145,16 @@ class Settings:
                    model_routes=e("NAPKIN_MODEL_ROUTES") or None,
                    model_extra_body=extra_body,
                    model_timeout=float(e("NAPKIN_MODEL_TIMEOUT") or 600),
-                   model_concurrency=int(e("NAPKIN_MODEL_CONCURRENCY") or 6),
+                   model_concurrency=int(e("NAPKIN_MODEL_CONCURRENCY") or 8),
                    research_url=e("NAPKIN_RESEARCH_URL") or None,
                    research_token=e("NAPKIN_RESEARCH_TOKEN") or None,
                    research_timeout=float(e("NAPKIN_RESEARCH_TIMEOUT") or 900),
-                   research_concurrency=int(e("NAPKIN_RESEARCH_CONCURRENCY") or 4),
+                   research_concurrency=int(e("NAPKIN_RESEARCH_CONCURRENCY") or 8),
+                   research_web=(e("NAPKIN_RESEARCH_WEB") or ("tavily" if e("NAPKIN_TAVILY_API_KEY") else ""))
+                   .strip().lower(),
+                   tavily_api_key=e("NAPKIN_TAVILY_API_KEY") or None,
+                   nova_region=e("NAPKIN_NOVA_REGION") or "us-east-1",
+                   nova_model=e("NAPKIN_NOVA_MODEL") or "us.amazon.nova-2-lite-v1:0",
                    retrieval_url=e("NAPKIN_RETRIEVAL_URL") or None,
                    retrieval_token=e("NAPKIN_RETRIEVAL_TOKEN") or None,
                    retrieval_timeout=float(e("NAPKIN_RETRIEVAL_TIMEOUT") or 120),
@@ -145,6 +172,10 @@ class Settings:
                    layers_url=e("NAPKIN_LAYERS_URL") or None,
                    layers_token=e("NAPKIN_LAYERS_TOKEN") or None,
                    layers_timeout=float(e("NAPKIN_LAYERS_TIMEOUT") or 30),
+                   layers_dsn=e("NAPKIN_LAYERS_DSN") or None,
+                   layers_agency_dsn=e("NAPKIN_LAYERS_AGENCY_DSN") or None,
+                   layers_agency_dsns={k[len("NAPKIN_LAYERS_AGENCY_DSN_"):].lower(): v for k, v in os.environ.items()
+                                       if k.startswith("NAPKIN_LAYERS_AGENCY_DSN_") and v},
                    reuse_days=int(e("NAPKIN_REUSE_DAYS") or 30),
                    org=e("NAPKIN_DEV_ORG") or "org/dev-agency",
                    brand=e("NAPKIN_DEV_BRAND") or "brand/dev-brand", token=e("NAPKIN_TOKEN") or None,

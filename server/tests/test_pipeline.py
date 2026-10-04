@@ -49,8 +49,8 @@ def test_research_writes_layers_first_then_pins_contests_and_reuses(store):
         assert set(p["sources"]) == set(row["sources"]) and len(p["sources"]) == 2
     # the market-independent year the two markets disagree on is a contest; neither value is pinned
     ct = change["data_patch"]["selection"]["contested"]
-    assert len(ct) == 1 and ct[0]["key"] == "category/automotive.ev_charging:market.flagship_year"
-    assert {v["value"] for v in ct[0]["values"]} == {"2019", "2020"}
+    assert len(ct) == 1 and ct[0]["key"] == "category/automotive.ev_charging:market.player_count"
+    assert {v["value"] for v in ct[0]["values"]} == {19, 20}
     assert not {v["fact_id"] for v in ct[0]["values"]} & {p["id"] for p in pins}
     assert any(d["kind"] == "contest" for d in change["decisions"])
     # sources carry their tier in the result
@@ -62,6 +62,261 @@ def test_research_writes_layers_first_then_pins_contests_and_reuses(store):
                                      ["market_structure", "media_spend"], ["IE", "GB"], ["automotive.ev_charging"]).run()
     assert r2.calls == [] and result2["reused"] > 0
     assert {p["id"] for p in change2["facts_append"]} == {p["id"] for p in pins}
+
+
+def _stored_fact(caps, market, key="market.leader", value="2019"):
+    """A fresh, active row in the category layer, as an earlier campaign would have left it."""
+    import datetime
+    src = caps.layers.add_source({"uri": "https://www.cso.ie/x", "tier": "primary", "domain": "cso.ie", "licence": "open"})
+    caps.layers.append({"layer": "category", "entity": "category/automotive.ev_charging", "key": key, "market": market,
+                        "value": value, "unit": "text", "as_of": "2025-12-31",
+                        "retrieved_at": datetime.date.today().isoformat(), "sources": [src], "licence": "open"},
+                       {"id": "d_TESTSTORED1", "kind": "pin", "handler": "t@1.0", "action": "t", "rationale": "r",
+                        "cites": []})
+
+
+def test_a_fact_about_no_market_does_not_stand_in_for_a_markets_research(store):
+    """An earlier Ireland job left a fact that names no market. It is returned for every market, but it
+    says nothing about Germany, so Germany's topic must still go to the web."""
+    caps = caps_for(store)
+    _stored_fact(caps, None)
+    r = FakeResearch()
+    result, _, _ = Researcher(DOC, "3", rclan(["DE"]), "t@1.0", caps_for(store, research=r), ["market_structure"],
+                              ["DE"], ["automotive.ev_charging"]).run()
+    assert r.calls and result["reused"] == 0
+
+
+def test_a_fresh_fact_about_the_market_still_stands_in_for_its_research(store):
+    caps = caps_for(store)
+    _stored_fact(caps, "DE")
+    r = FakeResearch()
+    result, _, _ = Researcher(DOC, "3", rclan(["DE"]), "t@1.0", caps_for(store, research=r), ["market_structure"],
+                              ["DE"], ["automotive.ev_charging"]).run()
+    assert r.calls == [] and result["reused"] == 1
+
+
+class _RecordingResearch(FakeResearch):
+    def __init__(self):
+        super().__init__()
+        self.queries = []
+
+    def search(self, query, *a, **kw):
+        self.queries.append(query)
+        return super().search(query, *a, **kw)
+
+
+def _run_with_competitors(store, names, brand=None):
+    clan = rclan(["IE"])
+    if names:
+        clan["data"]["campaign"]["competitor_set"] = stated(
+            [{"ref": f"brand/c{i}", "name": n} for i, n in enumerate(names)], "research")
+    if brand:
+        clan["data"]["campaign"]["brand"] = stated({"ref": "brand/long", "name": brand}, "created")
+    r = _RecordingResearch()
+    Researcher(DOC, "3", clan, "t@1.0", caps_for(store, research=r), ["market_structure"], ["IE"],
+               ["automotive.ev_charging"]).run()
+    return r.queries
+
+
+def test_a_long_competitor_list_still_gives_a_question_the_port_accepts(store):
+    """The research port refuses a question over 500 characters (a 400, so the topic returns nothing)."""
+    q = _run_with_competitors(store, [f"Competitor Brand Number {i}" for i in range(40)])
+    assert len(q) == 1 and len(q[0]) <= 500
+    assert "Competitor Brand Number 0" in q[0] and "Competitor Brand Number 39" not in q[0]  # whole names, in order
+    assert not q[0].rstrip(".").endswith(",")
+
+
+def test_a_short_competitor_list_leaves_the_question_as_it_was(store):
+    q = _run_with_competitors(store, ["Tesla", "Polestar"])
+    assert q[0].endswith("Brand: BMW. Comparators: Tesla, Polestar.")
+
+
+def test_a_very_long_brand_name_still_gives_an_accepted_question(store):
+    q = _run_with_competitors(store, ["Tesla"], brand="B" * 600)
+    assert len(q[0]) <= 500
+
+
+def test_each_entitys_stored_facts_are_fetched_once_per_job_not_once_per_topic(store):
+    """6 topics (3 lenses x 2 markets) used to make 6 x 2 database reads; the reads are the same for every topic."""
+    caps = caps_for(store)
+    _stored_fact(caps, "IE")
+    before = len(store.service.requests)
+    result, _, _ = Researcher(DOC, "3", rclan(["IE", "GB"]), "t@1.0", caps_for(store, research=FakeResearch()),
+                              ["market_structure", "media_spend", "consumer_culture"], ["IE", "GB"],
+                              ["automotive.ev_charging"]).run()
+    gets = [r for r in store.service.requests[before:] if r.method == "GET" and r.url.path.endswith("/facts")]
+    assert len(gets) == 2                    # the category and the brand, once each
+    assert result["reused"] >= 1             # and the stored IE fact is still found for its own topic
+
+
+def test_the_measures_are_the_layers_list_well_formed_and_include_every_asked_for_name():
+    import re
+    from napkin.measures import BY_NAME, DEFAULT_PATH, MEASURES, SYNONYM
+    from napkin.pipeline.research import LENS_QUESTIONS, UNITS
+    assert DEFAULT_PATH.parts[-3:] == ("layers-service", "data", "measures.json")   # the one list
+    assert not (DEFAULT_PATH.parents[2] / "server" / "napkin" / "measures.json").exists()
+    for lens, (_, wanted) in LENS_QUESTIONS.items():
+        names = [m["name"] for m in MEASURES[lens]]
+        assert len(names) >= 3 and len(names) == len(set(names)), lens
+        assert set(wanted) <= set(names), (lens, set(wanted) - set(names))
+        assert all(re.fullmatch(r"[a-z0-9_]+", n) and set(m["units"]) <= set(UNITS) and m["definition"]
+                   and m["qualifier"] and m["cardinality"] in ("one", "many") for n, m in zip(names, MEASURES[lens]))
+    for (lens, syn), (name, fixed) in SYNONYM.items():
+        assert (lens, name) in BY_NAME and (lens, syn) not in BY_NAME
+        assert fixed is None or BY_NAME[(lens, name)]["qualifier"] != "none"
+    assert SYNONYM[("media_spend", "tv_share_of_spend")] == ("channel_share", "tv")
+    assert SYNONYM[("market_structure", "size_eur")] == ("size_value", None)
+
+
+def test_the_measure_list_is_read_from_napkin_measures_when_it_is_set(tmp_path, monkeypatch):
+    from napkin import measures
+    f = tmp_path / "m.json"
+    f.write_text(json.dumps({"lenses": {"media_spend": {"measures": [
+        {"key": "media.channel_share", "units": ["proportion"], "cardinality": "one", "qualifier": "channel",
+         "group": 1, "definition": "A channel's share of spend.",
+         "synonyms": ["share_of_spend", {"name": "tv_share", "qualifier": "tv"}]}]}}}))
+    monkeypatch.setenv("NAPKIN_MEASURES", str(f))
+    assert measures.path() == f
+    ms, by, syn, units = measures.load()
+    assert ms["media_spend"][0]["name"] == "channel_share" and by[("media_spend", "channel_share")]["qualifier"] == \
+        "channel"
+    assert syn == {("media_spend", "share_of_spend"): ("channel_share", None),
+                   ("media_spend", "tv_share"): ("channel_share", "tv")} and units == ["proportion"]
+    monkeypatch.delenv("NAPKIN_MEASURES")
+    assert measures.path() == measures.DEFAULT_PATH
+
+
+def _fact(s, key_suffix, value=None, unit="proportion", about="category"):
+    import re as _re
+    pct = int(_re.search(r"(\d+)%", s["excerpts"][0]).group(1))  # the number the fake source states
+    return {"about": about, "category": "automotive.ev_charging", "competitor": None, "key_suffix": key_suffix,
+            "value_number": pct / 100 if value is None else value, "value_text": None, "value_boolean": None,
+            "unit": unit, "as_of": None, "market_specific": True,
+            "evidence": [{"source_id": s["source_id"], "quote": s["excerpts"][0]}]}
+
+
+def _spy_extraction(seen, key_suffix=None, not_found=(), more=()):
+    """An extraction that records what it was given and returns one fact under `key_suffix` (or none),
+    and one more per (key_suffix, value, unit) in `more`."""
+    def respond(p):
+        seen.append(p)
+        s = p["sources"][0]
+        facts = [] if key_suffix is None else [_fact(s, key_suffix)]
+        facts += [_fact(s, k, v, u) for k, v, u in more]
+        return {"facts": facts, "not_found": list(not_found)}
+    return FakeModel({"extract_facts": respond})
+
+
+class _Proposing:
+    """A layer store whose layers record measure proposals, as PgLayers does (the HTTP layers take none),
+    and refuse appends of the keys in `refuse` the way a layer refuses (LayersError)."""
+
+    def __init__(self, store, refuse=()):
+        self.store, self.proposed, self.refuse = store, [], set(refuse)
+
+    def open(self, scope, attribution=None):
+        inner, outer = self.store.open(scope, attribution), self
+
+        class Layers:
+            def __getattr__(self, name):
+                return getattr(inner, name)
+
+            def propose_measure(self, fact):
+                outer.proposed.append(fact)
+                return True
+
+            def append(self, fact, decision):
+                from napkin.layers.http import LayersError
+                if fact["key"] in outer.refuse:
+                    raise LayersError("layers append refused: invalid_input: refused in a test")
+                return inner.append(fact, decision)
+        return Layers()
+
+
+def test_the_extraction_is_given_the_lens_measures_to_name_its_facts_by(store):
+    seen = []
+    Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps_for(store, model=_spy_extraction(seen)), ["market_structure"],
+               ["IE"], ["automotive.ev_charging"]).run()
+    ms = {m["name"]: m for m in seen[0]["measures"]}
+    assert {"size_value", "player_share"} <= set(ms)
+    assert all(m["definition"] and m["units"] and m["qualifier"] for m in ms.values())
+    assert ms["player_share"]["qualifier"] == "player" and ms["size_value"]["units"] == ["eur", "gbp", "usd"]
+    assert "size_value" in seen[0]["wanted"]
+
+
+def test_a_name_the_model_invents_is_rewritten_to_the_listed_name_before_facts_merge(store):
+    _, change, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0",
+                              caps_for(store, model=_spy_extraction([], "market_share.acme")),
+                              ["market_structure"], ["IE"], ["automotive.ev_charging"]).run()
+    assert [f["key"] for f in change["facts_append"]] == ["market.player_share.acme"]
+
+
+def test_an_old_name_with_a_fixed_qualifier_is_rewritten_with_it(store):
+    _, change, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0",
+                              caps_for(store, model=_spy_extraction([], "tv_share_of_spend")),
+                              ["media_spend"], ["IE"], ["automotive.ev_charging"]).run()
+    assert [f["key"] for f in change["facts_append"]] == ["media.channel_share.tv"]
+
+
+def test_a_fact_under_a_qualified_asked_for_name_is_not_reported_as_a_gap(store):
+    _, change, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0",
+                              caps_for(store, model=_spy_extraction([], "share.acme",
+                                                                    not_found=["player_share", "size_value"])),
+                              ["market_structure"], ["IE"], ["automotive.ev_charging"]).run()
+    gap_keys = [g["key"] for g in change["data_patch"]["selection"]["gaps"]]
+    assert any(k.endswith(":market.size_value") for k in gap_keys)
+    assert not any(k.endswith(":market.player_share") for k in gap_keys)
+
+
+def test_a_fact_outside_the_measure_list_is_kept_as_a_note_and_proposed_never_written(store):
+    """x_ names, a listed name in a unit it does not allow, and a listed name without the qualifier it needs
+    are all outside the list: not written to the layers, kept in the document with the fact, proposed for a
+    planner; the listed fact beside them is pinned as usual and the job goes on."""
+    layers = _Proposing(store)
+    more = [("x_share_of_volume", None, "proportion"), ("size_value", None, "proportion"),
+            ("player_share", None, "proportion")]
+    caps = caps_for(layers, model=_spy_extraction([], "player_share.acme", more=more))
+    _, change, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["market_structure"], ["IE"],
+                              ["automotive.ev_charging"]).run()
+    assert [f["key"] for f in change["facts_append"]] == ["market.player_share.acme"]
+    written = {r["key"] for r in caps.layers.facts("category", "category/automotive.ev_charging")}
+    assert written == {"market.player_share.acme"}
+    assert {f["key"] for f in layers.proposed} == {"market.x_share_of_volume", "market.size_value",
+                                                   "market.player_share"}
+    notes = {g["key"].split(":", 1)[1]: g for g in change["data_patch"]["selection"]["gaps"] if "measure list" in
+             g.get("note", "")}
+    assert set(notes) == {"market.x_share_of_volume", "market.size_value", "market.player_share"}
+    n = notes["market.x_share_of_volume"]
+    assert n["note"].startswith("not on the measure list: proposed.")
+    assert "market.x_share_of_volume" in n["note"] and "as of" in n["note"] and "stood at" in n["note"]  # the quote
+    assert n["sources_tried"][0].startswith("https://") and n["market"] == "IE" and n["lens"] == "market_structure"
+    assert "measured in eur, gbp, usd" in notes["market.size_value"]["note"]
+    assert "needs a qualifier: the player" in notes["market.player_share"]["note"]
+    merge = next(d for d in change["decisions"] if d["action"] == "research_merge")
+    assert all(f"#selection.gaps[{g['id']}]" in " ".join(merge["targets"]) for g in notes.values())
+
+
+def test_without_proposals_the_note_says_the_fact_is_kept_for_a_planner(store):
+    _, change, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0",
+                              caps_for(store, model=_spy_extraction([], "x_share_of_volume")),
+                              ["market_structure"], ["IE"], ["automotive.ev_charging"]).run()
+    assert change["facts_append"] == []
+    gaps = change["data_patch"]["selection"]["gaps"]
+    [n] = [g for g in gaps if g.get("note", "").startswith("not on the measure list")]
+    assert "kept here for a planner" in n["note"] and n["key"].endswith(":market.x_share_of_volume")
+    # the unit found nothing the list has: that is said too
+    assert any("nothing on the measure list" in g.get("note", "") for g in gaps)
+
+
+def test_a_write_the_layers_refuse_is_a_note_and_the_merge_goes_on(store):
+    layers = _Proposing(store, refuse={"market.player_share.acme"})
+    caps = caps_for(layers, model=_spy_extraction([], "player_share.acme", more=[("value_growth_yoy", None,
+                                                                                    "proportion")]))
+    _, change, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["market_structure"], ["IE"],
+                              ["automotive.ev_charging"]).run()
+    assert [f["key"] for f in change["facts_append"]] == ["market.value_growth_yoy"]
+    [n] = [g for g in change["data_patch"]["selection"]["gaps"] if "refused" in g.get("note", "")]
+    assert n["key"].endswith(":market.player_share.acme") and "refused in a test" in n["note"]
 
 
 def test_research_carries_its_evidence_into_the_document(store):
@@ -159,6 +414,32 @@ def test_synthesis_drops_a_statement_with_an_unsourced_figure(store):
     assert result["dropped"] and all(f["status"] == "proposed" for f in change["findings_append"])
 
 
+def test_the_report_call_runs_at_low_effort(store):
+    model = FakeModel()
+    caps = caps_for(store, model=model)
+    _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["media_spend"], ["IE"],
+                           ["automotive.ev_charging"]).run()
+    report.compose(DOC, dict(rclan(["IE"]), facts=rch["facts_append"]), "t@1.0", caps)
+    kw = next(c[2] for c in model.calls if c[0] == "report")
+    assert kw["output_config"]["effort"] == "low"
+
+
+def test_the_report_and_synthesis_models_see_short_ids_only(store):
+    import re as _re
+    model = FakeModel()
+    caps = caps_for(store, model=model)
+    _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["media_spend"], ["IE"],
+                           ["automotive.ev_charging"]).run()
+    clan = dict(rclan(["IE"]), facts=rch["facts_append"])
+    _, sch, _ = synthesise.run_synthesis(DOC, "3", clan, {}, "t@1.0", caps)
+    rpt, _, _, _ = report.compose(DOC, dict(clan, findings=sch["findings_append"]), "t@1.0", caps)
+    for purpose in ("synthesise", "report"):
+        sent = json.dumps(next(c[1] for c in model.calls if c[0] == purpose))
+        assert not _re.search(r"\bfi?_[0-9A-Z]{6,}\b", sent), purpose     # the model never sees a long id
+    cited = {c for s in rpt["sections"] for b in s["blocks"] for c in b.get("cites", [])}
+    assert cited and all(_re.fullmatch(r"fi?_[0-9A-Z]{6,}", c) for c in cited)  # the record holds real ids
+
+
 def test_report_claims_are_checked_in_code(store):
     caps = caps_for(store)
     _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["media_spend"], ["IE"],
@@ -227,9 +508,50 @@ def test_the_agent_lays_the_report_out_and_the_rule_holds_it_to_the_record(store
     assert "Grounded." in html
 
 
+def _report_clan(store, model=None):
+    caps = caps_for(store, model=model) if model else caps_for(store)
+    _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps_for(store), ["media_spend", "market_structure"],
+                           ["IE"], ["automotive.ev_charging"]).run()
+    return caps, dict(rclan(["IE"]), facts=rch["facts_append"])
+
+
+def test_the_report_and_its_page_are_one_model_call(store):
+    from fakes import FakeModel
+    fm = FakeModel()
+    caps, clan = _report_clan(store, fm)
+    rpt, _, _, _ = report.compose(DOC, clan, "t@1.0", caps)
+    purposes = [c[0] for c in fm.calls]
+    assert purposes.count("report") == 1 and "layout" not in purposes
+    assert rpt["layout_by"] == "agent" and "<clan-sources></clan-sources>" in rpt["layout"]
+
+
+def test_the_composition_is_given_what_the_page_needs_to_reference(store):
+    seen = []
+    from fakes import FakeModel
+    caps, clan = _report_clan(store, FakeModel({"report": lambda p: (seen.append(p), FakeModel.r_report(p))[1]}))
+    clan["edits"] = {"report:headline": "<p>Our own words</p>"}
+    report.compose(DOC, clan, "t@1.0", caps)
+    p = seen[0]
+    pin = p["lenses"][0]["pins"][0]
+    assert {"id", "label", "value", "unit", "market", "as_of", "has_quote"} <= set(pin)
+    assert all("id" in g for l in p["lenses"] for g in l["gaps"] + l["open_contests"])
+    assert p["person_wording"] == ["Our own words"]
+
+
+def test_a_model_that_fails_still_gives_a_report_with_a_built_page(store):
+    from fakes import FakeModel
+    def boom(p):
+        raise RuntimeError("model unavailable")
+    caps, clan = _report_clan(store, FakeModel({"report": boom}))
+    rpt, _, _, _ = report.compose(DOC, clan, "t@1.0", caps)
+    assert rpt["layout_by"] == "built" and rpt["sections"] and rpt["summary"]
+    assert "<clan-sources></clan-sources>" in rpt["layout"]
+
+
 def test_a_layout_that_loses_its_evidence_is_built_from_the_report(store):
     from fakes import FakeModel
-    caps = caps_for(store, model=FakeModel({"layout": lambda p: {"html": "<p>Nothing but words.</p>"}}))
+    caps = caps_for(store, model=FakeModel({"report": lambda p: {**FakeModel.r_report(p),
+                                                                 "html": "<p>Nothing but words.</p>"}}))
     _, rch, _ = Researcher(DOC, "3", rclan(["IE"]), "t@1.0", caps, ["media_spend"], ["IE"],
                            ["automotive.ev_charging"]).run()
     clan = dict(rclan(["IE"]), facts=rch["facts_append"])

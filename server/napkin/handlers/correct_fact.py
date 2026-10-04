@@ -15,6 +15,7 @@ import re
 
 from ..doc import ctx_facts
 from ..layers import origin_uri
+from ..layers.http import LayersError
 from ..rules.confidence import fact_confidence
 from ..rules.tiering import registrable
 from ..util import TaskError, bad, iso, today
@@ -87,11 +88,15 @@ def run(req, caps):
                 "rationale": f"{who} corrected {old.get('key')}: {note}", "cites": [fid]}
     learned = today()
     as_of = max(learned, str(old.get("as_of") or learned))
-    row = caps.layers.append({"layer": old.get("layer") or "category", "entity": old["entity"], "key": old["key"],
-                              "market": old.get("market"), "value": value, "unit": old.get("unit"),
-                              "as_of": as_of, "retrieved_at": learned, "sources": [src],
-                              "quotes": {src: note},
-                              "licence": old.get("licence") or "open", "method": "report"}, decision)
+    try:
+        row = caps.layers.append({"layer": old.get("layer") or "category", "entity": old["entity"],
+                                  "key": old["key"], "market": old.get("market"), "value": value,
+                                  "unit": old.get("unit"), "as_of": as_of, "retrieved_at": learned,
+                                  "sources": [src], "quotes": {src: note},
+                                  "licence": old.get("licence") or "open", "method": "report"}, decision)
+    except LayersError as e:  # e.g. a key the measure list does not have: named, never a crash
+        raise TaskError(409, "layers_refused", f"the layers refused the correction of {fid}: {str(e)[:300]}") \
+            from None
     recs = row.get("source_records") or [dict(rec, id=src)]
     pin = {"id": row["id"], "entity": row["entity"], "key": row["key"], "value": row["value"], "unit": row["unit"],
            "as_of": row["as_of"], "retrieved_at": row["retrieved_at"], "sources": [src],

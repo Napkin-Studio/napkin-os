@@ -10,7 +10,10 @@ writes the document: the reply's change is null.
 
 The fact takes the strictest licence among the pins it rests on, and sits in the
 brand layer when any of them does — a synthesis over client-confidential material
-stays at brand scope and never promotes (C3).
+stays at brand scope and never promotes (C3). A category layer that speaks only
+the measure list (PgLayers) refuses a finding there (`unknown_measure`): it is
+then written to the brand layer, the agency's own; any other refusal is a named
+409 `layers_refused`.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import re
 
 from ..doc import LICENCE_RANK, ctx_facts, ctx_findings
 from ..layers import origin_uri
+from ..layers.http import LayersError
 from ..util import TaskError, bad, iso, today
 from .. import reasoning as rsn
 
@@ -58,7 +62,8 @@ def run(req, caps):
 
     src = caps.layers.add_source({"uri": who, "tier": "reviewer-verified", "domain": who, "licence": licence,
                                   "title": "verified in the document"})
-    decision = {"id": did, "kind": "verify", "handler": req.handler, "action": "verify_finding",
+    def decision_for(layer):
+        return {"id": did, "kind": "verify", "handler": req.handler, "action": "verify_finding",
                 "rationale": f"{who} verified finding {fid}: {finding.get('statement', '')}",
                 "cites": [fid] + cites,
                 "reasoning": rsn.make(
@@ -68,10 +73,23 @@ def run(req, caps):
                     rsn.certainty("high", "a person read it and said it holds"),
                     "the person reopens it or a cited pin is superseded",
                     only_option="a verified finding is written to the layer; that is what verifying means")}
-    row = caps.layers.append({"layer": layer, "entity": entity, "key": key, "market": market,
-                              "value": finding["statement"], "unit": "text", "as_of": as_of,
-                              "retrieved_at": learned, "sources": [src], "quotes": {},
-                              "licence": licence, "method": "synthesis"}, decision)
+    fact = {"layer": layer, "entity": entity, "key": key, "market": market,
+            "value": finding["statement"], "unit": "text", "as_of": as_of,
+            "retrieved_at": learned, "sources": [src], "quotes": {},
+            "licence": licence, "method": "synthesis"}
+    try:
+        row = caps.layers.append(fact, decision_for(layer))
+    except LayersError as e:
+        # The category layer speaks only the measure list, and a finding is not a measure: a layer that
+        # refuses it there (unknown_measure) keeps it in the agency's own brand layer instead, which is never
+        # less restricted (C3). Any other refusal is named, never a crash.
+        if layer != "category" or "unknown_measure" not in str(e) or not caps.scope.get("brand"):
+            raise TaskError(409, "layers_refused", f"the layers refused finding {fid}: {str(e)[:300]}") from None
+        layer = "brand"
+        try:
+            row = caps.layers.append({**fact, "layer": "brand"}, decision_for("brand"))
+        except LayersError as e2:
+            raise TaskError(409, "layers_refused", f"the layers refused finding {fid}: {str(e2)[:300]}") from None
     pin = {"id": row["id"], "entity": row["entity"], "key": row["key"], "value": row["value"], "unit": row["unit"],
            "as_of": row["as_of"], "retrieved_at": row["retrieved_at"], "sources": [src] + cites,
            "confidence": finding.get("confidence") or "low", "licence": licence,

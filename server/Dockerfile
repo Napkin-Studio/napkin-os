@@ -1,7 +1,8 @@
 # The middleware (napkin.middleware/1): FastAPI on uvicorn, Python 3.12.
 # Built from the repository root:  docker build -f server/Dockerfile .
 # It reads the apps' pipeline declarations (app/templates/*/app/pipeline.yaml)
-# and nothing else outside server/.
+# and the measure list the knowledge layers enforce
+# (layers-service/data/measures.json, NAPKIN_MEASURES), nothing else outside server/.
 FROM python:3.12-slim AS runtime
 
 COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /usr/local/bin/uv
@@ -13,11 +14,19 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY server/napkin ./napkin
 COPY app/templates/campaign-research/app/pipeline.yaml ../app/templates/campaign-research/app/pipeline.yaml
 COPY app/templates/brief-maker/app/pipeline.yaml ../app/templates/brief-maker/app/pipeline.yaml
+COPY layers-service/data/measures.json ../layers-service/data/measures.json
+# Which model each call uses (NAPKIN_MODEL_ROUTES; the deployment points at it).
+COPY server/model-routes.example.json ./model-routes.json
+# Aurora is reached with sslmode=verify-full: the RDS certificate authorities.
+RUN python -c "import urllib.request; urllib.request.urlretrieve('https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem', '/srv/napkin/rds-ca.pem')" \
+ && chmod 644 /srv/napkin/rds-ca.pem
 
 RUN useradd --uid 10001 --user-group --no-create-home napkin
 USER napkin
 
 ENV PATH=/srv/napkin/server/.venv/bin:$PATH \
+    NAPKIN_MEASURES=/srv/napkin/layers-service/data/measures.json \
+    PGSSLROOTCERT=/srv/napkin/rds-ca.pem \
     NAPKIN_HOST=0.0.0.0 \
     NAPKIN_PORT=8080
 EXPOSE 8080
