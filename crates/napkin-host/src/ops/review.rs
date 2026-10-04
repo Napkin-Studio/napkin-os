@@ -401,7 +401,12 @@ pub(crate) fn declared(clan: &clan_sdk::ClanFile, path: &str) -> bool {
             }
         }
         for key in ["allOf", "anyOf", "oneOf"] {
-            for branch in node.get(key).and_then(Value::as_array).into_iter().flatten() {
+            for branch in node
+                .get(key)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
                 out.extend(resolve(root, branch, depth + 1));
             }
         }
@@ -472,7 +477,9 @@ fn finding_index(findings: &[serde_yaml::Value], id: &str) -> HostResult<usize> 
 fn still_proposed(f: &Value, id: &str) -> HostResult<()> {
     match f.get("status").and_then(Value::as_str) {
         Some("proposed") => Ok(()),
-        Some(other) => Err(HostError::conflict(format!("finding {id} is already {other}"))),
+        Some(other) => Err(HostError::conflict(format!(
+            "finding {id} is already {other}"
+        ))),
         None => Err(HostError::internal(format!("finding {id} has no status"))),
     }
 }
@@ -506,7 +513,8 @@ fn commit_with(
     let mut decisions = vec![decision];
     decisions.extend(then);
     let bytes = assemble(doc.clan(), data, m, decisions, delta, now, false)?;
-    let notice = serde_json::json!({ "ok": true, "source": "review", "kind": kind, "decision": id });
+    let notice =
+        serde_json::json!({ "ok": true, "source": "review", "kind": kind, "decision": id });
     let change = doc
         .change(bytes)?
         .with_event(HostEvent::DataChanged(notice));
@@ -562,7 +570,11 @@ pub fn verdict(ctx: &Ctx, doc: &Document, input: Verdict) -> HostResult<Outcome>
     let data = data_of(clan)?;
     let empty = aim.address.starts_with(&format!("{}#", clan.document_id()))
         && !aim.path.contains('[')
-        && aim.path.split('.').try_fold(&data, |v, k| v.get(k)).is_none();
+        && aim
+            .path
+            .split('.')
+            .try_fold(&data, |v, k| v.get(k))
+            .is_none();
     if empty && input.rationale.is_empty() {
         return Err(HostError::bad_request(
             "the field is empty: marking it good needs a reason, saying why it may stay empty",
@@ -612,13 +624,24 @@ pub fn classify(ctx: &Ctx, doc: &Document, input: Classify) -> HostResult<Outcom
         corpus: Some(input.corpus),
         ..Default::default()
     });
-    commit(doc, data_of(clan)?, Members::of(clan)?, d, "a classify mark", &now)
+    commit(
+        doc,
+        data_of(clan)?,
+        Members::of(clan)?,
+        d,
+        "a classify mark",
+        &now,
+    )
 }
 
 /// Where a contest is: this document's `selection.contested`, or the frozen
 /// one of an ancestor it carries (`None` or the ancestor's id), with the
 /// contest's id and its entry.
-fn find_contest(data: &Value, here: &str, contest: &str) -> HostResult<(Option<String>, String, Value)> {
+fn find_contest(
+    data: &Value,
+    here: &str,
+    contest: &str,
+) -> HostResult<(Option<String>, String, Value)> {
     let missing = || HostError::not_found(format!("contest {contest} is not in this document"));
     let (on, id) = match contest.split_once('#') {
         Some((d, p)) => {
@@ -627,7 +650,10 @@ fn find_contest(data: &Value, here: &str, contest: &str) -> HostResult<(Option<S
             })?;
             (Some(d), id)
         }
-        None => (None, keyed(contest, "selection.contested").unwrap_or(contest)),
+        None => (
+            None,
+            keyed(contest, "selection.contested").unwrap_or(contest),
+        ),
     };
     let entry = |d: &Value| contest_index(d, id).map(|i| d["selection"]["contested"][i].clone());
     let in_copy = |up: &str| -> HostResult<Option<(Option<String>, String, Value)>> {
@@ -639,7 +665,9 @@ fn find_contest(data: &Value, here: &str, contest: &str) -> HostResult<(Option<S
         Ok(entry(copy).map(|c| (Some(up.to_string()), id.to_string(), c)))
     };
     match on {
-        Some(d) if d == here => entry(data).map(|c| (None, id.to_string(), c)).ok_or_else(missing),
+        Some(d) if d == here => entry(data)
+            .map(|c| (None, id.to_string(), c))
+            .ok_or_else(missing),
         Some(up) => in_copy(up)?.ok_or_else(missing),
         None => {
             if let Some(c) = entry(data) {
@@ -683,7 +711,9 @@ pub fn resolve(ctx: &Ctx, doc: &Document, input: Resolve) -> HostResult<Outcome>
     let contest_address = format!("{on}#selection.contested[{ct}]");
     if contest.get("status").and_then(Value::as_str) != Some("open") {
         return Err(HostError::conflict(match upstream {
-            Some(_) => format!("contest {ct} was already resolved upstream, before it was carried here"),
+            Some(_) => {
+                format!("contest {ct} was already resolved upstream, before it was carried here")
+            }
             None => format!("contest {} is already resolved", input.contest),
         }));
     }
@@ -793,7 +823,11 @@ pub fn resolve(ctx: &Ctx, doc: &Document, input: Resolve) -> HostResult<Outcome>
         data,
         m,
         d,
-        if upstream.is_some() { "a carried contest resolved" } else { "a contest resolved" },
+        if upstream.is_some() {
+            "a carried contest resolved"
+        } else {
+            "a contest resolved"
+        },
         &now,
     )
 }
@@ -844,7 +878,10 @@ pub fn verify_finding(
         .ok_or_else(|| HostError::new(502, "the middleware's synthesis fact has no f_ id"))?
         .to_string();
     if pin.get("method").and_then(Value::as_str) != Some("synthesis") {
-        return Err(HostError::new(502, "the middleware's fact is not a synthesis"));
+        return Err(HostError::new(
+            502,
+            "the middleware's fact is not a synthesis",
+        ));
     }
     if pin.get("decision").and_then(Value::as_str) != Some(decision_id) {
         return Err(HostError::new(
@@ -852,7 +889,10 @@ pub fn verify_finding(
             "the middleware's fact names another decision than the verification",
         ));
     }
-    if m.facts.iter().any(|e| members::entry_id(e) == Some(fact_id.as_str())) {
+    if m.facts
+        .iter()
+        .any(|e| members::entry_id(e) == Some(fact_id.as_str()))
+    {
         return Err(HostError::conflict(format!("{fact_id} is already pinned")));
     }
     m.facts.push(to_yaml(pin)?);
@@ -945,7 +985,14 @@ pub fn acknowledge(ctx: &Ctx, doc: &Document, input: &(String, String)) -> HostR
         &now,
     );
     v.polarity = Some("good".into());
-    commit(doc, data_of(clan)?, Members::of(clan)?, v, "a call accepted", &now)
+    commit(
+        doc,
+        data_of(clan)?,
+        Members::of(clan)?,
+        v,
+        "a call accepted",
+        &now,
+    )
 }
 
 /// Set aside, with a reason, a carried item this document cannot settle
@@ -999,7 +1046,8 @@ pub fn set_aside(ctx: &Ctx, doc: &Document, target: &str, rationale: &str) -> Ho
         .iter()
         .filter(|a| a.blocks_lock && a.address.as_deref() == Some(target))
         .collect();
-    let items: Vec<&decisions::Attention> = listed.iter().copied().filter(|a| a.can_set_aside).collect();
+    let items: Vec<&decisions::Attention> =
+        listed.iter().copied().filter(|a| a.can_set_aside).collect();
     if items.is_empty() {
         let chain = chain_of(doc)?;
         let earlier = chain.decisions.iter().find(|d| {
@@ -1047,7 +1095,14 @@ pub fn set_aside(ctx: &Ctx, doc: &Document, target: &str, rationale: &str) -> Ho
         rationale.to_string(),
         &now,
     );
-    commit(doc, data, Members::of(clan)?, d, "a carried item set aside", &now)
+    commit(
+        doc,
+        data,
+        Members::of(clan)?,
+        d,
+        "a carried item set aside",
+        &now,
+    )
 }
 
 fn clip_line(s: &str) -> String {
@@ -1075,10 +1130,15 @@ pub struct Edit {
 /// `POST /edit`: `{path, value, gate?, rationale, answers?}` — an edit says why.
 pub fn parse_edit(raw: &str) -> HostResult<Edit> {
     let v = body(raw)?;
-    let value = v.get("value").cloned().ok_or_else(|| HostError::bad_request("`value` is required"))?;
+    let value = v
+        .get("value")
+        .cloned()
+        .ok_or_else(|| HostError::bad_request("`value` is required"))?;
     let rationale = text(&v, "rationale");
     if rationale.is_empty() {
-        return Err(HostError::bad_request("say why you changed it (`rationale`)"));
+        return Err(HostError::bad_request(
+            "say why you changed it (`rationale`)",
+        ));
     }
     Ok(Edit {
         path: required(&v, "path")?,
@@ -1105,7 +1165,10 @@ fn open_for_edit(doc: &Document, path: &str, answers: Option<&str>) -> HostResul
         };
     };
     let open = super::client_review::reopened(&chain, here);
-    let Some(part) = open.iter().find(|r| super::client_review::inside(path, &r.path)) else {
+    let Some(part) = open
+        .iter()
+        .find(|r| super::client_review::inside(path, &r.path))
+    else {
         return Err(locked(lock));
     };
     match answers {
@@ -1131,21 +1194,37 @@ fn open_for_edit(doc: &Document, path: &str, answers: Option<&str>) -> HostResul
 /// edited (Contract 4 §7.5.6); the edit then records the request it answers
 /// (`answers`) and cites it.
 pub fn edit(ctx: &Ctx, doc: &Document, input: Edit) -> HostResult<Outcome> {
-    let Edit { path, value, gate, rationale, answers } = input;
+    let Edit {
+        path,
+        value,
+        gate,
+        rationale,
+        answers,
+    } = input;
     let who = person(ctx, "edit the document")?;
     open_for_edit(doc, &path, answers.as_deref())?;
     let segs: Vec<&str> = path.split('.').collect();
-    if segs.is_empty() || segs.iter().any(|s| s.is_empty() || s.contains('[') || s.contains('#')) {
-        return Err(HostError::bad_request(format!("{path} is not a data path (dotted keys only)")));
+    if segs.is_empty()
+        || segs
+            .iter()
+            .any(|s| s.is_empty() || s.contains('[') || s.contains('#'))
+    {
+        return Err(HostError::bad_request(format!(
+            "{path} is not a data path (dotted keys only)"
+        )));
     }
     if segs[0] == UPSTREAM_KEY {
         return Err(upstream_read_only(doc.clan(), segs.get(1).copied()));
     }
     if segs[0] == super::members::PROJECTION_KEY {
-        return Err(HostError::bad_request("the projection is the host's; edit the value it is built from"));
+        return Err(HostError::bad_request(
+            "the projection is the host's; edit the value it is built from",
+        ));
     }
     if matches!(segs[0], "facts" | "findings" | "sources") {
-        return Err(HostError::bad_request("a fact is corrected (/correct) and a finding verified (/verify), not edited"));
+        return Err(HostError::bad_request(
+            "a fact is corrected (/correct) and a finding verified (/verify), not edited",
+        ));
     }
     let clan = doc.clan();
     let now = now();
@@ -1158,18 +1237,26 @@ pub fn edit(ctx: &Ctx, doc: &Document, input: Edit) -> HostResult<Outcome> {
     let next = if envelope {
         let old = current.clone().unwrap_or(Value::Null);
         if old.get("value") == Some(&value) {
-            return Err(HostError::conflict(format!("{path} already holds that value")));
+            return Err(HostError::conflict(format!(
+                "{path} already holds that value"
+            )));
         }
         let gate = old
             .get("gate")
             .and_then(Value::as_str)
             .map(String::from)
             .or(gate)
-            .ok_or_else(|| HostError::bad_request(format!("{path} is empty: say which gate it belongs to (`gate`)")))?;
+            .ok_or_else(|| {
+                HostError::bad_request(format!(
+                    "{path} is empty: say which gate it belongs to (`gate`)"
+                ))
+            })?;
         serde_json::json!({ "value": value, "origin": "stated", "gate": gate, "by": who, "decision": d_id })
     } else {
         if current.as_ref() == Some(&value) {
-            return Err(HostError::conflict(format!("{path} already holds that value")));
+            return Err(HostError::conflict(format!(
+                "{path} already holds that value"
+            )));
         }
         value
     };
@@ -1189,7 +1276,11 @@ pub fn edit(ctx: &Ctx, doc: &Document, input: Edit) -> HostResult<Outcome> {
         "edit_field",
         vec![address(clan.document_id(), &path)],
         Vec::new(),
-        if rationale.is_empty() { "Edited by a person.".to_string() } else { rationale },
+        if rationale.is_empty() {
+            "Edited by a person.".to_string()
+        } else {
+            rationale
+        },
         &now,
     );
     d.id = Some(d_id);
@@ -1197,20 +1288,61 @@ pub fn edit(ctx: &Ctx, doc: &Document, input: Edit) -> HostResult<Outcome> {
     d.fields_changed = vec![path.clone()];
     if let Some(a) = answers {
         d.cites.push(a.clone());
-        d.extra.insert("answers".into(), serde_yaml::Value::String(a));
+        d.extra
+            .insert("answers".into(), serde_yaml::Value::String(a));
     }
     let shown = |v: &Value| match v {
         Value::String(s) => s.clone(),
-        Value::Array(a) => a.iter().map(|x| x.as_str().map(String::from).unwrap_or_else(|| x.get("name").and_then(Value::as_str).unwrap_or_default().to_string())).collect::<Vec<_>>().join(", "),
+        Value::Array(a) => a
+            .iter()
+            .map(|x| {
+                x.as_str().map(String::from).unwrap_or_else(|| {
+                    x.get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string()
+                })
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
         Value::Null => String::new(),
-        other => other.get("name").and_then(Value::as_str).map(String::from).unwrap_or_else(|| other.to_string()),
+        other => other
+            .get("name")
+            .and_then(Value::as_str)
+            .map(String::from)
+            .unwrap_or_else(|| other.to_string()),
     };
-    let before = current.as_ref().map(|c| if envelope { c.get("value").cloned().unwrap_or(Value::Null) } else { c.clone() }).unwrap_or(Value::Null);
-    let after = segs.iter().try_fold(&data, |v, k| v.get(*k)).map(|v| if envelope { v.get("value").cloned().unwrap_or(Value::Null) } else { v.clone() }).unwrap_or(Value::Null);
+    let before = current
+        .as_ref()
+        .map(|c| {
+            if envelope {
+                c.get("value").cloned().unwrap_or(Value::Null)
+            } else {
+                c.clone()
+            }
+        })
+        .unwrap_or(Value::Null);
+    let after = segs
+        .iter()
+        .try_fold(&data, |v, k| v.get(*k))
+        .map(|v| {
+            if envelope {
+                v.get("value").cloned().unwrap_or(Value::Null)
+            } else {
+                v.clone()
+            }
+        })
+        .unwrap_or(Value::Null);
     if !shown(&before).is_empty() {
-        d.extra.insert("was".into(), serde_yaml::Value::String(clip(&shown(&before), 300)));
+        d.extra.insert(
+            "was".into(),
+            serde_yaml::Value::String(clip(&shown(&before), 300)),
+        );
     }
-    d.extra.insert("now".into(), serde_yaml::Value::String(clip(&shown(&after), 300)));
+    d.extra.insert(
+        "now".into(),
+        serde_yaml::Value::String(clip(&shown(&after), 300)),
+    );
     commit(doc, data, Members::of(clan)?, d, "a person's edit", &now)
 }
 
@@ -1231,13 +1363,20 @@ fn plain(html: &str) -> String {
     for c in html.chars() {
         match c {
             '<' => tag = true,
-            '>' => { tag = false; out.push(' '); }
+            '>' => {
+                tag = false;
+                out.push(' ');
+            }
             _ if !tag => out.push(c),
             _ => {}
         }
     }
     let words = out.split_whitespace().collect::<Vec<_>>().join(" ");
-    if words.chars().count() > 300 { format!("{}…", words.chars().take(299).collect::<String>()) } else { words }
+    if words.chars().count() > 300 {
+        format!("{}…", words.chars().take(299).collect::<String>())
+    } else {
+        words
+    }
 }
 
 /// `POST /edit-text`: `{key, html, rationale, part?, was?}`. A rewrite needs
@@ -1247,9 +1386,17 @@ pub fn parse_edit_text_full(raw: &str) -> HostResult<TextEdit> {
     let (key, html) = parse_edit_text(raw)?;
     let rationale = text(&v, "rationale");
     if !html.is_empty() && rationale.is_empty() {
-        return Err(HostError::bad_request("say why you changed it (`rationale`)"));
+        return Err(HostError::bad_request(
+            "say why you changed it (`rationale`)",
+        ));
     }
-    Ok(TextEdit { key, html, rationale, part: text(&v, "part"), was: text(&v, "was") })
+    Ok(TextEdit {
+        key,
+        html,
+        rationale,
+        part: text(&v, "part"),
+        was: text(&v, "was"),
+    })
 }
 
 /// `POST /edit-text`: `{key, html}` — the key and wording alone.
@@ -1257,11 +1404,20 @@ pub fn parse_edit_text(raw: &str) -> HostResult<(String, String)> {
     let v = body(raw)?;
     let key = required(&v, "key")?;
     if key.len() > 200 || key.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(HostError::bad_request("`key` is a short name without spaces"));
+        return Err(HostError::bad_request(
+            "`key` is a short name without spaces",
+        ));
     }
-    let html = v.get("html").and_then(Value::as_str).unwrap_or_default().trim().to_string();
+    let html = v
+        .get("html")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if html.len() > 20_000 {
-        return Err(HostError::bad_request("that is too long for one piece of text"));
+        return Err(HostError::bad_request(
+            "that is too long for one piece of text",
+        ));
     }
     Ok((key, html))
 }
@@ -1272,21 +1428,39 @@ pub fn parse_edit_text(raw: &str) -> HostResult<(String, String)> {
 /// `edit` decision records it. The view shows it in place of its own text,
 /// sanitised as any layout is. An empty `html` restores the original.
 pub fn edit_text(ctx: &Ctx, doc: &Document, input: TextEdit) -> HostResult<Outcome> {
-    let TextEdit { key, html, rationale, part, was } = input;
+    let TextEdit {
+        key,
+        html,
+        rationale,
+        part,
+        was,
+    } = input;
     let who = person(ctx, "edit the document")?;
     not_locked(doc)?;
     let clan = doc.clan();
     let now = now();
     let mut m = Members::of(clan)?;
-    let i = m.edits.iter().position(|e| members::entry_key(e) == Some(key.as_str()));
-    let held = i.and_then(|i| m.edits[i].get("html").and_then(|v| v.as_str()).map(String::from));
+    let i = m
+        .edits
+        .iter()
+        .position(|e| members::entry_key(e) == Some(key.as_str()));
+    let held = i.and_then(|i| {
+        m.edits[i]
+            .get("html")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    });
     if held.as_deref() == Some(html.as_str()) || (held.is_none() && html.is_empty()) {
         return Err(HostError::conflict("the text already reads that way"));
     }
     let d_id = new_decision_id();
-    let entry = to_yaml(&serde_json::json!({ "key": key, "html": html, "by": who, "at": now, "decision": d_id }))?;
+    let entry = to_yaml(
+        &serde_json::json!({ "key": key, "html": html, "by": who, "at": now, "decision": d_id }),
+    )?;
     match (i, html.is_empty()) {
-        (Some(i), true) => { m.edits.remove(i); }
+        (Some(i), true) => {
+            m.edits.remove(i);
+        }
         (Some(i), false) => m.edits[i] = entry,
         (None, _) => m.edits.push(entry),
     }
@@ -1294,7 +1468,11 @@ pub fn edit_text(ctx: &Ctx, doc: &Document, input: TextEdit) -> HostResult<Outco
         ctx,
         &who,
         "edit",
-        if html.is_empty() { "restore_text" } else { "edit_text" },
+        if html.is_empty() {
+            "restore_text"
+        } else {
+            "edit_text"
+        },
         vec![address(clan.document_id(), &format!("text[{key}]"))],
         Vec::new(),
         if !rationale.is_empty() {
@@ -1311,13 +1489,16 @@ pub fn edit_text(ctx: &Ctx, doc: &Document, input: TextEdit) -> HostResult<Outco
     // Which part, and the words before and after: what the panel says.
     let was_plain = plain(&held.clone().unwrap_or(was));
     if !part.is_empty() {
-        d.extra.insert("part".into(), serde_yaml::Value::String(clip(&part, 40)));
+        d.extra
+            .insert("part".into(), serde_yaml::Value::String(clip(&part, 40)));
     }
     if !was_plain.is_empty() {
-        d.extra.insert("was".into(), serde_yaml::Value::String(was_plain));
+        d.extra
+            .insert("was".into(), serde_yaml::Value::String(was_plain));
     }
     if !html.is_empty() {
-        d.extra.insert("now".into(), serde_yaml::Value::String(plain(&html)));
+        d.extra
+            .insert("now".into(), serde_yaml::Value::String(plain(&html)));
     }
     commit(doc, data_of(clan)?, m, d, "a person's wording", &now)
 }
@@ -1326,16 +1507,28 @@ pub fn edit_text(ctx: &Ctx, doc: &Document, input: TextEdit) -> HostResult<Outco
 /// middleware first, as `/verify` is.
 pub fn parse_correct(raw: &str) -> HostResult<(String, Value, String, String)> {
     let v = body(raw)?;
-    let value = v.get("value").cloned().ok_or_else(|| HostError::bad_request("`value` is required"))?;
+    let value = v
+        .get("value")
+        .cloned()
+        .ok_or_else(|| HostError::bad_request("`value` is required"))?;
     if value.as_str().is_some_and(|s| s.trim().is_empty()) {
         return Err(HostError::bad_request("`value` is empty"));
     }
-    Ok((required(&v, "fact")?, value, text(&v, "source_uri"), required(&v, "rationale")?))
+    Ok((
+        required(&v, "fact")?,
+        value,
+        text(&v, "source_uri"),
+        required(&v, "rationale")?,
+    ))
 }
 
 /// What the middleware is asked before a fact is corrected: the fact, the
 /// value, where it comes from, who says so, and the decision id to record.
-pub fn correct_request(ctx: &Ctx, doc: &Document, input: &(String, Value, String, String)) -> HostResult<Value> {
+pub fn correct_request(
+    ctx: &Ctx,
+    doc: &Document,
+    input: &(String, Value, String, String),
+) -> HostResult<Value> {
     let (fact, value, source_uri, rationale) = input;
     let who = person(ctx, "correct a fact")?;
     not_locked(doc)?;
@@ -1346,7 +1539,9 @@ pub fn correct_request(ctx: &Ctx, doc: &Document, input: &(String, Value, String
         .find(|f| f.get("id").and_then(Value::as_str) == Some(fact.as_str()))
         .ok_or_else(|| HostError::not_found(format!("fact {fact} is not in this document")))?;
     if f.get("replaced_by").is_some() {
-        return Err(HostError::conflict(format!("fact {fact} has already been replaced")));
+        return Err(HostError::conflict(format!(
+            "fact {fact} has already been replaced"
+        )));
     }
     Ok(serde_json::json!({
         "task": "correct_fact",
@@ -1380,7 +1575,10 @@ pub fn correct_fact(
         .ok_or_else(|| HostError::new(502, "the middleware's corrected fact has no f_ id"))?
         .to_string();
     if pin.get("decision").and_then(Value::as_str) != Some(decision_id) {
-        return Err(HostError::new(502, "the middleware's fact names another decision than the correction"));
+        return Err(HostError::new(
+            502,
+            "the middleware's fact names another decision than the correction",
+        ));
     }
     let i = m
         .facts
@@ -1389,14 +1587,24 @@ pub fn correct_fact(
         .ok_or_else(|| HostError::not_found(format!("fact {fact} is not in this document")))?;
     let mut old = to_json(&m.facts[i]);
     if old.get("replaced_by").is_some() {
-        return Err(HostError::conflict(format!("fact {fact} has already been replaced")));
+        return Err(HostError::conflict(format!(
+            "fact {fact} has already been replaced"
+        )));
     }
     old["replaced_by"] = serde_json::json!({ "fact_id": new_id, "decision": decision_id });
     m.facts[i] = to_yaml(&old)?;
-    if !m.facts.iter().any(|e| members::entry_id(e) == Some(new_id.as_str())) {
+    if !m
+        .facts
+        .iter()
+        .any(|e| members::entry_id(e) == Some(new_id.as_str()))
+    {
         m.facts.push(to_yaml(pin)?);
     }
-    if let Some(src) = source.filter(|s| s.get("id").and_then(Value::as_str).is_some_and(|i| i.starts_with("src_"))) {
+    if let Some(src) = source.filter(|s| {
+        s.get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|i| i.starts_with("src_"))
+    }) {
         let sid = src["id"].as_str().unwrap_or_default();
         if !m.sources.iter().any(|e| members::entry_id(e) == Some(sid)) {
             m.sources.push(to_yaml(src)?);
@@ -1475,11 +1683,26 @@ pub fn approve(ctx: &Ctx, doc: &Document, rationale: &str) -> HostResult<Outcome
     d.version = Some(doc.version().as_str().to_string());
     let closed = if again {
         let lock = d.id.clone().unwrap_or_default();
-        super::client_review::closed_by_lock(ctx, &who, &chain, &view.client.suggestions, &lock, &now)?
+        super::client_review::closed_by_lock(
+            ctx,
+            &who,
+            &chain,
+            &view.client.suggestions,
+            &lock,
+            &now,
+        )?
     } else {
         Vec::new()
     };
-    commit_with(doc, data_of(clan)?, Members::of(clan)?, d, closed, "locked", &now)
+    commit_with(
+        doc,
+        data_of(clan)?,
+        Members::of(clan)?,
+        d,
+        closed,
+        "locked",
+        &now,
+    )
 }
 
 /// Now, in the one shape the campaign schema's `datetime` accepts.
@@ -1488,5 +1711,9 @@ pub(super) fn now() -> String {
 }
 
 fn clip(s: &str, n: usize) -> String {
-    if s.chars().count() > n { format!("{}…", s.chars().take(n - 1).collect::<String>()) } else { s.to_string() }
+    if s.chars().count() > n {
+        format!("{}…", s.chars().take(n - 1).collect::<String>())
+    } else {
+        s.to_string()
+    }
 }

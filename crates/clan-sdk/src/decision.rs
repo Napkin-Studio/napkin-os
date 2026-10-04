@@ -25,8 +25,19 @@ use serde::{Deserialize, Serialize};
 /// not an enum: a kind this SDK has not heard of still parses and round-trips,
 /// and `validate` reports it rather than the parser refusing the file.
 pub const DECISION_KINDS: &[&str] = &[
-    "edit", "contest", "resolve", "verdict", "classify", "pin", "finding", "verify", "approve",
-    "lease", "backref", "client_review", "unlock",
+    "edit",
+    "contest",
+    "resolve",
+    "verdict",
+    "classify",
+    "pin",
+    "finding",
+    "verify",
+    "approve",
+    "lease",
+    "backref",
+    "client_review",
+    "unlock",
 ];
 
 /// Prefix every generated decision id carries.

@@ -12,8 +12,8 @@
 
 use clan_sdk::{
     apply_patch_and_repack, decision::DecisionScope, fork as sdk_fork, patch_asset_with,
-    patch_context, patch_data_with, ClanBuilder, ClanFile, Decision, DecisionChain,
-    DecisionEntry, PatchDataOptions, Reasoning,
+    patch_context, patch_data_with, ClanBuilder, ClanFile, Decision, DecisionChain, DecisionEntry,
+    PatchDataOptions, Reasoning,
 };
 use serde_json::Value;
 
@@ -38,7 +38,11 @@ pub const UPSTREAM_KEY: &str = "upstream";
 pub fn upstream_read_only(clan: &clan_sdk::ClanFile, named: Option<&str>) -> HostError {
     let held: Vec<String> = super::assemble::data_of(clan)
         .ok()
-        .and_then(|d| d.get(UPSTREAM_KEY)?.as_object().map(|o| o.keys().cloned().collect()))
+        .and_then(|d| {
+            d.get(UPSTREAM_KEY)?
+                .as_object()
+                .map(|o| o.keys().cloned().collect())
+        })
         .unwrap_or_default();
     let of = match named {
         Some(id) => id.to_string(),
@@ -290,7 +294,10 @@ pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Out
     // A person changing only how the document looks (fields the app's schema
     // marks `x-clan-appearance`) asks for no reason and is not a decision
     // about the work: a run of such changes is one rolling entry.
-    if let Some(entry) = decision.as_ref().filter(|e| is_human_claim(ctx, &e.agent_name)) {
+    if let Some(entry) = decision
+        .as_ref()
+        .filter(|e| is_human_claim(ctx, &e.agent_name))
+    {
         let looks = appearance_keys(doc);
         if input.append_keys.is_empty() && input.keys.iter().all(|k| looks.contains(k)) {
             let bytes = roll_look(ctx, doc.clan(), &input.patch, &input.keys, entry)?;
@@ -345,8 +352,12 @@ pub fn clan_appearance_keys(clan: &ClanFile) -> std::collections::BTreeSet<Strin
             .as_ref()
             .and_then(|a| a.schema.clone())
             .unwrap_or_else(|| "agent/output-schema.json".into());
-        let Ok(bytes) = clan.read_entry(&path) else { return };
-        let Ok(schema) = serde_json::from_slice::<Value>(&bytes) else { return };
+        let Ok(bytes) = clan.read_entry(&path) else {
+            return;
+        };
+        let Ok(schema) = serde_json::from_slice::<Value>(&bytes) else {
+            return;
+        };
         if let Some(props) = schema.get("properties").and_then(Value::as_object) {
             for (k, v) in props {
                 if v.get("x-clan-appearance").and_then(Value::as_bool) == Some(true) {
@@ -376,21 +387,41 @@ fn roll_look(
         .and_then(|b| DecisionChain::from_yaml(&b).ok())
         .unwrap_or_default();
     let actor = ctx.actor.to_string();
-    let rolling = chain.decisions.first().is_some_and(|d| {
-        d.action == LOOK_ACTION && d.actor.as_deref() == Some(actor.as_str())
-    });
+    let rolling = chain
+        .decisions
+        .first()
+        .is_some_and(|d| d.action == LOOK_ACTION && d.actor.as_deref() == Some(actor.as_str()));
     let said = |k: &str| {
         let r = entry.rationale.trim();
-        if r.is_empty() { format!("changed {}", k.replace('_', " ")) } else { r.to_string() }
+        if r.is_empty() {
+            format!("changed {}", k.replace('_', " "))
+        } else {
+            r.to_string()
+        }
     };
 
     if !rolling {
-        let mut first = attribute(ctx, &entry.agent_name, LOOK_ACTION, "", false, Some(keys.to_vec()));
-        first.rationale = look_rationale(&keys.iter().map(|k| (k.clone(), said(k))).collect::<Vec<_>>());
+        let mut first = attribute(
+            ctx,
+            &entry.agent_name,
+            LOOK_ACTION,
+            "",
+            false,
+            Some(keys.to_vec()),
+        );
+        first.rationale = look_rationale(
+            &keys
+                .iter()
+                .map(|k| (k.clone(), said(k)))
+                .collect::<Vec<_>>(),
+        );
         let bytes = patch_data_with(
             clan,
             patch,
-            PatchDataOptions { append_keys: vec![], decision: Some(first) },
+            PatchDataOptions {
+                append_keys: vec![],
+                decision: Some(first),
+            },
             None,
         )?;
         // Keep each key's words beside the entry, for the next change to roll into.
@@ -404,7 +435,10 @@ fn roll_look(
     let bytes = patch_data_with(
         clan,
         patch,
-        PatchDataOptions { append_keys: vec![], decision: None },
+        PatchDataOptions {
+            append_keys: vec![],
+            decision: None,
+        },
         None,
     )?;
     set_looks(bytes, |d| {
@@ -426,10 +460,7 @@ fn look_rationale(looks: &[(String, String)]) -> String {
 
 /// Update the newest decision — a look entry — in `bytes`: its `looks`, its
 /// rationale and fields, and its time, which is the latest change's.
-fn set_looks(
-    bytes: Vec<u8>,
-    edit: impl FnOnce(&mut Vec<(String, String)>),
-) -> HostResult<Vec<u8>> {
+fn set_looks(bytes: Vec<u8>, edit: impl FnOnce(&mut Vec<(String, String)>)) -> HostResult<Vec<u8>> {
     let clan = ClanFile::from_bytes(bytes)?;
     let mut chain = DecisionChain::from_yaml(&clan.read_entry(CHAIN_PATH)?)?;
     let Some(d) = chain.decisions.first_mut() else {
@@ -454,7 +485,8 @@ fn set_looks(
         .into_iter()
         .map(|(k, v)| (serde_yaml::Value::String(k), serde_yaml::Value::String(v)))
         .collect();
-    d.extra.insert("looks".into(), serde_yaml::Value::Mapping(map));
+    d.extra
+        .insert("looks".into(), serde_yaml::Value::Mapping(map));
     let mut b = ClanBuilder::new(clan.manifest().clone());
     for (path, data) in clan.read_all_entries()? {
         if path != "manifest.yaml" && path != CHAIN_PATH {

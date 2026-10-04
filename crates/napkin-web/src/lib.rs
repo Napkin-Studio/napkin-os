@@ -74,23 +74,37 @@ pub const UPLOAD_MAX: usize = 64 * 1024 * 1024;
 
 /// The service with anonymous sessions (tests, demos).
 pub fn router(ctx: Arc<AppCtx>, static_dir: Option<&Path>, secure_cookie: bool) -> Router {
-    router_with(ctx, static_dir, Arc::new(tenant::Identity::anonymous(secure_cookie)))
+    router_with(
+        ctx,
+        static_dir,
+        Arc::new(tenant::Identity::anonymous(secure_cookie)),
+    )
 }
 
 /// The service, knowing people as `identity` says (anonymous, or accounts).
-pub fn router_with(ctx: Arc<AppCtx>, static_dir: Option<&Path>, identity: Arc<tenant::Identity>) -> Router {
+pub fn router_with(
+    ctx: Arc<AppCtx>,
+    static_dir: Option<&Path>,
+    identity: Arc<tenant::Identity>,
+) -> Router {
     Router::new()
         // The shell API is the only part that runs on a cookie session.
         .nest(
             "/api",
             api::router()
                 .layer(DefaultBodyLimit::max(UPLOAD_MAX))
-                .layer(axum::middleware::from_fn_with_state(identity.clone(), tenant::layer))
+                .layer(axum::middleware::from_fn_with_state(
+                    identity.clone(),
+                    tenant::layer,
+                ))
                 .layer(axum::Extension(identity)),
         )
         // The sandbox authenticates with its token and nothing else, so the
         // session layer deliberately does not apply to it.
-        .nest("/s", sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)))
+        .nest(
+            "/s",
+            sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
+        )
         .merge(shell_service(static_dir))
         .layer(TraceLayer::new_for_http())
         .with_state(ctx)

@@ -147,22 +147,26 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // and rail lie over it, frosted, so the document shows through them, and it
   // is told what they cover. Client review keeps the solid layout (its panel
   // and band are part of the page's flow).
-  const [chromeMode, setChromeMode] = useState<'glass' | 'solid'>('solid')
-  // The glass takes the document's own ground as its tint, when the app gives
-  // one the chrome's ink still reads on (4.5:1); never any other colour.
-  const [glassTint, setGlassTint] = useState<string | null>(null)
-  useEffect(() => { setChromeMode('solid'); setGlassTint(null) }, [docPath])
+  // What the open document asked for, kept with the document that asked: a
+  // document opened next starts solid until it asks. The glass takes the
+  // document's own ground as its tint, when the app gives one the chrome's ink
+  // still reads on (4.5:1); never any other colour.
+  const docRef = useRef(docPath)
+  useEffect(() => { docRef.current = docPath }, [docPath])
+  const [chrome, setChrome] = useState<{ doc: string | null; mode: 'glass' | 'solid'; tint: string | null }>(
+    { doc: null, mode: 'solid', tint: null })
   const onChrome = useCallback((mode: 'glass' | 'solid', tint: string | null) => {
-    setChromeMode(mode)
-    setGlassTint(tint && readsWithChromeInk(tint) ? tint : null)
+    setChrome({ doc: docRef.current, mode, tint: tint && readsWithChromeInk(tint) ? tint : null })
   }, [])
-  const glass = chromeMode === 'glass' && !clientOn
+  const asked = chrome.doc === docPath
+  const glass = asked && chrome.mode === 'glass' && !clientOn
+  const glassTint = asked ? chrome.tint : null
   const topRef = useRef<HTMLDivElement>(null)
   const workRef = useRef<HTMLDivElement>(null)
   const footRef = useRef<HTMLElement>(null)
   const [insets, setInsets] = useState<{ top: number; right: number; bottom: number } | null>(null)
   useEffect(() => {
-    if (!glass) { setInsets(null); return }
+    if (!glass) return
     const measure = () => {
       const top = topRef.current?.getBoundingClientRect().height ?? 0
       const bottom = footRef.current?.getBoundingClientRect().height ?? 0
@@ -173,7 +177,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
       setInsets(i => (i && i.top === Math.round(top) && i.right === Math.round(right) && i.bottom === Math.round(bottom)
         ? i : { top: Math.round(top), right: Math.round(right), bottom: Math.round(bottom) }))
     }
-    measure()
+    const first = requestAnimationFrame(measure)
     const ro = new ResizeObserver(measure)
     if (topRef.current) ro.observe(topRef.current)
     if (footRef.current) ro.observe(footRef.current)
@@ -185,12 +189,14 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     if (workRef.current) mo.observe(workRef.current, { childList: true })
     workRef.current?.querySelectorAll(':scope > .dp-rail, :scope > .dp-panel').forEach(el => ro.observe(el))
     window.addEventListener('resize', measure)
-    return () => { ro.disconnect(); mo.disconnect(); window.removeEventListener('resize', measure) }
+    return () => { cancelAnimationFrame(first); ro.disconnect(); mo.disconnect(); window.removeEventListener('resize', measure) }
   }, [glass])
+  // What the glass covers, only while there is glass.
+  const shown = glass ? insets : null
 
   return (
     <div className={glass ? 'ch-doc ch-doc-glass' : 'ch-doc'} style={{ display: 'flex', flexDirection: 'column', height: '100vh',
-      ...(insets ? { ['--glass-top' as string]: insets.top + 'px', ['--glass-bottom' as string]: insets.bottom + 'px' } : {}),
+      ...(shown ? { ['--glass-top' as string]: shown.top + 'px', ['--glass-bottom' as string]: shown.bottom + 'px' } : {}),
       ...(glass && glassTint ? { ['--glass-tint' as string]: glassTint } : {}) }}>
       <div className="ch-top" ref={topRef}>
       {/* Accent strip — recolors with a trusted app's theme (clan://set-theme). */}
@@ -244,7 +250,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onPartMark={onPartMark}
             onEditRequest={onEditRequest}
             onChrome={onChrome}
-            insets={insets}
+            insets={shown}
           />
         </main>
         {clientOn ? (

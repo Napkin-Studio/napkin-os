@@ -40,16 +40,23 @@ fn identity(data_root: &std::path::Path, secure: bool) -> Identity {
     let provider = match mode.as_str() {
         "local" => Provider::Local(Local::new(local_users(data_root))),
         "cognito" => Provider::Cognito(Cognito::new(
-            &env_string("NAPKIN_COGNITO_REGION").expect("NAPKIN_COGNITO_REGION is required with NAPKIN_AUTH=cognito"),
-            &env_string("NAPKIN_COGNITO_CLIENT_ID").expect("NAPKIN_COGNITO_CLIENT_ID is required with NAPKIN_AUTH=cognito"),
+            &env_string("NAPKIN_COGNITO_REGION")
+                .expect("NAPKIN_COGNITO_REGION is required with NAPKIN_AUTH=cognito"),
+            &env_string("NAPKIN_COGNITO_CLIENT_ID")
+                .expect("NAPKIN_COGNITO_CLIENT_ID is required with NAPKIN_AUTH=cognito"),
         )),
         other => panic!("NAPKIN_AUTH must be none, local or cognito (got {other:?})"),
     };
-    Identity { mode: Mode::Accounts { provider, sessions }, secure }
+    Identity {
+        mode: Mode::Accounts { provider, sessions },
+        secure,
+    }
 }
 
 fn local_users(data_root: &std::path::Path) -> PathBuf {
-    env_string("NAPKIN_AUTH_USERS").map(PathBuf::from).unwrap_or_else(|| data_root.join("accounts.json"))
+    env_string("NAPKIN_AUTH_USERS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| data_root.join("accounts.json"))
 }
 
 /// `napkin-web add-user <user@agency> [--name "Full Name"]`: an account for
@@ -61,11 +68,21 @@ fn add_user(args: &[String], data_root: &std::path::Path) {
         eprintln!("usage: napkin-web add-user <user@agency> [--name \"Full Name\"]");
         std::process::exit(2);
     };
-    let name = args.iter().position(|a| a == "--name").and_then(|i| args.get(i + 1)).map(String::as_str);
-    let temporary = format!("Napkin-{}", &uuid::Uuid::new_v4().simple().to_string()[..10]);
+    let name = args
+        .iter()
+        .position(|a| a == "--name")
+        .and_then(|i| args.get(i + 1))
+        .map(String::as_str);
+    let temporary = format!(
+        "Napkin-{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..10]
+    );
     let path = local_users(data_root);
     match Local::new(path.clone()).add(username, &temporary, name) {
-        Ok(()) => println!("{username}\t{temporary}\t(temporary; changed at first sign-in) -> {}", path.display()),
+        Ok(()) => println!(
+            "{username}\t{temporary}\t(temporary; changed at first sign-in) -> {}",
+            path.display()
+        ),
         Err(e) => {
             eprintln!("{username}: {e}");
             std::process::exit(1);
@@ -140,8 +157,14 @@ async fn main() {
     let identity = std::sync::Arc::new(identity(&settings.data_root, settings.secure_cookie));
     let auth = match &identity.mode {
         Mode::Anonymous => "anonymous",
-        Mode::Accounts { provider: Provider::Local(_), .. } => "local accounts",
-        Mode::Accounts { provider: Provider::Cognito(_), .. } => "cognito",
+        Mode::Accounts {
+            provider: Provider::Local(_),
+            ..
+        } => "local accounts",
+        Mode::Accounts {
+            provider: Provider::Cognito(_),
+            ..
+        } => "cognito",
     };
 
     let ctx = Arc::new(

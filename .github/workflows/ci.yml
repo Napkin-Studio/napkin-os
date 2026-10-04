@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, 'feature/**' ]
+    branches: [ '**' ]
   pull_request:
 
 # Cancel superseded runs on the same ref (e.g. force-pushes to a PR branch).
@@ -251,3 +251,34 @@ jobs:
       - name: Test
         working-directory: server
         run: uv run --python 3.12 pytest -q
+
+  mock-backend:
+    name: Mock backend (local development's stand-ins)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test
+        working-directory: mock-backend
+        run: python -m unittest discover -s tests
+
+  terraform:
+    name: Infrastructure — fmt · validate · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.10"
+      - name: Format
+        working-directory: infra
+        run: terraform fmt -check -recursive
+      # Mocked providers: no AWS account is touched.
+      - name: Validate and test the staging stack
+        working-directory: infra/envs/staging
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test

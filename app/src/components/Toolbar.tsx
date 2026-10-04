@@ -9,7 +9,7 @@ import { host } from '../host'
 import { useSpinoffTargets } from './ContinueIn'
 import ThemeToggle from './ThemeToggle'
 import { signedInUser } from '../host/http'
-import { signOut } from '../shell/SignIn'
+import { signOut } from '../shell/signOut'
 import './chrome.css'
 
 interface Props {

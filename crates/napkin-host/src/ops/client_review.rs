@@ -57,7 +57,14 @@ pub const REOPEN_PART: &str = "reopen_part";
 /// What a client may answer, of the document or of one part.
 pub const ANSWERS: &[&str] = &["accepted", "accepted_with_changes", "rejected"];
 /// Why a client rejected the document, when the recorder says.
-pub const REASONS: &[&str] = &["off_brief", "wrong_audience", "tone", "facts_wrong", "budget", "other"];
+pub const REASONS: &[&str] = &[
+    "off_brief",
+    "wrong_audience",
+    "tone",
+    "facts_wrong",
+    "budget",
+    "other",
+];
 /// How the answer reached the agency.
 pub const CHANNELS: &[&str] = &["pasted_email", "file", "call", "none"];
 
@@ -160,7 +167,9 @@ fn no_recorder(v: &Value) -> HostResult<()> {
 fn answer_of(v: &Value, key: &str) -> HostResult<String> {
     let a = required(v, key)?;
     if !ANSWERS.contains(&a.as_str()) {
-        return Err(bad(format!("`{key}` is accepted, accepted_with_changes or rejected")));
+        return Err(bad(format!(
+            "`{key}` is accepted, accepted_with_changes or rejected"
+        )));
     }
     Ok(a)
 }
@@ -175,7 +184,9 @@ fn client_of(v: &Value) -> HostResult<Client> {
         return Err(bad("`client.name` is required"));
     }
     if name.chars().count() > MAX_NAME {
-        return Err(bad(format!("`client.name` is at most {MAX_NAME} characters")));
+        return Err(bad(format!(
+            "`client.name` is at most {MAX_NAME} characters"
+        )));
     }
     let email = match c.get("email") {
         None | Some(Value::Null) => None,
@@ -222,12 +233,20 @@ fn aliases_of(p: &Value, address: &str) -> HostResult<Vec<String>> {
             .ok_or_else(|| bad(format!("part {address}'s aliases are words")))?,
         Some(_) => return Err(bad(format!("part {address}'s aliases are a list of words"))),
     };
-    let out: Vec<String> = raw.iter().map(|a| a.trim().to_string()).filter(|a| !a.is_empty()).collect();
+    let out: Vec<String> = raw
+        .iter()
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+        .collect();
     if out.len() > MAX_ALIASES {
-        return Err(bad(format!("part {address} has at most {MAX_ALIASES} aliases")));
+        return Err(bad(format!(
+            "part {address} has at most {MAX_ALIASES} aliases"
+        )));
     }
     if let Some(a) = out.iter().find(|a| a.chars().count() > MAX_LABEL) {
-        return Err(bad(format!("part {address}'s alias {a:?} is over {MAX_LABEL} characters")));
+        return Err(bad(format!(
+            "part {address}'s alias {a:?} is over {MAX_LABEL} characters"
+        )));
     }
     Ok(out)
 }
@@ -245,16 +264,23 @@ impl ClientReview {
         let v = body(raw)?;
         no_recorder(&v)?;
         if v.get("evidence").is_some() {
-            return Err(bad("`evidence` is the host's: send the attached file as `asset`"));
+            return Err(bad(
+                "`evidence` is the host's: send the attached file as `asset`",
+            ));
         }
         let answer = answer_of(&v, "answer")?;
         let client = client_of(&v)?;
 
         let mut reasons: Vec<String> = Vec::new();
         for r in list(&v, "reasons")? {
-            let r = r.as_str().ok_or_else(|| bad("`reasons` is a list of reason codes"))?;
+            let r = r
+                .as_str()
+                .ok_or_else(|| bad("`reasons` is a list of reason codes"))?;
             if !REASONS.contains(&r) {
-                return Err(bad(format!("reason {r:?} is not one of: {}", REASONS.join(", "))));
+                return Err(bad(format!(
+                    "reason {r:?} is not one of: {}",
+                    REASONS.join(", ")
+                )));
             }
             if reasons.iter().any(|x| x == r) {
                 return Err(bad(format!("reason {r} is given twice")));
@@ -273,13 +299,19 @@ impl ClientReview {
         }
         match channel.as_str() {
             "pasted_email" | "call" if said.is_none() => {
-                return Err(bad(format!("`{channel}` needs the client's words in `said`")))
+                return Err(bad(format!(
+                    "`{channel}` needs the client's words in `said`"
+                )))
             }
             "file" if asset.is_none() => {
-                return Err(bad("`file` needs the attached file in `asset`, stored first with /upload-asset"))
+                return Err(bad(
+                    "`file` needs the attached file in `asset`, stored first with /upload-asset",
+                ))
             }
             "none" if said.is_some() || asset.is_some() => {
-                return Err(bad("`none` takes no words and no file: say which channel they came by"))
+                return Err(bad(
+                    "`none` takes no words and no file: say which channel they came by",
+                ))
             }
             _ => {}
         }
@@ -287,10 +319,9 @@ impl ClientReview {
             return Err(bad("an attached file is channel `file`"));
         }
 
-        let raw_parts = v
-            .get("parts")
-            .and_then(Value::as_array)
-            .ok_or_else(|| bad("`parts` is the app's whole list of parts, every time (it may be empty)"))?;
+        let raw_parts = v.get("parts").and_then(Value::as_array).ok_or_else(|| {
+            bad("`parts` is the app's whole list of parts, every time (it may be empty)")
+        })?;
         if raw_parts.len() > MAX_PARTS {
             return Err(bad(format!("at most {MAX_PARTS} parts")));
         }
@@ -302,10 +333,16 @@ impl ClientReview {
                 return Err(bad(format!("part {address} needs a `label`")));
             }
             if label.chars().count() > MAX_LABEL {
-                return Err(bad(format!("part {address}'s label is at most {MAX_LABEL} characters")));
+                return Err(bad(format!(
+                    "part {address}'s label is at most {MAX_LABEL} characters"
+                )));
             }
             let aliases = aliases_of(p, &address)?;
-            parts.push(PartIn { address, label, aliases });
+            parts.push(PartIn {
+                address,
+                label,
+                aliases,
+            });
         }
         let mut marked = Vec::new();
         for m in list(&v, "marked")? {
@@ -316,9 +353,20 @@ impl ClientReview {
             });
         }
         if answer == "accepted" && !marked.is_empty() {
-            return Err(bad("an accepted document marks every part accepted already: mark no parts"));
+            return Err(bad(
+                "an accepted document marks every part accepted already: mark no parts",
+            ));
         }
-        Ok(Self { answer, client, reasons, channel, said, asset, parts, marked })
+        Ok(Self {
+            answer,
+            client,
+            reasons,
+            channel,
+            said,
+            asset,
+            parts,
+            marked,
+        })
     }
 }
 
@@ -339,9 +387,17 @@ pub fn parse_confirm(raw: &str) -> HostResult<Confirm> {
         };
         let said = words(&v, "said")?;
         if !confirm && said.is_some() {
-            return Err(bad("a dismissal records no words about the part: say why in `rationale`"));
+            return Err(bad(
+                "a dismissal records no words about the part: say why in `rationale`",
+            ));
         }
-        return Ok(Confirm::Suggestion { id: suggestion, confirm, answer, said, rationale });
+        return Ok(Confirm::Suggestion {
+            id: suggestion,
+            confirm,
+            answer,
+            said,
+            rationale,
+        });
     }
     if text(&v, "review").is_empty() {
         return Err(bad("`suggestion`, or `review` and `address`, is required"));
@@ -378,12 +434,19 @@ fn part_address(doc_id: &str, raw: &str) -> HostResult<(String, String)> {
         None => raw,
     };
     let segs: Vec<&str> = path.split('.').collect();
-    if path.is_empty() || segs.iter().any(|s| s.is_empty() || s.contains(['[', ']', '#'])) {
+    if path.is_empty()
+        || segs
+            .iter()
+            .any(|s| s.is_empty() || s.contains(['[', ']', '#']))
+    {
         return Err(bad(format!(
             "part {raw} is not a data path in dotted keys: /edit could not write it, so a rejection of it could never be answered"
         )));
     }
-    if matches!(segs[0], UPSTREAM_KEY | PROJECTION_KEY | "facts" | "findings" | "sources") {
+    if matches!(
+        segs[0],
+        UPSTREAM_KEY | PROJECTION_KEY | "facts" | "findings" | "sources"
+    ) {
         return Err(bad(format!(
             "part {raw} is not the document's own content: {} is the host's or a member",
             segs[0]
@@ -407,7 +470,9 @@ pub(crate) fn part_value(data: &Value, path: &str) -> Value {
         .cloned()
         .unwrap_or(Value::Null);
     match v {
-        Value::Object(ref m) if m.contains_key("value") && m.contains_key("origin") => m["value"].clone(),
+        Value::Object(ref m) if m.contains_key("value") && m.contains_key("origin") => {
+            m["value"].clone()
+        }
         other => other,
     }
 }
@@ -523,7 +588,11 @@ fn find<'c>(chain: &'c DecisionChain, id: &str) -> HostResult<&'c Decision> {
 }
 
 /// The part answer already recorded for `review` on `address`, if any.
-fn answered_part<'c>(chain: &'c DecisionChain, review: &str, address: &str) -> Option<&'c Decision> {
+fn answered_part<'c>(
+    chain: &'c DecisionChain,
+    review: &str,
+    address: &str,
+) -> Option<&'c Decision> {
     chain.decisions.iter().find(|d| {
         is(d, CLIENT_ANSWER_PART)
             && extra_str(d, "review") == Some(review)
@@ -626,7 +695,10 @@ fn prepare(ctx: &Ctx, doc: &Document, input: &ClientReview) -> HostResult<Prepar
     let mut parts: Vec<Seen> = Vec::new();
     for p in &input.parts {
         let (address, path) = part_address(&here, &p.address)?;
-        if let Some(q) = parts.iter().find(|q| inside(&path, &q.path) || inside(&q.path, &path)) {
+        if let Some(q) = parts
+            .iter()
+            .find(|q| inside(&path, &q.path) || inside(&q.path, &path))
+        {
             return Err(bad(if q.path == path {
                 format!("part {path} is given twice")
             } else {
@@ -660,17 +732,24 @@ fn prepare(ctx: &Ctx, doc: &Document, input: &ClientReview) -> HostResult<Prepar
         let name = asset
             .strip_prefix("human/assets/")
             .and_then(sanitize_asset_name)
-            .ok_or_else(|| bad("`asset` is human/assets/<name>, a file stored with /upload-asset"))?;
+            .ok_or_else(|| {
+                bad("`asset` is human/assets/<name>, a file stored with /upload-asset")
+            })?;
         let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
         if !matches!(ext.as_str(), "eml" | "pdf") {
-            return Err(bad("the attached file is the client's email (.eml) or a PDF"));
+            return Err(bad(
+                "the attached file is the client's email (.eml) or a PDF",
+            ));
         }
         let path = format!("human/assets/{name}");
         if !clan.has_entry(&path) {
-            return Err(HostError::not_found(format!("{path} is not in this document: store it with /upload-asset first")));
+            return Err(HostError::not_found(format!(
+                "{path} is not in this document: store it with /upload-asset first"
+            )));
         }
         let bytes = clan.read_entry(&path)?;
-        evidence = json!({ "asset": path, "sha256": sha256_prefixed(&bytes), "strength": "strong" });
+        evidence =
+            json!({ "asset": path, "sha256": sha256_prefixed(&bytes), "strength": "strong" });
         extracted = clan
             .read_entry(&format!("human/assets/.extracted/{name}.txt"))
             .ok()
@@ -695,7 +774,15 @@ fn prepare(ctx: &Ctx, doc: &Document, input: &ClientReview) -> HostResult<Prepar
 }
 
 /// A decision by the person `who`, of the client review kind.
-fn by_person(ctx: &Ctx, who: &str, action: &str, targets: Vec<String>, cites: Vec<String>, rationale: String, now: &str) -> Decision {
+fn by_person(
+    ctx: &Ctx,
+    who: &str,
+    action: &str,
+    targets: Vec<String>,
+    cites: Vec<String>,
+    rationale: String,
+    now: &str,
+) -> Decision {
     let mut d = attributed(ctx, "", KIND);
     d.id = Some(new_decision_id());
     d.agent = who.to_string();
@@ -739,7 +826,15 @@ pub fn record(ctx: &Ctx, doc: &Document, input: ClientReview) -> HostResult<Outc
     let reasons = if input.reasons.is_empty() {
         String::new()
     } else {
-        format!(" ({})", input.reasons.iter().map(|r| reason_words(r)).collect::<Vec<_>>().join(", "))
+        format!(
+            " ({})",
+            input
+                .reasons
+                .iter()
+                .map(|r| reason_words(r))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     };
     let what = match input.answer.as_str() {
         "accepted" => "accepted the document",
@@ -752,7 +847,10 @@ pub fn record(ctx: &Ctx, doc: &Document, input: ClientReview) -> HostResult<Outc
         CLIENT_ANSWER,
         vec![here.clone()],
         vec![p.lock.clone()],
-        format!("{name} {what}{reasons}, {evidence_words}; recorded by {}.", person_name(&p.who)),
+        format!(
+            "{name} {what}{reasons}, {evidence_words}; recorded by {}.",
+            person_name(&p.who)
+        ),
         &now,
     );
     put(&mut a, "covers", json!("document"))?;
@@ -777,9 +875,14 @@ pub fn record(ctx: &Ctx, doc: &Document, input: ClientReview) -> HostResult<Outc
             e
         })
         .collect();
-    put(&mut a, "seen", json!({ "version": p.version, "doc_hash": p.doc_hash, "parts": seen_parts }))?;
+    put(
+        &mut a,
+        "seen",
+        json!({ "version": p.version, "doc_hash": p.doc_hash, "parts": seen_parts }),
+    )?;
     let a_id = a.id.clone().unwrap_or_default();
-    let seen_part = |s: &Seen| json!({ "version": p.version, "doc_hash": p.doc_hash, "part_hash": s.hash });
+    let seen_part =
+        |s: &Seen| json!({ "version": p.version, "doc_hash": p.doc_hash, "part_hash": s.hash });
 
     let mut written = vec![a];
     let mut part_ids = Vec::new();
@@ -791,7 +894,12 @@ pub fn record(ctx: &Ctx, doc: &Document, input: ClientReview) -> HostResult<Outc
             CLIENT_ANSWER_PART,
             vec![s.address.clone()],
             vec![a_id.clone()],
-            format!("{} marked that {name} {} {}.", person_name(&p.who), part_verb(answer), s.label),
+            format!(
+                "{} marked that {name} {} {}.",
+                person_name(&p.who),
+                part_verb(answer),
+                s.label
+            ),
             &now,
         );
         put(&mut d, "covers", json!("part"))?;
@@ -814,7 +922,10 @@ pub fn record(ctx: &Ctx, doc: &Document, input: ClientReview) -> HostResult<Outc
             let parts: Vec<client_match::Part> = p
                 .parts
                 .iter()
-                .map(|s| client_match::Part { label: &s.label, aliases: &s.aliases })
+                .map(|s| client_match::Part {
+                    label: &s.label,
+                    aliases: &s.aliases,
+                })
                 .collect();
             Some(client_match::suggest(&input.answer, proof, &parts))
         }
@@ -844,7 +955,10 @@ pub fn record(ctx: &Ctx, doc: &Document, input: ClientReview) -> HostResult<Outc
         }];
         because.push(ReasonPoint {
             point: match (f.answer, f.cue) {
-                ("rejected", _) => "The client rejected the document, so the part is suggested rejected.".to_string(),
+                ("rejected", _) => {
+                    "The client rejected the document, so the part is suggested rejected."
+                        .to_string()
+                }
                 (_, Some(cue)) => format!("The sentence asks for a change (“{cue}”)."),
                 _ => "The sentence asks for no change.".to_string(),
             },
@@ -911,7 +1025,9 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
     let review_of = |id: &str| -> HostResult<&Decision> {
         let r = find(&chain, id)?;
         if !is(r, CLIENT_ANSWER) || !r.targets.contains(&here) {
-            return Err(bad(format!("{id} is not a client's answer to this document")));
+            return Err(bad(format!(
+                "{id} is not a client's answer to this document"
+            )));
         }
         Ok(r)
     };
@@ -926,19 +1042,30 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
     };
 
     match input {
-        Confirm::Suggestion { id, confirm, answer, said, rationale } => {
+        Confirm::Suggestion {
+            id,
+            confirm,
+            answer,
+            said,
+            rationale,
+        } => {
             let s = find(&chain, &id)?;
             if !is(s, SUGGEST_PART) || !on_here(s) {
-                return Err(HostError::conflict(format!("{id} is not a suggestion on this document")));
+                return Err(HostError::conflict(format!(
+                    "{id} is not a suggestion on this document"
+                )));
             }
-            if let Some(by) = chain
-                .decisions
-                .iter()
-                .find(|d| (is(d, CLIENT_ANSWER_PART) || is(d, DISMISS_PART)) && extra_str(d, "suggestion") == Some(id.as_str()))
-            {
+            if let Some(by) = chain.decisions.iter().find(|d| {
+                (is(d, CLIENT_ANSWER_PART) || is(d, DISMISS_PART))
+                    && extra_str(d, "suggestion") == Some(id.as_str())
+            }) {
                 return Err(HostError::conflict(format!(
                     "suggestion {id} was already {} ({})",
-                    if is(by, DISMISS_PART) { "dismissed" } else { "confirmed" },
+                    if is(by, DISMISS_PART) {
+                        "dismissed"
+                    } else {
+                        "confirmed"
+                    },
                     by.id.as_deref().unwrap_or("a decision")
                 )));
             }
@@ -965,10 +1092,12 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
                 put(&mut d, "covers", json!("part"))?;
                 put(&mut d, "review", json!(review))?;
                 put(&mut d, "suggestion", json!(id))?;
-                let reply = json!({ "ok": true, "kind": KIND, "decision": d.id, "targets": d.targets });
+                let reply =
+                    json!({ "ok": true, "kind": KIND, "decision": d.id, "targets": d.targets });
                 return commit(doc, vec![d], "a suggestion dismissed", &now, reply);
             }
-            let answer = answer.unwrap_or_else(|| extra_str(s, "answer").unwrap_or("rejected").to_string());
+            let answer =
+                answer.unwrap_or_else(|| extra_str(s, "answer").unwrap_or("rejected").to_string());
             let mut d = by_person(
                 ctx,
                 &who,
@@ -976,7 +1105,11 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
                 vec![address],
                 vec![review.clone(), id.clone()],
                 if rationale.is_empty() {
-                    format!("{} confirmed that {name} {} {label}.", person_name(&who), part_verb(&answer))
+                    format!(
+                        "{} confirmed that {name} {} {label}.",
+                        person_name(&who),
+                        part_verb(&answer)
+                    )
                 } else {
                     rationale
                 },
@@ -999,7 +1132,13 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
             let reply = json!({ "ok": true, "kind": KIND, "decision": d.id, "targets": d.targets });
             commit(doc, vec![d], "a suggestion confirmed", &now, reply)
         }
-        Confirm::Mark { review, address, answer, said, rationale } => {
+        Confirm::Mark {
+            review,
+            address,
+            answer,
+            said,
+            rationale,
+        } => {
             let r = review_of(&review)?;
             if extra_str(r, "answer") == Some("accepted") {
                 return Err(HostError::conflict(
@@ -1011,10 +1150,17 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
             let entry = seen
                 .get("parts")
                 .and_then(Value::as_array)
-                .and_then(|ps| ps.iter().find(|e| e.get("address").and_then(Value::as_str) == Some(full.as_str())))
+                .and_then(|ps| {
+                    ps.iter()
+                        .find(|e| e.get("address").and_then(Value::as_str) == Some(full.as_str()))
+                })
                 .cloned()
                 .ok_or_else(|| bad(format!("{address} is not one of the parts the client saw")))?;
-            let label = entry.get("label").and_then(Value::as_str).unwrap_or(&address).to_string();
+            let label = entry
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or(&address)
+                .to_string();
             let name = client_name(r);
             already(&review, &full, &label, &name)?;
             let mut d = by_person(
@@ -1024,7 +1170,11 @@ pub fn confirm(ctx: &Ctx, doc: &Document, input: Confirm) -> HostResult<Outcome>
                 vec![full],
                 vec![review.clone()],
                 if rationale.is_empty() {
-                    format!("{} marked that {name} {} {label}.", person_name(&who), part_verb(&answer))
+                    format!(
+                        "{} marked that {name} {} {label}.",
+                        person_name(&who),
+                        part_verb(&answer)
+                    )
                 } else {
                     rationale
                 },
@@ -1066,7 +1216,9 @@ pub(crate) fn closed_by_lock(
 ) -> HostResult<Vec<Decision>> {
     let mut out = Vec::new();
     for s in open {
-        let name = find(chain, &s.review).map(client_name).unwrap_or_else(|_| "the client".to_string());
+        let name = find(chain, &s.review)
+            .map(client_name)
+            .unwrap_or_else(|_| "the client".to_string());
         let mut d = by_person(
             ctx,
             who,
@@ -1113,17 +1265,32 @@ pub fn reopen(ctx: &Ctx, doc: &Document, answer: &str) -> HostResult<Outcome> {
         .parts
         .iter()
         .find(|p| p.decision == answer)
-        .ok_or_else(|| HostError::conflict(format!("{answer} is not its part's current answer: a newer one has replaced it")))?;
+        .ok_or_else(|| {
+            HostError::conflict(format!(
+                "{answer} is not its part's current answer: a newer one has replaced it"
+            ))
+        })?;
     if part.state == "accepted" {
-        return Err(HostError::conflict(format!("the client accepted {}: there is no change to make", part.label)));
+        return Err(HostError::conflict(format!(
+            "the client accepted {}: there is no change to make",
+            part.label
+        )));
     }
     if part.answered {
-        return Err(HostError::conflict(format!("{} was edited since the client answered: the request is answered", part.label)));
+        return Err(HostError::conflict(format!(
+            "{} was edited since the client answered: the request is answered",
+            part.label
+        )));
     }
     if part.reopened {
-        return Err(HostError::conflict(format!("{} is reopened already", part.label)));
+        return Err(HostError::conflict(format!(
+            "{} is reopened already",
+            part.label
+        )));
     }
-    let r = extra_str(a, "review").map(|id| find(&chain, id)).transpose()?;
+    let r = extra_str(a, "review")
+        .map(|id| find(&chain, id))
+        .transpose()?;
     let name = client_name(a);
     let said = r.and_then(|r| extra_str(r, "said")).map(String::from);
     let reasons: Vec<String> = r
@@ -1165,13 +1332,35 @@ pub fn reopen(ctx: &Ctx, doc: &Document, answer: &str) -> HostResult<Outcome> {
 
 /// Write one generation with `decisions`, in order (the last ends up newest),
 /// and nothing else changed.
-fn commit(doc: &Document, decisions: Vec<Decision>, delta: &str, now: &str, reply: Value) -> HostResult<Outcome> {
+fn commit(
+    doc: &Document,
+    decisions: Vec<Decision>,
+    delta: &str,
+    now: &str,
+    reply: Value,
+) -> HostResult<Outcome> {
     let clan = doc.clan();
-    let first = decisions.first().and_then(|d| d.id.clone()).unwrap_or_default();
-    let kind = decisions.first().and_then(|d| d.kind.clone()).unwrap_or_default();
-    let bytes = assemble(clan, data_of(clan)?, Members::of(clan)?, decisions, delta, now, false)?;
+    let first = decisions
+        .first()
+        .and_then(|d| d.id.clone())
+        .unwrap_or_default();
+    let kind = decisions
+        .first()
+        .and_then(|d| d.kind.clone())
+        .unwrap_or_default();
+    let bytes = assemble(
+        clan,
+        data_of(clan)?,
+        Members::of(clan)?,
+        decisions,
+        delta,
+        now,
+        false,
+    )?;
     let notice = json!({ "ok": true, "source": "client-review", "kind": kind, "decision": first });
-    let change = doc.change(bytes)?.with_event(HostEvent::DataChanged(notice));
+    let change = doc
+        .change(bytes)?
+        .with_event(HostEvent::DataChanged(notice));
     Ok(Outcome::changed(reply, change))
 }
 
@@ -1195,8 +1384,20 @@ mod tests {
     #[test]
     fn a_part_is_a_dotted_data_path_on_this_document() {
         assert_eq!(part_address("d1", "audience").unwrap().0, "d1#audience");
-        assert_eq!(part_address("d1", "d1#a.b").unwrap(), ("d1#a.b".into(), "a.b".into()));
-        for bad in ["d2#audience", "sections[s_2]", "upstream.p.x", "projection", "facts", "text[k]", "a..b", ""] {
+        assert_eq!(
+            part_address("d1", "d1#a.b").unwrap(),
+            ("d1#a.b".into(), "a.b".into())
+        );
+        for bad in [
+            "d2#audience",
+            "sections[s_2]",
+            "upstream.p.x",
+            "projection",
+            "facts",
+            "text[k]",
+            "a..b",
+            "",
+        ] {
             assert_eq!(part_address("d1", bad).unwrap_err().status, 400, "{bad}");
         }
         assert!(inside("audience.commercial", "audience"));
@@ -1206,7 +1407,10 @@ mod tests {
     #[test]
     fn aliases_are_a_list_or_the_attribute_as_written() {
         let p = |a: Value| aliases_of(&json!({ "aliases": a }), "audience");
-        assert_eq!(p(json!("who, the people ,, ")).unwrap(), vec!["who", "the people"]);
+        assert_eq!(
+            p(json!("who, the people ,, ")).unwrap(),
+            vec!["who", "the people"]
+        );
         assert_eq!(p(json!([" who ", ""])).unwrap(), vec!["who"]);
         assert_eq!(p(Value::Null).unwrap(), Vec::<String>::new());
         assert_eq!(p(json!([1])).unwrap_err().status, 400);
@@ -1225,9 +1429,18 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.marked[0].said.as_deref(), Some(said));
-        let c = parse_confirm(&json!({ "review": "d_1", "address": "tone", "answer": "rejected", "said": " \n " }).to_string());
+        let c = parse_confirm(
+            &json!({ "review": "d_1", "address": "tone", "answer": "rejected", "said": " \n " })
+                .to_string(),
+        );
         assert!(matches!(c.unwrap(), Confirm::Mark { said: None, .. }));
-        let d = parse_confirm(&json!({ "suggestion": "d_1", "confirm": false, "said": "x" }).to_string());
-        assert_eq!(d.unwrap_err().status, 400, "a dismissal takes no words about the part");
+        let d = parse_confirm(
+            &json!({ "suggestion": "d_1", "confirm": false, "said": "x" }).to_string(),
+        );
+        assert_eq!(
+            d.unwrap_err().status,
+            400,
+            "a dismissal takes no words about the part"
+        );
     }
 }

@@ -87,7 +87,13 @@ fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenRe
 
 /// Open `doc` and describe it. The session is cached, so this is cheap on the
 /// second call and every tab of the same document shares one archive.
-fn open_view(ctx: &AppCtx, tenant: &TenantId, person: &str, ws: &Workspace, doc: DocId) -> ApiResult<OpenView> {
+fn open_view(
+    ctx: &AppCtx,
+    tenant: &TenantId,
+    person: &str,
+    ws: &Workspace,
+    doc: DocId,
+) -> ApiResult<OpenView> {
     let session = ws.session(&doc)?;
     let open = session.open(doc.clone())?;
     Ok(view(ctx, tenant, person, &doc, open))
@@ -138,7 +144,11 @@ fn signed_in(identity: &crate::tenant::Identity, account: crate::auth::Account) 
     let crate::tenant::Mode::Accounts { sessions, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
-    let cookie = identity.cookie(crate::auth::SESSION_COOKIE, &sessions.issue(&account), crate::auth::SESSION_SECS);
+    let cookie = identity.cookie(
+        crate::auth::SESSION_COOKIE,
+        &sessions.issue(&account),
+        crate::auth::SESSION_SECS,
+    );
     let mut r = Json(serde_json::json!({ "ok": true, "user": account })).into_response();
     if let Ok(v) = header::HeaderValue::from_str(&cookie) {
         r.headers_mut().append(header::SET_COOKIE, v);
@@ -147,7 +157,11 @@ fn signed_in(identity: &crate::tenant::Identity, account: crate::auth::Account) 
 }
 
 fn refused(status: StatusCode, msg: &str) -> Response {
-    (status, Json(serde_json::json!({ "ok": false, "error": msg }))).into_response()
+    (
+        status,
+        Json(serde_json::json!({ "ok": false, "error": msg })),
+    )
+        .into_response()
 }
 
 fn answer(identity: &crate::tenant::Identity, out: crate::auth::SignIn) -> Response {
@@ -155,13 +169,17 @@ fn answer(identity: &crate::tenant::Identity, out: crate::auth::SignIn) -> Respo
         crate::auth::SignIn::Done(a) => signed_in(identity, a),
         // the first sign-in: the person chooses their own password next
         crate::auth::SignIn::NewPassword { session } => {
-            Json(serde_json::json!({ "ok": false, "step": "new_password", "session": session })).into_response()
+            Json(serde_json::json!({ "ok": false, "step": "new_password", "session": session }))
+                .into_response()
         }
         crate::auth::SignIn::Refused(why) => refused(StatusCode::UNAUTHORIZED, &why),
     }
 }
 
-async fn sign_in(Extension(identity): Extension<Arc<crate::tenant::Identity>>, Json(b): Json<SignInBody>) -> Response {
+async fn sign_in(
+    Extension(identity): Extension<Arc<crate::tenant::Identity>>,
+    Json(b): Json<SignInBody>,
+) -> Response {
     let crate::tenant::Mode::Accounts { provider, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
@@ -176,13 +194,17 @@ async fn new_password(
     let crate::tenant::Mode::Accounts { provider, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
-    let out = provider.new_password(&b.username, &b.session, &b.password).await;
+    let out = provider
+        .new_password(&b.username, &b.session, &b.password)
+        .await;
     answer(&identity, out)
 }
 
 async fn sign_out(Extension(identity): Extension<Arc<crate::tenant::Identity>>) -> Response {
     let mut r = Json(serde_json::json!({ "ok": true })).into_response();
-    if let Ok(v) = header::HeaderValue::from_str(&identity.cookie(crate::auth::SESSION_COOKIE, "", 0)) {
+    if let Ok(v) =
+        header::HeaderValue::from_str(&identity.cookie(crate::auth::SESSION_COOKIE, "", 0))
+    {
         r.headers_mut().append(header::SET_COOKIE, v);
     }
     r
@@ -219,7 +241,8 @@ struct NewDocument {
 
 async fn new_document(
     State(ctx): Ctx,
-    Tenant(tenant): Tenant, Extension(Person(person)): Extension<Person>,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
     Json(body): Json<NewDocument>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
@@ -258,7 +281,8 @@ struct Spinoff {
 async fn spinoff_document(
     State(ctx): Ctx,
     Acting(acting): Acting,
-    Tenant(tenant): Tenant, Extension(Person(person)): Extension<Person>,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
     Path((_t, doc)): Path<(String, String)>,
     Json(body): Json<Spinoff>,
 ) -> ApiResult<Json<OpenView>> {
@@ -280,7 +304,8 @@ async fn spinoff_document(
 /// to install, exactly as the desktop does when a template is opened.
 async fn upload_document(
     State(ctx): Ctx,
-    Tenant(tenant): Tenant, Extension(Person(person)): Extension<Person>,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
     body: Bytes,
 ) -> ApiResult<Json<OpenView>> {
     if body.is_empty() {
@@ -299,7 +324,11 @@ async fn upload_document(
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
-async fn home(State(ctx): Ctx, Tenant(tenant): Tenant, Extension(Person(person)): Extension<Person>) -> ApiResult<Json<OpenView>> {
+async fn home(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
+) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
     let doc = library::ensure_home(&*ws.store)?;
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
@@ -321,11 +350,18 @@ fn doc_session(
 
 async fn open_document(
     State(ctx): Ctx,
-    Tenant(tenant): Tenant, Extension(Person(person)): Extension<Person>,
+    Tenant(tenant): Tenant,
+    Extension(Person(person)): Extension<Person>,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Json<OpenView>> {
     let ws = ctx.workspace(&tenant);
-    Ok(Json(open_view(&ctx, &tenant, &person, &ws, DocId::new(doc))?))
+    Ok(Json(open_view(
+        &ctx,
+        &tenant,
+        &person,
+        &ws,
+        DocId::new(doc),
+    )?))
 }
 
 async fn human_html(

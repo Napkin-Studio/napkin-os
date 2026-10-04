@@ -19,6 +19,9 @@ function useMadeFrom(path: string | null): UpstreamEntry[] {
   const [up, setUp] = useState<UpstreamEntry[]>([])
   useEffect(() => {
     let live = true
+    // A new document's details replace the last one's: a load from the host
+    // when what is open changes, the case the rule allows (as App.tsx's).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUp([])
     if (!path) return
     host.upstream().then(v => { if (live) setUp(v.upstream ?? []) }, () => {})

@@ -167,7 +167,9 @@ pub async fn verify(
         };
         return Err(HostError::new(
             502,
-            format!("Not verified: the finding could not be written to the agency's knowledge ({why})."),
+            format!(
+                "Not verified: the finding could not be written to the agency's knowledge ({why})."
+            ),
         ));
     }
     let data = reply.get("data").cloned().unwrap_or(Value::Null);
@@ -176,10 +178,23 @@ pub async fn verify(
         .pointer("/result/pin")
         .filter(|p| p.is_object())
         .cloned()
-        .ok_or_else(|| HostError::new(502, "the middleware answered verify_finding without a pin"))?;
-    let source = data.pointer("/result/source").and_then(Value::as_str).map(String::from);
+        .ok_or_else(|| {
+            HostError::new(502, "the middleware answered verify_finding without a pin")
+        })?;
+    let source = data
+        .pointer("/result/source")
+        .and_then(Value::as_str)
+        .map(String::from);
     let applied = session.perform(ctx, |c, d| {
-        review::verify_finding(c, d, &finding, &rationale, &decision_id, &pin, source.as_deref())
+        review::verify_finding(
+            c,
+            d,
+            &finding,
+            &rationale,
+            &decision_id,
+            &pin,
+            source.as_deref(),
+        )
     })?;
     let mut reply = applied.reply;
     reply["clan"] = session.document_now().unwrap_or(Value::Null);
@@ -199,7 +214,10 @@ pub async fn correct(
     use crate::ops::review;
     let input = review::parse_correct(body)?;
     let payload = session.read(|d| review::correct_request(ctx, d, &input))?;
-    let decision_id = payload["input"]["decision_id"].as_str().unwrap_or_default().to_string();
+    let decision_id = payload["input"]["decision_id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
     let outgoing = serde_json::json!({
         "request_kind": middleware::REQUEST_KIND,
         "payload": payload,
@@ -209,10 +227,19 @@ pub async fn correct(
     if reply.get("ok").and_then(Value::as_bool) != Some(true) {
         let why = match reply.get("error") {
             Some(Value::String(s)) => s.clone(),
-            Some(e) => e.get("message").and_then(Value::as_str).unwrap_or("the middleware refused").to_string(),
+            Some(e) => e
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("the middleware refused")
+                .to_string(),
             None => "the middleware refused".to_string(),
         };
-        return Err(HostError::new(502, format!("Not corrected: the value could not be written to the agency's knowledge ({why}).")));
+        return Err(HostError::new(
+            502,
+            format!(
+                "Not corrected: the value could not be written to the agency's knowledge ({why})."
+            ),
+        ));
     }
     let data = reply.get("data").cloned().unwrap_or(Value::Null);
     middleware::check_api(&data)?;

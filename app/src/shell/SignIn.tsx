@@ -51,11 +51,6 @@ async function post(path: string, body: unknown): Promise<{ status: number; data
   return { status: r.status, data: await r.json().catch(() => ({})) }
 }
 
-export async function signOut() {
-  await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin' }).catch(() => {})
-  location.reload()
-}
-
 function SignIn({ onDone }: { onDone: () => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

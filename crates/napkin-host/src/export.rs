@@ -150,7 +150,10 @@ mod tests {
         let html = "<html><body><script>var s='</body>';</script><p>x</p></BODY></html>";
         let out = with_legibility_check(html);
         let at = out.find("data-napkin-legible").unwrap();
-        assert!(at > out.find("<p>x</p>").unwrap(), "after the content, not at an app's '</body>' string");
+        assert!(
+            at > out.find("<p>x</p>").unwrap(),
+            "after the content, not at an app's '</body>' string"
+        );
         assert!(out.ends_with("</BODY></html>"));
         assert!(with_legibility_check("<p>no body</p>").contains("data-napkin-legible"));
     }

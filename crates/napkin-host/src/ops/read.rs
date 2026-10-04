@@ -176,7 +176,14 @@ fn reprojected(clan: &ClanFile, data: &Value) -> Option<Value> {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    Some(members::projection(&facts, &fb, &findings, &gb, Some((&sources, &sb)), &built_at))
+    Some(members::projection(
+        &facts,
+        &fb,
+        &findings,
+        &gb,
+        Some((&sources, &sb)),
+        &built_at,
+    ))
 }
 
 /// `GET /assets/<rel>` — a binary asset from inside the archive.
@@ -269,7 +276,10 @@ fn asset_bytes(doc: &Document, dir: &str, name: &str, suffix: &str) -> Option<Ve
     let clan = doc.clan();
     clan.read_entry(&format!("{dir}{name}{suffix}"))
         .ok()
-        .or_else(|| clan.read_entry(&format!("{dir}{}{suffix}", crate::routes::uri_encode(name))).ok())
+        .or_else(|| {
+            clan.read_entry(&format!("{dir}{}{suffix}", crate::routes::uri_encode(name)))
+                .ok()
+        })
 }
 
 /// For each attachment carrying a `name`, read its cached extracted-text
@@ -325,17 +335,27 @@ fn splice_documents(doc: &Document, attachments: Option<&mut Value>) {
         let Some(bytes) = asset_bytes(doc, "human/assets/", &name, "") else {
             continue;
         };
-        let Some(obj) = a.as_object_mut() else { continue };
+        let Some(obj) = a.as_object_mut() else {
+            continue;
+        };
         if ext == "pdf" {
             if bytes.len() <= DOCUMENT_MAX_BYTES {
-                obj.insert("document".into(), serde_json::json!({"media_type": "application/pdf", "data": b64(&bytes)}));
+                obj.insert(
+                    "document".into(),
+                    serde_json::json!({"media_type": "application/pdf", "data": b64(&bytes)}),
+                );
             }
         } else {
             let pics = super::office::pictures(&ext, &bytes, 20, IMAGE_MAX_BYTES);
             if !pics.is_empty() {
-                obj.insert("images".into(), Value::Array(pics.iter().map(|(mt, b)| {
-                    serde_json::json!({"media_type": mt, "data": b64(b)})
-                }).collect()));
+                obj.insert(
+                    "images".into(),
+                    Value::Array(
+                        pics.iter()
+                            .map(|(mt, b)| serde_json::json!({"media_type": mt, "data": b64(b)}))
+                            .collect(),
+                    ),
+                );
             }
         }
     }
@@ -561,7 +581,10 @@ pub fn upstream_index(clan: &ClanFile, upstream: &Value) -> Value {
     let direct = clan.manifest().carried().map(|c| c.document_id.as_str());
     let mut out = serde_json::Map::new();
     for (id, copy) in upstream.as_object().into_iter().flatten() {
-        let keys: Vec<&String> = copy.as_object().map(|o| o.keys().collect()).unwrap_or_default();
+        let keys: Vec<&String> = copy
+            .as_object()
+            .map(|o| o.keys().collect())
+            .unwrap_or_default();
         let open: Vec<Value> = contests(copy)
             .filter(|c| c.get("status").and_then(Value::as_str) == Some("open"))
             .filter(|c| !resolved_in(&chain, id, str_of(c, "id").unwrap_or_default()))
@@ -703,7 +726,11 @@ fn pin_changes(doc: &Document, p: &Document) -> Vec<Value> {
             Some(o) if set(&theirs, "replaced_by").is_some() && set(o, "replaced_by").is_none() => {
                 Some("replaced")
             }
-            Some(o) if ["value", "unit", "as_of", "status"].iter().any(|k| set(&theirs, k) != set(o, k)) => {
+            Some(o)
+                if ["value", "unit", "as_of", "status"]
+                    .iter()
+                    .any(|k| set(&theirs, k) != set(o, k)) =>
+            {
                 Some("changed")
             }
             Some(_) => None,
@@ -763,9 +790,18 @@ fn finding_changes(doc: &Document, p: &Document) -> Vec<Value> {
 
 /// The parent's contests now against the ones frozen in this document's copy
 /// of it: `opened` there since, or `resolved` there since it was carried open.
-fn contest_changes(doc: &Document, data: &Value, carried: &clan_sdk::Carried, p: &Document) -> Vec<Value> {
+fn contest_changes(
+    doc: &Document,
+    data: &Value,
+    carried: &clan_sdk::Carried,
+    p: &Document,
+) -> Vec<Value> {
     let up = &carried.document_id;
-    let frozen = data.get(UPSTREAM_KEY).and_then(|u| u.get(up)).cloned().unwrap_or(Value::Null);
+    let frozen = data
+        .get(UPSTREAM_KEY)
+        .and_then(|u| u.get(up))
+        .cloned()
+        .unwrap_or(Value::Null);
     let was: BTreeMap<&str, &Value> = contests(&frozen)
         .filter_map(|c| Some((str_of(c, "id")?, c)))
         .collect();
@@ -796,7 +832,9 @@ fn contest_changes(doc: &Document, data: &Value, carried: &clan_sdk::Carried, p:
 fn resolved_in(chain: &DecisionChain, up: &str, ct: &str) -> bool {
     let address = format!("{up}#selection.contested[{ct}]");
     chain.decisions.iter().any(|d| {
-        d.kind.as_deref() == Some("resolve") && d.superseded_by.is_none() && d.targets.contains(&address)
+        d.kind.as_deref() == Some("resolve")
+            && d.superseded_by.is_none()
+            && d.targets.contains(&address)
     })
 }
 

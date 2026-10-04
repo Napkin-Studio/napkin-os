@@ -184,7 +184,8 @@ export default function AppRuntime({
     if (!i) return
     iframeRef.current?.contentWindow?.postMessage({ type: 'clan:insets', top: i.top, right: i.right, bottom: i.bottom }, '*')
   }, [])
-  useEffect(() => { insetsRef.current = insets; postInsets() }, [insets?.top, insets?.right, insets?.bottom, postInsets])
+  // `insets` is a new object only when a value changed (AppHost keeps the old one otherwise).
+  useEffect(() => { insetsRef.current = insets; postInsets() }, [insets, postInsets])
 
   const [iframeSrc, setIframeSrc] = useState<string>('')
 

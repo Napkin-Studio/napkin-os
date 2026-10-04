@@ -13,8 +13,9 @@
 
 use clan_sdk::decision::new_decision_id;
 use clan_sdk::{
-    create, instantiate, make_template, spinoff, AppHome, AppInfo, ClanBuilder, ClanFile, CreateOptions,
-    Decision, DecisionChain, InstantiateOptions, MakeTemplateOptions, SpinoffOptions,
+    create, instantiate, make_template, spinoff, AppHome, AppInfo, ClanBuilder, ClanFile,
+    CreateOptions, Decision, DecisionChain, InstantiateOptions, MakeTemplateOptions,
+    SpinoffOptions,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -293,7 +294,11 @@ fn is_blank_with(clan: &ClanFile, looks: &std::collections::BTreeSet<String>) ->
         return false;
     }
     let chain = chain_of(clan);
-    if chain.decisions.iter().any(|d| !clan_sdk::decision::is_look_action(&d.action)) {
+    if chain
+        .decisions
+        .iter()
+        .any(|d| !clan_sdk::decision::is_look_action(&d.action))
+    {
         return false;
     }
     // Written with nothing decided: something no decision records, such as
@@ -564,8 +569,9 @@ fn with_projection(bytes: Vec<u8>) -> HostResult<Vec<u8>> {
         &utc_seconds(&clan.manifest().updated_at),
     );
     let mut data: serde_yaml::Mapping = match clan.read_entry(DATA) {
-        Ok(b) => serde_yaml::from_slice(&b)
-            .map_err(|e| HostError::internal(format!("{DATA}: {e}")))?,
+        Ok(b) => {
+            serde_yaml::from_slice(&b).map_err(|e| HostError::internal(format!("{DATA}: {e}")))?
+        }
         Err(_) => serde_yaml::Mapping::new(),
     };
     data.insert(
@@ -777,7 +783,8 @@ pub fn backref_changes(
         from.insert("document_id".into(), child_id.clone().into());
         from.insert("decision".into(), decision.into());
         from.insert("version".into(), version.clone().into());
-        d.extra.insert("from".into(), serde_yaml::Value::Mapping(from));
+        d.extra
+            .insert("from".into(), serde_yaml::Value::Mapping(from));
         let change = with_decision(&parent, d)?;
         out.push((
             BackrefWritten {
@@ -812,7 +819,10 @@ pub fn write_backrefs(
         .filter_map(|(written, change)| match store.apply(&change) {
             Ok(_) => Some(written),
             Err(e) => {
-                log(&format!("backref: {} not written: {e}", written.document_id));
+                log(&format!(
+                    "backref: {} not written: {e}",
+                    written.document_id
+                ));
                 None
             }
         })
@@ -1105,9 +1115,15 @@ mod tests {
         let store = MemStore::default();
         install_template_app(&store, "Brief Maker", "ie.napkin.brief", None);
         let first = create_instance(&store, "ie.napkin.brief", None).unwrap();
-        assert!(scan_recent(&store).is_empty(), "a blank document is not listed");
+        assert!(
+            scan_recent(&store).is_empty(),
+            "a blank document is not listed"
+        );
         // Opened again: the same blank document, not another.
-        assert_eq!(create_instance(&store, "ie.napkin.brief", None).unwrap(), first);
+        assert_eq!(
+            create_instance(&store, "ie.napkin.brief", None).unwrap(),
+            first
+        );
         assert_eq!(store.documents().len(), 1);
 
         // Once someone works in it, it is listed, and the tool makes a new one.

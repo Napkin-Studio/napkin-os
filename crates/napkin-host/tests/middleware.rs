@@ -723,16 +723,26 @@ fn the_middleware_cannot_write_the_frozen_upstream_copy() {
     let before = std::fs::read(f.id.as_str()).unwrap();
     let clan = f.session.clan_context_for_agent();
     let parent = "3f2a9c1e-7b4d-4e8a-9c6f-0a1b2c3d4e5f";
-    for upstream in [json!({ parent: { "campaign": { "problem": "rewritten" } } }), json!(null)] {
+    for upstream in [
+        json!({ parent: { "campaign": { "problem": "rewritten" } } }),
+        json!(null),
+    ] {
         let mut r = reply_for(&clan);
         r["change"]["data_patch"]["upstream"] = upstream;
         let (out, events) = settle(&f, r);
         assert_eq!(out["data"]["change"]["applied"], false, "{out}");
         let reason = out["data"]["change"]["reason"].as_str().unwrap();
-        assert!(reason.contains("upstream is the frozen copy") && reason.contains("read-only"), "{reason}");
+        assert!(
+            reason.contains("upstream is the frozen copy") && reason.contains("read-only"),
+            "{reason}"
+        );
         assert!(events.is_empty());
     }
-    assert_eq!(std::fs::read(f.id.as_str()).unwrap(), before, "nothing written");
+    assert_eq!(
+        std::fs::read(f.id.as_str()).unwrap(),
+        before,
+        "nothing written"
+    );
 }
 
 #[test]
@@ -1573,8 +1583,7 @@ fn a_declaration_the_host_cannot_read_refuses_the_change() {
 
 /// A schema with room for sources in the projection, the way the Research
 /// Tool's is after this change: nothing else about it is checked.
-const SCHEMA_WITH_SOURCES: &str =
-    r#"{"type":"object","properties":{"projection":{"type":"object","properties":{"sources":{"type":"object"}}}}}"#;
+const SCHEMA_WITH_SOURCES: &str = r#"{"type":"object","properties":{"projection":{"type":"object","properties":{"sources":{"type":"object"}}}}}"#;
 
 /// A fresh document whose data schema is `schema`.
 fn fixture_with_schema(schema: &str) -> Fixture {
@@ -1626,7 +1635,10 @@ fn sources_land_in_their_own_member_and_the_projection_carries_them() {
 
     // What a view binds to: the source by id, and the quote on the pin.
     let p = &yaml(&after, "shared/data.yaml")["projection"];
-    assert_eq!(p["sources"]["src_4f2a"]["uri"], "https://example.com/panel-2026");
+    assert_eq!(
+        p["sources"]["src_4f2a"]["uri"],
+        "https://example.com/panel-2026"
+    );
     assert_eq!(p["sources"]["src_4f2a"]["publisher"], "Example Panel");
     assert!(p["sources"]["src_4f2a"].get("id").is_none());
     assert_eq!(
@@ -1719,8 +1731,12 @@ fn an_engine_fact_conflict_is_recorded_as_a_flag_and_writes_nothing() {
 
     let clan = f.session.clan_context_for_agent();
     let doc = clan["id"].as_str().unwrap();
-    let mut r = reasoning("Recorded a conflict between the client brief and verified research.", &["mat_email01"]);
-    r["attention"] = json!("The client brief and verified research disagree. Settle which is current.");
+    let mut r = reasoning(
+        "Recorded a conflict between the client brief and verified research.",
+        &["mat_email01"],
+    );
+    r["attention"] =
+        json!("The client brief and verified research disagree. Settle which is current.");
     let reply = json!({
         "api": "napkin.middleware/1", "task": "draft_brief", "handler": "draft_brief@1.0",
         "job": { "id": "job_e1", "state": "done", "progress": { "done": 3, "total": 3 },
@@ -1743,8 +1759,16 @@ fn an_engine_fact_conflict_is_recorded_as_a_flag_and_writes_nothing() {
     assert_eq!(out["data"]["change"]["applied"], true, "{out}");
 
     let after = on_disk(&f);
-    assert_eq!(yaml(&after, "shared/data.yaml"), data_before, "no field is written");
-    assert_eq!(yaml(&after, FACTS_PATH), facts_before, "the fact is not written");
+    assert_eq!(
+        yaml(&after, "shared/data.yaml"),
+        data_before,
+        "no field is written"
+    );
+    assert_eq!(
+        yaml(&after, FACTS_PATH),
+        facts_before,
+        "the fact is not written"
+    );
     assert_eq!(chain(&after).decisions[0].action, "flag_conflict");
     let flags: Vec<_> = f
         .session
@@ -1757,5 +1781,9 @@ fn an_engine_fact_conflict_is_recorded_as_a_flag_and_writes_nothing() {
     assert_eq!(flags.len(), 1, "one flagged item for the conflict");
     assert_eq!(flags[0].code, "flagged");
     assert!(!flags[0].blocks_lock, "a conflict never holds the brief");
-    assert!(flags[0].address.as_deref().unwrap().ends_with("#facts[f_01JA0B3P4Q]"));
+    assert!(flags[0]
+        .address
+        .as_deref()
+        .unwrap()
+        .ends_with("#facts[f_01JA0B3P4Q]"));
 }

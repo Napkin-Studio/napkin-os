@@ -51,10 +51,9 @@ impl TokenStore {
         let now = Instant::now();
         entries.retain(|_, e| e.expires > now);
 
-        if let Some((token, entry)) = entries
-            .iter_mut()
-            .find(|(_, e)| &e.grant.tenant == tenant && e.grant.person == person && &e.grant.doc == doc)
-        {
+        if let Some((token, entry)) = entries.iter_mut().find(|(_, e)| {
+            &e.grant.tenant == tenant && e.grant.person == person && &e.grant.doc == doc
+        }) {
             entry.expires = now + TTL;
             return token.clone();
         }
@@ -111,6 +110,9 @@ mod tests {
         let t = TenantId::mint();
         let doc = DocId::new("doc-x");
         assert_eq!(store.mint(&t, "p", &doc), store.mint(&t, "p", &doc));
-        assert_ne!(store.mint(&t, "p", &doc), store.mint(&t, "p", &DocId::new("doc-y")));
+        assert_ne!(
+            store.mint(&t, "p", &doc),
+            store.mint(&t, "p", &DocId::new("doc-y"))
+        );
     }
 }

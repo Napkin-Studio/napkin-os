@@ -924,7 +924,8 @@ mod tests {
                 fields_changed: None,
                 typed: None,
             };
-            file = ClanFile::from_bytes(crate::pack::patch_decision(&file, entry, None).unwrap()).unwrap();
+            file = ClanFile::from_bytes(crate::pack::patch_decision(&file, entry, None).unwrap())
+                .unwrap();
         }
         let path = format!("agents/{agent}/decisions.yaml");
         let mut chain = DecisionChain::from_yaml(&file.read_entry(&path).unwrap()).unwrap();
@@ -953,8 +954,22 @@ mod tests {
         let a = with_namespace_data(&a, serde_json::json!({"k": "from-alpha"}));
         let b = with_namespace_data(&b, serde_json::json!({"k": "from-beta"}));
         // Stamps that interleave, and a clock that runs backwards in beta.
-        let a = with_decisions(a, "alpha", &["a1", "a2", "a3"], &["2026-01-01T00:00:01Z", "2026-01-01T00:00:03Z", "2026-01-01T00:00:05Z"]);
-        let b = with_decisions(b, "beta", &["b1", "b2"], &["2026-01-01T00:00:04Z", "2026-01-01T00:00:02Z"]);
+        let a = with_decisions(
+            a,
+            "alpha",
+            &["a1", "a2", "a3"],
+            &[
+                "2026-01-01T00:00:01Z",
+                "2026-01-01T00:00:03Z",
+                "2026-01-01T00:00:05Z",
+            ],
+        );
+        let b = with_decisions(
+            b,
+            "beta",
+            &["b1", "b2"],
+            &["2026-01-01T00:00:04Z", "2026-01-01T00:00:02Z"],
+        );
         let open = |bytes: &Vec<u8>| ClanFile::from_bytes(bytes.clone()).unwrap();
         let chain_len = |f: &ClanFile| {
             DecisionChain::from_yaml(&f.read_entry("agent/decision-chain.yaml").unwrap())
@@ -985,7 +1000,9 @@ mod tests {
             let base_len = chain_len(&branches[0]);
             let outcome = merge(&branches, MergeOptions::default()).unwrap();
             let merged = ClanFile::from_bytes(outcome.bytes).unwrap();
-            let chain = DecisionChain::from_yaml(&merged.read_entry("agent/decision-chain.yaml").unwrap()).unwrap();
+            let chain =
+                DecisionChain::from_yaml(&merged.read_entry("agent/decision-chain.yaml").unwrap())
+                    .unwrap();
             let actions: Vec<&str> = chain.decisions.iter().map(|d| d.action.as_str()).collect();
             // Newest first: the marker, the last branch's run, the first's, the base.
             assert_eq!(&actions[1..6], &want, "{actions:?}");
@@ -996,7 +1013,8 @@ mod tests {
             assert_eq!(parallel, parallel_want);
             // The data agrees with the chain: the head-most run's branch won.
             let data: serde_json::Value =
-                serde_yaml::from_str(&merged.read_entry_string("shared/data.yaml").unwrap()).unwrap();
+                serde_yaml::from_str(&merged.read_entry_string("shared/data.yaml").unwrap())
+                    .unwrap();
             assert_eq!(data["k"], serde_json::json!(kept), "{data}");
             assert_eq!(outcome.report.conflicts[0].winner.agent, winner);
         }

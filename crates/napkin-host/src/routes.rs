@@ -696,9 +696,14 @@ mod uri_tests {
     fn an_uploaded_name_is_decoded_and_its_old_spelling_can_be_rebuilt() {
         // the owner's tender files, 2026-10-01: stored as `a%20b.pdf`, asked for as `a b.pdf`
         let sent = "2_Samaritans%20nfpPublic%20Ireland%20EDITED.pdf";
-        assert_eq!(query_param(&format!("name={sent}&agent=human"), "name").unwrap(),
-                   "2_Samaritans nfpPublic Ireland EDITED.pdf");
-        assert_eq!(uri_encode("2_Samaritans nfpPublic Ireland EDITED.pdf"), sent);
+        assert_eq!(
+            query_param(&format!("name={sent}&agent=human"), "name").unwrap(),
+            "2_Samaritans nfpPublic Ireland EDITED.pdf"
+        );
+        assert_eq!(
+            uri_encode("2_Samaritans nfpPublic Ireland EDITED.pdf"),
+            sent
+        );
         assert_eq!(uri_decode("caf%C3%A9%20%E2%82%AC.pdf"), "café €.pdf");
         assert_eq!(uri_decode("100%"), "100%");
         assert_eq!(uri_decode("a%zzb"), "a%zzb");

@@ -467,7 +467,10 @@ impl<'a> Lookup<'a> {
         if doc == self.doc_id {
             return Some(self.data);
         }
-        self.data.get(UPSTREAM_KEY)?.get(doc).filter(|v| v.is_object())
+        self.data
+            .get(UPSTREAM_KEY)?
+            .get(doc)
+            .filter(|v| v.is_object())
     }
 
     /// Each frozen ancestor, by document id, in key order.
@@ -554,7 +557,11 @@ impl<'a> Lookup<'a> {
         let carried = data.is_some();
         // A carried merge conflict's key and a branch's id are taken whole:
         // a key may hold brackets of its own, an id dots.
-        let whole = |name: &str| path.strip_prefix(name)?.strip_prefix('[')?.strip_suffix(']');
+        let whole = |name: &str| {
+            path.strip_prefix(name)?
+                .strip_prefix('[')?
+                .strip_suffix(']')
+        };
         if let Some(key) = whole("merge-report") {
             return (format!("Merge conflict · {key}"), "contest");
         }
@@ -588,7 +595,11 @@ impl<'a> Lookup<'a> {
                 (format!("Contest · {key}"), "contest")
             }
             [Seg::Name("text"), Seg::Key(k)] => (
-                if k.starts_with("report:") { "Report › wording".to_string() } else { "Wording".to_string() },
+                if k.starts_with("report:") {
+                    "Report › wording".to_string()
+                } else {
+                    "Wording".to_string()
+                },
                 "field",
             ),
             [Seg::Name("decisions"), Seg::Key(id)] => (self.decision_label(id), "decision"),
@@ -661,7 +672,11 @@ impl<'a> Lookup<'a> {
                     .and_then(Value::as_array)
                     .into_iter()
                     .flatten()
-                    .filter_map(|s| s.as_str().filter(|s| s.starts_with("src_")).map(String::from))
+                    .filter_map(|s| {
+                        s.as_str()
+                            .filter(|s| s.starts_with("src_"))
+                            .map(String::from)
+                    })
                     .collect(),
                 ..cite("fact", fact_label(f), Some(fact_detail(f)))
             };
@@ -719,14 +734,17 @@ impl<'a> Lookup<'a> {
                 .unwrap_or(id)
                 .to_string();
             let detail = [
-                str_of(p, "source").filter(|s| Some(*s) != str_of(p, "citation")).map(String::from),
+                str_of(p, "source")
+                    .filter(|s| Some(*s) != str_of(p, "citation"))
+                    .map(String::from),
                 str_of(p, "pack").map(|k| format!("pack {k}")),
                 str_of(p, "scope").map(|s| match s {
                     "house" => "house knowledge".to_string(),
                     other => other.replace("agency:", "agency "),
                 }),
                 str_of(p, "licence").map(|l| l.replace('-', " ")),
-                str_of(p, "retrieved_at").map(|r| format!("retrieved {}", r.get(..10).unwrap_or(r))),
+                str_of(p, "retrieved_at")
+                    .map(|r| format!("retrieved {}", r.get(..10).unwrap_or(r))),
             ];
             return Cite {
                 quote: str_of(p, "text").map(|t| clip(t, 400)),
@@ -797,7 +815,11 @@ impl<'a> Lookup<'a> {
                 tier: str_of(s, "tier").map(String::from),
                 ..cite(
                     "source",
-                    if label.is_empty() { id.to_string() } else { label },
+                    if label.is_empty() {
+                        id.to_string()
+                    } else {
+                        label
+                    },
                     Some(plural(used, "pinned fact")),
                 )
             };
@@ -1175,7 +1197,11 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
         .get("selection")
         .and_then(|s| s.get("excluded"))
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|e| e.get("fact_id")?.as_str()).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|e| e.get("fact_id")?.as_str())
+                .collect()
+        })
         .unwrap_or_default();
     if !excluded.is_empty() {
         for (id, f) in &ctx.findings {
@@ -1185,12 +1211,19 @@ fn lock_blockers(ctx: &Lookup, clan: &clan_sdk::ClanFile) -> Vec<Attention> {
             let gone: Vec<&str> = f
                 .get("cites")
                 .and_then(Value::as_array)
-                .map(|a| a.iter().filter_map(Value::as_str).filter(|c| excluded.contains(c)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(Value::as_str)
+                        .filter(|c| excluded.contains(c))
+                        .collect()
+                })
                 .unwrap_or_default();
             if gone.is_empty() {
                 continue;
             }
-            let statement = str_of(f, "statement").map(|s| clip(s, 140)).unwrap_or_default();
+            let statement = str_of(f, "statement")
+                .map(|s| clip(s, 140))
+                .unwrap_or_default();
             out.push(blocker(
                 "finding_on_excluded_fact",
                 format!(
@@ -1338,14 +1371,17 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
     let lock = review::lock_of(ctx.chain, here);
     let reopened_now = cr::reopened(ctx.chain, here);
     let label_of = |address: &str, fallback: Option<&str>| {
-        fallback.map(String::from).unwrap_or_else(|| ctx.target(address).label)
+        fallback
+            .map(String::from)
+            .unwrap_or_else(|| ctx.target(address).label)
     };
     let reopened: Vec<ReopenedPart> = reopened_now
         .iter()
         .map(|r| ReopenedPart {
             label: label_of(
                 &r.address,
-                ctx.index_of(&r.answers).and_then(|i| extra_str(&chain[i], "label")),
+                ctx.index_of(&r.answers)
+                    .and_then(|i| extra_str(&chain[i], "label")),
             ),
             address: r.address.clone(),
             decision: r.decision.clone(),
@@ -1355,7 +1391,9 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
 
     let documents = newest_first(
         (0..chain.len())
-            .filter(|&i| is(&chain[i], cr::CLIENT_ANSWER) && chain[i].targets.iter().any(|t| t == here))
+            .filter(|&i| {
+                is(&chain[i], cr::CLIENT_ANSWER) && chain[i].targets.iter().any(|t| t == here)
+            })
             .collect(),
     );
     let part_answers: Vec<usize> = (0..chain.len())
@@ -1370,7 +1408,10 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
     }
     let mut current: BTreeMap<String, (usize, Source)> = BTreeMap::new();
     let mut offer = |address: String, i: usize, from: Source| {
-        if current.get(&address).map_or(true, |(j, _)| ctx.after(i, *j)) {
+        if current
+            .get(&address)
+            .map_or(true, |(j, _)| ctx.after(i, *j))
+        {
             current.insert(address, (i, from));
         }
     };
@@ -1379,10 +1420,29 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
             continue;
         }
         let seen = extra_json(&chain[i], "seen");
-        for e in seen.get("parts").and_then(Value::as_array).into_iter().flatten() {
-            let Some(address) = e.get("address").and_then(Value::as_str) else { continue };
-            let text = |k| e.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
-            offer(ctx.qualify(address), i, Source::Document { label: text("label"), hash: text("part_hash") });
+        for e in seen
+            .get("parts")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(address) = e.get("address").and_then(Value::as_str) else {
+                continue;
+            };
+            let text = |k| {
+                e.get(k)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            offer(
+                ctx.qualify(address),
+                i,
+                Source::Document {
+                    label: text("label"),
+                    hash: text("part_hash"),
+                },
+            );
         }
     }
     for &i in &part_answers {
@@ -1403,7 +1463,11 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
             Source::Part => (
                 extra_str(d, "answer").unwrap_or_default().to_string(),
                 label_of(&address, extra_str(d, "label")),
-                extra_json(d, "seen").get("part_hash").and_then(Value::as_str).unwrap_or_default().to_string(),
+                extra_json(d, "seen")
+                    .get("part_hash")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
                 extra_str(d, "review").unwrap_or_default().to_string(),
                 extra_str(d, "found_by").unwrap_or("person").to_string(),
                 extra_str(d, "quote").map(String::from),
@@ -1421,7 +1485,10 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
         // answer is "edited with a reason".
         let answered = state != "accepted"
             && (0..chain.len()).any(|j| {
-                ctx.after(j, i) && is_person(&chain[j]) && is_edit(&chain[j]) && ctx.touches(j, &address)
+                ctx.after(j, i)
+                    && is_person(&chain[j])
+                    && is_edit(&chain[j])
+                    && ctx.touches(j, &address)
             });
         parts.push(ClientPart {
             stale: cr::part_hash(ctx.data, path) != recorded,
@@ -1460,9 +1527,13 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
             client: extra_json(d, "client"),
             channel: extra_str(d, "channel").map(String::from),
             evidence: extra_json(d, "evidence"),
-            recorded_by: RecordedBy { id: w.id, name: w.name },
+            recorded_by: RecordedBy {
+                id: w.id,
+                name: w.name,
+            },
             at: d.timestamp.clone(),
-            current: lock_version.is_some() && seen.get("version").and_then(Value::as_str) == lock_version,
+            current: lock_version.is_some()
+                && seen.get("version").and_then(Value::as_str) == lock_version,
             parts_known: part_answers
                 .iter()
                 .any(|&j| extra_str(&chain[j], "review") == d.id.as_deref()),
@@ -1513,9 +1584,18 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
 
     // §7.5.4: what the next lock needs, and what only asks for a look.
     let name = |client: &Value| {
-        client.get("name").and_then(Value::as_str).unwrap_or("The client").to_string()
+        client
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("The client")
+            .to_string()
     };
-    let item = |code, text: String, blocks_lock, decision: String, address: Option<String>, label: Option<String>| Attention {
+    let item = |code,
+                text: String,
+                blocks_lock,
+                decision: String,
+                address: Option<String>,
+                label: Option<String>| Attention {
         code,
         text,
         blocks_lock,
@@ -1532,7 +1612,10 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
         match p.state.as_str() {
             "rejected" => blockers.push(item(
                 "client_rejected",
-                format!("{who} rejected {}. Edit it, saying why, before locking again.", p.label),
+                format!(
+                    "{who} rejected {}. Edit it, saying why, before locking again.",
+                    p.label
+                ),
                 true,
                 p.decision.clone(),
                 Some(p.address.clone()),
@@ -1549,7 +1632,10 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
             _ => {}
         }
     }
-    if let Some(a) = answers.first().filter(|a| a.answer == "rejected" && !a.parts_known) {
+    if let Some(a) = answers
+        .first()
+        .filter(|a| a.answer == "rejected" && !a.parts_known)
+    {
         blockers.push(item(
             "client_rejected_parts_unknown",
             format!(
@@ -1570,7 +1656,10 @@ fn client_review(ctx: &Lookup) -> ClientDerived {
             .unwrap_or_else(|| "The client".to_string());
         attention.push(item(
             "client_part_suggested",
-            format!("Ellis thinks {who}'s answer is about {}. Confirm or dismiss it.", s.label),
+            format!(
+                "Ellis thinks {who}'s answer is about {}. Confirm or dismiss it.",
+                s.label
+            ),
             false,
             s.decision.clone(),
             Some(s.address.clone()),
@@ -1672,7 +1761,12 @@ fn wrote(ctx: &Lookup, d: &Decision, key: &str) -> bool {
 /// what it rests on. A redraft that no longer cites the finding answers it.
 /// Targets a decision may name while citing a finding that are not content a
 /// person would revise: see [`written_citing_findings`].
-const NOT_REVISED: &[&str] = &["intake.messages", "facts[", "findings[", "selection.excluded"];
+const NOT_REVISED: &[&str] = &[
+    "intake.messages",
+    "facts[",
+    "findings[",
+    "selection.excluded",
+];
 
 fn written_citing_findings<'r>(
     ctx: &Lookup,
@@ -1711,9 +1805,12 @@ fn written_citing_findings<'r>(
             if NOT_REVISED.iter().any(|p| key.starts_with(p)) {
                 continue;
             }
-            let rewritten = ctx.chain.decisions.iter().enumerate().any(|(j, e)| {
-                j != i && ctx.after(j, i) && writes(e) && wrote(ctx, e, key)
-            });
+            let rewritten = ctx
+                .chain
+                .decisions
+                .iter()
+                .enumerate()
+                .any(|(j, e)| j != i && ctx.after(j, i) && writes(e) && wrote(ctx, e, key));
             if !rewritten {
                 out.entry(key.to_string())
                     .or_default()
@@ -1870,7 +1967,11 @@ fn who(d: &Decision) -> Who {
         kind: "agent",
         // The host's word match over a client's words is shown as Ellis, the
         // crew member who reads what people send (Contract 4 §7.5.2a).
-        name: if id == cr::MATCHER { "Ellis".to_string() } else { humanise(&id) },
+        name: if id == cr::MATCHER {
+            "Ellis".to_string()
+        } else {
+            humanise(&id)
+        },
         id,
         you: false,
     }
@@ -2015,7 +2116,13 @@ pub(crate) fn fact_label(f: &Value) -> String {
         }
         w.replace(" yoy", " year on year")
     };
-    let label = join_with(&[Some(words).filter(|w| !w.is_empty()), str_of(f, "market").map(String::from)], " · ");
+    let label = join_with(
+        &[
+            Some(words).filter(|w| !w.is_empty()),
+            str_of(f, "market").map(String::from),
+        ],
+        " · ",
+    );
     if label.is_empty() {
         str_of(f, "id").unwrap_or("fact").to_string()
     } else {
@@ -2058,7 +2165,11 @@ fn format_value(v: &Value, unit: Option<&str>) -> String {
         (Value::Number(n), Some("percent_abv")) => format!("{n}% ABV"),
         (Value::Number(n), Some("percent")) => format!("{n}%"),
         (Value::Number(n), Some(u @ ("eur" | "gbp" | "usd"))) => {
-            let sym = match u { "eur" => "€", "gbp" => "£", _ => "$" };
+            let sym = match u {
+                "eur" => "€",
+                "gbp" => "£",
+                _ => "$",
+            };
             format!("{sym}{}", compact(n.as_f64().unwrap_or(0.0)))
         }
         (Value::Number(n), Some("count" | "units")) => compact(n.as_f64().unwrap_or(0.0)),
@@ -2079,7 +2190,11 @@ fn compact(v: f64) -> String {
         _ => (1.0, ""),
     };
     let x = ((v / d) * 10.0).round() / 10.0;
-    let s = if x.fract() == 0.0 { format!("{}", x as i64) } else { format!("{x}") };
+    let s = if x.fract() == 0.0 {
+        format!("{}", x as i64)
+    } else {
+        format!("{x}")
+    };
     format!("{s}{suf}")
 }
 

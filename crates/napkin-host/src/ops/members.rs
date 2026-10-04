@@ -116,13 +116,22 @@ pub fn projects_sources(clan: &ClanFile) -> bool {
     let Ok(s) = serde_json::from_slice::<Value>(&bytes) else {
         return false;
     };
-    // `projection` written in place, or (Brief Maker's schema) a `$ref` to a
-    // definition in the same schema: both are followed.
+    schema_has_sources(&s)
+}
+
+/// [`projects_sources`], for one schema: `projection` written in place, or
+/// (Brief Maker's schema) a `$ref` to a definition in the same schema; both
+/// are followed.
+pub fn schema_has_sources(s: &Value) -> bool {
     let Some(mut p) = s.pointer("/properties/projection") else {
         return false;
     };
     for _ in 0..4 {
-        match p.get("$ref").and_then(Value::as_str).and_then(|r| r.strip_prefix('#')) {
+        match p
+            .get("$ref")
+            .and_then(Value::as_str)
+            .and_then(|r| r.strip_prefix('#'))
+        {
             Some(path) => match s.pointer(path) {
                 Some(next) => p = next,
                 None => return false,
@@ -355,9 +364,12 @@ pub fn projection(
 mod projects_sources_tests {
     use super::*;
 
-    fn app(name: &str) -> ClanFile {
-        let p = format!("{}/../../app/public/apps/{name}.app.clan", env!("CARGO_MANIFEST_DIR"));
-        ClanFile::from_bytes(std::fs::read(p).unwrap()).unwrap()
+    fn schema(app: &str) -> Value {
+        let p = format!(
+            "{}/../../app/templates/{app}/schema.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap()
     }
 
     #[test]
@@ -365,7 +377,10 @@ mod projects_sources_tests {
         // Brief Maker's projection is a `$ref` to its definitions; the Research
         // Tool's is written in place. Both carry sources and quotes (2026-10-03:
         // briefs showed no source for a research fact).
-        assert!(projects_sources(&app("brief-maker")));
-        assert!(projects_sources(&app("campaign-research")));
+        assert!(schema_has_sources(&schema("brief-maker")));
+        assert!(schema_has_sources(&schema("campaign-research")));
+        assert!(!schema_has_sources(
+            &serde_json::json!({"properties": {"projection": {"$ref": "#/nowhere"}}})
+        ));
     }
 }

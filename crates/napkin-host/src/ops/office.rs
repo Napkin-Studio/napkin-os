@@ -27,7 +27,11 @@ pub fn text(kind: &str, bytes: &[u8]) -> Option<String> {
             let mut slides: Vec<(u32, String)> = (0..zip.len())
                 .filter_map(|i| {
                     let name = zip.by_index(i).ok()?.name().to_string();
-                    let n = name.strip_prefix("ppt/slides/slide")?.strip_suffix(".xml")?.parse().ok()?;
+                    let n = name
+                        .strip_prefix("ppt/slides/slide")?
+                        .strip_suffix(".xml")?
+                        .parse()
+                        .ok()?;
                     Some((n, name))
                 })
                 .collect();
@@ -48,7 +52,12 @@ pub fn text(kind: &str, bytes: &[u8]) -> Option<String> {
 /// The pictures inside a `.docx` (`word/media/`) or a `.pptx` (`ppt/media/`), in name order, as
 /// (media type, bytes): the charts, photos and screenshots a deck's meaning often lives in. At most
 /// `max` of them, each at most `max_bytes`; other files there (EMF, video) are left out.
-pub fn pictures(kind: &str, bytes: &[u8], max: usize, max_bytes: usize) -> Vec<(&'static str, Vec<u8>)> {
+pub fn pictures(
+    kind: &str,
+    bytes: &[u8],
+    max: usize,
+    max_bytes: usize,
+) -> Vec<(&'static str, Vec<u8>)> {
     let dir = match kind {
         "docx" => "word/media/",
         "pptx" => "ppt/media/",
@@ -57,21 +66,32 @@ pub fn pictures(kind: &str, bytes: &[u8], max: usize, max_bytes: usize) -> Vec<(
     let Ok(mut zip) = zip::ZipArchive::new(Cursor::new(bytes)) else {
         return Vec::new();
     };
-    let mut names: Vec<String> = zip.file_names().filter(|n| n.starts_with(dir)).map(str::to_string).collect();
+    let mut names: Vec<String> = zip
+        .file_names()
+        .filter(|n| n.starts_with(dir))
+        .map(str::to_string)
+        .collect();
     names.sort();
     let mut out = Vec::new();
     for name in names {
         if out.len() >= max {
             break;
         }
-        let mt = match name.rsplit('.').next().map(|e| e.to_ascii_lowercase()).as_deref() {
+        let mt = match name
+            .rsplit('.')
+            .next()
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref()
+        {
             Some("png") => "image/png",
             Some("jpg") | Some("jpeg") => "image/jpeg",
             Some("gif") => "image/gif",
             Some("webp") => "image/webp",
             _ => continue,
         };
-        let Ok(mut f) = zip.by_name(&name) else { continue };
+        let Ok(mut f) = zip.by_name(&name) else {
+            continue;
+        };
         if f.size() as usize > max_bytes || f.size() < 2048 {
             continue; // too big to send, or a bullet glyph or a logo crumb
         }
@@ -93,7 +113,11 @@ fn entry<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, name: &str) -> O
 /// The text runs of one part, `ns` being the namespace prefix of its text
 /// tags (`w` for Word, `a` for slides).
 fn scan(xml: &str, ns: &str) -> String {
-    let (open, close, para) = (format!("<{ns}:t"), format!("</{ns}:t>"), format!("</{ns}:p>"));
+    let (open, close, para) = (
+        format!("<{ns}:t"),
+        format!("</{ns}:t>"),
+        format!("</{ns}:p>"),
+    );
     let (tab, br) = (format!("<{ns}:tab"), format!("<{ns}:br"));
     let mut out = String::new();
     let mut i = 0;
@@ -163,7 +187,9 @@ fn unescape(s: &str) -> String {
             "gt" => Some('>'),
             "quot" => Some('"'),
             "apos" => Some('\''),
-            _ if ent.starts_with("#x") => u32::from_str_radix(&ent[2..], 16).ok().and_then(char::from_u32),
+            _ if ent.starts_with("#x") => u32::from_str_radix(&ent[2..], 16)
+                .ok()
+                .and_then(char::from_u32),
             _ if ent.starts_with('#') => ent[1..].parse().ok().and_then(char::from_u32),
             _ => None,
         };
@@ -200,14 +226,24 @@ mod tests {
     fn a_word_document_reads_as_its_paragraphs() {
         let xml = r#"<w:document><w:body><w:p><w:r><w:t>Brewline &amp; the </w:t></w:r><w:r><w:t xml:space="preserve">summer launch</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Budget:</w:t><w:tab/><w:t>&#8364;1.2m</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:t>Line one</w:t><w:br/><w:t>line two</w:t></w:r></w:p></w:body></w:document>"#;
         let t = text("docx", &archive(&[("word/document.xml", xml)])).unwrap();
-        assert_eq!(t, "Brewline & the summer launch\nBudget:\t€1.2m\nLine one\nline two");
+        assert_eq!(
+            t,
+            "Brewline & the summer launch\nBudget:\t€1.2m\nLine one\nline two"
+        );
     }
 
     #[test]
     fn a_deck_reads_slide_by_slide_in_order() {
         let s = |t: &str| format!("<p:sld><a:p><a:r><a:t>{t}</a:t></a:r></a:p></p:sld>");
-        let t = text("pptx", &archive(&[("ppt/slides/slide10.xml", &s("Ten")), ("ppt/slides/slide2.xml", &s("Two")),
-                                       ("ppt/slides/slide1.xml", &s("One"))])).unwrap();
+        let t = text(
+            "pptx",
+            &archive(&[
+                ("ppt/slides/slide10.xml", &s("Ten")),
+                ("ppt/slides/slide2.xml", &s("Two")),
+                ("ppt/slides/slide1.xml", &s("One")),
+            ]),
+        )
+        .unwrap();
         assert_eq!(t, "Slide 1\nOne\n\nSlide 2\nTwo\n\nSlide 10\nTen");
     }
 
@@ -226,6 +262,9 @@ mod real_files {
     fn reads_a_real_file() {
         let p = std::env::var("NAPKIN_OFFICE_PROBE").unwrap();
         let kind = p.rsplit('.').next().unwrap().to_string();
-        println!("{}", super::text(&kind, &std::fs::read(&p).unwrap()).unwrap());
+        println!(
+            "{}",
+            super::text(&kind, &std::fs::read(&p).unwrap()).unwrap()
+        );
     }
 }

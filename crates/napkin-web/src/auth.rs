@@ -53,10 +53,14 @@ impl Account {
         let (user, agency) = u.split_once('@')?;
         let user_ok = !user.is_empty()
             && user.len() <= 64
-            && user.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
+            && user
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c));
         let agency_ok = !agency.is_empty()
             && agency.len() <= 40
-            && agency.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+            && agency
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-')
             && !agency.starts_with('-');
         (user_ok && agency_ok).then(|| (u.clone(), agency.to_string()))
     }
@@ -68,7 +72,9 @@ pub enum SignIn {
     Done(Account),
     /// The first sign-in with a temporary password: the person chooses their
     /// own. `session` is what finishing it needs (Cognito's challenge session).
-    NewPassword { session: String },
+    NewPassword {
+        session: String,
+    },
     Refused(String),
 }
 
@@ -129,7 +135,10 @@ struct Claims {
 }
 
 fn now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 impl Sessions {
@@ -139,7 +148,9 @@ impl Sessions {
         if secret.len() < 32 {
             return Err("NAPKIN_SESSION_SECRET must be at least 32 bytes".into());
         }
-        Ok(Self { key: secret.to_vec() })
+        Ok(Self {
+            key: secret.to_vec(),
+        })
     }
 
     fn mac(&self, body: &str) -> String {
@@ -149,7 +160,10 @@ impl Sessions {
     }
 
     pub fn issue(&self, account: &Account) -> String {
-        let claims = Claims { account: account.clone(), exp: now() + SESSION_SECS };
+        let claims = Claims {
+            account: account.clone(),
+            exp: now() + SESSION_SECS,
+        };
         let body = B64.encode(serde_json::to_vec(&claims).unwrap_or_default());
         let sig = self.mac(&body);
         format!("{body}.{sig}")
@@ -201,13 +215,20 @@ fn hash(password: &str) -> String {
 fn verify(password: &str, stored: &str) -> bool {
     use argon2::password_hash::{PasswordHash, PasswordVerifier};
     PasswordHash::new(stored)
-        .map(|h| argon2::Argon2::default().verify_password(password.as_bytes(), &h).is_ok())
+        .map(|h| {
+            argon2::Argon2::default()
+                .verify_password(password.as_bytes(), &h)
+                .is_ok()
+        })
         .unwrap_or(false)
 }
 
 impl Local {
     pub fn new(path: PathBuf) -> Self {
-        Self { path, lock: Mutex::new(()) }
+        Self {
+            path,
+            lock: Mutex::new(()),
+        }
     }
 
     fn load(&self) -> BTreeMap<String, LocalUser> {
@@ -232,13 +253,25 @@ impl Local {
         let (u, _) = Account::parse_username(username).ok_or("the name must be user@agency")?;
         let _g = self.lock.lock().unwrap();
         let mut users = self.load();
-        users.insert(u, LocalUser { name: name.map(String::from), hash: hash(temporary), must_change: true, challenge: None });
+        users.insert(
+            u,
+            LocalUser {
+                name: name.map(String::from),
+                hash: hash(temporary),
+                must_change: true,
+                challenge: None,
+            },
+        );
         self.save(&users).map_err(|e| e.to_string())
     }
 
     fn account(username: &str, user: &LocalUser) -> Account {
         let (u, agency) = Account::parse_username(username).unwrap_or_default();
-        Account { username: u, agency, name: user.name.clone() }
+        Account {
+            username: u,
+            agency,
+            name: user.name.clone(),
+        }
     }
 
     fn sign_in(&self, username: &str, password: &str) -> SignIn {
@@ -306,12 +339,19 @@ impl Cognito {
         }
     }
 
-    async fn call(&self, target: &str, body: serde_json::Value) -> Result<serde_json::Value, (String, String)> {
+    async fn call(
+        &self,
+        target: &str,
+        body: serde_json::Value,
+    ) -> Result<serde_json::Value, (String, String)> {
         let r = self
             .http
             .post(&self.endpoint)
             .header("Content-Type", "application/x-amz-json-1.1")
-            .header("X-Amz-Target", format!("AWSCognitoIdentityProviderService.{target}"))
+            .header(
+                "X-Amz-Target",
+                format!("AWSCognitoIdentityProviderService.{target}"),
+            )
             .json(&body)
             .send()
             .await
@@ -321,16 +361,26 @@ impl Cognito {
         if ok {
             return Ok(v);
         }
-        let kind = v["__type"].as_str().unwrap_or("Error").rsplit('#').next().unwrap_or("Error").to_string();
+        let kind = v["__type"]
+            .as_str()
+            .unwrap_or("Error")
+            .rsplit('#')
+            .next()
+            .unwrap_or("Error")
+            .to_string();
         Err((kind, v["message"].as_str().unwrap_or("").to_string()))
     }
 
     fn refused((kind, msg): (String, String)) -> SignIn {
         SignIn::Refused(match kind.as_str() {
-            "NotAuthorizedException" | "UserNotFoundException" => "That name and password do not match.".into(),
+            "NotAuthorizedException" | "UserNotFoundException" => {
+                "That name and password do not match.".into()
+            }
             "InvalidPasswordException" => format!("That password is not allowed: {msg}"),
             "PasswordResetRequiredException" => "Your password has to be reset by an admin.".into(),
-            "TooManyRequestsException" | "LimitExceededException" => "Too many tries. Wait a minute and try again.".into(),
+            "TooManyRequestsException" | "LimitExceededException" => {
+                "Too many tries. Wait a minute and try again.".into()
+            }
             "Network" => "Sign-in could not be reached. Try again.".into(),
             _ => format!("Sign-in failed ({kind})."),
         })
@@ -345,7 +395,11 @@ impl Cognito {
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
             .and_then(|c| c["name"].as_str().map(String::from));
         let (u, agency) = Account::parse_username(username).unwrap_or_default();
-        SignIn::Done(Account { username: u, agency, name })
+        SignIn::Done(Account {
+            username: u,
+            agency,
+            name,
+        })
     }
 
     async fn sign_in(&self, username: &str, password: &str) -> SignIn {
@@ -355,9 +409,9 @@ impl Cognito {
             "AuthParameters": { "USERNAME": username, "PASSWORD": password },
         });
         match self.call("InitiateAuth", body).await {
-            Ok(v) if v["ChallengeName"] == "NEW_PASSWORD_REQUIRED" => {
-                SignIn::NewPassword { session: v["Session"].as_str().unwrap_or("").to_string() }
-            }
+            Ok(v) if v["ChallengeName"] == "NEW_PASSWORD_REQUIRED" => SignIn::NewPassword {
+                session: v["Session"].as_str().unwrap_or("").to_string(),
+            },
             Ok(v) if v.get("AuthenticationResult").is_some() => Self::done(username, &v),
             Ok(v) => SignIn::Refused(format!(
                 "Sign-in asked for a step this app does not support ({}).",
@@ -388,22 +442,45 @@ mod tests {
 
     #[test]
     fn only_user_at_agency_is_a_sign_in_name() {
-        assert_eq!(Account::parse_username(" Engineer@Napkin "), Some(("engineer@napkin".into(), "napkin".into())));
-        assert_eq!(Account::parse_username("john@javelin"), Some(("john@javelin".into(), "javelin".into())));
-        for bad in ["engineer", "@napkin", "a@b.com", "a@", "a b@napkin", "a@na pkin", "a@../x", "a@-x"] {
-            assert!(Account::parse_username(bad).is_none(), "{bad} must be refused");
+        assert_eq!(
+            Account::parse_username(" Engineer@Napkin "),
+            Some(("engineer@napkin".into(), "napkin".into()))
+        );
+        assert_eq!(
+            Account::parse_username("john@javelin"),
+            Some(("john@javelin".into(), "javelin".into()))
+        );
+        for bad in [
+            "engineer",
+            "@napkin",
+            "a@b.com",
+            "a@",
+            "a b@napkin",
+            "a@na pkin",
+            "a@../x",
+            "a@-x",
+        ] {
+            assert!(
+                Account::parse_username(bad).is_none(),
+                "{bad} must be refused"
+            );
         }
     }
 
     #[test]
     fn a_session_cookie_is_signed_and_runs_out() {
         let s = Sessions::new(&[7u8; 32]).unwrap();
-        let a = Account { username: "engineer@napkin".into(), agency: "napkin".into(), name: Some("Shrey".into()) };
+        let a = Account {
+            username: "engineer@napkin".into(),
+            agency: "napkin".into(),
+            name: Some("Shrey".into()),
+        };
         let c = s.issue(&a);
         assert_eq!(s.read(&c), Some(a.clone()));
         // a cookie edited to name someone else fails its signature
         let (body, sig) = c.split_once('.').unwrap();
-        let mut forged: serde_json::Value = serde_json::from_slice(&B64.decode(body).unwrap()).unwrap();
+        let mut forged: serde_json::Value =
+            serde_json::from_slice(&B64.decode(body).unwrap()).unwrap();
         forged["username"] = "visionary@napkin".into();
         let forged = format!("{}.{sig}", B64.encode(serde_json::to_vec(&forged).unwrap()));
         assert_eq!(s.read(&forged), None);
@@ -416,21 +493,37 @@ mod tests {
     fn a_local_account_changes_its_temporary_password_on_first_sign_in() {
         let dir = tempfile::tempdir().unwrap();
         let l = Local::new(dir.path().join("users.json"));
-        l.add("engineer@napkin", "Temporary-1234", Some("Shrey")).unwrap();
+        l.add("engineer@napkin", "Temporary-1234", Some("Shrey"))
+            .unwrap();
         let session = match l.sign_in("engineer@napkin", "Temporary-1234") {
             SignIn::NewPassword { session } => session,
             other => panic!("expected the new-password step, got {other:?}"),
         };
-        assert!(matches!(l.sign_in("engineer@napkin", "wrong"), SignIn::Refused(_)));
+        assert!(matches!(
+            l.sign_in("engineer@napkin", "wrong"),
+            SignIn::Refused(_)
+        ));
         match l.new_password("engineer@napkin", &session, "MyOwnPassword9") {
-            SignIn::Done(a) => assert_eq!((a.username.as_str(), a.agency.as_str()), ("engineer@napkin", "napkin")),
+            SignIn::Done(a) => assert_eq!(
+                (a.username.as_str(), a.agency.as_str()),
+                ("engineer@napkin", "napkin")
+            ),
             other => panic!("{other:?}"),
         }
         // the temporary password no longer works; the chosen one does, straight in
-        assert!(matches!(l.sign_in("engineer@napkin", "Temporary-1234"), SignIn::Refused(_)));
-        assert!(matches!(l.sign_in("engineer@napkin", "MyOwnPassword9"), SignIn::Done(_)));
+        assert!(matches!(
+            l.sign_in("engineer@napkin", "Temporary-1234"),
+            SignIn::Refused(_)
+        ));
+        assert!(matches!(
+            l.sign_in("engineer@napkin", "MyOwnPassword9"),
+            SignIn::Done(_)
+        ));
         // the challenge cannot be answered twice
-        assert!(matches!(l.new_password("engineer@napkin", &session, "Another9password"), SignIn::Refused(_)));
+        assert!(matches!(
+            l.new_password("engineer@napkin", &session, "Another9password"),
+            SignIn::Refused(_)
+        ));
     }
 
     #[test]

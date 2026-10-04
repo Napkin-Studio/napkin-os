@@ -547,7 +547,12 @@ mod upstream {
 
         fn post(&self, path: &str, body: &str) -> Value {
             let resp = self.call(self.session.ctx(), path, body);
-            assert_eq!(resp.status, 200, "{path}: {}", String::from_utf8_lossy(&resp.body));
+            assert_eq!(
+                resp.status,
+                200,
+                "{path}: {}",
+                String::from_utf8_lossy(&resp.body)
+            );
             serde_json::from_slice(&resp.body).unwrap()
         }
 
@@ -589,7 +594,8 @@ mod upstream {
     /// the other value — written the way it arrives, as a middleware change.
     fn research(store: &Arc<MemStore>) -> Doc {
         install(&**store, "Campaign Research", RESEARCH, None);
-        let id = library::create_instance(&**store, RESEARCH, Some("Lúnasa 0.0 launch".into())).unwrap();
+        let id =
+            library::create_instance(&**store, RESEARCH, Some("Lúnasa 0.0 launch".into())).unwrap();
         let r = Doc::open(store, id);
         let clan = r.session.clan_context_for_agent();
         let doc = r.doc.clone();
@@ -639,7 +645,10 @@ mod upstream {
 
     /// `from` spun off into `app`, through the route, and opened.
     fn spin(store: &Arc<MemStore>, from: &Doc, app: &str) -> Doc {
-        let v = from.post("/spinoff", &json!({ "app_id": app, "title": "Lúnasa brief" }).to_string());
+        let v = from.post(
+            "/spinoff",
+            &json!({ "app_id": app, "title": "Lúnasa brief" }).to_string(),
+        );
         Doc::open(store, DocId::new(v["path"].as_str().unwrap()))
     }
 
@@ -665,28 +674,46 @@ mod upstream {
     fn resolve(d: &Doc, chosen: &str) -> Value {
         d.post(
             "/resolve",
-            &json!({ "contest": "ct_share", "chosen": chosen, "rationale": "The retail panel" }).to_string(),
+            &json!({ "contest": "ct_share", "chosen": chosen, "rationale": "The retail panel" })
+                .to_string(),
         )
     }
 
     #[test]
     fn a_spun_off_brief_carries_the_research_and_starts_current() {
         let (store, research, brief) = setup();
-        let data = brief.session.read(|d| Ok(napkin_host::ops::read::data_json(d))).unwrap();
+        let data = brief
+            .session
+            .read(|d| Ok(napkin_host::ops::read::data_json(d)))
+            .unwrap();
         // The research, frozen under its id; the pins projected at the root.
-        assert_eq!(data["upstream"][&research.doc]["campaign"]["name"], "Lúnasa 0.0");
+        assert_eq!(
+            data["upstream"][&research.doc]["campaign"]["name"],
+            "Lúnasa 0.0"
+        );
         assert!(data["upstream"][&research.doc].get("projection").is_none());
         assert_eq!(data["projection"]["pins"]["f_01JA0B3P4Q"]["value"], 0.23);
-        assert_eq!(data["projection"]["findings"]["fi_01JA0F2B"]["status"], "proposed");
-        let facts = brief.stored(&store).read_entry("shared/facts.yaml").unwrap();
+        assert_eq!(
+            data["projection"]["findings"]["fi_01JA0F2B"]["status"],
+            "proposed"
+        );
+        let facts = brief
+            .stored(&store)
+            .read_entry("shared/facts.yaml")
+            .unwrap();
         assert_eq!(
             data["projection"]["built_from"]["facts_sha256"],
             clan_sdk::hash::sha256_prefixed(&facts)
         );
         // Stamped as every other host stamp, so the brief's schema takes the
         // next write (a manifest stamp's nanoseconds and offset it refuses).
-        let built_at = data["projection"]["built_from"]["built_at"].as_str().unwrap();
-        assert!(built_at.ends_with('Z') && built_at.len() == 20, "{built_at}");
+        let built_at = data["projection"]["built_from"]["built_at"]
+            .as_str()
+            .unwrap();
+        assert!(
+            built_at.ends_with('Z') && built_at.len() == 20,
+            "{built_at}"
+        );
 
         let up = brief.get("/upstream");
         assert_eq!(up["document_id"], brief.doc);
@@ -715,9 +742,20 @@ mod upstream {
         let clan = brief.session.clan_context_for_agent();
         let index = &clan["data"]["upstream"][&research.doc];
         assert_eq!(index["direct"], true);
-        let keys: Vec<&str> = index["keys"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
-        assert!(keys.contains(&"campaign") && keys.contains(&"selection"), "{keys:?}");
-        assert!(index.get("campaign").is_none(), "the frozen data stays home");
+        let keys: Vec<&str> = index["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert!(
+            keys.contains(&"campaign") && keys.contains(&"selection"),
+            "{keys:?}"
+        );
+        assert!(
+            index.get("campaign").is_none(),
+            "the frozen data stays home"
+        );
         assert_eq!(
             index["open_contests"],
             json!([{ "id": "ct_share", "key": "brand/orchard-hill:product.share@IE",
@@ -729,10 +767,19 @@ mod upstream {
         // Resolved here, the contest is no longer open for the agent either.
         resolve(&brief, "f_01JA0B9Z9Z");
         let clan = brief.session.clan_context_for_agent();
-        assert_eq!(clan["data"]["upstream"][&research.doc]["open_contests"], json!([]));
+        assert_eq!(
+            clan["data"]["upstream"][&research.doc]["open_contests"],
+            json!([])
+        );
         // The view still holds the copy whole.
-        let data = brief.session.read(|d| Ok(napkin_host::ops::read::data_json(d))).unwrap();
-        assert_eq!(data["upstream"][&research.doc]["selection"]["contested"][0]["status"], "open");
+        let data = brief
+            .session
+            .read(|d| Ok(napkin_host::ops::read::data_json(d)))
+            .unwrap();
+        assert_eq!(
+            data["upstream"][&research.doc]["selection"]["contested"][0]["status"],
+            "open"
+        );
     }
 
     #[test]
@@ -740,8 +787,12 @@ mod upstream {
         let (store, research, brief) = setup();
         let before = research.stored(&store);
         let members = |c: &ClanFile| {
-            ["shared/data.yaml", "shared/facts.yaml", "shared/findings.yaml"]
-                .map(|p| c.read_entry(p).unwrap())
+            [
+                "shared/data.yaml",
+                "shared/facts.yaml",
+                "shared/findings.yaml",
+            ]
+            .map(|p| c.read_entry(p).unwrap())
         };
 
         let reply = resolve(&brief, "f_01JA0B9Z9Z");
@@ -757,7 +808,10 @@ mod upstream {
         assert_eq!(d.agent, "napkin-host");
         assert_eq!(d.actor.as_deref(), Some("human:local"));
         assert_eq!(d.id.as_deref(), backrefs[0]["decision"].as_str());
-        assert_eq!(d.targets, vec![format!("{}#selection.contested[ct_share]", research.doc)]);
+        assert_eq!(
+            d.targets,
+            vec![format!("{}#selection.contested[ct_share]", research.doc)]
+        );
         assert_eq!(d.rationale, "Resolved in \"Lúnasa brief\": f_01JA0B9Z9Z.");
         let from = &d.extra["from"];
         assert_eq!(from["document_id"].as_str(), Some(brief.doc.as_str()));
@@ -767,7 +821,10 @@ mod upstream {
         assert_eq!(members(&after), members(&before));
         assert_eq!(after.manifest().id, before.manifest().id);
         // A pointer, not a resolution: the research's own contest is open.
-        let r = research.session.read(|d| Ok(napkin_host::ops::read::data_json(d))).unwrap();
+        let r = research
+            .session
+            .read(|d| Ok(napkin_host::ops::read::data_json(d)))
+            .unwrap();
         assert_eq!(r["selection"]["contested"][0]["status"], "open");
         // Nor does it make the research "changed" for the brief.
         assert_eq!(brief.get("/upstream")["upstream"][0]["status"], "current");
@@ -775,18 +832,30 @@ mod upstream {
         // A resolve of the brief's own contest (it has none) owes nothing; a
         // verdict owes nothing either.
         reject_findings(&brief);
-        assert_eq!(chain(&research.stored(&store)).decisions.len(), chain(&after).decisions.len());
+        assert_eq!(
+            chain(&research.stored(&store)).decisions.len(),
+            chain(&after).decisions.len()
+        );
 
         let reply = brief.post("/approve", "{}");
         let lock = reply["decision"].as_str().unwrap().to_string();
-        assert_eq!(reply["backrefs"], json!([{ "document_id": research.doc,
-            "decision": chain(&research.stored(&store)).decisions[0].id }]));
+        assert_eq!(
+            reply["backrefs"],
+            json!([{ "document_id": research.doc,
+            "decision": chain(&research.stored(&store)).decisions[0].id }])
+        );
         let now = research.stored(&store);
         let d = &chain(&now).decisions[0];
         assert_eq!(d.action, "used");
         assert_eq!(d.targets, vec![research.doc.clone()]);
-        let approved = chain(&brief.stored(&store)).decisions[0].version.clone().unwrap();
-        assert_eq!(d.rationale, format!("Used in locked \"Lúnasa brief\" at {approved}."));
+        let approved = chain(&brief.stored(&store)).decisions[0]
+            .version
+            .clone()
+            .unwrap();
+        assert_eq!(
+            d.rationale,
+            format!("Used in locked \"Lúnasa brief\" at {approved}.")
+        );
         assert_eq!(d.extra["from"]["decision"].as_str(), Some(lock.as_str()));
         assert_eq!(d.extra["from"]["version"].as_str(), Some(approved.as_str()));
         assert_eq!(members(&now), members(&before));
@@ -806,14 +875,22 @@ mod upstream {
         // The contest was settled and the findings rejected before the hop;
         // the brief's copies arrive rejected, so nothing is left open.
         let findings = brief.session.clan_context_for_agent()["findings"].clone();
-        assert!(findings.as_array().unwrap().iter().all(|f| f["status"] == "rejected"), "{findings}");
+        assert!(
+            findings
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|f| f["status"] == "rejected"),
+            "{findings}"
+        );
         let reply = brief.post("/approve", "{}");
         assert_eq!(reply["backrefs"].as_array().unwrap().len(), 1, "{reply}");
         let now = research.stored(&store);
         assert_eq!(chain(&now).decisions[0].action, "used");
         // Still locked by its own approve, which the backref did not touch.
-        assert!(chain(&now).decisions.iter().any(|d| d.kind.as_deref() == Some("approve")
-            && d.targets == vec![research.doc.clone()]));
+        assert!(chain(&now).decisions.iter().any(
+            |d| d.kind.as_deref() == Some("approve") && d.targets == vec![research.doc.clone()]
+        ));
     }
 
     #[test]
@@ -872,7 +949,10 @@ mod upstream {
         let up = deck.get("/upstream");
         let entries = up["upstream"].as_array().unwrap();
         assert_eq!(entries.len(), 2, "{up}");
-        assert_eq!(entries[0]["document_id"], brief.doc, "the direct parent first");
+        assert_eq!(
+            entries[0]["document_id"], brief.doc,
+            "the direct parent first"
+        );
         assert_eq!(entries[0]["status"], "current");
         assert_eq!(entries[1]["document_id"], research.doc);
         assert_eq!(entries[1]["direct"], false);
@@ -912,22 +992,35 @@ mod upstream {
     #[test]
     fn a_verified_finding_is_told_to_the_parent_only_when_it_holds_it() {
         let (store, research, brief) = setup();
-        let child = brief.session.read(|d| napkin_host::Document::from_bytes(d.id().clone(), d.bytes().to_vec())).unwrap();
+        let child = brief
+            .session
+            .read(|d| napkin_host::Document::from_bytes(d.id().clone(), d.bytes().to_vec()))
+            .unwrap();
         let ctx = Ctx::local();
-        let held = Backref::Verified { finding: "fi_01JA0F3C".into() };
-        let changes = library::backref_changes(&*store, &ctx, &child, "d_01JB0VERIFY", &held).unwrap();
+        let held = Backref::Verified {
+            finding: "fi_01JA0F3C".into(),
+        };
+        let changes =
+            library::backref_changes(&*store, &ctx, &child, "d_01JB0VERIFY", &held).unwrap();
         assert_eq!(changes.len(), 1);
         let (written, change) = &changes[0];
         assert_eq!(written.document_id, research.doc);
         assert_eq!(change.doc, research.id);
         let d = &change.decisions[0];
         assert_eq!(d.action, "verified");
-        assert_eq!(d.targets, vec![format!("{}#findings[fi_01JA0F3C]", research.doc)]);
+        assert_eq!(
+            d.targets,
+            vec![format!("{}#findings[fi_01JA0F3C]", research.doc)]
+        );
         assert_eq!(d.rationale, "Verified in \"Lúnasa brief\".");
-        let foreign = Backref::Verified { finding: "fi_01JAXXXX".into() };
-        assert!(library::backref_changes(&*store, &ctx, &child, "d_01JB0VERIFY", &foreign)
-            .unwrap()
-            .is_empty());
+        let foreign = Backref::Verified {
+            finding: "fi_01JAXXXX".into(),
+        };
+        assert!(
+            library::backref_changes(&*store, &ctx, &child, "d_01JB0VERIFY", &foreign)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -956,7 +1049,11 @@ mod upstream {
             })
         };
         // A person of tenant A writes to the research: it is A's now.
-        let resp = research.call(&tenant("org-a"), "/patch-data", r#"{"patch":{"tone":"warm"},"agent":"human"}"#);
+        let resp = research.call(
+            &tenant("org-a"),
+            "/patch-data",
+            r#"{"patch":{"tone":"warm"},"agent":"human"}"#,
+        );
         assert_eq!(resp.status, 200);
 
         let body = json!({ "app_id": BRIEF }).to_string();
@@ -1017,11 +1114,17 @@ fn a_run_of_look_changes_is_one_rolling_entry() {
     let f = Fixture { _dir: dir, session };
 
     let look = |patch: &str, said: &str| {
-        let body = format!(r#"{{"patch":{patch},"agent":"human","action":"look","rationale":"{said}"}}"#);
+        let body =
+            format!(r#"{{"patch":{patch},"agent":"human","action":"look","rationale":"{said}"}}"#);
         assert_eq!(post(&f, "/patch-data", &body).status, 200);
     };
     let chain = || -> Vec<serde_json::Value> {
-        json(&get(&f, "/decisions"))["decisions"].as_array().unwrap().iter().map(|b| b["decision"].clone()).collect()
+        json(&get(&f, "/decisions"))["decisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["decision"].clone())
+            .collect()
     };
 
     look(r#"{"brief_style":"creative"}"#, "Studio brief");
@@ -1031,20 +1134,32 @@ fn a_run_of_look_changes_is_one_rolling_entry() {
     let c = chain();
     assert_eq!(c.len(), 1, "four look changes, one entry: {c:?}");
     assert_eq!(c[0]["action"], "look");
-    assert_eq!(c[0]["rationale"], "Changed the look: Brand brief; Own brand colours");
-    assert_eq!(c[0]["fields_changed"], serde_json::json!(["brief_style", "theme"]));
+    assert_eq!(
+        c[0]["rationale"],
+        "Changed the look: Brand brief; Own brand colours"
+    );
+    assert_eq!(
+        c[0]["fields_changed"],
+        serde_json::json!(["brief_style", "theme"])
+    );
 
     // Other work, then a look again: a new entry after it, so the order stays true.
     let edit = r#"{"patch":{"insight":"people forget"},"agent":"human","action":"edit field","rationale":""}"#;
     assert_eq!(post(&f, "/patch-data", edit).status, 200);
     look(r#"{"brief_style":"basic"}"#, "Paper brief");
     let c = chain();
-    let actions: Vec<_> = c.iter().map(|d| d["action"].as_str().unwrap().to_string()).collect();
+    let actions: Vec<_> = c
+        .iter()
+        .map(|d| d["action"].as_str().unwrap().to_string())
+        .collect();
     assert_eq!(actions, ["look", "edit field", "look"]);
     assert_eq!(c[0]["rationale"], "Changed the look: Paper brief");
 
     // The look never asks a person for anything.
-    assert!(json(&get(&f, "/decisions"))["attention"].as_array().unwrap().is_empty());
+    assert!(json(&get(&f, "/decisions"))["attention"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 }
 
 // Changing only how a document looks is not work: it stays out of recent work.

@@ -12,7 +12,7 @@ import { AGENTS, type AgentKey } from '../studio/model'
 import type { InstalledApp } from './types'
 import { docTitle } from './docTitle'
 import { signedInUser } from '../host/http'
-import { signOut } from './SignIn'
+import { signOut } from './signOut'
 import '../components/chrome.css'
 import './Launcher.css'
 
@@ -116,6 +116,8 @@ function useNewApps(installed: InstalledApp[], loading: boolean) {
     if (seen === null && !loading && installed.length) {
       const all = installed.map(a => a.app_id)
       writeSeen(all)
+      // the first visit, once the tools have loaded from the host
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSeen(all)
     }
   }, [seen, loading, installed])
@@ -194,6 +196,8 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
       .catch(() => { if (live) { setRecent([]); setRecentFailed(true) } })
     return () => { live = false }
   }
+  // the initial load from the host (the case the rule allows, as App.tsx's)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(loadRecent, [])
 
   const appOf = (id?: string | null) => installed.find(a => a.app_id === id)

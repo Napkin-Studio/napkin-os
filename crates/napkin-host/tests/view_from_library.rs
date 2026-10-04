@@ -535,7 +535,10 @@ fn a_spun_off_brief_is_shown_with_the_library_view_and_reading_upstream_writes_n
     assert_eq!(open.view_source, ViewSource::Library);
     let html = session.human_html().unwrap();
     assert!(html.contains("VIEW 1.2.0"), "{html}");
-    assert!(html.contains("Lúnasa 0.0"), "the view's data carries the frozen copy whole");
+    assert!(
+        html.contains("Lúnasa 0.0"),
+        "the view's data carries the frozen copy whole"
+    );
 
     let resp = napkin_host::handle(
         &session,

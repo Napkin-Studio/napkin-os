@@ -92,15 +92,21 @@ pub fn assemble(
         || !m.findings.is_empty()
         || !m.sources.is_empty();
     let facts_bytes = members::write_doc(members::read_doc(clan, FACTS)?, FACTS, m.facts.clone())?;
-    let findings_bytes =
-        members::write_doc(members::read_doc(clan, FINDINGS)?, FINDINGS, m.findings.clone())?;
+    let findings_bytes = members::write_doc(
+        members::read_doc(clan, FINDINGS)?,
+        FINDINGS,
+        m.findings.clone(),
+    )?;
     let has_sources = !m.sources.is_empty() || clan.has_entry(SOURCES.path);
-    let sources_bytes =
-        members::write_doc(members::read_doc(clan, SOURCES)?, SOURCES, m.sources.clone())?;
+    let sources_bytes = members::write_doc(
+        members::read_doc(clan, SOURCES)?,
+        SOURCES,
+        m.sources.clone(),
+    )?;
     let has_edits = !m.edits.is_empty() || clan.has_entry(EDITS.path);
     let edits_bytes = members::write_doc(members::read_doc(clan, EDITS)?, EDITS, m.edits.clone())?;
-    let projected_sources = members::projects_sources(clan)
-        .then_some((m.sources.as_slice(), sources_bytes.as_slice()));
+    let projected_sources =
+        members::projects_sources(clan).then_some((m.sources.as_slice(), sources_bytes.as_slice()));
 
     if let Some(obj) = data.as_object_mut().filter(|_| with_members) {
         obj.insert(

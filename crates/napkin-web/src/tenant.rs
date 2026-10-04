@@ -49,7 +49,13 @@ impl TenantId {
     /// An agency's workspace: the same id for everyone in it, on every server
     /// (a name-based UUID, so it is still a safe directory name).
     pub fn of_agency(agency: &str) -> Self {
-        Self(uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, format!("napkin:agency:{agency}").as_bytes()).to_string())
+        Self(
+            uuid::Uuid::new_v5(
+                &uuid::Uuid::NAMESPACE_URL,
+                format!("napkin:agency:{agency}").as_bytes(),
+            )
+            .to_string(),
+        )
     }
 
     pub fn as_str(&self) -> &str {
@@ -93,12 +99,18 @@ pub struct Identity {
 
 pub enum Mode {
     Anonymous,
-    Accounts { provider: Provider, sessions: Sessions },
+    Accounts {
+        provider: Provider,
+        sessions: Sessions,
+    },
 }
 
 impl Identity {
     pub fn anonymous(secure: bool) -> Self {
-        Self { mode: Mode::Anonymous, secure }
+        Self {
+            mode: Mode::Anonymous,
+            secure,
+        }
     }
 
     pub fn cookie(&self, name: &str, value: &str, max_age: u64) -> String {
@@ -225,7 +237,9 @@ pub async fn layer(
                 }
                 None if path.starts_with("/auth/") || path == "/healthz" => {}
                 None => {
-                    let body = serde_json::json!({ "ok": false, "error": "sign in", "signin": true }).to_string();
+                    let body =
+                        serde_json::json!({ "ok": false, "error": "sign in", "signin": true })
+                            .to_string();
                     return Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
                         .header(header::CONTENT_TYPE, "application/json")
@@ -233,7 +247,8 @@ pub async fn layer(
                         .unwrap();
                 }
             }
-            next.run(axum::extract::Request::from_parts(parts, body)).await
+            next.run(axum::extract::Request::from_parts(parts, body))
+                .await
         }
     }
 }
@@ -260,7 +275,10 @@ mod tests {
         let a = TenantId::of_agency("napkin");
         assert_eq!(a, TenantId::of_agency("napkin"));
         assert_ne!(a, TenantId::of_agency("javelin"));
-        assert!(TenantId::parse(a.as_str()).is_some(), "still a safe directory name");
+        assert!(
+            TenantId::parse(a.as_str()).is_some(),
+            "still a safe directory name"
+        );
         let ctx = a.ctx_for("engineer@napkin");
         assert_eq!(ctx.actor.as_str(), "human:engineer@napkin");
         assert_eq!(ctx.scope.org.as_deref(), Some(a.as_str()));

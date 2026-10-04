@@ -42,8 +42,8 @@ pub const PROCESS: &str = "host";
 
 /// Words that ask for a change (item 4), whole words, ignoring case.
 pub const CHANGE_CUES: &[&str] = &[
-    "wrong", "flat", "change", "not", "instead", "rather", "too", "should", "don't", "doesn't", "less", "more",
-    "prefer", "missing", "remove", "replace",
+    "wrong", "flat", "change", "not", "instead", "rather", "too", "should", "don't", "doesn't",
+    "less", "more", "prefer", "missing", "remove", "replace",
 ];
 
 pub const MAX_QUOTE: usize = 500;
@@ -206,9 +206,14 @@ pub fn suggest(answer: &str, proof: &str, parts: &[Part]) -> Vec<Found> {
     for (i, part) in parts.iter().enumerate() {
         let names = names(part);
         let hit = said.iter().find_map(|(s, folded)| {
-            names.iter().find(|n| holds(folded, &fold(n))).map(|n| (*s, folded, n.clone()))
+            names
+                .iter()
+                .find(|n| holds(folded, &fold(n)))
+                .map(|n| (*s, folded, n.clone()))
         });
-        let Some((sentence, folded, name)) = hit else { continue };
+        let Some((sentence, folded, name)) = hit else {
+            continue;
+        };
         let cue = CHANGE_CUES.iter().copied().find(|c| holds(folded, c));
         let answer = match (answer, cue) {
             ("rejected", _) => "rejected",
@@ -260,17 +265,37 @@ mod tests {
 
     #[test]
     fn a_numbered_list_is_one_sentence_per_item_its_marker_leading() {
-        let text = "Points:\n1. The audience is wrong\n2) Budget is fine\n 10. Tone. Too loud\n3.5 stays";
+        let text =
+            "Points:\n1. The audience is wrong\n2) Budget is fine\n 10. Tone. Too loud\n3.5 stays";
         assert_eq!(
             sentences(text),
-            vec!["Points:", "1. The audience is wrong", "2) Budget is fine", "10. Tone.", "Too loud\n3.5 stays"]
+            vec![
+                "Points:",
+                "1. The audience is wrong",
+                "2) Budget is fine",
+                "10. Tone.",
+                "Too loud\n3.5 stays"
+            ]
         );
-        assert_eq!(sentences("1. First\n2. Second"), vec!["1. First", "2. Second"], "a list at the start");
-        assert_eq!(sentences("1234. Not a marker"), vec!["1234.", "Not a marker"]);
+        assert_eq!(
+            sentences("1. First\n2. Second"),
+            vec!["1. First", "2. Second"],
+            "a list at the start"
+        );
+        assert_eq!(
+            sentences("1234. Not a marker"),
+            vec!["1234.", "Not a marker"]
+        );
         let parts = [part("Audience", &[]), part("Budget", &[])];
         let r = suggest("accepted_with_changes", text, &parts);
-        assert_eq!(r[0].quote, "1. The audience is wrong", "no next item's marker in the quote");
-        assert_eq!((r[1].quote.as_str(), r[1].answer), ("2) Budget is fine", "accepted"));
+        assert_eq!(
+            r[0].quote, "1. The audience is wrong",
+            "no next item's marker in the quote"
+        );
+        assert_eq!(
+            (r[1].quote.as_str(), r[1].answer),
+            ("2) Budget is fine", "accepted")
+        );
     }
 
     #[test]
@@ -280,22 +305,35 @@ mod tests {
         for said in ["The caf\u{e9} is wrong.", "The cafe\u{301} is wrong."] {
             let r = suggest("accepted_with_changes", said, &parts);
             assert_eq!(r.len(), 1, "{said:?}");
-            assert_eq!(r[0].quote, said, "the quote is the proof's own text, not normalised");
+            assert_eq!(
+                r[0].quote, said,
+                "the quote is the proof's own text, not normalised"
+            );
         }
         let decomposed = vec!["cafe\u{301}".to_string()];
-        assert_eq!(suggest("rejected", "The café.", &[part("Venue", &decomposed)]).len(), 1);
+        assert_eq!(
+            suggest("rejected", "The café.", &[part("Venue", &decomposed)]).len(),
+            1
+        );
     }
 
     #[test]
     fn a_part_is_named_by_its_label_its_aliases_and_the_last_word_of_its_label() {
         let aliases = vec!["SMP".to_string(), " the line ".to_string(), "".to_string()];
-        assert_eq!(names(&part("Single-minded proposition", &aliases)), vec![
-            "Single-minded proposition",
-            "SMP",
-            "the line",
-            "proposition"
-        ]);
-        assert_eq!(names(&part("Audience", &[])), vec!["Audience"], "the last word is the label");
+        assert_eq!(
+            names(&part("Single-minded proposition", &aliases)),
+            vec![
+                "Single-minded proposition",
+                "SMP",
+                "the line",
+                "proposition"
+            ]
+        );
+        assert_eq!(
+            names(&part("Audience", &[])),
+            vec!["Audience"],
+            "the last word is the label"
+        );
         assert_eq!(names(&part("Why now?", &[])), vec!["Why now?", "now"]);
     }
 
@@ -304,7 +342,10 @@ mod tests {
         assert!(holds(&fold("The AUDIENCE's age"), &fold("audience")));
         assert!(!holds(&fold("audiences are"), &fold("audience")));
         assert!(!holds(&fold("a stone"), &fold("tone")));
-        assert!(holds(&fold("the single-minded\n  proposition"), &fold("Single-minded proposition")));
+        assert!(holds(
+            &fold("the single-minded\n  proposition"),
+            &fold("Single-minded proposition")
+        ));
         assert!(holds(&fold("It doesn’t land"), "doesn't"));
         assert!(!holds(&fold("cannot"), "not"));
         assert!(!holds("anything", ""));
@@ -312,21 +353,45 @@ mod tests {
 
     #[test]
     fn the_answer_follows_the_document_and_the_change_cues() {
-        let parts = [part("Single-minded proposition", &[]), part("Audience", &[]), part("Tone", &[])];
+        let parts = [
+            part("Single-minded proposition", &[]),
+            part("Audience", &[]),
+            part("Tone", &[]),
+        ];
         let said = "Love the proposition. The audience is wrong.\nTone: warm, good.";
         let r = suggest("accepted_with_changes", said, &parts);
-        let got: Vec<_> = r.iter().map(|f| (f.part, f.answer, f.quote.as_str(), f.cue)).collect();
-        assert_eq!(got, vec![
-            (0, "accepted", "Love the proposition.", None),
-            (1, "accepted_with_changes", "The audience is wrong.", Some("wrong")),
-            (2, "accepted", "Tone: warm, good.", None),
-        ]);
-        assert_eq!(r[0].name, "proposition", "found by the last word of its label");
+        let got: Vec<_> = r
+            .iter()
+            .map(|f| (f.part, f.answer, f.quote.as_str(), f.cue))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (0, "accepted", "Love the proposition.", None),
+                (
+                    1,
+                    "accepted_with_changes",
+                    "The audience is wrong.",
+                    Some("wrong")
+                ),
+                (2, "accepted", "Tone: warm, good.", None),
+            ]
+        );
+        assert_eq!(
+            r[0].name, "proposition",
+            "found by the last word of its label"
+        );
 
         let r = suggest("rejected", said, &parts);
         assert!(r.iter().all(|f| f.answer == "rejected" && f.cue.is_none()));
-        assert!(suggest("accepted", said, &parts).is_empty(), "an acceptance asks for none");
-        assert!(suggest("rejected", "Not us at all.", &parts).is_empty(), "no part named: none");
+        assert!(
+            suggest("accepted", said, &parts).is_empty(),
+            "an acceptance asks for none"
+        );
+        assert!(
+            suggest("rejected", "Not us at all.", &parts).is_empty(),
+            "no part named: none"
+        );
     }
 
     #[test]
@@ -348,7 +413,11 @@ mod tests {
         let said = "  The tone is  too\nloud!  And the AUDIENCE? ".repeat(3);
         let a = suggest("accepted_with_changes", &said, &parts);
         assert_eq!(a, suggest("accepted_with_changes", &said, &parts));
-        assert_eq!(a.iter().map(|f| f.part).collect::<Vec<_>>(), vec![0, 1], "in the parts' order");
+        assert_eq!(
+            a.iter().map(|f| f.part).collect::<Vec<_>>(),
+            vec![0, 1],
+            "in the parts' order"
+        );
         for f in &a {
             assert!(said.contains(&f.quote), "{:?}", f.quote);
         }

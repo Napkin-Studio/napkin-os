@@ -143,7 +143,10 @@ fn cites_resolve_to_what_they_name() {
     assert_eq!(fact.label, "Awareness prompted · IE");
     assert_eq!(fact.value.as_deref(), Some("47%"));
     assert!(!fact.sources.is_empty(), "a fact names its sources");
-    assert!(fact.sources.iter().all(|s| v.cites.contains_key(s)), "and each is resolved");
+    assert!(
+        fact.sources.iter().all(|s| v.cites.contains_key(s)),
+        "and each is resolved"
+    );
     let detail = fact.detail.as_deref().unwrap();
     assert!(detail.starts_with("47% · as of 2026-06-30"), "{detail}");
 
@@ -365,7 +368,11 @@ unresolved: 1
     assert!(v.attention[2].text.contains("between drafter and judge"));
     assert_eq!(v.lock.blockers, 4);
     // Its own merge and branch are its own to settle: nothing is set aside.
-    assert!(v.attention.iter().all(|a| !a.can_set_aside), "{:?}", v.attention);
+    assert!(
+        v.attention.iter().all(|a| !a.can_set_aside),
+        "{:?}",
+        v.attention
+    );
     assert!(v.attention[3].address.is_none());
 
     // A later resolve settles it.
@@ -572,7 +579,6 @@ fn paths_split_into_names_and_keys() {
     assert_eq!(humanise("in_market"), "In market");
 }
 
-
 #[test]
 fn a_source_the_document_carries_is_named_and_linked() {
     let chain = r#"decisions:
@@ -601,7 +607,11 @@ fn a_source_the_document_carries_is_named_and_linked() {
   published_at: '2026-03-10'
   tier: secondary
 "#;
-    let d = doc_with(&[(CHAIN_PATH, chain), (members::FACTS_PATH, facts), (members::SOURCES_PATH, sources)]);
+    let d = doc_with(&[
+        (CHAIN_PATH, chain),
+        (members::FACTS_PATH, facts),
+        (members::SOURCES_PATH, sources),
+    ]);
     let v = decisions(&d).unwrap();
     let f = &v.cites["f_01JB0FACT01"];
     assert_eq!(f.label, "Private label share · IE");
@@ -753,7 +763,11 @@ unresolved: 1
         contest.address.as_deref(),
         Some(format!("{UP}#selection.contested[ct_abv]").as_str())
     );
-    assert!(contest.text.contains("carried from upstream"), "{}", contest.text);
+    assert!(
+        contest.text.contains("carried from upstream"),
+        "{}",
+        contest.text
+    );
     assert_eq!(
         contest.label.as_deref(),
         Some("Contest · brand/orchard-hill:product.abv@IE"),
@@ -819,15 +833,25 @@ fn passages_capture_and_frozen_addresses_resolve_as_cites() {
 "
     );
     let data = carried_data();
-    let v = decisions(&doc_with(&[(CHAIN_PATH, &chain), ("shared/data.yaml", &data)])).unwrap();
+    let v = decisions(&doc_with(&[
+        (CHAIN_PATH, &chain),
+        ("shared/data.yaml", &data),
+    ]))
+    .unwrap();
 
     let p = &v.cites["psg_3b9f0c2e7a41"];
     assert_eq!(p.kind, "passage");
     assert_eq!(p.label, "IPA Effectiveness 2024");
     assert_eq!(p.uri.as_deref(), Some("https://ipa.example/1"));
-    assert_eq!(p.quote.as_deref(), Some("Brands grow by reaching light buyers."));
+    assert_eq!(
+        p.quote.as_deref(),
+        Some("Brands grow by reaching light buyers.")
+    );
     let detail = p.detail.as_deref().unwrap();
-    assert!(detail.contains("house knowledge") && detail.contains("retrieved 2026-09-20"), "{detail}");
+    assert!(
+        detail.contains("house knowledge") && detail.contains("retrieved 2026-09-20"),
+        "{detail}"
+    );
 
     let c = &v.cites["cap_1a2b3c4d5e6f"];
     assert_eq!(c.kind, "capture");
@@ -841,7 +865,10 @@ fn passages_capture_and_frozen_addresses_resolve_as_cites() {
     // The research's material and contest value, from its frozen copy.
     assert_eq!(v.cites["mat_brief01"].kind, "material");
     assert_eq!(v.cites["mat_brief01"].label, "Client brief");
-    assert_eq!(v.cites["f_b"].label, "brand/orchard-hill:product.abv@IE = 0.4% ABV");
+    assert_eq!(
+        v.cites["f_b"].label,
+        "brand/orchard-hill:product.abv@IE = 0.4% ABV"
+    );
 
     let a = &v.cites[&format!("{UP}#campaign.in_market")];
     assert_eq!(a.kind, "address");
@@ -908,11 +935,16 @@ fn a_field_whose_writing_decision_cites_a_rejected_finding_is_flagged() {
 
     // The drafter's decision is how the field stands, and it rests on the
     // finding a person rejected.
-    assert_eq!(flagged("", ""), [(insight.clone(), Some("d_rej".to_string()))]);
+    assert_eq!(
+        flagged("", ""),
+        [(insight.clone(), Some("d_rej".to_string()))]
+    );
     // A proposal does not change how the field stands.
     let propose = later(
         "d_prop",
-        &format!("  agent: draft_brief@1/drafter\n  action: propose\n  targets: ['{DOC}#insight']\n"),
+        &format!(
+            "  agent: draft_brief@1/drafter\n  action: propose\n  targets: ['{DOC}#insight']\n"
+        ),
     );
     assert_eq!(flagged(&propose, "").len(), 1);
     // A redraft that no longer cites it answers it, as does a person's edit
@@ -1011,7 +1043,13 @@ unresolved: 2
         v.attention
             .iter()
             .filter(|a| a.can_set_aside)
-            .map(|a| (a.code, a.address.clone().unwrap_or_default(), a.label.clone().unwrap_or_default()))
+            .map(|a| {
+                (
+                    a.code,
+                    a.address.clone().unwrap_or_default(),
+                    a.label.clone().unwrap_or_default(),
+                )
+            })
             .collect()
     };
     let objective = format!("{UP}#merge-report[campaign.objective]");
@@ -1025,17 +1063,47 @@ unresolved: 2
     assert_eq!(
         aside(&v),
         [
-            ("open_contest", objective.clone(), "Merge conflict · campaign.objective".to_string()),
-            ("open_contest", judged.clone(), "Merge conflict · decisions[d_x]".to_string()),
-            ("unmerged_branch", branch.clone(), "Agent branch · u.drafter.t".to_string()),
-            ("flagged_field", in_market.clone(), "Campaign › In market".to_string()),
+            (
+                "open_contest",
+                objective.clone(),
+                "Merge conflict · campaign.objective".to_string()
+            ),
+            (
+                "open_contest",
+                judged.clone(),
+                "Merge conflict · decisions[d_x]".to_string()
+            ),
+            (
+                "unmerged_branch",
+                branch.clone(),
+                "Agent branch · u.drafter.t".to_string()
+            ),
+            (
+                "flagged_field",
+                in_market.clone(),
+                "Campaign › In market".to_string()
+            ),
         ]
     );
-    let contest = v.attention.iter().find(|a| a.decision.as_deref() == Some("d_con")).unwrap();
+    let contest = v
+        .attention
+        .iter()
+        .find(|a| a.decision.as_deref() == Some("d_con"))
+        .unwrap();
     assert!(!contest.can_set_aside);
     assert_eq!(v.lock.blockers, 5);
-    assert!(v.attention[2].text.contains("sets it aside here with a reason"), "{}", v.attention[2].text);
-    let flagged = v.attention.iter().find(|a| a.code == "flagged_field").unwrap();
+    assert!(
+        v.attention[2]
+            .text
+            .contains("sets it aside here with a reason"),
+        "{}",
+        v.attention[2].text
+    );
+    let flagged = v
+        .attention
+        .iter()
+        .find(|a| a.code == "flagged_field")
+        .unwrap();
     assert_eq!(flagged.finding.as_deref(), Some("fi_rej"));
     // The view says so; the host's own note of the finding stays in.
     let json = serde_json::to_value(flagged).unwrap();
@@ -1069,13 +1137,27 @@ unresolved: 2
     .concat();
     let v = with(&all);
     assert!(aside(&v).is_empty(), "{:?}", aside(&v));
-    assert_eq!(codes(&v), [("open_contest", Some("d_con"))], "the carried contest is still open");
+    assert_eq!(
+        codes(&v),
+        [("open_contest", Some("d_con"))],
+        "the carried contest is still open"
+    );
 
     // A flagged field is set aside for the finding it cites: one naming
     // another finding does not clear it. A superseded set-aside is not one.
-    let v = with(&set_aside("d_s4", &in_market, &format!("'{in_market}', fi_other"), ""));
+    let v = with(&set_aside(
+        "d_s4",
+        &in_market,
+        &format!("'{in_market}', fi_other"),
+        "",
+    ));
     assert!(aside(&v).iter().any(|(_, a, _)| a == &in_market));
-    let v = with(&set_aside("d_s1", &branch, "", "  superseded_by: d_later\n"));
+    let v = with(&set_aside(
+        "d_s1",
+        &branch,
+        "",
+        "  superseded_by: d_later\n",
+    ));
     assert!(aside(&v).iter().any(|(_, a, _)| a == &branch));
     // A set-aside does not settle a contest: that is `/resolve`'s.
     let ct = format!("{UP}#selection.contested[ct_abv]");
@@ -1090,7 +1172,11 @@ unresolved: 2
         ("agents/u.drafter.t/data.yaml", "{}"),
     ]))
     .unwrap();
-    let b = own.attention.iter().find(|a| a.code == "unmerged_branch").unwrap();
+    let b = own
+        .attention
+        .iter()
+        .find(|a| a.code == "unmerged_branch")
+        .unwrap();
     assert!(!b.can_set_aside && b.address.is_none());
 }
 
@@ -1116,12 +1202,18 @@ fn a_verified_finding_on_a_fact_marked_wrong_blocks_until_a_person_settles_it() 
         (members::FINDINGS_PATH, &findings),
     ]);
     let v = decisions(&doc).unwrap();
-    let on: Vec<_> = v.attention.iter().filter(|a| a.code == "finding_on_excluded_fact").collect();
+    let on: Vec<_> = v
+        .attention
+        .iter()
+        .filter(|a| a.code == "finding_on_excluded_fact")
+        .collect();
     assert_eq!(on.len(), 1, "{:?}", codes(&v));
     assert!(on[0].blocks_lock && on[0].text.contains("f_01JA0B6D6G"));
     assert!(on[0].address.as_deref().unwrap().contains("#findings["));
     // The example with nothing excluded has none.
-    assert!(!codes(&decisions(&example()).unwrap()).iter().any(|c| c.0 == "finding_on_excluded_fact"));
+    assert!(!codes(&decisions(&example()).unwrap())
+        .iter()
+        .any(|c| c.0 == "finding_on_excluded_fact"));
 }
 
 #[test]
@@ -1146,9 +1238,17 @@ fn a_chat_message_or_a_fact_taken_out_is_never_flagged_for_citing_a_rejected_fin
         .filter(|a| a.code == "flagged_field")
         .filter_map(|a| a.address.clone())
         .collect();
-    assert!(flagged.iter().all(|a| !a.contains("intake.messages") && !a.contains("selection.excluded") && !a.contains("#facts[")), "{flagged:?}");
+    assert!(
+        flagged.iter().all(|a| !a.contains("intake.messages")
+            && !a.contains("selection.excluded")
+            && !a.contains("#facts[")),
+        "{flagged:?}"
+    );
     // The real part that cites it is still flagged.
-    assert!(flagged.iter().any(|a| a.ends_with("#campaign.in_market")), "{flagged:?}");
+    assert!(
+        flagged.iter().any(|a| a.ends_with("#campaign.in_market")),
+        "{flagged:?}"
+    );
 }
 
 #[test]
@@ -1162,7 +1262,16 @@ fn a_projection_built_without_its_sources_is_served_with_them() {
     let facts = read("shared/facts.yaml");
     let first_src = facts
         .lines()
-        .find_map(|l| l.split("src_").nth(1).map(|r| format!("src_{}", r.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').next().unwrap())))
+        .find_map(|l| {
+            l.split("src_").nth(1).map(|r| {
+                format!(
+                    "src_{}",
+                    r.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                        .next()
+                        .unwrap()
+                )
+            })
+        })
         .unwrap();
     let sources = format!(
         "sources:\n  - {{id: {first_src}, uri: 'https://www.cso.ie/x', publisher: CSO, title: A table, tier: primary, domain: cso.ie, licence: open}}\n"
@@ -1180,5 +1289,8 @@ fn a_projection_built_without_its_sources_is_served_with_them() {
     assert!(p["sources"].get(&first_src).is_some(), "{p}");
     assert!(p["pins"].as_object().map_or(0, |o| o.len()) > 0);
     // nothing is written: the stored data is as it was
-    assert_eq!(doc.clan().read_entry_string("shared/data.yaml").unwrap(), data);
+    assert_eq!(
+        doc.clan().read_entry_string("shared/data.yaml").unwrap(),
+        data
+    );
 }
