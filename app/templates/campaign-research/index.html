@@ -595,6 +595,9 @@ body.done #hero,body.done #gates,body.done #lockBtn{display:none!important}
    one holds only the tool's name and Export there (the OS's More has Export),
    so it goes. With the records open, or the run shown, it holds their links. */
 html.clan-glass body.done:not(.records-open):not(.show-run) .top{display:none}
+/* Whatever the state (the crew working, a job that stopped), a bar left with
+   nothing but the name and Export is the OS's bar again: it goes too. */
+html.clan-glass body.top-idle .top{display:none}
 body.done:not(.records-open) .nav,body.done:not(.records-open) #extractBtn,body.done:not(.records-open) #researchBtn,body.done:not(.records-open) #synthBtn{display:none!important}
 /* With no report yet (a job that stopped, or never started) the run is what
    there is to show, so it stays. */
@@ -1587,6 +1590,15 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     if(rec&&!rec.dataset.touched&&rec.open!==auto){ rec.dataset.auto=String(auto); rec.open=auto; }
     document.body.classList.toggle('records-open', !!(rec&&rec.open));
     document.body.classList.toggle('no-report', !isObj(D().report));
+    // Under glass the bar stays only for what it holds beyond the name and Export
+    // (the OS's More has Export): a section link or a step to run. Each is read by
+    // its own style, so hiding the bar does not change the answer.
+    var bar=document.querySelector('.top'), nav=bar&&bar.querySelector('.nav');
+    var navOn=!!nav&&getComputedStyle(nav).display!=='none';
+    var acts=bar?Array.prototype.slice.call(bar.querySelectorAll('.nav a, .top-act button')).filter(function(el){
+      if(el.id==='exportBtn'||el.hidden||getComputedStyle(el).display==='none'||!String(el.textContent||'').trim()) return false;
+      return !el.closest('.nav')||navOn; }):[];
+    document.body.classList.toggle('top-idle', !acts.length);
     var top=document.querySelector('.top'), pos=top?getComputedStyle(top).position:'';
     if(top) document.documentElement.style.setProperty('--top-h', (pos==='sticky'||pos==='fixed'?top.offsetHeight:0)+'px');
   }
