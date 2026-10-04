@@ -1579,9 +1579,12 @@ a.pin-card.missing{border-style:dashed;background:transparent;color:var(--ink3)}
     document.body.classList.toggle('working', working&&!fresh);
     document.body.classList.toggle('done', !working&&!fresh);
     var rec=$('records'), hasLayout=isObj(D().report)&&typeof D().report.layout==='string';
-    // Opened for you only while there is no report to read; once you open or
-    // close it yourself, it stays as you left it.
-    if(rec&&!rec.dataset.touched&&rec.open!==!hasLayout){ rec.dataset.auto=String(!hasLayout); rec.open=!hasLayout; }
+    // Opened for you only while there is no report to read but research to
+    // read in its place (pins or findings). A job that stopped before any
+    // (the crew unreachable) leaves the ask's empty fields closed under its
+    // message. Once you open or close it yourself, it stays as you left it.
+    var readable=Object.keys(pins()).length>0||Object.keys(fnds()).length>0, auto=!hasLayout&&readable;
+    if(rec&&!rec.dataset.touched&&rec.open!==auto){ rec.dataset.auto=String(auto); rec.open=auto; }
     document.body.classList.toggle('records-open', !!(rec&&rec.open));
     document.body.classList.toggle('no-report', !isObj(D().report));
     var top=document.querySelector('.top'), pos=top?getComputedStyle(top).position:'';
