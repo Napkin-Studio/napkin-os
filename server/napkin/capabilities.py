@@ -67,9 +67,8 @@ class ModelCap:
             raise ModelError("no model is configured", "server")
         attr = _attr_str(self._attr)
         mine = Usage()  # this call's own tokens and attempts, for the run log; folded into the job's below
-        model = self._port.vision_model if vision else None
         kw = dict(usage=mine, attribution=attr, max_tokens=max_tokens, effort=effort, images=images,
-                  model=model,
+                  vision=vision,
                   headers={"X-Napkin-Handler": str(self._attr.get("handler") or "-"),
                            "X-Napkin-Job": str(self._attr.get("job") or "-")})
         _not_cancelled(self._stopped)
@@ -90,11 +89,15 @@ class ModelCap:
                 self._usage.calls += mine.calls
                 self._usage.input_tokens += mine.input_tokens
                 self._usage.output_tokens += mine.output_tokens
+                for m, u in mine.by_model.items():
+                    t = self._usage.by_model.setdefault(m, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+                    for k in t:
+                        t[k] += u[k]
             log_ = self._log()
             if log_.on:
                 body = runlog.bodies()
                 pj = json.dumps(payload, ensure_ascii=False, default=str)
-                log_.model(purpose=purpose, model=model or self._port.model, secs=time.monotonic() - t0,
+                log_.model(purpose=purpose, model=next(iter(mine.by_model), None) or self._port.model, secs=time.monotonic() - t0,
                            tin=mine.input_tokens, tout=mine.output_tokens, attempts=mine.calls, ok=err is None,
                            error=err, payload_chars=len(pj) + len(system or ""),
                            reply_chars=len(json.dumps(out, ensure_ascii=False)) if out is not None else None,

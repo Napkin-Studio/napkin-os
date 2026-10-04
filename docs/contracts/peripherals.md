@@ -128,11 +128,13 @@ unchanged; what changes is that three wires can carry it.
 | `NAPKIN_MODEL_BEDROCK_ENDPOINT` | `runtime` (default) \| `mantle` | `bedrock` only: which Bedrock endpoint (§1.3a) |
 | `NAPKIN_MODEL` | model id | sent verbatim as `model`. Unset = `claude-opus-5`, or `global.anthropic.claude-opus-5-5` on `bedrock` |
 | `NAPKIN_VISION_MODEL` | model id | used for image transcription (§1.6); unset = `NAPKIN_MODEL` |
+| `NAPKIN_MODEL_ROUTES` | path to a JSON file, or the JSON | model, effort and schema mode **per call purpose** (§1.9); re-read when the file changes. Unset = `NAPKIN_MODEL` for every call |
 | `NAPKIN_MODEL_EXTRA_BODY` | JSON object | `openai` only: merged into every request body (e.g. `{"chat_template_kwargs": {"enable_thinking": false}}` for a NIM reasoning model). Never keys the port itself sets |
 
 One `ModelPort` per process, one wire. Which wire answered is recorded as
-`trace.backend`'s model half; `trace.model` is `NAPKIN_MODEL` (or the vision
-model for a transcription). No handler knows which wire is in use.
+`trace.backend`'s model half; `trace.model` is the default route's model, and
+`trace.models` gives calls and tokens per model actually used, since one job
+can use several (§1.9). No handler knows which wire or model is in use.
 
 ### 1.2 What the middleware sends, in both shapes
 
@@ -210,12 +212,16 @@ the only one serving the 5.5 models in `eu-west-1` (verified 2026-09-30: on
 behind both; the difference is only the envelope and how fast each endpoint
 gets a model in a region.
 
-- **Structured output is enforced** (verified 2026-09-30 on `runtime`,
-  `eu-west-1`): `output_config.format` is applied by the model service. Opus 4.6
-  and Haiku 4.5 returned valid objects, and a malformed schema came back as
-  `400 output_config.format.schema: Invalid JSON Schema in output format`. If an
-  endpoint ever refuses the field, the 400 becomes `ModelError(unsupported)` and
-  the call is never resent without it (§1.4's rule).
+- **Structured output depends on the model** (verified on `runtime`,
+  `eu-west-1`). Opus 4.6 and Haiku 4.5 enforce `output_config.format`
+  (2026-09-30: valid objects, and a malformed schema is a `400 … Invalid JSON
+  Schema in output format`). Opus 5.5, Sonnet 5.5 and Opus 5 answer, but refuse
+  the field: `output_config.format`, the older `output_format` and `strict`
+  tools are each a `400 … Extra inputs are not permitted` (2026-10-03, with or
+  without the structured-outputs beta). Under the default `schema: auto` the
+  port then sends the schema in the prompt for that model (§1.9). Measured
+  2026-10-04 on 32 real seed requests: 32/32 valid on the first attempt at
+  every effort.
 - **Auth is AWS:** SigV4 with the AWS credential chain (an SSO profile on a
   laptop, the instance role on the admin host, a task role in stage 2). A
   Bedrock bearer token in `NAPKIN_MODEL_API_KEY` is the fallback. No AWS
@@ -268,10 +274,14 @@ parsing; `choices[0].finish_reason`; `choices[0].message.refusal`; `usage`.
 | no `choices`, or `content` null | `ModelError(invalid_output)` |
 
 A `400` whose message says the endpoint does not support `response_format`
-`json_schema` is **not** retried without it: structured output is enforced or
-the call fails (`ModelError(unsupported)`). The engine's "drop the flag and
-retry" (`parse_brief.py:1150`) is exactly the prose path the no-signal test
-showed returning prose five times out of five, and does not port.
+`json_schema` is `ModelError(unsupported)` from the wire. The route's schema
+mode decides what happens next (§1.9): under `enforced` the call fails; under
+`auto` it is resent with the schema in the system prompt. Either way the answer
+must be one JSON object that validates against the full schema, or it is
+retried once with the error and then fails `invalid_output`. The engine's
+"drop the flag and retry" (`parse_brief.py:1150`) sent no schema at all and
+salvaged prose, which the no-signal test showed returning prose five times out
+of five. That path still does not port.
 
 ### 1.5 Model ids
 
@@ -352,6 +362,50 @@ exactly these (§5.3).
 - A model failure never becomes content. What a stage does with it — a gap, an
   omitted field, a failed stage — is the handler's rule (`middleware-api.md`
   §2 and §10).
+
+### 1.9 Routes: model, effort and schema mode per purpose
+
+Every call names its purpose (`extract`, `synthesise`, `report`,
+`extract_category_facts`, `write_dossier_cell`, the drafters, `transcribe`, …).
+`NAPKIN_MODEL_ROUTES` maps a purpose to a route, so a model or an effort is
+switched by editing one file, with no deploy and no restart: the file is re-read
+when it changes, and the next call uses it.
+
+```json
+{
+  "default":  {"model": "opus-4.6", "schema": "auto"},
+  "vision":   {"model": "opus-4.6"},
+  "purposes": {
+    "write_dossier_cell": {"model": "opus-5.5", "effort": "low"},
+    "synthesise":         {"effort": "high", "max_tokens": 12000}
+  }
+}
+```
+
+| Field | Values | |
+|---|---|---|
+| `model` | an alias (`opus-5.5`, `opus-5`, `opus-4.6`, `sonnet-5.5`, `haiku-4.5`) or a provider id | an alias resolves for the configured wire (`opus-5.5` is `global.anthropic.claude-opus-5-5` on `bedrock`, `claude-opus-5-5` on `anthropic`); anything else is sent verbatim |
+| `effort` | `low` \| `medium` \| `high` \| `xhigh` \| `max` \| null | null = the model's default. Dropped, with a warning, for a model that refuses it (Haiku 4.5) |
+| `schema` | `auto` (default) \| `enforced` \| `prompt` | `auto`: enforced where the endpoint enforces it; after the first `unsupported` for a model, that model gets the schema in the system prompt for the rest of the process. `enforced`: the endpoint must enforce it or the call fails `unsupported`. `prompt`: always in the prompt |
+| `max_tokens` | 1–128000 | replaces the caller's cap. Thinking counts against it, so a thinking model may need a higher one |
+
+- **Precedence**, field by field: the purpose's route, then `vision` (image
+  transcription only), then `default`, then the environment (`NAPKIN_MODEL`,
+  `NAPKIN_VISION_MODEL`). An effort or cap the calling code passes applies only
+  where no route sets one.
+- **Validation never changes.** In every mode the port validates the answer
+  against the full schema and retries once with the error (§1.2). In prompt
+  mode one code fence around the whole answer is removed; nothing else is
+  salvaged.
+- **A bad edit cannot stop a job.** A file that does not parse, or names an
+  unknown field or value, is refused with an error log, and the last good routes
+  stay in force (`/healthz` shows `model_routes.error`). A bad file at startup
+  stops the process.
+- **Visible:** `/healthz` returns the resolved routes; every call is logged
+  with its model, effort and schema mode; `trace.models` counts usage per
+  model. `uv run python -m napkin.model_routes` prints the routes in force, and
+  `scripts/model_smoke.py <purpose>` makes one call the way that purpose would.
+- The seed runner (`napkin.seed.run`) reads the same setting.
 
 ### 1.8 Embeddings are not the model port's
 
@@ -1010,6 +1064,7 @@ Environment only (`server/napkin/config.py`); handlers never see any of it.
 | `NAPKIN_MODEL_REGION` | unset (`AWS_REGION`) | unset | `eu-west-1` |
 | `NAPKIN_MODEL` | `claude-opus-5` (`global.anthropic.claude-opus-5-5` on bedrock) | `claude-opus-5` (or a NIM id in `MOCK_MODEL_ALIASES`) | `global.anthropic.claude-opus-5-5` · `claude-opus-5` · the NIM model (O1) |
 | `NAPKIN_VISION_MODEL` | = `NAPKIN_MODEL` | same | `claude-opus-5` · `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` |
+| `NAPKIN_MODEL_ROUTES` | unset | unset | a JSON file per environment (§1.9) |
 | `NAPKIN_MODEL_EXTRA_BODY` | unset | unset | e.g. `{"chat_template_kwargs":{"enable_thinking":false}}` for a NIM reasoning model |
 | `NAPKIN_MODEL_TIMEOUT` | `600` | `600` (never tune to the mock's latency) | `600` |
 | `NAPKIN_MODEL_CONCURRENCY` | `6` | `4` (= `MOCK_CONCURRENCY`) | provider limit |
@@ -1138,7 +1193,7 @@ recommendation.
 
 | # | Point | Recommendation |
 |---|---|---|
-| O1 | Which NIM model production runs, and whether it honours `response_format: json_schema` with `strict` (the engine found some NIM models reject it with a 400) | Pick one that does; the model port refuses to fall back to unconstrained JSON (§1.4). Run §8.1 against the NIM endpoint before committing |
+| O1 | Which NIM model production runs, and whether it honours `response_format: json_schema` with `strict` (the engine found some NIM models reject it with a 400) | Prefer one that does. One that does not runs with the schema in the prompt under `schema: auto`, validated as always (§1.9). Run §8.1 against the NIM endpoint before committing |
 | O2 | One model for every purpose, or per-role models (a cheaper drafter, a stronger judge) | One (`NAPKIN_MODEL`) plus the vision model now; add `NAPKIN_MODEL_<ROLE>` only when measurement shows a gain |
 | O3 | Whether the layers service keeps the per-identity supersede/contest rule (§4.4) or the middleware decides and the service only inserts | Keep it in the service: it must run in the append transaction, and moving it means a read-then-write race across HTTP. The middleware's merge (across runs) and contests (in the document) stay middleware-side, as the owner decided |
 | O4 | Same as O3 for `set_roster`'s key mapping (`roster.categories.primary` …) | Keep the route: the three keys are fixed here; the middleware still decides *when* a roster row is written |

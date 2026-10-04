@@ -4,7 +4,12 @@ Structured output on every call (W2-C3): the object the model returns is
 validated against the declared schema before it reaches any writer; on a
 failure the call is retried once with the validation error fed back (the last
 turn is always `user`, never a prefill), then fails loudly. There is no prose
-salvage and no unconstrained fallback.
+salvage. Where an endpoint cannot enforce the schema, the route's schema mode
+decides whether the schema goes in the prompt instead (§1.9, model_routes.py);
+the validation here is the same either way.
+
+Which model and effort a call uses comes from its purpose, through the routes
+(NAPKIN_MODEL_ROUTES, model_routes.py).
 
 Three wires carry it, chosen by configuration (`NAPKIN_MODEL_API`):
 
@@ -72,18 +77,34 @@ def strip_unsupported(schema):
 _strip_unsupported = strip_unsupported  # older name
 
 
+def schema_in_prompt(system: str, schema: dict) -> str:
+    """The system prompt for an endpoint that cannot enforce the schema (§1.9): the
+    schema goes in the prompt and the answer is validated here, as always."""
+    return (system + "\n\nReturn ONLY one JSON object - no prose, no code fences - that validates against "
+            "this JSON Schema:\n" + json.dumps(schema, ensure_ascii=False))
+
+
+_FENCE = re.compile(r"^\s*```(?:json)?\s*\n(.*)\n\s*```\s*$", re.S)
+
+
 class Usage:
     def __init__(self):
         self.input_tokens = 0
         self.output_tokens = 0
         self.calls = 0
+        self.by_model = {}          # model id -> {calls, input_tokens, output_tokens}
         self._lock = threading.Lock()
 
-    def add(self, input_tokens: int, output_tokens: int):
+    def add(self, input_tokens: int, output_tokens: int, model: str | None = None):
         with self._lock:
             self.calls += 1
             self.input_tokens += int(input_tokens or 0)
             self.output_tokens += int(output_tokens or 0)
+            if model:
+                m = self.by_model.setdefault(model, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+                m["calls"] += 1
+                m["input_tokens"] += int(input_tokens or 0)
+                m["output_tokens"] += int(output_tokens or 0)
 
     def as_dict(self):
         return {"input_tokens": self.input_tokens, "output_tokens": self.output_tokens}
@@ -142,11 +163,17 @@ class AnthropicWire:
                  for im in turn["images"]]
         return parts + [{"type": "text", "text": turn["text"]}]
 
-    def send(self, *, model, system, turns, schema, purpose, max_tokens, effort, timeout, headers=None) -> Reply:
-        kwargs = dict(model=model, max_tokens=max_tokens, system=system,
-                      messages=[{"role": t["role"], "content": self._content(t)} for t in turns],
-                      output_config={"format": {"type": "json_schema", "schema": schema},
-                                     **({"effort": effort} if effort else {})})
+    def send(self, *, model, system, turns, schema, purpose, max_tokens, effort, timeout, headers=None,
+             schema_mode="enforced") -> Reply:
+        """`schema_mode`: enforced (output_config.format) or prompt (the schema in the system prompt)."""
+        prompt = schema_mode == "prompt"
+        config = {} if prompt else {"format": {"type": "json_schema", "schema": schema}}
+        if effort:
+            config["effort"] = effort
+        kwargs = dict(model=model, max_tokens=max_tokens, system=schema_in_prompt(system, schema) if prompt else system,
+                      messages=[{"role": t["role"], "content": self._content(t)} for t in turns])
+        if config:
+            kwargs["output_config"] = config
         if headers:
             kwargs["extra_headers"] = dict(headers)
         try:
@@ -158,9 +185,9 @@ class AnthropicWire:
                 resp = self.client.with_options(timeout=timeout, max_retries=1).messages.create(**kwargs)
         except Exception as e:  # transport / API failure: mapped to a kind, attributable
             kind = _anthropic_kind(e)
-            if kind == "invalid_request" and getattr(e, "status_code", None) == 400 \
+            if not prompt and kind == "invalid_request" and getattr(e, "status_code", None) == 400 \
                     and _REFUSED_FORMAT.search(str(getattr(e, "message", "") or e)):
-                # Structured output is enforced or the call fails: never resent without it (§1.4).
+                # Not resent here: the port decides, by the route's schema mode (§1.9).
                 raise ModelError(f"{purpose}: the {self.api} endpoint refused output_config.format json_schema",
                                  "unsupported") from e
             raise ModelError(f"{purpose}: the model call failed ({type(e).__name__})", kind) from e
@@ -249,13 +276,16 @@ class OpenAIWire:
                  for im in turn["images"]]
         return parts + [{"type": "text", "text": turn["text"]}]
 
-    def send(self, *, model, system, turns, schema, purpose, max_tokens, effort, timeout, headers=None) -> Reply:
+    def send(self, *, model, system, turns, schema, purpose, max_tokens, effort, timeout, headers=None,
+             schema_mode="enforced") -> Reply:
+        prompt = schema_mode == "prompt"
         body = dict(self.extra)
         body.update(model=model, max_tokens=max_tokens,
-                    messages=[{"role": "system", "content": system}]
-                    + [{"role": t["role"], "content": self._content(t)} for t in turns],
-                    response_format={"type": "json_schema",
-                                     "json_schema": {"name": purpose, "schema": schema, "strict": True}})
+                    messages=[{"role": "system", "content": schema_in_prompt(system, schema) if prompt else system}]
+                    + [{"role": t["role"], "content": self._content(t)} for t in turns])
+        if not prompt:
+            body["response_format"] = {"type": "json_schema",
+                                       "json_schema": {"name": purpose, "schema": schema, "strict": True}}
         headers = {**(headers or {}), "Content-Type": "application/json"}
         if self.key:
             headers["Authorization"] = f"Bearer {self.key}"
@@ -272,8 +302,8 @@ class OpenAIWire:
                 break
             kind = _status_kind(r.status_code)
             msg = _openai_error_message(r)
-            if kind == "invalid_request" and r.status_code == 400 and _UNSUPPORTED.search(msg):
-                # Structured output is enforced or the call fails: never retried without it (§1.4).
+            if not prompt and kind == "invalid_request" and r.status_code == 400 and _UNSUPPORTED.search(msg):
+                # Not resent here: the port decides, by the route's schema mode (§1.9).
                 raise ModelError(f"{purpose}: the endpoint does not support response_format json_schema",
                                  "unsupported")
             if attempt == 1 and kind in ("rate_limited", "overloaded", "server"):
@@ -333,10 +363,23 @@ class ModelPort:
     `client` may be an Anthropic SDK client (wrapped in the Anthropic wire) or a
     wire object (`AnthropicWire`, `OpenAIWire`)."""
 
-    def __init__(self, client, model: str, timeout: float, max_tokens: int = 16000, vision_model: str | None = None):
+    def __init__(self, client, model: str, timeout: float, max_tokens: int = 16000, vision_model: str | None = None,
+                 routes=None):
+        from .model_routes import Routes
         self.wire = client if hasattr(client, "send") and hasattr(client, "api") else AnthropicWire(client)
-        self.model, self.timeout, self.max_tokens = model, timeout, max_tokens
-        self.vision_model = vision_model or model
+        self.timeout, self.max_tokens = timeout, max_tokens
+        self.routes = routes or Routes(self.wire.api, model, vision_model)
+        self._unenforced = set()      # models whose endpoint refused output_config.format (schema: auto)
+        self._unenforced_lock = threading.Lock()
+
+    @property
+    def model(self) -> str:
+        """The default route's model (what a purpose with no route of its own uses)."""
+        return self.routes.resolve("-").model
+
+    @property
+    def vision_model(self) -> str:
+        return self.routes.resolve("-", vision=True).model
 
     @property
     def api(self) -> str:
@@ -344,13 +387,20 @@ class ModelPort:
 
     def call(self, purpose: str, system: str, payload: dict, schema: dict, *, usage: Usage, attribution: str,
              max_tokens: int | None = None, effort: str | None = None, images=None, model: str | None = None,
-             headers: dict | None = None) -> dict:
+             headers: dict | None = None, vision: bool = False) -> dict:
         """`headers`: the attribution headers (`X-Napkin-Handler`, `X-Napkin-Job`,
-        peripherals.md §0.2) — metadata only, never auth, never content."""
+        peripherals.md §0.2) — metadata only, never auth, never content.
+        `vision`: an image transcription (the `vision` route). `model`: an id that
+        overrides the route's (tests, one-off tools)."""
+        from .model_routes import with_caller
         if not PURPOSE_RE.match(purpose or ""):
             raise ModelError(f"purpose {purpose!r} is not a slug", "invalid_request")
         images = check_images(images)
-        model = model or self.model
+        route = with_caller(self.routes.resolve(purpose, vision=vision), effort, max_tokens)
+        model = model or route.model
+        effort, max_tokens = route.effort, route.max_tokens
+        mode = "prompt" if route.schema == "prompt" or (route.schema == "auto" and model in self._unenforced) \
+            else "enforced"
         user = f"Task: {purpose}\n\n<input>\n{json.dumps(payload, ensure_ascii=False, indent=1)}\n</input>"
         first = {"role": "user", "text": user, "images": images}
         turns = [first]
@@ -359,16 +409,30 @@ class ModelPort:
         last_err = None
         for attempt in (1, 2):
             t0 = time.monotonic()
-            reply = self.wire.send(model=model, system=system, turns=turns, schema=api_schema, purpose=purpose,
-                                   max_tokens=max_tokens or self.max_tokens, effort=effort, timeout=self.timeout,
-                                   headers=headers)
+            send = dict(model=model, system=system, turns=turns, purpose=purpose,
+                        max_tokens=max_tokens or self.max_tokens, effort=effort, timeout=self.timeout, headers=headers)
+            try:
+                reply = self.wire.send(schema=schema if mode == "prompt" else api_schema, schema_mode=mode, **send)
+            except ModelError as e:
+                if e.kind != "unsupported" or mode != "enforced" or route.schema != "auto":
+                    raise
+                # schema: auto, and this endpoint does not enforce a schema for this model:
+                # the schema goes in the prompt from now on, for this model (§1.9).
+                with self._unenforced_lock:
+                    if model not in self._unenforced:
+                        log.warning("model %s: the endpoint does not enforce a JSON schema for %s; "
+                                    "the schema goes in the prompt (validated here) [%s]", purpose, model, attribution)
+                    self._unenforced.add(model)
+                mode = "prompt"
+                reply = self.wire.send(schema=schema, schema_mode=mode, **send)
             if reply.usage is None:
                 log.warning("model %s: the response carried no usage; counted as zero [%s]", purpose, attribution)
-                usage.add(0, 0)
+                usage.add(0, 0, model)
             else:
-                usage.add(*reply.usage)
-            log.info("model %s wire=%s attempt=%d stop=%s %.1fs [%s]", purpose, self.wire.api, attempt, reply.stop,
-                     time.monotonic() - t0, attribution)
+                usage.add(*reply.usage, model)
+            log.info("model %s wire=%s model=%s effort=%s schema=%s attempt=%d stop=%s %.1fs [%s]", purpose,
+                     self.wire.api, model, effort or "-", mode, attempt, reply.stop, time.monotonic() - t0,
+                     attribution)
             if reply.stop == "truncated":
                 raise ModelError(f"{purpose}: the response was cut off at max_tokens", "truncated")
             if reply.stop == "refusal":
@@ -376,6 +440,9 @@ class ModelPort:
                     log.info("model %s refusal category=%s [%s]", purpose, reply.detail, attribution)
                 raise ModelError(f"{purpose}: the model refused", "refusal")
             text = reply.text
+            if mode == "prompt" and text is not None:
+                fenced = _FENCE.match(text)   # a fence around the whole answer, nothing else, is removed
+                text = fenced.group(1) if fenced else text
             if reply.stop != "ok" or text is None:
                 problem = reply.detail or "no text in the response"
             else:

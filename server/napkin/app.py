@@ -25,6 +25,7 @@ from .doc import STAGES
 from .jobs import JobStore, LongJob
 from .layers.http import HttpLayerStore
 from .model import ModelPort, build_wire
+from .model_routes import Routes
 from .research import ResearchPort
 from .retrieval import RetrievalPort
 from .util import TaskError, bad, iso
@@ -52,7 +53,12 @@ class Middleware:
         wire = model_client if hasattr(model_client, "send") and hasattr(model_client, "api") else \
             build_wire(settings, client=model_client, transport=model_transport)
         set_model_wire(wire.api)
-        self.model_port = ModelPort(wire, settings.model, settings.model_timeout, vision_model=settings.vision_model)
+        try:
+            routes = Routes(wire.api, settings.model, settings.vision_model, settings.model_routes)
+        except (OSError, ValueError) as e:
+            raise SystemExit(f"NAPKIN_MODEL_ROUTES: {e}") from None
+        self.model_port = ModelPort(wire, settings.model, settings.model_timeout, vision_model=settings.vision_model,
+                                    routes=routes)
         if research_port is None and settings.research_url:
             research_port = ResearchPort(settings.research_url, settings.research_timeout,
                                          token=settings.research_token)
@@ -88,6 +94,7 @@ class Middleware:
         ran = caps is not None and caps.model_ran()
         return {"scope": self.settings.scope, "backend": backend(),
                 "model": caps.model.model_id if ran else None,
+                "models": dict(caps.usage.by_model) if caps is not None else {},
                 "hits": list({(h["id"], h["source"]): h for h in hits}.values()),
                 "usage": caps.usage.as_dict() if caps is not None else {"input_tokens": 0, "output_tokens": 0}}
 
@@ -243,8 +250,8 @@ def create_app(settings: Settings | None = None, **components) -> FastAPI:
 
     @app.get("/healthz")
     def healthz():
-        return {"ok": True, "api": API, "backend": backend(), "model": settings.model,
-                "model_api": mw.model_port.api, "research": bool(mw.research_port),
+        return {"ok": True, "api": API, "backend": backend(), "model": mw.model_port.model,
+                "model_api": mw.model_port.api, "model_routes": mw.model_port.routes.table(), "research": bool(mw.research_port),
                 "retrieval": bool(mw.retrieval_port), "stages": STAGES}
 
     @app.post("/v1/tasks")

@@ -17,6 +17,9 @@ see any of it.
   NAPKIN_MODEL                 model id, sent verbatim (claude-opus-5; on bedrock
                                global.anthropic.claude-opus-5-5)
   NAPKIN_VISION_MODEL          model id for image transcription (= NAPKIN_MODEL)
+  NAPKIN_MODEL_ROUTES          a JSON file (or the JSON itself) choosing model, effort and
+                               schema mode per call purpose; re-read when the file changes
+                               (napkin/model_routes.py). Unset = NAPKIN_MODEL for every call
   NAPKIN_MODEL_EXTRA_BODY      openai only: a JSON object merged into every request body
   NAPKIN_MODEL_TIMEOUT         seconds per HTTP attempt (600)
   NAPKIN_MODEL_CONCURRENCY     model calls in flight at once, across jobs (6)
@@ -64,6 +67,7 @@ class Settings:
     model_bedrock_endpoint: str = "runtime"
     model: str = "claude-opus-5"
     vision_model: str | None = None
+    model_routes: str | None = None
     model_extra_body: dict = field(default_factory=dict)
     model_timeout: float = 600.0
     model_concurrency: int = 6
@@ -116,6 +120,7 @@ class Settings:
                    model=e("NAPKIN_MODEL") or ("global.anthropic.claude-opus-5-5" if api == "bedrock"
                                                else "claude-opus-5"),
                    vision_model=e("NAPKIN_VISION_MODEL") or None,
+                   model_routes=e("NAPKIN_MODEL_ROUTES") or None,
                    model_extra_body=extra_body,
                    model_timeout=float(e("NAPKIN_MODEL_TIMEOUT") or 600),
                    model_concurrency=int(e("NAPKIN_MODEL_CONCURRENCY") or 6),

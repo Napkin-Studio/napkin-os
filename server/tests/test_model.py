@@ -11,6 +11,7 @@ import pytest
 
 from napkin.config import Settings
 from napkin.model import AnthropicWire, ModelError, ModelPort, OpenAIWire, Usage, build_wire
+from napkin.model_routes import Routes
 
 SCHEMA = {"type": "object", "additionalProperties": False, "required": ["answer", "items", "note"],
           "properties": {"answer": {"type": "string", "enum": ["yes", "no"]},
@@ -159,12 +160,23 @@ def test_openai_request_shape_images_and_think_stripped():
         assert banned not in body
 
 
-def test_openai_400_without_json_schema_support_is_never_retried_without_it():
+def test_openai_400_without_json_schema_support_under_schema_enforced_is_never_resent_without_it():
     ep = Endpoint([(400, {"error": {"message": "response_format json_schema is not supported by this model",
                                     "type": "invalid_request_error"}}, None)])
+    routes = Routes("openai", "claude-opus-5", source='{"default": {"schema": "enforced"}}')
     with pytest.raises(ModelError) as e:
-        port(oa(ep)).call("p", "s", {}, SCHEMA, usage=Usage(), attribution="t")
+        port(oa(ep), routes=routes).call("p", "s", {}, SCHEMA, usage=Usage(), attribution="t")
     assert e.value.kind == "unsupported" and len(ep.requests) == 1
+
+
+def test_openai_400_without_json_schema_support_under_schema_auto_puts_the_schema_in_the_prompt():
+    ep = Endpoint([(400, {"error": {"message": "response_format json_schema is not supported by this model",
+                                    "type": "invalid_request_error"}}, None),
+                   (200, {"choices": [{"message": {"content": json.dumps(GOOD)}, "finish_reason": "stop"}],
+                          "usage": {"prompt_tokens": 9, "completion_tokens": 4}}, None)])
+    assert port(oa(ep)).call("p", "sys", {}, SCHEMA, usage=Usage(), attribution="t") == GOOD
+    second = json.loads(ep.requests[1].content)
+    assert "response_format" not in second and "JSON Schema" in second["messages"][0]["content"]
 
 
 def test_openai_rate_limit_and_overload_retry_once():
@@ -266,19 +278,55 @@ def test_bedrock_with_aws_credentials_signs_sigv4_for_bedrock_mantle():
     assert auth.startswith("AWS4-HMAC-SHA256") and "/eu-west-1/bedrock-mantle/aws4_request" in auth
 
 
-def test_bedrock_refusing_structured_output_is_unsupported_and_never_resent_without_it():
-    calls = []
-
+def _refuses_format(calls):
+    """An endpoint like Bedrock's for Opus 5.5 (2026-10): output_config.format is a 400,
+    the same request without it answers."""
     def handler(req):
-        calls.append(req)
         import httpx2
-        return httpx2.Response(400, json={"type": "error", "error": {
-            "type": "invalid_request_error", "message": "output_config.format: Extra inputs are not permitted"}})
+        body = json.loads(req.content)
+        calls.append(body)
+        if "format" in (body.get("output_config") or {}):
+            return httpx2.Response(400, json={"type": "error", "error": {
+                "type": "invalid_request_error", "message": "output_config.format: Extra inputs are not permitted"}})
+        return httpx2.Response(200, json=_message("```json\n" + json.dumps(GOOD) + "\n```"))
+    return handler
 
-    wire = AnthropicWire(_mantle(handler, api_key="t"), api="bedrock")
+
+def test_bedrock_refusing_structured_output_under_schema_enforced_is_unsupported_and_never_resent():
+    calls = []
+    wire = AnthropicWire(_mantle(_refuses_format(calls), api_key="t"), api="bedrock")
+    routes = Routes("bedrock", "anthropic.claude-opus-5", source='{"default": {"schema": "enforced"}}')
     with pytest.raises(ModelError) as e:
-        ModelPort(wire, "anthropic.claude-opus-5", 30).call("p", "s", {}, SCHEMA, usage=Usage(), attribution="t")
+        ModelPort(wire, "anthropic.claude-opus-5", 30, routes=routes).call(
+            "p", "s", {}, SCHEMA, usage=Usage(), attribution="t")
     assert e.value.kind == "unsupported" and len(calls) == 1
+
+
+def test_bedrock_refusing_structured_output_under_schema_auto_switches_that_model_to_the_prompt():
+    calls = []
+    wire = AnthropicWire(_mantle(_refuses_format(calls), api_key="t"), api="bedrock")
+    p = ModelPort(wire, "anthropic.claude-opus-5", 30)
+    u = Usage()
+    assert p.call("p", "sys", {}, SCHEMA, usage=u, attribution="t", effort="low") == GOOD  # fence removed
+    assert len(calls) == 2
+    retry = calls[1]
+    assert retry["output_config"] == {"effort": "low"}            # effort kept, format gone
+    assert retry["system"].startswith("sys") and '"required"' in retry["system"]   # the full schema
+    assert "maxItems" in retry["system"]   # the prompt carries the schema unstripped
+    # the model is remembered: the next call goes straight to the prompt
+    assert p.call("p", "sys", {}, SCHEMA, usage=u, attribution="t") == GOOD
+    assert len(calls) == 3 and "output_config" not in calls[2]
+    assert u.by_model == {"anthropic.claude-opus-5": {"calls": 2, "input_tokens": 14, "output_tokens": 6}}
+
+
+def test_a_prompt_answer_that_does_not_validate_is_retried_with_the_error_then_fails():
+    sdk = FakeSDK([('{"wrong": 1}', "end_turn", U()), ("still not it", "end_turn", U())])
+    routes = Routes("anthropic", "claude-opus-5", source='{"default": {"schema": "prompt"}}')
+    with pytest.raises(ModelError) as e:
+        port(sdk, routes=routes).call("p", "s", {}, SCHEMA, usage=Usage(), attribution="t")
+    assert e.value.kind == "invalid_output" and len(sdk.calls) == 2
+    assert "does not validate" in sdk.calls[1]["messages"][2]["content"]
+    assert all("output_config" not in c for c in sdk.calls)
 
 
 def test_bedrock_without_aws_credentials_is_auth_not_a_transient_failure():

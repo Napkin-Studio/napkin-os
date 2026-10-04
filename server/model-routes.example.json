@@ -1,0 +1,9 @@
+{
+  "comment": "NAPKIN_MODEL_ROUTES (docs/contracts/peripherals.md §1.9). Edit and save: the next call uses it. Choices measured 2026-10-04 on 32 real seed requests: Opus 4.6 found the most verified facts (143 vs 131 for Opus 5.5 high, 106 low); every model passed every dossier cell.",
+  "default": {"model": "opus-4.6", "schema": "auto"},
+  "vision": {"model": "opus-4.6"},
+  "purposes": {
+    "extract_category_facts": {"model": "opus-4.6"},
+    "write_dossier_cell": {"model": "opus-4.6"}
+  }
+}

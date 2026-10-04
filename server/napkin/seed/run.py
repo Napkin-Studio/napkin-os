@@ -50,6 +50,7 @@ import httpx
 from ..config import Settings
 from ..doc import LENS_NAMESPACE, LENSES, market_list
 from ..model import ModelPort, Usage, build_wire
+from ..model_routes import Routes
 from ..pipeline.research import LENS_QUESTIONS, UNITS
 from ..research import ResearchPort
 from ..rules.figures import NUM, quote_supports
@@ -601,7 +602,9 @@ def main(argv=None) -> int:
     settings = Settings.from_env()
     if not settings.research_url:
         ap.error("NAPKIN_RESEARCH_URL is not set")
-    model = ModelPort(build_wire(settings), settings.model, settings.model_timeout)
+    wire = build_wire(settings)
+    model = ModelPort(wire, settings.model, settings.model_timeout,
+                      routes=Routes(wire.api, settings.model, settings.vision_model, settings.model_routes))
     research = ResearchPort(settings.research_url, settings.research_timeout, token=settings.research_token)
     store = Store(a.dsn, ORG)
 
