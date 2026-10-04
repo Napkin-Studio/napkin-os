@@ -29,6 +29,7 @@ RUN rustup target add wasm32-unknown-unknown
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
+COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
 # The CLI must be the exact version the crate pins, or the bindings are
@@ -64,6 +65,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
+COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
 # The Tauri app is a workspace member that needs GTK/WebKit to build. It is not
 # part of this image, so drop it rather than resolve its whole dependency tree.
