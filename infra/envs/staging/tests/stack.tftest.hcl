@@ -57,4 +57,8 @@ run "plans_with_two_agencies" {
     condition     = module.services.web_environment["NAPKIN_AUTH"] == "roster" && module.services.web_environment["NAPKIN_AUTH_ROSTER"] == "/srv/napkin/accounts.tsv" && !contains(keys(module.services.web_environment), "NAPKIN_COGNITO_CLIENT_ID")
     error_message = "staging signs in from the roster, with no password (features/no-password-sign-in.clan)"
   }
+  assert {
+    condition     = lookup(module.services.web_environment, "NAPKIN_DOGFOOD", "") == "1"
+    error_message = "staging is the dogfood build (features/dogfood-telemetry.clan)"
+  }
 }

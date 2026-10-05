@@ -1544,6 +1544,239 @@ async fn a_session_from_before_the_switch_to_the_roster_still_signs_in() {
     assert_eq!(r.json()["user"]["username"], "engineer@napkin");
 }
 
+// ── The dogfood build (NAPKIN_DOGFOOD=1) ─────────────────────────────────────
+
+/// A roster server that records everything, as staging runs it.
+fn dogfood_server(on: bool) -> (Server, Option<Arc<napkin_web::dogfood::Dogfood>>) {
+    let dir = tempfile::tempdir().unwrap();
+    let roster = dir.path().join("accounts.tsv");
+    std::fs::write(&roster, "engineer@napkin\tShrey\nlead@javelin\tJo\n").unwrap();
+    let dog = on.then(|| napkin_web::dogfood::Dogfood::start(dir.path().join("_dogfood"), 16));
+    let ctx = Arc::new(
+        AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
+            .with_dogfood(dog.clone()),
+    );
+    let identity = napkin_web::tenant::Identity {
+        mode: napkin_web::tenant::Mode::Accounts {
+            provider: napkin_web::auth::Provider::Roster(
+                napkin_web::auth::Roster::new(roster).unwrap(),
+            ),
+            sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
+        },
+        secure: false,
+    };
+    let app = napkin_web::router_with(ctx.clone(), None, Arc::new(identity));
+    (
+        Server {
+            _dir: dir,
+            ctx,
+            app,
+        },
+        dog,
+    )
+}
+
+async fn sign_in_as(s: &Server, user: &str, agency: &str) -> String {
+    let r = send(
+        s,
+        json_req(
+            "/api/auth/sign-in",
+            None,
+            serde_json::json!({"user": user, "agency": agency}),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    session_cookie(&r)
+}
+
+#[tokio::test]
+async fn without_the_flag_nothing_is_recorded_and_the_routes_do_not_exist() {
+    let (s, _) = dogfood_server(false);
+    let me = sign_in_as(&s, "engineer", "napkin").await;
+    let v = send(&s, request("GET", "/api/session", Some(&me), Body::empty()))
+        .await
+        .json();
+    assert_eq!(v["dogfood"], false);
+    for (method, uri) in [
+        ("POST", "/api/dogfood/events"),
+        ("POST", "/api/dogfood/consent"),
+        ("GET", "/api/dogfood/export"),
+        ("POST", "/api/dogfood/purge"),
+    ] {
+        let r = send(
+            &s,
+            Request::builder()
+                .method(method)
+                .uri(uri)
+                .header(header::COOKIE, &me)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"events":[]}"#))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::NOT_FOUND, "{method} {uri}");
+    }
+    let _ = &s.ctx;
+}
+
+#[tokio::test]
+async fn a_dogfood_build_records_everything_an_account_does_after_it_agrees() {
+    let (s, dog) = dogfood_server(true);
+    let dog = dog.unwrap();
+    let me = sign_in_as(&s, "engineer", "napkin").await;
+
+    // the shell is told to show the notice; nothing is taken before consent
+    let v = send(&s, request("GET", "/api/session", Some(&me), Body::empty()))
+        .await
+        .json();
+    assert_eq!(v["dogfood"], true);
+    assert_eq!(v["consented"], false);
+    let tenant = v["tenant"].as_str().unwrap().to_string();
+    let batch = serde_json::json!({"events": [{"kind": "click", "name": "Generate", "doc": "d1", "at": "t0"}]});
+    let r = send(
+        &s,
+        json_req("/api/dogfood/events", Some(&me), batch.clone()),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    dog.flush();
+    assert_eq!(dog.export(None, None, None), "");
+
+    let r = send(
+        &s,
+        json_req("/api/dogfood/consent", Some(&me), serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    let v = send(&s, request("GET", "/api/session", Some(&me), Body::empty()))
+        .await
+        .json();
+    assert_eq!(v["consented"], true);
+
+    // shell events, an /api request and an app frame's clan:// call, bodies capped
+    let r = send(&s, json_req("/api/dogfood/events", Some(&me), batch)).await;
+    assert_eq!(r.json()["recorded"], 1);
+    let r = post(
+        &s,
+        &format!("/api/t/{tenant}/documents/upload"),
+        &me,
+        a_clan("Dogfood"),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    let token = r.json()["token"].as_str().unwrap().to_string();
+    post(
+        &s,
+        &format!("/s/{token}/patch-data"),
+        "",
+        r#"{"patch":{"verdict":"a long answer to keep"},"agent":"human"}"#,
+    )
+    .await;
+
+    let r = send(
+        &s,
+        request("GET", "/api/dogfood/export", Some(&me), Body::empty()),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    let lines: Vec<Value> = String::from_utf8_lossy(&r.body)
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let find = |kind: &str, name: &str| {
+        lines
+            .iter()
+            .find(|e| e["kind"] == kind && e["name"].as_str().unwrap().contains(name))
+            .unwrap_or_else(|| panic!("no {kind} {name} in {lines:#?}"))
+            .clone()
+    };
+    assert!(lines
+        .iter()
+        .all(|e| e["account"] == "engineer@napkin" && e["agency"] == "napkin"));
+    find("consent", "acknowledged");
+    let click = find("click", "Generate");
+    assert_eq!(click["doc"], "d1");
+    assert_eq!(click["data"]["at"], "t0");
+    let upload = find("request", "/documents/upload");
+    assert_eq!(upload["data"]["status"], 200);
+    assert_eq!(
+        upload["data"]["body"]["truncated"], true,
+        "a 16-byte cap cuts the upload"
+    );
+    let patch = find("request", "clan://patch-data");
+    assert_eq!(patch["data"]["body"]["text"], r#"{"patch":{"verdi"#);
+    assert!(patch["doc"].is_string());
+}
+
+#[tokio::test]
+async fn only_napkins_own_accounts_read_or_purge_the_record() {
+    let (s, dog) = dogfood_server(true);
+    let dog = dog.unwrap();
+    let them = sign_in_as(&s, "lead", "javelin").await;
+    send(
+        &s,
+        json_req("/api/dogfood/consent", Some(&them), serde_json::json!({})),
+    )
+    .await;
+    send(
+        &s,
+        json_req(
+            "/api/dogfood/events",
+            Some(&them),
+            serde_json::json!({"events": [{"kind": "feedback", "name": "brief", "data": {"thumb": "down", "note": "slow"}}]}),
+        ),
+    )
+    .await;
+    for (method, uri) in [
+        ("GET", "/api/dogfood/export"),
+        ("POST", "/api/dogfood/purge"),
+    ] {
+        let r = send(
+            &s,
+            Request::builder()
+                .method(method)
+                .uri(uri)
+                .header(header::COOKIE, &them)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::FORBIDDEN, "{method} {uri}");
+    }
+
+    let me = sign_in_as(&s, "engineer", "napkin").await;
+    let r = send(
+        &s,
+        request(
+            "GET",
+            "/api/dogfood/export?agency=javelin",
+            Some(&me),
+            Body::empty(),
+        ),
+    )
+    .await;
+    // their feedback is there (its data over the 16-byte test cap, so kept capped)
+    let theirs = String::from_utf8_lossy(&r.body).to_string();
+    assert!(theirs.contains("\"kind\":\"feedback\""), "{theirs}");
+    let r = send(
+        &s,
+        json_req("/api/dogfood/purge", Some(&me), serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert!(r.json()["removed_files"].as_u64().unwrap() >= 2);
+    assert_eq!(dog.export(None, None, None), "");
+    // the purge took the acknowledgements too: the notice shows again
+    let v = send(
+        &s,
+        request("GET", "/api/session", Some(&them), Body::empty()),
+    )
+    .await
+    .json();
+    assert_eq!(v["consented"], false);
+}
+
 // ── Exports reach only the tab that asked (features/pdf-export.clan) ─────────
 //
 // Events go to every tab of a tenant, and in accounts mode the tenant is the

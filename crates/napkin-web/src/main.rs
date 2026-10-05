@@ -99,6 +99,24 @@ fn add_user(args: &[String], data_root: &std::path::Path) {
     }
 }
 
+/// Where the dogfood record lives, under the data root and outside every workspace.
+const DOGFOOD_DIR: &str = "_dogfood";
+
+/// `NAPKIN_DOGFOOD=1`: record everything consenting accounts do (staging only).
+/// `NAPKIN_DOGFOOD_BODY_CAP` bytes of each body are kept (default 64 KiB).
+fn dogfood(data_root: &std::path::Path) -> Option<Arc<napkin_web::dogfood::Dogfood>> {
+    if env_string("NAPKIN_DOGFOOD").as_deref() != Some("1") {
+        return None;
+    }
+    let cap = env_string("NAPKIN_DOGFOOD_BODY_CAP")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(napkin_web::dogfood::DEFAULT_BODY_CAP);
+    Some(napkin_web::dogfood::Dogfood::start(
+        data_root.join(DOGFOOD_DIR),
+        cap,
+    ))
+}
+
 fn env_string(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
@@ -163,6 +181,13 @@ async fn main() {
         add_user(&args[1..], &settings.data_root);
         return;
     }
+    if args.first().map(String::as_str) == Some("dogfood-purge") {
+        // the end of the dogfood: the whole record goes, in one command
+        let root = settings.data_root.join(DOGFOOD_DIR);
+        let n = napkin_web::dogfood::purge_dir(&root);
+        println!("purged {n} file(s) from {}", root.display());
+        return;
+    }
     let identity = std::sync::Arc::new(identity(&settings.data_root, settings.secure_cookie));
     let auth = match &identity.mode {
         Mode::Anonymous => "anonymous",
@@ -180,6 +205,7 @@ async fn main() {
         } => "roster (no passwords)",
     };
 
+    let dogfood = dogfood(&settings.data_root);
     let ctx = Arc::new(
         AppCtx::new(
             settings.data_root.clone(),
@@ -187,7 +213,8 @@ async fn main() {
             settings.sandbox_origin.clone(),
             settings.agent_cap,
         )
-        .with_seed(settings.seed_dir.clone()),
+        .with_seed(settings.seed_dir.clone())
+        .with_dogfood(dogfood.clone()),
     );
 
     let app = napkin_web::router_with(ctx, settings.static_dir.as_deref(), identity);
@@ -202,6 +229,7 @@ async fn main() {
         shell = %settings.static_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(none built)".into()),
         agent_cap = settings.agent_cap,
         auth,
+        dogfood = dogfood.is_some(),
         seed = %settings.seed_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(none)".into()),
         "Napkin Studio OS — web",
     );

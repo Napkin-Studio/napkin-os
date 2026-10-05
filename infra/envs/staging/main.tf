@@ -272,7 +272,11 @@ module "services" {
   # (owner, 2026-10-05; features/no-password-sign-in.clan). Anyone who knows a
   # roster name can sign in as that person; sign-ins are logged with their IP.
   # The user pool stays, so `cognito` here undoes it.
-  web_auth              = "roster"
+  web_auth = "roster"
+  # The dogfood build: everything consenting accounts do is recorded, bodies
+  # included, until the dogfood ends and it is purged (owner, 2026-10-05;
+  # features/dogfood-telemetry.clan). Staging only.
+  web_dogfood           = true
   github_repository     = var.github_repository
   github_repository_ids = var.github_repository_ids
   certificate_arn       = var.certificate_arn

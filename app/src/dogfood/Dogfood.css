@@ -1,0 +1,50 @@
+/* The dogfood build's notice, Beta badge and thumbs (Dogfood.tsx). */
+
+.df-bar { display: inline-flex; align-items: center; gap: 6px; }
+
+.df-badge {
+  font: 600 11px/1 'Geist', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+}
+.df-badge:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.df-badge-static { cursor: default; display: inline-block; margin-bottom: 10px; }
+
+.df-veil {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  padding: 16px;
+}
+.df-card {
+  max-width: 440px; width: 100%;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+.df-card h2 { margin: 0 0 10px; font-size: 19px; letter-spacing: -0.02em; }
+.df-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: var(--ink2); }
+.df-card a { color: var(--accent); }
+.df-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.df-thumbs { display: inline-flex; align-items: center; gap: 2px; }
+.df-thumb {
+  border: 1px solid transparent; background: transparent; border-radius: 6px;
+  padding: 2px 4px; font-size: 14px; line-height: 1; cursor: pointer; opacity: 0.7;
+}
+.df-thumb:hover, .df-thumb[aria-pressed='true'] { opacity: 1; border-color: var(--line); }
+.df-thumbs-compact .df-thumb { font-size: 12px; }
+.df-note { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.df-note input {
+  font: inherit; font-size: 12px; width: 180px;
+  padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--paper); color: var(--ink);
+}
+.df-thanks { font-size: 12px; color: var(--ink2); }

@@ -27,6 +27,8 @@ serde_json = { workspace = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { workspace = true }
+# the dogfood record's timestamps
+chrono = { workspace = true }
 futures-core = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 # sign-in: signed session cookies, local accounts' password hashes, Cognito's API
