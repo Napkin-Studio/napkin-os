@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { host } from '../host'
 import type { ClientAnswerKind, ClientPartRef, ManifestInfo } from '../host'
 import { partsFrom } from './clientReview/review'
@@ -10,6 +10,7 @@ import { getTheme, onThemeChange } from '../theme'
 import { setExportFrame } from './appExport'
 import { LEGACY_EDIT_BRIDGE } from '../bridge/legacyEditBridge'
 import { STRUCTURED_EDIT_BRIDGE } from '../bridge/structuredEditBridge'
+import { dogfoodState, frameCapture, record, subscribe as onDogfood } from '../dogfood/recorder'
 
 interface Props {
   htmlContent: string
@@ -167,6 +168,11 @@ export default function AppRuntime({
       else if (m?.type === 'clan:part-mark' && typeof m.address === 'string') {
         handlers.current.onPartMark?.({ address: m.address, marked: m.marked === true, words: typeof m.words === 'string' ? m.words : '' })
       } else if (m?.type === 'clan:edit-request') handlers.current.onEditRequest?.()
+      // the dogfood build's listener inside the frame (recorder.ts FRAME_CAPTURE)
+      else if (m?.type === 'clan:interaction') {
+        const { kind, name } = m as { kind?: unknown; name?: unknown }
+        record(typeof kind === 'string' ? kind : 'click', typeof name === 'string' ? name.slice(0, 120) : 'page', { in: 'app' })
+      }
       else if (m?.type === 'clan:chrome') {
         const { mode, tint } = m as { mode?: unknown; tint?: unknown }
         handlers.current.onChrome?.(mode === 'glass' ? 'glass' : 'solid',
@@ -188,6 +194,9 @@ export default function AppRuntime({
   useEffect(() => { insetsRef.current = insets; postInsets() }, [insets, postInsets])
 
   const [iframeSrc, setIframeSrc] = useState<string>('')
+  // The dogfood build listens inside the frame too, once the person has agreed.
+  const dogfood = useSyncExternalStore(onDogfood, dogfoodState, dogfoodState)
+  const capture = dogfood.on && dogfood.consented
 
   // Composing the page is a pure derivation of the view, the render model and
   // the theme — not an effect. The effect below only has to publish it.
@@ -196,7 +205,7 @@ export default function AppRuntime({
 
     const isFullDoc = /^\s*<!doctype\s+html/i.test(htmlContent) || /^\s*<html/i.test(htmlContent)
     const bridgeScript = renderModel === 'authored' ? STRUCTURED_EDIT_BRIDGE : LEGACY_EDIT_BRIDGE
-    const bridge = `<script>${bridgeScript}</script>`
+    const bridge = `<script>${bridgeScript}</script>${frameCapture(capture)}`
     let fullHtml: string
 
     if (isFullDoc) {
@@ -250,7 +259,7 @@ export default function AppRuntime({
     )
 
     return host.prepareAppHtml(themed)
-  }, [htmlContent, hasHumanView, renderModel])
+  }, [htmlContent, hasHumanView, renderModel, capture])
 
   // With a host behind a URL, hand it the page and point the frame at it.
   // With no server there is nothing to hand it to: the page is inlined below.

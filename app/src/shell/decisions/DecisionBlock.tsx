@@ -9,6 +9,7 @@
 
 import type { AttentionItem, DecisionBlock, DecisionsView } from '../../host'
 import { AgentFigure } from '../../studio/AgentFigure'
+import { ResultThumbs } from '../../dogfood/Dogfood'
 import { AGENTS } from '../../studio/model'
 import { canRun, openInApp, runInApp } from '../appExport'
 import {
@@ -158,6 +159,12 @@ export function HistoryLine({ block, view }: { block: DecisionBlock; view: Decis
             )}
             {sure === 'Unsure' && <span className="dp-pill-unsure">unsure</span>}
             {block.superseded && <span className="dp-pill-old">replaced since</span>}
+            {/* the dogfood build asks about each agent's result; a click here must not open the line */}
+            {w.agent && (
+              <span onClick={e => e.preventDefault()}>
+                <ResultThumbs extra={{ decision: d.id ?? null, action: d.action, agent: w.name, target: t?.label ?? null }} />
+              </span>
+            )}
           </div>
         </div>
         <span className="dp-time">{hhmm(d.timestamp)}{hasMore && <span className="dp-more">Why</span>}</span>
