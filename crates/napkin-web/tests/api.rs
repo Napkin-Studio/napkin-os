@@ -531,9 +531,13 @@ async fn an_export_the_app_builds_reaches_the_browser_as_a_handle_it_can_fetch()
         "the browser is given a handle, never a server path: {handle}"
     );
 
+    // only the asking frame's token claims an app's export
     let dl = get(
         &s,
-        &format!("/api/t/{}/export/{handle}?kind=html", b.tenant),
+        &format!(
+            "/api/t/{}/export/{handle}?kind=html&token={token}",
+            b.tenant
+        ),
         Some(&b.cookie),
     )
     .await;
@@ -819,16 +823,14 @@ async fn an_export_is_composed_once_and_claimed_once() {
     assert_eq!(started.status, StatusCode::OK);
     let handle = started.json()["handle"].as_str().unwrap().to_string();
 
-    // The shell hears about it under the same name the desktop uses.
-    let event = rx
-        .try_recv()
-        .expect("the shell must be told an export is ready");
-    assert_eq!(event.name, "clan-export-request");
-    assert_eq!(
-        event.data["tmpHtml"], handle,
-        "the event carries a handle, never a server path"
+    // The reply carries the handle, never a server path, and only the tab
+    // that asked is told: nothing goes out on the tenant's event stream.
+    assert!(!handle.contains('/'));
+    assert_eq!(started.json()["filename"], "Exported");
+    assert!(
+        rx.try_recv().is_err(),
+        "the OS export is not broadcast to the tenant's tabs"
     );
-    assert_eq!(event.data["filename"], "Exported");
 
     // Nobody else can claim it.
     let stolen = get(
@@ -1773,4 +1775,137 @@ async fn only_napkins_own_accounts_read_or_purge_the_record() {
     .await
     .json();
     assert_eq!(v["consented"], false);
+}
+
+// ── Exports reach only the tab that asked (features/pdf-export.clan) ─────────
+//
+// Events go to every tab of a tenant, and in accounts mode the tenant is the
+// whole agency. A single-use export handle on that stream was claimed by
+// whichever tab got there first: a bystander got the PDF, and the person who
+// clicked got the 404 as a JSON file.
+
+async fn signed_in(s: &Server, local: &napkin_web::auth::Local, user: &str) -> String {
+    local.add(user, "Temporary-1234", None).unwrap();
+    let r = send(
+        s,
+        json_req(
+            "/api/auth/sign-in",
+            None,
+            serde_json::json!({"username": user, "password": "Temporary-1234"}),
+        ),
+    )
+    .await;
+    let c = r.json()["session"].as_str().unwrap().to_string();
+    let r = send(
+        s,
+        json_req(
+            "/api/auth/new-password",
+            None,
+            serde_json::json!({"username": user, "session": c, "password": "Their-own-pass9"}),
+        ),
+    )
+    .await;
+    session_cookie(&r)
+}
+
+#[tokio::test]
+async fn two_tabs_of_one_agency_do_not_take_each_others_export() {
+    let (s, local) = accounts_server();
+    let a = signed_in(&s, &local, "engineer@napkin").await;
+    let b = signed_in(&s, &local, "visionary@napkin").await;
+    let tenant = napkin_web::tenant::TenantId::of_agency("napkin");
+    let t = tenant.to_string();
+
+    // A uploads a document; B opens the same one in their own tab
+    let up = post(
+        &s,
+        &format!("/api/t/{t}/documents/upload"),
+        &a,
+        a_clan("Shared"),
+    )
+    .await;
+    assert_eq!(up.status, StatusCode::OK);
+    let doc = up.json()["path"].as_str().unwrap().to_string();
+    let a_token = up.json()["token"].as_str().unwrap().to_string();
+    let a_frame = up.json()["frame"].as_str().map(String::from);
+    let opened = get(&s, &format!("/api/t/{t}/d/{doc}"), Some(&b)).await;
+    let b_token = opened.json()["token"].as_str().unwrap().to_string();
+    assert_ne!(a_token, b_token, "each person's tab has its own frame");
+
+    let mut every_tab = s.ctx.events.subscribe(&tenant);
+
+    // The OS export: the handle goes back to A alone, not onto everyone's stream.
+    let started = post_json(
+        &s,
+        &format!("/api/t/{t}/d/{doc}/export"),
+        &a,
+        serde_json::json!({ "kind": "html" }),
+    )
+    .await;
+    assert_eq!(started.status, StatusCode::OK);
+    assert!(
+        every_tab.try_recv().is_err(),
+        "an OS export must not be broadcast to the agency's other tabs"
+    );
+    let handle = started.json()["handle"].as_str().unwrap().to_string();
+    assert_eq!(started.json()["filename"], "Shared");
+    let mine = get(
+        &s,
+        &format!("/api/t/{t}/export/{handle}?kind=html"),
+        Some(&a),
+    )
+    .await;
+    assert_eq!(mine.status, StatusCode::OK);
+
+    // An app's own export: every tab hears of it, tagged with the asking frame,
+    // and only that frame's token claims it.
+    let r = post(
+        &s,
+        &format!("/s/{a_token}/export"),
+        &a,
+        r#"{"kind":"html","filename":"brief","html":"<!DOCTYPE html><html><body><h1>Probe</h1></body></html>"}"#,
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    let event = every_tab
+        .try_recv()
+        .expect("the asking tab must hear of it");
+    assert_eq!(event.name, "clan-export-request");
+    assert!(a_frame.is_some(), "an open tells the tab its frame id");
+    assert_eq!(
+        event.data["frame"].as_str(),
+        a_frame.as_deref(),
+        "tagged with the asking frame"
+    );
+    assert!(
+        !event.data.to_string().contains(&a_token),
+        "the event never carries a frame's token"
+    );
+    let handle = event.data["tmpHtml"].as_str().unwrap().to_string();
+    let theirs = get(
+        &s,
+        &format!("/api/t/{t}/export/{handle}?kind=html&token={b_token}"),
+        Some(&b),
+    )
+    .await;
+    assert_eq!(
+        theirs.status,
+        StatusCode::NOT_FOUND,
+        "a bystander tab cannot claim it"
+    );
+    let no_token = get(
+        &s,
+        &format!("/api/t/{t}/export/{handle}?kind=html"),
+        Some(&b),
+    )
+    .await;
+    assert_eq!(no_token.status, StatusCode::NOT_FOUND);
+    let mine = get(
+        &s,
+        &format!("/api/t/{t}/export/{handle}?kind=html&token={a_token}"),
+        Some(&a),
+    )
+    .await;
+    assert_eq!(mine.status, StatusCode::OK, "the asking tab still gets it");
+    assert!(String::from_utf8_lossy(&mine.body).contains("Probe"));
 }
