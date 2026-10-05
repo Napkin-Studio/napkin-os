@@ -655,11 +655,40 @@ def test_unvalidated_loops_are_flagged(monkeypatch, capsys):
     mc = types.SimpleNamespace(fields={k: [hit] for k, _t, _q in LOOP37_SPECS},
                                trace={"validation": {"per_field": per_field}})
     monkeypatch.setattr(bc, "build_multi", lambda *a, **k: mc)
+    # A built chain, so the per-loop verdicts are what count. Without this the test
+    # depends on the machine: where jev cannot be built (CI) every loop is degraded.
+    import judge
+    monkeypatch.setattr(bc, "brief_chain", lambda: judge.Chain([], requested="jev"))
     gist = {"problem": "p", "objective": "o", "audience": "a", "key_message": ""}
     loops, trace = pb._loops_via_mix(gist, {"business_problem": {"value": "p"}})
     assert trace["validation_degraded"] == ["loop4_insight"]
     assert loops["loop4_insight"]["validated_by"] is None and loops["loop5_proposition"]["validated_by"] == "jev"
     assert "unvalidated" in capsys.readouterr().err
+
+
+def test_no_validator_flags_every_loop(monkeypatch, capsys):
+    """When no validator can be built, every loop is flagged unvalidated, whatever the
+    per-loop trace says, the trace names why, and stderr says so."""
+    import brief_context as bc
+    from mix_queries import LOOP37_SPECS
+    monkeypatch.setattr(pb, "_load_retriever", lambda: None)
+    hit = types.SimpleNamespace(metadata={"scope": "global"}, header="H", doc_id="ipa_0001", section="Insight",
+                                cite="ipa_0001#1", title="T", source="ipa", score=0.9, text="passage")
+    # a trace claiming every loop was judged must not be believed without a validator
+    per_field = {k: {"backend_used": "jev", "fell_back": False} for k, _t, _q in LOOP37_SPECS}
+    mc = types.SimpleNamespace(fields={k: [hit] for k, _t, _q in LOOP37_SPECS},
+                               trace={"validation": {"per_field": per_field}})
+    monkeypatch.setattr(bc, "build_multi", lambda *a, **k: mc)
+
+    def unbuildable():
+        raise RuntimeError("jev: TYPESAFE_API_KEY is not set")
+    monkeypatch.setattr(bc, "brief_chain", unbuildable)
+    gist = {"problem": "p", "objective": "o", "audience": "a", "key_message": ""}
+    loops, trace = pb._loops_via_mix(gist, {"business_problem": {"value": "p"}})
+    assert trace["validation_degraded"] == [k for k, _t, _q in LOOP37_SPECS]
+    assert all(loops[k]["validated_by"] is None and loops[k]["validation_fell_back"] for k, _t, _q in LOOP37_SPECS)
+    assert "TYPESAFE_API_KEY" in trace["validator_unconfigured"]
+    assert "UNVALIDATED" in capsys.readouterr().err
 
 
 # ---------- change 9: clean text in, clean text out (H6 / H11 / J11) ----------
