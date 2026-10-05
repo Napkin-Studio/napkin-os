@@ -4,8 +4,16 @@
 #          eval, server, mock, layers, infra, ci, docs, features, spec
 #          (`!` after it marks a breaking change: `sdk!: …`)
 # Detail, audit ids, decisions and numbers go in the body. Merge, revert,
-# fixup! and squash! subjects pass untouched.
+# fixup! and squash! subjects skip the subject check.
+# No Co-Authored-By trailers: a commit is its author's (the feature owner's) alone.
 subject="$(grep -v '^#' "$1" | sed -n '1p')"
+
+# A commit belongs to its author, the feature's owner, alone: no co-author
+# trailers, from agents or anyone else.
+if grep -v '^#' "$1" | grep -qiE '^co-authored-by:'; then
+  echo "commit-msg: remove the Co-Authored-By trailer. A commit is attributed to its author, the feature's owner, alone." >&2
+  exit 1
+fi
 
 case "$subject" in
   Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;

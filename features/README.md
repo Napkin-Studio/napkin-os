@@ -65,8 +65,8 @@ Work on `feat/<slug>` and land it through a squash-merged PR, because pushes to
 Its `plan` names feature slugs and never copies their content.
 
 - Commits that change code must change a feature record in the same push.
-  A typo-sized fix can carry the commit trailer `Feature: none` instead. It goes in
-  the last block of the message, with no blank line before `Co-Authored-By`.
+  A typo-sized fix can carry the commit trailer `Feature: none` instead, as the
+  last line of the message.
 - Every feature record in the push must pass `scripts/feature verify`.
 - `scripts/check.sh` must pass for the CI suites the push reaches.
 

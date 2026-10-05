@@ -46,8 +46,8 @@ nobody finds out a week in that a better design was there from the start.
    The hooks enforce this. Never push to `main`.
 
 Typo-sized fixes don't need a record. Add the trailer `Feature: none` to the
-commit message instead. Put it in the last block of the message, next to any
-`Co-Authored-By`, with no blank line between them, or git won't read it as a trailer.
+commit message instead, as the last line of the message, or git won't read it as
+a trailer.
 
 Details: `features/README.md`. Schema: `features/feature.schema.json`.
 
@@ -106,6 +106,11 @@ are only for a person to set.
   a breaking change. Put the detail in the body. Use the trailer
   `Feature: none` only for typo-sized fixes. Older commits use long sentences;
   leave them as they are.
+- **Authorship:** a commit belongs to its author, the feature's owner, alone.
+  No `Co-Authored-By` trailers and no "Generated with" lines, from agents or
+  anyone else. An agent commits as the owner's git identity.
+  `.claude/settings.json` turns off Claude Code's attribution, and
+  `.githooks/commit-msg` rejects the trailer.
 - **Merging:** open a PR from the branch and squash-merge it. The PR title is
   the commit subject. Never force-push a shared branch.
 
