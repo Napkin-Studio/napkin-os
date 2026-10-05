@@ -90,7 +90,7 @@
           }
         },
         "test_plan": { "type": "array", "items": { "type": "string" } },
-        "rollout": { "type": "string", "description": "Staging and production steps, migrations, config or secrets needed, how to roll back." },
+        "rollout": { "type": "string", "description": "Staging and production steps, migrations, config or secrets needed, how to roll back. Name any terraform apply: the Deploy workflow only swaps images, so infra/ changes are live only after a person applies them, before the deploy." },
         "approved_by": { "type": "string", "description": "The person who approved this design." }
       }
     },

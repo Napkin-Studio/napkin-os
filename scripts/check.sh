@@ -79,7 +79,8 @@ else
       mock-backend/*|mock-middleware/*)
         want[mock-backend]=1 ;;
       infra/*)
-        want[terraform]=1 ;;
+        want[terraform]=1
+        infra_changed=1 ;;
       .github/workflows/*)
         notes+=("$f changed: workflows run only on GitHub; consider scripts/check.sh --all") ;;
       Dockerfile|docker-compose.yml|server/Dockerfile|.dockerignore)
@@ -87,6 +88,11 @@ else
     esac
   done < <(changed_files | sort -u)
   for n in "${notes[@]}"; do echo "note: $n"; done
+  if [[ -n "${infra_changed:-}" ]]; then
+    echo "note: infra/ changed. The Deploy workflow only swaps images, so these changes reach AWS"
+    echo "      only when a person applies them: plan and apply in infra/envs/staging BEFORE the"
+    echo "      deploy, then verify the running task definition (CLAUDE.md, Infrastructure changes)."
+  fi
 fi
 
 run_list=()
