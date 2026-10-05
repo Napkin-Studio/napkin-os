@@ -74,13 +74,18 @@ struct OpenView {
     #[serde(flatten)]
     open: OpenResult,
     token: String,
+    /// The frame's public name (`tokens::frame_id`): an app's export event
+    /// carries it, so each tab acts only on its own.
+    frame: String,
     sandbox_origin: Option<String>,
 }
 
 fn view(ctx: &AppCtx, tenant: &TenantId, person: &str, doc: &DocId, open: OpenResult) -> OpenView {
+    let token = ctx.tokens.mint(tenant, person, doc);
     OpenView {
         open,
-        token: ctx.tokens.mint(tenant, person, doc),
+        frame: crate::tokens::frame_id(&token),
+        token,
         sandbox_origin: ctx.sandbox_origin.clone(),
     }
 }
@@ -506,10 +511,11 @@ fn default_kind() -> String {
     "pdf".into()
 }
 
-/// Compose an export and tell the shell to come and get it.
+/// Compose an export and hand its handle back to the tab that asked.
 ///
-/// The event mirrors the desktop's: the shell decides what to do about it. On
-/// the desktop that is a save dialog; in a browser it is a fetch of the handle.
+/// Only in this reply: the tenant's event stream reaches every tab (in
+/// accounts mode, the whole agency), and a single-use handle broadcast there
+/// was claimed by whichever tab got to it first (features/pdf-export.clan).
 async fn export_document(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
@@ -517,25 +523,26 @@ async fn export_document(
     Json(body): Json<ExportRequestBody>,
 ) -> ApiResult<Json<Value>> {
     let kind = if body.kind == "pdf" { "pdf" } else { "html" };
-    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
-    let (html, filename) = session.compose_export(body.provenance, body.no_brand)?;
-    let tmp = export::write_temp_html(&html)?;
-    let handle = ctx.exports.stash(&tenant, tmp, filename.clone());
-    ctx.events.publish(
-        &tenant,
-        &napkin_host::HostEvent::ExportRequest {
-            kind: kind.to_string(),
-            filename,
-            tmp_html: handle.clone(),
-        },
-    );
-    Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
+    let composed = doc_session(&ctx, &tenant, &doc).and_then(|(_ws, session, _)| {
+        let (html, filename) = session.compose_export(body.provenance, body.no_brand)?;
+        Ok::<_, ApiError>((export::write_temp_html(&html)?, filename))
+    });
+    let (tmp, filename) = composed.inspect_err(|e| {
+        tracing::warn!(tenant = %tenant, doc = %doc, error = %e.0.message, "export could not be composed");
+    })?;
+    let handle = ctx.exports.stash(&tenant, tmp, filename.clone(), None);
+    Ok(Json(serde_json::json!({
+        "ok": true, "handle": handle, "filename": filename, "kind": kind,
+    })))
 }
 
 #[derive(Deserialize)]
 struct ExportKind {
     #[serde(default = "default_kind")]
     kind: String,
+    /// The asking frame's token, for an export an app made itself.
+    #[serde(default)]
+    token: Option<String>,
 }
 
 /// Claim a composed export, rendering it on the way out. Single use.
@@ -548,14 +555,16 @@ async fn export_download(
     let kind = if q.kind == "pdf" { "pdf" } else { "html" };
     let (tmp, filename) = ctx
         .exports
-        .take(&tenant, &handle)
+        .take(&tenant, &handle, q.token.as_deref())
         .ok_or_else(|| ApiError::new(404, "no such export (already claimed, or expired)"))?;
 
     // finish_export writes to a destination and consumes the source; give it a
     // temp destination and hand the bytes to the browser.
     let dest = std::env::temp_dir().join(format!("napkin-export-{handle}.{kind}"));
     let dest_str = dest.display().to_string();
-    export::finish_export(kind, &tmp, &dest_str)?;
+    export::finish_export(kind, &tmp, &dest_str).inspect_err(|e| {
+        tracing::warn!(tenant = %tenant, export = %filename, kind, error = %e.message, "export failed");
+    })?;
     let bytes = std::fs::read(&dest).map_err(|e| ApiError::new(500, e.to_string()))?;
     let _ = std::fs::remove_file(&dest);
 
