@@ -56,6 +56,19 @@ impl EventBus {
         });
     }
 
+    /// Publish an event meant for one tab: it still reaches every tab of the
+    /// tenant, carrying `frame` (`tokens::frame_id`) so the others ignore it.
+    pub fn publish_to_frame(&self, tenant: &TenantId, event: &HostEvent, frame: &str) {
+        let mut data = event.payload();
+        if let Value::Object(map) = &mut data {
+            map.insert("frame".into(), Value::String(frame.to_string()));
+        }
+        let _ = self.channel(tenant).send(ServerEvent {
+            name: event.name().to_string(),
+            data,
+        });
+    }
+
     pub fn publish_all(&self, tenant: &TenantId, events: &[HostEvent]) {
         for e in events {
             self.publish(tenant, e);

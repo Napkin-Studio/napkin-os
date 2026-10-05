@@ -96,7 +96,9 @@ ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_SEED=/srv/napkin/seed \
     PORT=8080
 # Unprivileged, and the uid the EFS access point writes as (infra/modules/services).
-RUN useradd --uid 10001 --user-group --no-create-home napkin \
+# With a home: tools it runs (Chromium, for PDF export) expect one, though the
+# host also gives each PDF render its own (features/pdf-export.clan).
+RUN useradd --uid 10001 --user-group --create-home --home-dir /home/napkin napkin \
  && mkdir -p /data && chown napkin:napkin /data
 USER napkin
 VOLUME ["/data"]

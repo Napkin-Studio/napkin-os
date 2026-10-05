@@ -255,7 +255,14 @@ export default function App() {
     // host can only compose from the markup, which for such an app is empty.
     if (await askAppToExport(kind)) return
     setBusy('Preparing the export…')
-    await host.exportCurrent(kind, false, false).catch(err => {
+    await host.exportCurrent(kind, false, false).then(saved => {
+      // a host that delivered the file itself says so here; the desktop's
+      // save dialog reports through the clan-export-request listener instead
+      if (saved) {
+        setToast({ title: 'Exported', body: `Saved ${saved}` })
+        setTimeout(() => setToast(null), 5000)
+      }
+    }).catch(err => {
       setToast({ title: 'Export failed', body: String(err), error: true })
       setTimeout(() => setToast(null), 5000)
     })

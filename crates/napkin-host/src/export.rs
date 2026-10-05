@@ -95,34 +95,72 @@ pub fn write_temp_html(html: &str) -> HostResult<String> {
     Ok(path.display().to_string())
 }
 
+/// Render `tmp_html` to a PDF at `dest` with a headless browser.
+///
+/// Chromium will not start without a home it can write its profile to, and
+/// the server may run as a user that has none (the studio's image did, and
+/// every PDF export failed). So each render gets its own temporary HOME and
+/// profile, removed afterwards; renders never share one, so two exports at
+/// once cannot lock each other out. What the renderer says on failure comes
+/// back in the error.
 pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
     let bin = find_pdf_renderer().ok_or_else(|| HostError::internal(
         "No PDF renderer found. Install 'chromium' (or Chrome), or export to HTML and print to PDF from your browser.",
     ))?;
-    let status = Command::new(&bin)
+    let home = tempfile::Builder::new()
+        .prefix("napkin-pdf-")
+        .tempdir()
+        .map_err(|e| HostError::internal(format!("no room to render the PDF: {e}")))?;
+    let out = Command::new(&bin)
+        .env("HOME", home.path())
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("XDG_CACHE_HOME")
         .args([
             "--headless=new",
             "--disable-gpu",
             "--no-sandbox",
+            // containers give /dev/shm 64 MB; Chromium needs more for a long page
+            "--disable-dev-shm-usage",
             "--no-pdf-header-footer",
             "--run-all-compositor-stages-before-draw",
             "--virtual-time-budget=2500",
         ])
+        .arg(format!(
+            "--user-data-dir={}",
+            home.path().join("profile").display()
+        ))
         .arg(format!("--print-to-pdf={dest}"))
         .arg(format!("file://{tmp_html}"))
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
+        .stderr(Stdio::piped())
+        .output()
         .map_err(|e| HostError::internal(format!("failed to run {bin}: {e}")))?;
-    if !status.success() {
+    let said = renderer_said(&out.stderr);
+    if !out.status.success() {
         return Err(HostError::internal(format!(
-            "{bin} failed to render the PDF"
+            "{bin} failed to render the PDF ({}){said}",
+            out.status
         )));
     }
     if !std::path::Path::new(dest).exists() {
-        return Err(HostError::internal("the renderer produced no PDF file"));
+        return Err(HostError::internal(format!(
+            "the renderer produced no PDF file{said}"
+        )));
     }
     Ok(())
+}
+
+/// The last few lines the renderer wrote, for an error: enough to say why,
+/// not a page of Chromium's chatter.
+fn renderer_said(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+    let tail = lines[lines.len().saturating_sub(4)..].join(" | ");
+    format!("; renderer said: {tail}")
 }
 
 /// Finish an export the shell has a destination for. `html` → copy the temp

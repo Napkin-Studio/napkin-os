@@ -97,26 +97,33 @@ async fn dispatch(
     .await;
     // An app that builds its own export (`clan://export`) gets back a temp file
     // on this server. The browser cannot fetch a server path, so it is stashed
-    // behind a handle here, as `/export` does for the export the OS composes.
-    let events: Vec<HostEvent> = resp
-        .events
-        .iter()
-        .map(|e| match e {
+    // behind a handle. The event goes to every tab of the tenant (in accounts
+    // mode, the whole agency), so it names the asking frame, and only that
+    // frame's token claims the handle: other tabs neither act on it nor can
+    // (features/pdf-export.clan).
+    for e in &resp.events {
+        match e {
             HostEvent::ExportRequest {
                 kind,
                 filename,
                 tmp_html,
-            } => HostEvent::ExportRequest {
-                kind: kind.clone(),
-                filename: filename.clone(),
-                tmp_html: ctx
-                    .exports
-                    .stash(&grant.tenant, tmp_html.clone(), filename.clone()),
-            },
-            other => other.clone(),
-        })
-        .collect();
-    ctx.events.publish_all(&grant.tenant, &events);
+            } => ctx.events.publish_to_frame(
+                &grant.tenant,
+                &HostEvent::ExportRequest {
+                    kind: kind.clone(),
+                    filename: filename.clone(),
+                    tmp_html: ctx.exports.stash(
+                        &grant.tenant,
+                        tmp_html.clone(),
+                        filename.clone(),
+                        Some(&token),
+                    ),
+                },
+                &crate::tokens::frame_id(&token),
+            ),
+            other => ctx.events.publish(&grant.tenant, other),
+        }
+    }
     into_response(resp)
 }
 
