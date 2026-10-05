@@ -33,7 +33,9 @@ contracts. "Probably fine" is not an answer.
    harness? Give the test or check that catches each. (`design.breakage`,
    `design.test_plan`)
 7. **Rollout.** What do staging and production need: migrations, config,
-   secrets, terraform? How do we roll back? (`design.rollout`)
+   a `terraform apply` (the Deploy workflow only swaps images; anything in
+   `infra/` is live only after a person applies it, before the deploy),
+   secrets? How do we roll back? (`design.rollout`)
 
 Then stop and show the owner the design. Write `status: designed` and
 `design.approved_by` only after they approve it.

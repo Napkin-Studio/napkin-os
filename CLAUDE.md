@@ -114,6 +114,37 @@ are only for a person to set.
 - **Merging:** open a PR from the branch and squash-merge it. The PR title is
   the commit subject. Never force-push a shared branch.
 
+## Infrastructure changes reach AWS only by `terraform apply`
+
+The Deploy workflow (`.github/workflows/deploy.yml`) **only swaps images**. It
+takes the newest task definition already in AWS, puts the new image into it,
+and rolls that out. Anything else under `infra/` reaches AWS only when a person
+applies Terraform: a task's environment variables (`NAPKIN_AUTH`,
+`NAPKIN_DOGFOOD`, …), secrets, ports, sizes, and every other resource.
+Merging such a change and seeing "Deploy: success" does not mean it is live.
+
+The order, every time a change touches `infra/`:
+
+1. **Plan, read, apply, before the deploy.** In `infra/envs/staging`, run
+   `AWS_PROFILE=napkin terraform plan -out=<f>.tfplan` (log in first with
+   `aws sso login --profile napkin`). Read the plan and check that it changes
+   only what the feature's `design.rollout` says it will. A person runs
+   `terraform apply <f>.tfplan`; an agent may plan and read, never apply.
+2. **Then deploy.** Merge the PR, or run
+   `gh workflow run deploy.yml -f environment=staging`. The deploy reads the
+   task definition at its rollout step, so if the merge's deploy got there
+   before the apply, deploy again.
+3. **Verify in AWS, not in the workflow.** Check that the running service's
+   revision carries the new values:
+   `aws ecs describe-services --cluster napkin-staging --services web`, then
+   `describe-task-definition` on its `taskDefinition`. Then check the
+   behaviour itself (e.g. `/api/session` on staging).
+
+Until all three are done, say "deployed, not yet live", not "live".
+(2026-10-05: roster sign-in and dogfood were merged, deployed "successfully",
+and still not live. Their settings were applied after the deploy had read the
+old task definition.)
+
 ## Never commit
 
 `.env` and `*.env`, `.napkin-dev-signing-key`, `client_briefs/`,
