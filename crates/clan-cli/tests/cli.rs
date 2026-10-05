@@ -1943,3 +1943,46 @@ fn five_agent_last_write_stress() {
         .status
         .success());
 }
+
+/// `read decisions` is an alias of `read chain` (F12): the same bytes, with
+/// the decisions in them, whatever order a decision's fields come in.
+#[test]
+fn read_decisions_is_read_chain() {
+    let dir = tempfile::tempdir().unwrap();
+    let doc = dir.path().join("d.clan");
+    let doc = doc.to_str().unwrap();
+    assert!(
+        clan(&["create", "--title", "t", "--brief", "b", "--output", doc])
+            .status
+            .success()
+    );
+    assert!(clan(&[
+        "patch-decision",
+        doc,
+        "--agent",
+        "lead",
+        "--action",
+        "signed off",
+        "--rationale",
+        "r",
+        "--pinned",
+    ])
+    .status
+    .success());
+    let decisions = clan(&["--quiet", "read", "decisions", doc]);
+    let chain = clan(&["--quiet", "read", "chain", doc]);
+    assert!(decisions.status.success() && chain.status.success());
+    assert!(!decisions.stdout.is_empty());
+    assert_eq!(
+        decisions.stdout, chain.stdout,
+        "the alias prints what it aliases"
+    );
+    let out = String::from_utf8_lossy(&decisions.stdout);
+    for line in ["agent: lead", "action: signed off", "pinned: true"] {
+        assert!(
+            out.lines()
+                .any(|l| l.trim_start_matches(['-', ' ']) == line),
+            "{line:?} in:\n{out}"
+        );
+    }
+}
