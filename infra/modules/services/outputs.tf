@@ -15,3 +15,8 @@ output "cluster" {
 output "ecr" {
   value = { for k, r in aws_ecr_repository.app : k => r.repository_url }
 }
+
+output "web_environment" {
+  description = "napkin-web's task environment, by name (no secrets)"
+  value       = { for e in local.web_environment : e.name => e.value }
+}

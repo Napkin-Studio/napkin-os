@@ -63,6 +63,16 @@ variable "certificate_arn" {
   default     = ""
 }
 
+variable "web_auth" {
+  description = "How people sign in to napkin-web: cognito (user@agency and a password, the user pool) or roster (a user name and agency on the image's roster, no password; features/no-password-sign-in.clan)"
+  type        = string
+  default     = "cognito"
+  validation {
+    condition     = contains(["cognito", "roster"], var.web_auth)
+    error_message = "web_auth is cognito or roster"
+  }
+}
+
 variable "web_count" {
   description = "Web tasks. One until app-frame tokens are shared between tasks (they live in memory)"
   type        = number

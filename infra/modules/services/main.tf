@@ -355,6 +355,28 @@ resource "aws_lb_listener" "https" {
 
 # ── task definitions (the pipeline registers new revisions) ───────────────────
 
+locals {
+  # Sign-in: the Cognito pool (passwords), or the roster the image carries
+  # (/srv/napkin/accounts.tsv, from infra/scripts/accounts.napkin.tsv; no passwords).
+  web_auth_env = var.web_auth == "roster" ? [
+    { name = "NAPKIN_AUTH", value = "roster" },
+    { name = "NAPKIN_AUTH_ROSTER", value = "/srv/napkin/accounts.tsv" },
+    ] : [
+    { name = "NAPKIN_AUTH", value = "cognito" },
+    { name = "NAPKIN_COGNITO_REGION", value = var.region },
+    { name = "NAPKIN_COGNITO_CLIENT_ID", value = var.cognito_client_id },
+  ]
+  web_environment = concat(
+    [{ name = "PORT", value = "8080" }],
+    local.web_auth_env,
+    [
+      { name = "NAPKIN_PROXY_MIDDLEWARE_URL", value = local.mw_url },
+      { name = "NAPKIN_AGENT_CAP", value = "400" }, # task submissions per agency per server start (meter.rs)
+    ],
+    local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [],
+  )
+}
+
 resource "aws_ecs_task_definition" "web" {
   family                   = "${var.name}-web"
   requires_compatibilities = ["FARGATE"]
@@ -380,15 +402,8 @@ resource "aws_ecs_task_definition" "web" {
     essential    = true
     portMappings = [{ containerPort = 8080, protocol = "tcp" }]
     mountPoints  = [{ sourceVolume = "data", containerPath = "/data" }]
-    environment = concat([
-      { name = "PORT", value = "8080" },
-      { name = "NAPKIN_AUTH", value = "cognito" },
-      { name = "NAPKIN_COGNITO_REGION", value = var.region },
-      { name = "NAPKIN_COGNITO_CLIENT_ID", value = var.cognito_client_id },
-      { name = "NAPKIN_PROXY_MIDDLEWARE_URL", value = local.mw_url },
-      { name = "NAPKIN_AGENT_CAP", value = "400" }, # task submissions per agency per server start (meter.rs)
-    ], local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [])
-    secrets = [{ name = "NAPKIN_SESSION_SECRET", valueFrom = var.session_secret_arn }]
+    environment  = local.web_environment
+    secrets      = [{ name = "NAPKIN_SESSION_SECRET", valueFrom = var.session_secret_arn }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
