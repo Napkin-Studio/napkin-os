@@ -268,10 +268,15 @@ module "services" {
   kms_key_arn                    = aws_kms_key.data.arn
   session_secret_arn             = module.identity.session_secret_arn
   cognito_client_id              = module.identity.client_id
-  github_repository              = var.github_repository
-  github_repository_ids          = var.github_repository_ids
-  certificate_arn                = var.certificate_arn
-  middleware_count               = var.middleware_count
+  # No passwords on staging: a user name and agency on the roster is enough
+  # (owner, 2026-10-05; features/no-password-sign-in.clan). Anyone who knows a
+  # roster name can sign in as that person; sign-ins are logged with their IP.
+  # The user pool stays, so `cognito` here undoes it.
+  web_auth              = "roster"
+  github_repository     = var.github_repository
+  github_repository_ids = var.github_repository_ids
+  certificate_arn       = var.certificate_arn
+  middleware_count      = var.middleware_count
   middleware_env = {
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
     # Until the middleware takes its scope from the signed-in person's agency,

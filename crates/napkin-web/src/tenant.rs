@@ -226,7 +226,7 @@ pub async fn layer(
             }
             response
         }
-        Mode::Accounts { sessions, .. } => {
+        Mode::Accounts { sessions, provider } => {
             let account = cookie_value(&parts, SESSION_COOKIE).and_then(|c| sessions.read(&c));
             let path = parts.uri.path().to_string();
             match account {
@@ -237,9 +237,14 @@ pub async fn layer(
                 }
                 None if path.starts_with("/auth/") || path == "/healthz" => {}
                 None => {
-                    let body =
-                        serde_json::json!({ "ok": false, "error": "sign in", "signin": true })
-                            .to_string();
+                    // `password` tells the sign-in screen whether to ask for one
+                    let body = serde_json::json!({
+                        "ok": false,
+                        "error": "sign in",
+                        "signin": true,
+                        "password": provider.uses_passwords(),
+                    })
+                    .to_string();
                     return Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
                         .header(header::CONTENT_TYPE, "application/json")

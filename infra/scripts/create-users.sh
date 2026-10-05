@@ -2,6 +2,8 @@
 # Make studio accounts in the Cognito user pool: `user@agency`, a display
 # name, and a temporary password printed once (the first sign-in asks for a
 # new one). Accounts that already exist are left as they are.
+# For environments that sign in with passwords (web_auth = cognito); staging
+# signs in from the roster itself (web_auth = roster), with no pool accounts needed.
 #
 #   AWS_PROFILE=napkin ./create-users.sh <user-pool-id> accounts.tsv
 #

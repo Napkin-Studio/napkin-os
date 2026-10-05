@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use napkin_host::FsConfig;
-use napkin_web::auth::{Cognito, Local, Provider, Sessions};
+use napkin_web::auth::{Cognito, Local, Provider, Roster, Sessions};
 use napkin_web::state::AppCtx;
 use napkin_web::tenant::{Identity, Mode};
 
@@ -28,6 +28,8 @@ struct Settings {
 ///   NAPKIN_AUTH=none     anonymous sessions (the default: tests and demos)
 ///   NAPKIN_AUTH=local    accounts in NAPKIN_AUTH_USERS (default <data>/accounts.json)
 ///   NAPKIN_AUTH=cognito  a Cognito user pool: NAPKIN_COGNITO_REGION, NAPKIN_COGNITO_CLIENT_ID
+///   NAPKIN_AUTH=roster   no passwords: a user name and agency on the roster file
+///                        NAPKIN_AUTH_ROSTER (`user@agency<TAB>Display name` lines)
 /// With accounts, NAPKIN_SESSION_SECRET (32+ bytes) signs the session cookies;
 /// every server behind one load balancer gets the same one.
 fn identity(data_root: &std::path::Path, secure: bool) -> Identity {
@@ -45,7 +47,14 @@ fn identity(data_root: &std::path::Path, secure: bool) -> Identity {
             &env_string("NAPKIN_COGNITO_CLIENT_ID")
                 .expect("NAPKIN_COGNITO_CLIENT_ID is required with NAPKIN_AUTH=cognito"),
         )),
-        other => panic!("NAPKIN_AUTH must be none, local or cognito (got {other:?})"),
+        "roster" => Provider::Roster(
+            Roster::new(PathBuf::from(
+                env_string("NAPKIN_AUTH_ROSTER")
+                    .expect("NAPKIN_AUTH_ROSTER is required with NAPKIN_AUTH=roster"),
+            ))
+            .unwrap_or_else(|e| panic!("{e}")),
+        ),
+        other => panic!("NAPKIN_AUTH must be none, local, cognito or roster (got {other:?})"),
     };
     Identity {
         mode: Mode::Accounts { provider, sessions },
@@ -165,6 +174,10 @@ async fn main() {
             provider: Provider::Cognito(_),
             ..
         } => "cognito",
+        Mode::Accounts {
+            provider: Provider::Roster(_),
+            ..
+        } => "roster (no passwords)",
     };
 
     let ctx = Arc::new(

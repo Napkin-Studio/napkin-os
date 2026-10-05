@@ -53,4 +53,8 @@ run "plans_with_two_agencies" {
     condition     = aws_budgets_budget.monthly["card"].cost_types[0].include_credit && !aws_budgets_budget.monthly["burn"].cost_types[0].include_credit
     error_message = "card = after credits, burn = before credits"
   }
+  assert {
+    condition     = module.services.web_environment["NAPKIN_AUTH"] == "roster" && module.services.web_environment["NAPKIN_AUTH_ROSTER"] == "/srv/napkin/accounts.tsv" && !contains(keys(module.services.web_environment), "NAPKIN_COGNITO_CLIENT_ID")
+    error_message = "staging signs in from the roster, with no password (features/no-password-sign-in.clan)"
+  }
 }

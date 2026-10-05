@@ -90,6 +90,8 @@ COPY --from=host /src/target/release/napkin-web /usr/local/bin/napkin-web
 COPY --from=device /out/apps/ /srv/napkin/seed/
 RUN rm -f /srv/napkin/seed/*.example.clan
 COPY --from=shell /src/app/dist/ /srv/napkin/dist/
+# Who may sign in when NAPKIN_AUTH=roster (staging): user@agency<TAB>Display name.
+COPY infra/scripts/accounts.napkin.tsv /srv/napkin/accounts.tsv
 
 ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_STATIC=/srv/napkin/dist \

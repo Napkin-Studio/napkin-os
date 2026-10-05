@@ -7,14 +7,18 @@
 //! Every account is named `user@agency` (no dot after the agency): the part
 //! after the `@` is the agency, whose workspace the person works in, and the
 //! whole name is the person the decision chain records. Accounts are made by
-//! an admin with a temporary password; the first sign-in asks the person to
-//! choose their own (owner, 2026-10-04: invite only, no open sign-up).
+//! an admin only (owner, 2026-10-04: invite only, no open sign-up).
 //!
-//! Who checks the password is a [`Provider`]:
+//! Who decides a sign-in is a [`Provider`]:
 //! - [`Cognito`] on AWS: the user pool holds the accounts and their passwords
-//!   (USER_PASSWORD_AUTH, NEW_PASSWORD_REQUIRED on the first sign-in);
+//!   (USER_PASSWORD_AUTH, NEW_PASSWORD_REQUIRED on the first sign-in, with
+//!   the temporary password an admin gave);
 //! - [`Local`] for development and tests: a JSON file of accounts with argon2
-//!   hashes, the same flow, no AWS.
+//!   hashes, the same flow, no AWS;
+//! - [`Roster`]: no passwords. A user name and an agency name that are on the
+//!   roster file are enough (owner, 2026-10-05, staging only). Nothing proves
+//!   the person is who they type, so every sign-in is logged with its source
+//!   IP; see features/no-password-sign-in.clan.
 //!
 //! A signed-in person carries a session cookie: their account and its expiry,
 //! signed with the server's secret (HMAC-SHA256). It is stateless, so any of
@@ -81,16 +85,24 @@ pub enum SignIn {
 pub enum Provider {
     Local(Local),
     Cognito(Cognito),
+    Roster(Roster),
 }
 
 impl Provider {
+    /// Whether signing in asks for a password. The shell shows the password
+    /// field, and the choose-password step exists, only when it does.
+    pub fn uses_passwords(&self) -> bool {
+        !matches!(self, Provider::Roster(_))
+    }
+
     pub async fn sign_in(&self, username: &str, password: &str) -> SignIn {
         let Some((username, _)) = Account::parse_username(username) else {
-            return SignIn::Refused("Use your sign-in name, like name@agency.".into());
+            return SignIn::Refused("Use your user name and your agency's name.".into());
         };
         match self {
             Provider::Local(l) => l.sign_in(&username, password),
             Provider::Cognito(c) => c.sign_in(&username, password).await,
+            Provider::Roster(r) => r.sign_in(&username),
         }
     }
 
@@ -104,6 +116,7 @@ impl Provider {
         match self {
             Provider::Local(l) => l.new_password(&username, session, new),
             Provider::Cognito(c) => c.new_password(&username, session, new).await,
+            Provider::Roster(_) => SignIn::Refused("This studio has no passwords.".into()),
         }
     }
 }
@@ -315,6 +328,76 @@ impl Local {
     }
 }
 
+// ── the roster: names, no passwords ─────────────────────────────────────────
+
+/// The people who may sign in, one per line: `user@agency<TAB>Display name`
+/// (the format of infra/scripts/accounts.napkin.tsv; `#` lines are comments).
+/// The file is read at each sign-in, so a person added to it can sign in
+/// without a restart.
+pub struct Roster {
+    path: PathBuf,
+}
+
+impl Roster {
+    /// Refuses to start on a roster that cannot be read or names no one: a
+    /// studio nobody can sign in to is a misconfiguration, not a quiet state.
+    pub fn new(path: PathBuf) -> Result<Self, String> {
+        let r = Self { path };
+        let people = r.load()?;
+        if people.is_empty() {
+            return Err(format!("the roster {} names no one", r.path.display()));
+        }
+        Ok(r)
+    }
+
+    fn load(&self) -> Result<BTreeMap<String, Option<String>>, String> {
+        let text = std::fs::read_to_string(&self.path)
+            .map_err(|e| format!("cannot read the roster {}: {e}", self.path.display()))?;
+        Ok(text
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+            .filter_map(|l| {
+                let (user, name) = l.split_once('\t').unwrap_or((l, ""));
+                let (u, _) = Account::parse_username(user)?;
+                let name = name.trim();
+                Some((u, (!name.is_empty()).then(|| name.to_string())))
+            })
+            .collect())
+    }
+
+    fn sign_in(&self, username: &str) -> SignIn {
+        match self.load() {
+            Ok(people) => match people.get(username) {
+                Some(name) => {
+                    let (u, agency) = Account::parse_username(username).unwrap_or_default();
+                    SignIn::Done(Account {
+                        username: u,
+                        agency,
+                        name: name.clone(),
+                    })
+                }
+                None => SignIn::Refused(
+                    "That name is not on this studio's list. Ask your studio admin to add you."
+                        .into(),
+                ),
+            },
+            Err(e) => SignIn::Refused(format!("Sign-in is not available right now ({e}).")),
+        }
+    }
+}
+
+/// Where a request came from, for the sign-in log: the client the load
+/// balancer saw (the first `X-Forwarded-For` entry), else `direct`.
+pub fn client_ip(headers: &axum::http::HeaderMap) -> String {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(|ip| ip.trim().to_string())
+        .filter(|ip| !ip.is_empty())
+        .unwrap_or_else(|| "direct".into())
+}
+
 // ── Amazon Cognito ──────────────────────────────────────────────────────────
 
 /// A Cognito user pool's app client (no client secret, USER_PASSWORD_AUTH).
@@ -524,6 +607,68 @@ mod tests {
             l.new_password("engineer@napkin", &session, "Another9password"),
             SignIn::Refused(_)
         ));
+    }
+
+    #[test]
+    fn a_roster_name_signs_in_without_a_password_and_others_do_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("accounts.tsv");
+        std::fs::write(
+            &path,
+            "# the studio's accounts\nengineer@napkin\tShrey\n\nmock@napkin\nnot a name\tX\n",
+        )
+        .unwrap();
+        let r = Roster::new(path.clone()).unwrap();
+        match r.sign_in("engineer@napkin") {
+            SignIn::Done(a) => {
+                assert_eq!(a.username, "engineer@napkin");
+                assert_eq!(a.agency, "napkin");
+                assert_eq!(a.name.as_deref(), Some("Shrey"));
+            }
+            other => panic!("{other:?}"),
+        }
+        match r.sign_in("mock@napkin") {
+            SignIn::Done(a) => assert_eq!(a.name, None),
+            other => panic!("{other:?}"),
+        }
+        assert!(matches!(r.sign_in("visionary@napkin"), SignIn::Refused(_)));
+        assert!(matches!(r.sign_in("engineer@javelin"), SignIn::Refused(_)));
+        // a person added to the file signs in without a restart
+        std::fs::write(
+            &path,
+            "engineer@napkin\tShrey\nvisionary@napkin\tLaurance\n",
+        )
+        .unwrap();
+        assert!(matches!(r.sign_in("visionary@napkin"), SignIn::Done(_)));
+        // a roster that names no one, or is missing, stops the server at start
+        std::fs::write(&path, "# nobody yet\n").unwrap();
+        assert!(Roster::new(path).is_err());
+        assert!(Roster::new(dir.path().join("missing.tsv")).is_err());
+    }
+
+    #[tokio::test]
+    async fn the_roster_provider_takes_no_password_and_has_no_password_step() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("accounts.tsv");
+        std::fs::write(&path, "engineer@napkin\tShrey\n").unwrap();
+        let p = Provider::Roster(Roster::new(path).unwrap());
+        assert!(!p.uses_passwords());
+        assert!(matches!(
+            p.sign_in(" Engineer@Napkin ", "").await,
+            SignIn::Done(_)
+        ));
+        assert!(matches!(
+            p.new_password("engineer@napkin", "x", "Whatever-123").await,
+            SignIn::Refused(_)
+        ));
+    }
+
+    #[test]
+    fn the_sign_in_log_names_the_client_the_load_balancer_saw() {
+        let mut h = axum::http::HeaderMap::new();
+        assert_eq!(client_ip(&h), "direct");
+        h.insert("x-forwarded-for", "203.0.113.7, 10.0.1.5".parse().unwrap());
+        assert_eq!(client_ip(&h), "203.0.113.7");
     }
 
     #[test]
