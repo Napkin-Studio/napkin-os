@@ -8,6 +8,7 @@ import { LogoSpinner } from '../brand/LogoSpinner'
 import { host } from '../host'
 import { useSpinoffTargets } from './ContinueIn'
 import ThemeToggle from './ThemeToggle'
+import { DogfoodBadge } from '../dogfood/Dogfood'
 import { signedInUser } from '../host/http'
 import { signOut } from '../shell/signOut'
 import './chrome.css'
@@ -305,6 +306,7 @@ export default function Toolbar({
         Share
       </button>
       <MoreMenu items={items} />
+      <DogfoodBadge />
       <ThemeToggle />
     </div>
   )

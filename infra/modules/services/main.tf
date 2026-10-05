@@ -374,6 +374,8 @@ locals {
       { name = "NAPKIN_AGENT_CAP", value = "400" }, # task submissions per agency per server start (meter.rs)
     ],
     local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [],
+    # the dogfood record, on the task's EFS under /data/_dogfood
+    var.web_dogfood ? [{ name = "NAPKIN_DOGFOOD", value = "1" }] : [],
   )
 }
 

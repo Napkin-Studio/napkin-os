@@ -8,6 +8,7 @@ import './index.css'
 import App from './App.tsx'
 import { isDesktop, isViewerRoute, serverless } from './host'
 import { SignInGate } from './shell/SignIn'
+import { DogfoodGate } from './dogfood/Dogfood'
 import { registerServiceWorker } from './pwa/pwa'
 
 // The desktop serves its own files; a service worker is for the web.
@@ -22,8 +23,11 @@ const FigureGallery = import.meta.env.DEV && new URLSearchParams(location.search
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {FigureGallery ? <Suspense><FigureGallery /></Suspense> : (
-      // A server with accounts asks for a sign-in before the studio opens.
-      <SignInGate check={!isDesktop && !serverless && !isViewerRoute}><App /></SignInGate>
+      // A server with accounts asks for a sign-in before the studio opens; a
+      // dogfood build (NAPKIN_DOGFOOD) then has the person acknowledge that it records.
+      <SignInGate check={!isDesktop && !serverless && !isViewerRoute}>
+        {!isDesktop && !serverless && !isViewerRoute ? <DogfoodGate><App /></DogfoodGate> : <App />}
+      </SignInGate>
     )}
   </StrictMode>,
 )

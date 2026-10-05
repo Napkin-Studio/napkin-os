@@ -8,6 +8,7 @@ import Sidebar from '../components/Sidebar'
 import AppRuntime from './AppRuntime'
 import WorkspaceView from './WorkspaceView'
 import DecisionPanel from './decisions/DecisionPanel'
+import { setScreen } from '../dogfood/recorder'
 import { useDecisions } from './decisions/useDecisions'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
@@ -63,6 +64,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
     : docTitle(open.manifest.title, open.manifest.app?.app_id, open.manifest.app?.name).text
   // The tab says it too: "Napkin Studio Research — Bulmers · Ireland".
   const brandName = brand?.name
+  // the dogfood build records where people go (a no-op elsewhere)
+  const appId = open.manifest.app?.app_id ?? null
+  useEffect(() => { setScreen({ screen: 'app', doc: docPath, app: appId }) }, [docPath, appId])
   useEffect(() => {
     document.title = brandName ? `Napkin Studio ${brandName} — ${barTitle}` : `${barTitle} — Napkin Studio`
     return () => { document.title = 'Napkin Studio' }

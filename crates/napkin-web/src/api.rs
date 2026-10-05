@@ -44,6 +44,10 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/auth/new-password", post(new_password))
         .route("/auth/sign-out", post(sign_out))
         .route("/session", get(session))
+        .route("/dogfood/events", post(crate::dogfood::post_events))
+        .route("/dogfood/consent", post(crate::dogfood::post_consent))
+        .route("/dogfood/export", get(crate::dogfood::get_export))
+        .route("/dogfood/purge", post(crate::dogfood::post_purge))
         .route("/t/{tenant}/apps", get(list_apps))
         .route("/t/{tenant}/apps/from/{doc}", post(install_from_document))
         .route("/t/{tenant}/recent", get(recent))
@@ -114,6 +118,10 @@ struct SessionInfo {
     /// The signed-in person, when this server runs with accounts.
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<crate::auth::Account>,
+    /// This build records everything (features/dogfood-telemetry.clan), and
+    /// whether this person has acknowledged that.
+    dogfood: bool,
+    consented: bool,
 }
 
 /// The shell's first call: who am I, and where do app frames live.
@@ -122,11 +130,19 @@ async fn session(
     Tenant(tenant): Tenant,
     user: Option<Extension<crate::auth::Account>>,
 ) -> Json<SessionInfo> {
+    let user = user.map(|Extension(a)| a);
+    let dogfood = ctx.dogfood.is_some() && user.is_some();
+    let consented = match (&ctx.dogfood, &user) {
+        (Some(d), Some(a)) => d.consented(&a.username),
+        _ => false,
+    };
     Json(SessionInfo {
         tenant: tenant.to_string(),
         sandbox_origin: ctx.sandbox_origin.clone(),
         quota: ctx.meter.usage(&tenant),
-        user: user.map(|Extension(a)| a),
+        user,
+        dogfood,
+        consented,
     })
 }
 

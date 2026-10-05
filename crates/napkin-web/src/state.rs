@@ -90,6 +90,8 @@ pub struct AppCtx {
     /// Origin the app frame loads from. Same-origin until the sandbox gets its
     /// own hostname, at which point this is the only thing that changes here.
     pub sandbox_origin: Option<String>,
+    /// The dogfood build's record (`NAPKIN_DOGFOOD=1`); `None` everywhere else.
+    pub dogfood: Option<Arc<crate::dogfood::Dogfood>>,
     workspaces: Mutex<HashMap<TenantId, Arc<Workspace>>>,
 }
 
@@ -109,6 +111,7 @@ impl AppCtx {
             exports: ExportStore::default(),
             meter: Meter::new(agent_cap),
             sandbox_origin,
+            dogfood: None,
             workspaces: Mutex::new(HashMap::new()),
         }
     }
@@ -116,6 +119,12 @@ impl AppCtx {
     /// Templates installed into every new workspace.
     pub fn with_seed(mut self, seed: Option<PathBuf>) -> Self {
         self.seed = seed;
+        self
+    }
+
+    /// Record everything consenting accounts do (the dogfood build).
+    pub fn with_dogfood(mut self, dogfood: Option<Arc<crate::dogfood::Dogfood>>) -> Self {
+        self.dogfood = dogfood;
         self
     }
 
