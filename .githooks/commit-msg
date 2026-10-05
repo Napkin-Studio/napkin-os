@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Commit subject: `<area>: <imperative summary>`, at most 72 characters (locked 2026-10-05).
+#   area   a component: shell, host, sdk, cli, web, wasm, desktop, apps, engine, rag,
+#          eval, server, mock, layers, infra, ci, docs, features, spec
+#          (`!` after it marks a breaking change: `sdk!: …`)
+# Detail, audit ids, decisions and numbers go in the body. Merge, revert,
+# fixup! and squash! subjects pass untouched.
+subject="$(grep -v '^#' "$1" | sed -n '1p')"
+
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
+esac
+
+fail() {
+  echo "commit-msg: $1" >&2
+  echo "  subject: $subject" >&2
+  echo "  expected: <area>: <imperative summary>  (≤72 chars), e.g. 'shell: name the tool in the OS bar'" >&2
+  exit 1
+}
+
+[[ "$subject" =~ ^[a-z][a-z0-9/-]*!?:\ [^[:space:]] ]] || fail "the subject must start with '<area>: '"
+(( ${#subject} <= 72 )) || fail "the subject is ${#subject} characters; keep it to 72 and put the detail in the body"
+exit 0

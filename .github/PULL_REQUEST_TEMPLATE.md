@@ -1,27 +1,28 @@
-## Summary
+<!-- Title = the squash commit subject: `<area>: <imperative summary>`, ≤72 chars. -->
 
-Briefly describe what this PR changes and why.
+## What and why
 
-## Related issues
+<!-- What changes for the user or the code, and why. -->
 
-Closes #
+## Feature record
 
-## Type of change
+`features/<slug>.clan`, status: <!-- designed / building / verifying / shipped -->
+<!-- or "Feature: none" for a typo-sized fix -->
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor / performance
-- [ ] Documentation
-- [ ] Build / packaging / CI
+- [ ] The design was approved before the code (`design.approved_by`)
+- [ ] `build_log`, `open_questions` and `next_step` are current
+- [ ] If the work drifted from the design, a decision records why
 
-## Checklist
+## How verified
 
-- [ ] `cargo build` passes
-- [ ] `cargo test` passes
-- [ ] `cargo clippy` reports no new warnings
-- [ ] Docs / CHANGELOG updated if needed
-- [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md)
+<!-- The commands and their results: scripts/check.sh (which suites), plus any manual run. -->
+
+## Definition of done
+
+- [ ] `scripts/check.sh` passes, and CI is green
+- [ ] There is a test for the new or changed behaviour. No old test was deleted, skipped or weakened to get green.
+- [ ] No paid or live model call in tests (mocked or replayed)
+- [ ] Docs, contracts (`docs/contracts/`) and `napkin-studio.clan` are updated, or "N/A because …"
+- [ ] Safe to deploy: merging deploys staging
 
 ## Notes for reviewers
-
-Anything reviewers should pay particular attention to.
