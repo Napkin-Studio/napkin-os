@@ -73,6 +73,12 @@ variable "web_auth" {
   }
 }
 
+variable "web_dogfood" {
+  description = "Record everything consenting accounts do in napkin-web (NAPKIN_DOGFOOD=1; features/dogfood-telemetry.clan). For a dogfood environment only, never production."
+  type        = bool
+  default     = false
+}
+
 variable "web_count" {
   description = "Web tasks. One until app-frame tokens are shared between tasks (they live in memory)"
   type        = number
