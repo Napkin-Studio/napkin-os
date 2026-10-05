@@ -14,6 +14,7 @@
 //    rewrites that base to the frame's own token URL, so app HTML runs
 //    unmodified.
 
+import { fetchFile } from './fetchFile'
 import type {
   ClientConfirmReply,
   ClientReopenReply,
@@ -159,6 +160,19 @@ function download(url: string) {
   document.body.appendChild(a)
   a.click()
   a.remove()
+}
+
+/** Save bytes already fetched, under `name`. */
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // after the click has handed the bytes to the browser
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
 // One stream per page, fanned out to the shell's listeners.
@@ -326,8 +340,11 @@ export const httpHost: Host = {
     // The server answers with an event; `finishExport` collects the file.
     await request(`/d/${requireDoc()}/export`, postJson({ kind, provenance, no_brand: noBrand }))
   },
+  // Fetched rather than linked, so a render that fails reaches the shell as
+  // "Export failed" with the server's reason, not as a silent dead download.
   finishExport: async (kind, tmpHtml, dest) => {
-    download(`${await base()}/export/${encodeURIComponent(tmpHtml)}?kind=${encodeURIComponent(kind)}`)
+    const blob = await fetchFile(`${await base()}/export/${encodeURIComponent(tmpHtml)}?kind=${encodeURIComponent(kind)}`)
+    saveBlob(blob, dest)
     return dest
   },
 
