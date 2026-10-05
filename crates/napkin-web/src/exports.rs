@@ -22,6 +22,10 @@ const TTL: Duration = Duration::from_secs(15 * 60);
 
 struct Pending {
     tenant: TenantId,
+    /// The app frame's token that asked for it, when an app did. Its handle
+    /// goes out on the tenant's event stream, which every tab of the tenant
+    /// (in accounts mode, the whole agency) hears; only this token claims it.
+    owner: Option<String>,
     tmp_html: String,
     filename: String,
     expires: Instant,
@@ -33,7 +37,16 @@ pub struct ExportStore {
 }
 
 impl ExportStore {
-    pub fn stash(&self, tenant: &TenantId, tmp_html: String, filename: String) -> String {
+    /// Stash an export. `owner` is the asking frame's token for an app's own
+    /// export; the OS export's handle goes back in the asking request's reply
+    /// only, so it needs none.
+    pub fn stash(
+        &self,
+        tenant: &TenantId,
+        tmp_html: String,
+        filename: String,
+        owner: Option<&str>,
+    ) -> String {
         let handle = uuid::Uuid::new_v4().simple().to_string();
         let mut pending = self.pending.lock().unwrap();
         self.sweep(&mut pending);
@@ -41,6 +54,7 @@ impl ExportStore {
             handle.clone(),
             Pending {
                 tenant: tenant.clone(),
+                owner: owner.map(String::from),
                 tmp_html,
                 filename,
                 expires: Instant::now() + TTL,
@@ -50,12 +64,21 @@ impl ExportStore {
     }
 
     /// Claim an export. Single use: the temp file is consumed by rendering it.
-    /// A handle belonging to another tenant reads as absent.
-    pub fn take(&self, tenant: &TenantId, handle: &str) -> Option<(String, String)> {
+    /// A handle of another tenant, or an owned one claimed without its
+    /// owner's token, reads as absent and stays for its owner.
+    pub fn take(
+        &self,
+        tenant: &TenantId,
+        handle: &str,
+        token: Option<&str>,
+    ) -> Option<(String, String)> {
         let mut pending = self.pending.lock().unwrap();
         self.sweep(&mut pending);
         // Another tenant's handle reads as absent, not as forbidden.
-        pending.get(handle).filter(|p| &p.tenant == tenant)?;
+        pending
+            .get(handle)
+            .filter(|p| &p.tenant == tenant)
+            .filter(|p| p.owner.is_none() || p.owner.as_deref() == token)?;
         let p = pending.remove(handle)?;
         Some((p.tmp_html, p.filename))
     }
@@ -83,15 +106,26 @@ mod tests {
         let a = TenantId::mint();
         let b = TenantId::mint();
 
-        let handle = store.stash(&a, "/tmp/x.html".into(), "brief".into());
+        let handle = store.stash(&a, "/tmp/x.html".into(), "brief".into(), None);
         assert!(
-            store.take(&b, &handle).is_none(),
+            store.take(&b, &handle, None).is_none(),
             "another tenant must not claim it"
         );
-        assert_eq!(store.take(&a, &handle).unwrap().1, "brief");
+        assert_eq!(store.take(&a, &handle, None).unwrap().1, "brief");
         assert!(
-            store.take(&a, &handle).is_none(),
+            store.take(&a, &handle, None).is_none(),
             "a claimed export is gone"
         );
+    }
+
+    #[test]
+    fn an_apps_export_is_claimed_only_with_its_frames_token() {
+        let store = ExportStore::default();
+        let a = TenantId::mint();
+        let handle = store.stash(&a, "/tmp/y.html".into(), "brief".into(), Some("frame-a"));
+        assert!(store.take(&a, &handle, None).is_none());
+        assert!(store.take(&a, &handle, Some("frame-b")).is_none());
+        // the failed claims leave it for its owner
+        assert_eq!(store.take(&a, &handle, Some("frame-a")).unwrap().1, "brief");
     }
 }

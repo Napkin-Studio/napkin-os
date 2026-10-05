@@ -19,6 +19,15 @@ use napkin_host::DocId;
 
 use crate::tenant::TenantId;
 
+/// A frame's public name: the tab that holds `token` knows it, and an event
+/// meant for that tab carries it, while the token itself (the authority over
+/// the document) never goes on the tenant's shared event stream.
+pub fn frame_id(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("napkin:frame:{token}").as_bytes());
+    digest[..16].iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// Long enough to survive a working session on one document, short enough that
 /// a token pasted somewhere it should not be goes stale.
 const TTL: Duration = Duration::from_secs(12 * 60 * 60);
