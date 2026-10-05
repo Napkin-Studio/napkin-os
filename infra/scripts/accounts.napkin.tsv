@@ -1,4 +1,8 @@
 # The studio's own accounts (owner, 2026-10-04). user@agency<TAB>Display name
+# Staging's sign-in roster (NAPKIN_AUTH=roster, no passwords; the image carries
+# this file as /srv/napkin/accounts.tsv): a person added here can sign in after
+# the next deploy. create-users.sh makes the same accounts in the Cognito pool
+# for an environment that keeps passwords.
 visionary@napkin	Laurance
 engineer@napkin	Shrey
 developer@napkin	Sai
