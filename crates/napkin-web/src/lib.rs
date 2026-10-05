@@ -15,6 +15,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod dogfood;
 pub mod error;
 pub mod events;
 pub mod exports;
@@ -92,6 +93,11 @@ pub fn router_with(
         .nest(
             "/api",
             api::router()
+                // inside the tenant layer, so it knows the signed-in account
+                .layer(axum::middleware::from_fn_with_state(
+                    ctx.clone(),
+                    dogfood::capture_api,
+                ))
                 .layer(DefaultBodyLimit::max(UPLOAD_MAX))
                 .layer(axum::middleware::from_fn_with_state(
                     identity.clone(),

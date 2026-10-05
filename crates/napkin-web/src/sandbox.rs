@@ -85,7 +85,8 @@ async fn dispatch(
         Err(e) => return refuse(status_of(e.status), &e.message),
     };
 
-    let req = HostRequest::new(path, query.unwrap_or_default(), body.to_vec());
+    let started = std::time::Instant::now();
+    let req = HostRequest::new(path.clone(), query.unwrap_or_default(), body.to_vec());
     // The grant, not the request, says who this is: an app frame cannot name
     // its own actor or scope.
     let resp = napkin_host::dispatch_async(
@@ -117,7 +118,24 @@ async fn dispatch(
         })
         .collect();
     ctx.events.publish_all(&grant.tenant, &events);
-    into_response(resp)
+    let response = into_response(resp);
+    // the dogfood build records the call, body and all (a no-op elsewhere)
+    if ctx.dogfood.is_some() {
+        crate::dogfood::capture_sandbox(
+            &ctx,
+            crate::dogfood::SandboxCall {
+                person: &grant.person,
+                doc: grant.doc.as_str(),
+                app: session.app_id(),
+                path: &path,
+                method: method.as_str(),
+                body: &body,
+                status: response.status(),
+                start: started,
+            },
+        );
+    }
+    response
 }
 
 fn status_of(code: u16) -> StatusCode {
