@@ -71,5 +71,8 @@ Its `plan` names feature slugs and never copies their content.
 - `scripts/check.sh` must pass for the CI suites the push reaches.
 
 `.clan` files are ZIP archives (`*.clan binary` in `.gitattributes`). One
-record per feature keeps two people from editing the same file. If two
-branches do touch the same record, resolve it with `clan merge`, not by hand.
+record per feature keeps two people from editing the same file. `clan merge`
+only joins branches made by `clan fork`. Two copies edited separately in git
+can't be merged by any tool yet. If that happens, keep the version with more
+work in it, re-apply the other side's changes with `clan patch-*`, and record a
+decision saying so.
