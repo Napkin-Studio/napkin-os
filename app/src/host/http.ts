@@ -14,6 +14,7 @@
 //    rewrites that base to the frame's own token URL, so app HTML runs
 //    unmodified.
 
+import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
 import type {
   ClientConfirmReply,
@@ -47,6 +48,8 @@ export async function signedInUser(): Promise<SessionInfo['user'] | null> {
 /** An opened document, plus what the frame needs to talk to the host. */
 interface OpenView extends OpenResult {
   token: string
+  /** The frame's public name: an app's export event carries it. */
+  frame?: string
   sandbox_origin: string | null
 }
 
@@ -70,6 +73,7 @@ async function base(): Promise<string> {
 // contract is not, so the current one lives here.
 let openDoc: string | null = null
 let openToken: string | null = null
+let openFrame: string | null = null
 let sandboxOrigin: string | null = null
 
 function requireDoc(): string {
@@ -147,6 +151,7 @@ async function adopt(request: Promise<OpenView>): Promise<OpenResult> {
   if (mine === opens) {
     openDoc = view.path
     openToken = view.token
+    openFrame = view.frame ?? null
     sandboxOrigin = view.sandbox_origin
   }
   return view
@@ -336,14 +341,23 @@ export const httpHost: Host = {
   saveClanTo: async () => {
     download(`${await base()}/d/${requireDoc()}/download`)
   },
+  // The handle comes back in this reply and nowhere else: the event stream
+  // reaches every tab of the tenant (the whole agency, with accounts), and a
+  // handle broadcast there went to whichever tab claimed it first.
   exportCurrent: async (kind, provenance, noBrand) => {
-    // The server answers with an event; `finishExport` collects the file.
-    await request(`/d/${requireDoc()}/export`, postJson({ kind, provenance, no_brand: noBrand }))
+    const r = await request(`/d/${requireDoc()}/export`, postJson({ kind, provenance, no_brand: noBrand }))
+    const { handle, filename } = (await r.json()) as { handle: string; filename: string }
+    const name = `${filename}.${kind}`
+    const blob = await fetchFile(`${await base()}/export/${encodeURIComponent(handle)}?kind=${encodeURIComponent(kind)}`)
+    saveBlob(blob, name)
+    return name
   },
-  // Fetched rather than linked, so a render that fails reaches the shell as
-  // "Export failed" with the server's reason, not as a silent dead download.
+  // An app's own export: claimed with this tab's frame token, the only key
+  // that opens it. Fetched rather than linked, so a failure reaches the shell
+  // as "Export failed" with the server's reason.
   finishExport: async (kind, tmpHtml, dest) => {
-    const blob = await fetchFile(`${await base()}/export/${encodeURIComponent(tmpHtml)}?kind=${encodeURIComponent(kind)}`)
+    const token = openToken ? `&token=${encodeURIComponent(openToken)}` : ''
+    const blob = await fetchFile(`${await base()}/export/${encodeURIComponent(tmpHtml)}?kind=${encodeURIComponent(kind)}${token}`)
     saveBlob(blob, dest)
     return dest
   },
@@ -388,7 +402,10 @@ export const httpHost: Host = {
     const source = await events()
     const listener = (e: MessageEvent<string>) => {
       try {
-        handler(JSON.parse(e.data) as HostEvents[K])
+        const payload = JSON.parse(e.data)
+        // an export another tab asked for is not this tab's to claim
+        if (event === 'clan-export-request' && !isMyExport(payload, openFrame)) return
+        handler(payload as HostEvents[K])
       } catch {
         console.warn(`malformed ${event} event`, e.data)
       }

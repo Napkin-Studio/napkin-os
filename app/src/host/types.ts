@@ -432,7 +432,7 @@ export interface HostEvents {
   'clan-open-document': string
   'clan-open-file-request': null
   'clan-request-save': null
-  'clan-export-request': { kind: string; filename: string; tmpHtml: string }
+  'clan-export-request': { kind: string; filename: string; tmpHtml: string; frame?: string }
   'clan-title-changed': string
   'napkin-notify': { title: string; body: string }
   'clan-theme-changed': Record<string, string>
@@ -552,7 +552,8 @@ export interface Host {
 
   // ── Getting bytes out ─────────────────────────────────────────────────────
   saveClanTo(path: string): Promise<void>
-  exportCurrent(kind: 'html' | 'pdf', provenance: boolean, noBrand: boolean): Promise<void>
+  /** Resolves with the saved file's name when the host delivered it itself (the browser), or nothing when a `clan-export-request` event follows (the desktop). */
+  exportCurrent(kind: 'html' | 'pdf', provenance: boolean, noBrand: boolean): Promise<string | void>
   finishExport(kind: string, tmpHtml: string, dest: string): Promise<string>
   /** Ask the user where a .clan or an export should go. `null` if cancelled. */
   pickSaveDestination(defaultName: string, ext: string): Promise<string | null>
