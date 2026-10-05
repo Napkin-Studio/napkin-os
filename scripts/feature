@@ -81,15 +81,22 @@ case "$cmd" in
       --brief "Design, then build, the feature: $title. Read agent/context.md first." --output "$f"
     sed -e "s/{{slug}}/$slug/g" -e "s/{{title}}/${title//\//\\/}/g" "$dir/context-template.md" \
       | q clan patch-context "$f" -
-    branch="feat/$slug"
+    # The branch the work happens on: the current one when it is already this
+    # feature's (`fix/<slug>`, `feat/<slug>`, ...), else the default feat/<slug>.
+    current="$(git branch --show-current)"
+    if [[ "$current" =~ ^(feat|fix|docs|chore|eval|refactor|spike)/$slug$ ]]; then
+      branch="$current"
+    else
+      branch="feat/$slug"
+    fi
     jq -n --arg slug "$slug" --arg title "$title" --arg owner "$owner" --arg branch "$branch" \
       '{slug:$slug, title:$title, owner:$owner, status:"exploring", branch:$branch,
         next_step:"Answer the design questions in agent/context.md, then show the owner."}' \
       | q clan patch-data "$f" - --agent "$agent" --action "opened feature" \
           --rationale "Feature record created; design comes before code." 
     echo "created features/$slug.clan (status: exploring)"
-    echo "next: git switch -c $branch   (if you are not on it yet)"
-    echo "      scripts/feature show $slug"
+    [[ "$branch" == "$current" ]] || echo "next: git switch -c $branch"
+    echo "next: scripts/feature show $slug"
     ;;
 
   list)
