@@ -127,10 +127,27 @@ async fn session(
 
 // ── Signing in ───────────────────────────────────────────────────────────────
 
+/// `{user, agency}` (the sign-in screen), or `{username: "user@agency"}` as
+/// before. `password` is ignored where the provider has none.
 #[derive(serde::Deserialize)]
 struct SignInBody {
-    username: String,
+    #[serde(default)]
+    username: Option<String>,
+    #[serde(default)]
+    user: Option<String>,
+    #[serde(default)]
+    agency: Option<String>,
+    #[serde(default)]
     password: String,
+}
+
+impl SignInBody {
+    fn sign_in_name(&self) -> String {
+        match (&self.user, &self.agency) {
+            (Some(u), Some(a)) => format!("{}@{}", u.trim(), a.trim()),
+            _ => self.username.clone().unwrap_or_default(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -178,12 +195,28 @@ fn answer(identity: &crate::tenant::Identity, out: crate::auth::SignIn) -> Respo
 
 async fn sign_in(
     Extension(identity): Extension<Arc<crate::tenant::Identity>>,
+    headers: header::HeaderMap,
     Json(b): Json<SignInBody>,
 ) -> Response {
     let crate::tenant::Mode::Accounts { provider, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
-    let out = provider.sign_in(&b.username, &b.password).await;
+    let name = b.sign_in_name();
+    let out = provider.sign_in(&name, &b.password).await;
+    // Every attempt, with where it came from: under the roster nothing else
+    // proves who signed in, so this log is how a misuse would be traced.
+    let outcome = match &out {
+        crate::auth::SignIn::Done(_) => "signed in",
+        crate::auth::SignIn::NewPassword { .. } => "new password asked",
+        crate::auth::SignIn::Refused(_) => "refused",
+    };
+    tracing::info!(
+        target: "napkin_web::sign_in",
+        account = %name.trim().to_ascii_lowercase(),
+        ip = %crate::auth::client_ip(&headers),
+        outcome,
+        "sign-in"
+    );
     answer(&identity, out)
 }
 
@@ -194,6 +227,9 @@ async fn new_password(
     let crate::tenant::Mode::Accounts { provider, .. } = &identity.mode else {
         return refused(StatusCode::NOT_FOUND, "sign-in is off on this server");
     };
+    if !provider.uses_passwords() {
+        return refused(StatusCode::NOT_FOUND, "this studio has no passwords");
+    }
     let out = provider
         .new_password(&b.username, &b.session, &b.password)
         .await;

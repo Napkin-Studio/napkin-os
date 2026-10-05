@@ -1409,3 +1409,135 @@ async fn a_person_signs_in_as_user_at_agency_and_chooses_their_password_first() 
         .any(|v| v.to_str().unwrap().contains("Max-Age=0")));
     let _ = &s.ctx;
 }
+
+// ── The roster (NAPKIN_AUTH=roster): a name and an agency, no password ───────
+
+fn roster_server(roster: &str) -> Server {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = Arc::new(AppCtx::new(
+        dir.path().to_path_buf(),
+        Arc::new(NoConfig),
+        None,
+        40,
+    ));
+    let path = dir.path().join("accounts.tsv");
+    std::fs::write(&path, roster).unwrap();
+    let identity = napkin_web::tenant::Identity {
+        mode: napkin_web::tenant::Mode::Accounts {
+            provider: napkin_web::auth::Provider::Roster(
+                napkin_web::auth::Roster::new(path).unwrap(),
+            ),
+            // the same key as accounts_server(): one deployment, switched
+            sessions: napkin_web::auth::Sessions::new(&[9u8; 32]).unwrap(),
+        },
+        secure: false,
+    };
+    let app = napkin_web::router_with(ctx.clone(), None, Arc::new(identity));
+    Server {
+        _dir: dir,
+        ctx,
+        app,
+    }
+}
+
+#[tokio::test]
+async fn a_person_on_the_roster_signs_in_with_their_name_and_agency_alone() {
+    let s = roster_server("engineer@napkin\tShrey\nvisionary@napkin\tLaurance\n");
+
+    // the sign-in screen is told there is no password to ask for
+    let r = send(&s, request("GET", "/api/session", None, Body::empty())).await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(r.json()["signin"], true);
+    assert_eq!(r.json()["password"], false);
+
+    let r = send(
+        &s,
+        json_req(
+            "/api/auth/sign-in",
+            None,
+            serde_json::json!({"user": " Engineer ", "agency": "Napkin"}),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    let mine = session_cookie(&r);
+    let me = send(
+        &s,
+        request("GET", "/api/session", Some(&mine), Body::empty()),
+    )
+    .await
+    .json();
+    assert_eq!(me["user"]["username"], "engineer@napkin");
+    assert_eq!(me["user"]["name"], "Shrey");
+    assert_eq!(
+        me["tenant"],
+        napkin_web::tenant::TenantId::of_agency("napkin").to_string()
+    );
+
+    // the old body shape still works
+    let r = send(
+        &s,
+        json_req(
+            "/api/auth/sign-in",
+            None,
+            serde_json::json!({"username": "visionary@napkin"}),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+
+    // names off the roster, and a known user in another agency, are refused
+    for body in [
+        serde_json::json!({"user": "intruder", "agency": "napkin"}),
+        serde_json::json!({"user": "engineer", "agency": "javelin"}),
+        serde_json::json!({"user": "engineer", "agency": ""}),
+    ] {
+        let r = send(&s, json_req("/api/auth/sign-in", None, body.clone())).await;
+        assert_eq!(r.status, StatusCode::UNAUTHORIZED, "{body}");
+        assert!(r.json()["error"].as_str().unwrap().len() > 0);
+    }
+
+    // there is no password step to reach
+    let r = send(
+        &s,
+        json_req(
+            "/api/auth/new-password",
+            None,
+            serde_json::json!({"username": "engineer@napkin", "session": "x", "password": "Anything-123"}),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_session_from_before_the_switch_to_the_roster_still_signs_in() {
+    // signed in on the password server...
+    let (before, local) = accounts_server();
+    local
+        .add("engineer@napkin", "Temporary-1234", Some("Shrey"))
+        .unwrap();
+    let r = send(
+        &before,
+        json_req(
+            "/api/auth/sign-in",
+            None,
+            serde_json::json!({"username": "engineer@napkin", "password": "Temporary-1234"}),
+        ),
+    )
+    .await;
+    let c = r.json()["session"].as_str().unwrap().to_string();
+    let r = send(&before, json_req("/api/auth/new-password", None,
+        serde_json::json!({"username": "engineer@napkin", "session": c, "password": "MyOwnPassword9"}))).await;
+    let cookie = session_cookie(&r);
+
+    // ...the same cookie is a session on the roster server with the same key
+    let after = roster_server("engineer@napkin\tShrey\n");
+    let r = send(
+        &after,
+        request("GET", "/api/session", Some(&cookie), Body::empty()),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK);
+    assert_eq!(r.json()["user"]["username"], "engineer@napkin");
+}
