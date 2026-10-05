@@ -1,3 +1,6 @@
 # Shell scripts must stay LF so they run on the Linux/macOS CI runners
 # (a CRLF script breaks `bash` with a bad-interpreter / syntax error).
 *.sh text eol=lf
+
+# Feature records and other CLAN documents are ZIP archives: never diff or merge them as text.
+*.clan binary

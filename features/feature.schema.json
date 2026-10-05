@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Napkin Studio feature record",
+  "description": "shared/data.yaml of a features/<slug>.clan. One file per feature: the design that was agreed before any code, and the build as it went. Written only through the clan CLI (scripts/feature wraps the common writes).",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "title": { "type": "string" },
+    "owner": { "type": "string", "description": "Who answers for the feature (a person, not an agent)." },
+    "status": {
+      "description": "exploring → designed (the design is approved) → building → verifying → shipped. abandoned at any point, with the reason as a decision.",
+      "enum": ["exploring", "designed", "building", "verifying", "shipped", "abandoned"]
+    },
+    "branch": { "type": "string" },
+
+    "problem": { "type": "string", "description": "What is wrong or missing today, and for whom." },
+    "done_when": {
+      "type": "array", "items": { "type": "string" },
+      "description": "Acceptance: observable facts that are true when the feature is finished."
+    },
+    "non_goals": { "type": "array", "items": { "type": "string" } },
+
+    "design": {
+      "type": "object",
+      "description": "Answered BEFORE any code is written. Status may not leave `exploring` until every part is filled and the owner has approved it.",
+      "properties": {
+        "prior_art": {
+          "type": "array",
+          "description": "Code, contracts and earlier features this builds on or could reuse. Paths, not impressions.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "what": { "type": "string" },
+              "reuse": { "type": "string", "description": "How the feature uses it, or why it can't." }
+            },
+            "required": ["path", "what"]
+          }
+        },
+        "approaches": {
+          "type": "array",
+          "description": "At least two ways in, compared honestly. One is chosen; the others say why not.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "summary": { "type": "string" },
+              "cost": { "type": "string", "description": "Build cost, and run cost: latency, tokens, money, ops." },
+              "chosen": { "type": "boolean" },
+              "why": { "type": "string", "description": "Why chosen, or why rejected." }
+            },
+            "required": ["name", "summary", "chosen", "why"]
+          }
+        },
+        "rework_risks": {
+          "type": "array",
+          "description": "Things that would make us redo work or slow the process later: repeated calls, wrong layer, a shape we will outgrow, a contract we will have to break, work done twice. Each says how the design avoids it.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "risk": { "type": "string" },
+              "avoided_by": { "type": "string" }
+            },
+            "required": ["risk", "avoided_by"]
+          }
+        },
+        "touches": {
+          "type": "array",
+          "description": "Repo areas the change reaches.",
+          "items": {
+            "enum": ["clan-sdk", "clan-cli", "napkin-host", "napkin-web", "napkin-wasm", "app-shell", "app-tauri", "app-templates", "engine", "server", "mock-backend", "mock-middleware", "mock-agent", "layers-service", "infra", "ci", "spec", "docs"]
+          }
+        },
+        "contracts": {
+          "type": "array",
+          "description": "Interfaces whose shape changes (docs/contracts/*, a .clan schema, an HTTP route, a CLI flag, a terraform output). Say who else reads each one.",
+          "items": { "type": "string" }
+        },
+        "breakage": {
+          "type": "array",
+          "description": "What could break, and the test or check that would catch it.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "risk": { "type": "string" },
+              "guard": { "type": "string" }
+            },
+            "required": ["risk", "guard"]
+          }
+        },
+        "test_plan": { "type": "array", "items": { "type": "string" } },
+        "rollout": { "type": "string", "description": "Staging and production steps, migrations, config or secrets needed, how to roll back." },
+        "approved_by": { "type": "string", "description": "The person who approved this design." }
+      }
+    },
+
+    "build_log": {
+      "type": "array",
+      "description": "One entry per meaningful step: what changed, where, and the commit.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string" },
+          "commit": { "type": "string" },
+          "summary": { "type": "string" }
+        },
+        "required": ["date", "summary"]
+      }
+    },
+    "open_questions": { "type": "array", "items": { "type": "string" } },
+    "next_step": { "type": "string", "description": "What a person or agent picking this up should do first." },
+    "last_check": {
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "commit": { "type": "string" },
+        "result": { "enum": ["pass", "fail"] },
+        "suites": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "required": ["slug", "title", "status"]
+}

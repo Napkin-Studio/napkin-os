@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Commit subject: `<area>: <imperative summary>`, at most 72 characters (locked 2026-10-05).
+#   area   a component: shell, host, sdk, cli, web, wasm, desktop, apps, engine, rag,
+#          eval, server, mock, layers, infra, ci, docs, features, spec
+#          (`!` after it marks a breaking change: `sdk!: …`)
+# Detail, audit ids, decisions and numbers go in the body. Merge, revert,
+# fixup! and squash! subjects skip the subject check.
+# No Co-Authored-By trailers: a commit is its author's (the feature owner's) alone.
+subject="$(grep -v '^#' "$1" | sed -n '1p')"
+
+# A commit belongs to its author, the feature's owner, alone: no co-author
+# trailers, from agents or anyone else.
+if grep -v '^#' "$1" | grep -qiE '^co-authored-by:'; then
+  echo "commit-msg: remove the Co-Authored-By trailer. A commit is attributed to its author, the feature's owner, alone." >&2
+  exit 1
+fi
+
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
+esac
+
+fail() {
+  echo "commit-msg: $1" >&2
+  echo "  subject: $subject" >&2
+  echo "  expected: <area>: <imperative summary>  (≤72 chars), e.g. 'shell: name the tool in the OS bar'" >&2
+  exit 1
+}
+
+[[ "$subject" =~ ^[a-z][a-z0-9/-]*!?:\ [^[:space:]] ]] || fail "the subject must start with '<area>: '"
+(( ${#subject} <= 72 )) || fail "the subject is ${#subject} characters; keep it to 72 and put the detail in the body"
+exit 0

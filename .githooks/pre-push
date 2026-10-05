@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Pre-push gate. Turn it on once per clone:  git config core.hooksPath .githooks
+#
+# main is never pushed to: it moves only by squash-merged PRs, and a push to it
+# deploys staging. For each other ref being pushed:
+#   1. scripts/check.sh over the pushed commits: the CI suites those changes reach.
+#   2. The feature record. Commits that change code must also change a features/<slug>.clan,
+#      unless every one of them carries a `Feature: none` trailer (typo-sized fixes).
+#      Each feature record in the push must pass `scripts/feature verify`: past
+#      `exploring`, its design is complete and approved.
+#
+# Only a person may bypass it: NAPKIN_ALLOW_MAIN=1 permits a push to main,
+# NAPKIN_SKIP_CHECKS=1 skips step 1, and NAPKIN_NO_FEATURE=1 skips step 2.
+# Agents never bypass it, and never use --no-verify.
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+zero=0000000000000000000000000000000000000000
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_sha" == "$zero" ]] && continue          # deleting a remote ref
+  if [[ "$remote_ref" == refs/heads/main && "${NAPKIN_ALLOW_MAIN:-}" != 1 ]]; then
+    echo "pre-push: main is reached only by a squash-merged PR (a push to main deploys staging)."
+    echo "  Push a branch instead: git switch -c feat/<slug> && git push -u origin feat/<slug>"
+    status=1
+    continue
+  fi
+  if [[ "$remote_sha" == "$zero" ]] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
+    base="$(git merge-base origin/main "$local_sha" 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)"
+  else
+    base="$remote_sha"
+  fi
+  range="$base..$local_sha"
+  [[ -z "$(git rev-list "$range")" ]] && continue
+  echo "pre-push: ${remote_ref#refs/heads/} ← $(git rev-list --count "$range") commit(s)"
+
+  # 1. checks
+  if [[ "${NAPKIN_SKIP_CHECKS:-}" == 1 ]]; then
+    echo "pre-push: checks skipped (NAPKIN_SKIP_CHECKS=1)"
+  elif ! scripts/check.sh --range "$range"; then
+    status=1
+  fi
+
+  # 2. feature record
+  if [[ "${NAPKIN_NO_FEATURE:-}" == 1 ]]; then
+    echo "pre-push: feature record skipped (NAPKIN_NO_FEATURE=1)"
+    continue
+  fi
+  files="$(git diff --name-only "$range")"
+  code="$(grep -vE '^(features/|docs/|.*\.md$|[^/]+\.clan$|\.claude/|LICENSE|NOTICE|\.githooks/|\.gitignore$|\.gitattributes$)' <<<"$files" || true)"
+  clans="$(grep -E '^features/[^/]+\.clan$' <<<"$files" || true)"
+  if [[ -n "$code" && -z "$clans" ]]; then
+    untagged="$(git log --format='%h %s%n%(trailers:key=Feature,valueonly)%x00' "$range" \
+      | awk 'BEGIN{RS="\0"} { sub(/^\n+/, "") } NF { n=split($0, l, "\n"); tagged=0; for (i=2;i<=n;i++) if (l[i] ~ /^ *none *$/) tagged=1; if (!tagged) print l[1] }')"
+    if [[ -n "$untagged" ]]; then
+      echo "pre-push: these commits change code but no features/<slug>.clan changed with them:"
+      sed 's/^/    /' <<<"$untagged"
+      echo "  Record the work: scripts/feature log <slug> \"<summary>\" (or scripts/feature new …),"
+      echo "  or, for a typo-sized fix, add the trailer 'Feature: none' to the commit."
+      status=1
+    fi
+  fi
+  if [[ -n "$clans" ]]; then
+    tmpd="$(mktemp -d)"
+    picked=()
+    while IFS= read -r c; do
+      git cat-file -e "$local_sha:$c" 2>/dev/null || continue   # removed in this push
+      git show "$local_sha:$c" >"$tmpd/$(basename "$c")"
+      picked+=("$tmpd/$(basename "$c")")
+    done <<<"$clans"
+    if [[ ${#picked[@]} -gt 0 ]] && ! scripts/feature verify "${picked[@]}"; then
+      echo "pre-push: a feature record is past 'exploring' without a complete, approved design"
+      status=1
+    fi
+    rm -rf "$tmpd"
+  fi
+done
+
+[[ $status -eq 0 ]] || echo "pre-push: push refused. Fix the above and push again."
+exit $status

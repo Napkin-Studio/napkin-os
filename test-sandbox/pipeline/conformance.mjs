@@ -212,8 +212,18 @@ r = clan(['create', '--title', 'AgentOnly', '--brief', 'b', '--no-render', '--ou
 }
 
 // ---------- T21 read decisions alias (F12) ----------
-r = clan(['read', 'decisions', 'doc.clan'])
-record('T21', 'read decisions == read chain (F12)', r.code === 0 && /- agent:/.test(r.out), r.out.slice(0, 200))
+// `decisions` is an alias of `chain`: the two print the same bytes, and the
+// output holds T18's pinned decision. Keys are matched wherever they sit in an
+// entry, since a decision's field order is the format's to choose (an `id` now
+// comes first).
+{
+  const d = clan(['read', 'decisions', 'doc.clan'])
+  const c = clan(['read', 'chain', 'doc.clan'])
+  const holds = /^\s*-?\s*agent: lead$/m.test(d.stdout) && /^\s*-?\s*action: signed off$/m.test(d.stdout) && /^\s*-?\s*pinned: true$/m.test(d.stdout)
+  record('T21', 'read decisions == read chain (F12)',
+    d.code === 0 && c.code === 0 && d.stdout.length > 0 && d.stdout === c.stdout && holds,
+    `decisions(${d.code}) vs chain(${c.code}), same=${d.stdout === c.stdout}, holds=${holds} :: ${d.out.slice(0, 160)}`)
+}
 
 // ---------- T22 export-static carries the full handoff surface ----------
 {

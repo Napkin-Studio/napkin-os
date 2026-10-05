@@ -1,6 +1,8 @@
 .DS_Store
 .agents/
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/settings.json
 *.clan.bak
 # The project plan is a local working file, shared with teammates directly (Sai, 2026-09-29)
 /project_plan.clan

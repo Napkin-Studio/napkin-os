@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Feature records: one features/<slug>.clan per feature, holding the design
+# agreed before any code and the build as it goes. See features/README.md.
+#
+#   scripts/feature new <slug> "<title>" [--owner NAME]
+#   scripts/feature list
+#   scripts/feature show <slug>                 the agent context (read this first)
+#   scripts/feature status <slug> <status>      exploring|designed|building|verifying|shipped|abandoned
+#   scripts/feature log <slug> "<summary>"      build_log entry at HEAD
+#   scripts/feature checked <slug> pass|fail "<suites>"
+#   scripts/feature verify [<file.clan>...]     the design gate (pre-push runs it)
+#
+# Every write is attributed: --agent is $FEATURE_AGENT, else git user.name.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+dir="$root/features"
+schema="$dir/feature.schema.json"
+agent="${FEATURE_AGENT:-$(git config user.name || echo unknown)}"
+export CLAN_NO_HINTS=1
+
+# Run quietly; show the CLI's own output only when it fails.
+q() { local out; out="$("$@" 2>&1)" || { echo "$out" >&2; return 1; }; }
+die() { echo "feature: $*" >&2; exit 1; }
+need_clan() { command -v clan >/dev/null || die "the clan CLI is not on PATH (cargo install --path crates/clan-cli)"; }
+file_of() {
+  [[ -n "${1:-}" ]] || die "missing <slug>"
+  local f="$dir/$1.clan"
+  [[ -f "$f" ]] || die "no feature '$1' ($f)"
+  echo "$f"
+}
+data_of() { clan export-static "$1" | jq '.shared_data'; }
+today() { date -u +%Y-%m-%d; }
+head_sha() { git rev-parse --short HEAD; }
+
+# The gate: a feature past `exploring` must carry a complete, approved design.
+# Prints the problems; exit status is the number of features that fail.
+verify_one() {
+  local f="$1" d status
+  d="$(data_of "$f")"
+  status="$(jq -r '.status // ""' <<<"$d")"
+  local problems
+  problems="$(jq -r --arg s "$status" '
+    def missing(p; msg): if p then empty else msg end;
+    [ missing(.slug and .title; "slug and title are required"),
+      missing(.status; "status is required"),
+      ( if $s == "exploring" or $s == "abandoned" then empty else
+          missing(((.done_when // []) | length) > 0;            "done_when is empty"),
+          missing(((.design.prior_art // []) | length) > 0;     "design.prior_art is empty: look for what already exists"),
+          missing(((.design.approaches // []) | length) >= 2;   "design.approaches needs at least two approaches"),
+          missing(([.design.approaches[]? | select(.chosen)] | length) == 1; "design.approaches must mark exactly one as chosen"),
+          missing(((.design.rework_risks // []) | length) > 0;  "design.rework_risks is empty: what would make us redo this?"),
+          missing(((.design.touches // []) | length) > 0;       "design.touches is empty"),
+          missing(((.design.breakage // []) | length) > 0;      "design.breakage is empty"),
+          missing(((.design.test_plan // []) | length) > 0;     "design.test_plan is empty"),
+          missing((.design.rollout // "") != "";                "design.rollout is empty"),
+          missing((.design.approved_by // "") != "";            "design.approved_by is empty: the owner has not approved the design")
+        end )
+    ] | .[]' <<<"$d")"
+  if [[ -n "$problems" ]]; then
+    echo "✗ $(basename "$f") [$status]"
+    sed 's/^/    - /' <<<"$problems"
+    return 1
+  fi
+  echo "✓ $(basename "$f") [$status]"
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  new)
+    need_clan
+    slug="${1:-}"; title="${2:-}"; shift 2 || die 'usage: feature new <slug> "<title>" [--owner NAME]'
+    owner="$(git config user.name || true)"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in --owner) owner="$2"; shift 2 ;; *) die "unknown option $1" ;; esac
+    done
+    [[ "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "slug must be lowercase kebab-case"
+    f="$dir/$slug.clan"
+    [[ ! -e "$f" ]] || die "$f already exists"
+    q clan create --title "$title" --doc-type feature --schema "$schema" \
+      --brief "Design, then build, the feature: $title. Read agent/context.md first." --output "$f"
+    sed -e "s/{{slug}}/$slug/g" -e "s/{{title}}/${title//\//\\/}/g" "$dir/context-template.md" \
+      | q clan patch-context "$f" -
+    branch="feat/$slug"
+    jq -n --arg slug "$slug" --arg title "$title" --arg owner "$owner" --arg branch "$branch" \
+      '{slug:$slug, title:$title, owner:$owner, status:"exploring", branch:$branch,
+        next_step:"Answer the design questions in agent/context.md, then show the owner."}' \
+      | q clan patch-data "$f" - --agent "$agent" --action "opened feature" \
+          --rationale "Feature record created; design comes before code." 
+    echo "created features/$slug.clan (status: exploring)"
+    echo "next: git switch -c $branch   (if you are not on it yet)"
+    echo "      scripts/feature show $slug"
+    ;;
+
+  list)
+    need_clan
+    shopt -s nullglob
+    files=("$dir"/*.clan)
+    [[ ${#files[@]} -gt 0 ]] || { echo "no features yet (scripts/feature new <slug> \"<title>\")"; exit 0; }
+    printf '%-28s %-10s %s\n' SLUG STATUS "TITLE / NEXT"
+    for f in "${files[@]}"; do
+      data_of "$f" | jq -r '"\(.slug // "?")\t\(.status // "?")\t\(.title // "")\t\(.next_step // "")"' \
+        | while IFS=$'\t' read -r s st t n; do
+            printf '%-28s %-10s %s\n' "$s" "$st" "$t"
+            [[ -n "$n" ]] && printf '%-28s %-10s → %s\n' "" "" "$n"
+          done
+    done
+    ;;
+
+  show)
+    need_clan
+    f="$(file_of "${1:-}")"
+    clan read agent "$f"
+    ;;
+
+  status)
+    need_clan
+    f="$(file_of "${1:-}")"; to="${2:-}"
+    [[ -n "$to" ]] || die "usage: feature status <slug> <status>"
+    from="$(data_of "$f" | jq -r .status)"
+    tmp="$(mktemp --suffix=.clan)"; trap 'rm -f "$tmp"' EXIT
+    cp "$f" "$tmp"
+    q clan patch-data "$tmp" "{\"status\":\"$to\"}" --agent "$agent" --action "status $from → $to" \
+      --rationale "${3:-status change}" 
+    verify_one "$tmp" >/dev/null || { verify_one "$tmp" || true; die "not moving $1 to '$to' until the design is complete"; }
+    mv "$tmp" "$f"; trap - EXIT
+    echo "$1: $from → $to"
+    ;;
+
+  log)
+    need_clan
+    f="$(file_of "${1:-}")"; summary="${2:-}"
+    [[ -n "$summary" ]] || die 'usage: feature log <slug> "<summary>"'
+    jq -n --arg d "$(today)" --arg c "$(head_sha)" --arg s "$summary" '{build_log:[{date:$d, commit:$c, summary:$s}]}' \
+      | q clan patch-data "$f" - --append build_log --agent "$agent" --action "build step" --rationale "$summary" 
+    echo "logged on $1 at $(head_sha)"
+    ;;
+
+  checked)
+    need_clan
+    f="$(file_of "${1:-}")"; result="${2:-}"; suites="${3:-}"
+    [[ "$result" == pass || "$result" == fail ]] || die 'usage: feature checked <slug> pass|fail "<suites>"'
+    jq -n --arg d "$(today)" --arg c "$(head_sha)" --arg r "$result" --arg s "$suites" \
+      '{last_check:{date:$d, commit:$c, result:$r, suites:($s | split(" ") | map(select(. != "")))}}' \
+      | q clan patch-data "$f" - --agent "$agent" --action "checks $result" --rationale "scripts/check.sh: $suites" 
+    echo "recorded: $1 checks $result"
+    ;;
+
+  verify)
+    need_clan
+    shopt -s nullglob
+    files=("$@"); [[ ${#files[@]} -gt 0 ]] || files=("$dir"/*.clan)
+    fails=0
+    for f in "${files[@]}"; do verify_one "$f" || fails=$((fails + 1)); done
+    exit "$fails"
+    ;;
+
+  help|-h|--help)
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *) die "unknown command '$cmd' (try: scripts/feature help)" ;;
+esac
