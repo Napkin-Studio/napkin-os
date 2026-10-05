@@ -266,8 +266,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 crew: vec!["extract".into(), "drafter".into(), "judge".into()],
                 noun: vec!["brief".into(), "briefs".into()],
                 untitled: Some("Untitled brief".into()),
-                // "Napkin Studio Briefs" in the OS bar; it shares the OS's face (Geist).
-                brand: Some("Briefs".into()),
+                // "Napkin Studio Brief" in the OS bar; it shares the OS's face (Geist).
+                brand: Some("Brief".into()),
                 ..Default::default()
             }),
         },
