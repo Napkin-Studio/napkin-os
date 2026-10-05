@@ -46,7 +46,8 @@ nobody finds out a week in that a better design was there from the start.
    The hooks enforce this. Never push to `main`.
 
 Typo-sized fixes don't need a record. Add the trailer `Feature: none` to the
-commit message instead.
+commit message instead. Put it in the last block of the message, next to any
+`Co-Authored-By`, with no blank line between them, or git won't read it as a trailer.
 
 Details: `features/README.md`. Schema: `features/feature.schema.json`.
 
