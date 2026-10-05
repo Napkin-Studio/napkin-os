@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
-const tests = readdirSync(here).filter(f => f.endsWith('.test.ts'))
+const tests = readdirSync(here).filter(f => /\.test\.tsx?$/.test(f))
 // Inside app/, so a bundle's external imports (react-dom, for the figure
 // test) resolve against app/node_modules.
 const out = mkdtempSync(join(here, '.run-'))
