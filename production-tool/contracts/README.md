@@ -59,14 +59,16 @@ The relay owns everything around the adapters:
 - choosing a provider with `config.routing[op]` (the first that supports the op and has a free slot)
 
 The director, given the routed sheet, owns:
-- each provider's prompt syntax and reference names (`tagSyntax`)
+- the prompt, written with plain `@tag` names
 - refs and roles
 - ratio strings
 
 The adapter owns the exact request:
 - field names
+- rewriting `@tag` into the provider's syntax (`tagSyntax`), with one deterministic function; a prompt already in that syntax is left alone (decided 2026-10-06)
+- asset URLs, through the relay's `providers.base.asset_url(sha)`: HTTPS, the real mime type, answers HEAD, no redirects
 - mask polarity: ours is white = change, and the adapter converts it to the endpoint's convention
-- setting audio explicitly
+- audio off wherever the model has a switch (`video.audioControl`); where it has none, the field is omitted and the director writes "no music, no dialogue" into the prompt (decided 2026-10-06)
 - the provider's error codes mapped onto ours
 
 ## Rules that hold everywhere
@@ -75,6 +77,7 @@ The adapter owns the exact request:
 - **One id everywhere.** A job's id is also its Excalidraw element id and its document entry id.
 - **Tags** are stored once in the strictest form (`^[a-z][a-z0-9_]{2,15}$`). Canvas badges (A, B, C) are for display only.
 - **Region:** 0-1 coordinates of the image it sits on, origin top-left.
+- **Cancel:** where `results.cancel` is false (HeyGen), the UI hides Cancel; a cancelled job may still bill and its `cost.confirmed` says so.
 - **Moderation:** never retry a moderated job (Runway `SAFETY.INPUT.*`, fal `content_policy_violation`). It becomes `moderated`, which can't be retried.
 - **`config.json` is public.** Event codes, keys and the blocked list live in Secrets Manager and DynamoDB, not in it.
 
@@ -85,7 +88,7 @@ The adapter owns the exact request:
 3. **Views:** front, three_quarter, side, back, plus an optional side_2.
 4. **`blocked` and per-handle overrides** moved out of `config.json`, because it is public.
 5. **Director models:** `claude-haiku-4-5` per click, `claude-sonnet-5-5` for the shot list (`config.director`).
-6. **Spend caps:** $200 in `config.testing.json`, $1,300 in `config.event.json`. Placeholders until D2.
+6. **Spend caps:** $200 in `config.testing.json`, $1,300 in `config.event.json` (D2, 2026-10-06: Runway's org has 20 concurrent per model and about $3.2k of credits, so no tier purchase). This is the relay's own stop, not a limit at Runway.
 7. **Example `routing` for the event:**
    - fal first for images, with Runway as fallback
    - clips: fal, then HeyGen, then Runway
