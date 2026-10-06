@@ -48,7 +48,7 @@
     },
     "jobState": {
       "enum": ["queued", "submitting", "submitted", "fetching", "validating", "completed", "failed", "cancelled", "uncertain"],
-      "description": "Same states as app/templates/advertising-studio/app/pipeline.yaml. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again."
+      "description": "The job states of the repo's production pipeline contract (app/templates/advertising-studio/app/pipeline.yaml), borrowed for their uncertain state. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again."
     },
     "cost": {
       "type": "object",
