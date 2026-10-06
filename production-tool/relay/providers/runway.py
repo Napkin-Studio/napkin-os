@@ -250,3 +250,9 @@ class RunwayProvider:
 def _mime(url: str) -> str:
     path = url.split("?", 1)[0].lower()
     return next((m for ext, m in MIME.items() if path.endswith(ext)), "application/octet-stream")
+
+
+def make():
+    """The relay's registry entry (providers/__init__.py): this adapter behind the relay's Protocol."""
+    from ._seam import Adapted, Resolver, key
+    return Adapted(RunwayProvider(key("RUNWAY_API_KEY"), Resolver()))

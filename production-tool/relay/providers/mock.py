@@ -109,3 +109,9 @@ class MockProvider:
     def cancel(self, request_id: str) -> None:
         if request_id in self._jobs:
             self._jobs[request_id]["cancelled"] = True
+
+
+def make():
+    """The relay's registry entry (providers/__init__.py): this adapter behind the relay's Protocol."""
+    from ._seam import Adapted, Resolver, fetch
+    return Adapted(MockProvider(Resolver(), fetch))

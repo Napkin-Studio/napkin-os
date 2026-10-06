@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from contracts import Contracts, api
 from director.base import Director
 from providers import Registry
-from providers.base import CapabilityMissing, Moderated, ProviderError, set_asset_urls
+from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
 
 log = logging.getLogger("relay")
 
@@ -499,7 +499,7 @@ class Relay:
             return self._finish(job, "completed", needsUser=directed["needsUser"], director=block,
                                 outputs=[], paid=False, refund=True)
         pjob = directed["providerJob"]
-        set_asset_urls({a["sha256"]: a["url"] for a in asset_refs(job["_req"]["input"])})
+        set_job_context(job["op"], asset_refs(job["_req"]["input"]))
         adapter = self.registry.get(provider)
         try:
             request_id = adapter.submit(pjob)
@@ -536,6 +536,9 @@ class Relay:
     def _direct(self, job: dict, sheet: dict | None) -> tuple[dict, dict]:
         start = self.clock()
         try:
+            use_config = getattr(self.director, "use_config", None)
+            if use_config:  # config.json's director block: the model ids and prompt version
+                use_config(self.config().get("director") or {})
             out = dict(self.director.direct(job["_req"], sheet))
         except Exception as e:
             log.exception("director failed")

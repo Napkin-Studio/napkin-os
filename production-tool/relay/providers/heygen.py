@@ -185,3 +185,9 @@ class HeyGenProvider:
             raise ProviderError("provider_failed", f"HeyGen refused the key: {message}", False, provider_code=str(code))
         raise ProviderError("invalid_input" if code in (400, 404, 422) else "provider_failed",
                             message, False, provider_code=str(code))
+
+
+def make():
+    """The relay's registry entry (providers/__init__.py): this adapter behind the relay's Protocol."""
+    from ._seam import Adapted, Resolver, key
+    return Adapted(HeyGenProvider(key("HEYGEN_API_KEY"), Resolver()))

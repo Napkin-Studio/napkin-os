@@ -458,3 +458,9 @@ class FalProvider:
             return
         if resp.status_code >= 400:
             raise _error(resp)
+
+
+def make():
+    """The relay's registry entry (providers/__init__.py): this adapter behind the relay's Protocol."""
+    from ._seam import Adapted, Resolver, key
+    return Adapted(FalProvider(key("FAL_KEY"), Resolver()))
