@@ -1548,14 +1548,25 @@ async fn a_session_from_before_the_switch_to_the_roster_still_signs_in() {
 
 /// A roster server that records everything, as staging runs it.
 fn dogfood_server(on: bool) -> (Server, Option<Arc<napkin_web::dogfood::Dogfood>>) {
+    dogfood_server_with(on, Arc::new(NoConfig))
+}
+
+fn dogfood_server_with(
+    on: bool,
+    config: Arc<dyn napkin_host::HostConfig>,
+) -> (Server, Option<Arc<napkin_web::dogfood::Dogfood>>) {
     let dir = tempfile::tempdir().unwrap();
     let roster = dir.path().join("accounts.tsv");
     std::fs::write(&roster, "engineer@napkin\tShrey\nlead@javelin\tJo\n").unwrap();
-    let dog = on.then(|| napkin_web::dogfood::Dogfood::start(dir.path().join("_dogfood"), 16));
-    let ctx = Arc::new(
-        AppCtx::new(dir.path().to_path_buf(), Arc::new(NoConfig), None, 40)
-            .with_dogfood(dog.clone()),
-    );
+    let dog = on.then(|| {
+        napkin_web::dogfood::Dogfood::start(
+            dir.path().join("_dogfood"),
+            Some(dir.path().join("_runlog")),
+            16,
+        )
+    });
+    let ctx =
+        Arc::new(AppCtx::new(dir.path().to_path_buf(), config, None, 40).with_dogfood(dog.clone()));
     let identity = napkin_web::tenant::Identity {
         mode: napkin_web::tenant::Mode::Accounts {
             provider: napkin_web::auth::Provider::Roster(
@@ -1775,6 +1786,170 @@ async fn only_napkins_own_accounts_read_or_purge_the_record() {
     .await
     .json();
     assert_eq!(v["consented"], false);
+}
+
+/// A middleware that answers every task as a queued job `job_0123abcd`.
+struct StubMiddleware(String);
+
+impl napkin_host::HostConfig for StubMiddleware {
+    fn workspace(&self) -> Option<napkin_host::WorkspaceConfig> {
+        serde_json::from_value(serde_json::json!({
+            "proxies": {"middleware": {"endpoint": self.0}},
+        }))
+        .ok()
+    }
+    fn secret(&self, _: &str) -> Option<String> {
+        None
+    }
+}
+
+async fn stub_middleware() -> String {
+    let app = Router::new().route(
+        "/v1/tasks",
+        axum::routing::post(|| async {
+            axum::Json(serde_json::json!({
+                "api": "napkin.middleware/1", "task": "draft_brief", "handler": "draft_brief@1",
+                "job": {"id": "job_0123abcd", "state": "queued"},
+                "result": {"summary": "queued"}, "change": null, "trace": {},
+            }))
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}/v1/tasks")
+}
+
+#[tokio::test]
+async fn an_app_call_that_starts_a_job_records_the_job_and_polls_fold() {
+    let (s, dog) = dogfood_server_with(true, Arc::new(StubMiddleware(stub_middleware().await)));
+    let dog = dog.unwrap();
+    let me = sign_in_as(&s, "engineer", "napkin").await;
+    send(
+        &s,
+        json_req("/api/dogfood/consent", Some(&me), serde_json::json!({})),
+    )
+    .await;
+    let v = send(&s, request("GET", "/api/session", Some(&me), Body::empty()))
+        .await
+        .json();
+    let tenant = v["tenant"].as_str().unwrap().to_string();
+    let r = post(
+        &s,
+        &format!("/api/t/{tenant}/documents/upload"),
+        &me,
+        a_clan("Jobs"),
+    )
+    .await;
+    let token = r.json()["token"].as_str().unwrap().to_string();
+    let r = post(
+        &s,
+        &format!("/s/{token}/api-proxy"),
+        "",
+        middleware_task("draft_brief"),
+    )
+    .await;
+    assert_eq!(
+        r.status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&r.body)
+    );
+    for _ in 0..4 {
+        post(&s, &format!("/s/{token}/edit-mode"), "", "").await;
+    }
+    let all = dog.export(None, None, None);
+    let lines: Vec<Value> = all
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let call = lines
+        .iter()
+        .find(|e| e["name"] == "clan://api-proxy")
+        .unwrap_or_else(|| panic!("{all}"));
+    assert_eq!(call["data"]["job"], "job_0123abcd");
+    let edit: Vec<&Value> = lines
+        .iter()
+        .filter(|e| e["name"] == "clan://edit-mode")
+        .collect();
+    assert_eq!(edit.len(), 2, "first call and one repeat line: {all}");
+    assert_eq!(edit[1]["kind"], "repeat");
+    assert_eq!(edit[1]["data"]["count"], 3);
+}
+
+#[tokio::test]
+async fn a_jobs_run_log_is_napkins_to_read_and_goes_with_the_purge() {
+    let (s, _) = dogfood_server(false);
+    let me = sign_in_as(&s, "engineer", "napkin").await;
+    let r = send(
+        &s,
+        request(
+            "GET",
+            "/api/dogfood/runlog?job=job_1",
+            Some(&me),
+            Body::empty(),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND, "not a dogfood build");
+
+    let (s, dog) = dogfood_server(true);
+    let dog = dog.unwrap();
+    let day = s._dir.path().join("_runlog").join("2026-10-06");
+    std::fs::create_dir_all(&day).unwrap();
+    std::fs::write(
+        day.join("draft_brief-job_0a1b.jsonl"),
+        "{\"ev\":\"job_end\"}\n",
+    )
+    .unwrap();
+    let them = sign_in_as(&s, "lead", "javelin").await;
+    let r = send(
+        &s,
+        request(
+            "GET",
+            "/api/dogfood/runlog?job=job_0a1b",
+            Some(&them),
+            Body::empty(),
+        ),
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::FORBIDDEN);
+    let me = sign_in_as(&s, "engineer", "napkin").await;
+    for (job, want) in [
+        ("job_0a1b", StatusCode::OK),
+        ("job_ffff", StatusCode::NOT_FOUND),
+        ("..%2F..%2Faccounts.tsv", StatusCode::NOT_FOUND),
+    ] {
+        let r = send(
+            &s,
+            request(
+                "GET",
+                &format!("/api/dogfood/runlog?job={job}"),
+                Some(&me),
+                Body::empty(),
+            ),
+        )
+        .await;
+        assert_eq!(r.status, want, "{job}");
+    }
+    let r = send(
+        &s,
+        request(
+            "GET",
+            "/api/dogfood/runlog?job=job_0a1b",
+            Some(&me),
+            Body::empty(),
+        ),
+    )
+    .await;
+    assert_eq!(String::from_utf8_lossy(&r.body), "{\"ev\":\"job_end\"}\n");
+    send(
+        &s,
+        json_req("/api/dogfood/purge", Some(&me), serde_json::json!({})),
+    )
+    .await;
+    assert_eq!(dog.runlog("job_0a1b"), None);
+    assert!(s._dir.path().join("_runlog").is_dir());
 }
 
 // ── Exports reach only the tab that asked (features/pdf-export.clan) ─────────

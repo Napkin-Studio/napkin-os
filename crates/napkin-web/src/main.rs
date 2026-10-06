@@ -101,6 +101,8 @@ fn add_user(args: &[String], data_root: &std::path::Path) {
 
 /// Where the dogfood record lives, under the data root and outside every workspace.
 const DOGFOOD_DIR: &str = "_dogfood";
+/// Where the middleware writes its run log when it shares this volume (staging).
+const RUNLOG_DIR: &str = "_runlog";
 
 /// `NAPKIN_DOGFOOD=1`: record everything consenting accounts do (staging only).
 /// `NAPKIN_DOGFOOD_BODY_CAP` bytes of each body are kept (default 64 KiB).
@@ -113,6 +115,7 @@ fn dogfood(data_root: &std::path::Path) -> Option<Arc<napkin_web::dogfood::Dogfo
         .unwrap_or(napkin_web::dogfood::DEFAULT_BODY_CAP);
     Some(napkin_web::dogfood::Dogfood::start(
         data_root.join(DOGFOOD_DIR),
+        Some(data_root.join(RUNLOG_DIR)),
         cap,
     ))
 }
@@ -186,6 +189,10 @@ async fn main() {
         let root = settings.data_root.join(DOGFOOD_DIR);
         let n = napkin_web::dogfood::purge_dir(&root);
         println!("purged {n} file(s) from {}", root.display());
+        // the run log's directory is the middleware's mount: empty it, keep it
+        let runlog = settings.data_root.join(RUNLOG_DIR);
+        let n = napkin_web::dogfood::purge_contents(&runlog);
+        println!("purged {n} file(s) from {}", runlog.display());
         return;
     }
     let identity = std::sync::Arc::new(identity(&settings.data_root, settings.secure_cookie));

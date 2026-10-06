@@ -47,6 +47,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/dogfood/events", post(crate::dogfood::post_events))
         .route("/dogfood/consent", post(crate::dogfood::post_consent))
         .route("/dogfood/export", get(crate::dogfood::get_export))
+        .route("/dogfood/runlog", get(crate::dogfood::get_runlog))
         .route("/dogfood/purge", post(crate::dogfood::post_purge))
         .route("/t/{tenant}/apps", get(list_apps))
         .route("/t/{tenant}/apps/from/{doc}", post(install_from_document))
