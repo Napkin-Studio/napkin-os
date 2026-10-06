@@ -21,6 +21,7 @@ import { updateDoc } from '../doc/store'
 import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
+import { viewCandidates } from '../canvas/viewCandidates'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -539,8 +540,9 @@ function ViewsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) 
   const gens = els.filter((e) => cd(e)?.kind === 'gen').map((e) => cd(e) as Extract<CustomData, { kind: 'gen' }>)
   const runningFor = (v: View) => gens.some((g) => g.op === 'view' && g.view === v && isActive(runner.liveInfo(g.id)?.state ?? doc.jobs.find((j) => j.id === g.id)?.state ?? 'completed'))
   const viewsRunning = SLOTS.slice(1).some(runningFor)
-  const candidates = (v: View) =>
-    gens.filter((g) => g.state === 'completed' && g.asset && (g.view === v || g.pickedAs === v || (v === 'front' && (g.op === 'generate' || g.op === 'combine'))))
+  const madeFor = (v: View) => viewCandidates(gens, v).madeFor
+  const others = (v: View) => viewCandidates(gens, v).others
+  const candidates = (v: View) => [...madeFor(v), ...others(v)]
 
   const lock = () => {
     updateDoc(docStore, (d) => {
@@ -595,12 +597,23 @@ function ViewsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) 
             <span className="spacer" />
             <button className="btn xs ghost" onClick={() => setOpen(null)}>Close</button>
           </div>
+          {madeFor(open).length > 0 && others(open).length > 0 && <div className="faint" style={{ fontSize: 12 }}>Made for {viewLabel(open)}</div>}
           <div className="grid">
-            {candidates(open).map((g) => (
+            {madeFor(open).map((g) => (
               <Candidate key={g.id} sha={g.asset!} picked={doc.character.views[open]?.job_id === g.id} onPick={() => ctrl?.pickView(g.id, open)} onShow={() => ctrl?.scrollTo(g.id)} />
             ))}
             {!candidates(open).length && <span className="faint" style={{ fontSize: 12.5, maxWidth: 360 }}>{open === 'front' ? 'Select your sketch frame and press Generate front view.' : 'Set a Front view, then press Make the other views.'}</span>}
           </div>
+          {others(open).length > 0 && (
+            <>
+              <div className="faint" style={{ fontSize: 12 }}>{madeFor(open).length ? 'Your other pictures' : `Use any picture as ${viewLabel(open)}`}</div>
+              <div className="grid">
+                {others(open).map((g) => (
+                  <Candidate key={g.id} sha={g.asset!} picked={doc.character.views[open]?.job_id === g.id} onPick={() => ctrl?.pickView(g.id, open)} onShow={() => ctrl?.scrollTo(g.id)} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
