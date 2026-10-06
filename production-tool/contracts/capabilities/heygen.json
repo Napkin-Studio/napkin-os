@@ -1,0 +1,20 @@
+{
+  "contractVersion": "1",
+  "provider": "heygen",
+  "checked": "2026-10-06",
+  "ops": {
+    "clip": { "model": "heygen-video-1", "endpoint": "POST /v3/models/videos", "estimateUsd": null, "minS": 5, "maxS": 15 }
+  },
+  "tagSyntax": "picture_n",
+  "refs": { "max": 9, "maxCharacter": 9, "element": false },
+  "seed": true,
+  "outputsPerCall": 1,
+  "mask": "none",
+  "segment": false,
+  "angles": false,
+  "series": 0,
+  "video": { "firstFrameWithRefs": false, "lastFrame": false, "multiShot": false, "regionEdit": "none", "feelEdit": "prompt", "audioDefault": true },
+  "inputs": { "headRequired": false, "followsRedirects": false, "maxImageMb": 16, "maxVideoMb": 32 },
+  "results": { "mode": "poll_or_webhook", "minPollS": 5, "idempotencyKey": true, "outputUrlTtlH": null },
+  "concurrency": { "image": 0, "video": 10, "note": "Pay-as-you-go: 10 concurrent workflows; whether heygen-video-1 counts against them is undocumented. Clips always carry generated sound; prompt 'no music' to avoid a music bed. API prices are not in the docs." }
+}

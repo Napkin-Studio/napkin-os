@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/document.schema.json",
+  "title": "Production Tool document (CLAN shared/data.yaml)",
+  "description": "The source of truth for one participant's work; the canvas and panels render it. Field names follow app/templates/advertising-studio/schema.json (snake_case, shots, takes, jobs, reviews, stale) so the post-hackathon move maps one to one; character and frames are the additions. Bytes are never inline: assets hold hashes and locations, plus an optional thumbnail under 4 KB. Only selected and referenced artifacts go in; other iterations stay in S3. Human verdicts (accept, reject, select) are also appended to the decision chain.",
+  "type": "object",
+  "properties": {
+    "contract_version": { "$ref": "common.schema.json#/$defs/contractVersion" },
+    "app": { "const": "production-tool" },
+    "participant": {
+      "type": "object",
+      "properties": { "id": { "type": "string" }, "handle": { "type": "string" } },
+      "required": ["id", "handle"],
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "object",
+      "properties": {
+        "current": { "enum": ["character", "storyboard", "video"] },
+        "next_action": { "type": "string", "maxLength": 140 }
+      },
+      "required": ["current"],
+      "additionalProperties": false
+    },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "character": {
+      "type": "object",
+      "properties": {
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "$ref": "common.schema.json#/$defs/id" },
+              "asset": { "$ref": "common.schema.json#/$defs/sha256" },
+              "tag": { "$ref": "common.schema.json#/$defs/tag" },
+              "role": { "$ref": "common.schema.json#/$defs/refRole" },
+              "label": { "type": "string", "maxLength": 60, "description": "What the user typed on the chip, as shown." },
+              "kind": { "enum": ["picture", "sketch"] }
+            },
+            "required": ["id", "asset", "tag", "role", "kind"],
+            "additionalProperties": false
+          }
+        },
+        "combines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "$ref": "common.schema.json#/$defs/id" },
+              "sources": { "type": "array", "minItems": 2, "maxItems": 4, "items": { "$ref": "common.schema.json#/$defs/id" } },
+              "text": { "type": "string", "maxLength": 1000 },
+              "job_id": { "$ref": "common.schema.json#/$defs/id" }
+            },
+            "required": ["id", "sources", "text"],
+            "additionalProperties": false
+          }
+        },
+        "views": {
+          "type": "object",
+          "description": "One chosen image per slot. The other candidates are jobs with outputs, kept in S3.",
+          "properties": {
+            "front": { "$ref": "#/$defs/viewPick" },
+            "three_quarter": { "$ref": "#/$defs/viewPick" },
+            "side": { "$ref": "#/$defs/viewPick" },
+            "back": { "$ref": "#/$defs/viewPick" },
+            "side_2": { "$ref": "#/$defs/viewPick" }
+          },
+          "additionalProperties": false
+        },
+        "locked": { "type": "boolean", "description": "Set by 'Lock character → Storyboard'. Changing a view after this marks dependent frames and takes stale." },
+        "locked_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["refs", "views", "locked"],
+      "additionalProperties": false
+    },
+    "script": {
+      "type": "object",
+      "properties": {
+        "current": { "$ref": "common.schema.json#/$defs/id" },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "$ref": "common.schema.json#/$defs/id" },
+              "parent": { "$ref": "common.schema.json#/$defs/id" },
+              "created_at": { "type": "string", "format": "date-time" },
+              "imported_text": { "type": "string", "maxLength": 600, "description": "The user's own words, kept verbatim." },
+              "target_s": { "type": "integer", "minimum": 10, "maximum": 20 },
+              "status": { "enum": ["draft", "approved", "superseded"] }
+            },
+            "required": ["id", "created_at", "imported_text", "target_s", "status"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["revisions"],
+      "additionalProperties": false
+    },
+    "shots": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/shot" } },
+    "frames": {
+      "type": "array",
+      "description": "Storyboard frame versions. shots[].storyboard_frame names the selected one.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "shot_id": { "$ref": "common.schema.json#/$defs/id" },
+          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
+          "job_id": { "$ref": "common.schema.json#/$defs/id" },
+          "parent": { "$ref": "common.schema.json#/$defs/id", "description": "The frame this one was edited from." },
+          "selected": { "type": "boolean" },
+          "kind": { "enum": ["generated", "mock"] }
+        },
+        "required": ["id", "shot_id", "asset", "job_id", "selected", "kind"],
+        "additionalProperties": false
+      }
+    },
+    "takes": {
+      "type": "array",
+      "description": "Clips. A take is never deleted to make room.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "shot_id": { "$ref": "common.schema.json#/$defs/id" },
+          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
+          "job_id": { "$ref": "common.schema.json#/$defs/id" },
+          "parent": { "$ref": "common.schema.json#/$defs/id" },
+          "kind": { "enum": ["generated", "mock"] },
+          "provider": { "$ref": "common.schema.json#/$defs/provider" },
+          "model": { "type": "string" },
+          "duration_s": { "type": "number" },
+          "selected": { "type": "boolean" }
+        },
+        "required": ["id", "shot_id", "asset", "job_id", "kind", "provider", "selected"],
+        "additionalProperties": false
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "description": "One entry per job, written at submit (state queued) and patched as it moves. Mirrors the relay ledger.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "op": { "$ref": "common.schema.json#/$defs/op" },
+          "state": { "$ref": "common.schema.json#/$defs/jobState" },
+          "provider": { "$ref": "common.schema.json#/$defs/provider" },
+          "model": { "type": "string" },
+          "remote_id": { "type": "string" },
+          "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },
+          "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
+          "region": { "$ref": "common.schema.json#/$defs/region" },
+          "text": { "type": "string" },
+          "chips": { "type": "array", "items": { "type": "string" } },
+          "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
+          "agent": { "$ref": "director.schema.json#/$defs/agentBlock" },
+          "cost": { "$ref": "common.schema.json#/$defs/cost" },
+          "error": { "$ref": "common.schema.json#/$defs/error" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "op", "state", "parent_ids", "input_hashes", "created_at"],
+        "additionalProperties": false
+      }
+    },
+    "reviews": {
+      "type": "array",
+      "description": "Comments on a view, frame or take; with a region they are pins. resolved_by_job is set when the job they caused lands.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "target": { "$ref": "#/$defs/target" },
+          "comment": { "type": "string", "maxLength": 1000 },
+          "chips": { "type": "array", "items": { "type": "string" } },
+          "region": { "$ref": "common.schema.json#/$defs/region" },
+          "at_s": { "type": "number", "minimum": 0, "description": "Takes only: the paused time." },
+          "resolved": { "type": "boolean" },
+          "resolved_by_job": { "$ref": "common.schema.json#/$defs/id" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "target", "comment", "resolved", "created_at"],
+        "additionalProperties": false
+      }
+    },
+    "stale": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": { "$ref": "#/$defs/target" },
+          "caused_by": { "$ref": "#/$defs/target" },
+          "reason": { "type": "string" },
+          "marked_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["target", "caused_by", "reason"],
+        "additionalProperties": false
+      }
+    },
+    "exports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "common.schema.json#/$defs/id" },
+          "kind": { "enum": ["ad_mp4", "bundle_zip"] },
+          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
+          "job_id": { "$ref": "common.schema.json#/$defs/id" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "kind", "asset", "created_at"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["contract_version", "app", "participant", "stage", "assets", "character", "jobs"],
+  "additionalProperties": false,
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "properties": {
+        "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
+        "kind": { "enum": ["image", "video"] },
+        "mime": { "type": "string" },
+        "bytes": { "type": "integer" },
+        "w": { "type": "integer" },
+        "h": { "type": "integer" },
+        "duration_s": { "type": "number" },
+        "origin": { "enum": ["uploaded", "drawn", "generated", "mock"] },
+        "job_id": { "$ref": "common.schema.json#/$defs/id" },
+        "locations": {
+          "type": "array",
+          "description": "Where to find the bytes, in resolution order: idb://sha256/<hex>, s3://<bucket>/assets/<hex>, then our https URL.",
+          "items": { "type": "string", "pattern": "^(idb|s3|https)://" }
+        },
+        "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 }
+      },
+      "required": ["sha256", "kind", "mime", "origin", "locations"],
+      "additionalProperties": false
+    },
+    "viewPick": {
+      "type": "object",
+      "properties": {
+        "asset": { "$ref": "common.schema.json#/$defs/sha256" },
+        "job_id": { "$ref": "common.schema.json#/$defs/id" },
+        "picked_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["asset", "job_id"],
+      "additionalProperties": false
+    },
+    "shot": {
+      "type": "object",
+      "description": "One row of the shot list. Same names as advertising-studio shots[].",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/id" },
+        "order": { "type": "integer", "minimum": 1 },
+        "duration_s": { "type": "number", "minimum": 1, "maximum": 10 },
+        "composition": { "enum": ["wide", "medium", "close", "extreme_close", "over_shoulder", "insert"] },
+        "action": { "type": "string", "maxLength": 300 },
+        "camera_move": { "enum": ["static", "pan", "tilt", "push_in", "pull_out", "track", "orbit", "handheld"] },
+        "lead_view": { "$ref": "common.schema.json#/$defs/view", "description": "The character view this shot leans on." },
+        "dialogue": { "type": "string", "maxLength": 200 },
+        "storyboard_frame": { "$ref": "common.schema.json#/$defs/sha256" },
+        "selected_take": { "$ref": "common.schema.json#/$defs/id" },
+        "status": { "enum": ["planned", "needs_review", "locked"] }
+      },
+      "required": ["id", "order", "duration_s", "composition", "action", "camera_move"],
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["view", "frame", "take", "shot"] },
+        "id": { "type": "string" }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false
+    }
+  }
+}

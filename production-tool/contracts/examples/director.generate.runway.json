@@ -1,0 +1,18 @@
+{
+  "op": "generate",
+  "providerJob": {
+    "provider": "runway",
+    "model": "gemini_image3.1_flash",
+    "prompt": "Full-body front view of the character drawn in @sketch, flat 2D illustration, plain background. Eyes shaped like @eyes. Colour palette of @palette.",
+    "refs": [
+      { "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "sketch", "role": "character" },
+      { "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "name": "eyes", "role": "object" },
+      { "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "name": "palette", "role": "object" }
+    ],
+    "ratio": "1080:1350",
+    "outputs": 1
+  },
+  "needsUser": null,
+  "rationale": "Sketch as the character ref; eyes and palette as object refs, named by tag.",
+  "confidence": 0.8
+}
