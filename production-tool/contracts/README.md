@@ -88,7 +88,7 @@ The adapter owns the exact request:
 2. **Job states** are pipeline.yaml's nine, in the relay and the document alike.
 3. **Views:** front, three_quarter, side, back, plus an optional side_2.
 4. **`blocked` and per-handle overrides** moved out of `config.json`, because it is public.
-5. **Director models:** `claude-haiku-4-5` per click, `claude-sonnet-5-5` for the shot list (`config.director`).
+5. **Director models:** Claude on Amazon Bedrock (eu-west-1, IAM, no API key): `eu.anthropic.claude-haiku-4-5-20251001-v1:0` per click, `eu.anthropic.claude-sonnet-5-5` for the shot list (`config.director`). Both inference profiles checked ACTIVE on 2026-10-06.
 6. **Spend caps:** $200 in `config.testing.json`, $1,300 in `config.event.json` (D2, 2026-10-06: Runway's org has 20 concurrent per model and about $3.2k of credits, so no tier purchase). This is the relay's own stop, not a limit at Runway.
 7. **Example `routing` for the event:**
    - fal first for images, with Runway as fallback
