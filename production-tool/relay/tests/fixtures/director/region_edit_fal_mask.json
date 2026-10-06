@@ -1,0 +1,50 @@
+{
+  "op": "region_edit",
+  "provider": "fal",
+  "input": {
+    "text": "make the hat red",
+    "chips": [],
+    "image": {
+      "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "url": "https://hack.napkin.ie/in/sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "mime": "image/png"
+    },
+    "mask": {
+      "sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "url": "https://hack.napkin.ie/in/sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "mime": "image/png"
+    },
+    "region": {
+      "x": 0.3,
+      "y": 0.1,
+      "w": 0.2,
+      "h": 0.15
+    }
+  },
+  "reply": {
+    "op": "region_edit",
+    "providerJob": {
+      "provider": "fal",
+      "model": "ideogram-v4.5-edit",
+      "prompt": "A red hat, same shape and shading as the original, nothing else changed.",
+      "refs": [
+        {
+          "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "name": "current",
+          "role": "current"
+        }
+      ],
+      "mask": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "region": {
+        "x": 0.3,
+        "y": 0.1,
+        "w": 0.2,
+        "h": 0.15
+      },
+      "outputs": 2
+    },
+    "needsUser": null,
+    "rationale": "The region is 3% of the image and fal takes masks: a masked inpaint on the current image.",
+    "confidence": 0.9
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "op": "generate",
+  "provider": "fal",
+  "input": {
+    "text": "use the colours from the other one",
+    "chips": [],
+    "sketch": {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png"
+    },
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000000AB",
+        "tag": "autumn",
+        "role": "colour",
+        "asset": {
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "mime": "image/png"
+        }
+      },
+      {
+        "id": "ref_01K6XA6Z0000000000000000AC",
+        "tag": "palette",
+        "role": "colour",
+        "asset": {
+          "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "mime": "image/png"
+        }
+      }
+    ],
+    "ratio": "1:1"
+  },
+  "reply": {
+    "op": "generate",
+    "needsUser": {
+      "question": "Which reference sets the colours?",
+      "options": [
+        "autumn",
+        "palette"
+      ]
+    },
+    "rationale": "Both references are colour refs and the text does not say which one 'the other one' is.",
+    "confidence": 0.3
+  }
+}

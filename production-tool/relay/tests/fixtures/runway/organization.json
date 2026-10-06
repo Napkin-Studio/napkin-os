@@ -1,0 +1,6 @@
+{"tier": {"maxMonthlyCreditSpend": 2000000,
+  "models": {"gemini_image3.1_flash": {"maxConcurrentGenerations": 10, "maxDailyGenerations": 5000},
+             "veo3.1_fast": {"maxConcurrentGenerations": 10, "maxDailyGenerations": 5000},
+             "aleph2": {"maxConcurrentGenerations": null, "maxDailyGenerations": null}}},
+ "creditBalance": 98000,
+ "usage": {"models": {}}}

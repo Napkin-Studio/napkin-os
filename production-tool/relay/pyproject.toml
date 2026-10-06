@@ -1,0 +1,13 @@
+[project]
+name = "napkin-production-relay"
+version = "0.1.0"
+description = "Production Tool relay: provider adapters, director, region edit"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27", "jsonschema>=4.21", "referencing", "pillow>=10.1"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
