@@ -1,11 +1,11 @@
-# Production Tool contracts (v1, draft for D1)
+# Production Tool contracts (v1, locked 2026-10-06)
 
 These files are the contract between the three lanes:
 - `production-tool-ui`: Shrey designs it, then Sai wires it
 - `production-tool-harness`: Sai
 - `production-tool-infra`: Shrey
 
-Once the owner signs them off (decision D1 in `features/production-tool.clan`), a contract changes only through a recorded decision (`clan patch-decision`) and a bump of `contractVersion`. Until then this is a draft.
+**Locked (D1) by Shreyansh Soni on 2026-10-06.** From now on a contract changes only by: (1) asking Shrey, (2) a decision recorded in `features/production-tool.clan` (`clan patch-decision`), (3) a bump of `contractVersion` when the change breaks an existing payload, (4) `check.py` passing. Adding an optional field is not breaking; renaming, removing, tightening or changing a meaning is.
 
 Check after any change:
 
@@ -78,7 +78,7 @@ The adapter owns the exact request:
 - **Moderation:** never retry a moderated job (Runway `SAFETY.INPUT.*`, fal `content_policy_violation`). It becomes `moderated`, which can't be retried.
 - **`config.json` is public.** Event codes, keys and the blocked list live in Secrets Manager and DynamoDB, not in it.
 
-## Decided in this draft (the owner confirms at D1)
+## Decided at D1
 
 1. **Field names.** The document is snake_case, like all CLAN data here; the API is camelCase. `shot` is shared and keeps snake_case in both. The shape (separate lists joined by id) borrows from Advertising Studio, but this is its own app and does not promise compatibility with it (owner, 2026-10-06).
 2. **Job states** are pipeline.yaml's nine, in the relay and the document alike.
