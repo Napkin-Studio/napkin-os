@@ -89,6 +89,8 @@ jobs:
       - name: Build the web app
         if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
         working-directory: production-tool/web
+        env:
+          VITE_RELAY_URL: /api   # same origin through CloudFront; without it the app runs on its in-browser mock
         run: npm ci && npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4
