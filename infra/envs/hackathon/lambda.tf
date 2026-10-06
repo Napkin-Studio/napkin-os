@@ -131,6 +131,7 @@ resource "aws_lambda_function" "relay" {
       BLOCKED_TABLE         = aws_dynamodb_table.blocked.name
       STITCH_FUNCTION       = "${aws_lambda_function.stitch.function_name}:live"
       SECRET_ARNS           = jsonencode({ for k, s in aws_secretsmanager_secret.relay : k => s.arn })
+      NAPKIN_MODEL_API      = "bedrock" # the director calls Claude on Bedrock with the relay role (IAM), no API key
     }
   }
 
