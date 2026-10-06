@@ -288,7 +288,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .stale { font-size: 11px; font-weight: 600; color: var(--danger); }
 
 /* ── Video ───────────────────────────────────────────────────────────────── */
-.video-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+.video-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
 @media (max-width: 1180px) { .video-layout { grid-template-columns: 1fr; } }
 .strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
 .shotcard { flex: 0 0 168px; border-radius: 14px; border: 2px solid transparent; background: var(--card); box-shadow: var(--shadow-soft); overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
@@ -309,7 +309,9 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .timeline .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--create); pointer-events: none; }
 .timeline .mark { position: absolute; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--status-amber); transform: translateX(-50%); border: 2px solid var(--paper); }
 .timeline .mark.done { background: var(--status-green); }
-.comments { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
+.comments { display: flex; flex-direction: column; gap: 8px; max-height: 38vh; overflow: auto; }
+.sketch-cta { position: absolute; transform: translate(-50%, 12px); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sketch-cta .err { color: var(--danger); font-size: 12px; font-weight: 600; background: var(--card); padding: 2px 8px; border-radius: 6px; }
 .comment { padding: 10px 12px; border-radius: 12px; background: var(--soft); cursor: pointer; border: 1px solid transparent; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
 .comment:hover { border-color: var(--line); }
 .comment .tc { font-family: var(--f-mono); font-size: 11px; color: var(--create); font-weight: 600; }

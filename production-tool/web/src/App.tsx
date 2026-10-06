@@ -38,7 +38,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         {stage === 'storyboard' && <div className="stage-pane"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane"><Video /></div>}
       </div>
-      {(import.meta.env.DEV || new URLSearchParams(location.search).has('dev')) && <DevSwitch />}
+      {!import.meta.env.PROD && <DevSwitch />}
     </>
   )
 }

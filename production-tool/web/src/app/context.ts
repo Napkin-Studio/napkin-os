@@ -40,6 +40,11 @@ export function useJobsTick(): number {
   return useSyncExternalStore(runner.subscribe, runner.getVersion)
 }
 
+/** MOCK labels show only while the in-browser mock relay is in use (no VITE_RELAY_URL). */
+export function useShowMock(): boolean {
+  return useServices().relay.kind === 'mock'
+}
+
 export function useConfig(): { config: Config; controls: Controls } {
   const { remoteConfig } = useServices()
   const ui = useUi()
