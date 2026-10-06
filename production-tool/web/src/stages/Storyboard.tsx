@@ -67,7 +67,7 @@ export function Storyboard() {
   const updateShot = (id: string, patch: Partial<Shot>) => updateDoc(docStore, (d) => {
     const s = d.shots?.find((x) => x.id === id)
     if (s) Object.assign(s, patch)
-  })
+  }, 'edit shot')
 
   const lock = () => updateDoc(docStore, (d) => {
     for (const s of d.shots ?? []) s.status = 'locked'
@@ -153,7 +153,7 @@ export function Storyboard() {
                     onClick={() => updateDoc(docStore, (d) => {
                       d.shots = (d.shots ?? []).filter((x) => x.id !== s.id).map((x, k) => ({ ...x, order: k + 1 }))
                       d.frames = (d.frames ?? []).filter((f) => f.shot_id !== s.id)
-                    })}>✕</button>
+                    }, 'delete shot')}>✕</button>
                 </div>
               ))}
             </div>
@@ -163,7 +163,7 @@ export function Storyboard() {
                   onClick={() => updateDoc(docStore, (d) => {
                     d.shots ??= []
                     d.shots.push({ id: newId('shot'), order: d.shots.length + 1, duration_s: 5, composition: 'medium', action: '', camera_move: 'static', lead_view: 'front', status: 'planned' })
-                  })}>+ Add shot</button>
+                  }, 'add shot')}>+ Add shot</button>
                 <span className="spacer" />
                 <button className="btn dark" disabled={!check.ok || anyFrameRunning || !doc.character.views.front} onClick={() => drawFrames()}>
                   {anyFrameRunning ? 'Drawing…' : allFramed ? 'All frames drawn' : 'Draw frames'}

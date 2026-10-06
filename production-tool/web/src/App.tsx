@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
@@ -10,6 +10,8 @@ import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
 import { StudioMark } from './ui/Mark'
+import { HistoryPanel } from './ui/History'
+import { CLAN_DB } from './doc/clan'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Character' },
@@ -18,19 +20,25 @@ const STAGES: { id: StageName; n: number; label: string }[] = [
 ]
 
 export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null }) {
-  const { relay } = useServices()
+  const { relay, clan, storeNote } = useServices()
   const doc = useDoc()
   const ui = useUi()
   const { config } = useConfig()
   const stage = doc.stage.current
+  const [history, setHistory] = useState(false)
+  const [trouble, setTrouble] = useState<string | null>(null)
+  useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
 
   if (relay.kind === 'http' && !ui.session) return <SignIn />
 
   return (
     <>
-      <TopBar />
+      <TopBar history={history} onHistory={() => setHistory((h) => !h)} />
       {config.banner && <div className="banner">{config.banner}</div>}
+      {storeNote && <div className="storenote" role="status">{storeNote}</div>}
+      {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
       <div className="stage">
+        {history && <HistoryPanel store={clan} onClose={() => setHistory(false)} />}
         {/* The canvas stays mounted so its jobs keep landing while you're on another stage. */}
         <div className={`stage-pane ${stage === 'character' ? '' : 'hidden'}`}>
           <Character initial={initialCanvas} active={stage === 'character'} />
@@ -43,7 +51,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   )
 }
 
-function TopBar() {
+function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
   const { doc: docStore, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -86,7 +94,8 @@ function TopBar() {
           <span className="dot" />
           {active.length ? `${running} running · ${queued} queued` : 'Nothing running'}
         </span>
-        <button className="btn sm" disabled={exporting} title="Download your work as a zip" onClick={async () => {
+        <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
+        <button className="btn sm" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
           setExporting(true)
           try {
             const { blob, name } = await exportBundle(docStore)
@@ -132,6 +141,7 @@ function DevSwitch() {
           if (!confirm('Start over? This clears your work in this browser.')) return
           try {
             indexedDB.deleteDatabase('napkin-production-tool')
+            indexedDB.deleteDatabase(CLAN_DB)
             localStorage.removeItem('napkin-pt.mock-ledger')
           } catch { /* nothing to clear */ }
           location.reload()

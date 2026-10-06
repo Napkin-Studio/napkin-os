@@ -50,6 +50,22 @@ Beyond the interface: `open(bytes)` (an import), `chain()` (the decision chain,
 newest first), `flush()`, `startMirror()`/`stopMirror()`/`mirrorNow()`, and
 `dispose()`.
 
+## Who did what: three kinds of author
+
+`patch(mp, why)` records the participant's handle unless `why.agent` names
+someone else; `why.pinned` pins the entry (locks, verdicts) and `why.quiet`
+writes the data with no entry (bookkeeping: a job's state, an asset list).
+`record({agent, action, rationale}, {once: true})` writes a decision that
+changes no data, once per agent and action.
+
+`recordJobOutcome(store, job)` (src/attribution.ts) writes, for a job in a
+terminal state, the director's entry (`director · <model> · <promptVersion>`:
+its rationale, the refs it used as what, the prompt it wrote, abbreviated)
+and the provider's (`<provider> · <model>`: cost confirmed, time, output
+sha256, or the error code). Both name the job id in the action, so they are
+written once however often the job is seen. production-tool/web calls it as
+each job lands (web/src/doc/clan.ts).
+
 ## Build and test
 
 ```bash

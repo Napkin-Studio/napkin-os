@@ -161,7 +161,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
                   for (const x of d.takes ?? []) if (x.shot_id === shot.id) x.selected = x.id === t.id
                   const s = d.shots?.find((y) => y.id === shot.id)
                   if (s) s.selected_take = t.id
-                })
+                }, 'pick take')
               }}>v{i + 1}</button>
           ))}
           {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}

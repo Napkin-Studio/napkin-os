@@ -172,10 +172,15 @@ suite_production-tool() {
   ( cd production-tool/relay && uv run -q --python 3.12 pytest -q ) &&
   ( cd production-tool/stitch && uv run -q --python 3.12 pytest -q ) &&
   uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py &&
+  # The CLAN store: napkin-wasm (cargo + wasm-bindgen) into clan-store/src/wasm, its tests
+  # (against the real `clan` CLI), then the web app on top of it.
+  ( cd production-tool/clan-store &&
+    { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
+    npm run -s build && npm run -s lint && npm test ) &&
   if [[ -f production-tool/web/package.json ]]; then
     ( cd production-tool/web &&
       { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-      npm run -s lint && npm test && npm run -s build )
+      npm run -s lint && npm test && npm run -s build:web )
   fi
 }
 

@@ -217,7 +217,9 @@ export class JobRunner {
   private patchDocJob(jobId: string, patch: Partial<DocJob>) {
     updateDoc(this.doc, (d) => {
       const j = d.jobs.find((x) => x.id === jobId)
-      if (j) Object.assign(j, patch, { updated_at: new Date().toISOString() })
+      // Only a real change moves updated_at: a poll that learns nothing writes nothing.
+      const changed = j && Object.entries(patch).some(([k, v]) => JSON.stringify((j as unknown as Record<string, unknown>)[k]) !== JSON.stringify(v))
+      if (j && changed) Object.assign(j, patch, { updated_at: new Date().toISOString() })
     })
   }
 

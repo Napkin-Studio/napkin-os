@@ -8,9 +8,11 @@
   },
   "scripts": {
     "dev": "vite",
+    "clan-store": "npm --prefix ../clan-store ci --no-audit --no-fund && npm --prefix ../clan-store run build",
     "lint": "eslint .",
     "test": "vitest run",
-    "build": "tsc -b && vite build",
+    "build": "npm run clan-store && tsc -b && vite build",
+    "build:web": "tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
