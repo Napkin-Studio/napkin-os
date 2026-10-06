@@ -229,3 +229,25 @@ def test_a_moderated_task_fails_the_relay_job_as_moderated(seam):
     h.clock.tick(6)
     done = h.poll(token, job["jobId"])
     assert done["state"] == "failed" and done["error"]["code"] == "moderated", done
+
+
+
+def test_local_reader_inlines_localhost_assets(monkeypatch):
+    from providers import _seam, base
+    sha = "sha256:" + "c" * 64
+    url = "http://localhost:8787/in/" + sha
+    seen = []
+    monkeypatch.setattr(_seam, "LOCAL_READER", lambda u: seen.append(u) or b"\x89PNG-bytes")
+    base.set_job_context("generate", [{"sha256": sha, "url": url, "mime": "image/png"}])
+    ref = _seam.Resolver()(sha)
+    assert ref.url == "data:image/png;base64," + __import__("base64").b64encode(b"\x89PNG-bytes").decode()
+    assert seen == [url]
+
+
+def test_deployed_urls_are_left_alone(monkeypatch):
+    from providers import _seam, base
+    sha = "sha256:" + "d" * 64
+    url = "https://d1kyxuk8u2ulz5.cloudfront.net/in/" + sha
+    monkeypatch.setattr(_seam, "LOCAL_READER", None)
+    base.set_job_context("generate", [{"sha256": sha, "url": url, "mime": "image/png"}])
+    assert _seam.Resolver()(sha).url == url
