@@ -44,7 +44,8 @@ changed_files() {
     return
   fi
   if [[ -z "$base" ]]; then
-    base="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo origin/main)"
+    base="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null ||
+      { git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop; } || echo origin/main)"
   fi
   git diff --name-only "$(git merge-base "$base" HEAD)" HEAD
   git diff --name-only HEAD          # staged and unstaged
