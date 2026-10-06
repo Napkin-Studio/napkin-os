@@ -18,7 +18,7 @@ import json
 import logging
 import re
 
-from ..doc import (CAMPAIGN_FIELDS, LENS_TITLES, LENSES, ctx_data, ctx_facts, ctx_findings, lens_of_key,
+from ..doc import (CAMPAIGN_FIELDS, LENS_TITLES, LENSES, ctx_data, ctx_facts, current_facts, ctx_findings, lens_of_key,
                    market_list)
 from ..rules.cite import clean_claim
 from ..util import bad, canon_sha, iso
@@ -70,7 +70,7 @@ def compose(doc, clan, handler, caps):
     sel = data.get("selection") or {}
     # a fact a person marked wrong (excluded) is never cited
     excluded = {e.get("fact_id") for e in (sel.get("excluded") or []) if isinstance(e, dict)}
-    pins = [f for f in ctx_facts(clan) if re.fullmatch(r"f_[0-9A-Z]{6,}", str(f.get("id", "")))
+    pins = [f for f in current_facts(clan) if re.fullmatch(r"f_[0-9A-Z]{6,}", str(f.get("id", "")))
             and f.get("id") not in excluded]
     pin_by = {f["id"]: f for f in pins}
     # nor a finding that rests on one: the finding worked out again in its place is used instead

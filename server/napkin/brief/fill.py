@@ -17,7 +17,7 @@ change any of them. One model call for all of them.
 """
 from __future__ import annotations
 
-from ..doc import ctx_facts, ctx_findings
+from ..doc import current_facts, ctx_findings
 from .fields import ARRAY_KEYS, LABELS, clean, filled
 
 # The parts the context fill may write, and what each is for the planner.
@@ -69,7 +69,7 @@ def research_view(clan: dict, data: dict) -> dict:
     own audience, headline, brand and markets (frozen under `upstream`)."""
     pins = [{"id": f["id"], "key": f.get("key"), "value": f.get("value"), "unit": f.get("unit"),
              "market": f.get("market"), "as_of": f.get("as_of"), "entity": f.get("entity")}
-            for f in ctx_facts(clan) if isinstance(f.get("id"), str)][:60]
+            for f in current_facts(clan) if isinstance(f.get("id"), str)][:60]
     findings = [{"id": x["id"], "statement": x.get("statement"), "status": x.get("status")}
                 for x in ctx_findings(clan) if isinstance(x.get("id"), str) and x.get("status") != "rejected"][:30]
     up = []
