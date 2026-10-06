@@ -206,6 +206,15 @@ export class JobRunner {
     this.timers.delete(jobId)
   }
 
+  /** Ask about every job still moving now, without waiting for its timer (tests drive the mock relay with this). */
+  async pollNow() {
+    // Only jobs waiting on a poll timer: a job being fetched into the blob store has none and must not complete twice.
+    await Promise.all([...this.timers.keys()].map((id) => {
+      this.stopPolling(id)
+      return this.poll(id)
+    }))
+  }
+
   private async poll(jobId: string) {
     this.timers.delete(jobId)
     try {

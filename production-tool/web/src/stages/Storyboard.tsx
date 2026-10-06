@@ -1,13 +1,16 @@
-// Stage 2: script → shot list → one frame per shot. Each frame can be changed
-// with a sentence, optionally inside a box (or a painted mask, or a click when
-// the provider can segment), and stepped back to an earlier version.
+// Stage 2: script → shot list → one frame per shot, drawn in order: frame 1
+// from the character views, then each next frame from the views, frame 1
+// (setting, light, style) and the frame before it (jobs/frames.ts). Each frame
+// can be changed with a sentence, optionally inside a box (or a painted mask,
+// or a click when the provider can segment), and stepped back to an earlier version.
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { Composition, CameraMove, Ratio, Region, Shot, View } from '../contracts/types'
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
-import { characterInput, isRunning, jobAt, ratioAspect } from '../jobs/select'
+import { isRunning, jobAt, ratioAspect } from '../jobs/select'
+import { continuity, drawFrame, drawTheRest, firstUndrawn, selectFrame, selectedFrame } from '../jobs/frames'
 import { putBlob } from '../lib/blobs'
 import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
 import { newId } from '../lib/ulid'
@@ -39,6 +42,8 @@ export function Storyboard() {
   const planning = isRunning(doc, planJob)
   const allFramed = shots.length > 0 && shots.every((s) => (doc.frames ?? []).some((f) => f.shot_id === s.id && f.selected))
   const anyFrameRunning = shots.some((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
+  const noFrames = !(doc.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
+  const deps = { relay, doc: docStore, ui: uiStore, runner }
 
   const plan = async () => {
     setError(null)
@@ -54,20 +59,17 @@ export function Storyboard() {
     await runner.submit('shot_list', { script: text.slice(0, 600), targetS: ui.targetS }, [], { for: 'shot_list', revId })
   }
 
-  const drawFrames = async (only?: string[]) => {
+  const attempt = async (fn: () => Promise<unknown>) => {
     setError(null)
     try {
-      const character = await characterInput(relay, doc)
-      for (const shot of shots) {
-        if (only && !only.includes(shot.id)) continue
-        if (!only && (doc.frames ?? []).some((f) => f.shot_id === shot.id && f.selected)) continue
-        if (isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === shot.id))) continue
-        await runner.submit('frame', { shot, character, ratio: ui.ratio }, [], { for: 'frame', shotId: shot.id })
-      }
+      await fn()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   }
+  const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first'))
+  const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next'))
+  const drawRest = () => attempt(() => drawTheRest(deps))
 
   const updateShot = (id: string, patch: Partial<Shot>) => updateDoc(docStore, (d) => {
     const s = d.shots?.find((x) => x.id === id)
@@ -182,9 +184,17 @@ export function Storyboard() {
                     d.shots.push({ id: newId('shot'), order: d.shots.length + 1, duration_s: 5, composition: 'medium', action: '', camera_move: 'static', lead_view: 'front', status: 'planned' })
                   }, 'add shot')}>+ Add shot</button>
                 <span className="spacer" />
-                <button className="btn dark" disabled={!check.ok || anyFrameRunning || !doc.character.views.front} onClick={() => drawFrames()}>
-                  {anyFrameRunning ? 'Drawing…' : allFramed ? 'All frames drawn' : 'Draw frames'}
-                </button>
+                {noFrames ? (
+                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || !doc.character.views.front} onClick={drawFirst}
+                    title="Frame 1 sets the place, the light and the style for every frame after it">
+                    {anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}
+                  </button>
+                ) : (
+                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || allFramed || firstUndrawn(doc) < 0 || !doc.character.views.front} onClick={drawRest}
+                    title="Draw each remaining shot in turn, each one following the one before">
+                    {ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : allFramed ? 'All frames drawn' : 'Draw the rest'}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -194,12 +204,15 @@ export function Storyboard() {
           <>
             <div className="row" style={{ margin: '28px 0 12px' }}>
               <h2>Frames</h2>
-              {controls.series && <span className="faint" style={{ fontSize: 12 }}>· drawn as one series for consistency</span>}
+              <span className="faint" style={{ fontSize: 12 }}>· drawn in order: each follows frame 1 and the one before</span>
               <span className="spacer" />
               <button className="btn primary" disabled={!allFramed || anyFrameRunning} onClick={lock} title={allFramed ? '' : 'Every shot needs a frame'}>Lock storyboard → Video</button>
             </div>
             <div className="frames">
-              {shots.map((s, i) => <FrameCard key={s.id} shot={s} index={i} onDraw={() => drawFrames([s.id])} />)}
+              {shots.map((s, i) => (
+                <FrameCard key={s.id} shot={s} index={i} onDraw={() => (i === 0 ? drawFirst() : drawNext(i))}
+                  onNext={i + 1 < shots.length ? () => drawNext(i + 1) : undefined} />
+              ))}
             </div>
           </>
         )}
@@ -212,7 +225,7 @@ function UndoRow({ label, onUndo }: { label: string; onUndo: () => void }) {
   return <div className="shotrow undo"><UndoChip label={label} onUndo={onUndo} /></div>
 }
 
-function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw: () => void }) {
+function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number; onDraw: () => void; onNext?: () => void }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -231,19 +244,16 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
   const [error, setError] = useState<string | null>(null)
   const [undo, offerUndo, runUndo] = useUndo()
   const region = current ? ui.frameRegions[current.id] : undefined
-  const stale = current && (doc.stale ?? []).some((s) => s.target.kind === 'frame' && s.target.id === current.id)
+  const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
+  const prevShot = index > 0 ? (doc.shots ?? [])[index - 1] : undefined
+  const prevDrawn = !prevShot || !!selectedFrame(doc, prevShot.id)
+  const nextShot = (doc.shots ?? [])[index + 1]
+  const nextEmpty = !!nextShot && !(doc.frames ?? []).some((f) => f.shot_id === nextShot.id)
+  const nextBusy = !!nextShot && isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === nextShot.id))
   const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ui.ratio)
 
   const setRegion = (r: Region | null) => current && uiStore.update((u) => { u.frameRegions[current.id] = r ?? undefined })
-  const select = (frameId: string) => updateDoc(docStore, (d) => {
-    let sha: string | undefined
-    for (const f of d.frames ?? []) if (f.shot_id === shot.id) {
-      f.selected = f.id === frameId
-      if (f.selected) sha = f.asset
-    }
-    const s = d.shots?.find((x) => x.id === shot.id)
-    if (s && sha) s.storyboard_frame = sha
-  }, 'select frame')
+  const select = (frameId: string) => selectFrame(docStore, shot.id, frameId)
 
   const regenerate = async () => {
     setError(null)
@@ -255,12 +265,11 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
           const sha = await putBlob(await maskPng(strokes, asset.w, asset.h))
           mask = await assetRef(relay, sha)
         }
-        await runner.submit('region_edit', { image, region, text: text.trim(), ...(mask ? { mask } : {}) }, [current.job_id], { for: 'frame', shotId: shot.id, parentFrameId: current.id })
+        // A region edit keeps the frame in its sequence: shot 1's frame and the one before go too.
+        const anchors = await continuity(relay, doc, index)
+        await runner.submit('region_edit', { image, region, text: text.trim(), ...(mask ? { mask } : {}), ...anchors }, [current.job_id], { for: 'frame', shotId: shot.id, parentFrameId: current.id, how: 'again' })
       } else {
-        const character = await characterInput(relay, doc)
-        const prevShot = doc.shots?.[index - 1]
-        const prevFrame = prevShot?.storyboard_frame ? await assetRef(relay, prevShot.storyboard_frame) : undefined
-        await runner.submit('frame', { shot, character, ratio: ui.ratio, ...(text.trim() ? { text: text.trim() } : {}), ...(prevFrame ? { previousFrame: prevFrame } : {}) }, current ? [current.job_id] : [], { for: 'frame', shotId: shot.id, ...(current ? { parentFrameId: current.id } : {}) })
+        await drawFrame({ relay, doc: docStore, ui: uiStore, runner }, index, current ? 'again' : index === 0 ? 'first' : 'next', { text, ...(current ? { parent: current } : {}) })
       }
       setText('')
       setStrokes([])
@@ -284,7 +293,7 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
         <b>Shot {index + 1}</b>
         <span className="faint">{label(shot.composition)} · {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
-        {stale && <span className="stale" title="The character changed after this frame was drawn">Out of date</span>}
+        {staleMark && <span className="stale" title={staleMark.reason}>Out of date</span>}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
       <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
@@ -296,8 +305,16 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
         )}
         {!current && !jobId && (
           <div className="pending" style={{ animation: 'none', position: 'absolute', inset: 0 }}>
-            <div className="faint">No frame yet</div>
-            <button className="btn xs" onClick={onDraw} disabled={!doc.character.views.front}>Draw this one</button>
+            {ui.drawingRest && !prevDrawn ? (
+              <div className="faint">Waiting for shot {index}</div>
+            ) : prevDrawn ? (
+              <>
+                <div className="faint">No frame yet</div>
+                <button className="btn xs" onClick={onDraw} disabled={!doc.character.views.front}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
+              </>
+            ) : (
+              <div className="faint">Draw shot {index} first</div>
+            )}
           </div>
         )}
       </RegionImage>
@@ -333,6 +350,9 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
             <div className="row">
               {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
               <span className="spacer" />
+              {onNext && nextEmpty && !ui.drawingRest && (
+                <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>
+              )}
               <button className="btn sm primary" disabled={running || (!!region && !text.trim())} onClick={regenerate}>{region ? 'Change the box' : 'Regenerate'}</button>
             </div>
             {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>{error}</div>}

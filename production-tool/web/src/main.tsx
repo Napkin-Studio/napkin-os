@@ -11,6 +11,7 @@ import { openDocument } from './doc/open'
 import { postClanMirror } from './doc/clan'
 import { applyFrame, applyShotList, applyStitch, applyTake } from './jobs/handlers'
 import { JobRunner } from './jobs/runner'
+import { continueDrawing } from './jobs/frames'
 import { idbGet } from './lib/idb'
 import { createRelay, relayId } from './relay'
 
@@ -42,10 +43,14 @@ async function boot() {
   const runner = new JobRunner(relay, doc, ui)
   runner.stage = () => doc.get().stage.current
   runner.onComplete('shot_list', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'shot_list' && applyShotList(d, job, ctx), 'shot list'))
-  runner.onComplete('frame', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'frame' && applyFrame(d, job, ctx), 'frame'))
+  // A landed frame moves "Draw the rest" on to the next shot (jobs/frames.ts).
+  const frameDeps = { relay, doc, ui, runner }
+  runner.onComplete('frame', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'frame' && applyFrame(d, job, ctx), 'frame')
+    .then(() => continueDrawing(frameDeps)).catch((e) => console.warn('draw the rest stopped', e)))
   runner.onComplete('clip', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'clip' && applyTake(d, job, ctx), 'take'))
   runner.onComplete('stitch', (job) => void updateDoc(doc, (d) => applyStitch(d, job), 'ad'))
   runner.resume()
+  void continueDrawing(frameDeps).catch((e) => console.warn('draw the rest stopped', e))
 
   // The organisers' copy of the .clan: every 5 minutes when something changed,
   // on each lock, and on export (POST /clan). Not on the in-browser mock relay.
