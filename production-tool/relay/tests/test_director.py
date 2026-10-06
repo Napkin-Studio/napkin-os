@@ -398,3 +398,21 @@ def test_an_agent_block_that_breaks_the_schema_raises(tmp_path):
     f = fixture("generate_runway")
     with pytest.raises(DirectorError, match="agent block"):
         d.run(f["op"], f["input"], f["provider"])
+
+
+def test_a_camera_angle_is_dropped_for_a_provider_without_angles():
+    # 2026-10-07: Haiku sent `angle` for a Runway side view and the job failed with DirectorError.
+    from director.director import _drop_unusable
+    sheet = {"angles": False, "seed": False, "ops": {"view": {"model": "m"}}, "video": {"feelEdit": "prompt"}}
+    job = {"prompt": "@front as seen from the right.", "angle": {"horizontal": 90}, "seed": 3, "refs": []}
+    _drop_unusable(job, "view", sheet)
+    assert "angle" not in job and job["seed"] == 3  # only the angle is dropped
+    assert job["prompt"].endswith("Show the side view.")
+
+
+def test_a_camera_angle_is_kept_where_the_provider_has_angles():
+    from director.director import _drop_unusable
+    sheet = {"angles": True, "seed": True, "ops": {"view": {"model": "m"}}, "video": {"feelEdit": "strength"}}
+    job = {"prompt": "@front, back view.", "angle": {"horizontal": 180}, "seed": 3, "refs": []}
+    _drop_unusable(job, "view", sheet)
+    assert job["angle"] == {"horizontal": 180}

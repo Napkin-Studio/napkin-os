@@ -56,6 +56,23 @@ PROMPT_MAX = {("runway", "clip"): 1000, ("runway", "clip_edit"): 1000, ("runway"
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 
 
+
+_VIEW_WORDS = {0: "front", 45: "three-quarter", 90: "side", 180: "back", 270: "side", 315: "three-quarter"}
+
+
+def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
+    """Remove a camera angle the routed provider cannot take, instead of failing the job.
+
+    The prompt tells the model not to send them, but it sometimes does (2026-10-07: Haiku sent a
+    camera `angle` for a Runway view, which has no angle control, and the whole job failed).
+    Dropping it is safe: a view is said in words instead. Other stray fields still fail, by design."""
+    if "angle" in job and not sheet.get("angles"):
+        angle = job.pop("angle")
+        if op == "view":
+            word = _VIEW_WORDS.get(int(round(angle.get("horizontal", 0))) % 360)
+            if word and word.split("-")[0] not in job["prompt"].lower():
+                job["prompt"] = f"{job['prompt'].rstrip()} Show the {word} view."
+
 class DirectorError(Exception):
     """The director's answer cannot be used: it breaks the routed sheet or the job's own facts."""
 
@@ -172,6 +189,7 @@ class Director:
         if output["needsUser"] is not None:
             raise DirectorError("answered with a question and a job; send one or the other")
         job = output["providerJob"]
+        _drop_unusable(job, op, sheet)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
