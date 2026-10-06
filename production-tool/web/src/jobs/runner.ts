@@ -1,0 +1,281 @@
+// Jobs: submit to the relay, write the document entry at submit (state
+// queued), poll no faster than nextPollS, fetch outputs into the blob store,
+// then hand the result to whoever asked for it. Pending jobs resume after a
+// reload because the document and the job purposes are both snapshotted.
+
+import type {
+  ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, Op, Region, StageName,
+} from '../contracts/types'
+import { TERMINAL_STATES } from '../contracts/types'
+import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
+import type { JobCtx, JobPurpose, UiState } from '../doc/ui'
+import { idbLocation, putBlobAs } from '../lib/blobs'
+import { newId } from '../lib/ulid'
+import { asContractError, type Relay } from '../relay'
+
+export interface LiveInfo {
+  state: JobState
+  queuePosition?: number
+}
+
+export type CompletionHandler = (job: Job, ctx: JobCtx) => void
+export type Purpose = JobPurpose['for']
+
+function collectHashes(v: unknown, out: Set<string>) {
+  if (typeof v === 'string') {
+    if (/^sha256:[0-9a-f]{64}$/.test(v)) out.add(v)
+  } else if (Array.isArray(v)) v.forEach((x) => collectHashes(x, out))
+  else if (v && typeof v === 'object') Object.values(v).forEach((x) => collectHashes(x, out))
+}
+
+export function isActive(state: JobState): boolean {
+  return !TERMINAL_STATES.includes(state)
+}
+
+export class JobRunner {
+  private readonly live = new Map<string, LiveInfo>()
+  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly handlers = new Map<Purpose, CompletionHandler>()
+  private readonly waiting = new Map<Purpose, { job: Job; ctx: JobCtx }[]>()
+  private readonly listeners = new Set<() => void>()
+  private version = 0
+  private readonly relay: Relay
+  private readonly doc: DocumentStore
+  private readonly ui: SnapshotStore<UiState>
+  /** The stage the user is on, for log entries. */
+  stage: () => StageName = () => 'character'
+
+  constructor(relay: Relay, doc: DocumentStore, ui: SnapshotStore<UiState>) {
+    this.relay = relay
+    this.doc = doc
+    this.ui = ui
+  }
+
+  // ── observation (for the job chip and pending nodes) ──
+
+  subscribe = (fn: () => void) => {
+    this.listeners.add(fn)
+    return () => this.listeners.delete(fn)
+  }
+  getVersion = () => this.version
+  private emit() {
+    this.version++
+    for (const fn of this.listeners) fn()
+  }
+  liveInfo(jobId: string): LiveInfo | undefined {
+    return this.live.get(jobId)
+  }
+
+  /** Register what happens when a job for `purpose` completes. Flushes results that arrived first. */
+  onComplete(purpose: Purpose, handler: CompletionHandler): () => void {
+    this.handlers.set(purpose, handler)
+    const queued = this.waiting.get(purpose)
+    if (queued) {
+      this.waiting.delete(purpose)
+      for (const { job, ctx } of queued) handler(job, ctx)
+    }
+    return () => {
+      if (this.handlers.get(purpose) === handler) this.handlers.delete(purpose)
+    }
+  }
+
+  // ── submit / retry / cancel ──
+
+  async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job')): Promise<string> {
+    const request: JobRequest = { contractVersion: '1', jobId, op, parentIds, input }
+    const hashes = new Set<string>()
+    collectHashes(input, hashes)
+    const now = new Date().toISOString()
+    const entry: DocJob = {
+      id: jobId,
+      op,
+      state: 'queued',
+      parent_ids: parentIds,
+      input_hashes: [...hashes],
+      created_at: now,
+    }
+    if (input.text) entry.text = input.text
+    if (input.chips?.length) entry.chips = input.chips
+    if (input.region) entry.region = input.region as Region
+    this.ui.update((u) => {
+      u.jobCtx[jobId] = { ...purpose, request }
+    })
+    updateDoc(this.doc, (d) => {
+      d.jobs.push(entry)
+    }, `submit ${op}`)
+    this.live.set(jobId, { state: 'queued' })
+    this.emit()
+    await this.send(request)
+    return jobId
+  }
+
+  private async send(request: JobRequest) {
+    try {
+      const job = await this.relay.createJob(request)
+      this.apply(job)
+    } catch (e) {
+      this.fail(request.jobId, asContractError(e))
+    }
+  }
+
+  /** Re-run a failed job as a new job (same input, new id: the old id would return the same failure). */
+  async retry(jobId: string): Promise<string | null> {
+    const ctx = this.ui.get().jobCtx[jobId]
+    if (!ctx) return null
+    const { request, dismissed: _d, retriedAs: _r, ...purpose } = ctx
+    const newJobId = newId('job')
+    this.ui.update((u) => {
+      const c = u.jobCtx[jobId]
+      if (c) {
+        c.dismissed = true
+        c.retriedAs = newJobId
+      }
+    })
+    await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId)
+    return newJobId
+  }
+
+  async cancel(jobId: string) {
+    this.stopPolling(jobId)
+    try {
+      const job = await this.relay.cancelJob(jobId)
+      this.apply(job)
+    } catch (e) {
+      this.patchDocJob(jobId, { state: 'cancelled', error: asContractError(e) })
+      this.live.set(jobId, { state: 'cancelled' })
+      this.emit()
+    }
+  }
+
+  dismiss(jobId: string) {
+    this.ui.update((u) => {
+      const c = u.jobCtx[jobId]
+      if (c) c.dismissed = true
+    })
+  }
+
+  async report(jobId: string | undefined, message: string, extra: Partial<LogEntry> = {}) {
+    const entry: LogEntry = {
+      level: 'report',
+      message: message.slice(0, 2000),
+      stage: this.stage(),
+      browser: navigator.userAgent.slice(0, 300),
+      ...extra,
+    }
+    if (jobId) entry.jobId = jobId
+    try {
+      await this.relay.log(entry)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Pick up every job that was still moving when the page was last open. */
+  resume() {
+    for (const j of this.doc.get().jobs) {
+      if (isActive(j.state)) {
+        this.live.set(j.id, { state: j.state })
+        this.schedule(j.id, 0.2)
+      }
+    }
+    this.emit()
+  }
+
+  // ── polling ──
+
+  private schedule(jobId: string, seconds: number) {
+    this.stopPolling(jobId)
+    this.timers.set(jobId, setTimeout(() => void this.poll(jobId), Math.max(0.2, seconds) * 1000))
+  }
+
+  private stopPolling(jobId: string) {
+    const t = this.timers.get(jobId)
+    if (t) clearTimeout(t)
+    this.timers.delete(jobId)
+  }
+
+  private async poll(jobId: string) {
+    this.timers.delete(jobId)
+    try {
+      const job = await this.relay.getJob(jobId)
+      this.apply(job)
+    } catch (e) {
+      const err = asContractError(e)
+      if (err.code === 'invalid_input' || err.code === 'unauthorised') this.fail(jobId, err)
+      else this.schedule(jobId, 5) // network blip: keep trying, the ledger has the job
+    }
+  }
+
+  private fail(jobId: string, error: ContractError) {
+    this.stopPolling(jobId)
+    this.patchDocJob(jobId, { state: 'failed', error })
+    this.live.set(jobId, { state: 'failed' })
+    this.emit()
+  }
+
+  private patchDocJob(jobId: string, patch: Partial<DocJob>) {
+    updateDoc(this.doc, (d) => {
+      const j = d.jobs.find((x) => x.id === jobId)
+      if (j) Object.assign(j, patch, { updated_at: new Date().toISOString() })
+    })
+  }
+
+  private apply(job: Job) {
+    const done = job.state === 'completed'
+    const prev = this.doc.get().jobs.find((x) => x.id === job.jobId)
+    if (prev && !isActive(prev.state) && prev.state === job.state) return
+    this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition })
+    const patch: Partial<DocJob> = { state: done ? 'fetching' : job.state, cost: job.cost }
+    if (job.provider) patch.provider = job.provider
+    if (job.model) patch.model = job.model
+    if (job.requestId) patch.remote_id = job.requestId
+    if (job.director) patch.agent = job.director
+    if (job.error) patch.error = job.error
+    this.patchDocJob(job.jobId, patch)
+    this.emit()
+    if (done) void this.complete(job)
+    else if (isActive(job.state)) this.schedule(job.jobId, job.nextPollS ?? 2)
+  }
+
+  private async complete(job: Job) {
+    try {
+      const assets: DocAsset[] = []
+      for (const o of job.outputs ?? []) {
+        const blob = await this.relay.fetchOutput(o)
+        await putBlobAs(o.sha256, blob)
+        const a: DocAsset = {
+          sha256: o.sha256,
+          kind: o.mime.startsWith('video/') ? 'video' : 'image',
+          mime: o.mime,
+          origin: job.kind === 'mock' ? 'mock' : 'generated',
+          job_id: job.jobId,
+          locations: [idbLocation(o.sha256), o.url],
+        }
+        if (o.bytes) a.bytes = o.bytes
+        if (o.w) a.w = o.w
+        if (o.h) a.h = o.h
+        if (o.durationS) a.duration_s = o.durationS
+        assets.push(a)
+      }
+      updateDoc(this.doc, (d) => {
+        for (const a of assets) if (!d.assets.some((x) => x.sha256 === a.sha256)) d.assets.push(a)
+        const j = d.jobs.find((x) => x.id === job.jobId)
+        if (j) {
+          j.state = 'completed'
+          j.outputs = (job.outputs ?? []).map((o) => o.sha256)
+          j.updated_at = new Date().toISOString()
+        }
+      }, `complete ${job.op}`)
+      this.live.set(job.jobId, { state: 'completed' })
+      this.emit()
+      const ctx = this.ui.get().jobCtx[job.jobId]
+      if (!ctx) return
+      const handler = this.handlers.get(ctx.for)
+      if (handler) handler(job, ctx)
+      else this.waiting.set(ctx.for, [...(this.waiting.get(ctx.for) ?? []), { job, ctx }])
+    } catch (e) {
+      this.fail(job.jobId, asContractError(e))
+    }
+  }
+}
