@@ -73,6 +73,31 @@ def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
             if word and word.split("-")[0] not in job["prompt"].lower():
                 job["prompt"] = f"{job['prompt'].rstrip()} Show the {word} view."
 
+
+def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
+    """For a plain ratio ('9:16', '4:5', '16:9'; both terms 32 or less), the allowed 'W:H' of nearly the
+    same shape and closest to 1 MP. Pixel sizes ('1080:1350') are left alone: those must match exactly."""
+    import math
+    try:
+        w, h = (int(x) for x in ratio.split(":"))
+    except ValueError:
+        return None
+    if not allowed or not (0 < w <= 32 and 0 < h <= 32):
+        return None
+    target = math.log(w / h)
+
+    def shape(r: str) -> float:
+        a, b = (int(x) for x in r.split(":"))
+        return abs(math.log(a / b) - target)
+
+    def area(r: str) -> float:
+        a, b = (int(x) for x in r.split(":"))
+        return abs(math.log(a * b / 1_048_576))
+
+    best = min(shape(r) for r in allowed)
+    return min((r for r in allowed if shape(r) <= best + 0.04), key=area)
+
+
 class DirectorError(Exception):
     """The director's answer cannot be used: it breaks the routed sheet or the job's own facts."""
 
@@ -252,6 +277,12 @@ class Director:
             raise DirectorError(f"{provider} {op} takes no ratio")
         if ratio and provider == "runway":
             allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if op == "region_edit" else FLASH_RATIOS
+            if ratio not in allowed:
+                # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
+                # size this model takes rather than failing the job (2026-10-07: storyboard frames).
+                ratio = _nearest_ratio(ratio, allowed)
+                if ratio:
+                    job["ratio"] = ratio
             if ratio not in allowed:
                 raise DirectorError(f"runway {op} does not take ratio {ratio!r}")
         spec = sheet["ops"][op]
