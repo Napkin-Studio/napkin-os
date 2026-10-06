@@ -4,7 +4,7 @@
     "generate": ["fal", "runway"], "combine": ["fal", "runway"], "view": ["fal", "runway"], "shot_list": [],
     "frame": ["fal", "runway"], "region_edit": ["fal", "runway"], "clip": ["fal", "heygen", "runway"], "clip_edit": ["runway"], "stitch": []
   },
-  "director": { "promptVersion": "director.v1", "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
+  "director": { "promptVersion": "director.v2", "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
   "quotas": { "image": 40, "video": 6, "render": 3 },
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },

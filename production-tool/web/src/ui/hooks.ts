@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
+import { placeFloating, type Anchor } from '../lib/place'
 
 /** An object URL for a content hash from the local blob store. */
 export function useBlobUrl(sha: string | undefined): string | undefined {
@@ -50,4 +51,26 @@ export function useColorScheme(): 'light' | 'dark' {
     return () => m.removeEventListener('change', fn)
   }, [])
   return dark ? 'dark' : 'light'
+}
+
+/**
+ * Position a floating element (toolbar, popover) by its anchor, kept fully inside
+ * its positioned parent: measured after layout, so it is placed before it paints.
+ */
+export function useFloating<T extends HTMLElement>(anchor: Anchor): { ref: React.RefObject<T | null>; style: CSSProperties } {
+  const ref = useRef<T>(null)
+  const [dims, setDims] = useState<{ w: number; h: number; bw: number; bh: number } | null>(null)
+  // Every render on purpose: the content (a busy label, an error) changes the size;
+  // the comparison inside stops the loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const box = el.offsetParent as HTMLElement | null
+    const next = { w: el.offsetWidth, h: el.offsetHeight, bw: box?.clientWidth ?? window.innerWidth, bh: box?.clientHeight ?? window.innerHeight }
+    if (!dims || next.w !== dims.w || next.h !== dims.h || next.bw !== dims.bw || next.bh !== dims.bh) setDims(next)
+  })
+  if (!dims) return { ref, style: { left: anchor.x, top: anchor.top, visibility: 'hidden' } }
+  const p = placeFloating(anchor, { w: dims.w, h: dims.h }, { w: dims.bw, h: dims.bh })
+  return { ref, style: { left: p.left, top: p.top, transform: 'none' } }
 }
