@@ -52,6 +52,10 @@ const VERDICT_GUARD_KEY = 'verdict'
 
 const VERDICT_KINDS = new Set(['accept', 'reject', 'select'])
 
+function recordKey(agent: string, action: string): string {
+  return `${agent}\u0000${action}`
+}
+
 export class ClanDocumentStore implements DocumentStore {
   private host: NapkinHost | null = null
   private doc: Doc | null = null
@@ -64,6 +68,8 @@ export class ClanDocumentStore implements DocumentStore {
   private readonly wasm?: WasmSource
   private mirror: { post: MirrorPost; timer: ReturnType<typeof setInterval> | null; lastPosted: string | null; onError: (e: unknown) => void } | null = null
   private revision = 0
+  /** `agent action` of every entry in the chain, built on first need. */
+  private recorded: Set<string> | null = null
 
   constructor(opts: ClanStoreOptions = {}) {
     this.wasm = opts.wasm
@@ -144,16 +150,52 @@ export class ClanDocumentStore implements DocumentStore {
       if (!why?.action?.trim()) throw new TypeError('why.action is required: it is the decision-chain entry')
       const next = mergePatch(this.get(), mergePatchBody)
       assertValid(next, 'the patched document')
-      route(h, '/patch-data', {
-        patch: mergePatchBody,
-        agent: this.get().participant.handle,
-        action: why.action,
-        rationale: why.rationale ?? '',
-      })
+      // A body without `agent` writes the data and no decision (the host's
+      // rule), which is what a quiet write is.
+      const agent = why.agent?.trim() || this.get().participant.handle
+      route(h, '/patch-data', why.quiet
+        ? { patch: mergePatchBody }
+        : {
+            patch: mergePatchBody,
+            agent,
+            action: why.action,
+            rationale: why.rationale ?? '',
+            ...(why.pinned ? { pinned: true } : {}),
+          })
+      if (!why.quiet) this.recorded?.add(recordKey(agent, why.action))
       this.doc = this.readData()
       this.changed()
       this.scheduleSave()
       return this.doc
+    })
+  }
+
+  /**
+   * A decision that changes no data: who did what, and why. With `once`, it is
+   * written only if the chain has no entry by the same agent with the same
+   * action (so a job's director and provider entries survive reloads and
+   * repeated polls without doubling). Resolves true when it was written.
+   */
+  record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean }, opts: { once?: boolean } = {}): Promise<boolean> {
+    return this.serial(async () => {
+      const h = this.need()
+      if (!entry?.action?.trim()) throw new TypeError('record: action is required')
+      const agent = entry.agent?.trim() || this.get().participant.handle
+      const key = recordKey(agent, entry.action)
+      if (opts.once && this.recordedKeys(h).has(key)) return false
+      route(h, '/patch-data', {
+        patch: {},
+        append_keys: [VERDICT_GUARD_KEY],
+        agent,
+        action: entry.action,
+        rationale: entry.rationale ?? '',
+        ...(entry.pinned ? { pinned: true } : {}),
+      })
+      this.recorded?.add(key)
+      this.revision++
+      this.changed()
+      this.scheduleSave()
+      return true
     })
   }
 
@@ -170,6 +212,7 @@ export class ClanDocumentStore implements DocumentStore {
         rationale: v.note ?? '',
         pinned: true,
       })
+      this.recorded?.add(recordKey(this.get().participant.handle, verdictAction(v)))
       this.revision++
       this.changed()
       this.scheduleSave()
@@ -223,9 +266,9 @@ export class ClanDocumentStore implements DocumentStore {
     this.mirror = null
   }
 
-  /** Post the bytes now, whatever changed. */
-  mirrorNow(): Promise<void> {
-    return this.postMirror('manual')
+  /** Post the bytes now, whatever changed (e.g. on a lock: reason 'accept'). */
+  mirrorNow(reason: 'accept' | 'manual' = 'manual'): Promise<void> {
+    return this.postMirror(reason)
   }
 
   /** Release the wasm host and timers. */
@@ -255,6 +298,15 @@ export class ClanDocumentStore implements DocumentStore {
   private swapHost(h: NapkinHost) {
     this.host?.free()
     this.host = h
+    this.recorded = null
+  }
+
+  private recordedKeys(h: NapkinHost): Set<string> {
+    if (!this.recorded) {
+      const c = route<{ decisions?: ChainEntry[] }>(h, '/chain')
+      this.recorded = new Set((c?.decisions ?? []).map((d) => recordKey(d.agent, d.action)))
+    }
+    return this.recorded
   }
 
   private async openBytesNow(bytes: Uint8Array): Promise<Doc> {
@@ -276,6 +328,7 @@ export class ClanDocumentStore implements DocumentStore {
       console.warn(`restored document does not match document.schema.json: ${p.join('; ')}`)
     }
     prev?.free()
+    this.recorded = null
     this.doc = data
     this.changed()
     return data

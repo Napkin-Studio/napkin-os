@@ -52,6 +52,14 @@ export interface DocAsset {
 export interface Why {
   action: string
   rationale?: string
+  /** Who made it. Default: the participant's handle. The director and the
+   * provider steps name themselves (see attribution.ts). */
+  agent?: string
+  /** Never compressed: for verdicts and locks. */
+  pinned?: boolean
+  /** Bookkeeping (a job's state, an asset list): change the data, write no
+   * decision-chain entry. */
+  quiet?: boolean
 }
 
 /** A person's verdict on a view, frame, take or shot. */

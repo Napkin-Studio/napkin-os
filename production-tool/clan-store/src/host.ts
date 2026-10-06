@@ -11,7 +11,11 @@ let ready: Promise<unknown> | null = null
 /** Load the module. In a browser the default finds napkin_wasm_bg.wasm beside
  * the glue (Vite rewrites the URL); in node, pass the bytes. */
 export function loadWasm(source?: WasmSource): Promise<unknown> {
-  ready ??= init(source === undefined ? undefined : { module_or_path: source })
+  // A failed load (a dropped fetch) is not remembered: the next call tries again.
+  ready ??= init(source === undefined ? undefined : { module_or_path: source }).catch((e: unknown) => {
+    ready = null
+    throw e
+  })
   return ready
 }
 
@@ -22,7 +26,9 @@ function base64Bytes(b64: string): Uint8Array {
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
     return out
   }
-  return Uint8Array.from(Buffer.from(b64, 'base64'))
+  // node without atob (very old): Buffer, reached without needing node's types in a browser build.
+  const B = (globalThis as unknown as { Buffer: { from(s: string, enc: string): Uint8Array } }).Buffer
+  return Uint8Array.from(B.from(b64, 'base64'))
 }
 
 let template: Uint8Array | null = null
