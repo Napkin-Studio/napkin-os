@@ -3,25 +3,87 @@
   "provider": "fal",
   "checked": "2026-10-06",
   "ops": {
-    "generate":    { "model": "kling-image-o3", "endpoint": "fal-ai/kling-image/o3/image-to-image", "estimateUsd": 0.028 },
-    "combine":     { "model": "kling-image-o3", "endpoint": "fal-ai/kling-image/o3/image-to-image", "estimateUsd": 0.028 },
-    "view":        { "model": "qwen-image-edit-2511-multiple-angles", "endpoint": "fal-ai/qwen-image-edit-2511-multiple-angles", "estimateUsd": 0.035 },
-    "frame":       { "model": "kling-image-o3", "endpoint": "fal-ai/kling-image/o3/image-to-image", "estimateUsd": 0.028 },
-    "region_edit": { "model": "ideogram-v4.5-edit", "endpoint": "ideogram/v4.5/edit", "estimateUsd": 0.06 },
-    "clip":        { "model": "kling-v3-pro-i2v", "endpoint": "fal-ai/kling-video/v3/pro/image-to-video", "estimateUsd": 0.56, "minS": 3, "maxS": 15 },
-    "clip_edit":   { "model": "luma-ray-3.2-v2v", "endpoint": "luma/agent/ray/v3.2/video-to-video", "estimateUsd": 0.72, "durationsS": [5, 10],
-                     "regionModel": "wan-vace-14b-inpainting", "regionEndpoint": "fal-ai/wan-vace-14b/inpainting" }
+    "generate": {
+      "model": "kling-image-o3",
+      "endpoint": "fal-ai/kling-image/o3/image-to-image",
+      "estimateUsd": 0.028
+    },
+    "combine": {
+      "model": "kling-image-o3",
+      "endpoint": "fal-ai/kling-image/o3/image-to-image",
+      "estimateUsd": 0.028
+    },
+    "view": {
+      "model": "qwen-image-edit-2511-multiple-angles",
+      "endpoint": "fal-ai/qwen-image-edit-2511-multiple-angles",
+      "estimateUsd": 0.035
+    },
+    "frame": {
+      "model": "kling-image-o3",
+      "endpoint": "fal-ai/kling-image/o3/image-to-image",
+      "estimateUsd": 0.028
+    },
+    "region_edit": {
+      "model": "ideogram-v4.5-edit",
+      "endpoint": "ideogram/v4.5/edit",
+      "estimateUsd": 0.06
+    },
+    "clip": {
+      "model": "kling-v3-pro-i2v",
+      "endpoint": "fal-ai/kling-video/v3/pro/image-to-video",
+      "estimateUsd": 0.56,
+      "minS": 3,
+      "maxS": 15
+    },
+    "clip_edit": {
+      "model": "luma-ray-3.2-v2v",
+      "endpoint": "luma/agent/ray/v3.2/video-to-video",
+      "estimateUsd": 0.72,
+      "durationsS": [
+        5,
+        10
+      ],
+      "regionModel": "wan-vace-14b-inpainting",
+      "regionEndpoint": "fal-ai/wan-vace-14b/inpainting"
+    }
   },
   "tagSyntax": "at_image_n",
-  "refs": { "max": 10, "maxCharacter": 4, "element": true },
+  "refs": {
+    "max": 10,
+    "maxCharacter": 4,
+    "element": true
+  },
   "seed": false,
   "outputsPerCall": 9,
   "mask": "png_black_edit",
   "segment": true,
   "angles": true,
   "series": 9,
-  "video": { "firstFrameWithRefs": true, "lastFrame": true, "multiShot": true, "regionEdit": "mask", "feelEdit": "strength", "audioDefault": true },
-  "inputs": { "headRequired": false, "followsRedirects": false, "maxImageMb": 30, "maxVideoMb": 200 },
-  "results": { "mode": "poll_or_webhook", "minPollS": 2, "idempotencyKey": false, "outputUrlTtlH": null },
-  "concurrency": { "image": 2, "video": 2, "note": "2 requests in progress in total for a new account, rising with paid invoices up to 40. Send x-app-fal-disable-fallback. Mask polarity is per endpoint: ideogram v4.5 black = edit; wan-vace undocumented, so test it." }
+  "video": {
+    "firstFrameWithRefs": true,
+    "lastFrame": true,
+    "multiShot": true,
+    "regionEdit": "mask",
+    "feelEdit": "strength",
+    "audioDefault": true,
+    "audioControl": true
+  },
+  "inputs": {
+    "headRequired": false,
+    "followsRedirects": false,
+    "maxImageMb": 30,
+    "maxVideoMb": 200
+  },
+  "results": {
+    "mode": "poll_or_webhook",
+    "minPollS": 2,
+    "idempotencyKey": false,
+    "outputUrlTtlH": null,
+    "cancel": true
+  },
+  "concurrency": {
+    "image": 2,
+    "video": 2,
+    "note": "2 requests in progress in total for a new account, rising with paid invoices up to 40. Send x-app-fal-disable-fallback. Mask polarity is per endpoint: ideogram v4.5 black = edit; wan-vace undocumented, so test it."
+  }
 }

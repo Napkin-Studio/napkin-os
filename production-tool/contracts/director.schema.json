@@ -5,28 +5,73 @@
   "description": "What the director model returns for one job, enforced as strict JSON (structured output, validated, one retry, then a loud failure: server/napkin/model.py). It sees the job input and the routed provider's capability sheet, and never a chat history. For shot_list it returns shots; for every other op it returns one provider job in that provider's syntax.",
   "type": "object",
   "properties": {
-    "op": { "$ref": "common.schema.json#/$defs/op" },
-    "providerJob": { "$ref": "#/$defs/providerJob" },
+    "op": {
+      "$ref": "common.schema.json#/$defs/op"
+    },
+    "providerJob": {
+      "$ref": "#/$defs/providerJob"
+    },
     "shots": {
       "type": "array",
       "minItems": 2,
       "maxItems": 8,
-      "items": { "$ref": "document.schema.json#/$defs/shot" },
+      "items": {
+        "$ref": "document.schema.json#/$defs/shot"
+      },
       "description": "shot_list only. durationS sums to the target length."
     },
-    "needsUser": { "$ref": "#/$defs/needsUser" },
-    "rationale": { "type": "string", "maxLength": 300 },
-    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+    "needsUser": {
+      "$ref": "#/$defs/needsUser"
+    },
+    "rationale": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
   },
-  "required": ["op", "needsUser", "rationale", "confidence"],
+  "required": [
+    "op",
+    "needsUser",
+    "rationale",
+    "confidence"
+  ],
   "additionalProperties": false,
   "allOf": [
     {
-      "if": { "properties": { "op": { "const": "shot_list" } } },
-      "then": { "required": ["shots"], "not": { "required": ["providerJob"] } },
+      "if": {
+        "properties": {
+          "op": {
+            "const": "shot_list"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "shots"
+        ],
+        "not": {
+          "required": [
+            "providerJob"
+          ]
+        }
+      },
       "else": {
-        "if": { "properties": { "needsUser": { "type": "null" } } },
-        "then": { "required": ["providerJob"] }
+        "if": {
+          "properties": {
+            "needsUser": {
+              "type": "null"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "providerJob"
+          ]
+        }
       }
     }
   ],
@@ -34,14 +79,30 @@
     "needsUser": {
       "description": "null, or one question with 2-4 options shown as chips; one tap resubmits with input.answer.",
       "oneOf": [
-        { "type": "null" },
+        {
+          "type": "null"
+        },
         {
           "type": "object",
           "properties": {
-            "question": { "type": "string", "maxLength": 120 },
-            "options": { "type": "array", "minItems": 2, "maxItems": 4, "items": { "type": "string", "maxLength": 40 } }
+            "question": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "options": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": {
+                "type": "string",
+                "maxLength": 40
+              }
+            }
           },
-          "required": ["question", "options"],
+          "required": [
+            "question",
+            "options"
+          ],
           "additionalProperties": false
         }
       ]
@@ -50,61 +111,213 @@
       "type": "object",
       "description": "Provider-neutral job the adapter turns into the exact request. Refs carry the name the prompt uses in the provider's syntax (capability tagSyntax).",
       "properties": {
-        "provider": { "$ref": "common.schema.json#/$defs/provider" },
-        "model": { "type": "string" },
-        "prompt": { "type": "string", "maxLength": 5000 },
-        "negative": { "type": "string", "maxLength": 1000 },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/provider"
+        },
+        "model": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "negative": {
+          "type": "string",
+          "maxLength": 1000
+        },
         "refs": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
-              "name": { "type": "string", "description": "As written in the prompt: hero, Image1, Element1, Picture 1…" },
-              "role": { "enum": ["character", "object", "element_front", "element_angle", "frame", "marked", "current"] }
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "name": {
+                "type": "string",
+                "description": "As written in the prompt: hero, Image1, Element1, Picture 1…"
+              },
+              "role": {
+                "enum": [
+                  "character",
+                  "object",
+                  "element_front",
+                  "element_angle",
+                  "frame",
+                  "marked",
+                  "current"
+                ]
+              }
             },
-            "required": ["sha256", "name", "role"],
+            "required": [
+              "sha256",
+              "name",
+              "role"
+            ],
             "additionalProperties": false
           }
         },
-        "firstFrame": { "$ref": "common.schema.json#/$defs/sha256" },
-        "lastFrame": { "$ref": "common.schema.json#/$defs/sha256" },
-        "mask": { "$ref": "common.schema.json#/$defs/sha256" },
-        "region": { "$ref": "common.schema.json#/$defs/region" },
+        "firstFrame": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "lastFrame": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "mask": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "region": {
+          "$ref": "common.schema.json#/$defs/region"
+        },
         "keyframe": {
           "type": "object",
           "description": "clip_edit on Runway aleph2: the edited frame, its time and the integer-second range it applies to (end exclusive).",
           "properties": {
-            "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
-            "atS": { "type": "number", "minimum": 0 },
-            "startS": { "type": "integer", "minimum": 0 },
-            "endS": { "type": "integer", "minimum": 1 }
+            "sha256": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "atS": {
+              "type": "number",
+              "minimum": 0
+            },
+            "startS": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "endS": {
+              "type": "integer",
+              "minimum": 1
+            }
           },
-          "required": ["sha256", "atS"],
+          "required": [
+            "sha256",
+            "atS"
+          ],
           "additionalProperties": false
         },
-        "angle": { "type": "object", "properties": { "horizontal": { "type": "number", "minimum": 0, "maximum": 360 }, "vertical": { "type": "number", "minimum": -30, "maximum": 90 } }, "required": ["horizontal"], "additionalProperties": false },
-        "ratio": { "type": "string", "description": "In the provider's own form, e.g. 1080:1920 for Runway, 9:16 for fal." },
-        "durationS": { "type": "number", "minimum": 1, "maximum": 30 },
-        "seed": { "type": "integer", "minimum": 0 },
-        "audio": { "const": false, "description": "Always sent explicitly. Wednesday has no audio." },
-        "outputs": { "type": "integer", "minimum": 1, "maximum": 9 },
-        "strength": { "enum": ["adhere", "flex", "reimagine"] }
+        "angle": {
+          "type": "object",
+          "properties": {
+            "horizontal": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 360
+            },
+            "vertical": {
+              "type": "number",
+              "minimum": -30,
+              "maximum": 90
+            }
+          },
+          "required": [
+            "horizontal"
+          ],
+          "additionalProperties": false
+        },
+        "ratio": {
+          "type": "string",
+          "description": "In the provider's own form, e.g. 1080:1920 for Runway, 9:16 for fal."
+        },
+        "durationS": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "audio": {
+          "const": false,
+          "description": "Sent as false wherever the model has an audio switch (capability video.audioControl). Where it has none, the adapter omits it and the director writes 'no music, no dialogue' into the prompt."
+        },
+        "outputs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9
+        },
+        "strength": {
+          "enum": [
+            "adhere",
+            "flex",
+            "reimagine"
+          ]
+        },
+        "op": {
+          "$ref": "common.schema.json#/$defs/op",
+          "description": "Filled by the relay from the job, so the adapter knows which endpoint to call. Added 2026-10-06 (additive)."
+        },
+        "video": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "clip_edit: the source clip. Added 2026-10-06 (additive)."
+        },
+        "keyframes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "properties": {
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "atS": {
+                "type": "number",
+                "minimum": 0
+              },
+              "startS": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "endS": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "sha256",
+              "atS"
+            ],
+            "additionalProperties": false
+          },
+          "description": "clip_edit: up to 5 edited frames (Runway aleph2). With ranges, every keyframe sets one or none does. Use this or keyframe, not both. Added 2026-10-06 (additive)."
+        }
       },
-      "required": ["provider", "model", "prompt", "refs"],
+      "required": [
+        "provider",
+        "model",
+        "prompt",
+        "refs"
+      ],
       "additionalProperties": false
     },
     "agentBlock": {
       "type": "object",
       "description": "Logged with every job and written into the CLAN entry, so a job can be re-run against a newer prompt and diffed.",
       "properties": {
-        "model": { "type": "string" },
-        "promptVersion": { "type": "string", "pattern": "^director\\.v[0-9]+$" },
-        "output": { "type": "object" },
-        "rationale": { "type": "string" },
-        "latencyMs": { "type": "integer" }
+        "model": {
+          "type": "string"
+        },
+        "promptVersion": {
+          "type": "string",
+          "pattern": "^director\\.v[0-9]+$"
+        },
+        "output": {
+          "type": "object"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "latencyMs": {
+          "type": "integer"
+        }
       },
-      "required": ["model", "promptVersion", "output", "rationale"],
+      "required": [
+        "model",
+        "promptVersion",
+        "output",
+        "rationale"
+      ],
       "additionalProperties": false
     }
   }
