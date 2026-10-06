@@ -411,7 +411,8 @@ export class CanvasController {
     }
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
     for (const p of placed) {
-      await this.s.runner.submit('view', { character: { front: frontRef }, view: p.view, refs }, [front.job_id], { for: 'canvas' }, p.jobId)
+      // Same ratio as the front view, so the four views line up (the relay refuses a view without one).
+      await this.s.runner.submit('view', { character: { front: frontRef }, view: p.view, refs, ratio: '4:5' }, [front.job_id], { for: 'canvas' }, p.jobId)
     }
   }
 

@@ -398,3 +398,31 @@ def test_an_agent_block_that_breaks_the_schema_raises(tmp_path):
     f = fixture("generate_runway")
     with pytest.raises(DirectorError, match="agent block"):
         d.run(f["op"], f["input"], f["provider"])
+
+
+def test_a_camera_angle_is_dropped_for_a_provider_without_angles():
+    # 2026-10-07: Haiku sent `angle` for a Runway side view and the job failed with DirectorError.
+    from director.director import _drop_unusable
+    sheet = {"angles": False, "seed": False, "ops": {"view": {"model": "m"}}, "video": {"feelEdit": "prompt"}}
+    job = {"prompt": "@front as seen from the right.", "angle": {"horizontal": 90}, "seed": 3, "refs": []}
+    _drop_unusable(job, "view", sheet)
+    assert "angle" not in job and job["seed"] == 3  # only the angle is dropped
+    assert job["prompt"].endswith("Show the side view.")
+
+
+def test_a_camera_angle_is_kept_where_the_provider_has_angles():
+    from director.director import _drop_unusable
+    sheet = {"angles": True, "seed": True, "ops": {"view": {"model": "m"}}, "video": {"feelEdit": "strength"}}
+    job = {"prompt": "@front, back view.", "angle": {"horizontal": 180}, "seed": 3, "refs": []}
+    _drop_unusable(job, "view", sheet)
+    assert job["angle"] == {"horizontal": 180}
+
+
+def test_a_plain_ratio_is_mapped_to_the_nearest_runway_size():
+    # 2026-10-07: storyboard frames failed with "runway frame does not take ratio '9:16'".
+    from director.director import FLASH_RATIOS, RUNWAY_CLIP_RATIOS, _nearest_ratio
+    assert _nearest_ratio("9:16", FLASH_RATIOS) == "768:1344"
+    assert _nearest_ratio("4:5", FLASH_RATIOS) == "896:1152"
+    assert _nearest_ratio("1:1", FLASH_RATIOS) == "1024:1024"
+    assert _nearest_ratio("16:9", RUNWAY_CLIP_RATIOS) in {"1280:720", "1920:1080"}
+    assert _nearest_ratio("nonsense", FLASH_RATIOS) is None

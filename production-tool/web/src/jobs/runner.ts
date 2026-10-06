@@ -114,7 +114,18 @@ export class JobRunner {
       const job = await this.relay.createJob(request)
       this.apply(job)
     } catch (e) {
-      this.fail(request.jobId, asContractError(e))
+      const err = asContractError(e)
+      // Too many of this person's jobs are running (relay inFlightPerParticipant). The relay did not
+      // record this one, so wait for a free slot and send the same request again (idempotent jobId).
+      if (err.code === 'queue_full' && err.retryable) {
+        if (this.live.get(request.jobId)?.state === 'cancelled') return
+        this.live.set(request.jobId, { state: 'queued' })
+        this.emit()
+        const t = setTimeout(() => { this.timers.delete(request.jobId); void this.send(request) }, Math.max(1, err.retryAfterS ?? 4) * 1000)
+        this.timers.set(request.jobId, t)
+        return
+      }
+      this.fail(request.jobId, err)
     }
   }
 
