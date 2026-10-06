@@ -4,7 +4,7 @@
 // frame), a "change the feel" box, and Render / Export.
 
 import { useMemo, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
 import { characterInput, isRunning, jobAt } from '../jobs/select'
@@ -124,13 +124,12 @@ export function Video() {
           </button>
         </div>
 
-        <div className="video-layout" style={{ marginTop: 20 }}>
-          <Player mode={mode} shot={shot} take={take} onPickShot={setShotId} />
-          <div className="stack" style={{ gap: 14 }}>
+        <div style={{ marginTop: 20 }}>
+          <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}>
             {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobNode jobId={stitchJob} /></div>}
             {latestAd && <AdResult sha={latestAd.asset} />}
             {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
-          </div>
+          </Player>
         </div>
       </div>
     </div>
@@ -143,6 +142,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const takes = takesOf(doc.takes ?? [], shot.id)
   const sel = takes.find((t) => t.selected)
   const thumb = useBlobUrl(shot.storyboard_frame)
+  const showMock = useShowMock()
   const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
   return (
     <div className={`shotcard ${selected ? 'sel' : ''}`} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
@@ -165,14 +165,14 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
               }}>v{i + 1}</button>
           ))}
           {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}
-          {sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
+          {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
         </div>
       </div>
     </div>
   )
 }
 
-function Player({ mode, shot, take, onPickShot }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; onPickShot: (id: string) => void }) {
+function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; onPickShot: (id: string) => void; children?: React.ReactNode }) {
   const { doc: docStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -279,6 +279,7 @@ function Player({ mode, shot, take, onPickShot }: { mode: 'shot' | 'all'; shot?:
   const segTotal = segs.reduce((a, b) => a + b, 0)
 
   return (
+    <div className="video-layout">
     <div className="stack" style={{ gap: 0 }}>
       <div className="player">
         {cur && url ? (
@@ -335,26 +336,31 @@ function Player({ mode, shot, take, onPickShot }: { mode: 'shot' | 'all'; shot?:
           ))}
         </div>
       ) : null}
+    </div>
 
+    <div className="stack" style={{ gap: 14 }}>
       {cur && mode === 'shot' && (
-        <div className="card section stack" style={{ marginTop: 14 }}>
+        <div className="card section stack notes-panel">
           <div className="row">
             <h2>Notes</h2>
             <span className="faint" style={{ fontSize: 12 }}>Shot {cur.shot.order} · v{takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1}</span>
-            <span className="spacer" />
-            {openNotes.length > 0 && (
-              <button className="btn sm primary" disabled={fixing} onClick={fix}>{fixing ? 'Making a new version…' : `Make a new version (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}</button>
-            )}
           </div>
+          <textarea className="textarea" rows={2} placeholder="Leave a note at this moment…" maxLength={1000} value={note}
+            onFocus={pause} onChange={(e) => { pause(); setNote(e.target.value) }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                addNote()
+              }
+            }} />
           <div className="row">
-            <span className="mono" style={{ fontSize: 12, color: 'var(--create)', fontWeight: 600, minWidth: 44 }}>{fmtTime(t)}</span>
-            <input className="input" placeholder="Leave a note at this moment…" maxLength={1000} value={note}
-              onFocus={pause} onChange={(e) => { pause(); setNote(e.target.value) }}
-              onKeyDown={(e) => e.key === 'Enter' && addNote()} />
+            <span className="mono" style={{ fontSize: 12, color: 'var(--create)', fontWeight: 600 }}>at {fmtTime(t)}</span>
+            <span className="spacer" />
+            {/* Box-on-video is cut for Wednesday (D9): it only renders with the videoRegionEdit flag. */}
             {controls.videoRegionEdit && (
               <button className={`btn sm ${drawing ? 'on' : ''}`} title="Draw a box on the paused frame" onClick={() => { pause(); setDrawing(!drawing) }}>▭ Box</button>
             )}
-            <button className="btn sm dark" disabled={!note.trim()} onClick={addNote}>Add</button>
+            <button className="btn sm dark" disabled={!note.trim()} onClick={addNote}>Add note</button>
           </div>
           {region && <div className="faint" style={{ fontSize: 12 }}>Box set on the paused frame. <button className="btn xs ghost" onClick={() => setRegion(null)}>Remove box</button></div>}
           {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
@@ -371,8 +377,13 @@ function Player({ mode, shot, take, onPickShot }: { mode: 'shot' | 'all'; shot?:
             })}
             {!reviews.length && <div className="faint" style={{ fontSize: 12.5 }}>Pause the clip and type. Your note sticks to that moment.</div>}
           </div>
+          {openNotes.length > 0 && (
+            <button className="btn primary" disabled={fixing} onClick={fix}>{fixing ? 'Making a new version…' : `Make a new version (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}</button>
+          )}
         </div>
       )}
+      {children}
+    </div>
     </div>
   )
 }
@@ -420,11 +431,12 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
 function AdResult({ sha }: { sha: string }) {
   const url = useBlobUrl(sha)
   const doc = useDoc()
+  const showMock = useShowMock()
   const asset = doc.assets.find((a) => a.sha256 === sha)
   const ext = asset?.mime.includes('webm') ? 'webm' : 'mp4'
   return (
     <div className="card section stack">
-      <div className="row"><h2>Your ad</h2><span className="spacer" />{asset?.origin === 'mock' && <span className="mockbadge">MOCK</span>}</div>
+      <div className="row"><h2>Your ad</h2><span className="spacer" />{showMock && asset?.origin === 'mock' && <span className="mockbadge">MOCK</span>}</div>
       {url && <video src={url} controls playsInline style={{ width: '100%', borderRadius: 12, background: '#000', maxHeight: 360 }} />}
       {url && <a className="btn sm" href={url} download={`napkin-${doc.participant.handle}-${sha.slice(7, 15)}.${ext}`}>Download</a>}
     </div>

@@ -57,6 +57,16 @@ describe('capability gating', () => {
     expect(c.clickSelect).toBe(true) // fal segments and the event flag is on
   })
 
+  it('the Wednesday cuts (D9) do not render with the event flags', () => {
+    const c = controlsFor(effectiveConfig('event', 'mock'))
+    expect(c.videoRegionEdit).toBe(false)
+    expect(c.feelEdit).toBe(false)
+    expect(c.feelStrength).toBe(false)
+    expect(c.regionEditCanvas).toBe(false)
+    expect(c.moreOptions).toBe(false)
+    expect(c.generate && c.combine && c.views && c.storyboard && c.video && c.stitch).toBe(true)
+  })
+
   it('reads only the first routed provider', () => {
     const cfg = { ...CONFIGS.event, routing: { ...CONFIGS.event.routing, region_edit: ['runway' as const, 'fal' as const] } }
     expect(controlsFor(cfg).maskBrush).toBe(false)

@@ -36,7 +36,7 @@ export interface UiState {
 export function initialUi(): UiState {
   return {
     jobCtx: {},
-    configChoice: 'allon',
+    configChoice: 'event',
     providerChoice: 'mock',
     ratio: '9:16',
     scriptDraft: '',
