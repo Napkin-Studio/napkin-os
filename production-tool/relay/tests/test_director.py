@@ -85,7 +85,7 @@ def test_generate_on_runway():
     assert [r["name"] for r in job["refs"]] == ["sketch", "eyes", "palette"]
     assert res.usage == {"input_tokens": 120, "output_tokens": 60}
     sent = wire.calls[0]
-    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == (PROMPTS / "director.v1.md").read_text()
+    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == (PROMPTS / "director.v2.md").read_text()
     asked = json.loads(sent["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     assert asked["provider"] == "runway" and asked["sheet"]["tagSyntax"] == "at_tag" and asked["op"] == "generate"
 
@@ -134,7 +134,7 @@ def test_agent_block_logs_the_prompt_version():
     d, _ = make(fixture("generate_runway")["reply"])
     res = run("generate_runway", d)
     block = res.agent_block
-    assert block["promptVersion"] == "director.v1" and block["model"] == "claude-haiku-4-5"
+    assert block["promptVersion"] == "director.v2" and block["model"] == "claude-haiku-4-5"
     assert block["output"] == res.output and block["rationale"] == res.output["rationale"]
     assert isinstance(block["latencyMs"], int)
 
@@ -148,10 +148,48 @@ def test_prompt_version_comes_from_the_prompt_file(tmp_path):
     assert wire.calls[0]["system"] == "You are the director."
 
 
-def test_prompt_carries_the_rules():
-    text = (PROMPTS / "director.v1.md").read_text()
-    for rule in ("canonical @tags", "Keep the seed", "0.25", "role `current`", "`audio` to false", "one question"):
+@pytest.mark.parametrize("version", ["director.v1", "director.v2"])
+def test_prompt_carries_the_rules(version):
+    text = (PROMPTS / f"{version}.md").read_text()
+    for rule in ("canonical @tags", "Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer"):
         assert rule in text
+
+
+def test_v2_keeps_the_sketch_and_limits_each_ref_to_its_tag():
+    text = (PROMPTS / "director.v2.md").read_text()
+    for rule in (
+        "never \"the sketch provided\"",           # every ref, the sketch too, by its @tag
+        "It sets the design",                        # the sketch is the character
+        "It is the user's instruction",              # input.text, the frame's words
+        "it wins over the defaults",
+        "only what its tag names",                   # a ref adds what its tag says, nothing else
+        "never the picture's subject, species",      # @texture is material, not the subject
+        "read the purpose from the tag name",        # role other
+        "neutral standing pose",                     # defaults
+        "plain light background",
+        "not photoreal",                             # the sketch's level of simplicity
+        "show it once, in the neutral pose",         # several poses, one character
+        "Never add a background scene",
+        "do not ask",                                # the UI cannot show needsUser yet
+    ):
+        assert rule in text, rule
+
+
+def test_v2_generate_follows_the_frame_text_and_names_every_ref():
+    """The owner's case (2026-10-06): a diamond-headed stick figure, the words written in
+    the frame, and a feather photo tagged @texture with role other."""
+    f = fixture("generate_runway_texture")
+    d, wire = make(f["reply"])
+    res = d.run(f["op"], f["input"], f["provider"])
+    asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
+    assert asked["input"]["text"] == f["input"]["text"]  # the frame's words reach the director
+    job = res.output["providerJob"]
+    assert [r["name"] for r in job["refs"]] == ["sketch", "texture"]
+    assert [r["role"] for r in job["refs"]] == ["character", "object"]
+    prompt = job["prompt"]
+    assert "@sketch" in prompt and "@texture" in prompt and "sketch provided" not in prompt
+    assert "AI agent" in prompt and "material" in prompt and "not photoreal" in prompt
+    assert res.output["needsUser"] is None and res.agent_block["promptVersion"] == "director.v2"
 
 
 # --- failures are loud -------------------------------------------------------
@@ -241,8 +279,8 @@ def refuses(why, *args, **kw):
 def test_view_on_fal_sends_the_angle_the_prompt_maps():
     res = attempt("view_fal")
     assert res.output["providerJob"]["angle"] == {"horizontal": 90, "vertical": 0}
-    text = (PROMPTS / "director.v1.md").read_text()
-    assert "front 0, three_quarter 45, side 90, back 180" in text
+    for v in ("director.v1", "director.v2"):
+        assert "front 0, three_quarter 45, side 90, back 180" in (PROMPTS / f"{v}.md").read_text()
 
 
 def test_clip_edit_on_runway_needs_the_keyframe_the_relay_made():

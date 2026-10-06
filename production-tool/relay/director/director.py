@@ -106,7 +106,7 @@ def _hashes(node) -> set:
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
                  per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
-                 prompt_version: str = "director.v1", contracts: Path = CONTRACTS):
+                 prompt_version: str = "director.v2", contracts: Path = CONTRACTS):
         self.port = model_port
         self.sheets = sheets
         self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
