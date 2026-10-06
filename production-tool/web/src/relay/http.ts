@@ -8,6 +8,7 @@ import { RelayError, type Relay, type UploadResult } from './types'
 export class HttpRelay implements Relay {
   readonly kind = 'http' as const
   private token: string | null = null
+  onUnauthorised?: () => void
   private readonly base: string
 
   constructor(base: string) {
@@ -34,6 +35,7 @@ export class HttpRelay implements Relay {
       json = await res.json()
     } catch { /* empty or not JSON */ }
     if (!res.ok) {
+      if (res.status === 401 && path !== '/session') this.onUnauthorised?.()
       const err = (json as { error?: ContractError } | null)?.error
       throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status)
     }

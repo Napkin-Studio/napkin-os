@@ -202,7 +202,8 @@ export class JobRunner {
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
-      if (err.code === 'invalid_input' || err.code === 'unauthorised') this.fail(jobId, err)
+      if (err.code === 'invalid_input') this.fail(jobId, err)
+      else if (err.code === 'unauthorised') this.schedule(jobId, 10) // signed out: resume once signed in again
       else this.schedule(jobId, 5) // network blip: keep trying, the ledger has the job
     }
   }

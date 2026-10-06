@@ -16,6 +16,8 @@ export interface Relay {
   session(req: SessionRequest): Promise<SessionResponse>
   /** Restore a token from an earlier session (no request). */
   useToken(token: string | null): void
+  /** Called when the server refuses the session (401). The app clears it and shows sign-in. */
+  onUnauthorised?: () => void
   /** Hash in the browser, POST /uploads, PUT the bytes when the relay doesn't have them. */
   upload(blob: Blob, mime: InputMime): Promise<UploadResult>
   /** POST /jobs (idempotent on jobId) */

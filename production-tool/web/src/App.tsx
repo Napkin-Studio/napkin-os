@@ -12,6 +12,7 @@ import { Video } from './stages/Video'
 import { StudioMark } from './ui/Mark'
 import { HistoryPanel } from './ui/History'
 import { CLAN_DB } from './doc/clan'
+import { relayId } from './relay'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Character' },
@@ -52,7 +53,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
 }
 
 function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
-  const { doc: docStore, relay } = useServices()
+  const { doc: docStore, relay, ui: uiStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
   useJobsTick()
@@ -105,6 +106,12 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
           }
         }}>{exporting ? 'Packing…' : 'Export'}</button>
         <span className="handle">@{ui.session?.handle ?? doc.participant.handle}</span>
+        {relay.kind === 'http' && ui.session && (
+          <button className="btn xs ghost" onClick={() => {
+            relay.useToken(null)
+            uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
+          }}>Sign out</button>
+        )}
       </div>
     </header>
   )
@@ -166,7 +173,7 @@ function SignIn() {
         try {
           const s = await relay.session({ eventCode: code.trim(), handle: handle.trim() })
           relay.useToken(s.token)
-          uiStore.update((u) => { u.session = s })
+          uiStore.update((u) => { u.session = s; u.sessionFor = relayId() })
           await updateDoc(doc, (d) => { d.participant = { id: s.participantId, handle: s.handle } }, 'sign in')
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not sign in.')

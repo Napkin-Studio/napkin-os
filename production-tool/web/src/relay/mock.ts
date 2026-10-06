@@ -188,6 +188,11 @@ export class MockRelay implements Relay {
   }
 
   /** Kick off the render once the fake queue time has passed. */
+  /** Resolves when every job that has started finishing has finished (tests wait on this, not on timers). */
+  async settled(): Promise<void> {
+    await Promise.all([...this.running.values()])
+  }
+
   private finish(jobId: string, item: LedgerItem) {
     if (this.running.has(jobId)) return
     const p = (async () => {
