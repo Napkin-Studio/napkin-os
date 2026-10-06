@@ -4,7 +4,7 @@
                     and the EventBridge sweep (every minute)
 
 Environment (infra/envs/hackathon/relay.tf):
-  BUCKET, PUBLIC_BASE_URL, JOBS_TABLE, QUOTAS_TABLE, BLOCKED_TABLE,
+  BUCKET, PUBLIC_BASE_URL (or PUBLIC_BASE_URL_PARAM, an SSM name), JOBS_TABLE, QUOTAS_TABLE, BLOCKED_TABLE,
   STITCH_FUNCTION, SECRET_ARNS, CONFIG_KEY (default config.json)
 """
 
@@ -42,11 +42,16 @@ def _build() -> Relay:
     def start_stitch(payload: dict) -> None:
         lam.invoke(FunctionName=stitch_fn, InvocationType="Event", Payload=json.dumps(payload).encode())
 
+    public_base = os.environ.get("PUBLIC_BASE_URL")
+    if not public_base:
+        name = os.environ["PUBLIC_BASE_URL_PARAM"]
+        public_base = boto3.client("ssm").get_parameter(Name=name)["Parameter"]["Value"]
+
     secrets = EnvSecrets()
     secrets()  # keys into the environment before the adapters start
     return Relay(
         store=DynamoStore(os.environ["JOBS_TABLE"], os.environ["QUOTAS_TABLE"], os.environ["BLOCKED_TABLE"]),
-        blobs=S3Blobs(bucket, os.environ["PUBLIC_BASE_URL"], client=s3),
+        blobs=S3Blobs(bucket, public_base, client=s3),
         registry=load_registry(),
         director=load_director(),
         config=CachedConfig(lambda: json.loads(s3.get_object(Bucket=bucket, Key=config_key)["Body"].read()), contracts),

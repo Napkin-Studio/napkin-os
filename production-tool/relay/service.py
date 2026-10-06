@@ -135,6 +135,8 @@ class Relay:
             ctx["costUsd"] = cost.get("confirmed", cost.get("reserved"))
             if out.get("error"):
                 ctx["error"] = out["error"]["code"]
+            if out["state"] in TERMINAL and out.get("updatedAt"):
+                ctx["jobS"] = parse_iso(out["updatedAt"]) - parse_iso(out["createdAt"])
         return status, out, ctx
 
     def _route(self, method, path, headers, body, ctx):

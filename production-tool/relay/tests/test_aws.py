@@ -117,10 +117,13 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
 
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     s3.put_object(Bucket="napkin-test", Key="config.json", Body=json.dumps(cfg).encode())
-    for k, v in {"BUCKET": "napkin-test", "PUBLIC_BASE_URL": "https://cdn.test", "JOBS_TABLE": "jobs",
+    for k, v in {"BUCKET": "napkin-test", "PUBLIC_BASE_URL_PARAM": "/napkin-hackathon/public-base-url", "JOBS_TABLE": "jobs",
                  "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked",
                  "EVENT_CODES": '{"participant": ["HACK"]}', "TOKEN_SECRET": "x" * 32}.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
+    boto3.client("ssm", region_name="eu-west-1").put_parameter(
+        Name="/napkin-hackathon/public-base-url", Value="https://cdn.test", Type="String")
     import handler
 
     monkeypatch.setattr(handler, "_relay", None)
@@ -135,7 +138,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     status, sess = http("POST", "/api/session", {"eventCode": "HACK", "handle": "alice"})
     assert status == 200
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5}, sess["token"])
-    assert status == 200 and up["exists"] is False
+    assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
     # no adapters exist yet in this lane: routing finds no provider
     req = {"contractVersion": "1", "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "parentIds": [],
            "input": {"text": "x"}}

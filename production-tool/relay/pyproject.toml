@@ -11,7 +11,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest>=8",
-  "moto[dynamodb,s3]>=5",
+  "moto[dynamodb,s3,ssm]>=5",
 ]
 
 [tool.uv]

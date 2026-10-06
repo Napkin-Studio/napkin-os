@@ -289,6 +289,9 @@ s3 = [
     { name = "py-partiql-parser" },
     { name = "pyyaml" },
 ]
+ssm = [
+    { name = "pyyaml" },
+]
 
 [[package]]
 name = "packaging"
@@ -319,7 +322,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "moto", extra = ["dynamodb", "s3"] },
+    { name = "moto", extra = ["dynamodb", "s3", "ssm"] },
     { name = "pytest" },
 ]
 
@@ -331,7 +334,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "moto", extras = ["dynamodb", "s3"], specifier = ">=5" },
+    { name = "moto", extras = ["dynamodb", "s3", "ssm"], specifier = ">=5" },
     { name = "pytest", specifier = ">=8" },
 ]
 
