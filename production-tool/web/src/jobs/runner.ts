@@ -253,7 +253,7 @@ export class JobRunner {
           mime: o.mime,
           origin: job.kind === 'mock' ? 'mock' : 'generated',
           job_id: job.jobId,
-          locations: [idbLocation(o.sha256), o.url],
+          locations: outputLocations(o.sha256, o.url),
         }
         if (o.bytes) a.bytes = o.bytes
         if (o.w) a.w = o.w
@@ -281,4 +281,10 @@ export class JobRunner {
       this.fail(job.jobId, asContractError(e))
     }
   }
+}
+
+/** Where an output's bytes can be found. The document only takes idb://, s3:// and https:// locations,
+ *  so a local dev relay's http://localhost URL is left out (the bytes are in this browser anyway). */
+export function outputLocations(sha256: string, url: string): string[] {
+  return /^https:\/\//.test(url) ? [idbLocation(sha256), url] : [idbLocation(sha256)]
 }

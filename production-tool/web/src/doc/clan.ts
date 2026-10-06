@@ -245,7 +245,7 @@ export class ClanBackedStore implements DocumentStore {
 
   private refused(e: unknown) {
     const message = e instanceof Error ? e.message : String(e)
-    console.error('the .clan refused a write; rolling back to what it holds', e)
+    console.error(`the .clan refused a write; rolling back to what it holds: ${message}`, e)
     this.trouble = message
     this.pending = []
     this.value = normaliseDocument(this.clan.get() as unknown as ProductionDocument)
