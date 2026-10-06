@@ -3,3 +3,4 @@
 # This file mirrors the CORE dependencies for tooling that reads requirements.txt.
 pdfplumber>=0.11.0      # .pdf briefs
 python-docx>=1.1.0      # .docx briefs
+PyYAML>=6               # rule packs (engine/rule_packs); off, with a message, when missing

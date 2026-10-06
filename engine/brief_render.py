@@ -24,6 +24,9 @@ from pathlib import Path
 # A parenthesised aside about a sentence number goes whole; a bare 'sentence 12' or
 # 'sentences 2-3' loses only the reference itself; '[5]' goes.
 _MARKER_RE = re.compile(r"\(\s*sentences?\s+\d+[^)\n]{0,80}\)|\bsentences?\s+\d+(?:\s*[-–,]\s*\d+)*|\[\d+\]", re.I)
+_CITE_RE = re.compile(r"\[(?:F|D):[^\]\s]+(?:\s+v\d+)?\]"
+                      # a section writer's source tags left in its text: '(s6)', '(s6, s7)', '(F:f_x; R:ie-1)'
+                      r"|\(\s*(?:(?:s\d+|[FR]:[^\s,;)]+)\s*[,;]?\s*)+\)|\b[FR]:[A-Za-z0-9_-]+")
 
 
 def _scrub_markers(text):
@@ -32,7 +35,11 @@ def _scrub_markers(text):
     scrubbed per item; other values pass through unchanged."""
     if isinstance(text, str):
         out = _MARKER_RE.sub("", text)
-        out = re.sub(r"\s+([?.,;:!])", r"\1", out)     # 'impact ?' -> 'impact?'
+        out = _CITE_RE.sub("", out)                     # a fact or decision id left in (a proposal's basis)
+        out = re.sub(r"[\s;,]*[;,](?=\s*\))", "", out)  # 'finding;,)' -> 'finding)' once the ids are gone
+        out = re.sub(r"\(\s*\)", "", out)
+        out = re.sub(r"\s*[;,](?=\s*[.;,!?]|\s*$)", "", out)  # 'claim [F:a], [F:b].' -> 'claim.'
+        out = re.sub(r"\s+([?.,;:!)])", r"\1", out)    # 'impact ?' -> 'impact?'
         return re.sub(r"\s{2,}", " ", out).strip()
     if isinstance(text, list):
         return [_scrub_markers(x) for x in text]
@@ -101,6 +108,108 @@ def render_loops37(L, brief):
         L.append(f"_Sources cited: {len(s['sources_used'])} playbook sections._\n")
 
 
+# What the Loop-1 capture reads from the client's documents that no golden field carries (2026-10-02,
+# Sai; EC-043): measured on the Samaritans tender, the success measures with their 5% baseline, the
+# tender's scoring, the timings, the deliverables and the constraints were captured and then never shown.
+# Order is the order a planner reads them in. These move into their own sections when the schema grows.
+CAPTURE_EXTRAS = (
+    ("success_metrics", "Success measures"),
+    ("evaluation_criteria", "How the work will be judged"),
+    ("timeline", "Timings"),
+    ("deliverables", "Deliverables"),
+    ("constraints", "Constraints"),
+    ("decision_makers", "Decision makers"),
+    ("key_message", "The client's key message"),
+    ("proof_points", "The client's proof points"),
+    ("strategic_angle", "The client's suggested direction"),
+)
+
+
+def _norm_words(text: str) -> list:
+    """Lower-case words of `text`, for the 'already said in the brief' test."""
+    return re.findall(r"[a-z0-9€%]+", str(text).lower())
+
+
+def captured_extras(brief) -> list:
+    """[(heading, [line, ...])] for the CAPTURE_EXTRAS fields that have content, leaving out any item a
+    golden field already says (80% of its words are in the golden fields' text). An item with no source
+    quote and an inferred or assumed status is tagged as inferred; the rest are the documents' own."""
+    cap = ((brief.get("loop1_capture") or {}).get("fields") or {})
+    gf = (brief.get("loop2_golden") or {}).get("fields", {}) or {}
+    said = set(_norm_words(" ".join(str((f.get("value") if isinstance(f, dict) else f) or "") for f in gf.values())))
+    for sec in ((brief.get("sections") or {}).get("sections") or {}).values():   # P3 sections say it too
+        said |= set(_norm_words(" ".join(str(v) for it in sec.get("items") or [] for k, v in it.items()
+                                         if k not in ("source", "refs", "figure_unchecked", "cite", "unsupported", "detail_unchecked"))))
+    out = []
+    for key, heading in CAPTURE_EXTRAS:
+        items = cap.get(key)
+        items = items if isinstance(items, list) else [items]
+        lines = []
+        for it in items:
+            v = it.get("value") if isinstance(it, dict) else it
+            if v in (None, "", [], {}) or (isinstance(it, dict) and it.get("status") == "gap"):
+                continue
+            text = _scrub_markers(v if isinstance(v, str) else json.dumps(v, ensure_ascii=False))
+            words = _norm_words(text)
+            if words and sum(w in said for w in words) / len(words) >= 0.8:
+                continue
+            inferred = (isinstance(it, dict) and not it.get("source_quote")
+                        and it.get("status") in ("assumption", "inferred"))
+            lines.append(text + (" _(inferred)_" if inferred else ""))
+        if lines:
+            out.append((heading, lines))
+    return out
+
+
+def section_lines(sid: str, sec: dict, unreviewed: bool = False, n_of: "dict | None" = None) -> list:
+    """One P3 section (sections.py, ADR 0022) as markdown lines under its '## title'. Measurement is a table;
+    the rest are '- **label:** text' items. A proposed item says so; a figure no source states is marked;
+    a rule-pack item names its source. A section the writers could not fill reads as to be agreed."""
+    L = [f"## {sec.get('title') or sid}"]
+    items = sec.get("items") or []
+    if not items:
+        return L + ["_To be agreed — see open questions._", ""]
+    if all(it.get("source") == "proposed" for it in items):
+        built = any(str(r).startswith("s") for it in items for r in it.get("refs") or [])
+        L += ["_Proposed by the agency, built on the client's documents where cited. To confirm with the client._" if built
+              else "_Proposed by the agency: the client's documents do not cover this. To confirm with the client._", ""]
+    if sid == "safety_legal" and unreviewed and any(it.get("source") == "pack" for it in items):
+        L += ["_Rules from the agency's rule packs, not yet reviewed by a person: check each source before use._", ""]
+
+    def mark(it):
+        bits = []
+        if it.get("source") == "proposed" and not all(x.get("source") == "proposed" for x in items):
+            bits.append("_(proposed)_")
+        if it.get("figure_unchecked"):
+            bits.append("_(figure to check)_")
+        if it.get("detail_unchecked"):
+            bits.append("_(contact detail to check)_")
+        if it.get("unsupported"):
+            bits.append("_(no source: to confirm)_")
+        ns = [n_of[r[2:]] for r in it.get("refs") or [] if r.startswith("F:") and (n_of or {}).get(r[2:])]
+        if ns:
+            bits.append("[" + ", ".join(f"A{n}" for n in dict.fromkeys(ns)) + "]")
+        if it.get("cite"):
+            bits.append(f"— {it['cite']}")
+        return (" " + " ".join(bits)) if bits else ""
+
+    if sid == "measurement":
+        L += ["| Objective | Measure | Baseline | Target | How it is measured |", "|---|---|---|---|---|"]
+        for it in items:
+            cells = [_scrub_markers(str(it.get(k) or "—")).replace("|", "/") for k in ("label", "measure", "baseline", "target", "method")]
+            if it.get("method_proposed") and it.get("source") != "proposed":
+                cells[-1] += " _(method proposed)_"
+            cells[-1] += mark(it)
+            L.append("| " + " | ".join(cells) + " |")
+    else:
+        for it in items:
+            label = _scrub_markers(str(it.get("label") or "")).strip()
+            text = _scrub_markers(str(it.get("text") or "")).strip()
+            L.append(f"- **{label[:1].upper() + label[1:]}:** {text}{mark(it)}" if label and text
+                     else f"- {text or label}{mark(it)}")
+    return L + [""]
+
+
 def render_client_brief(brief) -> str:
     """The DELIVERABLE — only the final brief. Assembles the Golden Brief (facts +
     generated strategy) into a clean one-pager: no loop labels, no provenance tags,
@@ -109,7 +218,7 @@ def render_client_brief(brief) -> str:
     m = brief["meta"]
     gf = (brief.get("loop2_golden") or {}).get("fields", {}) or {}
     l2 = brief.get("loop2_brief", {}) or {}
-    title = m.get("project") or m.get("client") or "Client brief"
+    title = m.get("project") or m.get("client") or (m.get("gap_fill") or {}).get("brand") or "Client brief"
 
     def gv(fid):                      # golden value, else loop-2 fallback for the FACTS only
         """Return golden field `fid`'s value. When it is empty, only background,
@@ -130,15 +239,35 @@ def render_client_brief(brief) -> str:
 
     L = [f"# {title} — Brief", ""]
     TBD = "_To be agreed — see open questions._"
+    # Evidence marks (ADR 0021): [A1] after a field or item that cites appendix fact A1.
+    import evidence as _ev
+    numbered = (brief.get("evidence") or {}).get("appendix") or []
+    mk = _ev.marks(gf, numbered) if numbered else {}
 
-    def text_section(heading, value):
+    def tag(fid, item=None):
+        ns = mk.get((fid, item)) or []
+        return (" [" + ", ".join(f"A{n}" for n in ns) + "]") if ns else ""
+
+    def text_section(heading, value, fid=None):
         """Append a '## heading' section: the value as text (internal sentence markers
-        scrubbed), or the to-be-agreed placeholder when it is empty, then a blank line."""
+        scrubbed) with its evidence marks, or the to-be-agreed placeholder when it is empty,
+        then a blank line."""
         L.append(f"## {heading}")
-        L.append(_scrub_markers(str(value)) if value else TBD)
+        if isinstance(value, list) and value:         # a list field (mandatories...) reads as a list, not ['a', 'b']
+            L.extend(f"- {_scrub_markers(str(v.get('value') if isinstance(v, dict) else v))}{tag(fid, i)}"
+                     for i, v in enumerate(value))
+        else:
+            L.append(_scrub_markers(str(value)) + tag(fid) if value else TBD)
         L.append("")
 
-    text_section("Background", gv("background"))
+    secs = ((brief.get("sections") or {}).get("sections") or {})
+    unrev = bool(((brief.get("sections") or {}).get("meta") or {}).get("unreviewed"))
+
+    def put(sid):
+        if secs.get(sid):
+            L.extend(section_lines(sid, secs[sid], unrev, {a["id"]: a["n"] for a in numbered}))
+
+    text_section("Background", gv("background"), "background")
 
     obj = gv("objectives")
     L.append("## Objectives")
@@ -152,21 +281,29 @@ def render_client_brief(brief) -> str:
     else:
         L.append(TBD)
     L.append("")
+    put("measurement")
 
-    text_section("Audience", gv("audience"))
-    text_section("Competitor context", gv("competitor_context"))
-    text_section("The insight", gv("insight"))
-    text_section("Single-minded proposition", gv("smp"))
+    text_section("Audience", gv("audience"), "audience")
+    put("audience_depth")
+    text_section("Competitor context", gv("competitor_context"), "competitor_context")
+    put("competitors")
+    text_section("The insight", gv("insight"), "insight")
+    text_section("Single-minded proposition", gv("smp"), "smp")
 
     rtb = gv("reasons_to_believe")
     L.append("## Reasons to believe")
     if isinstance(rtb, list) and rtb:
         L += [f"- {_scrub_markers(r if isinstance(r, str) else (r.get('value') if isinstance(r, dict) else r))}"
-              for r in rtb]
+              + tag("reasons_to_believe", i) for i, r in enumerate(rtb)]
     elif rtb:
         L.append(str(rtb))
     else:
         L.append(TBD)
+    needed = (gf.get("reasons_to_believe") or {}).get("proof_needed") if isinstance(gf.get("reasons_to_believe"), dict) else None
+    if needed:                       # ADR 0020: what the brief could not prove, shown apart from the proof
+        L.append("")
+        L += ["_Proof still needed:_", ""]
+        L += [f"- {_scrub_markers(re.sub(r'^\s*TO CONFIRM:?\s*', '', str(p), flags=re.I))}" for p in needed]
     L.append("")
 
     dr = gv("desired_response")
@@ -174,16 +311,20 @@ def render_client_brief(brief) -> str:
     if isinstance(dr, dict):
         for k, lab in (("think", "Think"), ("feel", "Feel"), ("do", "Do")):
             if dr.get(k):
-                L.append(f"- **{lab}:** {dr[k]}")
+                L.append(f"- **{lab}:** {dr[k]}{tag('desired_response', k)}")
     elif dr:
         L.append(str(dr))
     else:
         L.append(TBD)
     L.append("")
 
-    text_section("Tone & world", gv("tone_world_assets"))
-    text_section("Budget & scope", gv("budget_scope"))
-    text_section("Mandatories", gv("mandatories"))
+    text_section("Tone & world", gv("tone_world_assets"), "tone_world_assets")
+    put("channel_roles")
+    text_section("Budget & scope", gv("budget_scope"), "budget_scope")
+    text_section("Mandatories", gv("mandatories"), "mandatories")
+    put("safety_legal")
+    put("language_adaptation")
+    put("practicalities")
 
     # A field kept as a draft because every draft failed its checks (Sai, 2026-09-28) gets
     # a visible tag under its heading, so a reader never takes it as final.
@@ -196,8 +337,43 @@ def render_client_brief(brief) -> str:
         fid = heads.get(L[i][3:]) if L[i].startswith("## ") else None
         rv = (gf.get(fid) or {}).get("review") if fid and isinstance(gf.get(fid), dict) else None
         if isinstance(rv, dict):
-            L.insert(i + 1, f"_Draft — to review: it failed {', '.join(rv.get('failed') or ['its checks'])}. "
-                            "See open questions._")
+            L[i + 1:i + 1] = [f"_Draft — to review: it failed {', '.join(rv.get('failed') or ['its checks'])}. "
+                              "See open questions._", ""]
+        # A field the client never gave, filled as the agency's proposal (REQ-01, Sai 2026-10-02): the
+        # reader must never take it for the client's words.
+        fe = gf.get(fid) if fid and isinstance(gf.get(fid), dict) else None
+        if fe and fe.get("proposed"):
+            basis = f", based on {fe['basis'].rstrip('.')}" if fe.get("basis") else ""
+            confirm = f" To confirm: {fe['confirm']}" if fe.get("confirm") else ""
+            L[i + 1:i + 1] = [f"_Proposed (not given by the client){basis}.{confirm}_", ""]
+
+    fc = brief.get("fact_check") or {}
+    if fc.get("unverified"):
+        L.append("## Still to verify")
+        L += ["_Claims that rest on a single, unchecked research source._", ""]
+        L += [f"- {c['claim']} ({_ev.where(c['field'])})" for c in fc["unverified"]]
+        L.append("")
+    if fc.get("unsupported"):
+        L.append("## What we will not claim")
+        L += ["_No source in the client's documents or the research supports these; they stay out of the work "
+              "until confirmed._", ""]
+        L += [f"- {c['claim']} ({_ev.where(c['field'])})" for c in fc["unsupported"]]
+        L.append("")
+    if numbered:
+        L.append("## Evidence and sources")
+        for a in numbered:
+            src = "; ".join(x for x in (a.get("source"), str(a["as_of"]) if a.get("as_of") else None, a.get("status"),
+                                        f"<{a['uri']}>" if a.get("uri") else None) if x)
+            L.append(f"- **A{a['n']}** {a['text']}" + (f" ({src})" if src else ""))
+        L.append("")
+
+    extras = captured_extras(brief)
+    if extras:
+        L.append("## Also in the client's documents")
+        for heading, lines in extras:
+            L.append(f"**{heading}**")
+            L += [f"- {line}" for line in lines]
+            L.append("")
 
     oqs = l2.get("open_questions") or []
     if oqs:

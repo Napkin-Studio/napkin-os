@@ -20,6 +20,17 @@ def _placeholder_claude_key(monkeypatch):
     # jev checks (ADR 0011) off unless a test turns them on with a fake backend: the real
     # backend would read TYPESAFE_API_KEY from engine/.env and try the network.
     monkeypatch.setenv("BRIEF_JEV_CHECKS", "0")
+    # The coherence pass (one extra judge call after the fields are filled) is off unless a test
+    # turns it on: the call-count and fake-model tests count exact calls.
+    monkeypatch.setenv("BRIEF_COHERENCE", "0")
+    # REQ-01's fill step (repair then flag; labelled proposals) runs after the first-pass gates and adds
+    # calls; the gate tests check the first pass, so it is off unless a test turns it on (test_fill_all.py).
+    monkeypatch.setenv("BRIEF_FILL_ALL", "0")
+    # The gap-filler (ADR 0019) never searches or writes the real fact store in tests.
+    monkeypatch.setenv("BRIEF_GAP_FILL", "0")
+    monkeypatch.setenv("BRIEF_FACT_CHECK", "0")      # one more judge call (ADR 0021); its own tests turn it on
+    monkeypatch.setenv("BRIEF_SECTIONS", "0")        # seven section writers (ADR 0022); test_sections turns them on
+    monkeypatch.delenv("BRIEF_RESEARCH_URL", raising=False)
     import sys as _sys
     jc = _sys.modules.get("jev_checks")
     if jc is not None:

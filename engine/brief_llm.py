@@ -49,7 +49,7 @@ _HTTP_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 # `usage` when present; chars are always counted as the fallback ruler.
 # ---------------------------------------------------------------------------
 _LLM_STATS = {}
-_STATS_LOCK = __import__("threading").Lock()   # loops 3–7 retrieval/rerank run in threads
+_STATS_LOCK = __import__("threading").RLock()   # loops 3–7 retrieval/rerank run in threads; reentrant, since _stats_snapshot -> _ledger -> _stats_reset re-takes it on a fresh ledger
 # A run's ledger travels with the thread (and, via _scoped, with the threads it starts), so
 # two briefs in one process — or a name-derivation call next to a running brief on the
 # agent-server — never write into each other's numbers (audit 2026-09-24, critic-G11).
@@ -587,18 +587,33 @@ _CLI_DEFAULT_EFFORT = {"claude-opus-5-5": "medium"}
 # to the single-model chain (the whole-pipeline swaps the comparisons use).
 # ---------------------------------------------------------------------------
 HAIKU = "claude-haiku-4-5-20251001"
+# 2026-10-01 (Sai): extraction moved to Opus 5.5 (20% cheaper per token than Opus 4.6, Opus 4.6 kept as
+# its fallback) and every Sonnet 5 route to Sonnet 5.5 (same price, the current Sonnet).
+SONNET = "claude-sonnet-5-5"
 ROUTES = {
-    "extract":         ("claude-opus-4-6", "claude-opus-5-5"),   # capture, golden extraction
-    "hero":            ("claude-opus-4-6", "claude-opus-5-5"),   # insight/SMP drafts, refine, other fields
+    "extract":         ("claude-opus-5-5", "claude-opus-4-6"),   # capture, golden extraction
+    "hero":            ("claude-opus-5-5", "claude-opus-4-6"),   # insight/SMP drafts, refine, other fields (5.5 + high effort since 2026-10-02)
     "grounded_writer": ("claude-opus-5-5", "claude-opus-4-6"),   # RTB, desired response: 0/8 vs 11 invented figures
-    "hero_judge":      ("claude-opus-5-5", "claude-sonnet-5"),   # insight/SMP judges, territory map
-    "judge":           ("claude-sonnet-5", HAIKU),               # every other field's judge
-    "mechanical":      ("claude-sonnet-5", HAIKU),               # scorecard, how-to-win, rerank
-    "synth":           ("claude-sonnet-5", HAIKU),               # loop syntheses (Sai: Sonnet, not Haiku)
+    "hero_judge":      ("claude-opus-5-5", SONNET),              # insight/SMP judges, territory map
+    "judge":           (SONNET, HAIKU),                          # every other field's judge
+    "mechanical":      (SONNET, HAIKU),                          # scorecard, how-to-win, rerank
+    "synth":           (SONNET, HAIKU),
+    "section":         (SONNET, "claude-opus-5-5"),            # P3 section writers: measurement, channels, safety... (2026-10-03)
+    "vision":          (SONNET, "claude-opus-5-5"),            # page images and image files -> text (2026-10-02)                          # loop syntheses (Sai: Sonnet, not Haiku)
 }
 # Effort per job on thinking models (Opus 5.5, Sonnet 5): judges and mechanical calls
 # answer a rule, so they think little. None = the model's own default.
-ROUTE_EFFORT = {"hero_judge": "low", "judge": "low", "mechanical": "low", "synth": "medium"}
+ROUTE_EFFORT = {"section": "medium", "vision": "low", "hero": "high", "hero_judge": "low", "judge": "low", "mechanical": "low", "synth": "medium"}
+
+
+def route_effort(route: "str | None") -> "str | None":
+    """The effort a job's calls run at: BRIEF_EFFORT_<JOB> (low | medium | high | xhigh | max) when set,
+    else ROUTE_EFFORT, else None (the model's own default). The override is how an effort change is
+    measured on whole runs before the table changes."""
+    if not route:
+        return None
+    env = os.environ.get(f"BRIEF_EFFORT_{route.upper()}", "").strip().lower()
+    return env if env in ("low", "medium", "high", "xhigh", "max") else ROUTE_EFFORT.get(route)
 GROUNDED_FIELDS = ("reasons_to_believe", "desired_response")
 HERO_FIELDS = ("insight", "smp")
 _EFFORT_TL = threading.local()       # the effort of the call in flight on this thread
@@ -704,6 +719,103 @@ def transport_used() -> str:
 
 
 _CLI_WORKDIR: str | None = None
+
+
+# Page images (chart and scanned PDF pages, image files) are read by Claude, never by another model
+# (ADR 0006; 2026-10-02, Sai: the client tracker's chart pages were never read and an older figure was
+# used). Sonnet 5.5 at low effort reads chart labels and values; Opus 5.5 if Sonnet cannot.
+_VISION_ASK = "Transcribe this page."
+
+
+def _vision_message(b64: str, mime: str) -> list:
+    """The user content for one image: the image block, then the one-line ask."""
+    return [{"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
+            {"type": "text", "text": _VISION_ASK}]
+
+
+def _vision_cli(b64: str, mime: str, prompt: str, model: str) -> str:
+    """One image through the Claude Code CLI: the image goes in a stream-json user message (the CLI
+    runs with no tools, so it cannot open a file). Usage is recorded like _chat_claude_cli's."""
+    import shutil
+    import subprocess
+    if not shutil.which("claude"):
+        raise RuntimeError("claude CLI not on PATH (BRIEF_CLAUDE_TRANSPORT=cli)")
+    _stats_call(f"anthropic:{model}", len(prompt) + len(b64) // 4)
+    cmd = ["claude", "-p", "--model", model, "--system-prompt", prompt, "--tools", "", "--max-turns", "1",
+           "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+           "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config"]
+    env = {**os.environ, "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(MAXTOK_EXTRACT + _thinking_headroom(model))}
+    if _thinking_headroom(model):
+        cmd += ["--effort", route_effort("vision") or "low"]
+    else:
+        env["MAX_THINKING_TOKENS"] = "0"
+    env.pop("ANTHROPIC_API_KEY", None)
+    msg = {"type": "user", "message": {"role": "user", "content": _vision_message(b64, mime)}}
+    try:
+        proc = subprocess.run(cmd, input=json.dumps(msg) + "\n", capture_output=True, text=True,
+                              timeout=CLI_TIMEOUT_S, env=env, cwd=_cli_workdir())
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"claude CLI timed out after {CLI_TIMEOUT_S:.0f}s") from e
+    res = {}
+    for line in (proc.stdout or "").splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(ev, dict) and ev.get("type") == "result":
+            res = ev
+    if proc.returncode != 0 or not res or res.get("is_error") or res.get("subtype") not in (None, "success"):
+        detail = str(res.get("result") or proc.stderr or "")[:300]
+        if re.search(r"usage limit|rate limit|429|overloaded", detail, re.I):
+            raise _RateLimited(f"claude CLI: {detail}")
+        raise RuntimeError(f"claude CLI vision failed (exit {proc.returncode}): {detail}")
+    text = str(res.get("result") or "")
+    u = res.get("usage") or {}
+    _stats_usage({"prompt_tokens": int(u.get("input_tokens") or 0),
+                  "completion_tokens": int(u.get("output_tokens") or 0),
+                  "cache_read_tokens": int(u.get("cache_read_input_tokens") or 0),
+                  "cache_creation_tokens": int(u.get("cache_creation_input_tokens") or 0)}, len(text))
+    if res.get("stop_reason") == "max_tokens":
+        _stats_bump("truncations")
+        raise _Truncated(f"claude-cli:{model}: page transcription hit the output cap")
+    return text
+
+
+def _vision_api(b64: str, mime: str, prompt: str, model: str) -> str:
+    """One image through the Anthropic API (the image block, then the ask)."""
+    client = _anthropic_client()
+    _stats_call(f"anthropic:{model}", len(prompt) + len(b64) // 4)
+    kw = {"output_config": {"effort": route_effort("vision") or "low"}} if _thinking_headroom(model) else {}
+    msg = client.messages.create(model=model, max_tokens=MAXTOK_EXTRACT + _thinking_headroom(model), system=prompt,
+                                 messages=[{"role": "user", "content": _vision_message(b64, mime)}], **kw)
+    text = next((b.text for b in msg.content if getattr(b, "type", None) == "text"), "")
+    u = getattr(msg, "usage", None)
+    _stats_usage({"prompt_tokens": getattr(u, "input_tokens", 0) or 0,
+                  "completion_tokens": getattr(u, "output_tokens", 0) or 0,
+                  "cache_read_tokens": getattr(u, "cache_read_input_tokens", 0) or 0,
+                  "cache_creation_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0} if u else None, len(text))
+    if getattr(msg, "stop_reason", None) == "max_tokens":
+        _stats_bump("truncations")
+        raise _Truncated(f"anthropic:{model}: page transcription hit the output cap")
+    return text
+
+
+def transcribe_image(data: bytes, mime: str, prompt: str, label: str = "image") -> str:
+    """Faithful text of one image, by Claude (the 'vision' route's models in order, over the CLI or
+    the API as BRIEF_CLAUDE_TRANSPORT says). '' when no model could read it; the caller marks the page
+    as unread instead of dropping it silently."""
+    import base64
+    b64 = base64.b64encode(data).decode()
+    use_cli = _claude_transport() == "cli" or _cli_fallback_active()
+    for model in route_models("vision"):
+        try:
+            text = (_vision_cli if use_cli else _vision_api)(b64, mime, prompt, model)
+        except Exception as e:  # noqa: BLE001 - the next model tries; the caller handles ''
+            print(f"[i] {label}: Claude vision on {model} failed ({type(e).__name__}: {str(e)[:120]})", file=sys.stderr)
+            continue
+        if text.strip():
+            return text.strip()
+    return ""
 
 
 def _cli_workdir() -> str:
@@ -897,7 +1009,7 @@ def _json_call(user, system=None, retries=1, model=None, accept=None, max_tokens
             return None
     else:
         chain = _model_chain(model)
-    _EFFORT_TL.effort = ROUTE_EFFORT.get(route) if routed is not None else None
+    _EFFORT_TL.effort = route_effort(route) if routed is not None else None
     try:
         reader = parse or (functools.partial(_loads_lenient, whole=True) if whole else _loads_lenient)
         for provider, m in chain:
@@ -963,6 +1075,9 @@ def _loads_lenient(raw, whole=False):
         return None
 
     obj = _try(raw)
+    if obj is None:   # a reply fenced as ```json ... ``` is still one whole object
+        fenced = re.fullmatch(r"\s*```(?:json)?\s*(.*?)\s*```\s*", raw or "", re.S)
+        obj = _try(fenced.group(1)) if fenced else None
     if obj is not None:
         return obj
     if whole:

@@ -1333,6 +1333,20 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    what it has lands, and the rest is `absent` and named in `abstained`.
    The engine call runs inside the `extract` stage, so that stage's time
    limit (60 minutes) covers the engine's 900 s plus the fallback capture.
+7. **What `meta` carries now.** *Added 2026-10-06* (engine ADRs 0017-0022,
+   `docs/brief-maker/handoff-shrey-2026-10-03.md`). The engine's reply adds,
+   next to `research_facts` and `research_decisions`: `gap_fill` (facts found
+   for the brief's gaps), `degraded` (a brief made without precedent
+   retrieval, said in words), `clipped` and `transcribed` (input cut or read
+   from an image), `field_flags` (per field: `proposed`, `basis`, `confirm`,
+   `proof_needed`, `review`), `evidence` and `fact_check` (the sources cited
+   as A1.., and every claim marked client, verified, unverified or
+   unsupported), and `sections` (`order`, `sections`, `meta`: seven sections
+   beyond the golden fields, each item marked client, research, pack or
+   proposed). The adapter reads only the keys named in items 1-4 and ignores
+   the rest (`meta.get(...)`), so nothing here changes the §10 mapping; the
+   app may show them later. The engine's default is now the full brief
+   (Loops 3-7), and `loops37: true` is still sent.
 
 ---
 
