@@ -19,7 +19,7 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `relay-api.schema.json` | request and response bodies of every relay route, and the job ledger item | infra writes the relay; ui calls it; harness plugs in behind it |
 | `capabilities.schema.json` + `capabilities/*.json` | what each provider can do, with which model, at what price | harness writes; the director, relay and UI read |
 | `director.schema.json` | the director's strict JSON output and the logged agent block | harness |
-| `document.schema.json` | the CLAN document (shared/data.yaml), in advertising-studio's field names | ui writes; export and the Viewer read; Advertising Studio later |
+| `document.schema.json` | the CLAN document (shared/data.yaml): character, script, shots, frames, takes, jobs, reviews | ui writes; export and the Viewer read |
 | `customdata.schema.json` | Excalidraw `customData` on the Character canvas | ui |
 | `config.schema.json` + `examples/config.*.json` | remote `config.json`: routing per op, director models, quotas, timeouts, spend stop, flags, banner | Shrey edits during the event; web and relay read |
 
@@ -80,7 +80,7 @@ The adapter owns the exact request:
 
 ## Decided in this draft (the owner confirms at D1)
 
-1. **Field names.** The document uses advertising-studio's snake_case names; the API uses camelCase. `shot` is shared and keeps snake_case.
+1. **Field names.** The document is snake_case, like all CLAN data here; the API is camelCase. `shot` is shared and keeps snake_case in both. The shape (separate lists joined by id) borrows from Advertising Studio, but this is its own app and does not promise compatibility with it (owner, 2026-10-06).
 2. **Job states** are pipeline.yaml's nine, in the relay and the document alike.
 3. **Views:** front, three_quarter, side, back, plus an optional side_2.
 4. **`blocked` and per-handle overrides** moved out of `config.json`, because it is public.
