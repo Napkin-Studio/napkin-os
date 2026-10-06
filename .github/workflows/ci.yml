@@ -1,8 +1,10 @@
 name: CI
 
+# Pull requests, and the two long-lived branches. A feature branch is checked
+# once, by its PR, not twice (push + pull_request).
 on:
   push:
-    branches: [ '**' ]
+    branches: [ main, develop ]
   pull_request:
 
 # Cancel superseded runs on the same ref (e.g. force-pushes to a PR branch).
@@ -14,6 +16,19 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # main takes releases from develop only (CLAUDE.md, Branches).
+  release-source:
+    name: Release source
+    runs-on: ubuntu-latest
+    steps:
+      - name: A PR into main comes from develop
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "::error::A PR into main must come from develop, not ${{ github.head_ref }}. Target develop instead."
+            exit 1
+          fi
+
   rust:
     name: Rust — fmt · clippy · test
     runs-on: ubuntu-latest
