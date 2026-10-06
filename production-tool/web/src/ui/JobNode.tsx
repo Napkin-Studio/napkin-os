@@ -2,8 +2,10 @@
 // elapsed time; when it fails, the error with Retry and Report. Never a toast.
 
 import { useState } from 'react'
-import { useDoc, useJobsTick, useServices } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useServices } from '../app/context'
 import { isActive } from '../jobs/runner'
+import { cancelText, mayStillCharge } from './cancel'
+import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
 
 const STATE_LABEL: Record<string, string> = {
@@ -25,6 +27,8 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   const running = isActive(state)
   const elapsed = useElapsed(job?.created_at, running)
   const [reported, setReported] = useState<'no' | 'sending' | 'yes' | 'failed'>('no')
+  const [confirming, setConfirming] = useState(false)
+  const { config } = useConfig()
 
   if (!job) return null
 
@@ -66,9 +70,9 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
       <div className="meta">
         {q ? `#${q} in queue · ` : ''}{fmtElapsed(elapsed)}
       </div>
-      {!compact && (
-        <button className="btn xs ghost" onClick={() => runner.cancel(jobId)}>Cancel</button>
-      )}
+      {!compact && (confirming
+        ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
+        : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)}
     </div>
   )
 }

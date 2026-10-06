@@ -5,7 +5,7 @@
 import { CaptureUpdateAction, convertToExcalidrawElements, getVisibleSceneBounds, newElementWith } from '@excalidraw/excalidraw'
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
-import type { CharacterRef, CustomData, Job, JobInputRef, ProductionDocument, RefRole, View } from '../contracts/types'
+import type { CustomData, Job, JobInputRef, ProductionDocument, RefRole, View } from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
@@ -14,12 +14,14 @@ import { newId } from '../lib/ulid'
 import { updateDoc } from '../doc/store'
 import { assetRef } from '../jobs/assets'
 import {
-  alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor,
+  alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
   isUserDrawing, makeArrow, makeGenPlaceholder, nextSlot, sketchFrame, type El,
 } from './scene'
+import { CanvasDocSync } from './sync'
 import { frameText, withNotes } from './text'
 
-export const CANVAS_KEY = 'canvas'
+import { CANVAS_KEY } from './keys'
+export { CANVAS_KEY }
 
 export interface CanvasSnapshot {
   elements: El[]
@@ -32,10 +34,26 @@ export class CanvasController {
   private readonly processing = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private syncTimer: ReturnType<typeof setTimeout> | null = null
+  /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
+  readonly sync: CanvasDocSync
 
   constructor(api: ExcalidrawImperativeAPI, services: Services) {
     this.api = api
     this.s = services
+    this.sync = new CanvasDocSync({
+      doc: services.doc,
+      cancel: (jobId) => void services.runner.cancel(jobId),
+      setPickedAs: (changes) => {
+        this.setEls(this.els().map((e) => {
+          const c = cd(e)
+          if (c?.kind !== 'gen' || !changes.has(c.id)) return e
+          const { pickedAs: _p, ...rest } = c
+          const view = changes.get(c.id)
+          return newElementWith(e, { customData: view ? { ...rest, pickedAs: view } : rest })
+        }), false)
+      },
+    })
+    this.sync.gens(this.els())
   }
 
   private els(): El[] {
@@ -70,7 +88,58 @@ export class CanvasController {
     this.scheduleSave()
     void this.intakePictures()
     if (this.syncTimer) clearTimeout(this.syncTimer)
-    this.syncTimer = setTimeout(() => this.syncRefs(), 250)
+    this.syncTimer = setTimeout(() => this.syncNow(), 250)
+  }
+
+  private syncNow() {
+    if (this.syncTimer) clearTimeout(this.syncTimer)
+    this.syncTimer = null
+    this.syncRefs()
+    void this.sync.gens(this.els())
+  }
+
+  // ── delete and undo ──
+
+  /** What deleting these elements takes with it: a drawing ref's strokes, and the arrows to and from them. Never the sketch frame. */
+  private deletionOf(ids: string[]): string[] {
+    const els = alive(this.els())
+    const sketch = sketchFrame(els)
+    const out = new Set(ids.filter((id) => id !== sketch?.id))
+    for (const e of els) {
+      if (e.frameId && out.has(e.frameId)) out.add(e.id)
+    }
+    const owned = new Set(els.filter((e) => out.has(e.id)).map((e) => idOf(e)).filter((x): x is string => !!x))
+    for (const e of els) {
+      const c = cd(e)
+      if (c?.kind === 'provenance' && (owned.has(c.from) || owned.has(c.to))) out.add(e.id)
+    }
+    return [...out]
+  }
+
+  /** Delete elements (undoable with Ctrl+Z too). Returns what went, for Undo, and where it was. */
+  deleteElements(ids: string[]): { ids: string[]; at: { x: number; y: number }; label: string } | null {
+    const gone = this.deletionOf(ids)
+    if (!gone.length) return null
+    const els = this.els()
+    const shown = alive(els).filter((e) => gone.includes(e.id) && cd(e)?.kind !== 'provenance')
+    const b = bounds(shown.length ? shown : alive(els).filter((e) => gone.includes(e.id)))
+    const kinds = shown.map((e) => cd(e)?.kind)
+    const label = kinds.length === 1 ? (kinds[0] === 'ref' ? 'Reference deleted' : kinds[0] === 'gen' ? 'Image deleted' : 'Deleted') : `${kinds.length} deleted`
+    this.setEls(els.map((e) => (gone.includes(e.id) ? newElementWith(e, { isDeleted: true }) : e)))
+    this.api.updateScene({ appState: { selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER })
+    this.syncNow()
+    return { ids: gone, at: { x: b.minX + b.w / 2, y: b.minY + b.h / 2 }, label }
+  }
+
+  /** Undo a delete from the inline Undo (Ctrl+Z does the same through Excalidraw). */
+  undelete(ids: string[]) {
+    this.setEls(this.els().map((e) => (ids.includes(e.id) && e.isDeleted ? newElementWith(e, { isDeleted: false }) : e)))
+    this.syncNow()
+  }
+
+  /** The selected elements that the Delete key and 🗑 act on (references and generated images, with drawings beside them). */
+  deletable(selected: El[]): El[] {
+    return selected.filter((e) => cd(e)?.kind !== 'sketch')
   }
 
   ensureSketchFrame(): El | undefined {
@@ -123,21 +192,7 @@ export class CanvasController {
 
   /** The canvas is the source for refs: mirror their customData into document.character.refs. */
   syncRefs() {
-    const onCanvas = alive(this.els())
-      .map((e) => ({ e, c: cd(e) }))
-      .filter((x): x is { e: El; c: Extract<CustomData, { kind: 'ref' }> } => x.c?.kind === 'ref')
-    const doc = this.s.doc.get()
-    const next: CharacterRef[] = onCanvas.map(({ e, c }) => {
-      const prev = doc.character.refs.find((r) => r.id === c.id)
-      const ref: CharacterRef = { id: c.id, asset: c.asset, tag: c.tag, role: c.role, kind: e.type === 'frame' ? 'sketch' : 'picture' }
-      if (prev?.label) ref.label = prev.label
-      return ref
-    })
-    if (JSON.stringify(next) !== JSON.stringify(doc.character.refs)) {
-      updateDoc(this.s.doc, (d) => {
-        d.character.refs = next
-      }, 'sync refs')
-    }
+    this.sync.refs(this.els())
   }
 
   setRefTag(elId: string, label: string) {
@@ -395,6 +450,7 @@ export class CanvasController {
     const old = byOwnId(els, oldId)
     if (!old) return
     const c = cd(old) as Extract<CustomData, { kind: 'gen' }>
+    this.sync.moved.add(oldId)
     const gen = makeGenPlaceholder(newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view)
     let next: El[] = els.map((e) => (e.id === old.id ? newElementWith(e, { isDeleted: true }) : e))
     next.push(gen)

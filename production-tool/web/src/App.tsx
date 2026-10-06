@@ -13,6 +13,8 @@ import { StudioMark } from './ui/Mark'
 import { HistoryPanel } from './ui/History'
 import { CLAN_DB } from './doc/clan'
 import { relayId } from './relay'
+import { startOver, START_OVER_TEXT } from './app/startOver'
+import { InlineConfirm } from './ui/Undo'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Character' },
@@ -28,13 +30,30 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   const stage = doc.stage.current
   const [history, setHistory] = useState(false)
   const [trouble, setTrouble] = useState<string | null>(null)
+  const [restart, setRestart] = useState<'no' | 'asking' | 'busy'>('no')
+  const services = useServices()
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
 
   if (relay.kind === 'http' && !ui.session) return <SignIn />
 
   return (
     <>
-      <TopBar history={history} onHistory={() => setHistory((h) => !h)} />
+      <TopBar history={history} onHistory={() => setHistory((h) => !h)} onStartOver={() => setRestart('asking')} />
+      {restart !== 'no' && (
+        <div className="startover">
+          <InlineConfirm text={START_OVER_TEXT} yes={restart === 'busy' ? 'Starting over…' : 'Start over'} no="Keep working" busy={restart === 'busy'}
+            onNo={() => setRestart('no')}
+            onYes={async () => {
+              setRestart('busy')
+              try {
+                await startOver(services)
+              } catch (e) {
+                console.error('could not start over', e)
+                setRestart('no')
+              }
+            }} />
+        </div>
+      )}
       {config.banner && <div className="banner">{config.banner}</div>}
       {storeNote && <div className="storenote" role="status">{storeNote}</div>}
       {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
@@ -52,12 +71,13 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   )
 }
 
-function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
+function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHistory: () => void; onStartOver: () => void }) {
   const { doc: docStore, relay, ui: uiStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
+  const [menu, setMenu] = useState(false)
   const stage = doc.stage.current
   const reachable = (s: StageName) =>
     s === 'character' || (s === 'storyboard' && doc.character.locked) || (s === 'video' && doc.character.locked && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
@@ -112,6 +132,14 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
             uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
           }}>Sign out</button>
         )}
+        <span className="topmenu">
+          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
+          {menu && (
+            <span className="menu" role="menu">
+              <button className="btn sm ghost" role="menuitem" style={{ color: 'var(--danger)' }} onClick={() => { setMenu(false); onStartOver() }}>Start over…</button>
+            </span>
+          )}
+        </span>
       </div>
     </header>
   )

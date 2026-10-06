@@ -13,6 +13,9 @@ import { newId } from '../lib/ulid'
 import { fmtTime, useBlobUrl } from '../ui/hooks'
 import { JobNode } from '../ui/JobNode'
 import { updateDoc } from '../doc/store'
+import { deleteFrom, removeNote, removeTake, restoreTo } from '../doc/remove'
+import { UndoChip } from '../ui/Undo'
+import { useUndo } from '../ui/useUndo'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -144,6 +147,8 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const thumb = useBlobUrl(shot.storyboard_frame)
   const showMock = useShowMock()
   const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
+  const [undo, offerUndo, runUndo] = useUndo()
+  const selIdx = sel ? takes.indexOf(sel) : -1
   return (
     <div className={`shotcard ${selected ? 'sel' : ''}`} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
       <div className="thumb">
@@ -164,6 +169,16 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
                 }, 'pick take')
               }}>v{i + 1}</button>
           ))}
+          {sel && (
+            <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete clip v${selIdx + 1}`} disabled={takes.length <= 1}
+              title={takes.length <= 1 ? 'Regenerate instead' : `Delete v${selIdx + 1}`}
+              onClick={async (e) => {
+                e.stopPropagation()
+                const r = await deleteFrom(docStore, (d) => removeTake(d, sel.id))
+                offerUndo({ label: `v${selIdx + 1} deleted`, undo: () => restoreTo(docStore, r) })
+              }}>🗑</button>
+          )}
+          {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
           {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
         </div>
@@ -192,6 +207,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const [drag, setDrag] = useState<{ a: { x: number; y: number }; b: { x: number; y: number } } | null>(null)
   const [focusPin, setFocusPin] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [noteUndo, offerNoteUndo, runNoteUndo] = useUndo()
   const pendingSeek = useRef<number | null>(null)
 
   // New clip: reset the composer bits that belong to the old one.
@@ -366,15 +382,25 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
           {fixJob && <div style={{ height: 96, borderRadius: 12, overflow: 'hidden' }}><JobNode jobId={fixJob} /></div>}
           <div className="comments">
-            {reviews.map((r) => {
+            {reviews.flatMap((r, i) => {
               const v = takesOf(doc.takes ?? [], cur.shot.id).findIndex((x) => x.id === r.target.id) + 1
-              return (
+              const row = (
                 <div key={r.id} className="comment" onClick={() => jump(r)} style={focusPin === r.id ? { borderColor: 'var(--create)' } : undefined}>
-                  <div className="row"><span className="tc">{fmtTime(r.at_s ?? 0)}</span><span className="faint" style={{ fontSize: 11 }}>v{v}{r.region ? ' · box' : ''}</span><span className="spacer" />{r.resolved && <span className="ok">✓ Addressed</span>}</div>
+                  <div className="row">
+                    <span className="tc">{fmtTime(r.at_s ?? 0)}</span><span className="faint" style={{ fontSize: 11 }}>v{v}{r.region ? ' · box' : ''}</span><span className="spacer" />{r.resolved && <span className="ok">✓ Addressed</span>}
+                    <button className="btn xs icon ghost iconbtn-del del" aria-label="Delete note" title="Delete note" onClick={async (e) => {
+                      e.stopPropagation()
+                      if (focusPin === r.id) setFocusPin(null)
+                      const removal = await deleteFrom(docStore, (d) => removeNote(d, r.id))
+                      offerNoteUndo({ label: 'Note deleted', key: String(i), undo: () => restoreTo(docStore, removal) })
+                    }}>🗑</button>
+                  </div>
                   <div>{r.comment}</div>
                 </div>
               )
+              return noteUndo?.key === String(i) ? [<UndoChip key="undo" label={noteUndo.label} onUndo={runNoteUndo} />, row] : [row]
             })}
+            {noteUndo && Number(noteUndo.key) >= reviews.length && <UndoChip label={noteUndo.label} onUndo={runNoteUndo} />}
             {!reviews.length && <div className="faint" style={{ fontSize: 12.5 }}>Pause the clip and type. Your note sticks to that moment.</div>}
           </div>
           {openNotes.length > 0 && (

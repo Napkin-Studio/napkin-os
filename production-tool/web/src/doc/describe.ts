@@ -8,6 +8,7 @@
 // panel can find every entry about an item.
 
 import type { DocJob, ProductionDocument, View } from '../contracts/types'
+import type { Removal } from './remove'
 import type { JobCtx } from './ui'
 
 export interface Described {
@@ -97,7 +98,7 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
   }
 }
 
-function describeRefs(before: ProductionDocument, after: ProductionDocument): Described | null {
+function describeRefs(before: ProductionDocument, after: ProductionDocument, restoring = false): Described | null {
   const was = new Map(before.character.refs.map((r) => [r.id, r]))
   const now = new Map(after.character.refs.map((r) => [r.id, r]))
   const said: string[] = []
@@ -105,7 +106,7 @@ function describeRefs(before: ProductionDocument, after: ProductionDocument): De
   for (const [id, r] of now) {
     const p = was.get(id)
     if (!p) {
-      said.push(`added ${r.kind === 'sketch' ? 'a drawing' : 'a picture'} as @${r.tag}`)
+      said.push(restoring ? `restored ref @${r.tag}` : `added ${r.kind === 'sketch' ? 'a drawing' : 'a picture'} as @${r.tag}`)
       ids.push(id, r.asset)
     } else if (p.role !== r.role) {
       said.push(`set @${r.tag} as ${r.role}`)
@@ -125,9 +126,16 @@ function describeRefs(before: ProductionDocument, after: ProductionDocument): De
   return { action: said.join('; '), rationale: words(tail(...ids)) }
 }
 
+/** The entry for a delete ("deleted frame frame_… (shot 2, v1)") or its undo ("restored …"). */
+export function describeRemoval(r: Removal, restoring = false): Described {
+  return { action: `${restoring ? 'restored' : 'deleted'} ${r.what}`, rationale: words(r.note, tail(...r.ids)) }
+}
+
 /** The chain entry for a write, or null to write it without one. */
 export function describeWrite(action: string, before: ProductionDocument, after: ProductionDocument, ctxOf: JobCtxOf = () => undefined): Described | null {
   if (action.startsWith('submit ')) return describeSubmit(before, after, ctxOf)
+  // Deletes and their undo are named where they happen (remove.ts, describeRemoval).
+  if (action.startsWith('deleted ') || action.startsWith('restored ')) return { action }
   if (action.startsWith('complete ')) return null
   if (QUIET.has(action)) return null
   if (action.startsWith('pick ')) {
@@ -139,6 +147,8 @@ export function describeWrite(action: string, before: ProductionDocument, after:
   switch (action) {
     case 'sync refs':
       return describeRefs(before, after)
+    case 'restore refs':
+      return describeRefs(before, after, true)
     case 'tag': {
       const changed = after.character.refs.find((r) => {
         const p = before.character.refs.find((x) => x.id === r.id)
@@ -182,11 +192,6 @@ export function describeWrite(action: string, before: ProductionDocument, after:
       const known = new Set((before.shots ?? []).map((s) => s.id))
       const s = (after.shots ?? []).find((x) => !known.has(x.id))
       return s ? { action: `added shot ${s.order}`, rationale: s.id } : null
-    }
-    case 'delete shot': {
-      const left = new Set((after.shots ?? []).map((s) => s.id))
-      const s = (before.shots ?? []).find((x) => !left.has(x.id))
-      return s ? { action: `deleted shot ${s.order}`, rationale: words(clip(s.action, 200), s.id) } : null
     }
     case 'sign in':
       return { action: `signed in as @${after.participant.handle}`, rationale: after.participant.id }

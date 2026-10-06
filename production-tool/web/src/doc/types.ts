@@ -21,4 +21,6 @@ export interface DocumentStore {
   verdict(v: Verdict): Promise<void>
   exportClan(): Promise<Uint8Array>
   onChange(cb: (d: Doc) => void): () => void
+  /** A decision with no data change, as the participant (the CLAN store only). */
+  record?(action: string, rationale?: string): Promise<void>
 }
