@@ -188,7 +188,7 @@ def test_v2_generate_follows_the_frame_text_and_names_every_ref():
     assert [r["role"] for r in job["refs"]] == ["character", "object"]
     prompt = job["prompt"]
     assert "@sketch" in prompt and "@texture" in prompt and "sketch provided" not in prompt
-    assert "AI agent" in prompt and "material" in prompt and "not photoreal" in prompt
+    assert "AI agent" in prompt and "material" in prompt and "2D illustration" in prompt
     assert res.output["needsUser"] is None and res.agent_block["promptVersion"] == "director.v2"
 
 
