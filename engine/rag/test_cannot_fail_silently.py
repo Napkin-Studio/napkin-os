@@ -881,6 +881,7 @@ def test_the_tournament_record_keeps_every_other_draft_with_its_checks(monkeypat
     import brief_render
     _fake_models(monkeypatch)
     monkeypatch.setenv("BRIEF_SMP_CANDIDATES", "6"); monkeypatch.setenv("BRIEF_HERO_CANDIDATES", "6")
+    monkeypatch.setenv("BRIEF_SHARPEN", "0")   # with sharpen on, the unsharpened winner is a 4th alternative
     gf, _fills, _qs = _fill(monkeypatch)
     ins = gf["insight"]
     assert len(ins["alternatives"]) == 3                 # the fake writer returns 4 drafts: all kept
@@ -957,7 +958,7 @@ def test_client_page_tags_a_kept_draft():
                          "review": {"status": "failed_checks", "failed": ["derives_from"], "why": "derives_from: no"}},
                  "insight": {"value": "Fine", "source": "inferred", "method": "gen:insight"}}}}
     md = brief_render.render_client_brief(brief)
-    assert "## Single-minded proposition\n_Draft — to review: it failed derives_from. See open questions._\nKeep me" in md
+    assert "## Single-minded proposition\n_Draft — to review: it failed derives_from. See open questions._\n\nKeep me" in md
     assert "## The insight\nFine" in md                                # an ordinary field gets no tag
 
 
@@ -969,14 +970,37 @@ def test_app_rationale_names_the_kept_drafts():
     assert "DRAFTS TO REVIEW (failed their checks): smp" in mapping.build_rationale(brief)
 
 
-def test_the_sharpen_pass_is_off_by_default(monkeypatch):
-    """Off since 2026-09-29 (phase C change 1): no refine call for the hero lines by default;
-    BRIEF_SHARPEN=1 turns it back on."""
+def test_the_sharpen_pass_is_on_by_default(monkeypatch):
+    """On again since 2026-10-02 (it was off from 2026-09-29): a refine call for the hero lines by
+    default; BRIEF_SHARPEN=0 turns it off."""
     monkeypatch.delenv("BRIEF_SHARPEN", raising=False)
     calls = _fake_models(monkeypatch)
     _fill(monkeypatch)
-    assert not any(k == "refine" for k, _u, _s in calls)
+    assert any(k == "refine" for k, _u, _s in calls)
     calls2 = _fake_models(monkeypatch)
-    monkeypatch.setenv("BRIEF_SHARPEN", "1")
+    monkeypatch.setenv("BRIEF_SHARPEN", "0")
     _fill(monkeypatch)
-    assert any(k == "refine" for k, _u, _s in calls2)
+    assert not any(k == "refine" for k, _u, _s in calls2)
+
+
+def test_proof_requests_are_taken_out_before_the_judge_sees_the_reasons_to_believe(monkeypatch):
+    """ADR 0020 (2026-10-03): a 'TO CONFIRM' item failed the judge's supports_smp on 6 of 7 briefs; it is
+    now moved to proof_needed before judging and asked as a question."""
+    calls = _fake_models(monkeypatch)
+    real_fake = pb._json_call
+    seen = []
+
+    def spy(user, system=None, **kw):
+        if "judging candidate" in (system or ""):
+            seen.append(user)
+        out = real_fake(user, system=system, **kw)
+        if isinstance(out, dict) and out.get("value") == ["2 million weekly users", "Free for under-30s"]:
+            out = {**out, "value": ["2 million weekly users", "TO CONFIRM: proof it tastes real"]}
+        return out
+    monkeypatch.setattr(pb, "_json_call", spy)
+    gf, fills, qs = _fill(monkeypatch)
+    rtb = gf["reasons_to_believe"]
+    assert rtb["value"] == ["2 million weekly users"] and rtb["proof_needed"] == ["TO CONFIRM: proof it tastes real"]
+    assert any(q["question"] == "Proof needed: proof it tastes real" for q in qs)
+    assert seen and any("2 million weekly users" in u for u in seen)       # the judge ran on the proof
+    assert not any("TO CONFIRM: proof it tastes real" in u for u in seen)   # and never saw the request

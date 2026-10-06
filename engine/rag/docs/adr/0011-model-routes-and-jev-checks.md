@@ -116,3 +116,55 @@ instead: fixed per-job routes, low effort on judges and mechanical jobs, the gra
 of 3 samples, and the noise line every checkpoint report carries (ADR 0013). Closed as won't do;
 revisit only if a model on the routes accepts the parameter again.
 
+
+## Amendment 2026-10-01 (Sai)
+
+Extraction (capture and golden extraction) moves to Opus 5.5, with Opus 4.6 as its fallback: Opus 5.5 is
+20% cheaper per token. Every Sonnet 5 route (judge, mechanical, synth, the hero judge's fallback) moves to
+Sonnet 5.5, the current Sonnet at the same price. `BRIEF_EFFORT_<JOB>` overrides one job's effort, so an
+effort change can be measured on whole runs before `ROUTE_EFFORT` changes. The grader (golden_critic) and the
+evaluation tools keep their Sonnet 5 judge, so scores stay comparable with earlier checkpoints.
+
+
+## Amendment 2026-10-01 (b): jev reads the whole brief
+
+The Samaritans youth brief (228,237 characters of direction and tender documents, 94 research facts)
+lost its reasons to believe and desired response: the writer cited the research facts correctly,
+and the figure check failed every item because jev was given only the first 60,000 characters of
+the brief with the facts pasted after it, so it saw neither most of the tender nor any fact. Sai's
+rule is that nothing from the input is left out. The figure check, the fact-conflict check, and the
+evaluation's claim and open-question checks now send the whole brief, in pieces of at most 60,000
+characters overlapping by 2,000, and take each question's best piece; research fact lines go in their
+own `verified_research_facts` slot of every state, split into parts of 15,000 characters when there
+are more. A brief of up to 60,000 characters without research sends exactly the state it sent before,
+so earlier checkpoints stay comparable. With research the figure question also accepts a figure a
+fact states; that wording is not lab-measured, like claims_supported's research variant. jev costs
+about $0.04 per million input tokens, so four or more pieces per check add well under a cent a brief.
+
+## Update 2026-10-02: hero writer on Opus 5.5 at high effort, sharpen on (Sai)
+
+Measured through the middleware on `integrate/jev-hardening`
+(`engine/outputs/harness_2026_10_02`, one run per input):
+- **Before:** in a blind Fable 5.1 head-to-head (both orders; a side wins only if it wins both)
+  against the research tool's drafter, the engine won 2 of 7 inputs, tied 1 and lost 4. The drafter
+  writes on Opus 5.5 with a sharpen and revise loop.
+- **The change:** the `hero` route moves to Opus 5.5 at `high` effort, and the sharpen pass is back on.
+- **After:** 3 wins, 3 ties and 1 loss. The 14-test job check rose by 1 to 3 on each brief, for about
+  +$0.05 and +10-30 s per short brief.
+- **Judging:** the hero judge now runs on Sonnet 5.5, because a judge never runs on its writer's model.
+
+The earlier finding that Opus 4.6 writes better hero lines came from the critic. The blind judge,
+which this time compared against an outside writer, disagreed.
+
+## Update 2026-10-02 (later): the coherence check is built and off by default
+
+- **What it does:** `BRIEF_COHERENCE` asks whether problem → insight → proposition → reasons to
+  believe → desired response hold together.
+- **Who judges:** one Sonnet 5.5 call on the judge route. jev is the fallback.
+- **jev vs Claude:** on 88 links from 23 briefs, jev agreed with Claude on 84%, caught 17 of the 30
+  breaks Claude found, and raised 1 false alarm, so Claude leads.
+- **Repair:** one per brief.
+- **Result:** 6 blind head-to-heads against the same engine without it gave 2 wins, 2 ties and 2
+  losses, for +40-100 s per brief. Most breaks are reasons to believe that no given fact can support
+  (evidence gaps). Off by default (Sai). It is kept for the gap-filler and the strategy chain.
+

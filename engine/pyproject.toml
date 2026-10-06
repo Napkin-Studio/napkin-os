@@ -12,6 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pdfplumber>=0.11",   # .pdf ingestion
     "python-docx>=1.1",   # .docx ingestion
+    "PyYAML>=6",          # the house rule packs (engine/rule_packs/*.yaml); without it they are off, loudly
 ]
 
 [project.optional-dependencies]

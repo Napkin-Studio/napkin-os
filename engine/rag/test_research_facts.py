@@ -27,7 +27,7 @@ def test_only_current_well_formed_facts_are_used():
 
 
 def test_a_fact_line_carries_id_version_scope_and_source():
-    assert rf.line(FIXTURE_FACTS[0]) == "[F:f-1 v2] brand shops: 40 shops (brand research, as of 2026-06; Fixture annual report)"
+    assert rf.line(FIXTURE_FACTS[0]) == "[F:f-1 v2] brand shops: 40 shops (brand research, unverified, as of 2026-06; Fixture annual report)"
     assert rf.line(FIXTURE_FACTS[1]).startswith("[F:f-2 v1] category loaves bought weekly per household: 3.1 (category research")
     rec = rf.record(*rf.current(FIXTURE_FACTS))
     assert rec["given"] == 4 and [u["id"] for u in rec["used"]] == ["f-1", "f-2"] and len(rec["skipped"]) == 2
@@ -45,7 +45,7 @@ def test_every_hero_writer_gets_the_facts_and_the_figure_check_allows_them(monke
     pb.fill_derivable_fields(gf, {"loops": {}}, pb.json.loads((HERE.parent / "golden-brief" / "golden_brief.schema.json").read_text()),
                              brief_text="A bakery. Under-30s buy supermarket bread.", research_facts=lines)
     gen_prompts = [u for k, u, s in calls if k in ("gen", "gen_batch")]
-    assert gen_prompts and all("[F:f-1 v2]" in u and "VERIFIED RESEARCH FACTS" in u for u in gen_prompts)
+    assert gen_prompts and all("[F:f-1 v2]" in u and "RESEARCH FACTS, each marked verified or unverified" in u for u in gen_prompts)
     assert "35" not in " ".join(gen_prompts)                                  # the superseded fact never appears
     assert seen and all("[F:f-1 v2]" in a for a in seen)                     # figures may come from the facts
     assert pb._numbers_not_in(["We have 40 shops"], seen[0]) == []
@@ -62,7 +62,7 @@ def test_without_facts_the_prompts_are_unchanged(monkeypatch):
     from test_cannot_fail_silently import GOLDEN_SCHEMA, BRIEF
     pb.fill_derivable_fields(gf, {"loops": {}}, GOLDEN_SCHEMA, brief_text=BRIEF, research_facts=[])
     b = [u for k, u, s in calls_b if k in ("gen", "gen_batch")]
-    assert a == b and not any("VERIFIED RESEARCH FACTS" in u for u in a)
+    assert a == b and not any("RESEARCH FACTS, each marked verified or unverified" in u for u in a)
 
 
 def test_run_records_the_facts_and_keeps_them_out_of_the_capture(monkeypatch):
@@ -189,7 +189,7 @@ def test_contested_facts_reach_the_writers_only_as_to_confirm(monkeypatch):
                              research_facts=[usable[1]], contested=contested)
     prompts = [u for k, u, s in calls if k in ("gen", "gen_batch")]
     assert all("CONTESTED" in u and "do NOT state either value as fact" in u for u in prompts)
-    assert all("VERIFIED RESEARCH FACTS" in u and "[F:f-2 v1]" in u.split("CONTESTED")[0] for u in prompts)
+    assert all("RESEARCH FACTS, each marked verified or unverified" in u and "[F:f-2 v1]" in u.split("CONTESTED")[0] for u in prompts)
     assert not any("[F:f-1 v2]" in u.split("CONTESTED")[0] for u in prompts)   # usable list excludes it
 
 
@@ -261,7 +261,7 @@ def test_with_no_research_at_all_everything_runs_as_before(monkeypatch):
           "competitor_context": {"value": "supermarkets", "source": "client_stated"}}
     fills, qs = pb.fill_derivable_fields(gf, {"loops": {}}, GOLDEN_SCHEMA, brief_text="A bakery.")
     prompts = [u for k, u, s in calls if k in ("gen", "gen_batch", "territory")]
-    assert not any("VERIFIED RESEARCH FACTS" in u or "CONTESTED" in u or "RIVAL (from" in u for u in prompts)
+    assert not any("RESEARCH FACTS, each marked verified or unverified" in u or "CONTESTED" in u or "RIVAL (from" in u for u in prompts)
     assert gf["smp"]["territory"]["rival_source"] == "brief" and not any("fact_refs" in (v or {}) for v in gf.values() if isinstance(v, dict))
     monkeypatch.setattr(pb, "capture_toon", lambda segs: {"fields": {"business_problem": {"value": "p", "status": "fact"}},
                                                           "how_to_win": {}, "open_questions": []})
@@ -269,3 +269,43 @@ def test_with_no_research_at_all_everything_runs_as_before(monkeypatch):
     monkeypatch.setattr(pb, "score_betterbriefs", lambda text, fields=None: {})
     out = pb.run(None, raw_text="A bakery.")
     assert "research_facts" not in out["meta"]
+
+
+
+def test_a_share_or_a_large_amount_may_be_written_the_way_a_planner_writes_it():
+    """The research tool stores shares as 0-1 and money in units; a writer quoting '27% (2014)' or
+    'EUR 85 million' is quoting the fact, not misquoting it (one-line test, 2026-10-01: every RTB
+    built from research facts was rejected for this)."""
+    facts = {"f-s": {"id": "f-s", "value": 0.27, "unit": "proportion", "as_of": "2014-10-06"},
+             "f-m": {"id": "f-m", "value": 85000000, "unit": "eur", "as_of": "2025-06-01"}}
+    assert rf.forms(facts["f-s"]) == ["27%"] and rf.forms(facts["f-m"]) == ["85 million"]
+    assert "0.27 proportion (27%)" in rf.line(facts["f-s"]) and "(85 million)" in rf.line(facts["f-m"])
+    assert rf.citation_failures(["Barry's holds 27% of the market (2014) [F:f-s]",
+                                 "The category is worth EUR 85 million [F:f-m]"], facts, "Barry's Tea brief.") == []
+    assert rf.citation_failures(["Barry's holds 31% of the market [F:f-s]"], facts, "x") == [
+        "fact citation: 31 is not in the fact it cites (F:f-s) (item 0)"]               # a misquote still fails
+    assert rf.citation_failures(["About 27% of drinkers"], facts, "x") == [
+        "fact citation: 27 comes from the research (F:f-s) but is not cited (item 0)"]  # uncited research still fails
+    assert rf.citation_failures(["Launch in 2014"], facts, "x") == []                  # a date alone is not research
+
+
+def test_an_identifier_written_in_full_is_not_an_uncited_figure_and_is_attached():
+    """EC-044: 'Save 116 123 in your phone' emptied the Samaritans desired response."""
+    import research_facts as rf
+    facts = {"f_tel": {"id": "f_tel", "version": 1, "entity": "brand/x", "key": "positioning.freephone_number",
+                       "value": "116 123", "unit": "code"},
+             "f_syn": {"id": "f_syn", "version": 1, "entity": "brand/x", "key": "synthesis.a",
+                       "value": "A free number (116 123) answered day or night.", "unit": "text"}}
+    draft = {"do": "Save 116 123 in their phone now, and ring it on a bad night."}
+    assert rf.citation_failures(draft, facts, "the brief says nothing about the number") == []
+    assert rf.citation_failures({"do": "Ring 116-123"}, facts, "") == []
+    clean, refs = rf.strip(draft, facts)
+    assert clean == draft and [(r["item"], r["id"], r["auto"]) for r in refs] == [("do", "f_tel", "identifier")]
+
+
+def test_digits_that_are_also_a_statistic_still_need_their_citation():
+    import research_facts as rf
+    facts = {"f_tel": {"id": "f_tel", "value": "116 123", "unit": "code"},
+             "f_calls": {"id": "f_calls", "value": 123, "unit": "count"}}
+    assert rf.citation_failures("We took 123 calls.", facts, "") != []          # a count, not the number
+    assert rf.citation_failures("Call 116 123.", facts, "") == []
