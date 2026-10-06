@@ -25,11 +25,7 @@ export function DogfoodNotice({ onAgree, onClose }: { onAgree?: () => void; onCl
       <div className="df-card">
         <span className="df-badge df-badge-static">Beta</span>
         <h2 id="df-h">This build records everything you do</h2>
-        <p>
-          You are using a beta of Napkin Studio, made so we can learn from how it is used. While you use it,
-          everything is recorded: where you click, what you type and send, and the files you upload.
-        </p>
-        <p>Use it for testing only, not for real client work.</p>
+        <p>You are using a beta of Napkin Studio, made so we can learn from how it is used.</p>
         <p>Questions, or want your data removed? Write to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.</p>
         <div className="df-actions">
           {onAgree && <button className="ch-btn ch-btn-primary" onClick={onAgree} autoFocus>I understand</button>}
