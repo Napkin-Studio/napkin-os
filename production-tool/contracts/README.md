@@ -94,3 +94,4 @@ The adapter owns the exact request:
    - fal first for images, with Runway as fallback
    - clips: fal, then HeyGen, then Runway
    - clip_edit on Runway only (aleph2)
+8. **Sequential storyboard frames (2026-10-07).** Frames are drawn one after another with three anchors: the character views (identity), frame 1 (setting, light and style) and the previous frame (continuity). `JobInput` gains an optional `anchorFrame` (assetRef: the first storyboard frame) beside `previousFrame`, and a frame request may carry the `script` for the setting. Additive: `contractVersion` stays "1". The director names them `@anchor` and `@previous` (prompt `director.v2.1`). To name it, `promptVersion` in `config.schema.json` and the agent block in `director.schema.json` now also take a minor version (`director.v2.1`); this loosens a pattern, so every existing value stays valid.

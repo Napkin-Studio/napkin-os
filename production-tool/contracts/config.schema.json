@@ -15,7 +15,7 @@
     "director": {
       "type": "object",
       "properties": {
-        "promptVersion": { "type": "string", "pattern": "^director\\.v[0-9]+$" },
+        "promptVersion": { "type": "string", "pattern": "^director\\.v[0-9]+(\\.[0-9]+)?$" },
         "perClickModel": { "type": "string" },
         "shotListModel": { "type": "string" }
       },
