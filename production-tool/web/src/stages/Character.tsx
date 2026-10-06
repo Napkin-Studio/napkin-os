@@ -18,6 +18,9 @@ import { useBlobUrl, useColorScheme, useFloating } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { updateDoc } from '../doc/store'
+import { cancelText } from '../ui/cancel'
+import { InlineConfirm, UndoChip } from '../ui/Undo'
+import { useUndo } from '../ui/useUndo'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -40,12 +43,15 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const ui = useUi()
   useJobsTick()
   const theme = useColorScheme()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
   const ctrl = useMemo(() => (api ? new CanvasController(api, services) : null), [api, services])
   const raf = useRef<number | null>(null)
   const lastSig = useRef('')
+  const wrap = useRef<HTMLDivElement>(null)
+  const [undo, offerUndo, runUndo] = useUndo()
+  const [confirming, setConfirming] = useState<{ ids: string[]; text: string; at: Pt } | null>(null)
 
   const initialData = useMemo(() => {
     if (initial?.elements?.length) return { elements: initial.elements, files: initial.files, scrollToContent: true }
@@ -120,12 +126,56 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id)), [els, vs])
   const zoom = vs?.zoom.value ?? 1
 
+  const doDelete = useCallback((ids: string[]) => {
+    if (!ctrl) return
+    setConfirming(null)
+    const r = ctrl.deleteElements(ids)
+    if (r) offerUndo({ label: r.label, at: r.at, undo: () => ctrl.undelete(r.ids) })
+  }, [ctrl, offerUndo])
+
+  /** The 🗑 and the Delete key: straight away, or first a confirm when something is still being made. */
+  const requestDelete = useCallback((sel: El[]) => {
+    if (!ctrl) return
+    const targets = ctrl.deletable(sel)
+    if (!targets.length) return
+    const ids = targets.map((e) => e.id)
+    const running = targets.map((e) => cd(e)).filter((c): c is Extract<CustomData, { kind: 'gen' }> => c?.kind === 'gen')
+      .map((c) => docStore.get().jobs.find((j) => j.id === c.id)).filter((j) => j && isActive(runner.liveInfo(j.id)?.state ?? j.state))
+    if (running.length) {
+      const b = bounds(targets)
+      setConfirming({ ids, text: cancelText(running[0], config, true), at: { x: b.minX + b.w / 2, y: b.minY } })
+      return
+    }
+    doDelete(ids)
+  }, [ctrl, docStore, runner, config, doDelete])
+
+  // The Delete key on references and generated images goes through the same path
+  // (one entry, the inline Undo); other drawings are Excalidraw's own.
+  useEffect(() => {
+    const el = wrap.current
+    if (!el || !ctrl) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const st = ctrl.api.getAppState()
+      const ids = Object.keys(st.selectedElementIds).filter((k) => st.selectedElementIds[k])
+      const sel = alive(ctrl.api.getSceneElements() as El[]).filter((x) => ids.includes(x.id))
+      if (!sel.some((x) => cd(x)?.kind === 'ref' || cd(x)?.kind === 'gen')) return
+      e.preventDefault()
+      e.stopPropagation()
+      requestDelete(sel)
+    }
+    el.addEventListener('keydown', onKey, true)
+    return () => el.removeEventListener('keydown', onKey, true)
+  }, [ctrl, requestDelete])
+
   const hasUserMarks = els.some((e) => isUserDrawing(e) || cd(e)?.kind === 'ref' || cd(e)?.kind === 'gen')
   const showHint = !ui.hintDismissed && !hasUserMarks && doc.character.refs.length === 0
 
   return (
     <div className="character">
-      <div className="canvas-wrap">
+      <div className="canvas-wrap" ref={wrap}>
         <Excalidraw
           excalidrawAPI={setApi}
           initialData={initialData}
@@ -146,7 +196,19 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             return null
           })}
           {ctrl && controls.generate && <SketchGenerate ctrl={ctrl} els={els} toView={toView} />}
-          {ctrl && selected.length > 0 && <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} />}
+          {ctrl && selected.length > 0 && !confirming && <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} />}
+          {confirming && (() => {
+            const p = toView(confirming.at)
+            return (
+              <Floating className="toolbar confirming" anchor={{ x: p.x, top: p.y, bottom: p.y }}>
+                <InlineConfirm text={confirming.text} yes="Stop and remove" onYes={() => doDelete(confirming.ids)} onNo={() => setConfirming(null)} />
+              </Floating>
+            )
+          })()}
+          {undo?.at && (() => {
+            const p = toView(undo.at)
+            return <UndoChip className="oncanvas" label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
+          })()}
         </div>
         {showHint && (
           <div className="hint3" aria-hidden>
@@ -294,7 +356,7 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
 
 // ── The floating toolbar on the selection ───────────────────────────────────
 
-function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; selected: El[]; toView: (p: Pt) => Pt }) {
+function FloatingToolbar({ ctrl, selected, toView, onDelete }: { ctrl: CanvasController; selected: El[]; toView: (p: Pt) => Pt; onDelete: (sel: El[]) => void }) {
   const doc = useDoc()
   const { controls } = useConfig()
   const [busy, setBusy] = useState<string | null>(null)
@@ -371,6 +433,9 @@ function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; s
   }
   if (singleRef) {
     groups.push(<button key="unref" className="btn xs ghost" onClick={() => ctrl.removeRef(meaningful[0].id)}>Not a reference</button>)
+  }
+  if (ctrl.deletable(meaningful).length) {
+    groups.push(<button key="del" className="btn sm icon ghost iconbtn-del" aria-label="Delete" title="Delete (Undo for a few seconds, or Ctrl+Z)" onClick={() => onDelete(meaningful)}>🗑</button>)
   }
   if (!groups.length && !error) return null
 

@@ -16,6 +16,9 @@ import { JobNode } from '../ui/JobNode'
 import { RegionImage, type MarkMode, type Stroke } from '../ui/RegionImage'
 import { maskPng } from '../lib/mask'
 import { updateDoc } from '../doc/store'
+import { deleteFrom, removeFrame, removeShot, restoreTo, shotDeleteText } from '../doc/remove'
+import { InlineConfirm, UndoChip } from '../ui/Undo'
+import { useUndo } from '../ui/useUndo'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -28,6 +31,8 @@ export function Storyboard() {
   const { controls } = useConfig()
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
+  const [confirmShot, setConfirmShot] = useState<string | null>(null)
+  const [shotUndo, offerShotUndo, runShotUndo] = useUndo()
   const shots = doc.shots ?? []
   const check = checkDurations(shots, ui.targetS)
   const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list')
@@ -129,7 +134,21 @@ export function Storyboard() {
             </div>
             {!shots.length && <div className="faint" style={{ padding: '18px 0' }}>Your shots show up here. You can change every one.</div>}
             <div className="shots">
-              {shots.map((s, i) => (
+              {shots.map((s, i) => confirmShot === s.id ? (
+                <div key={s.id} className="shotrow confirming">
+                  <span className="num">{i + 1}</span>
+                  <InlineConfirm
+                    text={shotDeleteText(i + 1, (doc.frames ?? []).filter((f) => f.shot_id === s.id).length, (doc.takes ?? []).filter((t) => t.shot_id === s.id).length)}
+                    yes="Delete shot"
+                    onNo={() => setConfirmShot(null)}
+                    onYes={async () => {
+                      setConfirmShot(null)
+                      const r = await deleteFrom(docStore, (d) => removeShot(d, s.id))
+                      offerShotUndo({ label: `Shot ${i + 1} deleted`, key: String(i), undo: () => restoreTo(docStore, r) })
+                    }}
+                  />
+                </div>
+              ) : (
                 <div key={s.id} className="shotrow">
                   <span className="num">{i + 1}</span>
                   <div className="stack" style={{ gap: 4 }}>
@@ -149,13 +168,11 @@ export function Storyboard() {
                       onChange={(e) => updateShot(s.id, { duration_s: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
                     <span className="faint">s</span>
                   </div>
-                  <button className="btn icon sm ghost" aria-label="Remove shot" title="Remove" disabled={shots.length <= 2}
-                    onClick={() => updateDoc(docStore, (d) => {
-                      d.shots = (d.shots ?? []).filter((x) => x.id !== s.id).map((x, k) => ({ ...x, order: k + 1 }))
-                      d.frames = (d.frames ?? []).filter((f) => f.shot_id !== s.id)
-                    }, 'delete shot')}>✕</button>
+                  <button className="btn icon sm ghost" aria-label="Delete shot" title={shots.length <= 2 ? 'A storyboard needs at least 2 shots' : 'Delete this shot'} disabled={shots.length <= 2}
+                    onClick={() => setConfirmShot(s.id)}>✕</button>
                 </div>
-              ))}
+              )).flatMap((row, i) => (shotUndo && shotUndo.key === String(i) ? [<UndoRow key="undo" label={shotUndo.label} onUndo={runShotUndo} />, row] : [row]))}
+              {shotUndo && Number(shotUndo.key) >= shots.length && <UndoRow label={shotUndo.label} onUndo={runShotUndo} />}
             </div>
             {shots.length > 0 && (
               <div className="row">
@@ -191,6 +208,10 @@ export function Storyboard() {
   )
 }
 
+function UndoRow({ label, onUndo }: { label: string; onUndo: () => void }) {
+  return <div className="shotrow undo"><UndoChip label={label} onUndo={onUndo} /></div>
+}
+
 function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw: () => void }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
@@ -208,6 +229,7 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
   const [text, setText] = useState('')
   const [strokes, setStrokes] = useState<Stroke[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [undo, offerUndo, runUndo] = useUndo()
   const region = current ? ui.frameRegions[current.id] : undefined
   const stale = current && (doc.stale ?? []).some((s) => s.target.kind === 'frame' && s.target.id === current.id)
   const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ui.ratio)
@@ -287,10 +309,22 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
             ))}
             {(region || strokes.length > 0) && <button className="btn xs ghost" onClick={() => { setRegion(null); setStrokes([]) }}>Clear</button>}
             <span className="spacer" />
+            {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
             <div className="versions">
               <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
               <span className="mono">v{idx + 1}/{frames.length}</span>
               <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
+              <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={frames.length <= 1 || running}
+                title={frames.length <= 1 ? 'Regenerate instead' : `Delete v${idx + 1}`}
+                onClick={async () => {
+                  setError(null)
+                  try {
+                    const r = await deleteFrom(docStore, (d) => removeFrame(d, current.id))
+                    offerUndo({ label: `v${idx + 1} deleted`, undo: () => restoreTo(docStore, r) })
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'That did not work.')
+                  }
+                }}>🗑</button>
             </div>
           </div>
           <div className="foot">

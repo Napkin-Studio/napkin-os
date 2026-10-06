@@ -77,6 +77,10 @@ export class ClanBackedStore implements DocumentStore {
   }
 
   async create(init: { participant: { id: string; handle: string } }): Promise<Doc> {
+    // Starting over: nothing still pending belongs to the new document.
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    this.pending = []
     await this.clan.create(init)
     this.value = normaliseDocument(this.clan.get() as unknown as ProductionDocument)
     this.emit()
@@ -200,8 +204,10 @@ export class ClanBackedStore implements DocumentStore {
       try {
         const mp = createMergePatch(this.clan.get(), item.after)
         if (mp !== undefined) {
+          // The author is whoever the document names once this write lands:
+          // signing in renames the participant, and that entry is theirs.
           await this.clan.patch(mp as object, item.why
-            ? { action: item.why.action, ...(item.why.rationale ? { rationale: item.why.rationale } : {}), ...(item.why.pinned ? { pinned: true } : {}) }
+            ? { action: item.why.action, agent: item.after.participant.handle, ...(item.why.rationale ? { rationale: item.why.rationale } : {}), ...(item.why.pinned ? { pinned: true } : {}) }
             : { action: 'sync', quiet: true })
           if (item.why) wrote = true
         }
