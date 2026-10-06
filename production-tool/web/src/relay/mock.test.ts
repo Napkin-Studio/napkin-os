@@ -31,7 +31,6 @@ function setup() {
 }
 
 const request = (op: JobRequest['op'] = 'generate', text = 'make it'): JobRequest => ({ contractVersion: '1', jobId: newId('job'), op, parentIds: [], input: { text, script: 'Rain. Smile.', targetS: 15 } })
-const settle = () => new Promise((r) => setTimeout(r, 0))
 
 describe('mock relay', () => {
   const validateJob = makeAjv().compile({ $ref: SCHEMA('relay-api') + '#/$defs/Job' })
@@ -47,8 +46,7 @@ describe('mock relay', () => {
     expect(a.queuePosition).toBeGreaterThanOrEqual(1)
     advance(2100)
     await relay.getJob(req.jobId)
-    await settle()
-    await settle()
+    await relay.settled()
     const done = await relay.createJob(req)
     expect(done.state).toBe('completed')
     expect(done.kind).toBe('mock')
@@ -66,7 +64,7 @@ describe('mock relay', () => {
     await relay.createJob(req)
     advance(5000)
     await relay.getJob(req.jobId)
-    await settle()
+    await relay.settled()
     const job = await relay.getJob(req.jobId)
     expect(job.state).toBe('completed')
     expect(job.shots!.reduce((s, x) => s + x.duration_s, 0)).toBe(15)
@@ -82,7 +80,7 @@ describe('mock relay', () => {
     advance(3000)
     await relay.getJob(a.jobId)
     await relay.getJob(b.jobId)
-    await settle()
+    await relay.settled()
     const ja = await relay.getJob(a.jobId)
     const jb = await relay.getJob(b.jobId)
     expect(ja.state).toBe('failed')
