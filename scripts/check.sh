@@ -9,7 +9,7 @@
 #   scripts/check.sh --only rust,wasm  just these suites
 #   scripts/check.sh --list            say which suites would run, run nothing
 #
-# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform
+# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool
 # `desktop` (cargo check of app/src-tauri) runs only when that path changes or is named:
 # the full .deb bundle stays in CI.
 set -uo pipefail
@@ -22,7 +22,7 @@ unset CLAN_NO_HINTS
 for b in chromium chromium-browser google-chrome-stable google-chrome; do
   command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
 done
-ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform)
+ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool)
 
 base="" range="" only="" list=0 all=0
 while [[ $# -gt 0 ]]; do
@@ -85,6 +85,8 @@ else
         want[middleware]=1 ;;
       mock-backend/*|mock-middleware/*)
         want[mock-backend]=1 ;;
+      production-tool/*)
+        want[production-tool]=1 ;;
       infra/*)
         want[terraform]=1
         infra_changed=1 ;;
@@ -97,7 +99,7 @@ else
   for n in "${notes[@]}"; do echo "note: $n"; done
   if [[ -n "${infra_changed:-}" ]]; then
     echo "note: infra/ changed. The Deploy workflow only swaps images, so these changes reach AWS"
-    echo "      only when a person applies them: plan and apply in infra/envs/staging BEFORE the"
+    echo "      only when a person applies them: plan and apply in infra/envs/<env> BEFORE the"
     echo "      deploy, then verify the running task definition (CLAUDE.md, Infrastructure changes)."
   fi
 fi
@@ -159,9 +161,22 @@ suite_terraform() {
   local cache="${XDG_CACHE_HOME:-$HOME/.cache}/napkin-check"
   mkdir -p "$cache/tf-plugins"
   ( cd infra && terraform fmt -check -recursive ) &&
-  ( cd infra/envs/staging && export TF_DATA_DIR="$cache/tfdata-staging" TF_PLUGIN_CACHE_DIR="$cache/tf-plugins" &&
-    terraform init -backend=false -input=false >/dev/null &&
-    terraform validate && terraform test )
+  for env in staging hackathon; do
+    ( cd "infra/envs/$env" && export TF_DATA_DIR="$cache/tfdata-$env" TF_PLUGIN_CACHE_DIR="$cache/tf-plugins" &&
+      terraform init -backend=false -input=false >/dev/null &&
+      terraform validate && terraform test ) || return 1
+  done
+}
+suite_production-tool() {
+  # relay and stitch (offline), the locked contracts, and the web app once the UI lane adds it
+  ( cd production-tool/relay && uv run -q --python 3.12 pytest -q ) &&
+  ( cd production-tool/stitch && uv run -q --python 3.12 pytest -q ) &&
+  uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py &&
+  if [[ -f production-tool/web/package.json ]]; then
+    ( cd production-tool/web &&
+      { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
+      npm run -s lint && npm test && npm run -s build )
+  fi
 }
 
 logdir="$(mktemp -d "${TMPDIR:-/tmp}/napkin-check.XXXXXX")"
