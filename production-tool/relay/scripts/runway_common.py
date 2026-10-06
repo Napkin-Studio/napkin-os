@@ -12,7 +12,9 @@ import dataclasses
 import hashlib
 import io
 import math
+import os
 import random
+import re
 import sys
 import threading
 import time
@@ -48,6 +50,13 @@ PRO_RATIOS = ("1344:768", "768:1344", "1024:1024", "1184:864", "864:1184", "1536
 IMAGE_RATIO = "1024:1024"
 CLIP_RATIO = "1280:720"
 DATA_URI_MAX = 5 * 1024 * 1024  # Runway's limit for an encoded image data URI
+GATE_NOTE = "thresholds untuned, judged on the raw model output"
+EXT = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "video/mp4": "mp4"}
+FIRST_FRAME_NEEDS_HTTPS = "needs an https image URL: Runway rejects data URIs as a clip's first frame"
+
+
+def is_https(url: Optional[str]) -> bool:
+    return bool(url) and urlsplit(url).scheme == "https"
 
 
 def key_status(env: dict) -> str:
@@ -59,6 +68,22 @@ def redact_url(url: str) -> str:
     """Scheme, host and path only: a signed URL's query is a credential."""
     parts = urlsplit(url)
     return f"{parts.scheme}://{parts.netloc}{parts.path}"
+
+
+def scrub(text: str) -> str:
+    """Text with the query dropped from any URL in it: an error message can carry a signed URL."""
+    return re.sub(r"(https?://[^\s?'\"]+)\?\S*", r"\1", text)
+
+
+def open_rgb(data: bytes) -> Image.Image:
+    """The image as RGB. A transparent one is laid on white first, so its hidden pixels do not turn black."""
+    img = Image.open(io.BytesIO(data))
+    if img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info:
+        img = img.convert("RGBA")
+        flat = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        flat.alpha_composite(img)
+        return flat.convert("RGB")
+    return img.convert("RGB")
 
 
 def timeout_for(sheet: dict, op: str) -> int:
@@ -117,10 +142,33 @@ class Assets:
         return self._refs[sha]
 
 
+def _data_uri_len(n_bytes: int, mime: str) -> int:
+    return len(f"data:{mime};base64,") + 4 * math.ceil(n_bytes / 3)
+
+
+def fit_image(data: bytes) -> tuple[bytes, str]:
+    """The image as a PNG, or a JPEG when the PNG is too big, shrunk until its data URI fits Runway's limit."""
+    img = open_rgb(data)
+    while True:
+        for fmt, mime, opts in (("PNG", "image/png", {}), ("JPEG", "image/jpeg", {"quality": 90})):
+            out = io.BytesIO()
+            img.save(out, format=fmt, **opts)
+            if _data_uri_len(out.tell(), mime) <= DATA_URI_MAX:
+                return out.getvalue(), mime
+        img = img.resize((max(1, img.width * 3 // 4), max(1, img.height * 3 // 4)), Image.LANCZOS)
+
+
+def image_ref(assets: "Assets", fetch: Callable[[str], bytes], url: str) -> str:
+    """Fetch the source once and register it as a data URI: Runway fetches no http(s) URL of ours
+    for an image op, only https, so the bytes go inline."""
+    data, mime = fit_image(fetch(url))
+    return assets.upload(data, mime).sha256
+
+
 def prepare_image(data: bytes) -> tuple[bytes, str]:
     """Centre-crop and resize to the nearest ratio gemini_image3_pro accepts, so the region
     edit's result has the original's shape. Returns the PNG and its ratio string."""
-    img = Image.open(io.BytesIO(data)).convert("RGB")
+    img = open_rgb(data)
     aspect = math.log(img.width / img.height)
 
     def distance(r: str) -> float:
@@ -273,7 +321,7 @@ class Runner:
             return {**rec, "state": "failed", "latency_s": 0.0, "error": error}
         rec.update(state=status.state, latency_s=round(self.clock() - t0, 2), cost_usd=status.cost_usd,
                    throttled_s=self.tap.throttled_s(rid) if self.tap else 0.0,
-                   outputs=[o.url for o in status.outputs])
+                   outputs=[o.url for o in status.outputs], output_mimes=[o.mime for o in status.outputs])
         if status.error:
             rec["error"] = status.error.to_dict()  # a moderated job lands here, and is not retried
         return rec
@@ -301,14 +349,53 @@ class Metered:
 
 
 def region_edit(runner: Runner, png: bytes, ratio: str, region: dict, prompt: str,
-                assets: Assets, fetch: Callable[[str], bytes]):
-    """One region edit through region.pipeline, no retry. May raise BudgetExceeded."""
+                assets: Assets, fetch: Callable[[str], bytes], capture: Optional[dict] = None):
+    """One region edit through region.pipeline, no retry. May raise BudgetExceeded.
+    `capture`, if given, gets the model's raw output under "raw" (the pipeline keeps only the pasted-back one)."""
     from region import run_region_edit
 
     job = make_job(runner.sheet, "region_edit", prompt, ratio=ratio)
     timeout = timeout_for(runner.sheet, "region_edit")
-    return run_region_edit(Metered(runner), job, png, region, assets.upload, fetch,
-                           lambda _p, rid: runner.wait(rid, timeout), retries=0)
+
+    def wait(_p, rid):
+        status = runner.wait(rid, timeout)
+        if capture is not None and status.outputs and status.outputs[0].data is not None:
+            capture["raw"] = status.outputs[0].data
+        return status
+
+    def grab(url):
+        data = fetch(url)
+        if capture is not None:
+            capture["raw"] = data
+        return data
+
+    return run_region_edit(Metered(runner), job, png, region, assets.upload, grab, wait, retries=0)
+
+
+def write_file(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def save_outputs(rec: dict, item: str, save_dir: Path, base: Path, fetch: Callable[[str], bytes],
+                 default_ext: str = "png") -> None:
+    """Download each output of a finished job to <save_dir>/<item>/<label>[_<n>].<ext> and put the paths,
+    relative to `base`, in rec["files"]. A download that fails is noted in rec["download_errors"]."""
+    urls, mimes = rec.get("outputs") or [], rec.get("output_mimes") or []
+    files, errors = [], []
+    for n, url in enumerate(urls):
+        ext = EXT.get(mimes[n] if n < len(mimes) else None, default_ext)
+        path = save_dir / item / f"{rec['label']}{f'_{n + 1}' if len(urls) > 1 else ''}.{ext}"
+        try:
+            write_file(path, fetch(url))
+            files.append(os.path.relpath(path, base))
+        except Exception as exc:  # the run is not lost for want of a picture
+            errors.append(f"{type(exc).__name__}: {str(exc).replace(url, redact_url(url))}")
+    if urls:
+        rec["files"] = files
+        rec["outputs"] = [redact_url(u) for u in urls]  # the signed URL is a credential; the files are saved
+    if errors:
+        rec["download_errors"] = errors
 
 
 def fetch_bytes(url: str) -> bytes:

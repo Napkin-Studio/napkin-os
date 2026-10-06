@@ -13,9 +13,11 @@ The key is read only from the environment variable RUNWAYML_API_SECRET. Load it 
 Step 0 is GET /v1/organization (free): the tier and each model's concurrency. --org-only
 does just that, without --live.
 
-Inputs are public HTTPS URLs, no redirects, with a Content-Type and Content-Length:
-  --image-url   combine, view, frame, region_edit, clip
-  --video-url   clip_edit (mp4, 2-30 s)
+Inputs, no redirects, with a Content-Type and Content-Length:
+  --image-url   combine, view, frame, region_edit (fetched once and sent as a data URI, so a local
+                http URL will do); clip (its first frame: Runway rejects a data URI there, so it
+                needs an https URL, else the op is 'blocked': nothing is submitted)
+  --video-url   clip_edit (https mp4, 2-30 s; blocked if it is not https)
 Exit status is non-zero if any op failed or was not run.
 """
 
@@ -28,8 +30,9 @@ import time
 from typing import Callable, Optional
 
 from runway_common import (
-    CLIP_RATIO, DEFAULT_MAX_USD, IMAGE_RATIO, KEY_ENV, KEY_HELP, Assets, Budget, BudgetExceeded, Runner, Tap,
-    default_factory, estimate_usd, fetch_bytes, key_status, make_job, prepare_image, region_edit,
+    CLIP_RATIO, DEFAULT_MAX_USD, FIRST_FRAME_NEEDS_HTTPS, IMAGE_RATIO, KEY_ENV, KEY_HELP, Assets, Budget,
+    BudgetExceeded, Runner, Tap, default_factory, estimate_usd, fetch_bytes, image_ref, is_https, key_status,
+    make_job, prepare_image, region_edit,
 )
 from providers import ProviderError, Ref, load_sheet
 
@@ -37,6 +40,7 @@ OPS = ("generate", "combine", "view", "frame", "region_edit", "clip", "clip_edit
 NEEDS = {"combine": "image", "view": "image", "frame": "image", "region_edit": "image",
          "clip": "image", "clip_edit": "video"}
 FLAG = {"image": "--image-url", "video": "--video-url"}
+VIDEO_NEEDS_HTTPS = "needs an https video URL: Runway cannot fetch a local video for a clip edit"
 BOX = {"x": 0.3, "y": 0.3, "w": 0.3, "h": 0.3}
 
 
@@ -51,19 +55,30 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def blocked_reason(op: str, urls: dict) -> Optional[str]:
+    """Why an op cannot run with these URLs, or None. A URL that is not given is the 'needs' check's business."""
+    if op == "clip" and urls.get("image") and not is_https(urls["image"]):
+        return FIRST_FRAME_NEEDS_HTTPS
+    if op == "clip_edit" and urls.get("video") and not is_https(urls["video"]):
+        return VIDEO_NEEDS_HTTPS
+    return None
+
+
 def plan_lines(sheet: dict, ops: list[str], urls: dict) -> tuple[list[str], float]:
     lines, total = [], 0.0
     for op in ops:
         est, need = estimate_usd(sheet, op), NEEDS.get(op)
-        total += est
         note = ""
         if need and not urls.get(need):
             note = f"   needs {FLAG[need]}"
+        if reason := blocked_reason(op, urls):
+            est, note = 0.0, f"   BLOCKED: {reason}"
+        total += est
         lines.append(f"  {op:<12} {sheet['ops'][op]['model']:<22} ~${est:.2f}{note}")
     return lines, total
 
 
-def build_job(sheet: dict, op: str, assets: Assets, urls: dict):
+def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[[str], bytes]):
     """The request for one op. Returns the job, or None for region_edit (its own pipeline)."""
     if op == "generate":
         return make_job(sheet, op, "A red fox sitting in a snowy forest, photo.", ratio=IMAGE_RATIO)
@@ -71,7 +86,10 @@ def build_job(sheet: dict, op: str, assets: Assets, urls: dict):
         sha = assets.add_url(urls["video"], "video/mp4")
         return make_job(sheet, op, "Make the lighting warmer, keep everything else the same.",
                         refs=[Ref(sha, "source", "source")])
-    sha = assets.add_url(urls["image"], "image/png")
+    if op == "clip":  # an https URL, checked before this; a data URI is no first frame
+        sha = assets.add_url(urls["image"], "image/png")
+        return make_job(sheet, op, "She turns and smiles.", ratio=CLIP_RATIO, duration_s=4, first_frame=sha)
+    sha = image_ref(assets, fetch, urls["image"])  # an image op takes the bytes inline
     if op == "combine":
         return make_job(sheet, op, "@hero and @prop together on a wooden table, photo.", ratio=IMAGE_RATIO,
                         refs=[Ref(sha, "hero", "character"), Ref(sha, "prop", "object")])
@@ -81,14 +99,17 @@ def build_job(sheet: dict, op: str, assets: Assets, urls: dict):
     if op == "frame":
         return make_job(sheet, op, "@hero walking through a doorway, cinematic still.", ratio=IMAGE_RATIO,
                         refs=[Ref(sha, "hero", "character")])
-    if op == "clip":
-        return make_job(sheet, op, "She turns and smiles.", ratio=CLIP_RATIO, duration_s=4, first_frame=sha)
     return None
 
 
 def run_op(op: str, runner: Runner, assets: Assets, urls: dict, fetch: Callable[[str], bytes]) -> dict:
     sheet = runner.sheet
-    job = build_job(sheet, op, assets, urls)
+    if reason := blocked_reason(op, urls):
+        return {"label": op, "op": op, "state": "blocked", "reason": reason}
+    try:
+        job = build_job(sheet, op, assets, urls, fetch)
+    except Exception as exc:  # an unreachable image is this op's failure, not the run's
+        return {"label": op, "op": op, "state": "failed", "error": {"code": "input", "message": f"{type(exc).__name__}: {exc}"}}
     if job:
         return runner.run(op, job)
     try:
