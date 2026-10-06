@@ -322,13 +322,41 @@ jobs:
         run: uv run --python 3.12 pytest -q
       - name: Contracts
         run: uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py
-      # The UI lane adds production-tool/web; until then these steps skip.
+      # The CLAN store: napkin-wasm built once (wasm32 + wasm-bindgen), its tests
+      # against the real `clan` CLI, then the web app that bundles it.
+      - name: Install Rust toolchain (wasm32)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: production-tool
+          # wasm-bindgen-cli and clan-cli live in ~/.cargo/bin
+          cache-all-crates: true
+      # The CLI and the crate must be the exact same version, or the bindings are rejected at load.
+      - name: Install wasm-bindgen CLI
+        run: |
+          version=$(grep -oP 'wasm-bindgen = "=\K[0-9.]+' crates/napkin-wasm/Cargo.toml)
+          if [ "$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')" != "$version" ]; then
+            cargo install wasm-bindgen-cli --version "$version" --locked
+          fi
+      - name: Build the clan CLI (the store's tests read the .clan with it)
+        run: cargo build --release -p clan-cli && echo "CLAN_BIN=$PWD/target/release/clan" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
-        if: hashFiles('production-tool/web/package.json') != ''
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: production-tool/web/package-lock.json
+          cache-dependency-path: |
+            production-tool/web/package-lock.json
+            production-tool/clan-store/package-lock.json
+      - name: CLAN store — build napkin-wasm, lint, test
+        working-directory: production-tool/clan-store
+        run: |
+          npm ci
+          npm run build
+          npm run lint
+          npm test
       - name: Web — lint, test, build
         if: hashFiles('production-tool/web/package.json') != ''
         working-directory: production-tool/web
@@ -336,4 +364,4 @@ jobs:
           npm ci
           npm run lint
           npm test
-          npm run build
+          npm run build:web
