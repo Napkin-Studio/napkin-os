@@ -111,8 +111,31 @@ are only for a person to set.
   anyone else. An agent commits as the owner's git identity.
   `.claude/settings.json` turns off Claude Code's attribution, and
   `.githooks/commit-msg` rejects the trailer.
-- **Merging:** open a PR from the branch and squash-merge it. The PR title is
-  the commit subject. Never force-push a shared branch.
+- **Merging:** open a PR from the branch into `develop` and squash-merge it.
+  The PR title is the commit subject. Never force-push a shared branch.
+
+## Branches: develop, then main (2026-10-06)
+
+`develop` is the default branch, and every PR targets it. `main` is what
+staging runs: a merge into `main` deploys it. Both are protected on GitHub (no
+direct push, no force-push, no deletion, all 9 CI checks green), and
+`.githooks/pre-push` refuses a direct push to either.
+
+1. **Feature to develop.** Work on `<type>/<slug>`, then open a PR into
+   `develop` and squash-merge it once CI is green.
+2. **Test develop locally.** Before releasing, run `git switch develop && git pull`,
+   then `scripts/check.sh --all`, then the local smoke run of the real stack
+   (sign-in, opening a document, export) once it exists (feature
+   local-smoke). Fix anything that breaks on develop first.
+3. **Release.** Open a PR from `develop` into `main`, titled
+   `release: <what changes for people>`, and merge it with a **merge commit**,
+   never a squash, so main and develop stay in step. CI's `Release source`
+   check refuses a PR into main from any branch other than develop.
+4. **Make it live.** If the release touches `infra/`, follow "Infrastructure
+   changes" below (apply before the deploy). Then verify on staging.
+
+A fix that must reach staging urgently still goes through develop: merge it
+there, then release at once.
 
 ## Infrastructure changes reach AWS only by `terraform apply`
 
