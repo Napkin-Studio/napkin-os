@@ -17,6 +17,7 @@ import {
   alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor,
   isUserDrawing, makeArrow, makeGenPlaceholder, nextSlot, sketchFrame, type El,
 } from './scene'
+import { frameText, withNotes } from './text'
 
 export const CANVAS_KEY = 'canvas'
 
@@ -262,7 +263,7 @@ export class CanvasController {
     const kids = childrenOf(els, frame.id)
     const refs = await this.inputRefs()
     let sketch
-    if (kids.length) {
+    if (kids.some((e) => e.type !== 'text')) {
       const blob = (await downscale(await exportElements(kids, this.api.getFiles()))).blob
       const sha = await putBlob(blob)
       updateDoc(this.s.doc, (d) => {
@@ -278,7 +279,9 @@ export class CanvasController {
     this.placeGen(jobId, 'generate', [], [{ el: frame, id: (cd(frame) as { id: string }).id }, ...refEls.map((e) => ({ el: e, id: (cd(e) as { id: string }).id }))], at)
     // "More options" (flag moreOptions) asks the director for 4 variants; v1 has no
     // input field for it, so it travels as a chip.
-    const input = { sketch, refs, ratio: '4:5' as const, ...(moreOptions ? { chips: ['more_options'] } : {}) }
+    // The words written in the frame are the user's instruction; the PNG carries none.
+    const text = frameText(els, frame)
+    const input = { sketch, refs, ratio: '4:5' as const, ...(text ? { text } : {}), ...(moreOptions ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, [], { for: 'canvas' }, jobId)
   }
 
@@ -318,7 +321,9 @@ export class CanvasController {
       d.character.combines ??= []
       d.character.combines.push({ id: newId('combine'), sources: sources.map((s) => s.id), text: text.slice(0, 1000), job_id: jobId })
     })
-    await this.s.runner.submit('combine', { text, refs, ratio: '4:5' }, parentIds, { for: 'canvas' }, jobId)
+    // A drawing among the items may have words written in it; they go with the instruction.
+    const notes = items.filter((i) => i.el.type === 'frame').map((i) => ({ tag: i.tag, text: frameText(els, i.el) }))
+    await this.s.runner.submit('combine', { text: withNotes(text, notes), refs, ratio: '4:5' }, parentIds, { for: 'canvas' }, jobId)
   }
 
   /** The 3/4, side and back views from the chosen front. */
