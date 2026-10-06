@@ -106,6 +106,8 @@ class Provider(Protocol):
 
 
 _asset_urls: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar("asset_urls", default={})
+_asset_mimes: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar("asset_mimes", default={})
+_job_op: contextvars.ContextVar[str | None] = contextvars.ContextVar("job_op", default=None)
 
 
 def asset_url(sha256: str) -> str:
@@ -118,3 +120,21 @@ def asset_url(sha256: str) -> str:
 
 def set_asset_urls(mapping: dict[str, str]) -> contextvars.Token:
     return _asset_urls.set(dict(mapping))
+
+
+def asset_mime(sha256: str) -> str | None:
+    """The MIME type of an asset named in the current provider job, when known."""
+    return _asset_mimes.get().get(sha256)
+
+
+def job_op() -> str | None:
+    """The op of the job being submitted (a providerJob carries none, yet an
+    adapter picks its endpoint by it). Set by the relay with set_job_context."""
+    return _job_op.get()
+
+
+def set_job_context(op: str, assets: list[dict]) -> None:
+    """Before `submit`: the job's op and its assetRefs ({sha256, url, mime})."""
+    _job_op.set(op)
+    _asset_urls.set({a["sha256"]: a["url"] for a in assets})
+    _asset_mimes.set({a["sha256"]: a["mime"] for a in assets if a.get("mime")})

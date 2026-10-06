@@ -1,0 +1,66 @@
+{
+  "op": "generate",
+  "provider": "runway",
+  "input": {
+    "text": "eyes from @eyes, colours from @palette",
+    "chips": [],
+    "sketch": {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png"
+    },
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000000AB",
+        "tag": "eyes",
+        "role": "shape",
+        "asset": {
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "mime": "image/jpeg"
+        }
+      },
+      {
+        "id": "ref_01K6XA6Z0000000000000000AC",
+        "tag": "palette",
+        "role": "colour",
+        "asset": {
+          "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "mime": "image/png"
+        }
+      }
+    ],
+    "ratio": "4:5"
+  },
+  "reply": {
+    "op": "generate",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3.1_flash",
+      "prompt": "Full-body front view of the character drawn in @sketch, flat 2D illustration, plain background. Eyes shaped like @eyes. Colour palette of @palette.",
+      "refs": [
+        {
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "sketch",
+          "role": "character"
+        },
+        {
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "eyes",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "name": "palette",
+          "role": "object"
+        }
+      ],
+      "ratio": "896:1152",
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "Sketch as the character ref; eyes and palette as object refs, named by tag.",
+    "confidence": 0.8
+  }
+}

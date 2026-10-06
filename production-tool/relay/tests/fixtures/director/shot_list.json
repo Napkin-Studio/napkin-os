@@ -1,0 +1,50 @@
+{
+  "op": "shot_list",
+  "provider": null,
+  "input": {
+    "script": "A hero walks into a rainy street, opens an umbrella, and the product logo shows.",
+    "targetS": 12,
+    "character": {
+      "front": {
+        "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "url": "https://hack.napkin.ie/in/sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "mime": "image/png"
+      }
+    }
+  },
+  "reply": {
+    "op": "shot_list",
+    "shots": [
+      {
+        "id": "shot_01K6XB000000000000000000A1",
+        "order": 1,
+        "duration_s": 4,
+        "composition": "wide",
+        "action": "The hero walks into a rainy street, umbrella closed.",
+        "camera_move": "track",
+        "lead_view": "three_quarter"
+      },
+      {
+        "id": "shot_01K6XB000000000000000000A2",
+        "order": 2,
+        "duration_s": 4,
+        "composition": "medium",
+        "action": "The hero stops and opens the umbrella.",
+        "camera_move": "static",
+        "lead_view": "front"
+      },
+      {
+        "id": "shot_01K6XB000000000000000000A3",
+        "order": 3,
+        "duration_s": 4,
+        "composition": "close",
+        "action": "The product logo shows on the open umbrella.",
+        "camera_move": "push_in",
+        "lead_view": "front"
+      }
+    ],
+    "needsUser": null,
+    "rationale": "Three 4 s shots for a 12 s script: establish, act, payoff.",
+    "confidence": 0.75
+  }
+}

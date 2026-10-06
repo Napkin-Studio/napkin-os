@@ -1,0 +1,45 @@
+{
+  "op": "clip_edit",
+  "provider": "fal",
+  "input": {
+    "text": "make the umbrella red",
+    "chips": [],
+    "video": {
+      "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "url": "https://hack.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "mime": "image/png"
+    },
+    "mask": {
+      "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "url": "https://hack.napkin.ie/in/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "mime": "image/png"
+    },
+    "region": {
+      "x": 0.4,
+      "y": 0.2,
+      "w": 0.2,
+      "h": 0.2
+    },
+    "atS": 2.5
+  },
+  "reply": {
+    "op": "clip_edit",
+    "providerJob": {
+      "provider": "fal",
+      "model": "wan-vace-14b-inpainting",
+      "prompt": "A red umbrella, same shape and motion as the clip.",
+      "refs": [],
+      "mask": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "region": {
+        "x": 0.4,
+        "y": 0.2,
+        "w": 0.2,
+        "h": 0.2
+      },
+      "audio": false
+    },
+    "needsUser": null,
+    "rationale": "fal takes a mask for clip edits: the region model, no duration or ratio.",
+    "confidence": 0.7
+  }
+}

@@ -1,7 +1,13 @@
 """Provider registry: every adapter module in this package that defines
-`make() -> Provider`, paired with its capability sheet from
+`make() -> base.Provider`, paired with its capability sheet from
 contracts/capabilities/<name>.json. A provider with a sheet but no adapter is
 skipped by routing, as if its sheet supported nothing.
+
+Two sets of types live here. The relay speaks providers/base.py (a providerJob
+dict in, base.Status out, base.ProviderError); import those from providers.base.
+The harness adapters speak providers/types.py (ProviderJob, ProviderOutput,
+AssetRef, their own ProviderError); this package's top-level names are those.
+providers/_seam.py joins the two, and each adapter's make() goes through it.
 """
 
 from __future__ import annotations
@@ -12,21 +18,25 @@ import logging
 import pkgutil
 
 from contracts_dir import contracts_dir
-from providers.base import CapabilityMissing, Moderated, Provider, ProviderError, Status  # noqa: F401
+from providers.types import (  # noqa: F401  the harness adapters' types
+    AssetRef, CapabilityMissing, Provider, ProviderError, ProviderJob, ProviderOutput, Ref, Status,
+    check_capabilities, load_sheet, video_audio,
+)
+from providers.base import Provider as RelayProvider  # noqa: E402
 
 log = logging.getLogger(__name__)
 
 
 class Registry:
-    def __init__(self, providers: dict[str, Provider] | None = None, sheets: dict[str, dict] | None = None):
-        self.providers: dict[str, Provider] = dict(providers or {})
+    def __init__(self, providers: dict[str, RelayProvider] | None = None, sheets: dict[str, dict] | None = None):
+        self.providers: dict[str, RelayProvider] = dict(providers or {})
         self.sheets: dict[str, dict] = dict(sheets or {})
 
-    def register(self, provider: Provider, sheet: dict | None = None) -> None:
+    def register(self, provider: RelayProvider, sheet: dict | None = None) -> None:
         self.providers[provider.name] = provider
         self.sheets[provider.name] = sheet if sheet is not None else provider.capabilities()
 
-    def get(self, name: str) -> Provider | None:
+    def get(self, name: str) -> RelayProvider | None:
         return self.providers.get(name)
 
     def sheet(self, name: str) -> dict | None:
@@ -50,7 +60,7 @@ def load_registry() -> Registry:
     sheets = load_sheets()
     reg = Registry()
     for mod in pkgutil.iter_modules(__path__):
-        if mod.name == "base" or mod.name.startswith("_"):
+        if mod.name in ("base", "types", "tags") or mod.name.startswith("_"):
             continue
         try:
             module = importlib.import_module(f"{__name__}.{mod.name}")
@@ -67,3 +77,9 @@ def load_registry() -> Registry:
             continue
         reg.register(provider, sheets.get(provider.name) or provider.capabilities())
     return reg
+
+
+try:  # the harness tests import it from here; a missing Pillow must not take the registry down
+    from providers.mock import MockProvider  # noqa: E402,F401
+except ImportError:  # pragma: no cover
+    log.exception("providers.mock failed to import")

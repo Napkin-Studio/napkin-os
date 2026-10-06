@@ -1,0 +1,1 @@
+{"data": {"video_id": "vid_abc123", "status": "failed", "failure_code": "content_policy_violation", "failure_message": "Prompt blocked by content policy"}}
