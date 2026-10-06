@@ -33,6 +33,10 @@ _SENT_MAYBE = (httpx.ReadTimeout, httpx.WriteTimeout, httpx.ReadError, httpx.Wri
                httpx.RemoteProtocolError)
 
 
+# Set by relay/local.py: url -> bytes for assets on the local dev server. Never set on Lambda.
+LOCAL_READER = None
+
+
 class Resolver:
     """types.AssetResolver over the relay's per-job asset map. A status() call
     runs outside the job's context (the mock reads its input then), so every
@@ -48,7 +52,12 @@ class Resolver:
             if sha256 in self._seen:
                 return self._seen[sha256]
             raise types.ProviderError("invalid_input", f"no URL for asset {sha256}", False) from None
-        ref = types.AssetRef(sha256=sha256, url=url, mime=base.asset_mime(sha256) or _guess_mime(url))
+        mime = base.asset_mime(sha256) or _guess_mime(url)
+        if LOCAL_READER is not None and url.startswith("http://"):
+            # Local dev only (relay/local.py): providers can't reach http://localhost,
+            # so send the bytes inline. Runway takes images up to 5 MB as data URIs.
+            url = f"data:{mime};base64," + base64.b64encode(LOCAL_READER(url)).decode()
+        ref = types.AssetRef(sha256=sha256, url=url, mime=mime)
         self._seen[sha256] = ref
         return ref
 

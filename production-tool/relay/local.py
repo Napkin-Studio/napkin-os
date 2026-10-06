@@ -116,6 +116,8 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
     load = (lambda: json.loads(Path(cfg_file).read_text())) if cfg_file else default_config
     blobs = LocalBlobs(data_dir, f"http://localhost:{port}")
     registry = load_registry()
+    from providers import _seam
+    _seam.LOCAL_READER = lambda url: blobs.path(blobs.key_for_url(url)).read_bytes()
     if registry.get("mock") is None:
         sheet = json.loads((contracts_dir() / "capabilities" / "mock.json").read_text())
         registry.register(StubMock(sheet), sheet)
