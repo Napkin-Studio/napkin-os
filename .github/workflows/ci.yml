@@ -299,3 +299,41 @@ jobs:
           terraform init -backend=false -input=false
           terraform validate
           terraform test
+      - name: Validate and test the hackathon stack
+        working-directory: infra/envs/hackathon
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test
+
+  production-tool:
+    name: Production tool (relay, stitch, contracts, web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Relay tests (offline)
+        working-directory: production-tool/relay
+        run: uv run --python 3.12 pytest -q
+      - name: Install ffmpeg (stitch's real-encode test)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Stitch tests
+        working-directory: production-tool/stitch
+        run: uv run --python 3.12 pytest -q
+      - name: Contracts
+        run: uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py
+      # The UI lane adds production-tool/web; until then these steps skip.
+      - uses: actions/setup-node@v4
+        if: hashFiles('production-tool/web/package.json') != ''
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: production-tool/web/package-lock.json
+      - name: Web — lint, test, build
+        if: hashFiles('production-tool/web/package.json') != ''
+        working-directory: production-tool/web
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run build
