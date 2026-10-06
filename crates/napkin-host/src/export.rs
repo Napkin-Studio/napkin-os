@@ -9,7 +9,9 @@
 //! is [`crate::session::Session::compose_export`]; this module is the part that
 //! puts bytes somewhere.
 
-use std::process::{Command, Stdio};
+use std::io::Read;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::error::{HostError, HostResult};
 
@@ -103,6 +105,13 @@ pub fn write_temp_html(html: &str) -> HostResult<String> {
 /// profile, removed afterwards; renders never share one, so two exports at
 /// once cannot lock each other out. What the renderer says on failure comes
 /// back in the error.
+///
+/// A render always ends. The browser runs in its own process group and is
+/// waited on directly, not through its stderr: children that outlive it
+/// (Chrome's crashpad handler keeps the pipe open) would otherwise hold the
+/// export for ever. Past the deadline (`NAPKIN_PDF_TIMEOUT_SECS`, 60 by
+/// default) it is stopped, and after every render the whole group is
+/// (features/pdf-export.clan: on GitHub's runners Chrome did both).
 pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
     let bin = find_pdf_renderer().ok_or_else(|| HostError::internal(
         "No PDF renderer found. Install 'chromium' (or Chrome), or export to HTML and print to PDF from your browser.",
@@ -111,8 +120,13 @@ pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
         .prefix("napkin-pdf-")
         .tempdir()
         .map_err(|e| HostError::internal(format!("no room to render the PDF: {e}")))?;
-    let out = Command::new(&bin)
-        .env("HOME", home.path())
+    let timeout = std::env::var("NAPKIN_PDF_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|s| *s > 0)
+        .map_or(Duration::from_secs(60), Duration::from_secs);
+    let mut cmd = Command::new(&bin);
+    cmd.env("HOME", home.path())
         .env_remove("XDG_CONFIG_HOME")
         .env_remove("XDG_CACHE_HOME")
         .args([
@@ -121,6 +135,17 @@ pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
             "--no-sandbox",
             // containers give /dev/shm 64 MB; Chromium needs more for a long page
             "--disable-dev-shm-usage",
+            // nothing waits on a crash reporter that never exits
+            "--disable-crash-reporter",
+            "--disable-breakpad",
+            // no calls home: the virtual-time budget waits for the network to
+            // go quiet, and Chrome's own background traffic (GCM registration)
+            // kept it busy until the deadline on GitHub's runners
+            "--disable-background-networking",
+            "--disable-component-update",
+            "--disable-sync",
+            "--no-first-run",
+            "--no-default-browser-check",
             "--no-pdf-header-footer",
             "--run-all-compositor-stages-before-draw",
             "--virtual-time-budget=2500",
@@ -133,14 +158,47 @@ pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
         .arg(format!("file://{tmp_html}"))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = cmd
+        .spawn()
         .map_err(|e| HostError::internal(format!("failed to run {bin}: {e}")))?;
-    let said = renderer_said(&out.stderr);
-    if !out.status.success() {
+    // Read on the side, so the wait is on the browser and never on the pipe.
+    let (tx, rx) = std::sync::mpsc::channel();
+    if let Some(mut err) = child.stderr.take() {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = err.read_to_end(&mut buf);
+            let _ = tx.send(buf);
+        });
+    }
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break Some(s),
+            Ok(None) if Instant::now() >= deadline => break None,
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(e) => {
+                stop_group(&mut child);
+                return Err(HostError::internal(format!("waiting on {bin}: {e}")));
+            }
+        }
+    };
+    stop_group(&mut child);
+    let said = renderer_said(&rx.recv_timeout(Duration::from_secs(2)).unwrap_or_default());
+    let Some(status) = status else {
         return Err(HostError::internal(format!(
-            "{bin} failed to render the PDF ({}){said}",
-            out.status
+            "{bin} did not finish rendering the PDF within {}s and was stopped{said}",
+            timeout.as_secs()
+        )));
+    };
+    if !status.success() {
+        return Err(HostError::internal(format!(
+            "{bin} failed to render the PDF ({status}){said}"
         )));
     }
     if !std::path::Path::new(dest).exists() {
@@ -149,6 +207,24 @@ pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
         )));
     }
     Ok(())
+}
+
+/// End the renderer and everything it started. On Unix its group goes (it
+/// leads one: `process_group(0)`), through the shell's own `kill`, which a
+/// slim image has where `/bin/kill` may not be.
+fn stop_group(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let _ = Command::new("sh")
+            .arg("-c")
+            .arg(format!("kill -KILL -- -{} 2>/dev/null", child.id()))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// The last few lines the renderer wrote, for an error: enough to say why,
