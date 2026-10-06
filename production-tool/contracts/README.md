@@ -33,6 +33,7 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `GET /jobs/{jobId}` | → `Job` | Poll no faster than `nextPollS`. |
 | `DELETE /jobs/{jobId}` | → `Job` (state `cancelled`) | Also cancels at the provider where it can. |
 | `POST /log` | `LogEntry` → 204 | Client errors and the Report button. |
+| `POST /clan` | `.clan` bytes → 204 | Mirror of the participant's document for the organisers, on accept and every 5 minutes (`ClanMirror` lists the headers). Max 5 MiB. Kept as `clan/<participantId>/latest.clan` plus a timestamped history. Added 2026-10-06. |
 | `GET /config` | → `config.json` | Served by CloudFront; public. |
 
 Errors are a non-2xx status with `ErrorResponse`. A 2xx body never carries an `error` key. A provider failure never becomes a success, and a mock output is always `kind: "mock"`.
