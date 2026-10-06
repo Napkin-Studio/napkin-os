@@ -18,6 +18,10 @@ root="$(git rev-parse --show-toplevel)"
 cd "$root"
 # The suites test the CLI's own `next:` hints; a caller's CLAN_NO_HINTS must not reach them.
 unset CLAN_NO_HINTS
+# Real PDF renders (crates/napkin-host/tests/export_pdf.rs) run here when a browser is installed.
+for b in chromium chromium-browser google-chrome-stable google-chrome; do
+  command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
+done
 ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform)
 
 base="" range="" only="" list=0 all=0
