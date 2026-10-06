@@ -155,11 +155,10 @@ export function bindArrow(els: El[], arrow: El): El[] {
   )
 }
 
-/** Where the next output beside `anchor` goes: to its right, stacking down under earlier ones. */
-export function nextSlot(els: readonly El[], anchor: { maxX: number; minY: number }, size: { w: number; h: number }, gap = 60) {
-  const x = anchor.maxX + 120
-  let y = anchor.minY
-  const taken = alive(els).filter((e) => cd(e)?.kind === 'gen' && Math.abs(e.x - x) < 10)
-  for (const t of taken) y = Math.max(y, t.y + t.height + gap)
+/** Where the next output beside `anchor` goes: right of anything already in that row. */
+export function nextSlot(els: readonly El[], anchor: { maxX: number; minY: number }, size: { w: number; h: number }, gap = 80) {
+  const y = anchor.minY
+  const inRow = alive(els).filter((e) => e.type !== 'arrow' && e.y < y + size.h && e.y + e.height > y && e.x + e.width > anchor.maxX)
+  const x = Math.max(anchor.maxX, ...inRow.map((e) => e.x + e.width)) + gap
   return { x, y, w: size.w, h: size.h }
 }

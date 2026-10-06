@@ -171,7 +171,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 
 .stage { flex: 1; min-height: 0; position: relative; }
 .stage-pane { position: absolute; inset: 0; }
-.stage-pane.hidden { visibility: hidden; pointer-events: none; }
+.stage-pane.hidden { visibility: hidden; opacity: 0; z-index: -1; pointer-events: none; }
 
 /* ── Panels (Storyboard, Video) ──────────────────────────────────────────── */
 .panel { height: 100%; overflow: auto; background: var(--paper); }

@@ -318,9 +318,10 @@ export class CanvasController {
     const anchor = frontEl ? bounds([frontEl]) : { maxX: 1200, minY: 0, minX: 900, maxY: 400, w: 300, h: 400 }
     const frontRef = await assetRef(this.s.relay, front.asset)
     const refs = await this.inputRefs()
-    let x = anchor.maxX + 120
-    // Row under the anchor's right side, clear of other gens.
-    const y = Math.max(anchor.minY, ...alive(els).filter((e) => cd(e)?.kind === 'gen' && e.x >= x - 10).map((e) => e.y + e.height + 60))
+    // A row to the right of the front, clear of anything already there.
+    const slot = nextSlot(els, anchor, { w: 300 * 3 + 80, h: 400 })
+    let x = slot.x
+    const y = slot.y
     const placed: { jobId: string; view: View }[] = []
     for (const view of views) {
       const jobId = newId('job')

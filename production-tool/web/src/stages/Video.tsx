@@ -292,7 +292,8 @@ function Player({ mode, shot, take, onPickShot }: { mode: 'shot' | 'all'; shot?:
               autoPlay={mode === 'all' && idx > 0}
               style={{ height: '100%' }}
               onLoadedMetadata={(e) => {
-                setDur(e.currentTarget.duration || cur.take.duration_s || 0)
+                const d = e.currentTarget.duration
+                setDur(Number.isFinite(d) && d > 0 ? d : cur.take.duration_s ?? cur.shot.duration_s)
                 if (pendingSeek.current !== null) {
                   e.currentTarget.currentTime = pendingSeek.current
                   pendingSeek.current = null

@@ -87,6 +87,16 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     }
   }, [active, api, refresh])
 
+  // A fresh canvas: fit the sketch frame in view.
+  useEffect(() => {
+    if (!api || initial?.elements?.length) return
+    const t = setTimeout(() => {
+      const f = sketchFrame(api.getSceneElements() as El[])
+      if (f) api.scrollToContent(f, { fitToViewport: true, viewportZoomFactor: 0.7 })
+    }, 50)
+    return () => clearTimeout(t)
+  }, [api, initial])
+
   useEffect(() => {
     if (!api) return
     const off = api.onScrollChange(() => refresh())
@@ -266,7 +276,10 @@ function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; s
   const meaningful = selected.filter((e) => cd(e)?.kind !== 'provenance')
   if (!meaningful.length) return null
   const b = bounds(meaningful)
-  const at = toView({ x: b.minX + b.w / 2, y: b.minY })
+  const raw = toView({ x: b.minX + b.w / 2, y: b.minY })
+  // Keep it on screen when the selection runs past the top or the sides.
+  const chipRow = meaningful.some((e) => cd(e)?.kind === 'ref' || cd(e)?.kind === 'gen') ? 30 : 0
+  const at = { x: Math.min(Math.max(raw.x, 220), window.innerWidth - 220), y: Math.max(raw.y - chipRow, 76) }
 
   const all = ctrl.api.getSceneElements() as El[]
   const frame = sketchFrame(all)
@@ -457,7 +470,7 @@ function ViewsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) 
             {viewsRunning ? 'Making views…' : 'Make the other views'}
           </button>
         )}
-        {controls.views && controls.angles && <span className="faint" style={{ fontSize: 11.5 }}>Exact angles: 45°, 90°, 180°</span>}
+        {controls.views && controls.angles && <span className="faint" style={{ fontSize: 11.5 }}>Made by exact camera angle</span>}
         {error && <span role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>{error}</span>}
       </div>
       <span className="spacer" />
