@@ -1,11 +1,15 @@
 [project]
 name = "production-tool-relay"
 version = "0.1.0"
-description = "Production Tool relay: sessions, uploads, the job ledger and the fair-share queue (AWS Lambda)"
+description = "Production Tool relay (AWS Lambda): sessions, uploads, the job ledger and fair-share queue, the provider adapters, the director and region edit"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "boto3>=1.34",
   "jsonschema>=4.22",
+  "referencing",
+  "httpx>=0.27",
+  "pillow>=10.1",
+  "anthropic[bedrock]>=1.8",
 ]
 
 [dependency-groups]

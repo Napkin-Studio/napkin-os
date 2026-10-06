@@ -1,0 +1,39 @@
+{
+  "op": "view",
+  "provider": "fal",
+  "input": {
+    "text": "",
+    "chips": [],
+    "character": {
+      "front": {
+        "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "url": "https://hack.napkin.ie/in/sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "mime": "image/png"
+      }
+    },
+    "view": "side"
+  },
+  "reply": {
+    "op": "view",
+    "providerJob": {
+      "provider": "fal",
+      "model": "qwen-image-edit-2511-multiple-angles",
+      "prompt": "The character from @front seen from the side.",
+      "refs": [
+        {
+          "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "name": "front",
+          "role": "character"
+        }
+      ],
+      "angle": {
+        "horizontal": 90,
+        "vertical": 0
+      },
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "The sheet has angles: side is horizontal 90, front is 0.",
+    "confidence": 0.9
+  }
+}
