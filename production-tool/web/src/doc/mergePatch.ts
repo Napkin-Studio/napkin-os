@@ -25,6 +25,21 @@ export function createMergePatch(a: J, b: J): J | undefined {
     }
     return Object.keys(p).length ? p : undefined
   }
-  if (JSON.stringify(a) === JSON.stringify(b)) return undefined
+  if (deepEqual(a, b)) return undefined
   return structuredClone(b)
+}
+
+/** Equal as JSON values, whatever the key order (the .clan's YAML does not keep it). */
+export function deepEqual(a: J, b: J): boolean {
+  if (a === b) return true
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((x, i) => deepEqual(x, b[i]))
+  }
+  if (isObj(a) && isObj(b)) {
+    const ka = Object.keys(a).filter((k) => a[k] !== undefined)
+    const kb = Object.keys(b).filter((k) => b[k] !== undefined)
+    return ka.length === kb.length && ka.every((k) => k in b && deepEqual(a[k], b[k]))
+  }
+  return false
 }

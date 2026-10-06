@@ -5,6 +5,7 @@ import { subscribeDoc, type DocumentStore, type SnapshotStore } from '../doc/sto
 import type { UiState } from '../doc/ui'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
+import type { ClanBackedStore } from '../doc/clan'
 
 export interface Services {
   relay: Relay
@@ -13,6 +14,10 @@ export interface Services {
   runner: JobRunner
   /** The config the relay served (GET /config), when there is one. */
   remoteConfig: Config | null
+  /** The CLAN store behind `doc` (decision chain, .clan export); null when the wasm did not load. */
+  clan: ClanBackedStore | null
+  /** Shown under the top bar when saving is degraded ("Saving without history"). */
+  storeNote: string | null
 }
 
 export const ServicesContext = createContext<Services | null>(null)
