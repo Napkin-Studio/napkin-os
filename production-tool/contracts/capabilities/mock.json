@@ -1,0 +1,26 @@
+{
+  "contractVersion": "1",
+  "provider": "mock",
+  "checked": "2026-10-06",
+  "ops": {
+    "generate":    { "model": "mock", "endpoint": "mock://image", "estimateUsd": 0 },
+    "combine":     { "model": "mock", "endpoint": "mock://image", "estimateUsd": 0 },
+    "view":        { "model": "mock", "endpoint": "mock://image", "estimateUsd": 0 },
+    "frame":       { "model": "mock", "endpoint": "mock://image", "estimateUsd": 0 },
+    "region_edit": { "model": "mock", "endpoint": "mock://image", "estimateUsd": 0 },
+    "clip":        { "model": "mock", "endpoint": "mock://video", "estimateUsd": 0, "minS": 2, "maxS": 15 },
+    "clip_edit":   { "model": "mock", "endpoint": "mock://video", "estimateUsd": 0, "minS": 2, "maxS": 15, "regionModel": "mock", "regionEndpoint": "mock://video" }
+  },
+  "tagSyntax": "at_tag",
+  "refs": { "max": 14, "maxCharacter": 5, "element": true },
+  "seed": true,
+  "outputsPerCall": 4,
+  "mask": "png_white_edit",
+  "segment": true,
+  "angles": true,
+  "series": 9,
+  "video": { "firstFrameWithRefs": true, "lastFrame": true, "multiShot": true, "regionEdit": "mask", "feelEdit": "strength", "audioDefault": false },
+  "inputs": { "headRequired": false, "followsRedirects": true },
+  "results": { "mode": "poll", "minPollS": 1, "idempotencyKey": true, "outputUrlTtlH": null },
+  "concurrency": { "image": 100, "video": 100, "note": "Every capability on, so every UI control can be built and tested before the real keys exist. Returns the input stamped 'MOCK' after 2 s with a fake queue position. A mock output is labelled kind 'mock' and can never count as final." }
+}

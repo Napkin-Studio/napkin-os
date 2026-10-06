@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/relay-api.schema.json",
+  "title": "Relay HTTP API: request and response bodies",
+  "description": "Every route but POST /session and GET /config needs 'Authorization: Bearer <token>' from POST /session. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: POST /session, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, GET /config (served by CloudFront as config.json).",
+  "$defs": {
+    "SessionRequest": {
+      "type": "object",
+      "properties": {
+        "eventCode": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "handle": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{2,24}$" }
+      },
+      "required": ["eventCode", "handle"],
+      "additionalProperties": false
+    },
+    "SessionResponse": {
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "description": "Signed, 24 h. Carries participantId and role." },
+        "participantId": { "type": "string", "pattern": "^p_[a-z0-9]{6,}$" },
+        "handle": { "type": "string" },
+        "role": { "enum": ["participant", "organiser"] },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "quotas": {
+          "type": "object",
+          "description": "Remaining today, per quota class.",
+          "properties": {
+            "image": { "type": "integer" }, "video": { "type": "integer" }, "render": { "type": "integer" }
+          },
+          "required": ["image", "video", "render"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["token", "participantId", "handle", "role", "expiresAt", "quotas"],
+      "additionalProperties": false
+    },
+    "UploadRequest": {
+      "type": "object",
+      "description": "Ask for a place to put an artifact. The browser hashes first; if the relay already has the hash, no upload is needed.",
+      "properties": {
+        "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
+        "mime": { "enum": ["image/png", "image/jpeg", "image/webp", "video/mp4"] },
+        "bytes": { "type": "integer", "minimum": 1, "maximum": 33554432 }
+      },
+      "required": ["sha256", "mime", "bytes"],
+      "additionalProperties": false
+    },
+    "UploadResponse": {
+      "type": "object",
+      "properties": {
+        "exists": { "type": "boolean" },
+        "putUrl": { "type": "string", "description": "Presigned S3 PUT, 15 min. Absent when exists is true." },
+        "url": { "type": "string", "pattern": "^https://", "description": "The CloudFront path providers read. HTTPS, answers HEAD with Content-Type and Content-Length, no redirects (Runway's rules)." }
+      },
+      "required": ["exists", "url"],
+      "additionalProperties": false
+    },
+    "JobRequest": {
+      "type": "object",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice.",
+      "properties": {
+        "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
+        "jobId": { "$ref": "common.schema.json#/$defs/id" },
+        "op": { "$ref": "common.schema.json#/$defs/op" },
+        "parentIds": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "description": "Jobs whose outputs this one builds on (provenance edges)." },
+        "input": { "$ref": "#/$defs/JobInput" }
+      },
+      "required": ["contractVersion", "jobId", "op", "parentIds", "input"],
+      "additionalProperties": false
+    },
+    "JobInput": {
+      "type": "object",
+      "description": "What the user asked for, in our terms. The director turns it into a provider job. Which fields apply depends on op; the relay rejects missing ones with invalid_input.",
+      "properties": {
+        "text": { "type": "string", "maxLength": 1000, "description": "The user's words: the Combine instruction, the text box under a frame or clip, the region note, the feel change." },
+        "chips": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 },
+        "sketch": { "$ref": "common.schema.json#/$defs/assetRef", "description": "generate, combine: the frame's drawing exported as PNG, with labels and arrows stripped." },
+        "refs": {
+          "type": "array",
+          "maxItems": 14,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "$ref": "common.schema.json#/$defs/id" },
+              "tag": { "$ref": "common.schema.json#/$defs/tag" },
+              "role": { "$ref": "common.schema.json#/$defs/refRole" },
+              "asset": { "$ref": "common.schema.json#/$defs/assetRef" }
+            },
+            "required": ["id", "tag", "role", "asset"],
+            "additionalProperties": false
+          }
+        },
+        "character": {
+          "type": "object",
+          "description": "view, frame, clip, clip_edit: the locked character views. front is required; the others as chosen.",
+          "properties": {
+            "front": { "$ref": "common.schema.json#/$defs/assetRef" },
+            "three_quarter": { "$ref": "common.schema.json#/$defs/assetRef" },
+            "side": { "$ref": "common.schema.json#/$defs/assetRef" },
+            "back": { "$ref": "common.schema.json#/$defs/assetRef" },
+            "side_2": { "$ref": "common.schema.json#/$defs/assetRef" }
+          },
+          "required": ["front"],
+          "additionalProperties": false
+        },
+        "view": { "$ref": "common.schema.json#/$defs/view", "description": "view: which view to make." },
+        "script": { "type": "string", "maxLength": 600, "description": "shot_list: the 10-20 s script." },
+        "targetS": { "type": "integer", "minimum": 10, "maximum": 20, "description": "shot_list: total length." },
+        "shot": { "$ref": "document.schema.json#/$defs/shot", "description": "frame, clip: the shot being made." },
+        "previousFrame": { "$ref": "common.schema.json#/$defs/assetRef", "description": "frame: the previous selected frame, for continuity." },
+        "image": { "$ref": "common.schema.json#/$defs/assetRef", "description": "region_edit: the image being edited. clip: the storyboard frame." },
+        "region": { "$ref": "common.schema.json#/$defs/region" },
+        "mask": { "$ref": "common.schema.json#/$defs/assetRef", "description": "region_edit, clip_edit: a PNG mask (white = change, our convention); the adapter converts it per provider. Absent when the user drew only a box." },
+        "video": { "$ref": "common.schema.json#/$defs/assetRef", "description": "clip_edit: the clip being changed. stitch: not used (see clips)." },
+        "atS": { "type": "number", "minimum": 0, "description": "clip_edit: the paused time of a region comment." },
+        "feel": {
+          "type": "object",
+          "description": "clip_edit without a region: change the whole clip.",
+          "properties": { "strength": { "enum": ["adhere", "flex", "reimagine"] } },
+          "additionalProperties": false
+        },
+        "ratio": { "enum": ["1:1", "4:5", "9:16", "16:9", "3:1"] },
+        "clips": {
+          "type": "array",
+          "description": "stitch: the selected takes in order.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "asset": { "$ref": "common.schema.json#/$defs/assetRef" },
+              "trimS": { "type": "number", "minimum": 0 }
+            },
+            "required": ["asset"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "answer": { "type": "string", "maxLength": 200, "description": "The option the user tapped when the previous job came back with needsUser." }
+      },
+      "additionalProperties": false
+    },
+    "Job": {
+      "type": "object",
+      "description": "Response of POST /jobs and GET /jobs/{jobId}, and the DynamoDB ledger item (pk = jobId). Poll GET no faster than nextPollS.",
+      "properties": {
+        "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
+        "jobId": { "$ref": "common.schema.json#/$defs/id" },
+        "participantId": { "type": "string" },
+        "op": { "$ref": "common.schema.json#/$defs/op" },
+        "quotaClass": { "$ref": "common.schema.json#/$defs/quotaClass" },
+        "state": { "$ref": "common.schema.json#/$defs/jobState" },
+        "queuePosition": { "type": "integer", "minimum": 0, "description": "Our fair-share queue position, or the provider's when it reports one." },
+        "nextPollS": { "type": "integer", "minimum": 1 },
+        "provider": { "$ref": "common.schema.json#/$defs/provider" },
+        "model": { "type": "string" },
+        "requestId": { "type": "string", "description": "The provider's task or request id, saved before the relay answers." },
+        "inputHashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
+        "director": { "$ref": "director.schema.json#/$defs/agentBlock" },
+        "needsUser": { "$ref": "director.schema.json#/$defs/needsUser" },
+        "shots": { "type": "array", "items": { "$ref": "document.schema.json#/$defs/shot" }, "description": "shot_list only." },
+        "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/output" } },
+        "kind": { "enum": ["generated", "mock"], "description": "mock outputs are labelled everywhere and can never count as final." },
+        "error": { "$ref": "common.schema.json#/$defs/error" },
+        "cost": { "$ref": "common.schema.json#/$defs/cost" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["contractVersion", "jobId", "participantId", "op", "quotaClass", "state", "inputHashes", "cost", "createdAt", "updatedAt"],
+      "additionalProperties": false
+    },
+    "LogEntry": {
+      "type": "object",
+      "description": "POST /log: client errors and the Report button.",
+      "properties": {
+        "level": { "enum": ["error", "report", "info"] },
+        "message": { "type": "string", "maxLength": 2000 },
+        "jobId": { "$ref": "common.schema.json#/$defs/id" },
+        "stage": { "enum": ["character", "storyboard", "video"] },
+        "browser": { "type": "string", "maxLength": 300 },
+        "canvasElements": { "type": "integer" },
+        "stack": { "type": "string", "maxLength": 8000 }
+      },
+      "required": ["level", "message"],
+      "additionalProperties": false
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "properties": { "error": { "$ref": "common.schema.json#/$defs/error" } },
+      "required": ["error"],
+      "additionalProperties": false
+    }
+  }
+}

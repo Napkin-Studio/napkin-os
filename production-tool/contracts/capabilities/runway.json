@@ -1,0 +1,26 @@
+{
+  "contractVersion": "1",
+  "provider": "runway",
+  "checked": "2026-10-06",
+  "ops": {
+    "generate":    { "model": "gemini_image3.1_flash", "endpoint": "POST /v1/text_to_image", "estimateUsd": 0.07 },
+    "combine":     { "model": "gemini_image3.1_flash", "endpoint": "POST /v1/text_to_image", "estimateUsd": 0.07 },
+    "view":        { "model": "gemini_image3.1_flash", "endpoint": "POST /v1/text_to_image", "estimateUsd": 0.07 },
+    "frame":       { "model": "gemini_image3.1_flash", "endpoint": "POST /v1/text_to_image", "estimateUsd": 0.07 },
+    "region_edit": { "model": "gemini_image3_pro", "endpoint": "POST /v1/text_to_image", "estimateUsd": 0.20 },
+    "clip":        { "model": "veo3.1_fast", "endpoint": "POST /v1/image_to_video", "estimateUsd": 0.60, "durationsS": [4, 6, 8] },
+    "clip_edit":   { "model": "aleph2", "endpoint": "POST /v1/video_to_video", "estimateUsd": 1.40, "minS": 2, "maxS": 30 }
+  },
+  "tagSyntax": "at_tag",
+  "refs": { "max": 14, "maxCharacter": 5, "element": false },
+  "seed": false,
+  "outputsPerCall": 4,
+  "mask": "none",
+  "segment": false,
+  "angles": false,
+  "series": 0,
+  "video": { "firstFrameWithRefs": false, "lastFrame": true, "multiShot": false, "regionEdit": "temporal_keyframe", "feelEdit": "prompt", "audioDefault": true },
+  "inputs": { "headRequired": true, "followsRedirects": false, "maxImageMb": 16, "maxVideoMb": 32 },
+  "results": { "mode": "poll", "minPollS": 5, "idempotencyKey": false, "outputUrlTtlH": 24 },
+  "concurrency": { "image": 10, "video": 10, "note": "Tier 4 values. Read the real limits from GET /v1/organization at start-up; the docs say both per model and shared." }
+}
