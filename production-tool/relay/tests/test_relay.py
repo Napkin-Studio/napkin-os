@@ -1,0 +1,338 @@
+import hashlib
+
+import pytest
+
+from conftest import Harness, base_config, job_request
+from director import new_id
+from providers.base import Moderated, ProviderError, Status
+
+
+# ── session and uploads ─────────────────────────────────────────────────────
+def test_session_signs_a_token_with_quotas(h):
+    _, out = h.call("POST", "/session", {"eventCode": "hack", "handle": "Alice"}, expect=200)
+    assert out["role"] == "participant" and out["participantId"].startswith("p_")
+    assert out["quotas"] == {"image": 40, "video": 6, "render": 3}
+    # the same handle is the same participant (quotas follow it)
+    _, again = h.call("POST", "/session", {"eventCode": "HACK", "handle": "alice"}, expect=200)
+    assert again["participantId"] == out["participantId"]
+
+
+def test_session_organiser_code_and_bad_code(h):
+    _, out = h.call("POST", "/session", {"eventCode": "ORGS", "handle": "shrey"}, expect=200)
+    assert out["role"] == "organiser" and out["quotas"]["image"] == 400
+    _, err = h.call("POST", "/session", {"eventCode": "nope", "handle": "bob"}, expect=401)
+    assert err["error"]["code"] == "unauthorised"
+
+
+def test_blocked_handle_cannot_sign_in_or_submit(h):
+    token = h.sign_in("mallory")
+    h.store.blocked.add("mallory")
+    assert h.call("POST", "/session", {"eventCode": "HACK", "handle": "Mallory"}, expect=403)[1]["error"]["code"] == "blocked"
+    assert h.post_job(token, expect=403)[1]["error"]["code"] == "blocked"
+
+
+def test_routes_need_a_valid_token(h):
+    assert h.call("POST", "/jobs", job_request("generate", new_id("job")), expect=401)[1]["error"]["code"] == "unauthorised"
+    token = h.sign_in()
+    h.clock.tick(24 * 3600 + 1)
+    assert h.call("GET", "/jobs/job_x", None, token, expect=401)[1]["error"]["code"] == "unauthorised"
+
+
+def test_upload_dedupes_by_hash(h):
+    token = h.sign_in()
+    sha = "sha256:" + "a" * 64
+    _, out = h.call("POST", "/uploads", {"sha256": sha, "mime": "image/png", "bytes": 10}, token, expect=200)
+    assert not out["exists"] and out["putUrl"] and out["url"] == f"https://cdn.test/in/{sha}"
+    h.blobs.put(f"in/{sha}", b"x", "image/png")
+    _, out = h.call("POST", "/uploads", {"sha256": sha, "mime": "image/png", "bytes": 10}, token, expect=200)
+    assert out == {"exists": True, "url": f"https://cdn.test/in/{sha}"}
+
+
+def test_invalid_job_request_is_rejected(h):
+    token = h.sign_in()
+    req = job_request("generate", new_id("job"))
+    req["op"] = "teleport"
+    status, out = h.call("POST", "/jobs", req, token, expect=400)
+    assert out["error"]["code"] == "invalid_input"
+
+
+def test_log_returns_204(h):
+    token = h.sign_in()
+    h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "stage": "character"}, token, expect=204)
+
+
+# ── the ledger ──────────────────────────────────────────────────────────────
+def test_same_job_id_twice_submits_once(h):
+    token = h.sign_in()
+    jid = new_id("job")
+    _, first = h.post_job(token, job_id=jid, expect=200)
+    _, second = h.post_job(token, job_id=jid, expect=200)
+    assert first["state"] == second["state"] == "submitted"
+    assert first["requestId"] == second["requestId"]
+    assert len(h.providers["fal"].submits) == 1
+    assert h.relay.remaining(first["participantId"], "participant")["image"] == 39
+
+
+def test_job_id_of_someone_else_is_refused(h):
+    jid = new_id("job")
+    h.post_job(h.sign_in("alice"), job_id=jid, expect=200)
+    assert h.post_job(h.sign_in("bob"), job_id=jid, expect=409)[1]["error"]["code"] == "invalid_input"
+    assert h.poll(h.sign_in("bob"), jid, expect=404)
+
+
+def test_submit_that_raises_becomes_uncertain_and_is_never_resent(h):
+    token = h.sign_in()
+    h.providers["fal"].submit_effect = TimeoutError("read timed out")
+    jid = new_id("job")
+    _, out = h.post_job(token, job_id=jid, expect=200)
+    assert out["state"] == "uncertain" and out["error"]["code"] == "uncertain"
+    h.providers["fal"].submit_effect = None
+    _, again = h.post_job(token, job_id=jid, expect=200)
+    assert again["state"] == "uncertain"
+    assert len(h.providers["fal"].submits) == 1
+    assert len(h.providers["runway"].submits) == 0  # never routed elsewhere either
+    assert h.store.counters(f"inflight#{out['participantId']}")["n"] == 0
+    assert h.store.counters("slots#fal#image")["n"] == 0
+    # the reserved spend stays counted: it may have been paid
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.028)
+
+
+def test_completed_job_copies_outputs_to_s3_and_hashes_them(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    fal = h.providers["fal"]
+    h.clock.tick(3)
+    assert h.poll(token, job["jobId"])["state"] == "submitted"
+    fal.succeed(job["requestId"], b"the-image", cost=0.03)
+    h.clock.tick(3)
+    done = h.poll(token, job["jobId"])
+    sha = "sha256:" + hashlib.sha256(b"the-image").hexdigest()
+    assert done["state"] == "completed" and done["kind"] == "generated"
+    assert done["outputs"] == [{"sha256": sha, "url": f"https://cdn.test/out/{sha}", "mime": "image/png",
+                                "bytes": 9, "w": 64, "h": 64}]
+    assert h.blobs.objects[f"out/{sha}"] == (b"the-image", "image/png")
+    assert done["cost"]["confirmed"] == 0.03
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.03)
+    assert h.store.counters("slots#fal#image")["n"] == 0
+    assert done["director"]["promptVersion"] == "director.v0"
+
+
+def test_polls_respect_min_poll(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    assert job["nextPollS"] >= 2
+    h.poll(token, job["jobId"])
+    h.poll(token, job["jobId"])
+    assert h.providers["fal"].status_calls == []  # fal minPollS is 2
+    h.clock.tick(2)
+    h.poll(token, job["jobId"])
+    assert len(h.providers["fal"].status_calls) == 1
+
+
+def test_provider_failure_never_becomes_success(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    h.providers["fal"].states[job["requestId"]] = Status(state="failed", error_code="provider_failed",
+                                                         error_message="boom", provider_code="E1")
+    h.clock.tick(3)
+    out = h.poll(token, job["jobId"])
+    assert out["state"] == "failed" and out["error"]["code"] == "provider_failed"
+    assert "outputs" not in out
+
+
+# ── limits ──────────────────────────────────────────────────────────────────
+def test_quota_exhaustion():
+    h = Harness(base_config(quotas={"image": 2, "video": 1, "render": 1}))
+    token = h.sign_in()
+    h.post_job(token, expect=200)
+    h.post_job(token, expect=200)
+    _, out = h.post_job(token, expect=429)
+    assert out["error"]["code"] == "quota_exhausted" and out["error"]["retryable"] is False
+    # a refused job leaves nothing behind
+    from service import participant_id
+    assert h.store.counters(f"inflight#{participant_id('alice')}")["n"] == 2
+
+
+def test_spend_stop():
+    h = Harness(base_config(spend={"capUsd": 0.02, "warnUsd": 0.01}))
+    token = h.sign_in()
+    h.post_job(token, expect=200)            # 0 spent: admitted, reserves fal's 0.028
+    _, out = h.post_job(token, expect=503)   # 0.028 reserved >= 0.02
+    assert out["error"]["code"] == "spend_stop"
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.028)
+
+
+def test_in_flight_limit():
+    h = Harness(base_config(inFlightPerParticipant=2))
+    token = h.sign_in()
+    _, a = h.post_job(token, expect=200)
+    h.post_job(token, expect=200)
+    _, out = h.post_job(token, expect=429)
+    assert out["error"]["code"] == "queue_full" and out["error"]["retryable"] and out["error"]["retryAfterS"] > 0
+    h.providers[a["provider"]].succeed(a["requestId"])
+    h.clock.tick(10)
+    assert h.poll(token, a["jobId"])["state"] == "completed"
+    h.post_job(token, expect=200)
+
+
+def test_jobs_queue_when_the_provider_is_full_and_run_when_a_slot_frees():
+    cfg = base_config()
+    cfg["routing"]["generate"] = ["fal"]       # fal: 2 image slots
+    h = Harness(cfg)
+    tokens = [h.sign_in(n) for n in ("ann", "ben", "cat")]
+    jobs = [h.post_job(t, expect=200)[1] for t in tokens]
+    assert [j["state"] for j in jobs] == ["submitted", "submitted", "queued"]
+    assert jobs[2]["queuePosition"] == 0 and jobs[2]["nextPollS"] >= 3
+    assert len(h.providers["fal"].submits) == 2
+    h.clock.tick(3)
+    assert h.poll(tokens[2], jobs[2]["jobId"])["state"] == "queued"
+    h.providers["fal"].succeed(jobs[0]["requestId"])
+    h.poll(tokens[0], jobs[0]["jobId"])
+    assert h.poll(tokens[2], jobs[2]["jobId"])["state"] == "submitted"
+    assert len(h.providers["fal"].submits) == 3
+
+
+def test_fair_share_puts_the_participant_with_fewer_running_jobs_first():
+    cfg = base_config()
+    cfg["routing"]["generate"] = ["fal"]
+    h = Harness(cfg)
+    ann, ben = h.sign_in("ann"), h.sign_in("ben")
+    h.post_job(ann, expect=200)
+    h.post_job(ann, expect=200)                 # fal full, both ann's
+    _, ann3 = h.post_job(ann, expect=200)       # queued first
+    h.clock.tick(1)
+    _, ben1 = h.post_job(ben, expect=200)       # queued later, but ben has nothing running
+    assert ann3["queuePosition"] == 0 and ben1["queuePosition"] == 0
+    assert h.poll(ann, ann3["jobId"])["queuePosition"] == 1
+
+
+def test_routing_falls_back_when_the_first_provider_is_full():
+    h = Harness()
+    tokens = [h.sign_in(n) for n in ("ann", "ben", "cat")]
+    jobs = [h.post_job(t, expect=200)[1] for t in tokens]
+    assert [j["provider"] for j in jobs] == ["fal", "fal", "runway"]
+    assert jobs[2]["cost"]["reserved"] == 0.07   # re-reserved at runway's price
+
+
+def test_routing_falls_back_when_the_first_provider_refuses():
+    h = Harness()
+    h.providers["fal"].submit_effect = ProviderError("provider_unavailable", "503 from fal")
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    assert job["state"] == "submitted" and job["provider"] == "runway"
+    assert h.store.counters("slots#fal#image")["n"] == 0
+
+
+def test_moderated_is_never_retried_or_rerouted():
+    h = Harness()
+    h.providers["fal"].submit_effect = Moderated(provider_code="content_policy_violation")
+    token = h.sign_in()
+    jid = new_id("job")
+    _, job = h.post_job(token, job_id=jid, expect=200)
+    assert job["state"] == "failed" and job["error"]["code"] == "moderated" and not job["error"]["retryable"]
+    assert job["error"]["providerCode"] == "content_policy_violation"
+    h.post_job(token, job_id=jid, expect=200)
+    h.clock.tick(5)
+    h.poll(token, jid)
+    assert len(h.providers["fal"].submits) == 1 and h.providers["runway"].submits == []
+
+
+def test_moderated_status_fails_the_job(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    h.providers["fal"].states[job["requestId"]] = Status(state="moderated", provider_code="SAFETY.INPUT.TEXT")
+    h.clock.tick(3)
+    out = h.poll(token, job["jobId"])
+    assert out["error"]["code"] == "moderated" and out["error"]["retryable"] is False
+
+
+def test_routing_off_and_flags():
+    cfg = base_config()
+    cfg["routing"]["generate"] = []
+    cfg["flags"]["video"] = False
+    h = Harness(cfg)
+    token = h.sign_in()
+    assert h.post_job(token, expect=403)[1]["error"]["code"] == "flag_off"
+    assert h.post_job(token, op="clip", expect=403)[1]["error"]["code"] == "flag_off"
+
+
+def test_cancel_a_queued_job_gives_the_quota_back():
+    cfg = base_config()
+    cfg["routing"]["generate"] = ["fal"]
+    h = Harness(cfg)
+    a, b, c = (h.sign_in(n) for n in ("ann", "ben", "cat"))
+    h.post_job(a, expect=200)
+    h.post_job(b, expect=200)
+    _, queued = h.post_job(c, expect=200)
+    _, out = h.call("DELETE", f"/jobs/{queued['jobId']}", None, c, expect=200)
+    assert out["state"] == "cancelled"
+    assert h.relay.remaining(queued["participantId"], "participant")["image"] == 40
+
+
+def test_cancel_a_running_job_cancels_at_the_provider(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    _, out = h.call("DELETE", f"/jobs/{job['jobId']}", None, token, expect=200)
+    assert out["state"] == "cancelled" and h.providers["fal"].cancels == [job["requestId"]]
+
+
+def test_queued_job_times_out():
+    cfg = base_config()
+    cfg["routing"]["generate"] = ["fal"]
+    h = Harness(cfg)
+    a, b, c = (h.sign_in(n) for n in ("ann", "ben", "cat"))
+    h.post_job(a, expect=200)
+    h.post_job(b, expect=200)
+    _, queued = h.post_job(c, expect=200)
+    h.clock.tick(cfg["jobTimeoutS"]["image"] + 1)
+    out = h.poll(c, queued["jobId"])
+    assert out["state"] == "failed" and out["error"]["code"] == "timeout" and out["error"]["retryable"]
+
+
+def test_sweep_advances_jobs_nobody_polls(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, expect=200)
+    h.providers["fal"].succeed(job["requestId"])
+    h.clock.tick(5)
+    h.relay.sweep()
+    assert h.store.get_job(job["jobId"])["state"] == "completed"
+    assert h.store.counters("slots#fal#image")["n"] == 0
+
+
+# ── director-only and stitch ────────────────────────────────────────────────
+def test_shot_list_runs_on_the_director(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, op="shot_list", expect=200)
+    assert job["state"] == "completed" and job["quotaClass"] == "text"
+    assert sum(s["duration_s"] for s in job["shots"]) == 15
+    assert "provider" not in job
+
+
+def test_stitch_starts_the_lambda_and_completes_from_its_result(h):
+    token = h.sign_in()
+    _, job = h.post_job(token, op="stitch", expect=200)
+    assert job["state"] == "submitted"
+    payload = h.stitched[0]
+    assert payload["clips"][0]["key"].startswith("out/sha256:") and payload["clips"][0]["trimS"] == 4
+    assert payload["outKey"] == f"ads/{job['jobId']}.mp4"
+    h.clock.tick(3)
+    assert h.poll(token, job["jobId"])["state"] == "submitted"
+    h.blobs.put(payload["resultKey"], b'{"ok": true, "sha256": "sha256:' + b"b" * 64 + b'", "bytes": 100, "w": 720, "h": 1280, "durationS": 9.0}', "application/json")
+    out = h.poll(token, job["jobId"])
+    assert out["state"] == "completed" and out["outputs"][0]["url"] == f"https://cdn.test/ads/{job['jobId']}.mp4"
+    assert h.relay.remaining(job["participantId"], "participant")["render"] == 2
+
+
+def test_stitch_rejects_clips_that_are_not_ours(h):
+    token = h.sign_in()
+    inp = {"clips": [{"asset": {"sha256": "sha256:" + "c" * 64, "url": "https://evil.test/x.mp4", "mime": "video/mp4"}}]}
+    _, job = h.post_job(token, op="stitch", expect=200, **inp)
+    assert job["state"] == "failed" and job["error"]["code"] == "invalid_input"
+    assert h.relay.remaining(job["participantId"], "participant")["render"] == 3
+
+
+def test_config_route_and_api_prefix(h):
+    _, out = h.call("GET", "/config", expect=200)
+    assert out["contractVersion"] == "1"
+    status, out, _ = h.relay.http("POST", "/api/session", {}, b'{"eventCode": "HACK", "handle": "zed"}')
+    assert status == 200 and out["handle"] == "zed"
