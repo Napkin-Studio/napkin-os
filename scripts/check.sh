@@ -16,6 +16,8 @@ set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
+# The suites test the CLI's own `next:` hints; a caller's CLAN_NO_HINTS must not reach them.
+unset CLAN_NO_HINTS
 ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform)
 
 base="" range="" only="" list=0 all=0
