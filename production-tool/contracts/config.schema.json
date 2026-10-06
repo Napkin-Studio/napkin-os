@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/config.schema.json",
+  "title": "Remote config (config.json on S3 behind CloudFront)",
+  "description": "Read by the web app at load and every 2 minutes, and by the relay on every job (cached 30 s). Changing it is uploading a file; no deploy. It is public: never put event codes, keys or handles in it. Event codes and the blocked list live in Secrets Manager / the relay's DynamoDB table.",
+  "type": "object",
+  "properties": {
+    "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
+    "routing": {
+      "type": "object",
+      "description": "Per op, providers in order of preference. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off.",
+      "propertyNames": { "$ref": "common.schema.json#/$defs/op" },
+      "additionalProperties": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/provider" }, "uniqueItems": true }
+    },
+    "director": {
+      "type": "object",
+      "properties": {
+        "promptVersion": { "type": "string", "pattern": "^director\\.v[0-9]+$" },
+        "perClickModel": { "type": "string" },
+        "shotListModel": { "type": "string" }
+      },
+      "required": ["promptVersion", "perClickModel", "shotListModel"],
+      "additionalProperties": false
+    },
+    "quotas": {
+      "type": "object",
+      "description": "Per participant per day.",
+      "properties": {
+        "image": { "type": "integer", "minimum": 0 },
+        "video": { "type": "integer", "minimum": 0 },
+        "render": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["image", "video", "render"],
+      "additionalProperties": false
+    },
+    "inFlightPerParticipant": { "type": "integer", "minimum": 1, "maximum": 6 },
+    "jobTimeoutS": {
+      "type": "object",
+      "properties": { "image": { "type": "integer" }, "video": { "type": "integer" } },
+      "required": ["image", "video"],
+      "additionalProperties": false
+    },
+    "spend": {
+      "type": "object",
+      "properties": {
+        "capUsd": { "type": "number", "minimum": 0, "description": "Global stop: new paid jobs are refused with spend_stop once confirmed + reserved reaches it." },
+        "warnUsd": { "type": "number", "minimum": 0 }
+      },
+      "required": ["capUsd", "warnUsd"],
+      "additionalProperties": false
+    },
+    "flags": {
+      "type": "object",
+      "description": "Kill switches and the D7 go/no-go flags. A control appears only when its flag is on AND the routed provider's sheet supports it.",
+      "properties": {
+        "storyboard": { "type": "boolean" },
+        "video": { "type": "boolean" },
+        "stitch": { "type": "boolean" },
+        "regionEditFrames": { "type": "boolean" },
+        "regionEditCanvas": { "type": "boolean" },
+        "videoRegionEdit": { "type": "boolean" },
+        "feelEdit": { "type": "boolean" },
+        "clickSelect": { "type": "boolean" },
+        "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." }
+      },
+      "required": ["storyboard", "video", "stitch", "regionEditFrames", "regionEditCanvas", "videoRegionEdit", "feelEdit", "clickSelect", "moreOptions"],
+      "additionalProperties": false
+    },
+    "banner": { "type": "string", "maxLength": 200 },
+    "eventName": { "type": "string", "maxLength": 60, "description": "Shown on the end card." }
+  },
+  "required": ["contractVersion", "routing", "director", "quotas", "inFlightPerParticipant", "jobTimeoutS", "spend", "flags", "banner", "eventName"],
+  "additionalProperties": false
+}

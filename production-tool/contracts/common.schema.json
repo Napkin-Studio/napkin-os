@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/common.schema.json",
+  "title": "Production Tool: shared definitions",
+  "description": "Types every other contract uses. Contract version 1 (D1).",
+  "$defs": {
+    "contractVersion": { "const": "1" },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Content address of an artifact: the SHA-256 of its bytes. Authoritative; every URL is only a hint."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Prefixed ULID made by the client: job_…, ref_…, shot_…, frame_…, take_…, rev_…, combine_…, pin_…"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,15}$",
+      "description": "A user's reference tag, stored once in the strictest form any provider accepts (Runway: 3-16 chars). Adapters rewrite it into each provider's syntax."
+    },
+    "refRole": {
+      "enum": ["character", "shape", "texture", "colour", "feel", "pose", "prop", "other"],
+      "description": "What a reference contributes. Adapters map it to provider roles (Runway subject human|object; Kling elements)."
+    },
+    "view": { "enum": ["front", "three_quarter", "side", "back", "side_2"] },
+    "region": {
+      "type": "object",
+      "description": "A box in 0-1 coordinates of the image it sits on, origin top-left.",
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "h": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      },
+      "required": ["x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "provider": { "enum": ["mock", "runway", "fal", "heygen"] },
+    "op": {
+      "enum": ["generate", "combine", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch"],
+      "description": "generate: front view from sketch + refs. combine: 2-4 selected items + one instruction. view: one turnaround view from the chosen front. shot_list: script to shots (director only, no provider). frame: one storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: region comment or feel change on a clip. stitch: shots to one MP4 with the end card."
+    },
+    "quotaClass": {
+      "enum": ["image", "video", "render", "text"],
+      "description": "image: generate, combine, view, frame, region_edit. video: clip, clip_edit. render: stitch. text: shot_list."
+    },
+    "jobState": {
+      "enum": ["queued", "submitting", "submitted", "fetching", "validating", "completed", "failed", "cancelled", "uncertain"],
+      "description": "Same states as app/templates/advertising-studio/app/pipeline.yaml. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again."
+    },
+    "cost": {
+      "type": "object",
+      "description": "Three separate numbers, never inferred from each other. confirmed stays absent and unknown true until the provider reports it.",
+      "properties": {
+        "estimate": { "type": "number", "minimum": 0 },
+        "reserved": { "type": "number", "minimum": 0 },
+        "confirmed": { "type": "number", "minimum": 0 },
+        "currency": { "const": "USD" },
+        "unknown": { "type": "boolean" }
+      },
+      "required": ["currency", "unknown"],
+      "additionalProperties": false
+    },
+    "assetRef": {
+      "type": "object",
+      "description": "An artifact passed between browser, relay and provider. url is our CloudFront input path from POST /uploads.",
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "mime": { "enum": ["image/png", "image/jpeg", "image/webp", "video/mp4"] }
+      },
+      "required": ["sha256", "url", "mime"],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "description": "One result of a job, already copied into our S3 (the provider URL is never handed out).",
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "url": { "type": "string", "pattern": "^https://" },
+        "mime": { "type": "string" },
+        "w": { "type": "integer" },
+        "h": { "type": "integer" },
+        "durationS": { "type": "number" },
+        "bytes": { "type": "integer" }
+      },
+      "required": ["sha256", "url", "mime"],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "internal"]
+        },
+        "message": { "type": "string", "description": "One line a participant can read in the node." },
+        "retryable": { "type": "boolean" },
+        "retryAfterS": { "type": "integer", "minimum": 0 },
+        "providerCode": { "type": "string", "description": "The provider's own code, e.g. SAFETY.INPUT.TEXT or content_policy_violation. For logs." }
+      },
+      "required": ["code", "message", "retryable"],
+      "additionalProperties": false
+    }
+  }
+}

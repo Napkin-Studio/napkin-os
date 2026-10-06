@@ -1,0 +1,16 @@
+{
+  "contractVersion": "1",
+  "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F",
+  "op": "generate",
+  "parentIds": [],
+  "input": {
+    "text": "eyes from @eyes, colours from @palette",
+    "chips": [],
+    "sketch": { "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mime": "image/png" },
+    "refs": [
+      { "id": "ref_01K6XA6Z0000000000000000AB", "tag": "eyes", "role": "shape", "asset": { "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "mime": "image/jpeg" } },
+      { "id": "ref_01K6XA6Z0000000000000000AC", "tag": "palette", "role": "colour", "asset": { "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "mime": "image/png" } }
+    ],
+    "ratio": "4:5"
+  }
+}
