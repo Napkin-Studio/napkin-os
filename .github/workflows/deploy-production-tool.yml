@@ -121,9 +121,12 @@ jobs:
             --no-emit-package boto3 --no-emit-package botocore --no-emit-package s3transfer \
             --no-emit-package jmespath --no-emit-package urllib3 --no-emit-package python-dateutil \
             --no-emit-package six -o "$build/requirements.txt")
-          uv pip install --target "$build/pkg" --python-platform x86_64-manylinux2014 --python-version 3.12 \
+          # Lambda python3.12 is Amazon Linux 2023 (glibc 2.34), x86_64 (infra/envs/hackathon/lambda.tf).
+          # manylinux_2_28: Pillow 12 ships no manylinux2014 wheels.
+          uv pip install --target "$build/pkg" --python-platform x86_64-manylinux_2_28 --python-version 3.12 \
             --only-binary :all: -r "$build/requirements.txt"
           rsync -a --exclude tests --exclude .venv --exclude .local-data --exclude '__pycache__' \
+            --exclude results --exclude scripts \
             --exclude '*.zip' --exclude uv.lock --exclude pyproject.toml --exclude README.md \
             production-tool/relay/ "$build/pkg/"
           mkdir -p "$build/pkg/contracts"
