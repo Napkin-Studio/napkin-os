@@ -1,0 +1,15 @@
+{
+  "contractVersion": "1",
+  "routing": {
+    "generate": ["runway"], "combine": ["runway"], "view": ["runway"], "shot_list": [],
+    "frame": ["runway"], "region_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "stitch": []
+  },
+  "director": { "promptVersion": "director.v1", "perClickModel": "claude-haiku-4-5", "shotListModel": "claude-sonnet-5-5" },
+  "quotas": { "image": 40, "video": 6, "render": 3 },
+  "inFlightPerParticipant": 2,
+  "jobTimeoutS": { "image": 180, "video": 600 },
+  "spend": { "capUsd": 200, "warnUsd": 150 },
+  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": false, "moreOptions": false },
+  "banner": "",
+  "eventName": "Napkin test"
+}
