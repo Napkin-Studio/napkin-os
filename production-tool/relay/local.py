@@ -133,7 +133,7 @@ def serve(port: int, data_dir: Path) -> None:
         def _cors(self):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Clan-Reason")
 
         def _send(self, status: int, body: bytes = b"", ctype: str = "application/json", head=False):
             self.send_response(status)

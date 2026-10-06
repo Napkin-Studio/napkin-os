@@ -41,6 +41,9 @@ TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
 UNKNOWN_PRICE_USD = 1.0       # reserved for an op whose sheet has no price (HeyGen)
 ORGANISER_QUOTA_FACTOR = 10
 SESSION_TTL_S = 24 * 3600
+CLAN_MAX_BYTES = 5 * 1024 * 1024
+CLAN_MIME = "application/vnd.clan+zip"
+CLAN_REASONS = {"interval", "accept", "manual"}
 SUBMITTING_STALE_S = 120       # a submit that never came back
 FETCH_LEASE_S = 90
 MAX_FETCH_ATTEMPTS = 3
@@ -167,6 +170,10 @@ class Relay:
                 return 200, public(self.advance(job))
             if method == "DELETE":
                 return 200, public(self.cancel(job))
+        if method == "POST" and path == "/clan":
+            self._not_blocked(who)
+            ctx["clanBytes"] = self.mirror_clan(who, headers, body)
+            return 204, None
         if method == "POST" and path == "/log":
             entry = self._json(body, "LogEntry")
             ctx.update({"clientLevel": entry["level"], "clientMessage": entry["message"][:500],
@@ -245,6 +252,21 @@ class Relay:
         if self.blobs.exists(key):
             return {"exists": True, "url": url}
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
+
+    def mirror_clan(self, who: dict, headers: dict, body: bytes | None) -> int:
+        """POST /clan: keep the participant's latest .clan, plus a timestamped copy, for the organisers."""
+        data = body or b""
+        if len(data) > CLAN_MAX_BYTES:
+            raise ApiError("invalid_input", "The document is larger than 5 MB.", status=413)
+        if not data.startswith(b"PK\x03\x04"):
+            raise ApiError("invalid_input", "The body is not a .clan file.")
+        reason = headers.get("x-clan-reason", "manual")
+        if reason not in CLAN_REASONS:
+            reason = "manual"
+        stamp = iso(self.clock()).replace(":", "")
+        for key in (f"clan/{who['pid']}/latest.clan", f"clan/{who['pid']}/{stamp}-{reason}.clan"):
+            self.blobs.put(key, data, CLAN_MIME)
+        return len(data)
 
     # ── admission ───────────────────────────────────────────────────────────
     def _candidates(self, cfg: dict, op: str) -> list[str]:
