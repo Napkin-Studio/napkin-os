@@ -14,7 +14,8 @@ import { alive, bounds, cd, isUserDrawing, makeSketchFrame, sketchFrame, type El
 import type { CustomData, View } from '../contracts/types'
 import { isActive } from '../jobs/runner'
 import { newId } from '../lib/ulid'
-import { useBlobUrl, useColorScheme } from '../ui/hooks'
+import { useBlobUrl, useColorScheme, useFloating } from '../ui/hooks'
+import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { updateDoc } from '../doc/store'
 
@@ -256,7 +257,10 @@ function GenOverlay({ el, c, toView, zoom, ctrl }: { el: El; c: Extract<CustomDa
         <div className="genlabel" style={{ left: tl.x, top: tl.y }}>
           {views.map((v) => <span key={v} className="pill view">{viewLabel(v)} ✓</span>)}
           {!views.length && c.view && <span className="pill">{viewLabel(c.view)}</span>}
-          {!views.length && !c.view && <span className="pill">{c.op === 'combine' ? 'Combined' : 'Front?'}</span>}
+          {/* Not picked for any view yet: selecting it opens the "Set as" choices. */}
+          {!views.length && !c.view && (
+            <button className="pill pick" title="Set it as the front, 3/4, side or back view" onClick={() => ctrl?.api.updateScene({ appState: { selectedElementIds: { [el.id]: true } } })}>Use as…</button>
+          )}
           {showMock && c.mock && <span className="mockbadge">MOCK</span>}
         </div>
       )}
@@ -309,9 +313,9 @@ function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; s
   if (!meaningful.length) return null
   const b = bounds(meaningful)
   const raw = toView({ x: b.minX + b.w / 2, y: b.minY })
-  // Keep it on screen when the selection runs past the top or the sides.
+  // Above the selection and its label row; useFloating keeps it inside the canvas.
   const chipRow = meaningful.some((e) => cd(e)?.kind === 'ref' || cd(e)?.kind === 'gen') ? 30 : 0
-  const at = { x: Math.min(Math.max(raw.x, 220), window.innerWidth - 220), y: Math.max(raw.y - chipRow, 76) }
+  const at: Anchor = { x: raw.x, top: raw.y - chipRow, bottom: toView({ x: b.minX, y: b.maxY }).y }
 
   const all = ctrl.api.getSceneElements() as El[]
   const frame = sketchFrame(all)
@@ -375,7 +379,7 @@ function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; s
   }
 
   return (
-    <div className="toolbar" style={{ left: at.x, top: at.y }} onPointerDown={(e) => e.stopPropagation()}>
+    <Floating className="toolbar" anchor={at}>
       {groups.map((g, i) => (
         <span key={i} className="row">
           {i > 0 && <span className="sep" />}
@@ -383,11 +387,17 @@ function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; s
         </span>
       ))}
       {error && <span className="row" role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600, padding: '0 6px' }}>{error}</span>}
-    </div>
+    </Floating>
   )
 }
 
-function CombinePopover({ ctrl, ids, at, onClose }: { ctrl: CanvasController; ids: string[]; at: Pt; onClose: () => void }) {
+/** A toolbar or popover over the canvas, kept fully inside it (flips below the selection at the top). */
+function Floating({ className, anchor, children }: { className: string; anchor: Anchor; children: React.ReactNode }) {
+  const { ref, style } = useFloating<HTMLDivElement>(anchor)
+  return <div ref={ref} className={className} style={style} onPointerDown={(e) => e.stopPropagation()}>{children}</div>
+}
+
+function CombinePopover({ ctrl, ids, at, onClose }: { ctrl: CanvasController; ids: string[]; at: Anchor; onClose: () => void }) {
   const items = ctrl.combineItems(ids)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -419,7 +429,7 @@ function CombinePopover({ ctrl, ids, at, onClose }: { ctrl: CanvasController; id
     }
   }
   return (
-    <div className="popover" style={{ left: at.x, top: at.y }} onPointerDown={(e) => e.stopPropagation()}>
+    <Floating className="popover" anchor={at}>
       <h3>Combine {items.length} pictures</h3>
       <div className="faint" style={{ fontSize: 12.5 }}>Say what to take from each. Tap a tag to add it.</div>
       <div className="taghints">
@@ -445,7 +455,7 @@ function CombinePopover({ ctrl, ids, at, onClose }: { ctrl: CanvasController; id
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
         <button className="btn sm primary" disabled={!text.trim() || busy} onClick={submit}>{busy ? 'Sending…' : 'Combine'}</button>
       </div>
-    </div>
+    </Floating>
   )
 }
 
