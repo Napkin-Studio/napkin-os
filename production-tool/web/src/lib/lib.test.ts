@@ -30,6 +30,15 @@ describe('tags', () => {
     expect(uniqueTag('!!!', [])).toBe('ref')
   })
 
+  it('default tags from badges are valid and short (@ref_a, @ref_b…)', () => {
+    const tags: string[] = []
+    for (let i = 0; i < 60; i++) tags.push(uniqueTag(`ref_${badgeFor(i).toLowerCase()}`, tags))
+    expect(tags.slice(0, 3)).toEqual(['ref_a', 'ref_b', 'ref_c'])
+    expect(tags[26]).toBe('ref_aa')
+    for (const t of tags) expect(isValidTag(t)).toBe(true)
+    expect(new Set(tags).size).toBe(tags.length)
+  })
+
   it('badges run A…Z then AA', () => {
     expect([0, 1, 25, 26, 27].map(badgeFor)).toEqual(['A', 'B', 'Z', 'AA', 'AB'])
   })

@@ -3,7 +3,7 @@
 // the provider can segment), and stepped back to an earlier version.
 
 import { useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { Composition, CameraMove, Ratio, Region, Shot, View } from '../contracts/types'
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
@@ -196,6 +196,7 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
   const doc = useDoc()
   const ui = useUi()
   const { controls } = useConfig()
+  const showMock = useShowMock()
   const frames = (doc.frames ?? []).filter((f) => f.shot_id === shot.id)
   const current = frames.find((f) => f.selected) ?? frames[frames.length - 1]
   const idx = current ? frames.indexOf(current) : -1
@@ -262,7 +263,7 @@ function FrameCard({ shot, index, onDraw }: { shot: Shot; index: number; onDraw:
         <span className="faint">{label(shot.composition)} · {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
         {stale && <span className="stale" title="The character changed after this frame was drawn">Out of date</span>}
-        {current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
+        {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
       <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
         onRegion={setRegion} onStrokes={setStrokes}>

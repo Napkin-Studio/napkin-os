@@ -2,7 +2,7 @@
 // hash, tag), refs ↔ document sync, Generate / Combine / views, and landing
 // results on the canvas. The React component only renders overlays and calls in.
 
-import { CaptureUpdateAction, convertToExcalidrawElements, newElementWith } from '@excalidraw/excalidraw'
+import { CaptureUpdateAction, convertToExcalidrawElements, getVisibleSceneBounds, newElementWith } from '@excalidraw/excalidraw'
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
 import type { CharacterRef, CustomData, Job, JobInputRef, ProductionDocument, RefRole, View } from '../contracts/types'
@@ -97,9 +97,10 @@ export class CanvasController {
           fileId = data.id
         }
         const doc = this.s.doc.get()
-        const tag = uniqueTag(`ref_${doc.character.refs.length + 1}`, doc.character.refs.map((r) => r.tag))
         const refId = newId('ref')
         const badge = badgeFor(this.nextBadgeIndex())
+        // Default tag from the badge: the shortest valid tag is ref_a, ref_b…
+        const tag = uniqueTag(`ref_${badge.toLowerCase()}`, doc.character.refs.map((r) => r.tag))
         const customData: CustomData = { kind: 'ref', id: refId, asset: sha, tag, role: 'other', badge }
         this.patchEl(el.id, (e) => newElementWith(e as ExcalidrawImageElement, { fileId, status: 'saved', customData }), true)
         updateDoc(this.s.doc, (d) => {
@@ -188,9 +189,10 @@ export class CanvasController {
     const blob = (await downscale(await exportElements(strokes, this.api.getFiles()))).blob
     const sha = await putBlob(blob)
     const doc = this.s.doc.get()
-    const tag = uniqueTag(`drawing_${doc.character.refs.length + 1}`, doc.character.refs.map((r) => r.tag))
+    const badge = badgeFor(this.nextBadgeIndex())
+    const tag = uniqueTag(`ref_${badge.toLowerCase()}`, doc.character.refs.map((r) => r.tag))
     const [frame] = convertToExcalidrawElements(
-      [{ type: 'frame', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: '', children: [], customData: { kind: 'ref', id: refId, asset: sha, tag, role: 'shape', badge: badgeFor(this.nextBadgeIndex()) } }],
+      [{ type: 'frame', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: '', children: [], customData: { kind: 'ref', id: refId, asset: sha, tag, role: 'other', badge } }],
     )
     const next = els.map((e) => (ids.includes(e.id) ? newElementWith(e, { frameId: frame.id }) : e))
     // Frames sit below their children.
@@ -238,6 +240,17 @@ export class CanvasController {
       els = bindArrow([...els, arrow], arrow)
     }
     this.setEls(els)
+    this.reveal([gen.id, ...sources.map((s) => s.el.id)])
+  }
+
+  /** Make sure new results land in view: zoom out to them and their inputs when any part is off-screen. */
+  reveal(ids: string[]) {
+    const els = alive(this.els()).filter((e) => ids.includes(e.id))
+    if (!els.length) return
+    const [vx0, vy0, vx1, vy1] = getVisibleSceneBounds(this.api.getAppState())
+    const b = bounds(els)
+    if (b.minX >= vx0 && b.minY >= vy0 && b.maxX <= vx1 && b.maxY <= vy1) return
+    this.api.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85, animate: true })
   }
 
   /** Generate front view from the sketch frame and every reference on the canvas. */
@@ -336,6 +349,7 @@ export class CanvasController {
       this.setEls(all)
       placed.push({ jobId, view })
     }
+    this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
     for (const p of placed) {
       await this.s.runner.submit('view', { character: { front: frontRef }, view: p.view, refs }, [front.job_id], { for: 'canvas' }, p.jobId)
     }

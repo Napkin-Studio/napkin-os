@@ -8,11 +8,10 @@ import { Excalidraw, getSceneVersion, sceneCoordsToViewportCoords } from '@excal
 import '@excalidraw/excalidraw/index.css'
 import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import { CanvasController, viewLabel, type CanvasSnapshot } from '../canvas/controller'
 import { alive, bounds, cd, isUserDrawing, makeSketchFrame, sketchFrame, type El } from '../canvas/scene'
-import type { CustomData, RefRole, View } from '../contracts/types'
-import { REF_ROLES } from '../contracts/types'
+import type { CustomData, View } from '../contracts/types'
 import { isActive } from '../jobs/runner'
 import { newId } from '../lib/ulid'
 import { useBlobUrl, useColorScheme } from '../ui/hooks'
@@ -40,6 +39,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const ui = useUi()
   useJobsTick()
   const theme = useColorScheme()
+  const { controls } = useConfig()
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
   const ctrl = useMemo(() => (api ? new CanvasController(api, services) : null), [api, services])
@@ -140,17 +140,18 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           <FlowArrows els={els} toView={toView} />
           {els.map((e) => {
             const c = cd(e)
-            if (c?.kind === 'ref') return <RefChips key={e.id} el={e} c={c} at={toView({ x: e.x, y: e.y })} onTag={(v) => ctrl?.setRefTag(e.id, v)} onRole={(r) => ctrl?.setRefRole(e.id, r)} />
+            if (c?.kind === 'ref') return <RefChips key={e.id} el={e} c={c} at={toView({ x: e.x, y: e.y })} onTag={(v) => ctrl?.setRefTag(e.id, v)} />
             if (c?.kind === 'gen') return <GenOverlay key={e.id} el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} />
             return null
           })}
+          {ctrl && controls.generate && <SketchGenerate ctrl={ctrl} els={els} toView={toView} />}
           {ctrl && selected.length > 0 && <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} />}
         </div>
         {showHint && (
           <div className="hint3" aria-hidden>
-            <div className="step"><div className="n">1</div><b>Tag</b><span>Drop or paste pictures. Each gets a tag like <span className="mono">@eyes</span>.</span></div>
-            <div className="step"><div className="n">2</div><b>Select</b><span>Draw your character in the frame, then click the frame.</span></div>
-            <div className="step"><div className="n">3</div><b>Generate</b><span>Press <b style={{ display: 'inline' }}>Generate front view</b>. It lands beside your sketch.</span></div>
+            <div className="step"><div className="n">1</div><b>Tag</b><span>Drop or paste pictures. Rename each tag, like <span className="mono">@eyes</span>.</span></div>
+            <div className="step"><div className="n">2</div><b>Draw</b><span>Draw your character in the frame. Select pictures to combine them.</span></div>
+            <div className="step"><div className="n">3</div><b>Generate</b><span>Press <b style={{ display: 'inline' }}>Generate front view</b> under the frame. It lands beside your sketch.</span></div>
           </div>
         )}
       </div>
@@ -159,9 +160,41 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   )
 }
 
-// ── Ref chips: badge, editable tag, role ────────────────────────────────────
+// ── The always-visible Generate button under the sketch frame (D9) ──────────
 
-function RefChips({ el, c, at, onTag, onRole }: { el: El; c: Extract<CustomData, { kind: 'ref' }>; at: Pt; onTag: (v: string) => void; onRole: (r: RefRole) => void }) {
+function SketchGenerate({ ctrl, els, toView }: { ctrl: CanvasController; els: El[]; toView: (p: Pt) => Pt }) {
+  const { controls } = useConfig()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [more, setMore] = useState(false)
+  const frame = sketchFrame(els)
+  if (!frame) return null
+  const at = toView({ x: frame.x + frame.width / 2, y: frame.y + frame.height })
+  return (
+    <div className="sketch-cta" style={{ left: at.x, top: at.y }} onPointerDown={(e) => e.stopPropagation()}>
+      <div className="row">
+        <button className="btn primary" disabled={busy} onClick={async () => {
+          setBusy(true)
+          setError(null)
+          try {
+            await ctrl.generateFront(more)
+          } catch (e) {
+            setError(e instanceof Error ? e.message : 'That did not work. Try again.')
+          } finally {
+            setBusy(false)
+          }
+        }}>{busy ? 'Preparing…' : 'Generate front view'}</button>
+        {/* 4 variants are cut for Wednesday (D9): only with the moreOptions flag. */}
+        {controls.moreOptions && <button className={`btn sm ${more ? 'on' : ''}`} title="Ask for 4 options instead of 1" onClick={() => setMore(!more)}>4 options</button>}
+      </div>
+      {error && <span className="err" role="alert">{error}</span>}
+    </div>
+  )
+}
+
+// ── Ref chips: badge and editable tag ───────────────────────────────────────
+
+function RefChips({ el, c, at, onTag }: { el: El; c: Extract<CustomData, { kind: 'ref' }>; at: Pt; onTag: (v: string) => void }) {
   const doc = useDoc()
   const label = doc.character.refs.find((r) => r.id === c.id)?.label
   const [draft, setDraft] = useState<string | null>(null)
@@ -191,9 +224,7 @@ function RefChips({ el, c, at, onTag, onRole }: { el: El; c: Extract<CustomData,
           e.stopPropagation()
         }}
       />
-      <select className="rolechip" aria-label="Role" value={c.role} onChange={(e) => onRole(e.target.value as RefRole)}>
-        {REF_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-      </select>
+      {/* The role chip is hidden for Wednesday (D9); roles stay in the data, default 'other'. */}
     </div>
   )
 }
@@ -204,6 +235,7 @@ function GenOverlay({ el, c, toView, zoom, ctrl }: { el: El; c: Extract<CustomDa
   const { runner } = useServices()
   const doc = useDoc()
   const ui = useUi()
+  const showMock = useShowMock()
   const job = doc.jobs.find((j) => j.id === c.id)
   const live = runner.liveInfo(c.id)
   const state = live?.state ?? job?.state ?? c.state
@@ -225,7 +257,7 @@ function GenOverlay({ el, c, toView, zoom, ctrl }: { el: El; c: Extract<CustomDa
           {views.map((v) => <span key={v} className="pill view">{viewLabel(v)} ✓</span>)}
           {!views.length && c.view && <span className="pill">{viewLabel(c.view)}</span>}
           {!views.length && !c.view && <span className="pill">{c.op === 'combine' ? 'Combined' : 'Front?'}</span>}
-          {c.mock && <span className="mockbadge">MOCK</span>}
+          {showMock && c.mock && <span className="mockbadge">MOCK</span>}
         </div>
       )}
     </>
@@ -316,7 +348,7 @@ function FloatingToolbar({ ctrl, selected, toView }: { ctrl: CanvasController; s
     )
   }
   if (combinable && controls.combine) {
-    groups.push(<button key="combine" className="btn sm dark" disabled={!!busy} onClick={() => setCombining(true)}>Combine {meaningful.length}…</button>)
+    groups.push(<button key="combine" className="btn sm dark" disabled={!!busy} onClick={() => setCombining(true)}>Combine {meaningful.length} items</button>)
   }
   if (singleDoneGen) {
     const g = cd(gens[0]) as Extract<CustomData, { kind: 'gen' }>
