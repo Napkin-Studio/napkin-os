@@ -66,12 +66,30 @@ def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
     The prompt tells the model not to send them, but it sometimes does (2026-10-07: Haiku sent a
     camera `angle` for a Runway view, which has no angle control, and the whole job failed).
     Dropping it is safe: a view is said in words instead. Other stray fields still fail, by design."""
+    spec = sheet["ops"].get(op, {})
+    if op == "clip" and "durationS" in job and spec.get("durationsS") and job["durationS"] not in spec["durationsS"]:
+        # A 5 s shot on a model that makes 4/6/8 s clips: make the next longer allowed clip;
+        # the stitch trims each clip to its shot's length (trimS).
+        longer = [d for d in sorted(spec["durationsS"]) if d >= job["durationS"]]
+        job["durationS"] = longer[0] if longer else max(spec["durationsS"])
     if "angle" in job and not sheet.get("angles"):
         angle = job.pop("angle")
         if op == "view":
             word = _VIEW_WORDS.get(int(round(angle.get("horizontal", 0))) % 360)
             if word and word.split("-")[0] not in job["prompt"].lower():
                 job["prompt"] = f"{job['prompt'].rstrip()} Show the {word} view."
+
+
+def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
+    """Called after the artifact checks, so a ref that is not in the input still fails."""
+    if op == "clip" and job.get("firstFrame") and job.get("refs") and not sheet["video"]["firstFrameWithRefs"]:
+        # 2026-10-07: every Runway clip failed ("cannot take a first frame together with refs").
+        # The first frame is the storyboard frame, which already shows the character: keep it,
+        # drop the refs, and say their names in words so the prompt names no missing ref.
+        for ref in job["refs"]:
+            words = "the character" if ref["role"] == "character" else ref["name"].replace("_", " ")
+            job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
+        job["refs"] = []
 
 
 def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
@@ -223,6 +241,7 @@ class Director:
         stray = _hashes(job) - _hashes(payload) - extra
         if stray:
             raise DirectorError(f"the job names artifacts that are not in the input: {sorted(stray)[0]}")
+        _clip_frame_only(job, op, sheet)
         names = [r["name"] for r in job["refs"]]
         if len(set(names)) != len(names) or not all(TAG.match(n) for n in names):
             raise DirectorError(f"ref names must be unique canonical tags: {names}")

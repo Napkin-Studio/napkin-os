@@ -220,7 +220,6 @@ def variant(name, edit):
     ("region_edit_runway", lambda r: r["providerJob"].update(mask="sha256:" + "d" * 64), "takes no mask"),
     ("generate_runway", lambda r: r["providerJob"].update(seed=7), "takes no seed"),
     ("generate_runway", lambda r: r["providerJob"].update(outputs=5), "at most 4 outputs"),
-    ("clip_runway", lambda r: r["providerJob"].update(durationS=5), "duration must be one of"),
     ("clip_runway", lambda r: r["providerJob"]["refs"].append(
         {"sha256": "sha256:" + "9" * 64, "name": "x", "role": "object"}), "not in the input"),
     ("generate_runway", lambda r: r["providerJob"].update(provider="fal"), "routed provider"),
@@ -234,11 +233,23 @@ def test_what_the_sheet_or_the_input_rules_out_raises(name, edit, why):
         d.run(f["op"], f["input"], f["provider"])
 
 
-def test_clip_with_first_frame_and_refs_is_refused_on_runway():
-    d, f = variant("clip_runway", lambda r: r["providerJob"]["refs"].append(
-        {"sha256": fixture("clip_runway")["input"]["character"]["front"]["sha256"], "name": "front", "role": "character"}))
-    with pytest.raises(DirectorError, match="first frame together with refs"):
-        d.run(f["op"], f["input"], f["provider"])
+def test_clip_with_first_frame_and_refs_keeps_the_frame_on_runway():
+    # Changed 2026-10-07 (was: refused). Haiku kept sending the character refs with the first frame,
+    # so every Runway clip failed. The storyboard frame already shows the character: keep the frame,
+    # drop the refs, and name them in words.
+    d, f = variant("clip_runway", lambda r: (r["providerJob"]["refs"].append(
+        {"sha256": fixture("clip_runway")["input"]["character"]["front"]["sha256"], "name": "front", "role": "character"}),
+        r["providerJob"].update(prompt=r["providerJob"]["prompt"] + " Keep @front on model.")))
+    job = d.run(f["op"], f["input"], f["provider"]).output["providerJob"]
+    assert job["refs"] == [] and job["firstFrame"]
+    assert "@front" not in job["prompt"] and "the character" in job["prompt"]
+
+
+def test_a_clip_length_the_model_cannot_make_is_rounded_up():
+    # Changed 2026-10-07 (was: refused). A 5 s shot on veo3.1_fast (4/6/8 s) becomes 6 s;
+    # the stitch trims it back to 5 s.
+    d, f = variant("clip_runway", lambda r: r["providerJob"].update(durationS=5))
+    assert d.run(f["op"], f["input"], f["provider"]).output["providerJob"]["durationS"] == 6
 
 
 def test_shots_that_miss_the_target_raise():
