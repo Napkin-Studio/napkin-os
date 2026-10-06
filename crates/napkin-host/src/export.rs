@@ -138,6 +138,14 @@ pub fn render_pdf(tmp_html: &str, dest: &str) -> HostResult<()> {
             // nothing waits on a crash reporter that never exits
             "--disable-crash-reporter",
             "--disable-breakpad",
+            // no calls home: the virtual-time budget waits for the network to
+            // go quiet, and Chrome's own background traffic (GCM registration)
+            // kept it busy until the deadline on GitHub's runners
+            "--disable-background-networking",
+            "--disable-component-update",
+            "--disable-sync",
+            "--no-first-run",
+            "--no-default-browser-check",
             "--no-pdf-header-footer",
             "--run-all-compositor-stages-before-draw",
             "--virtual-time-budget=2500",
