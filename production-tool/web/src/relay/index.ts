@@ -10,5 +10,10 @@ export function createRelay(): Relay {
   return new MockRelay({ renderer: browserRenderer })
 }
 
+/** Which server a saved session belongs to: the relay URL, or 'mock'. */
+export function relayId(): string {
+  return (import.meta.env.VITE_RELAY_URL as string | undefined) || 'mock'
+}
+
 export type { Relay } from './types'
 export { RelayError, asContractError } from './types'

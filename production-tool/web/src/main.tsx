@@ -12,7 +12,7 @@ import { postClanMirror } from './doc/clan'
 import { applyFrame, applyShotList, applyStitch, applyTake } from './jobs/handlers'
 import { JobRunner } from './jobs/runner'
 import { idbGet } from './lib/idb'
-import { createRelay } from './relay'
+import { createRelay, relayId } from './relay'
 
 async function boot() {
   const relay = createRelay()
@@ -24,10 +24,19 @@ async function boot() {
   const participant = session ? { id: session.participantId, handle: session.handle } : { id: 'p_local', handle: 'guest' }
   const { doc, clan, storeNote } = await openDocument(participant, (jobId) => ui.get().jobCtx[jobId])
 
+  const here = relayId()
+  const saved = ui.get().session
+  if (saved && (ui.get().sessionFor !== here || Date.parse(saved.expiresAt) <= Date.now())) {
+    ui.update((u) => { u.session = undefined; u.sessionFor = undefined })
+  }
+  relay.onUnauthorised = () => {
+    relay.useToken(null)
+    ui.update((u) => { u.session = undefined; u.sessionFor = undefined })
+  }
   if (ui.get().session) relay.useToken(ui.get().session!.token)
   if (relay.kind === 'mock' && !ui.get().session) {
     const session = await relay.session({ eventCode: 'MOCK', handle: 'guest' })
-    ui.update((u) => { u.session = session })
+    ui.update((u) => { u.session = session; u.sessionFor = here })
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null
   const runner = new JobRunner(relay, doc, ui)

@@ -30,6 +30,8 @@ export interface UiState {
   /** Region drawn on each frame (by frame id) before Regenerate. */
   frameRegions: Record<string, Region | undefined>
   session?: SessionResponse
+  /** relayId() of the server that issued `session`. */
+  sessionFor?: string
   hintDismissed?: boolean
 }
 
