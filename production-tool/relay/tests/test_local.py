@@ -16,3 +16,11 @@ def test_preflight_allows_the_own_keys_header():
 
 def test_preflight_allows_the_other_headers_the_web_sends():
     assert {"authorization", "content-type", "x-clan-reason"} <= allowed()
+
+
+def test_the_default_local_config_takes_own_keys_and_is_valid():
+    from contracts import Contracts
+    cfg = local.default_config()
+    assert cfg["flags"]["ownKeys"] is True
+    assert set(cfg["routing"]["generate"]) == {"mock"}  # no key: mock, as before
+    assert not Contracts().errors("config.schema.json", cfg)
