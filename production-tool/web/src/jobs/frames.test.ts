@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { JobInput, ProductionDocument } from '../contracts/types'
 import { describeWrite } from '../doc/describe'
 import { emptyDocument, SnapshotDocumentStore, SnapshotStore, updateDoc } from '../doc/store'
@@ -103,6 +103,9 @@ describe('sequential storyboard frames', () => {
     await drawTheRest(s.deps)
     expect(s.ui.get().drawingRest).toBe(true)
     for (const k of [1, 2, 3]) {
+      // The chain submits shot k from a completion hook, which runs asynchronously: wait for it
+      // to appear (CI was faster to check than the hook was to submit), then check it is the only one.
+      await vi.waitFor(() => expect(s.running().length).toBeGreaterThan(0), { timeout: 2000, interval: 5 })
       const now = s.running()
       expect(now).toHaveLength(1) // one at a time
       expect(now[0].ctx.for === 'frame' && now[0].ctx.shotId).toBe(s.shotId(k))
