@@ -621,7 +621,7 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
       </div>
       <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
         <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => setLibrary(true)} disabled={!ctrl}>Library</button>
+          <button className="btn sm" onClick={() => setLibrary(true)} disabled={!ctrl} title="Characters and objects your team published">Team library</button>
           <button className="btn sm ghost" onClick={startCleanUp} title="Remove pictures nothing uses any more">Clean up</button>
         </div>
         {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void cleanUp(cleaning)} onNo={() => setCleaning(null)} />}
@@ -706,7 +706,7 @@ function LibraryPanel({ ctrl, onClose }: { ctrl: CanvasController; onClose: () =
   return (
     <div className="candidates library" onPointerDown={(e) => e.stopPropagation()}>
       <div className="row">
-        <b>Library{index ? ` · ${index.workspace}` : ''}</b>
+        <b>Team library{index ? ` · ${index.workspace}` : ''}</b>
         <span className="faint" style={{ fontSize: 12 }}>Characters and objects your team published. Importing copies them in.</span>
         <span className="spacer" />
         <button className="btn xs ghost" onClick={onClose}>Close</button>

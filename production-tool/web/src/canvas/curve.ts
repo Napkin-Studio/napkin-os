@@ -11,8 +11,14 @@ export function curvePoints(start: { x: number; y: number }, end: { x: number; y
   return [[0, 0], [dx / 2 - (dy / len) * off, dy / 2 + (dx / len) * off], [dx, dy]]
 }
 
-/** How far an arrow bends, by its place among the arrows into the same node: never straight,
- * alternating sides and wider each pair (0.15, -0.15, 0.3, -0.3…), so none lie on top of each other. */
-export function bendFor(index: number): number {
-  return (index % 2 ? -1 : 1) * 0.15 * (1 + Math.floor(index / 2))
+/**
+ * The bend for an arrow from a source to a target: it bows away from the line between their
+ * centres, on the side the source sits (a source above the target arcs over, one below arcs
+ * under), so arrows from sources stacked on one side run beside each other instead of crossing.
+ * `dy` is the source centre's y minus the target centre's; `dx` is the arrow's x run.
+ */
+export function bendAway(dx: number, dy: number, index: number): number {
+  const side = Math.abs(dy) > 20 ? Math.sign(dy) : index % 2 ? -1 : 1
+  // A positive bend moves the middle point toward +y when the arrow runs rightward.
+  return side * (dx >= 0 ? 1 : -1) * 0.15 * (1 + Math.floor(index / 2))
 }

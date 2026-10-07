@@ -202,7 +202,7 @@ export class CanvasController {
     const blob = (await downscale(await exportElements(strokes, this.api.getFiles()))).blob
     const sha = await putBlob(blob)
     const [frame] = convertToExcalidrawElements(
-      [{ type: 'frame', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: '', children: [], customData: { kind: 'drawn', id: newId('node'), asset: sha } }],
+      [{ type: 'frame', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', children: [], customData: { kind: 'drawn', id: newId('node'), asset: sha } }],
     )
     const next = els.map((e) => (ids.includes(e.id) ? newElementWith(e, { frameId: frame.id }) : e))
     this.setEls([frame, ...next]) // frames sit below their children
@@ -398,7 +398,7 @@ export class CanvasController {
       x += NODE.w + 40
       let all = [...this.els(), gen]
       if (frontEl && front.node) {
-        const arrow = makeArrow(frontEl, gen, front.node, jobId)
+        const arrow = makeArrow(frontEl, gen, front.node, jobId, 0, true)
         all = bindArrow([...all, arrow], arrow)
       }
       this.setEls(all)
@@ -520,7 +520,7 @@ export class CanvasController {
       const fromEl = byOwnId(els, from)
       next = next.map((e) => (e.id === a.id ? newElementWith(e, { isDeleted: true }) : e))
       if (fromEl) {
-        const arrow = makeArrow(fromEl, gen, from, newJobId, i)
+        const arrow = makeArrow(fromEl, gen, from, newJobId, i, c.op === 'view')
         next = bindArrow([...next, arrow], arrow)
       }
     })

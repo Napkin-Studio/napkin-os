@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bendFor, curvePoints } from './curve'
+import { bendAway, curvePoints } from './curve'
 import { instruction, planSelection, type PlainEl } from './selection'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
@@ -48,9 +48,13 @@ describe('curved arrows', () => {
     expect(m[1]).toBeCloseTo(30)
   })
 
-  it('arrows into one node never lie straight and alternate sides, wider each pair', () => {
-    const bends = [0, 1, 2, 3].map(bendFor)
-    expect(bends).toEqual([0.15, -0.15, 0.3, -0.3])
-    expect(new Set(bends).size).toBe(4)
+  it('an arrow bows toward the side its source sits on, so stacked sources do not cross', () => {
+    // Rightward arrows: a source below the target (dy > 0) bows down (+y), one above bows up.
+    expect(bendAway(300, 120, 0)).toBeGreaterThan(0)
+    expect(bendAway(300, -120, 1)).toBeLessThan(0)
+    // Leftward, the same side needs the other sign.
+    expect(bendAway(-300, 120, 0)).toBeLessThan(0)
+    // Level sources alternate and widen, and none is straight.
+    expect([0, 1, 2, 3].map((i) => bendAway(300, 0, i))).toEqual([0.15, -0.15, 0.3, -0.3])
   })
 })

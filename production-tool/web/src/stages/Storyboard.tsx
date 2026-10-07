@@ -159,9 +159,11 @@ export function Storyboard() {
                     <select className="select" aria-label="Composition" value={s.composition} onChange={(e) => updateShot(s.id, { composition: e.target.value as Composition })}>
                       {COMPOSITIONS.map((c) => <option key={c} value={c}>{label(c)}</option>)}
                     </select>
+                  </div>
+                  <div className="stack" style={{ gap: 4 }}>
+                    <textarea className="textarea" aria-label="Action" maxLength={300} value={s.action} onChange={(e) => updateShot(s.id, { action: e.target.value })} />
                     <ShotRefs shot={s} onChange={(refs) => updateShot(s.id, { refs })} />
                   </div>
-                  <textarea className="textarea" aria-label="Action" maxLength={300} value={s.action} onChange={(e) => updateShot(s.id, { action: e.target.value })} />
                   <select className="select" aria-label="Camera move" value={s.camera_move} onChange={(e) => updateShot(s.id, { camera_move: e.target.value as CameraMove })}>
                     {CAMERA_MOVES.map((c) => <option key={c} value={c}>{label(c)}</option>)}
                   </select>

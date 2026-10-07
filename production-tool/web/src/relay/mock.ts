@@ -89,6 +89,7 @@ export class MockRelay implements Relay {
   private readonly running = new Map<string, Promise<void>>()
   private readonly opts: Required<Omit<MockOptions, 'persistKey'>> & { persistKey: string | null }
   private participantId = 'p_mock000'
+  private handle = 'you'
 
   constructor(opts: MockOptions) {
     this.opts = {
@@ -123,6 +124,7 @@ export class MockRelay implements Relay {
 
   async session(req: SessionRequest): Promise<SessionResponse> {
     this.participantId = 'p_' + (req.handle.toLowerCase().replace(/[^a-z0-9]/g, '') + 'mock00').slice(0, 8)
+    this.handle = req.handle
     return {
       token: 'mock-token',
       participantId: this.participantId,
@@ -228,8 +230,7 @@ export class MockRelay implements Relay {
     if (req.baseVer !== latest) {
       throw new RelayError({ code: 'conflict', message: `Someone published version ${latest} of this key since yours. Import it first, then publish.`, retryable: false }, 409)
     }
-    const handle = this.participantId.replace(/^p_/, '').replace(/mock0*$/, '') || 'you'
-    const entry: LibraryEntry = { workspace: 'mock', key, ver: latest + 1, role: req.role, by: handle, at: new Date(this.opts.now()).toISOString(), refs: req.refs }
+    const entry: LibraryEntry = { workspace: 'mock', key, ver: latest + 1, role: req.role, by: this.handle, at: new Date(this.opts.now()).toISOString(), refs: req.refs }
     this.saveLibrary({ ...data, [key]: [...versions, entry] })
     return entry
   }

@@ -8,7 +8,7 @@ import type { BinaryFileData, BinaryFiles } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalidraw/excalidraw/element/types'
 import type { CustomData, GenOp, Sha256, View } from '../contracts/types'
 import { hexOf } from '../lib/hash'
-import { bendFor, curvePoints } from './curve'
+import { bendAway, curvePoints } from './curve'
 
 export type El = ExcalidrawElement
 export const ACCENT = '#FF4F2E'
@@ -134,15 +134,29 @@ export function makeGenPlaceholder(jobId: string, op: GenOp, parentIds: string[]
   return newElementWith(el as ExcalidrawImageElement, { status: 'pending', fileId: null })
 }
 
-/** A curved provenance arrow from one element to another, bound at both ends so it follows them. */
-export function makeArrow(from: El, to: El, fromId: string, toId: string, index = 0): El {
+/**
+ * A curved provenance arrow from one element to another, bound at both ends so it follows them.
+ * `over`: leave and arrive on the top edges and arc above, for a row of results made from one
+ * source (the views), so the arrow never crosses the nodes between them.
+ */
+export function makeArrow(from: El, to: El, fromId: string, toId: string, index = 0, over = false): El {
   const fb = bounds([from])
   const tb = bounds([to])
-  // Leave from the side facing the target, arrive on the side facing the source.
-  const rightward = tb.minX >= fb.maxX
-  const start = { x: rightward ? fb.maxX + 8 : fb.minX - 8, y: fb.minY + fb.h / 2 }
-  const end = { x: rightward ? tb.minX - 8 : tb.maxX + 8, y: tb.minY + tb.h / 2 }
-  const points = curvePoints(start, end, bendFor(index))
+  let start: { x: number; y: number }
+  let end: { x: number; y: number }
+  let bend: number
+  if (over) {
+    start = { x: fb.minX + fb.w / 2, y: fb.minY - 8 }
+    end = { x: tb.minX + tb.w / 2, y: tb.minY - 8 }
+    bend = end.x >= start.x ? -0.22 : 0.22 // the middle point goes up
+  } else {
+    // Leave from the side facing the target, arrive on the side facing the source.
+    const rightward = tb.minX >= fb.maxX
+    start = { x: rightward ? fb.maxX + 8 : fb.minX - 8, y: fb.minY + fb.h / 2 }
+    end = { x: rightward ? tb.minX - 8 : tb.maxX + 8, y: tb.minY + tb.h / 2 }
+    bend = bendAway(end.x - start.x, fb.minY + fb.h / 2 - (tb.minY + tb.h / 2), index)
+  }
+  const points = curvePoints(start, end, bend)
   const xs = points.map((p) => p[0])
   const ys = points.map((p) => p[1])
   const [arrow] = convertToExcalidrawElements(
