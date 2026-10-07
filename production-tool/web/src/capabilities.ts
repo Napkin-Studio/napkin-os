@@ -114,7 +114,7 @@ export const PROVIDER_CHOICES: { id: ProviderChoice; label: string }[] = [
 
 const ALL_FLAGS_ON: Flags = {
   storyboard: true, video: true, stitch: true, regionEditFrames: true, regionEditCanvas: true,
-  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true,
+  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, ownKeys: true,
 }
 
 function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {

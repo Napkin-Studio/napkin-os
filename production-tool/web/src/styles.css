@@ -352,3 +352,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .topmenu .menu .btn { justify-content: flex-start; width: 100%; }
 .startover { display: flex; justify-content: center; padding: 10px 16px; }
 .startover .confirm { max-width: 560px; }
+
+/* ── Your own provider keys (keys/OwnKeysPanel.tsx) ── */
+.topmenu .ownkeys { width: 320px; padding: 14px; gap: 10px; font-size: 12.5px; }
+.ownkeys-use { list-style: none; margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); display: flex; flex-direction: column; gap: 4px; }
+.ownkeys-use li { display: flex; justify-content: space-between; gap: 8px; }

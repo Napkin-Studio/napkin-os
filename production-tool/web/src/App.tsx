@@ -14,6 +14,7 @@ import { HistoryPanel } from './ui/History'
 import { CLAN_DB } from './doc/clan'
 import { relayId } from './relay'
 import { startOver, START_OVER_TEXT } from './app/startOver'
+import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
@@ -75,6 +76,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
   const { doc: docStore, relay, ui: uiStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
+  const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
   const [menu, setMenu] = useState(false)
@@ -115,6 +117,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
           <span className="dot" />
           {active.length ? `${running} running · ${queued} queued` : 'Nothing running'}
         </span>
+        {config.flags.ownKeys && <OwnKeysButton />}
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
         <button className="btn sm" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
           setExporting(true)
