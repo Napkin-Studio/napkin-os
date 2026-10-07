@@ -131,7 +131,7 @@
     },
     "JobRequest": {
       "type": "object",
-      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice.",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. Optional header X-Own-Keys: JSON {\"fal\"?: key, \"heygen\"?: key}, read only when config flags.ownKeys is on: a step those providers can do runs on that key (HeyGen before fal for clip), any other step on the event routing. A key the provider refuses fails the job; it never falls back to the event key. Keys are never returned or logged.",
       "properties": {
         "contractVersion": {
           "$ref": "common.schema.json#/$defs/contractVersion"
@@ -369,6 +369,10 @@
         },
         "provider": {
           "$ref": "common.schema.json#/$defs/provider"
+        },
+        "keySource": {
+          "enum": ["own", "event"],
+          "description": "Whose provider key runs this job: the participant's own (sent in X-Own-Keys; billed to them, no event spend or daily quota) or the event's. Absent on shot_list and stitch, and on jobs from before own keys."
         },
         "model": {
           "type": "string"

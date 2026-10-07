@@ -119,6 +119,8 @@ export interface Flags {
   feelEdit: boolean
   clickSelect: boolean
   moreOptions: boolean
+  /** Participants may send their own fal and HeyGen keys. Optional; absent means off. */
+  ownKeys?: boolean
 }
 
 export interface Config {
@@ -371,6 +373,8 @@ export interface Job {
   queuePosition?: number
   nextPollS?: number
   provider?: Provider
+  /** Whose key runs the job (the participant's X-Own-Keys, or the event's). */
+  keySource?: 'own' | 'event'
   model?: string
   requestId?: string
   inputHashes: Sha256[]

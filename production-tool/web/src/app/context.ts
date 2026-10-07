@@ -6,6 +6,8 @@ import type { UiState } from '../doc/ui'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
 import type { ClanBackedStore } from '../doc/clan'
+import { withOwnKeys, type OwnKeys, type OwnKeysStore } from '../keys/ownKeys'
+import { SHEETS } from '../contracts/load'
 
 export interface Services {
   relay: Relay
@@ -18,6 +20,8 @@ export interface Services {
   clan: ClanBackedStore | null
   /** Shown under the top bar when saving is degraded ("Saving without history"). */
   storeNote: string | null
+  /** The participant's own provider keys (this tab only). */
+  ownKeys: OwnKeysStore
 }
 
 export const ServicesContext = createContext<Services | null>(null)
@@ -50,11 +54,17 @@ export function useShowMock(): boolean {
   return useServices().relay.kind === 'mock'
 }
 
+export function useOwnKeys(): OwnKeys {
+  const { ownKeys } = useServices()
+  return useSyncExternalStore(ownKeys.subscribe, ownKeys.get)
+}
+
 export function useConfig(): { config: Config; controls: Controls } {
   const { remoteConfig } = useServices()
   const ui = useUi()
+  const keys = useOwnKeys()
   return useMemo(() => {
-    const config = effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig)
+    const config = withOwnKeys(effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig), keys, SHEETS)
     return { config, controls: controlsFor(config) }
-  }, [ui.configChoice, ui.providerChoice, remoteConfig])
+  }, [ui.configChoice, ui.providerChoice, remoteConfig, keys])
 }

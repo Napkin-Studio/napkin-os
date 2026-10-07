@@ -2,6 +2,7 @@
 // or the deployed /api. Routes and bodies per relay-api.schema.json.
 
 import type { Config, ContractError, InputMime, Job, JobRequest, LogEntry, Output, SessionRequest, SessionResponse, UploadResponse } from '../contracts/types'
+import { OWN_KEYS_HEADER } from '../keys/ownKeys'
 import { sha256Of } from '../lib/hash'
 import { RelayError, type Relay, type UploadResult } from './types'
 
@@ -19,8 +20,11 @@ export class HttpRelay implements Relay {
     this.token = token
   }
 
-  private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {}
+  /** The participant's own keys for POST /jobs (keys/ownKeys.ts); never sent elsewhere. */
+  ownKeys?: () => string | null
+
+  private async call<T>(method: string, path: string, body?: unknown, extra?: Record<string, string>): Promise<T> {
+    const headers: Record<string, string> = { ...extra }
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (this.token) headers.Authorization = `Bearer ${this.token}`
     let res: Response
@@ -62,7 +66,8 @@ export class HttpRelay implements Relay {
   }
 
   createJob(req: JobRequest) {
-    return this.call<Job>('POST', '/jobs', req)
+    const own = this.ownKeys?.()
+    return this.call<Job>('POST', '/jobs', req, own ? { [OWN_KEYS_HEADER]: own } : undefined)
   }
 
   getJob(jobId: string) {

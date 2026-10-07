@@ -135,8 +135,8 @@ class Harness:
                            clock=self.clock, stitch=self.stitched.append, contracts=self.contracts)
 
     # every response is checked against relay-api.schema.json
-    def call(self, method, path, body=None, token=None, expect=None):
-        headers = {"Authorization": f"Bearer {token}"} if token else {}
+    def call(self, method, path, body=None, token=None, expect=None, headers=None):
+        headers = {**({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})}
         raw = json.dumps(body).encode() if body is not None else None
         status, out, ctx = self.relay.http(method, path, headers, raw)
         if status >= 400:
