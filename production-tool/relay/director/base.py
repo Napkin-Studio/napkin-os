@@ -41,6 +41,16 @@ _VIDEO_OPS = {"clip", "clip_edit"}
 _COMPOSITIONS = ["wide", "medium", "close", "medium", "close", "wide", "insert", "medium"]
 _MOVES = ["static", "push_in", "pan", "static", "track", "pull_out", "static", "orbit"]
 _ELEMENT_OPS = {"generate", "frame", "clip"}
+# The camera angle of each turnaround view (director.v4: front 0, three-quarter 45, side 90, back 180).
+VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
+
+
+def view_angle(op: str, inp: dict, sheet: dict | None) -> dict | None:
+    """The angle a view job needs where the provider takes angles (fal's multiple-angles endpoint
+    refuses a view without one); None where it does not (the view is said in words instead)."""
+    if op != "view" or not (sheet or {}).get("angles") or inp.get("view") not in VIEW_ANGLES:
+        return None
+    return {"horizontal": VIEW_ANGLES[inp["view"]], "vertical": 0.0}
 _MAX_ANGLES = 3  # Kling: a front plus 1-3 reference images per element
 
 
@@ -112,6 +122,9 @@ class PassthroughDirector:
         if inp.get("view"):
             prompt = f"{inp['view'].replace('-', ' ')} view of @current. {prompt}".strip()
         job = {"provider": provider, "model": model, "prompt": prompt or "the character", "refs": refs}
+        angle = view_angle(op, inp, sheet)
+        if angle:
+            job["angle"] = angle
         if op == "clip" and inp.get("image"):
             job["firstFrame"] = inp["image"]["sha256"]
         if inp.get("mask"):

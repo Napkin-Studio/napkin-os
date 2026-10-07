@@ -89,3 +89,11 @@ def test_a_key_without_a_front_or_without_other_variants_is_no_element():
 def test_a_view_sends_its_source_as_current():
     sent = _passthrough("view", {"view": "three-quarter", "image": asset(9)}, "fal")
     assert sent == [{"sha256": asset(9)["sha256"], "name": "current", "role": "current"}]
+
+
+def test_a_view_on_fal_carries_the_angle_of_its_view():
+    """fal's multiple-angles endpoint refuses a view without an angle ("view needs an angle", 2026-10-07)."""
+    req = {"jobId": "job_x", "op": "view", "input": {"view": "three-quarter", "image": asset(9)}}
+    job = PassthroughDirector().direct(req, load_sheet("fal"))["providerJob"]
+    assert job["angle"] == {"horizontal": 45.0, "vertical": 0.0}
+    assert "angle" not in PassthroughDirector().direct(req, load_sheet("runway"))["providerJob"]

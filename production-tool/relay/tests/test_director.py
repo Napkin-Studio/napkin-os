@@ -458,3 +458,8 @@ def test_a_ratio_the_model_left_out_is_taken_from_the_request():
 def test_shot_list_names_only_refs_it_was_given():
     assert run("shot_list", make(fixture("shot_list")["reply"])[0]).output["shots"][0]["refs"] == ["hero_front"]
     refuses("not an input ref", "shot_list", lambda r: r["shots"][0].update(refs=["hero_sad"]))
+
+
+def test_a_view_angle_the_model_left_out_is_filled_from_the_view():
+    res = attempt("view_fal", lambda r: r["providerJob"].pop("angle"))
+    assert res.output["providerJob"]["angle"] == {"horizontal": 90.0, "vertical": 0.0}

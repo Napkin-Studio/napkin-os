@@ -23,6 +23,7 @@ from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, IMAGE_OPS
 from providers.tags import UnknownTag, rewrite_tags
 
+from .base import view_angle
 from .model import ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -236,6 +237,11 @@ class Director:
             # 2026-10-07: Haiku sometimes leaves out the ratio it was given ("frame needs a ratio").
             # Take it from the request; the nearest-size mapping below makes it fit the model.
             job["ratio"] = payload["ratio"]
+        if "angle" not in job:
+            # A model that leaves out a view's angle would fail the job on an angle-taking provider.
+            angle = view_angle(op, payload, sheet)
+            if angle:
+                job["angle"] = angle
         _drop_unusable(job, op, sheet)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
