@@ -220,7 +220,8 @@ def test_clip_multi_shot_splits_on_dashes_and_the_durations_add_up(provider, fal
     provider.submit(job(op="clip", prompt="@hero opens the door\n---\n@hero steps out\n---\nwide shot",
                         refs=element_refs(), first_frame=FRAME, duration_s=10))
     body = fal.body()
-    assert "prompt" not in body and "duration" not in body
+    # The top-level duration defaults to "5" on fal, so it says the shots' sum (docs checked 2026-10-07).
+    assert "prompt" not in body and body["duration"] == "10"
     assert body["shot_type"] == "customize"
     assert [(s["prompt"], s["duration"]) for s in body["multi_prompt"]] == [
         ("@Element1 opens the door", "4"), ("@Element1 steps out", "3"), ("wide shot", "3")]
@@ -719,3 +720,26 @@ def test_queue_urls_use_the_base_app_not_the_endpoint_sub_path(provider, fal):
     assert [r.url.path for r in fal.fal_requests[1:]] == ["/fal-ai/kling-image/requests/req1/status", "/fal-ai/kling-image/requests/req1"]
     # An id written before the queue app was kept still polls the right place.
     assert provider._split(f"{KLING_IMAGE}:req1") == (KLING_IMAGE, "fal-ai/kling-image", "req1")
+
+
+def test_kling_image_gets_an_aspect_ratio_from_its_list(provider, fal):
+    """Kling image o3 takes 16:9, 9:16, 1:1, 4:3, 3:4, 3:2, 2:3, 21:9: the canvas's 4:5 becomes 3:4."""
+    provider.submit(job(ratio="4:5"))
+    assert fal.body()["aspect_ratio"] == "3:4"
+    provider.submit(job(ratio="896:1152"))
+    assert fal.body()["aspect_ratio"] == "3:4"
+    provider.submit(job(ratio="9:16"))
+    assert fal.body()["aspect_ratio"] == "9:16"
+
+
+def test_a_clip_with_no_words_still_sends_a_prompt(provider, fal):
+    provider.submit(job(op="clip", prompt="", refs=[], first_frame=FRAME))
+    assert fal.body()["prompt"]
+
+
+def test_a_clip_edit_source_sent_as_video_is_found():
+    """director.schema.json lets the director name the source clip as `video`; adapters look for the
+    `current` ref, so from_director turns one into the other."""
+    from providers.types import ProviderJob as PJ
+    pj = PJ.from_director("clip_edit", {"provider": "fal", "model": "m", "prompt": "x", "video": VIDEO, "refs": []})
+    assert [(r.sha256, r.role) for r in pj.refs] == [(VIDEO, "current")]
