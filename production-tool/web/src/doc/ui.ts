@@ -9,7 +9,9 @@ import type { SessionResponse } from '../contracts/types'
 export type JobPurpose =
   | { for: 'canvas' }
   | { for: 'shot_list'; revId: string }
-  | { for: 'frame'; shotId: string; parentFrameId?: string }
+  /** how: first (frame 1), next (Next frame →), rest (the click on Draw the rest), chain (Draw the rest
+   *  moving on), again (Regenerate or a region edit); older jobs have none. */
+  | { for: 'frame'; shotId: string; parentFrameId?: string; how?: 'first' | 'next' | 'rest' | 'chain' | 'again' }
   | { for: 'clip'; shotId: string; parentTakeId?: string; reviewIds?: string[] }
   | { for: 'stitch' }
 
@@ -33,6 +35,8 @@ export interface UiState {
   /** relayId() of the server that issued `session`. */
   sessionFor?: string
   hintDismissed?: boolean
+  /** "Draw the rest" is under way: each finished frame starts the next shot (jobs/frames.ts). */
+  drawingRest?: boolean
 }
 
 export function initialUi(): UiState {

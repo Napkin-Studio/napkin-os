@@ -243,7 +243,7 @@
         "script": {
           "type": "string",
           "maxLength": 600,
-          "description": "shot_list: the 10-20 s script."
+          "description": "shot_list: the 10-20 s script. frame: the same script, for the setting."
         },
         "targetS": {
           "type": "integer",
@@ -258,6 +258,10 @@
         "previousFrame": {
           "$ref": "common.schema.json#/$defs/assetRef",
           "description": "frame: the previous selected frame, for continuity."
+        },
+        "anchorFrame": {
+          "$ref": "common.schema.json#/$defs/assetRef",
+          "description": "frame: the first storyboard frame, the setting/light/style anchor for every later frame"
         },
         "image": {
           "$ref": "common.schema.json#/$defs/assetRef",

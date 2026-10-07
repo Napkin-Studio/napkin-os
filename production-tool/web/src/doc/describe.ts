@@ -81,7 +81,14 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
       return { action: 'planned shots', rationale: words(input.targetS ? `${input.targetS} s` : undefined, clip(input.script ? `"${input.script}"` : undefined), ids) }
     case 'frame': {
       const again = ctx && 'parentFrameId' in ctx && ctx.parentFrameId
-      return { action: again ? `made a new version of ${shotNo(after, shotId)}'s frame` : `drew the frame for ${shotNo(after, shotId)}`, rationale: words(clip(input.text), again ? `from ${ctx.parentFrameId}` : undefined, ids) }
+      const how = ctx && ctx.for === 'frame' ? ctx.how : undefined
+      const from = words(input.anchorFrame && 'kept the setting of frame 1', input.previousFrame && 'continued from the frame before')
+      if (again) return { action: `made a new version of ${shotNo(after, shotId)}'s frame`, rationale: words(clip(input.text), `from ${ctx.parentFrameId}`, from, ids) }
+      if (how === 'first') return { action: 'drew frame 1', rationale: words('from the character views', ids) }
+      if (how === 'next') return { action: `drew the next frame (${shotNo(after, shotId)})`, rationale: words(clip(input.text), from, ids) }
+      if (how === 'rest') return { action: 'drew the rest', rationale: words(`starting with ${shotNo(after, shotId)}`, from, ids) }
+      if (how === 'chain') return { action: `drew the next frame (${shotNo(after, shotId)})`, rationale: words('drawing the rest', from, ids) }
+      return { action: `drew the frame for ${shotNo(after, shotId)}`, rationale: words(clip(input.text), from, ids) }
     }
     case 'region_edit':
       return { action: `edited part of ${shotNo(after, shotId)}'s frame`, rationale: words(clip(input.text), ids) }
