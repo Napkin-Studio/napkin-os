@@ -1,67 +1,15 @@
 {
   "contractVersion": "1",
   "routing": {
-    "generate": [
-      "fal",
-      "runway"
-    ],
-    "combine": [
-      "fal",
-      "runway"
-    ],
-    "view": [
-      "fal",
-      "runway"
-    ],
-    "shot_list": [],
-    "frame": [
-      "fal",
-      "runway"
-    ],
-    "region_edit": [
-      "fal",
-      "runway"
-    ],
-    "clip": [
-      "fal",
-      "heygen",
-      "runway"
-    ],
-    "clip_edit": [
-      "runway"
-    ],
-    "stitch": []
+    "generate": ["fal", "runway"], "combine": ["fal", "runway"], "view": ["fal", "runway"], "shot_list": [],
+    "frame": ["fal", "runway"], "region_edit": ["fal", "runway"], "clip": ["fal", "heygen", "runway"], "clip_edit": ["runway"], "stitch": []
   },
-  "director": {
-    "promptVersion": "director.v2",
-    "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "shotListModel": "eu.anthropic.claude-sonnet-5-5"
-  },
-  "quotas": {
-    "image": 100000,
-    "video": 100000,
-    "render": 100000
-  },
+  "director": { "promptVersion": "director.v2", "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
+  "quotas": { "image": 40, "video": 6, "render": 3 },
   "inFlightPerParticipant": 2,
-  "jobTimeoutS": {
-    "image": 180,
-    "video": 600
-  },
-  "spend": {
-    "capUsd": 1300,
-    "warnUsd": 1000
-  },
-  "flags": {
-    "storyboard": true,
-    "video": true,
-    "stitch": true,
-    "regionEditFrames": true,
-    "regionEditCanvas": false,
-    "videoRegionEdit": false,
-    "feelEdit": false,
-    "clickSelect": true,
-    "moreOptions": false
-  },
+  "jobTimeoutS": { "image": 180, "video": 600 },
+  "spend": { "capUsd": 1300, "warnUsd": 1000 },
+  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": true, "moreOptions": false },
   "banner": "",
   "eventName": "Napkin Hackathon"
 }
