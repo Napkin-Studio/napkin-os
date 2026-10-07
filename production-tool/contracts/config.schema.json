@@ -61,7 +61,8 @@
         "videoRegionEdit": { "type": "boolean" },
         "feelEdit": { "type": "boolean" },
         "clickSelect": { "type": "boolean" },
-        "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." }
+        "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." },
+        "ownKeys": { "type": "boolean", "description": "Participants may send their own fal and HeyGen keys (X-Own-Keys on POST /jobs). Optional; absent means off." }
       },
       "required": ["storyboard", "video", "stitch", "regionEditFrames", "regionEditCanvas", "videoRegionEdit", "feelEdit", "clickSelect", "moreOptions"],
       "additionalProperties": false
