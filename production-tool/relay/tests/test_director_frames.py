@@ -128,21 +128,49 @@ def test_passthrough_sends_previous_then_anchor_and_one_picture_once():
 # caption box, and every clip made from it kept the card. Dialogue is voice-over: it never reaches
 # the model for a frame or a clip, and the prompt asks for a full-bleed image with no text.
 
-def test_v3_forbids_text_panels_and_drawn_dialogue():
+def test_v3_draws_only_the_scripts_on_screen_text_and_never_a_storyboard_sheet():
+    # Owner decision 2026-10-07: text only when the script asks for it on screen (carried in the
+    # shot's action as On screen: "..."), drawn exactly; spoken lines never; storyboard layout never.
     v3 = (PROMPTS / "director.v3.md").read_text()
     for rule in (
         "one full-bleed cinematic image",
-        "never a storyboard sheet or a panel on a page",
-        "no captions, no subtitles",
-        "no speech or thought bubbles",
+        "Never, in any case, a storyboard sheet or a panel on a page",
+        "no caption boxes, no \"Dialogue:\"",
         "no panel borders or frames-within-frames",
+        "On-screen text only when asked",
+        "Draw exactly that text, spelled and cased exactly as quoted",
+        "When neither asks for text, there is none",
         "Full-bleed cinematic image; no text, captions, subtitles, speech bubbles, borders or panels.",
         "Dialogue is never drawn",
+        "Lines in `input.script` that are spoken are not on-screen text either",
         "No text, captions, subtitles or speech bubbles.",  # clips
         "the region is filled with the scene continuing behind it",  # "remove this card"
-        "it is voice-over, never shown on screen",  # shot_list
+        "write it into that shot's `action` in quotes, exactly as the script spells it: `On screen: \"FACET\"`",
+        "never invent on-screen text",
     ):
         assert rule in v3, rule
+
+
+def test_on_screen_text_in_the_action_is_asked_for_exactly():
+    f = fixture("frame_runway_on_screen")
+    assert f["input"]["shot"]["action"].endswith('On screen: "FACET"')
+    res, asked, _ = direct("frame_runway_on_screen")
+    assert asked["input"]["shot"]["action"] == f["input"]["shot"]["action"]  # the action reaches the model whole
+    prompt = res.output["providerJob"]["prompt"]
+    assert 'The text "FACET" appears exactly as written' in prompt
+    assert prompt.endswith("no other text, no captions, speech bubbles, borders or panels.")
+
+
+def test_the_shot_list_moves_script_supers_into_the_action_and_keeps_spoken_lines_as_dialogue():
+    f = fixture("shot_list_on_screen")
+    wire = FakeWire(f["reply"])
+    d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
+                 prompt_version="director.v3")
+    res = d.run("shot_list", copy.deepcopy(f["input"]))
+    shots = res.output["shots"]
+    assert shots[-1]["action"].endswith('On screen: "FACET"')
+    assert shots[0]["dialogue"] == "Every diamond starts as pressure."
+    assert not any("On screen" in s["action"] for s in shots[:-1])  # nothing invented, spoken lines not on screen
 
 
 def test_a_shot_with_dialogue_never_shows_the_model_its_words():
@@ -153,7 +181,8 @@ def test_a_shot_with_dialogue_never_shows_the_model_its_words():
     assert '"dialogue"' not in wire.calls[0]["turns"][0]["text"]  # (the script may still hold the words; the prompt rules cover it)
     assert asked["input"]["shot"]["action"] == f["input"]["shot"]["action"]  # the rest of the shot goes
     job = res.output["providerJob"]
-    assert job["prompt"].endswith("no text, captions, subtitles, speech bubbles, borders or panels.")
+    # Only dialogue, no On screen text: the prompt forbids all text.
+    assert job["prompt"].endswith("Full-bleed cinematic image; no text, captions, subtitles, speech bubbles, borders or panels.")
     assert "Smooth where it shines" not in job["prompt"]
 
 
