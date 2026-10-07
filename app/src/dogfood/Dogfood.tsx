@@ -11,7 +11,7 @@
 // Nothing renders when the build does not record.
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CONTACT, acknowledge, currentScreen, dogfoodState, feedback, loadDogfood, subscribe } from './recorder'
+import { CONTACT, acknowledge, currentScreen, dogfoodState, feedback, feedbackNote, loadDogfood, subscribe } from './recorder'
 import './Dogfood.css'
 
 function useDogfood() {
@@ -57,22 +57,23 @@ export function DogfoodGate({ children }: { children: ReactNode }) {
   )
 }
 
-/** Thumbs up or down, then an optional note, sent as feedback on `on`. */
+/** Thumbs up or down, recorded when chosen; then an optional note, sent as feedback on `on`. */
 export function Thumbs({ on, extra, compact = false }: { on: string; extra?: Record<string, unknown>; compact?: boolean }) {
   const [thumb, setThumb] = useState<'up' | 'down' | null>(null)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState(false)
   if (sent) return <span className="df-thanks">Thanks</span>
-  const send = () => { if (thumb) { feedback(on, thumb, note, extra); setSent(true) } }
+  const choose = (t: 'up' | 'down') => { if (t !== thumb) { setThumb(t); feedback(on, t, extra) } }
+  const send = () => { if (thumb) { feedbackNote(on, thumb, note, extra); setSent(true) } }
   return (
     <span className={compact ? 'df-thumbs df-thumbs-compact' : 'df-thumbs'}>
-      <button className="df-thumb" aria-pressed={thumb === 'up'} title="This works for me" onClick={() => setThumb('up')}>👍</button>
-      <button className="df-thumb" aria-pressed={thumb === 'down'} title="This does not work for me" onClick={() => setThumb('down')}>👎</button>
+      <button className="df-thumb" data-dogfood="thumb up" aria-pressed={thumb === 'up'} title="This works for me" onClick={() => choose('up')}>👍</button>
+      <button className="df-thumb" data-dogfood="thumb down" aria-pressed={thumb === 'down'} title="This does not work for me" onClick={() => choose('down')}>👎</button>
       {thumb && (
         <span className="df-note">
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Anything to add? (optional)"
             onKeyDown={e => { if (e.key === 'Enter') send() }} autoFocus aria-label="Note" />
-          <button className="ch-btn" onClick={send}>Send</button>
+          <button className="ch-btn" data-dogfood="send feedback note" onClick={send}>Send</button>
         </span>
       )}
     </span>
@@ -87,7 +88,7 @@ export function DogfoodBadge() {
   const where = currentScreen()
   return (
     <span className="df-bar">
-      <button className="df-badge" onClick={() => setOpen(true)} title="This build records what you do. Click to read more.">Beta</button>
+      <button className="df-badge" data-dogfood="beta notice" onClick={() => setOpen(true)} title="This build records what you do. Click to read more.">Beta</button>
       {state.consented && <Thumbs key={`${where.screen}:${where.doc ?? ''}`} on="screen" extra={{ ...where }} compact />}
       {open && <DogfoodNotice onClose={() => setOpen(false)} />}
     </span>

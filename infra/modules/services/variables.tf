@@ -79,6 +79,12 @@ variable "web_dogfood" {
   default     = false
 }
 
+variable "middleware_runlog" {
+  description = "Keep the middleware's per-job run log (sizes, costs; no bodies) on web's EFS under /data/_runlog, where napkin-web serves and purges it (NAPKIN_RUNLOG_DIR; features/dogfood-log-quality.clan). Dogfood environments only."
+  type        = bool
+  default     = false
+}
+
 variable "web_count" {
   description = "Web tasks. One until app-frame tokens are shared between tasks (they live in memory)"
   type        = number

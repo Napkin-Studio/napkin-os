@@ -248,6 +248,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
               <button
                 key={app.app_id}
                 className={['ln-app', isNew(app.app_id) && 'ln-app-new', busy && 'ln-app-busy'].filter(Boolean).join(' ')}
+                data-dogfood={`open app ${app.app_id}`}
                 style={tint(home)}
                 title={home?.line}
                 aria-busy={busy || undefined}
@@ -339,7 +340,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
             const noun = capital(app?.home?.noun?.[0] ?? app?.name ?? '')
             return (
               <div key={d.path} className="ln-row" style={tint(app?.home)}>
-                <button className="ln-item" onClick={() => onOpenDocument(d.path)}>
+                <button className="ln-item" data-dogfood="open document" onClick={() => onOpenDocument(d.path)}>
                   <span className="ln-tile" aria-hidden><Mark app={app} className="ln-tile-mark" /></span>
                   <span className="ln-item-text">
                     <b className={title.untitled ? 'ln-item-untitled' : undefined}>{title.text}</b>
