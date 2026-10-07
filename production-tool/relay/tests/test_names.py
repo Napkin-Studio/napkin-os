@@ -97,3 +97,38 @@ def test_a_view_on_fal_carries_the_angle_of_its_view():
     job = PassthroughDirector().direct(req, load_sheet("fal"))["providerJob"]
     assert job["angle"] == {"horizontal": 45.0, "vertical": 0.0}
     assert "angle" not in PassthroughDirector().direct(req, load_sheet("runway"))["providerJob"]
+
+
+# --- a bare key is the whole character (owner, 2026-10-07; no front = refused, option B) ---
+
+def test_a_bare_key_stands_for_its_front_and_a_shot_key_brings_every_variant():
+    refs = [ref(1, "goremon_front"), ref(2, "goremon_side"), ref(3, "goremon_laughing"), ref(4, "lamp_on", role="prop")]
+    shot = {"action": "@goremon opens @lamp_on, then @goremon_laughing", "refs": ["goremon", "lamp_on"]}
+    out = to_wire("frame", {"text": "keep @goremon's coat", "refs": refs, "shot": shot})
+    assert out["text"] == "keep @goremon_front's coat"
+    assert out["shot"]["action"] == "@goremon_front opens @lamp_on, then @goremon_laughing"
+    assert out["shot"]["refs"] == ["goremon_front", "goremon_side", "goremon_laughing", "lamp_on"]
+
+
+def test_a_bare_key_without_a_front_is_refused_with_what_to_do():
+    with pytest.raises(UnknownName, match="Set a front for goremon first"):
+        to_wire("generate", {"text": "@goremon dances", "refs": [ref(1, "goremon_side")]})
+    with pytest.raises(UnknownName, match="Set a front for goremon first"):
+        to_wire("frame", {"refs": [ref(1, "goremon_side")], "shot": {"action": "x", "refs": ["goremon"]}})
+    with pytest.raises(UnknownName, match="@nobody is not one"):
+        to_wire("generate", {"text": "@nobody", "refs": [ref(1, "goremon_front")]})
+
+
+def test_on_fal_a_bare_key_becomes_the_element():
+    refs = [ref(1, "goremon_front"), ref(2, "goremon_side"), ref(3, "lamp_on", role="prop")]
+    req = {"jobId": "job_x", "op": "generate", "input": to_wire("generate", {"text": "@goremon holds @lamp_on", "refs": refs})}
+    job = PassthroughDirector().direct(req, load_sheet("fal"))["providerJob"]
+    assert [(r["name"], r["role"]) for r in job["refs"]] == [
+        ("goremon_front", "element_front"), ("goremon_side", "element_angle"), ("lamp_on", "object")]
+
+
+def test_the_shot_planner_names_whole_characters_by_their_key():
+    req = {"jobId": "job_x", "op": "shot_list", "input": {"script": "A. B.", "targetS": 10,
+           "refs": [ref(1, "goremon_front"), ref(2, "goremon_side"), ref(3, "lamp_on")]}}
+    shots = PassthroughDirector().direct(req, None)["shots"]
+    assert shots[0]["refs"] == ["goremon", "lamp_on"]

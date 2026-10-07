@@ -5,8 +5,43 @@
 
 import { KEY_RE, VARIANT_RE, type Key, type NamedRef, type ProductionDocument, type RefName, type Variant } from '../contracts/types'
 
-/** `@maya_laughing` in someone's words (not inside a word or an address). */
-export const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}_[a-z0-9][a-z0-9-]{0,31})/g
+/** `@maya_laughing` or a bare `@maya` in someone's words (not inside a word or an address). */
+export const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
+
+/** The views a whole character sends after its front, in this order; then its other variants as named. */
+const VIEW_ORDER = ['three-quarter', 'side', 'back']
+/** A whole character is its front plus up to 3 more pictures (fal's Kling element: 1 + 3). */
+export const KEY_EXTRAS = 3
+
+/** Thrown for a bare key with no front: @goremon needs goremon_front (the owner's choice, 2026-10-07). */
+export class NoFrontError extends Error {
+  readonly key: string
+  constructor(key: string) {
+    super(`Set a front for ${key} first: @${key} stands for the whole character, led by its front.`)
+    this.key = key
+  }
+}
+
+/** The pictures a bare @key sends: its front, then three-quarter, side, back, then the rest as named. */
+export function keyRefs(doc: ProductionDocument, key: Key): NamedRef[] {
+  const mine = doc.refs.filter((r) => r.key === key)
+  const front = mine.find((r) => r.variant === 'front')
+  if (!front) throw new NoFrontError(key)
+  const rank = (r: NamedRef) => (VIEW_ORDER.includes(r.variant) ? VIEW_ORDER.indexOf(r.variant) : VIEW_ORDER.length + mine.indexOf(r))
+  return [front, ...mine.filter((r) => r !== front).sort((a, b) => rank(a) - rank(b)).slice(0, KEY_EXTRAS)]
+}
+
+/** Keys that can be named bare (they have a front). */
+export function wholeKeys(doc: ProductionDocument): Key[] {
+  return doc.keys.map((k) => k.key).filter((k) => doc.refs.some((r) => r.key === k && r.variant === 'front'))
+}
+
+/** The pictures a subject (bare key or key_variant) sends; [] for a name nothing has. */
+export function subjectRefs(doc: ProductionDocument, subject: string): NamedRef[] {
+  if (!subject.includes('_')) return doc.refs.some((r) => r.key === subject) ? keyRefs(doc, subject) : []
+  const r = refByName(doc, subject)
+  return r ? [r] : []
+}
 
 export const nameOf = (r: { key: Key; variant: Variant }): RefName => `${r.key}_${r.variant}`
 
@@ -39,17 +74,26 @@ export function refByName(doc: ProductionDocument, name: RefName): NamedRef | un
   return doc.refs.find((r) => nameOf(r) === name)
 }
 
-/** The named refs someone's words mention, in order, once each; and the names that match nothing. */
+/**
+ * The named refs someone's words mention, in order, once each (a bare @key brings its front and
+ * up to 3 other pictures), and the names that match nothing. A bare key with no front throws.
+ */
 export function mentions(doc: ProductionDocument, text: string): { found: NamedRef[]; unknown: string[] } {
   const found: NamedRef[] = []
   const unknown: string[] = []
+  const add = (r: NamedRef) => { if (!found.includes(r)) found.push(r) }
   for (const m of text.matchAll(MENTION)) {
+    if (!m[1].includes('_')) {
+      if (doc.refs.some((r) => r.key === m[1])) keyRefs(doc, m[1]).forEach(add)
+      else unknown.push(m[1])
+      continue
+    }
     let name = m[1]
     // "@maya_front-on" may be @maya_front followed by "-on": take the longest known name.
     while (!refByName(doc, name) && name.includes('-')) name = name.slice(0, name.lastIndexOf('-'))
     const r = refByName(doc, name)
     if (!r) unknown.push(m[1])
-    else if (!found.includes(r)) found.push(r)
+    else add(r)
   }
   return { found, unknown }
 }

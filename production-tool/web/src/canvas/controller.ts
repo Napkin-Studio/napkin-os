@@ -12,7 +12,7 @@ import type { CustomData, Job, JobInputRef, Key, LibraryEntry, ProductionDocumen
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
-import { nameOf, nameProblem, refByName } from '../lib/names'
+import { mentions, nameOf, nameProblem, refByName } from '../lib/names'
 import { newId } from '../lib/ulid'
 import { updateDoc } from '../doc/store'
 import { markStale } from '../doc/remove'
@@ -303,9 +303,12 @@ export class CanvasController {
     if (characters > limits.characters) {
       throw new Error(`This provider takes at most ${limits.characters} character pictures at once. Leave some out.`)
     }
-    // A name typed in the words must be one of the inputs, so the relay can find it.
-    for (const r of doc.refs) {
-      if (text.includes(`@${nameOf(r)}`) && !refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
+    // A name typed in the words must be one of the inputs, so the relay can find it; a bare
+    // @key brings the whole character (its front and up to 3 more), or says to set a front.
+    const said = mentions(doc, text)
+    if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
+    for (const r of said.found) {
+      if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
     }
 
     const noteIds = plan.notes.map((n) => n.nodeId ?? this.noteId(n.elId))

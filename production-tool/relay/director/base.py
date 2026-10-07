@@ -144,7 +144,10 @@ class PassthroughDirector:
     def _shot_list(self, job_request: dict) -> dict:
         inp = job_request.get("input", {})
         script = (inp.get("script") or inp.get("text") or "").strip()
-        named = [r["name"] for r in inp.get("refs") or [] if r.get("name")][:9]
+        names = [r["name"] for r in inp.get("refs") or [] if r.get("name")]
+        # Whole characters by their bare key (those with a front), then the other keys' pictures.
+        keys = [n.split("_", 1)[0] for n in names if n.endswith("_front")]
+        named = (keys + [n for n in names if n.split("_", 1)[0] not in keys])[:9]
         target = int(inp.get("targetS") or 15)
         n = max(2, min(8, -(-target // 5)))
         sentences = [s.strip() for s in script.replace("!", ".").replace("?", ".").split(".") if s.strip()]

@@ -179,7 +179,8 @@ def test_v4_names_refs_and_limits_each_ref_to_what_it_names():
         "Never add a background scene",
         "do not ask",                                # the UI cannot show needsUser yet
         "`element_front` first",                     # a character key is one Kling element
-        "Use only names from `input.refs`",          # shot_list names only refs that exist
+        "Use only keys and names from `input.refs`", # shot_list names only refs that exist
+        "use its bare key",                           # a whole character by its key
     ):
         assert rule in text, rule
 

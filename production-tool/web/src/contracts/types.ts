@@ -17,6 +17,8 @@ export type Key = string
 export type Variant = string
 /** key_variant, as written after @ (maya_laughing). */
 export type RefName = string
+/** What a script or shot names: a bare key (the whole character) or key_variant (one look). */
+export type Subject = string
 export const KEY_RE = /^[a-z][a-z0-9]{1,23}$/
 export const VARIANT_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
 
@@ -169,8 +171,8 @@ export interface Shot {
   composition: Composition
   action: string
   camera_move: CameraMove
-  /** The named refs the shot shows (maya_front, lamp_on); frames and takes send exactly these. */
-  refs?: RefName[]
+  /** What the shot shows: bare keys for whole characters (goremon), key_variant for a look (goremon_laughing). */
+  refs?: Subject[]
   dialogue?: string
   storyboard_frame?: Sha256
   selected_take?: Id

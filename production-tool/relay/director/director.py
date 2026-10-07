@@ -328,6 +328,8 @@ class Director:
         if len({s["id"] for s in shots}) != len(shots):
             raise DirectorError("shot ids must be unique")
         known = {r["name"] for r in payload.get("refs") or [] if r.get("name")}
+        # A bare key names the whole character, and only a key with a front can be named bare.
+        known |= {n.split("_", 1)[0] for n in known if n.endswith("_front")}
         for s in shots:
             unknown = [n for n in s.get("refs") or [] if n not in known]
             if unknown:

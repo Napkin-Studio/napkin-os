@@ -10,6 +10,10 @@ job, before the director sees it:
   an unnamed input (a node the participant never named) is `in_1`, `in_2`… in input order;
 - `@name` in `text`, `shot.action` and `shot.dialogue` becomes `@tag`, and `shot.refs` becomes the
   tags (frame and clip send exactly the shot's refs);
+- a bare `@key` (`@goremon`) is the whole character: it becomes its front's tag (on fal the front
+  leads the key's Kling element, so the tag stands for the element), and a bare key in `shot.refs`
+  brings the tags of every picture of that key the job carries. A key with no front among the
+  job's refs cannot be named bare (the owner's choice, 2026-10-07): set a front first;
 - a `@name` the job has no ref for is an error the participant can fix, not a silent drop.
 
 shot_list is left alone: its output goes back into the document, which keeps people's names.
@@ -21,8 +25,8 @@ import copy
 import re
 
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
-# A mention: @ then key_variant (common.schema.json#/$defs/refName), not inside a word or an address.
-MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}_[a-z0-9][a-z0-9-]{0,31})")
+# A mention: @ then key_variant (refName) or a bare key, not inside a word or an address.
+MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
 MAX = 16
 
 
@@ -67,9 +71,20 @@ def wire_tags(refs: list[dict]) -> dict[str, str]:
     return out
 
 
+def _front_tag(key: str, by_name: dict[str, str]) -> str:
+    """The tag a bare @key stands for: its front's."""
+    if f"{key}_front" in by_name:
+        return by_name[f"{key}_front"]
+    if any(n.split("_", 1)[0] == key for n in by_name):
+        raise UnknownName(f"Set a front for {key} first: @{key} stands for the whole character, led by its front.")
+    raise UnknownName(f"@{key} is not one of the images this step was given.")
+
+
 def _rewrite(text: str, by_name: dict[str, str]) -> str:
     def sub(m: re.Match) -> str:
         name = m.group(1)
+        if "_" not in name:
+            return "@" + _front_tag(name, by_name)
         # "@maya_front-on" may be @maya_front followed by "-on": take the longest known name.
         while name not in by_name and "-" in name:
             name = name.rsplit("-", 1)[0]
@@ -98,8 +113,14 @@ def to_wire(op: str, payload: dict) -> dict:
         for field in ("action", "dialogue"):
             if shot.get(field):
                 shot[field] = _rewrite(shot[field], by_name)
-        missing = [n for n in shot.get("refs") or [] if n not in by_name]
-        if missing:
-            raise UnknownName(f"The shot names @{missing[0]}, but no image has that name.")
-        shot["refs"] = [by_name[n] for n in shot.get("refs") or []]
+        tags: list[str] = []
+        for n in shot.get("refs") or []:
+            if "_" in n:
+                if n not in by_name:
+                    raise UnknownName(f"The shot names @{n}, but no image has that name.")
+                found = [by_name[n]]
+            else:  # a whole character: its front first, then its other pictures in this job
+                found = [_front_tag(n, by_name)] + [t for m, t in by_name.items() if m.split("_", 1)[0] == n and m != f"{n}_front"]
+            tags += [t for t in found if t not in tags]
+        shot["refs"] = tags
     return out

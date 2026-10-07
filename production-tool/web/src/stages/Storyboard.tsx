@@ -10,7 +10,7 @@ import type { Composition, CameraMove, Ratio, Region, Shot } from '../contracts/
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
 import { allNamed, isRunning, jobAt, ratioAspect } from '../jobs/select'
-import { nameOf, refByName } from '../lib/names'
+import { nameOf, subjectRefs, wholeKeys } from '../lib/names'
 import { continuity, drawFrame, drawTheRest, firstUndrawn, selectFrame, selectedFrame } from '../jobs/frames'
 import { putBlob } from '../lib/blobs'
 import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
@@ -369,11 +369,18 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
 function ShotRefs({ shot, onChange }: { shot: Shot; onChange: (refs: string[]) => void }) {
   const doc = useDoc()
   const names = shot.refs ?? []
-  const free = doc.refs.map(nameOf).filter((n) => !names.includes(n))
+  const free = [...wholeKeys(doc), ...doc.refs.map(nameOf)].filter((n) => !names.includes(n))
+  const problem = (n: string) => {
+    try {
+      return subjectRefs(doc, n).length ? null : 'No image has this name'
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Set a front first'
+    }
+  }
   return (
     <div className="shotrefs">
       {names.map((n) => (
-        <span key={n} className={`taghint ${refByName(doc, n) ? '' : 'missing'}`} title={refByName(doc, n) ? undefined : 'No image has this name'}>
+        <span key={n} className={`taghint ${problem(n) ? 'missing' : n.includes('_') ? '' : 'whole'}`} title={problem(n) ?? (n.includes('_') ? undefined : 'The whole character')}>
           @{n}
           <button className="x" aria-label={`Take @${n} off this shot`} onClick={() => onChange(names.filter((x) => x !== n))}>×</button>
         </span>

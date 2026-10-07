@@ -35,6 +35,10 @@
       "pattern": "^[a-z][a-z0-9]{1,23}_[a-z0-9][a-z0-9-]{0,31}$",
       "description": "key_variant, as the participant writes it after @ (maya_laughing). Unique in a document."
     },
+    "subject": {
+      "anyOf": [{ "$ref": "#/$defs/refName" }, { "$ref": "#/$defs/key" }],
+      "description": "What a script or shot names after @: a bare key (goremon) is the whole character, sent as its front plus up to 3 other variants (three-quarter, side, back, then the rest); key_variant (goremon_laughing) is one look. A key with no front variant cannot be named bare."
+    },
     "refRole": {
       "enum": ["character", "shape", "texture", "colour", "feel", "pose", "prop", "other"],
       "description": "What a key contributes. A character key goes to Runway as subject human and to fal as one Kling element (its front plus up to 3 other variants); every other role goes as an object/image ref."

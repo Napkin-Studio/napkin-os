@@ -1,7 +1,7 @@
 // Finding the job that belongs at a spot in the UI (pending or failed).
 
 import type { JobInputRef, NamedRef, ProductionDocument, Ratio, Shot } from '../contracts/types'
-import { mentions, nameOf, refByName } from '../lib/names'
+import { mentions, nameOf, subjectRefs } from '../lib/names'
 import type { JobCtx, UiState } from '../doc/ui'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
@@ -36,9 +36,9 @@ export async function namedInput(relay: Relay, doc: ProductionDocument, r: Named
 export async function shotRefs(relay: Relay, doc: ProductionDocument, shot: Shot): Promise<JobInputRef[]> {
   const out: JobInputRef[] = []
   for (const name of shot.refs ?? []) {
-    const r = refByName(doc, name)
-    if (!r) throw new Error(`Shot ${shot.order} uses @${name}, but no image has that name. Name one on the canvas, or change the shot.`)
-    out.push(await namedInput(relay, doc, r))
+    const found = subjectRefs(doc, name) // a bare key: its front and up to 3 more (throws with no front)
+    if (!found.length) throw new Error(`Shot ${shot.order} uses @${name}, but no image has that name. Name one on the canvas, or change the shot.`)
+    for (const r of found) if (!out.some((x) => x.id === r.id)) out.push(await namedInput(relay, doc, r))
   }
   return out
 }

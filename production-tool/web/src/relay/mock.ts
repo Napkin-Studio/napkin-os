@@ -67,8 +67,11 @@ function collectHashes(v: unknown, out: Set<string>) {
 const COMPOSITIONS: Shot['composition'][] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
 const MOVES: Shot['camera_move'][] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
 /** The mock director: split the script into sentences, one shot each, seconds summing to the target;
- * each shot shows every named ref it was given (the real director picks the variant per shot). */
+ * each shot shows every character it was given, by its bare key when it has a front (the real
+ * director picks a variant only when the moment needs one). */
 export function mockShotList(script: string, targetS: number, names: string[] = []): Shot[] {
+  const keys = names.filter((n) => n.endsWith('_front')).map((n) => n.split('_')[0])
+  names = [...keys, ...names.filter((n) => !keys.includes(n.split('_')[0]))]
   const durations = splitTarget(targetS)
   const sentences = script.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean)
   return durations.map((d, i) => ({

@@ -19,7 +19,7 @@ import { updateDoc } from '../doc/store'
 import { sweep, unused } from '../doc/gc'
 import { isActive } from '../jobs/runner'
 import { deleteBlob } from '../lib/blobs'
-import { cleanKey, cleanVariant, nameOf, nameProblem, refByName } from '../lib/names'
+import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
 import { useBlobUrl, useColorScheme, useFloating } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
@@ -493,8 +493,9 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
       </div>
       {doc.refs.length > 0 && (
         <>
-          <div className="faint" style={{ fontSize: 12.5 }}>Tap a name to use it in your words.</div>
+          <div className="faint" style={{ fontSize: 12.5 }}>Tap a name to use it in your words. A bare name is the whole character.</div>
           <div className="taghints">
+            {wholeKeys(doc).map((k) => <button key={k} className="taghint whole" title={`${k}: its front and other views`} onClick={() => insert(k)}>@{k}</button>)}
             {doc.refs.map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
           </div>
         </>
