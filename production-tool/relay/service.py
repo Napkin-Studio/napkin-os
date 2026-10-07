@@ -548,8 +548,11 @@ class Relay:
             if job["state"] != "queued":
                 return self._with_poll(job)
         if not [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]:
-            return self._fail(job, "provider_unavailable", "No provider could take this job. Try again.",
-                              retryable=True, paid=False, refund=True)
+            message = "No provider could take this job. Try again."
+            if self._is_own(job):
+                names = " or ".join(own_keys.NAMES[p] for p in job["_own"])
+                message = f"Your {names} account could not take this step. Try again, or remove your key to use the event's providers."
+            return self._fail(job, "provider_unavailable", message, retryable=True, paid=False, refund=True)
         return self._with_poll({**job, "queuePosition": 0})
 
     def _submit(self, job: dict, cfg: dict, provider: str, slot: str) -> dict | None:

@@ -101,6 +101,7 @@ def test_busy_own_providers_never_fall_back_to_the_event_key():
     fakes.one("heygen", HEYGEN_KEY).submit_effect = ProviderError("provider_unavailable", "busy", retryable=True)
     job = post(h, token, "clip", headers=keys(heygen=HEYGEN_KEY))
     assert job["state"] == "failed" and job["error"]["code"] == "provider_unavailable"
+    assert job["error"]["message"].startswith("Your HeyGen account could not take this step.")
     assert not h.providers["runway"].submits
 
 
