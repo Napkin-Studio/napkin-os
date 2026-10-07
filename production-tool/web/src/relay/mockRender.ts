@@ -321,7 +321,9 @@ async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutp
     const blob = await input(c.asset.sha256)
     if (!blob) continue
     const v = await loadVideo(blob)
-    clips.push({ v, dur: Number.isFinite(v.duration) && v.duration > 0 ? v.duration : CLIP_MAX_S })
+    const full = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : CLIP_MAX_S
+    // Like the real stitch (stitch.py): each clip is cut to its shot's length (trimS).
+    clips.push({ v, dur: c.trimS ? Math.min(full, c.trimS) : full })
   }
   const total = clips.reduce((s, c) => s + c.dur, 0) + 1
   let current = -1

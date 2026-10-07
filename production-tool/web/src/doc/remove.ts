@@ -11,6 +11,8 @@ import type { DocJob, ProductionDocument, StaleMark, Target, View, ViewPick } fr
 import { describeRemoval, viewLabel } from './describe'
 import { createMergePatch, deepEqual } from './mergePatch'
 import type { DocumentStore } from './types'
+import { markNextStale, selectedFrame } from '../jobs/frames'
+import { refreshClipStale } from '../jobs/stale'
 
 type Doc = ProductionDocument
 export type ListName = 'shots' | 'frames' | 'takes' | 'reviews' | 'stale'
@@ -84,11 +86,23 @@ function takeOutAbout(d: Doc, r: Removal, kind: Target['kind'], ids: Set<string>
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
+/** Re-check out-of-date marks after a delete (jobs/stale.ts), remembering what changed so Undo puts it back. */
+function restale(d: Doc, r: Removal, check: (d: Doc) => void) {
+  const before = structuredClone(d.stale ?? [])
+  check(d)
+  const after = d.stale ?? []
+  before.forEach((m, index) => {
+    if (!after.some((x) => deepEqual(x, m))) r.removed.push({ list: 'stale', index, value: m })
+  })
+  for (const m of after) if (!before.some((x) => deepEqual(x, m))) r.staleAdded.push(m)
+}
+
 /** A shot, with its frames, clips and the notes on them. The rest renumber. */
 export function removeShot(d: Doc, shotId: string): Removal {
   const shot = (d.shots ?? []).find((s) => s.id === shotId)
   if (!shot) throw new Error('That shot is already gone.')
   const r = blank('shot', shotId, `shot ${shot.order}`)
+  const at = (d.shots ?? []).indexOf(shot)
   const frameIds = new Set((d.frames ?? []).filter((f) => f.shot_id === shotId).map((f) => f.id))
   const takeIds = new Set((d.takes ?? []).filter((t) => t.shot_id === shotId).map((t) => t.id))
   takeOut(d, r, 'shots', (x: { id: string }) => x.id === shotId)
@@ -100,6 +114,15 @@ export function removeShot(d: Doc, shotId: string): Removal {
   ;(d.shots ?? []).forEach((s, i) => {
     if (s.order !== i + 1) modify(r, 'shots', s, (x) => { x.order = i + 1 })
   })
+  // The shot after it now follows another frame (the shot before it, or, when shot 1 went, a new
+  // shot 1 that sets the scene), so its frame is out of date. Drawn again, the mark goes with the old version.
+  const follower = (d.shots ?? [])[Math.max(at, 1)]
+  const followerFrame = follower && frameIds.size ? selectedFrame(d, follower.id) : undefined
+  if (followerFrame) {
+    const mark: StaleMark = { target: { kind: 'frame', id: followerFrame.id }, caused_by: { kind: 'shot', id: shotId }, reason: `Shot ${shot.order} was deleted`, marked_at: new Date().toISOString() }
+    d.stale = [...(d.stale ?? []), mark]
+    r.staleAdded.push(mark)
+  }
   r.note = `with ${plural(frameIds.size, 'frame')} and ${plural(takeIds.size, 'clip')}`
   r.ids = [shotId, ...frameIds, ...takeIds]
   return r
@@ -126,6 +149,7 @@ export function removeFrame(d: Doc, frameId: string): Removal {
     if (shot) modify(r, 'shots', shot, (x) => { x.storyboard_frame = next.asset })
   }
   takeOutAbout(d, r, 'frame', new Set([frameId]))
+  if (frame.selected) restale(d, r, (x) => { markNextStale(x, frame.shot_id); refreshClipStale(x, frame.shot_id) })
   r.ids = [frame.shot_id, frameId, frame.job_id]
   return r
 }
@@ -150,6 +174,7 @@ export function removeTake(d: Doc, takeId: string): Removal {
     if (shot) modify(r, 'shots', shot, (x) => { x.selected_take = next.id })
   }
   takeOutAbout(d, r, 'take', new Set([takeId]))
+  if (take.selected) restale(d, r, (x) => refreshClipStale(x, take.shot_id))
   r.ids = [take.shot_id, takeId, take.job_id]
   return r
 }

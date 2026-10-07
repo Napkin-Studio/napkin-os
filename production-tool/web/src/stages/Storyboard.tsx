@@ -22,6 +22,7 @@ import { updateDoc } from '../doc/store'
 import { deleteFrom, removeFrame, removeShot, restoreTo, shotDeleteText } from '../doc/remove'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
+import { UpdateFollows } from '../ui/Follow'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -245,6 +246,8 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const [undo, offerUndo, runUndo] = useUndo()
   const region = current ? ui.frameRegions[current.id] : undefined
   const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
+  // This frame made something after it out of date (the next frame, or this shot's clip).
+  const madeStale = !!current && (doc.stale ?? []).some((s) => s.caused_by.kind === 'frame' && s.caused_by.id === current.id)
   const prevShot = index > 0 ? (doc.shots ?? [])[index - 1] : undefined
   const prevDrawn = !prevShot || !!selectedFrame(doc, prevShot.id)
   const nextShot = (doc.shots ?? [])[index + 1]
@@ -350,6 +353,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             <div className="row">
               {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
               <span className="spacer" />
+              {madeStale && <UpdateFollows size="xs" progress={false} />}
               {onNext && nextEmpty && !ui.drawingRest && (
                 <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>
               )}

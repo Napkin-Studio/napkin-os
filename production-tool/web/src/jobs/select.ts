@@ -1,6 +1,6 @@
 // Finding the job that belongs at a spot in the UI (pending or failed).
 
-import type { JobInput, ProductionDocument, Ratio, View } from '../contracts/types'
+import type { JobInput, ProductionDocument, Ratio, Shot, View } from '../contracts/types'
 import type { JobCtx, UiState } from '../doc/ui'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
@@ -38,4 +38,15 @@ export async function characterInput(relay: Relay, doc: ProductionDocument): Pro
 export function ratioAspect(r: Ratio): number {
   const [a, b] = r.split(':').map(Number)
   return a / b
+}
+
+/**
+ * The shot as a frame or clip job sees it. A shot's `dialogue` is voice-over: it
+ * stays in the document and the shot list, but never goes to a frame or a clip,
+ * because a model that is told the words draws them (decided 2026-10-07, the
+ * FACET ad: a "Dialogue – …" caption box in shot 4's frame and every clip from it).
+ */
+export function jobShot(shot: Shot): Shot {
+  const { dialogue: _voiceOver, ...rest } = shot
+  return rest
 }

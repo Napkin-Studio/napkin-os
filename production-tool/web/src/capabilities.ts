@@ -32,6 +32,9 @@ export interface Controls {
   video: boolean
   /** Comments that change a region of a clip (sheet.video.regionEdit on clip_edit). */
   videoRegionEdit: boolean
+  /** A box on the paused clip, fixed in the shot's storyboard frame and the clip made again
+   *  (jobs/fix.ts). Needs frame region edits only, not video region support. */
+  fixInShot: boolean
   /** The "change the feel" box (sheet.video.feelEdit on clip_edit). */
   feelEdit: boolean
   /** The Adhere / Flex / Reimagine control (feelEdit === 'strength'). */
@@ -82,6 +85,7 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
     clickSelect: regionEditFrames && f.clickSelect && regionEdit!.segment,
     video,
     videoRegionEdit: video && f.videoRegionEdit && !!clipEdit && clipEdit.video.regionEdit !== 'none',
+    fixInShot: video && regionEditFrames,
     feelEdit,
     feelStrength: feelEdit && clipEdit!.video.feelEdit === 'strength',
     // stitch and shot_list run inside the relay (ffmpeg Lambda, director), not at a

@@ -67,6 +67,18 @@ describe('capability gating', () => {
     expect(c.generate && c.combine && c.views && c.storyboard && c.video && c.stitch).toBe(true)
   })
 
+  it('Fix it in the shot shows with the event flags on every provider, whatever its video region support', () => {
+    // Decided 2026-10-07: the box on the paused clip edits the storyboard frame, not the video,
+    // so it is gated on frame region edits (regionEditFrames), not on videoRegionEdit.
+    for (const p of ['mock', 'runway', 'fal', 'heygen'] as const) {
+      const c = controlsFor(effectiveConfig('event', p))
+      expect(c.videoRegionEdit).toBe(false)
+      expect(c.fixInShot, p).toBe(true)
+    }
+    const off = { ...CONFIGS.event, flags: { ...CONFIGS.event.flags, regionEditFrames: false } }
+    expect(controlsFor(off).fixInShot).toBe(false)
+  })
+
   it('reads only the first routed provider', () => {
     const cfg = { ...CONFIGS.event, routing: { ...CONFIGS.event.routing, region_edit: ['runway' as const, 'fal' as const] } }
     expect(controlsFor(cfg).maskBrush).toBe(false)

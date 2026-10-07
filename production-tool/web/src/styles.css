@@ -352,3 +352,9 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .topmenu .menu .btn { justify-content: flex-start; width: 100%; }
 .startover { display: flex; justify-content: center; padding: 10px 16px; }
 .startover .confirm { max-width: 560px; }
+
+/* Update what follows (ui/Follow.tsx) */
+.follow { gap: 6px; display: inline-flex; align-items: center; flex-wrap: wrap; }
+.follow .confirm { max-width: 340px; }
+.follow .confirm { border-color: var(--line, var(--create)); }
+.topbar-right .follow .confirm { position: absolute; right: 16px; top: 52px; z-index: 30; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.12); }

@@ -15,6 +15,7 @@ import { CLAN_DB } from './doc/clan'
 import { relayId } from './relay'
 import { startOver, START_OVER_TEXT } from './app/startOver'
 import { InlineConfirm } from './ui/Undo'
+import { UpdateFollows } from './ui/Follow'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Character' },
@@ -111,6 +112,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
         ))}
       </nav>
       <div className="topbar-right">
+        {stage !== 'character' && <UpdateFollows />}
         <span className={`jobchip ${active.length ? 'busy' : ''}`} aria-live="polite">
           <span className="dot" />
           {active.length ? `${running} running · ${queued} queued` : 'Nothing running'}
