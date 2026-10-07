@@ -37,6 +37,9 @@ from service import Relay
 from store import MemoryStore
 
 HERE = Path(__file__).resolve().parent
+# Every header the web app sends. The browser preflights each one; a header missing here drops
+# the request before it leaves the browser (2026-10-07: X-Own-Keys on POST /jobs).
+CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys"
 log = logging.getLogger("relay.local")
 
 
@@ -135,7 +138,7 @@ def serve(port: int, data_dir: Path) -> None:
         def _cors(self):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Clan-Reason")
+            self.send_header("Access-Control-Allow-Headers", CORS_ALLOW_HEADERS)
 
         def _send(self, status: int, body: bytes = b"", ctype: str = "application/json", head=False):
             self.send_response(status)
