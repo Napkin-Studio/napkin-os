@@ -54,16 +54,19 @@ describe('the UI on the CLAN store', () => {
     await s.create({ participant: maya })
     const refId = newId('ref')
 
-    // A picture comes in (bookkeeping), then the canvas syncs its refs (an entry).
+    // A picture comes in (bookkeeping), then the participant names it (an entry).
     void updateDoc(s, (d) => { d.assets.push({ sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: ['idb://sha256/' + 'a'.repeat(64)] }) }, 'add picture')
-    void updateDoc(s, (d) => { d.character.refs.push({ id: refId, asset: SHA('a'), tag: 'ref_a', role: 'other', kind: 'picture' }) }, 'sync refs')
+    void updateDoc(s, (d) => {
+      d.keys.push({ key: 'maya', role: 'character' })
+      d.refs.push({ id: refId, key: 'maya', variant: 'eyes', asset: SHA('a'), node: newId('node') })
+    }, 'name')
     // Two writes in a row both see the one before (the memory copy is current).
-    expect(s.get().character.refs).toHaveLength(1)
+    expect(s.get().refs).toHaveLength(1)
     expect(s.get().assets).toHaveLength(1)
 
     // Generate: the runner writes the job at submit.
     const job = generateJob()
-    ctx[job.id] = { for: 'canvas', request: { contractVersion: '1', jobId: job.id, op: 'generate', parentIds: [], input: { refs: [{ id: refId, tag: 'ref_a', role: 'other', asset: { sha256: SHA('a'), url: 'https://x.invalid/a', mime: 'image/png' } }] } } as JobRequest }
+    ctx[job.id] = { for: 'canvas', request: { contractVersion: '2', jobId: job.id, op: 'generate', parentIds: [], input: { refs: [{ id: refId, name: 'maya_eyes', role: 'character', kind: 'picture', asset: { sha256: SHA('a'), url: 'https://x.invalid/a', mime: 'image/png' } }] } } as JobRequest }
     void updateDoc(s, (d) => { d.jobs.push(job) }, 'submit generate')
     // Polls: bookkeeping.
     void updateDoc(s, (d) => { d.jobs[0].state = 'submitted' })
@@ -74,23 +77,23 @@ describe('the UI on the CLAN store', () => {
       Object.assign(d.jobs[0], {
         state: 'completed', outputs: [SHA('b')], provider: 'runway', model: 'gen4_image', updated_at: '2026-10-07T10:40:41Z',
         cost: { estimate: 0.08, confirmed: 0.07, currency: 'USD', unknown: false },
-        agent: { model: 'claude-sonnet-4-5', promptVersion: 'director.v1', rationale: 'The sketch sets the pose.', output: { op: 'generate', providerJob: { provider: 'runway', prompt: '@ref_a, front view', refs: [{ sha256: SHA('a'), name: 'ref_a', role: 'character' }] }, needsUser: null, rationale: 'x', confidence: 0.9 } },
+        agent: { model: 'claude-sonnet-4-5', promptVersion: 'director.v1', rationale: 'The sketch sets the pose.', output: { op: 'generate', providerJob: { provider: 'runway', prompt: '@maya_eyes, front view', refs: [{ sha256: SHA('a'), name: 'maya_eyes', role: 'character' }] }, needsUser: null, rationale: 'x', confidence: 0.9 } },
       })
     }, 'complete generate')
-    void updateDoc(s, (d) => { d.character.views.front = { asset: SHA('b'), job_id: job.id, picked_at: '2026-10-07T10:41:00Z' } }, 'pick front')
-    void updateDoc(s, (d) => { d.character.locked = true; d.character.locked_at = '2026-10-07T10:42:00Z'; d.stage = { current: 'storyboard' } }, 'lock character')
+    void updateDoc(s, (d) => { d.refs.push({ id: newId('ref'), key: 'maya', variant: 'front', asset: SHA('b'), node: job.id }) }, 'name')
+    void updateDoc(s, (d) => { d.keys[0].library = { workspace: 'acme', ver: 1, by: 'maya', at: '2026-10-07T10:42:00Z' } }, 'publish')
+    void updateDoc(s, (d) => { d.stage = { current: 'storyboard' } }, 'stage')
 
     const chain = await s.chain()
     const mine = chain.filter((e) => e.agent === 'maya').map((e) => e.action)
-    expect(mine).toEqual(['locked the character', 'picked as Front', 'generated a front view', 'added a picture as @ref_a', 'started the document'])
-    const gen = chain.find((e) => e.action === 'generated a front view')!
-    expect(gen.rationale).toContain('from @ref_a')
+    expect(mine).toEqual(['published maya to the acme library', 'named @maya_front', 'generated from 1 input', 'named @maya_eyes', 'started the document'])
+    const gen = chain.find((e) => e.action === 'generated from 1 input')!
+    expect(gen.rationale).toContain('from @maya_eyes')
     expect(gen.rationale).toContain(job.id)
-    expect(chain.find((e) => e.action === 'locked the character')!.pinned).toBe(true)
 
     const director = chain.find((e) => e.agent === 'director · claude-sonnet-4-5 · director.v1')!
     expect(director.action).toBe(`directed generate ${job.id}`)
-    expect(director.rationale).toContain('prompt: "@ref_a, front view"')
+    expect(director.rationale).toContain('prompt: "@maya_eyes, front view"')
     const provider = chain.find((e) => e.agent === 'runway · gen4_image')!
     expect(provider.action).toBe(`made generate ${job.id}`)
     expect(provider.rationale).toContain('cost $0.07 confirmed')
@@ -116,7 +119,7 @@ describe('the UI on the CLAN store', () => {
       const file = join(tmp, 'maya.clan')
       writeFileSync(file, await s.exportClan())
       const read = execFileSync(process.env.CLAN_BIN || 'clan', ['--quiet', 'read', 'chain', file], { encoding: 'utf8' })
-      expect(read).toContain('picked as Front')
+      expect(read).toContain('named @maya_front')
       expect(read).toContain('director · claude-sonnet-4-5 · director.v1')
       expect(read).toContain('runway · gen4_image')
       const ok = execFileSync(process.env.CLAN_BIN || 'clan', ['--quiet', 'validate', '--strict', file], { encoding: 'utf8' })
@@ -127,7 +130,7 @@ describe('the UI on the CLAN store', () => {
   it('typing into a shot folds into one entry', async () => {
     const s = make()
     await s.create({ participant: maya })
-    const shot = { id: newId('shot'), order: 1, duration_s: 5, composition: 'medium' as const, action: '', camera_move: 'static' as const, lead_view: 'front' as const, status: 'planned' as const }
+    const shot = { id: newId('shot'), order: 1, duration_s: 5, composition: 'medium' as const, action: '', camera_move: 'static' as const, refs: [], status: 'planned' as const }
     void updateDoc(s, (d) => { d.shots = [shot, { ...shot, id: newId('shot'), order: 2 }] }, 'add shot')
     for (const text of ['A', 'A m', 'A ma', 'A man runs']) void updateDoc(s, (d) => { d.shots![0].action = text }, 'edit shot')
     const chain = await s.chain()
@@ -168,14 +171,35 @@ describe('describeWrite', () => {
     for (const a of ['edit', 'stage', 'add picture', 'complete generate', 'frame', 'take', 'shot list']) expect(describeWrite(a, d, d)).toBeNull()
   })
 
-  it('names refs added, retagged, re-roled and deleted', () => {
+  it('names names given, moved, renamed, re-roled and taken off', () => {
     const a = emptyDocument(maya)
     const b = structuredClone(a)
-    b.character.refs.push({ id: 'ref_01K6XA7Q3M9V2D4R8T0B000001', asset: SHA('a'), tag: 'eyes', role: 'other', kind: 'sketch' })
-    expect(describeWrite('sync refs', a, b)!.action).toBe('added a drawing as @eyes')
+    b.keys.push({ key: 'maya', role: 'character' })
+    b.refs.push({ id: 'ref_01K6XA7Q3M9V2D4R8T0B000001', key: 'maya', variant: 'eyes', asset: SHA('a') })
+    expect(describeWrite('name', a, b)!.action).toBe('named @maya_eyes')
     const c = structuredClone(b)
-    c.character.refs[0].role = 'shape'
-    expect(describeWrite('sync refs', b, c)!.action).toBe('set @eyes as shape')
-    expect(describeWrite('sync refs', c, a)!.action).toBe('deleted ref @eyes')
+    c.refs[0].variant = 'laughing'
+    expect(describeWrite('name', b, c)!.action).toBe('renamed @maya_eyes to @maya_laughing')
+    const d = structuredClone(c)
+    d.refs[0].asset = SHA('b')
+    expect(describeWrite('name', c, d)!.action).toBe('@maya_laughing now shows another image')
+    const e = structuredClone(d)
+    e.keys[0].role = 'prop'
+    expect(describeWrite('name', d, e)!.action).toBe('set maya as prop')
+    expect(describeWrite('name', e, a)!.action).toBe('took the name @maya_laughing off')
+  })
+
+  it('names a clean-up and an import', () => {
+    const a = emptyDocument(maya)
+    a.assets.push({ sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: [] }, { sha256: SHA('b'), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: [] })
+    const b = structuredClone(a)
+    b.assets = b.assets.slice(1)
+    expect(describeWrite('clean up', a, b)!.action).toBe('cleaned up 1 unused picture')
+    const c = structuredClone(a)
+    c.keys.push({ key: 'lamp', role: 'prop', library: { workspace: 'acme', ver: 3, by: 'cat', at: '2026-10-07T10:00:00Z' } })
+    c.refs.push({ id: 'ref_01K6XA7Q3M9V2D4R8T0B000002', key: 'lamp', variant: 'on', asset: SHA('a') })
+    const said = describeWrite('import', a, c)!
+    expect(said.action).toBe('imported lamp from the library')
+    expect(said.rationale).toContain('version 3 by @cat')
   })
 })

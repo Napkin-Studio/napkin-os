@@ -1,6 +1,7 @@
 // Finding the job that belongs at a spot in the UI (pending or failed).
 
-import type { JobInput, ProductionDocument, Ratio, View } from '../contracts/types'
+import type { JobInputRef, NamedRef, ProductionDocument, Ratio, Shot } from '../contracts/types'
+import { mentions, nameOf, refByName } from '../lib/names'
 import type { JobCtx, UiState } from '../doc/ui'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
@@ -23,15 +24,38 @@ export function isRunning(doc: ProductionDocument, jobId: string | undefined): b
   return !!j && isActive(j.state)
 }
 
-/** The locked character views as AssetRefs (front is required). */
-export async function characterInput(relay: Relay, doc: ProductionDocument): Promise<NonNullable<JobInput['character']>> {
-  const v = doc.character.views
-  if (!v.front) throw new Error('Pick a Front view on the Character stage first.')
-  const out: NonNullable<JobInput['character']> = { front: await assetRef(relay, v.front.asset) }
-  for (const k of ['three_quarter', 'side', 'back', 'side_2'] as Exclude<View, 'front'>[]) {
-    const p = v[k]
-    if (p) out[k] = await assetRef(relay, p.asset)
+/** A named ref as a job input. The role is its key's; the relay makes the wire tag. */
+export async function namedInput(relay: Relay, doc: ProductionDocument, r: NamedRef): Promise<JobInputRef> {
+  const role = doc.keys.find((k) => k.key === r.key)?.role ?? 'other'
+  const origin = doc.assets.find((a) => a.sha256 === r.asset)?.origin
+  const kind = origin === 'drawn' ? 'drawing' : origin === 'generated' || origin === 'mock' ? 'generated' : 'picture'
+  return { id: r.id, name: nameOf(r), role, kind, asset: await assetRef(relay, r.asset) }
+}
+
+/** The refs a shot names, as job inputs. A name with no image is an error the participant can fix. */
+export async function shotRefs(relay: Relay, doc: ProductionDocument, shot: Shot): Promise<JobInputRef[]> {
+  const out: JobInputRef[] = []
+  for (const name of shot.refs ?? []) {
+    const r = refByName(doc, name)
+    if (!r) throw new Error(`Shot ${shot.order} uses @${name}, but no image has that name. Name one on the canvas, or change the shot.`)
+    out.push(await namedInput(relay, doc, r))
   }
+  return out
+}
+
+/** A shot's refs plus any name written in the participant's words (the relay must have each one). */
+export async function refsFor(relay: Relay, doc: ProductionDocument, shot: Shot, text?: string): Promise<JobInputRef[]> {
+  const refs = await shotRefs(relay, doc, shot)
+  for (const r of mentions(doc, text ?? '').found) {
+    if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(relay, doc, r))
+  }
+  return refs
+}
+
+/** Every named ref, for the shot list: the director picks the names each shot shows. */
+export async function allNamed(relay: Relay, doc: ProductionDocument): Promise<JobInputRef[]> {
+  const out: JobInputRef[] = []
+  for (const r of doc.refs.slice(0, 14)) out.push(await namedInput(relay, doc, r))
   return out
 }
 

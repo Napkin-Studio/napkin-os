@@ -2,12 +2,16 @@
 // decision chain, through napkin-wasm) when it loads; the JSON snapshot store
 // only when the wasm cannot load, with a visible "Saving without history".
 
+import { CANVAS_KEY } from '../canvas/keys'
 import type { ProductionDocument } from '../contracts/types'
-import { idbGet } from '../lib/idb'
+import { idbDelete, idbGet } from '../lib/idb'
 import { ClanBackedStore } from './clan'
 import type { JobCtxOf } from './describe'
 import { emptyDocument, idbPersister, normaliseDocument, SnapshotDocumentStore } from './store'
 import type { DocumentStore } from './types'
+
+/** The contract this build reads. A document from an older one starts fresh (no compatibility, 2026-10-07). */
+const CURRENT = '2'
 
 export const NO_HISTORY = 'Saving without history: the .clan engine did not load in this browser, so your work is kept as plain data.'
 
@@ -26,16 +30,22 @@ export async function openDocument(
   const earlier = async () => {
     try {
       const v = await idbGet<ProductionDocument>('kv', 'doc')
-      return v ? normaliseDocument(v) : undefined
+      return v && v.contract_version === CURRENT ? normaliseDocument(v) : undefined
     } catch {
       return undefined
     }
   }
   const tryClan = async () => {
     const clan = make()
-    if (!(await clan.load())) {
+    const loaded = await clan.load()
+    if (loaded && loaded.contract_version !== CURRENT) {
+      // Made by an older build: its canvas and data do not fit this one. The organisers
+      // already have its .clan (mirrored on every lock and every five minutes).
+      await clan.create({ participant })
+      await idbDelete('kv', CANVAS_KEY).catch(() => undefined)
+    } else if (!loaded) {
       const old = await earlier()
-      if (old && (old.jobs.length || old.assets.length || old.character.refs.length)) await clan.adopt(old)
+      if (old && (old.jobs.length || old.assets.length || old.refs.length)) await clan.adopt(old)
       else await clan.create({ participant })
     }
     return clan
@@ -52,7 +62,11 @@ export async function openDocument(
   } catch (e) {
     console.error('the CLAN store did not open; saving without history', e)
     const doc = new SnapshotDocumentStore(emptyDocument(), idbPersister<ProductionDocument>('doc'))
-    if (!(await doc.load())) await doc.create({ participant })
+    const loaded = await doc.load()
+    if (!loaded || loaded.contract_version !== CURRENT) {
+      await doc.create({ participant })
+      if (loaded) await idbDelete('kv', CANVAS_KEY).catch(() => undefined)
+    }
     return { doc, clan: null, storeNote: NO_HISTORY }
   }
 }

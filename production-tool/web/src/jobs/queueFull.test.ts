@@ -7,7 +7,7 @@ describe('a job refused because too many are running', () => {
   it('waits and sends the same request again instead of failing', async () => {
     vi.useFakeTimers()
     let calls = 0
-    const ok = { contractVersion: '1', state: 'submitted', op: 'view', quotaClass: 'image', inputHashes: [], cost: { currency: 'USD', unknown: true }, createdAt: '', updatedAt: '', participantId: 'p_x', nextPollS: 600 }
+    const ok = { contractVersion: '2', state: 'submitted', op: 'view', quotaClass: 'image', inputHashes: [], cost: { currency: 'USD', unknown: true }, createdAt: '', updatedAt: '', participantId: 'p_x', nextPollS: 600 }
     const relay = {
       kind: 'http',
       createJob: vi.fn(async (req: { jobId: string }) => {

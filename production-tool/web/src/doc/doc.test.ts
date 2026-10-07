@@ -11,7 +11,7 @@ const SHA = (c: string) => `sha256:${c.repeat(64)}`
 
 function job(partial: Partial<Job>): Job {
   return {
-    contractVersion: '1', jobId: newId('job'), participantId: 'p_test01', op: 'frame', quotaClass: 'image', state: 'completed',
+    contractVersion: '2', jobId: newId('job'), participantId: 'p_test01', op: 'frame', quotaClass: 'image', state: 'completed',
     inputHashes: [], cost: { currency: 'USD', unknown: false }, kind: 'mock', provider: 'mock', model: 'mock',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...partial,
   }
@@ -36,15 +36,14 @@ describe('document store', () => {
     const jobId = newId('job')
     updateDoc(store, (d) => {
       d.assets.push({ sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: ['idb://sha256/' + 'a'.repeat(64)] })
-      d.character.refs.push({ id: refId, asset: SHA('a'), tag: 'eyes', role: 'shape', label: 'Eyes', kind: 'picture' })
+      d.keys.push({ key: 'maya', role: 'character' })
+      d.refs.push({ id: refId, key: 'maya', variant: 'eyes', asset: SHA('a'), node: newId('node'), named_at: new Date().toISOString() })
       d.jobs.push({ id: jobId, op: 'generate', state: 'completed', parent_ids: [], input_hashes: [SHA('a')], outputs: [SHA('b')], created_at: new Date().toISOString(), cost: { currency: 'USD', unknown: false } })
-      d.character.views.front = { asset: SHA('b'), job_id: jobId, picked_at: new Date().toISOString() }
-      d.character.locked = true
-      d.character.locked_at = new Date().toISOString()
+      d.refs.push({ id: newId('ref'), key: 'maya', variant: 'three-quarter', asset: SHA('b'), node: jobId })
       d.script = { current: newId('rev'), revisions: [] }
       d.script.revisions.push({ id: d.script.current!, created_at: new Date().toISOString(), imported_text: 'Rain. The hero smiles.', target_s: 10, status: 'draft' })
     })
-    const shotJob = job({ op: 'shot_list', quotaClass: 'text', shots: mockShotList('Rain. The hero smiles.', 10), outputs: [] })
+    const shotJob = job({ op: 'shot_list', quotaClass: 'text', shots: mockShotList('Rain. @maya_eyes smiles.', 10, ['maya_eyes']), outputs: [] })
     updateDoc(store, (d) => applyShotList(d, shotJob, { for: 'shot_list', revId: d.script!.current!, request: {} as never }))
     const shotId = store.get().shots![0].id
     updateDoc(store, (d) => applyFrame(d, job({ outputs: [{ sha256: SHA('c'), url: 'https://x.invalid/c', mime: 'image/png' }] }), { for: 'frame', shotId, request: {} as never }))
@@ -65,11 +64,14 @@ describe('document store', () => {
     expect(doc.shots![0].storyboard_frame).toBe(SHA('c'))
     expect(doc.takes![0].selected).toBe(true)
     expect(doc.reviews![0].resolved).toBe(true)
+    expect(doc.shots![0].refs).toEqual(['maya_eyes'])
   })
 
   it('catches a document that breaks the contract', () => {
     const bad = emptyDocument() as unknown as Record<string, unknown>
-    ;(bad.character as { refs: unknown[] }).refs.push({ id: 'ref_bad', asset: 'nope', tag: 'X', role: 'hat', kind: 'picture' })
+    ;(bad.refs as unknown[]).push({ id: newId('ref'), key: 'maya_x', variant: 'Front', asset: SHA('a') })
     expect(validate(bad)).toBe(false)
+    const old = { ...emptyDocument(), contract_version: '1' }
+    expect(validate(old)).toBe(false)
   })
 })

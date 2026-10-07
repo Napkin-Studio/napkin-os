@@ -251,19 +251,36 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .hint3 .step span { font-size: 12.5px; color: var(--ink2); line-height: 1.4; }
 
 .dock { flex-shrink: 0; display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--line-soft); background: var(--paper); position: relative; z-index: 10; }
-.views { display: flex; gap: 10px; align-items: center; }
-.slot { position: relative; width: 66px; height: 84px; border-radius: 10px; border: 1.5px dashed var(--line); background: var(--soft); cursor: pointer; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; padding: 0; }
-.slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.slot .name { position: relative; z-index: 1; width: 100%; font-size: 10.5px; font-weight: 700; padding: 3px 0; background: var(--frost); color: var(--ink); text-align: center; }
-.slot.filled { border-style: solid; border-color: var(--line); }
-.slot.front.filled { border-color: var(--create); border-width: 2px; }
-.slot.active { outline: 2px solid var(--create); outline-offset: 2px; }
-.slot .pend { position: absolute; inset: 0; display: grid; place-items: center; }
 .candidates { position: absolute; bottom: calc(100% + 10px); left: 16px; padding: 12px; border-radius: 16px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); z-index: 12; max-width: 560px; }
 .candidates .grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .candidates .cand { width: 84px; height: 112px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; cursor: pointer; padding: 0; background: var(--soft); position: relative; }
 .candidates .cand.picked { border-color: var(--create); }
 .candidates .cand img { width: 100%; height: 100%; object-fit: cover; }
+.candidates.library { max-width: 720px; }
+.candidates .libkey { width: 132px; }
+.candidates .libkey .cand { width: 84px; height: 112px; border-radius: 10px; overflow: hidden; background: var(--soft); }
+.candidates .libkey .cand img { width: 100%; height: 100%; object-fit: cover; }
+
+/* The References dock: one row per solid key, its variants as thumbnails. */
+.refsdock { align-items: flex-end; }
+.refsdock .keys { display: flex; flex-direction: column; gap: 6px; max-height: 172px; overflow-y: auto; }
+.keyrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.keyrow .variants { display: flex; gap: 6px; }
+.variant { position: relative; width: 48px; height: 60px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); overflow: hidden; padding: 0; cursor: pointer; display: flex; align-items: flex-end; }
+.variant img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.variant .name { position: relative; z-index: 1; width: 100%; font-size: 9.5px; font-family: var(--f-mono); padding: 2px 0; background: var(--frost); color: var(--ink); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select.xs { height: 24px; font-size: 11.5px; padding: 0 4px; width: auto; }
+
+/* Place mode: the next click on the canvas says where the new image goes. */
+.placing { position: absolute; inset: 0; z-index: 9; cursor: crosshair; background: color-mix(in srgb, var(--create) 6%, transparent); }
+.placing-hint { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 10px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.place-error { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 9; padding: 6px 10px; border-radius: 10px; background: var(--danger-bg); color: var(--danger); font-size: 12.5px; font-weight: 600; }
+
+.taghint.static { cursor: default; border-style: solid; }
+.taghint.static:hover { border-color: var(--line); color: var(--ink2); }
+.taghint.missing { border-color: var(--danger); color: var(--danger); }
+.taghint .x { border: 0; background: none; padding: 0 0 0 4px; color: inherit; cursor: pointer; font-size: 12px; }
+.shotrefs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 
 /* ── Storyboard ──────────────────────────────────────────────────────────── */
 .counter { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink3); }
@@ -312,8 +329,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .timeline .mark { position: absolute; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--status-amber); transform: translateX(-50%); border: 2px solid var(--paper); }
 .timeline .mark.done { background: var(--status-green); }
 .comments { display: flex; flex-direction: column; gap: 8px; max-height: 38vh; overflow: auto; }
-.sketch-cta { position: absolute; transform: translate(-50%, 12px); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.sketch-cta .err { color: var(--danger); font-size: 12px; font-weight: 600; background: var(--card); padding: 2px 8px; border-radius: 6px; }
 .comment { padding: 10px 12px; border-radius: 12px; background: var(--soft); cursor: pointer; border: 1px solid transparent; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
 .comment:hover { border-color: var(--line); }
 .comment .tc { font-family: var(--f-mono); font-size: 11px; color: var(--create); font-weight: 600; }

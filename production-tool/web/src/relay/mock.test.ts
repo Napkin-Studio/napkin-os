@@ -30,7 +30,7 @@ function setup() {
   return { relay, advance: (ms: number) => (t += ms), renders: () => renders }
 }
 
-const request = (op: JobRequest['op'] = 'generate', text = 'make it'): JobRequest => ({ contractVersion: '1', jobId: newId('job'), op, parentIds: [], input: { text, script: 'Rain. Smile.', targetS: 15 } })
+const request = (op: JobRequest['op'] = 'generate', text = 'make it'): JobRequest => ({ contractVersion: '2', jobId: newId('job'), op, parentIds: [], input: { text, script: 'Rain. Smile.', targetS: 15 } })
 
 describe('mock relay', () => {
   const validateJob = makeAjv().compile({ $ref: SCHEMA('relay-api') + '#/$defs/Job' })
@@ -95,5 +95,26 @@ describe('mock relay', () => {
     await relay.createJob(req)
     const job = await relay.cancelJob(req.jobId)
     expect(job.state).toBe('cancelled')
+  })
+})
+
+describe('the mock workspace library', () => {
+  const sha = (c: string) => `sha256:${c.repeat(64)}`
+  const ref = (variant: string, c: string) => ({ variant, asset: { sha256: sha(c), url: `https://mock.napkin.invalid/in/${sha(c)}`, mime: 'image/png' as const } })
+  const validate = (def: string) => makeAjv().compile({ $ref: SCHEMA('relay-api') + `#/$defs/${def}` })
+
+  it('publishes versions, lists the latest with its front as cover, and refuses an out-of-date publish', async () => {
+    const { relay } = setup()
+    await relay.session({ eventCode: 'X', handle: 'ann' })
+    const v1 = await relay.publish('maya', { role: 'character', baseVer: 0, refs: [ref('side', 'b'), ref('front', 'a')] })
+    expect(validate('LibraryEntry')(v1)).toBe(true)
+    const v2 = await relay.publish('maya', { role: 'character', baseVer: 1, refs: [ref('front', 'c')] })
+    expect(v2.ver).toBe(2)
+    const index = await relay.library()
+    expect(validate('LibraryIndex')(index)).toBe(true)
+    expect(index.keys).toEqual([expect.objectContaining({ key: 'maya', ver: 2, variants: ['front'], cover: ref('front', 'c').asset })])
+    expect((await relay.libraryEntry('maya', 1)).refs.map((r) => r.variant)).toEqual(['side', 'front'])
+    await expect(relay.publish('maya', { role: 'character', baseVer: 1, refs: [ref('front', 'd')] })).rejects.toMatchObject({ error: { code: 'conflict' } })
+    await expect(relay.libraryEntry('lamp')).rejects.toMatchObject({ status: 404 })
   })
 })

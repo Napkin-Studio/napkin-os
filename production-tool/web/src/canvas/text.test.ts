@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
-import { frameText, MAX_TEXT, withNotes } from './text'
+import { frameText, MAX_TEXT } from './text'
 import { placeFloating } from '../lib/place'
 
 type El = ExcalidrawElement
@@ -9,7 +9,7 @@ const el = (o: Partial<El> & Record<string, unknown>): El =>
 
 const frame = el({ id: 'f', type: 'frame', x: 0, y: 0, width: 600, height: 800 })
 
-describe('frameText: the words written in the sketch frame', () => {
+describe('frameText: the words written in a drawing', () => {
   it('collects the frame’s text top to bottom, folding wrapped lines', () => {
     const els = [
       frame,
@@ -44,20 +44,6 @@ describe('frameText: the words written in the sketch frame', () => {
   it('stays within the contract’s 1000 characters', () => {
     const long = 'word '.repeat(400)
     expect(frameText([frame, el({ type: 'text', frameId: 'f', text: long })], frame).length).toBe(MAX_TEXT)
-  })
-})
-
-describe('withNotes: a Combine instruction plus a drawing’s words', () => {
-  it('keeps the instruction first and adds the notes by tag', () => {
-    expect(withNotes('the hat from @ref_b', [{ tag: 'ref_a', text: 'When happy\nWhen dancing' }]))
-      .toBe('the hat from @ref_b\nWritten in @ref_a: When happy / When dancing')
-  })
-  it('skips empty notes and never cuts the instruction', () => {
-    const instr = 'x'.repeat(990)
-    const out = withNotes(instr, [{ tag: 'a', text: '' }, { tag: 'b', text: 'a long note here' }])
-    expect(out.startsWith(instr)).toBe(true)
-    expect(out.length).toBe(MAX_TEXT)
-    expect(withNotes('just this', [])).toBe('just this')
   })
 })
 

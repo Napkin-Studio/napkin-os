@@ -11,7 +11,7 @@ import { continueDrawing, drawFrame, drawTheRest, selectedFrame, selectFrame, ty
 import { applyFrame } from './handlers'
 import { JobRunner } from './runner'
 
-// Sequential storyboard frames (decided 2026-10-07): frame 1 from the views; every
+// Sequential storyboard frames (decided 2026-10-07): frame 1 from the shot's named refs; every
 // later frame with anchorFrame = shot 1's frame and previousFrame = the shot before's.
 
 /** Let the runner's fetch-and-store finish (promises only; no clock). */
@@ -39,10 +39,11 @@ async function setup(shotCount = 3) {
   const front = await putBlob(new Blob(['front view'], { type: 'image/png' }))
   const script = 'It rains on a city street. Our hero opens a yellow umbrella. She splashes through a puddle. She grins.'
   await updateDoc(doc, (d) => {
-    d.character.views.front = { asset: front, job_id: newId('job'), picked_at: new Date().toISOString() }
+    d.keys.push({ key: 'hero', role: 'character' })
+    d.refs.push({ id: newId('ref'), key: 'hero', variant: 'front', asset: front, node: newId('node') })
     const rev = newId('rev')
     d.script = { current: rev, revisions: [{ id: rev, created_at: new Date().toISOString(), imported_text: script, target_s: 15, status: 'draft' }] }
-    d.shots = mockShotList(script, 20).slice(0, shotCount).map((s, i) => ({ ...s, order: i + 1 }))
+    d.shots = mockShotList(script, 20, ['hero_front']).slice(0, shotCount).map((s, i) => ({ ...s, order: i + 1 }))
   })
 
   /** Every frame job running now finishes and lands (and the chain, if on, starts the next). */
@@ -62,13 +63,13 @@ async function setup(shotCount = 3) {
 }
 
 describe('sequential storyboard frames', () => {
-  it('frame 1 comes from the views only; shot 2 and shot k carry frame 1 and the frame before', async () => {
+  it('frame 1 comes from the shot\'s refs only; shot 2 and shot k carry frame 1 and the frame before', async () => {
     const s = await setup(3)
     const j1 = await drawFrame(s.deps, 0, 'first')
     const in1 = s.inputOf(j1)
     expect(in1.anchorFrame).toBeUndefined()
     expect(in1.previousFrame).toBeUndefined()
-    expect(in1.character?.front.sha256).toBe(s.front)
+    expect(in1.refs?.map((r) => [r.name, r.asset.sha256])).toEqual([['hero_front', s.front]])
     expect(in1.script).toContain('yellow umbrella')
     await s.land()
     const f1 = s.frameOf(0)
@@ -77,7 +78,7 @@ describe('sequential storyboard frames', () => {
     const in2 = s.inputOf(j2)
     expect(in2.anchorFrame?.sha256).toBe(f1.asset)
     expect(in2.previousFrame?.sha256).toBe(f1.asset)
-    expect(in2.character?.front.sha256).toBe(s.front)
+    expect(in2.refs?.[0].asset.sha256).toBe(s.front)
     expect(in2.shot?.id).toBe(s.shotId(1))
     await s.land()
     const f2 = s.frameOf(1)
@@ -192,5 +193,20 @@ describe('sequential storyboard frames', () => {
     const input: JobInput = { anchorFrame: ref, previousFrame: ref, ratio: '9:16', script: 'Rain.' }
     expect(validate(input), JSON.stringify(validate.errors)).toBe(true)
     expect(validate({ ...input, anchorFrame: { sha256: 'nope' } })).toBe(false)
+  })
+})
+
+describe('a shot names its refs', () => {
+  it('a name in the typed change is sent too, and a name no image has stops the frame with a clear message', async () => {
+    const s = await setup(1)
+    const lamp = await putBlob(new Blob(['lamp'], { type: 'image/png' }))
+    await updateDoc(s.doc, (d) => {
+      d.keys.push({ key: 'lamp', role: 'prop' })
+      d.refs.push({ id: newId('ref'), key: 'lamp', variant: 'on', asset: lamp })
+    })
+    const j = await drawFrame(s.deps, 0, 'first', { text: 'and @lamp_on glows' })
+    expect(s.inputOf(j).refs?.map((r) => r.name)).toEqual(['hero_front', 'lamp_on'])
+    await updateDoc(s.doc, (d) => { d.shots![0].refs = ['hero_sad'] })
+    await expect(drawFrame(s.deps, 0, 'again', { text: 'x' })).rejects.toThrow(/@hero_sad/)
   })
 })

@@ -1,15 +1,16 @@
 // Stage 2: script → shot list → one frame per shot, drawn in order: frame 1
-// from the character views, then each next frame from the views, frame 1
+// from the shot's named refs (@maya_front, @lamp_on), then each next frame from its refs, frame 1
 // (setting, light, style) and the frame before it (jobs/frames.ts). Each frame
 // can be changed with a sentence, optionally inside a box (or a painted mask,
 // or a click when the provider can segment), and stepped back to an earlier version.
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { Composition, CameraMove, Ratio, Region, Shot, View } from '../contracts/types'
+import type { Composition, CameraMove, Ratio, Region, Shot } from '../contracts/types'
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
-import { isRunning, jobAt, ratioAspect } from '../jobs/select'
+import { allNamed, isRunning, jobAt, ratioAspect } from '../jobs/select'
+import { nameOf, refByName } from '../lib/names'
 import { continuity, drawFrame, drawTheRest, firstUndrawn, selectFrame, selectedFrame } from '../jobs/frames'
 import { putBlob } from '../lib/blobs'
 import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
@@ -25,7 +26,6 @@ import { useUndo } from '../ui/useUndo'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
-const VIEW_OPTS: View[] = ['front', 'three_quarter', 'side', 'back']
 
 export function Storyboard() {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
@@ -56,7 +56,9 @@ export function Storyboard() {
       d.script.revisions.push({ id: revId, created_at: new Date().toISOString(), imported_text: text.slice(0, 600), target_s: ui.targetS, status: 'draft', ...(d.script.current ? { parent: d.script.current } : {}) })
       d.script.current = revId
     }, 'script revision')
-    await runner.submit('shot_list', { script: text.slice(0, 600), targetS: ui.targetS }, [], { for: 'shot_list', revId })
+    // The named refs go along, so each shot can name the ones it shows (@maya_front, @lamp_on).
+    const refs = await allNamed(relay, docStore.get())
+    await runner.submit('shot_list', { script: text.slice(0, 600), targetS: ui.targetS, ...(refs.length ? { refs } : {}) }, [], { for: 'shot_list', revId })
   }
 
   const attempt = async (fn: () => Promise<unknown>) => {
@@ -118,7 +120,7 @@ export function Storyboard() {
             </div>
             <div className="row">
               <button className="btn primary" disabled={planning || !ui.scriptDraft.trim()} onClick={plan}>{planning ? 'Planning…' : shots.length ? 'Plan again' : 'Plan shots'}</button>
-              {!doc.character.views.front && <span className="faint" style={{ fontSize: 12 }}>You need a Front view first.</span>}
+              {!doc.refs.length && <span className="faint" style={{ fontSize: 12 }}>Name an image on the canvas first, like @maya_front.</span>}
             </div>
             {planJob && <div style={{ height: 120, borderRadius: 12, overflow: 'hidden' }}><JobNode jobId={planJob} /></div>}
             {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 13 }}>{error}</div>}
@@ -157,9 +159,7 @@ export function Storyboard() {
                     <select className="select" aria-label="Composition" value={s.composition} onChange={(e) => updateShot(s.id, { composition: e.target.value as Composition })}>
                       {COMPOSITIONS.map((c) => <option key={c} value={c}>{label(c)}</option>)}
                     </select>
-                    <select className="select" aria-label="Character view" value={s.lead_view ?? 'front'} onChange={(e) => updateShot(s.id, { lead_view: e.target.value as View })}>
-                      {VIEW_OPTS.map((v) => <option key={v} value={v}>{label(v)} view</option>)}
-                    </select>
+                    <ShotRefs shot={s} onChange={(refs) => updateShot(s.id, { refs })} />
                   </div>
                   <textarea className="textarea" aria-label="Action" maxLength={300} value={s.action} onChange={(e) => updateShot(s.id, { action: e.target.value })} />
                   <select className="select" aria-label="Camera move" value={s.camera_move} onChange={(e) => updateShot(s.id, { camera_move: e.target.value as CameraMove })}>
@@ -181,16 +181,16 @@ export function Storyboard() {
                 <button className="btn sm ghost" disabled={shots.length >= MAX_SHOTS}
                   onClick={() => updateDoc(docStore, (d) => {
                     d.shots ??= []
-                    d.shots.push({ id: newId('shot'), order: d.shots.length + 1, duration_s: 5, composition: 'medium', action: '', camera_move: 'static', lead_view: 'front', status: 'planned' })
+                    d.shots.push({ id: newId('shot'), order: d.shots.length + 1, duration_s: 5, composition: 'medium', action: '', camera_move: 'static', refs: [], status: 'planned' })
                   }, 'add shot')}>+ Add shot</button>
                 <span className="spacer" />
                 {noFrames ? (
-                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || !doc.character.views.front} onClick={drawFirst}
+                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || !doc.refs.length} onClick={drawFirst}
                     title="Frame 1 sets the place, the light and the style for every frame after it">
                     {anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}
                   </button>
                 ) : (
-                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || allFramed || firstUndrawn(doc) < 0 || !doc.character.views.front} onClick={drawRest}
+                  <button className="btn dark" disabled={!check.ok || anyFrameRunning || allFramed || firstUndrawn(doc) < 0 || !doc.refs.length} onClick={drawRest}
                     title="Draw each remaining shot in turn, each one following the one before">
                     {ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : allFramed ? 'All frames drawn' : 'Draw the rest'}
                   </button>
@@ -310,7 +310,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             ) : prevDrawn ? (
               <>
                 <div className="faint">No frame yet</div>
-                <button className="btn xs" onClick={onDraw} disabled={!doc.character.views.front}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
+                <button className="btn xs" onClick={onDraw} disabled={!doc.refs.length}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
               </>
             ) : (
               <div className="faint">Draw shot {index} first</div>
@@ -358,6 +358,29 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>{error}</div>}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+/** The named refs a shot shows: chips to take off, and a list to add from. */
+function ShotRefs({ shot, onChange }: { shot: Shot; onChange: (refs: string[]) => void }) {
+  const doc = useDoc()
+  const names = shot.refs ?? []
+  const free = doc.refs.map(nameOf).filter((n) => !names.includes(n))
+  return (
+    <div className="shotrefs">
+      {names.map((n) => (
+        <span key={n} className={`taghint ${refByName(doc, n) ? '' : 'missing'}`} title={refByName(doc, n) ? undefined : 'No image has this name'}>
+          @{n}
+          <button className="x" aria-label={`Take @${n} off this shot`} onClick={() => onChange(names.filter((x) => x !== n))}>×</button>
+        </span>
+      ))}
+      {free.length > 0 && names.length < 9 && (
+        <select className="select xs" aria-label="Add a reference to this shot" value="" onChange={(e) => e.target.value && onChange([...names, e.target.value])}>
+          <option value="">+ ref</option>
+          {free.map((n) => <option key={n} value={n}>@{n}</option>)}
+        </select>
       )}
     </div>
   )

@@ -1,7 +1,10 @@
 // The relay over HTTP: the infra lane's local server (http://localhost:8787)
 // or the deployed /api. Routes and bodies per relay-api.schema.json.
 
-import type { Config, ContractError, InputMime, Job, JobRequest, LogEntry, Output, SessionRequest, SessionResponse, UploadResponse } from '../contracts/types'
+import type {
+  AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output, SessionRequest,
+  SessionResponse, UploadResponse,
+} from '../contracts/types'
 import { OWN_KEYS_HEADER } from '../keys/ownKeys'
 import { sha256Of } from '../lib/hash'
 import { RelayError, type Relay, type UploadResult } from './types'
@@ -90,7 +93,19 @@ export class HttpRelay implements Relay {
     }
   }
 
-  async fetchOutput(output: Output): Promise<Blob> {
+  library() {
+    return this.call<LibraryIndex>('GET', '/library')
+  }
+
+  libraryEntry(key: Key, ver?: number) {
+    return this.call<LibraryEntry>('GET', `/library/${encodeURIComponent(key)}${ver ? `/${ver}` : ''}`)
+  }
+
+  publish(key: Key, req: LibraryPublish) {
+    return this.call<LibraryEntry>('POST', `/library/${encodeURIComponent(key)}`, req)
+  }
+
+  async fetchOutput(output: Output | AssetRef): Promise<Blob> {
     const res = await fetch(output.url)
     if (!res.ok) throw new RelayError({ code: 'provider_unavailable', message: 'Could not download the result.', retryable: true }, res.status)
     return await res.blob()

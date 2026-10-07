@@ -10,9 +10,12 @@ import { OPS } from './contracts/types'
 export type Sheets = Partial<Record<Provider, CapabilitySheet>>
 
 export interface Controls {
-  /** Character */
+  /** Canvas */
   generate: boolean
-  combine: boolean
+  /** How many image inputs one Generate may take on the routed provider (refs.max, at most 14). */
+  generateMax: number
+  /** …of which characters (refs.maxCharacter), when the sheet limits them. */
+  generateCharacters: number
   views: boolean
   /** Turnaround by exact camera angle (sheet.angles on the view provider). */
   angles: boolean
@@ -57,7 +60,6 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
   const f = config.flags
   const s = (op: Op) => routedSheet(op, config, sheets)
   const gen = s('generate')
-  const combine = s('combine')
   const view = s('view')
   const frame = s('frame')
   const regionEdit = s('region_edit')
@@ -70,7 +72,8 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
   const feelEdit = video && f.feelEdit && !!clipEdit && clipEdit.video.feelEdit !== 'none'
   return {
     generate: !!gen,
-    combine: !!combine,
+    generateMax: Math.min(14, gen?.refs.max ?? 0),
+    generateCharacters: Math.min(14, gen?.refs.maxCharacter ?? gen?.refs.max ?? 0),
     views: !!view,
     angles: !!view && view.angles,
     regionEditCanvas: f.regionEditCanvas && !!regionEdit,

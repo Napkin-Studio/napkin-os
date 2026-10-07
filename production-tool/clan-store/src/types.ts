@@ -3,21 +3,16 @@
 // minimal; both stores run the same round-trip cases against it.
 
 /** shared/data.yaml of a Production Tool document
- * (production-tool/contracts/document.schema.json, contract v1). Typed only
+ * (production-tool/contracts/document.schema.json, contract v2). Typed only
  * at the top level: the schema, validated on every write, is the authority. */
 export interface Doc {
-  contract_version: '1'
+  contract_version: '2'
   app: 'production-tool'
   participant: Participant
   stage: { current: 'character' | 'storyboard' | 'video'; next_action?: string }
   assets: DocAsset[]
-  character: {
-    refs: Record<string, unknown>[]
-    combines?: Record<string, unknown>[]
-    views: Record<string, { asset: string; job_id: string; picked_at?: string }>
-    locked: boolean
-    locked_at?: string
-  }
+  keys: Record<string, unknown>[]
+  refs: Record<string, unknown>[]
   script?: { current?: string; revisions: Record<string, unknown>[] }
   shots?: Record<string, unknown>[]
   frames?: Record<string, unknown>[]

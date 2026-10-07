@@ -1,13 +1,14 @@
 // Helpers over the Excalidraw scene: reading our customData, making the tool's
-// own elements (sketch frame, gen placeholders, provenance arrows) and image
-// files. Every element the tool owns carries customData per
+// own elements (drawn frames, gen placeholders, curved provenance arrows) and
+// image files. Every element the tool owns carries customData per
 // customdata.schema.json; elements without it are the user's own drawing.
 
 import { convertToExcalidrawElements, exportToBlob, getCommonBounds, newElementWith } from '@excalidraw/excalidraw'
 import type { BinaryFileData, BinaryFiles } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalidraw/excalidraw/element/types'
-import type { CustomData, View } from '../contracts/types'
+import type { CustomData, GenOp, Sha256, View } from '../contracts/types'
 import { hexOf } from '../lib/hash'
+import { bendFor, curvePoints } from './curve'
 
 export type El = ExcalidrawElement
 export const ACCENT = '#FF4F2E'
@@ -30,17 +31,31 @@ export function byOwnId(els: readonly El[], id: string): El | undefined {
   return els.find((e) => !e.isDeleted && (e.id === id || idOf(e) === id))
 }
 
-export function sketchFrame(els: readonly El[]): El | undefined {
-  return els.find((e) => !e.isDeleted && cd(e)?.kind === 'sketch')
+/** An image node (picture, drawing frame or generated image) and its picture, when it has one yet. */
+export function imageOf(el: El | undefined): { id: string; asset?: Sha256; kind: 'pic' | 'drawn' | 'gen' } | undefined {
+  const c = cd(el)
+  if (c?.kind === 'pic' || c?.kind === 'drawn') return { id: c.id, asset: c.asset, kind: c.kind }
+  if (c?.kind === 'gen') return { id: c.id, asset: c.asset, kind: 'gen' }
+  return undefined
 }
 
 export function childrenOf(els: readonly El[], frameId: string): El[] {
   return els.filter((e) => !e.isDeleted && e.frameId === frameId)
 }
 
-/** The user's own marks (not the tool's), for "Use as reference" and the empty-canvas hint. */
+/** The user's own marks (not the tool's, not text): strokes and shapes. */
 export function isUserDrawing(e: El): boolean {
-  return !e.isDeleted && !cd(e) && e.type !== 'image' && e.type !== 'frame' && e.type !== 'magicframe'
+  return !e.isDeleted && !cd(e) && e.type !== 'image' && e.type !== 'frame' && e.type !== 'magicframe' && e.type !== 'text' && e.type !== 'arrow'
+}
+
+/** Words on the canvas: a text element, loose or used as a note. */
+export function isText(e: El): boolean {
+  return !e.isDeleted && e.type === 'text' && (!cd(e) || cd(e)?.kind === 'note')
+}
+
+export function textOf(e: El): string {
+  const t = e as El & { originalText?: string; text?: string }
+  return (t.originalText ?? t.text ?? '').trim()
 }
 
 export function bounds(els: readonly El[]) {
@@ -109,14 +124,7 @@ export async function exportElements(els: readonly El[], files: BinaryFiles): Pr
   })
 }
 
-export function makeSketchFrame(id: string): El[] {
-  return convertToExcalidrawElements(
-    [{ type: 'frame', id: `el_${id}`, x: 0, y: 0, width: 600, height: 800, name: 'Draw your character here', children: [], customData: { kind: 'sketch', id, template: 'character-3x4' } }],
-    { regenerateIds: false },
-  )
-}
-
-export function makeGenPlaceholder(jobId: string, op: 'generate' | 'combine' | 'view' | 'region_edit', parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View): El {
+export function makeGenPlaceholder(jobId: string, op: GenOp, parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View): El {
   const customData: CustomData = { kind: 'gen', id: jobId, op, parentIds, state: 'queued' }
   if (view) customData.view = view
   const [el] = convertToExcalidrawElements(
@@ -126,19 +134,24 @@ export function makeGenPlaceholder(jobId: string, op: 'generate' | 'combine' | '
   return newElementWith(el as ExcalidrawImageElement, { status: 'pending', fileId: null })
 }
 
-/** A provenance arrow from one element to another, bound at both ends so it follows them. */
-export function makeArrow(from: El, to: El, fromId: string, toId: string): El {
+/** A curved provenance arrow from one element to another, bound at both ends so it follows them. */
+export function makeArrow(from: El, to: El, fromId: string, toId: string, index = 0): El {
   const fb = bounds([from])
   const tb = bounds([to])
-  const start = { x: fb.maxX + 8, y: fb.minY + fb.h / 2 }
-  const end = { x: tb.minX - 8, y: tb.minY + tb.h / 2 }
+  // Leave from the side facing the target, arrive on the side facing the source.
+  const rightward = tb.minX >= fb.maxX
+  const start = { x: rightward ? fb.maxX + 8 : fb.minX - 8, y: fb.minY + fb.h / 2 }
+  const end = { x: rightward ? tb.minX - 8 : tb.maxX + 8, y: tb.minY + tb.h / 2 }
+  const points = curvePoints(start, end, bendFor(index))
+  const xs = points.map((p) => p[0])
+  const ys = points.map((p) => p[1])
   const [arrow] = convertToExcalidrawElements(
     [{
-      type: 'arrow', x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y,
-      points: [[0, 0], [end.x - start.x, end.y - start.y]] as never,
+      type: 'arrow', x: start.x, y: start.y, width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys),
+      points: points as never, roundness: { type: 2 },
       strokeColor: ACCENT, strokeWidth: 2, strokeStyle: 'dashed', roughness: 0, endArrowhead: 'arrow',
       customData: { kind: 'provenance', from: fromId, to: toId },
-    }],
+    } as never],
   )
   return newElementWith(arrow, {
     startBinding: { elementId: from.id, focus: 0, gap: 8 },
