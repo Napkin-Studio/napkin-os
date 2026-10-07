@@ -9,10 +9,10 @@ import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalid
 import type { CustomData, GenOp, Sha256, View } from '../contracts/types'
 import { hexOf } from '../lib/hash'
 import { bendAway, curvePoints } from './curve'
+import { fitSize } from './fit'
 
 export type El = ExcalidrawElement
 export const ACCENT = '#FF4F2E'
-export const MAX_SIDE = 1536
 
 export function cd(el: El | undefined): CustomData | undefined {
   const c = el?.customData as CustomData | undefined
@@ -90,26 +90,30 @@ export async function fileData(sha: string, blob: Blob): Promise<BinaryFileData>
   }
 }
 
-/** Downscale to ≤1536 px on the long side; the result is the artifact that gets hashed. */
-export async function downscale(blob: Blob, max = MAX_SIDE): Promise<{ blob: Blob; w: number; h: number; changed: boolean }> {
+/**
+ * Fit a picture for providers (fit.ts): short side ≥ 512 px, long side ≤ 1536 px, aspect within
+ * 2.5:1, padded with white. The result is the artifact that gets hashed and sent.
+ */
+export async function downscale(blob: Blob): Promise<{ blob: Blob; w: number; h: number; changed: boolean }> {
   const bmp = await createImageBitmap(blob)
-  const { width, height } = bmp
-  const scale = Math.min(1, max / Math.max(width, height))
+  const f = fitSize(bmp.width, bmp.height)
   const okType = blob.type === 'image/png' || blob.type === 'image/jpeg' || blob.type === 'image/webp'
-  if (scale === 1 && okType) {
+  if (f.same && okType) {
     bmp.close?.()
-    return { blob, w: width, h: height, changed: false }
+    return { blob, w: f.w, h: f.h, changed: false }
   }
-  const w = Math.round(width * scale)
-  const h = Math.round(height * scale)
   const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  c.getContext('2d')!.drawImage(bmp, 0, 0, w, h)
+  c.width = f.canvasW
+  c.height = f.canvasH
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, c.width, c.height)
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(bmp, Math.round((f.canvasW - f.w) / 2), Math.round((f.canvasH - f.h) / 2), f.w, f.h)
   bmp.close?.()
-  const type = blob.type === 'image/jpeg' ? 'image/jpeg' : 'image/png'
+  const type = blob.type === 'image/jpeg' && f.canvasW === f.w && f.canvasH === f.h ? 'image/jpeg' : 'image/png'
   const out = await new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not resize the picture.'))), type, 0.9))
-  return { blob: out, w, h, changed: true }
+  return { blob: out, w: f.canvasW, h: f.canvasH, changed: true }
 }
 
 /** Export some elements to a PNG, without the tool's labels and arrows. */
