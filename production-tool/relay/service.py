@@ -594,6 +594,8 @@ class Relay:
             if self._is_own(job):
                 names = " or ".join(own_keys.NAMES[p] for p in job["_own"])
                 message = f"Your {names} account could not take this step. Try again, or remove your key to use the event's providers."
+                if job.get("_lastError"):
+                    message += f" ({job['_lastError']})"
             return self._fail(job, "provider_unavailable", message, retryable=True, paid=False, refund=True)
         return self._with_poll({**job, "queuePosition": 0})
 
@@ -638,7 +640,7 @@ class Relay:
                                   provider_code=e.provider_code, director=block)
             if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
                 back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                  _tried=job["_tried"] + [provider])
+                                  _tried=job["_tried"] + [provider], _lastError=f"{provider}: {e.message}"[:300])
                 self.store.incr(slot, "n", -1)
                 if back is None:
                     log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
