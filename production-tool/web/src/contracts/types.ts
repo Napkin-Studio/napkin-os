@@ -340,6 +340,8 @@ export interface JobInput {
   targetS?: number
   shot?: Shot
   previousFrame?: AssetRef
+  /** frame: the first storyboard frame, the setting/light/style anchor for every later frame (added 2026-10-07). */
+  anchorFrame?: AssetRef
   image?: AssetRef
   region?: Region
   mask?: AssetRef

@@ -5,6 +5,7 @@
 import type { Job, ProductionDocument } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { newId } from '../lib/ulid'
+import { markNextStale } from './frames'
 
 export function applyShotList(d: ProductionDocument, job: Job, ctx: Extract<JobCtx, { for: 'shot_list' }>) {
   const shots = (job.shots ?? []).map((s, i) => ({ ...s, order: i + 1, status: 'planned' as const }))
@@ -36,6 +37,7 @@ export function applyFrame(d: ProductionDocument, job: Job, ctx: Extract<JobCtx,
     shot.storyboard_frame = out.sha256
     if (shot.status === 'locked') shot.status = 'needs_review'
   }
+  markNextStale(d, ctx.shotId)
 }
 
 export function applyTake(d: ProductionDocument, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>) {
