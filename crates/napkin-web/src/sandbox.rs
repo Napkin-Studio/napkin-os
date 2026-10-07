@@ -125,6 +125,9 @@ async fn dispatch(
             other => ctx.events.publish(&grant.tenant, other),
         }
     }
+    let job = (ctx.dogfood.is_some() && path == "/api-proxy")
+        .then(|| crate::dogfood::job_of(&resp.body))
+        .flatten();
     let response = into_response(resp);
     // the dogfood build records the call, body and all (a no-op elsewhere)
     if ctx.dogfood.is_some() {
@@ -139,6 +142,7 @@ async fn dispatch(
                 body: &body,
                 status: response.status(),
                 start: started,
+                job,
             },
         );
     }

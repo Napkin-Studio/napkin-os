@@ -1,0 +1,166 @@
+name: Deploy production tool
+
+# The hackathon Production Tool (infra/envs/hackathon), deployed by hand from
+# any branch (normally feat/production-tool): Actions → Deploy production tool
+# → Run workflow. Never runs on push, and never touches staging.
+#
+#   web     npm ci && npm run build in production-tool/web, sync dist/ to
+#           s3://<bucket>/web/, invalidate CloudFront
+#   relay   package production-tool/relay (+ the contracts), update the code,
+#           publish a version, move the `live` alias
+#   stitch  the same for production-tool/stitch; builds and attaches the
+#           ffmpeg layer when the function has none (or when asked)
+#
+# config.json is never written here: it is uploaded by hand (aws s3 cp).
+# Rollback: aws lambda update-alias --function-name <fn> --name live
+#           --function-version <previous> (printed in the run summary).
+#
+# Repository variables (terraform output in infra/envs/hackathon):
+#   AWS_DEPLOY_ROLE_ARN_HACKATHON   deploy_role_arn
+#   HACKATHON_BUCKET                bucket
+#   HACKATHON_DISTRIBUTION_ID       distribution_id
+
+on:
+  workflow_dispatch:
+    inputs:
+      parts:
+        description: What to deploy
+        type: choice
+        options: [ all, web, relay, stitch ]
+        default: all
+      rebuild_ffmpeg_layer:
+        description: Rebuild and attach the ffmpeg layer even if stitch has one
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production-tool
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+  ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN_HACKATHON }}
+  BUCKET: ${{ vars.HACKATHON_BUCKET }}
+  DISTRIBUTION_ID: ${{ vars.HACKATHON_DISTRIBUTION_ID }}
+  RELAY_FN: napkin-hackathon-relay
+  STITCH_FN: napkin-hackathon-stitch
+  LAYER: napkin-hackathon-ffmpeg
+  PARTS: ${{ inputs.parts }}
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.parts }}) from ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repository variables are set
+        run: |
+          for v in ROLE BUCKET DISTRIBUTION_ID; do
+            if [ -z "${!v}" ]; then echo "::error::$v is empty: set the repository variables from terraform output (infra/envs/hackathon)"; exit 1; fi
+          done
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Test the relay and stitch
+        if: env.PARTS == 'all' || env.PARTS == 'relay' || env.PARTS == 'stitch'
+        run: |
+          (cd production-tool/relay && uv run --python 3.12 pytest -q)
+          (cd production-tool/stitch && uv run --python 3.12 pytest -q)
+          uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py
+
+      - id: web
+        name: Is there a web app
+        run: |
+          if [ -f production-tool/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::production-tool/web does not exist on this branch: skipping the web app."; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: production-tool/web/package-lock.json
+
+      - name: Build the web app
+        if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
+        working-directory: production-tool/web
+        env:
+          VITE_RELAY_URL: /api   # same origin through CloudFront; without it the app runs on its in-browser mock
+        run: npm ci && npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload the web app and invalidate CloudFront
+        if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
+        working-directory: production-tool/web
+        run: |
+          # hashed assets cache for a year; index.html is revalidated on every load
+          aws s3 sync dist/ "s3://$BUCKET/web/" --delete --exclude index.html \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp dist/index.html "s3://$BUCKET/web/index.html" \
+            --cache-control "no-cache" --content-type "text/html; charset=utf-8"
+          id=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" \
+            --query Invalidation.Id --output text)
+          echo "web: synced, invalidation $id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package and deploy the relay
+        if: env.PARTS == 'all' || env.PARTS == 'relay'
+        run: |
+          set -euo pipefail
+          build=$(mktemp -d)
+          # boto3 and its dependencies come with the Lambda runtime
+          (cd production-tool/relay && uv export --frozen --no-dev --no-hashes --no-emit-project \
+            --no-emit-package boto3 --no-emit-package botocore --no-emit-package s3transfer \
+            --no-emit-package jmespath --no-emit-package urllib3 --no-emit-package python-dateutil \
+            --no-emit-package six -o "$build/requirements.txt")
+          uv pip install --target "$build/pkg" --python-platform x86_64-manylinux2014 --python-version 3.12 \
+            --only-binary :all: -r "$build/requirements.txt"
+          rsync -a --exclude tests --exclude .venv --exclude .local-data --exclude '__pycache__' \
+            --exclude '*.zip' --exclude uv.lock --exclude pyproject.toml --exclude README.md \
+            production-tool/relay/ "$build/pkg/"
+          mkdir -p "$build/pkg/contracts"
+          cp production-tool/contracts/*.schema.json "$build/pkg/contracts/"
+          cp -r production-tool/contracts/capabilities "$build/pkg/contracts/"
+          (cd "$build/pkg" && zip -qr9 "$build/relay.zip" .)
+          ls -lh "$build/relay.zip"
+          prev=$(aws lambda get-alias --function-name "$RELAY_FN" --name live --query FunctionVersion --output text)
+          aws lambda update-function-code --function-name "$RELAY_FN" --zip-file "fileb://$build/relay.zip" >/dev/null
+          aws lambda wait function-updated-v2 --function-name "$RELAY_FN"
+          ver=$(aws lambda publish-version --function-name "$RELAY_FN" \
+            --description "${GITHUB_REF_NAME}@${GITHUB_SHA::7}" --query Version --output text)
+          aws lambda update-alias --function-name "$RELAY_FN" --name live --function-version "$ver" >/dev/null
+          echo "relay: live → $ver (was $prev; roll back with update-alias --function-version $prev)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Package and deploy stitch
+        if: env.PARTS == 'all' || env.PARTS == 'stitch'
+        run: |
+          set -euo pipefail
+          build=$(mktemp -d)
+          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py)
+          layers=$(aws lambda get-function-configuration --function-name "$STITCH_FN" --query 'length(Layers || `[]`)' --output text)
+          if [ "$layers" = "0" ] || [ "${{ inputs.rebuild_ffmpeg_layer }}" = "true" ]; then
+            production-tool/stitch/build-layer.sh "$build/ffmpeg-layer.zip"
+            aws s3 cp "$build/ffmpeg-layer.zip" "s3://$BUCKET/build/ffmpeg-layer.zip"
+            arn=$(aws lambda publish-layer-version --layer-name "$LAYER" \
+              --content "S3Bucket=$BUCKET,S3Key=build/ffmpeg-layer.zip" \
+              --compatible-runtimes python3.12 --compatible-architectures x86_64 \
+              --query LayerVersionArn --output text)
+            aws lambda update-function-configuration --function-name "$STITCH_FN" --layers "$arn" >/dev/null
+            aws lambda wait function-updated-v2 --function-name "$STITCH_FN"
+            echo "stitch: layer $arn" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          prev=$(aws lambda get-alias --function-name "$STITCH_FN" --name live --query FunctionVersion --output text)
+          aws lambda update-function-code --function-name "$STITCH_FN" --zip-file "fileb://$build/stitch.zip" >/dev/null
+          aws lambda wait function-updated-v2 --function-name "$STITCH_FN"
+          ver=$(aws lambda publish-version --function-name "$STITCH_FN" \
+            --description "${GITHUB_REF_NAME}@${GITHUB_SHA::7}" --query Version --output text)
+          aws lambda update-alias --function-name "$STITCH_FN" --name live --function-version "$ver" >/dev/null
+          echo "stitch: live → $ver (was $prev)" >> "$GITHUB_STEP_SUMMARY"

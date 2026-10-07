@@ -157,6 +157,19 @@ data "aws_iam_policy_document" "middleware" {
     actions   = ["bedrock:InvokeTool"]
     resources = ["arn:aws:bedrock::${data.aws_caller_identity.me.account_id}:system-tool/amazon.nova_grounding"]
   }
+  # The run log: through its own access point only, never web's workspaces.
+  dynamic "statement" {
+    for_each = var.middleware_runlog ? [1] : []
+    content {
+      actions   = ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"]
+      resources = [aws_efs_file_system.web.arn]
+      condition {
+        test     = "StringEquals"
+        variable = "elasticfilesystem:AccessPointArn"
+        values   = [aws_efs_access_point.runlog[0].arn]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "middleware" {
@@ -261,7 +274,7 @@ resource "aws_security_group" "efs" {
     from_port       = 2049
     to_port         = 2049
     protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
+    security_groups = concat([aws_security_group.web.id], var.middleware_runlog ? [aws_security_group.middleware.id] : [])
   }
 }
 
@@ -280,6 +293,26 @@ resource "aws_efs_access_point" "web" {
   }
   root_directory {
     path = "/napkin-web"
+    creation_info {
+      owner_uid   = 10001
+      owner_gid   = 10001
+      permissions = "750"
+    }
+  }
+}
+
+# The middleware's run log, inside web's /data (/data/_runlog there), so
+# napkin-web serves it to napkin accounts and its dogfood purge empties it.
+# Same POSIX user as web: web reads and deletes what the middleware writes.
+resource "aws_efs_access_point" "runlog" {
+  count          = var.middleware_runlog ? 1 : 0
+  file_system_id = aws_efs_file_system.web.id
+  posix_user {
+    uid = 10001
+    gid = 10001
+  }
+  root_directory {
+    path = "/napkin-web/_runlog"
     creation_info {
       owner_uid   = 10001
       owner_gid   = 10001
@@ -417,6 +450,17 @@ resource "aws_ecs_task_definition" "web" {
   }])
 }
 
+locals {
+  runlog_dir = "/runlog"
+  middleware_environment = merge({
+    NAPKIN_HOST         = "0.0.0.0"
+    NAPKIN_PORT         = tostring(local.mw_port)
+    NAPKIN_MODEL_API    = "bedrock"
+    NAPKIN_MODEL_REGION = var.region
+  }, var.middleware_runlog ? { NAPKIN_RUNLOG_DIR = local.runlog_dir } : {}, var.middleware_env)
+  middleware_mounts = var.middleware_runlog ? [{ sourceVolume = "runlog", containerPath = local.runlog_dir }] : []
+}
+
 resource "aws_ecs_task_definition" "middleware" {
   family                   = "${var.name}-middleware"
   requires_compatibilities = ["FARGATE"]
@@ -425,18 +469,28 @@ resource "aws_ecs_task_definition" "middleware" {
   memory                   = 2048
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.middleware.arn
+  dynamic "volume" {
+    for_each = var.middleware_runlog ? [1] : []
+    content {
+      name = "runlog"
+      efs_volume_configuration {
+        file_system_id     = aws_efs_file_system.web.id
+        transit_encryption = "ENABLED"
+        authorization_config {
+          access_point_id = aws_efs_access_point.runlog[0].id
+          iam             = "ENABLED"
+        }
+      }
+    }
+  }
   container_definitions = jsonencode([{
     name         = "middleware"
     image        = "${aws_ecr_repository.app["middleware"].repository_url}:bootstrap"
     essential    = true
     portMappings = [{ containerPort = local.mw_port, protocol = "tcp" }]
-    environment = [for k, v in merge({
-      NAPKIN_HOST         = "0.0.0.0"
-      NAPKIN_PORT         = tostring(local.mw_port)
-      NAPKIN_MODEL_API    = "bedrock"
-      NAPKIN_MODEL_REGION = var.region
-    }, var.middleware_env) : { name = k, value = v }]
-    secrets = [for k, v in var.middleware_secrets : { name = k, valueFrom = v }]
+    mountPoints  = local.middleware_mounts
+    environment  = [for k, v in local.middleware_environment : { name = k, value = v }]
+    secrets      = [for k, v in var.middleware_secrets : { name = k, valueFrom = v }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {

@@ -172,6 +172,7 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
               <button
                 className="ch-menu-item"
                 role="menuitem"
+                data-dogfood={`menu: ${item.label}`}
                 tabIndex={-1}
                 onClick={() => { close(true); item.run() }}
               >

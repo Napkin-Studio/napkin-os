@@ -122,9 +122,20 @@ export function setScreen(next: Screen) {
 
 export function currentScreen(): Screen { return screen }
 
-/** A thumbs-up or -down, with an optional note, on a screen or an agent's result. */
-export function feedback(on: string, thumb: 'up' | 'down', note: string, extra?: Record<string, unknown>) {
-  record('feedback', on, { thumb, note: note.trim() || undefined, ...extra })
+/**
+ * A thumbs-up or -down on a screen or an agent's result, recorded the moment
+ * it is chosen: most people never write the note (features/dogfood-log-quality.clan).
+ */
+export function feedback(on: string, thumb: 'up' | 'down', extra?: Record<string, unknown>) {
+  record('feedback', on, { thumb, ...extra })
+  recorder.flush(false)
+}
+
+/** The note someone added to the thumb they chose on `on`. */
+export function feedbackNote(on: string, thumb: 'up' | 'down', note: string, extra?: Record<string, unknown>) {
+  const text = note.trim()
+  if (!text) return
+  record('feedback-note', on, { thumb, note: text, ...extra })
   recorder.flush(false)
 }
 
@@ -155,26 +166,54 @@ export async function acknowledge(): Promise<boolean> {
 
 // ── capture in the shell ────────────────────────────────────────────────────
 
-/** A name for what was clicked: its data-dogfood name, label, title or text. */
+/**
+ * A name for what was clicked that stays the same from day to day: the
+ * control's data-dogfood, aria-label or title; else its text, a part per child
+ * element (' · '), with dates and times taken out. A click on no control is
+ * 'background', never the page's text. A name is at most 80 characters.
+ *
+ * Self-contained on purpose: FRAME_CAPTURE carries this function's own source
+ * into app frames, so the shell and the frames name things by one rule.
+ */
 export function nameOf(el: Element | null): string {
-  if (!el) return 'page'
-  const target = el.closest('[data-dogfood],button,a,[role="button"],[role="menuitem"],[role="tab"],input,select,textarea,summary,label') ?? el
-  const tag = target.tagName.toLowerCase()
-  const label = target.getAttribute('data-dogfood')
-    ?? target.getAttribute('aria-label')
-    ?? target.getAttribute('title')
-    ?? (target.textContent ?? '').replace(/\s+/g, ' ').trim()
-  return `${tag}: ${label.slice(0, 80) || '(no label)'}`
+  const CONTROLS = '[data-dogfood],button,a,[role="button"],[role="menuitem"],[role="tab"],input,select,textarea,summary,label'
+  const WHEN = /\b(?:today|yesterday|tomorrow)\b(?:,?\s*(?:at\s*)?\d{1,2}:\d{2})?|\b\d{1,2}:\d{2}(?::\d{2})?\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:\s+\d{4})?\b|\b\d+\s+(?:minute|hour|day|week|month)s?\s+ago\b|\bjust now\b/gi
+  // the text of each element is its own part; text beside it, another
+  function parts(node: Node, out: string[]) {
+    let run = ''
+    for (let i = 0; i < node.childNodes.length; i++) {
+      const c = node.childNodes[i]
+      if (c.nodeType === 3) run += c.textContent || ''
+      else if (c.nodeType === 1) { out.push(run); run = ''; parts(c, out) }
+    }
+    out.push(run)
+  }
+  if (!el || !el.closest) return 'page'
+  const target = el.closest(CONTROLS)
+  if (!target) return 'background'
+  let label = target.getAttribute('data-dogfood') || target.getAttribute('aria-label') || target.getAttribute('title') || ''
+  if (!label) {
+    const out: string[] = []
+    parts(target, out)
+    label = out
+      .map(p => p.replace(WHEN, '').replace(/\s+/g, ' ').replace(/^[\s,·–→↗-]+|[\s,·–→↗-]+$/g, ''))
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return target.tagName.toLowerCase() + ': ' + (label.slice(0, 80) || '(no label)')
 }
 
 let capturing = false
 function startCapture() {
   if (capturing || typeof document === 'undefined') return
   capturing = true
+  // a click the page makes itself (the download link) is not the person's
   document.addEventListener('click', e => {
+    if (!e.isTrusted) return
     record('click', nameOf(e.target instanceof Element ? e.target : null), { in: 'shell' })
   }, { capture: true, passive: true })
   document.addEventListener('submit', e => {
+    if (!e.isTrusted) return
     record('submit', nameOf(e.target instanceof Element ? e.target : null), { in: 'shell' })
   }, { capture: true, passive: true })
   const leave = () => recorder.flush(true)
@@ -187,14 +226,12 @@ function startCapture() {
 /**
  * The listener the shell adds to an app frame's page when this build records:
  * it only listens (capture phase, passive) and tells the shell what was
- * clicked or submitted. No app changes; a template can name things with
- * `data-dogfood`.
+ * clicked or submitted, named by `nameOf` itself. No app changes; a template
+ * can name things with `data-dogfood`.
  */
 export const FRAME_CAPTURE = `<script data-dogfood-capture>(function(){
-function nameOf(el){if(!el||!el.closest)return 'page';var t=el.closest('[data-dogfood],button,a,[role="button"],[role="menuitem"],[role="tab"],input,select,textarea,summary,label')||el;
-var l=t.getAttribute('data-dogfood')||t.getAttribute('aria-label')||t.getAttribute('title')||(t.textContent||'').replace(/\\s+/g,' ').trim();
-return t.tagName.toLowerCase()+': '+(l.slice(0,80)||'(no label)')}
-function tell(kind,e){try{parent.postMessage({type:'clan:interaction',kind:kind,name:nameOf(e.target)},'*')}catch(_){}}
+var nameOf=${nameOf.toString()};
+function tell(kind,e){if(!e.isTrusted)return;try{parent.postMessage({type:'clan:interaction',kind:kind,name:nameOf(e.target)},'*')}catch(_){}}
 document.addEventListener('click',function(e){tell('click',e)},{capture:true,passive:true});
 document.addEventListener('submit',function(e){tell('submit',e)},{capture:true,passive:true});
 })();</script>`
