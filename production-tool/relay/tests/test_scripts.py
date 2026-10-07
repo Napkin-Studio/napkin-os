@@ -195,10 +195,10 @@ def test_smoke_runs_each_op_and_sets_audio_off(runtime):
                      factory=fake_factory(log), fetch=lambda url: _gradient(), **runtime)
     assert code == 0, text
     ops = [j.op for j, _ in log["jobs"]]
-    assert ops == ["generate", "combine", "view", "frame", "region_edit", "clip", "clip_edit"]
+    assert ops == ["generate", "view", "frame", "region_edit", "clip", "clip_edit"]
     clip = next(j for j, _ in log["jobs"] if j.op == "clip")
     assert clip.audio is False and clip.duration_s == 4
-    assert text.count("done") >= 6
+    assert text.count("done") >= 5
 
 
 def test_smoke_exits_non_zero_when_an_op_fails(runtime):
@@ -225,7 +225,7 @@ def test_a_moderated_job_is_submitted_once(runtime):
 
 def test_max_usd_stops_before_overspending(runtime):
     log = new_log()
-    code, text = run(runway_smoke, ["--live", "--ops", "generate,combine,view", "--image-url", IMG,
+    code, text = run(runway_smoke, ["--live", "--ops", "generate,view,frame", "--image-url", IMG,
                                     "--max-usd", "0.10"],
                      factory=fake_factory(log, cost=0.07), fetch=lambda url: _gradient(), **runtime)
     assert len(log["jobs"]) == 1  # a second $0.07 job would pass $0.10

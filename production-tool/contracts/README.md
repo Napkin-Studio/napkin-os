@@ -34,7 +34,7 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `DELETE /jobs/{jobId}` | → `Job` (state `cancelled`) | Also cancels at the provider where it can. |
 | `POST /log` | `LogEntry` → 204 | Client errors and the Report button. |
 | `GET /library` | → `LibraryIndex` | The workspace's keys, latest version each. Added 2026-10-07 (v2). |
-| `GET /library/{key}` | → `LibraryEntry` | One version (`?ver=n`, latest by default). |
+| `GET /library/{key}[/{ver}]` | → `LibraryEntry` | One version; the latest without `{ver}`. |
 | `POST /library/{key}` | `LibraryPublish` → `LibraryEntry` | Publishes the next version. 409 `conflict` when `baseVer` is not the latest. Assets must be uploaded first. |
 | `POST /clan` | `.clan` bytes → 204 | Mirror of the participant's document for the organisers, on accept and every 5 minutes (`ClanMirror` lists the headers). Max 5 MiB. Kept as `clan/<participantId>/latest.clan` plus a timestamped history. Added 2026-10-06. |
 | `GET /config` | → `config.json` | Served by CloudFront; public. |

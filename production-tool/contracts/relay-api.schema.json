@@ -554,7 +554,7 @@
     },
     "LibraryEntry": {
       "type": "object",
-      "description": "GET /library/{key}[?ver=n] and the response of a publish: one immutable version of a key. Stored at s3 library/<workspace>/<key>/<ver>.json.",
+      "description": "GET /library/{key} (latest) or /library/{key}/{ver}, and the response of a publish: one immutable version of a key. Stored at s3 library/<workspace>/<key>/<ver>.json.",
       "properties": {
         "workspace": {
           "type": "string"

@@ -166,7 +166,7 @@ def _hashes(node) -> set:
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
                  per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
-                 prompt_version: str = "director.v2", contracts: Path = CONTRACTS):
+                 prompt_version: str = "director.v4", contracts: Path = CONTRACTS):
         self.port = model_port
         self.sheets = sheets
         self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
@@ -321,6 +321,11 @@ class Director:
             raise DirectorError("shot orders must run 1..n")
         if len({s["id"] for s in shots}) != len(shots):
             raise DirectorError("shot ids must be unique")
+        known = {r["name"] for r in payload.get("refs") or [] if r.get("name")}
+        for s in shots:
+            unknown = [n for n in s.get("refs") or [] if n not in known]
+            if unknown:
+                raise DirectorError(f"shot {s['order']} names {unknown[0]!r}, which is not an input ref")
         target = payload.get("targetS")
         total = sum(s["duration_s"] for s in shots)
         if target is not None and total != target:

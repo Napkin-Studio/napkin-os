@@ -50,7 +50,7 @@ MASK_POLARITY = {
     WAN: "unverified",  # takes the mask video that sam2 makes, so it is never converted here
 }
 
-IMAGE_OPS = {"generate", "combine", "frame"}
+IMAGE_OPS = {"generate", "frame"}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
 # pydantic-style 422 types: the request itself is wrong. Any other 422 type is fal's failure.
 INVALID_TYPES = ("missing", "value_error", "type_error", "string_", "int_", "float_", "bool_", "enum",

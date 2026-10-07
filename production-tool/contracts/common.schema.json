@@ -108,7 +108,7 @@
       "type": "object",
       "properties": {
         "code": {
-          "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "internal"]
+          "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "conflict", "internal"]
         },
         "message": { "type": "string", "description": "One line a participant can read in the node." },
         "retryable": { "type": "boolean" },

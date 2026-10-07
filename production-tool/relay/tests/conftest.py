@@ -56,6 +56,18 @@ class FakeBlobs:
     def get_json(self, key):
         return json.loads(self.objects[key][0]) if key in self.objects else None
 
+    def get_json_tagged(self, key):
+        if key not in self.objects:
+            return None, None
+        raw = self.objects[key][0]
+        return json.loads(raw), hashlib.sha256(raw).hexdigest()
+
+    def put_json_if(self, key, data, etag):
+        if self.get_json_tagged(key)[1] != etag:
+            return False
+        self.put(key, json.dumps(data).encode(), "application/json")
+        return True
+
     def fetch(self, url):
         return self.remote[url]
 
@@ -106,7 +118,7 @@ def sheets() -> dict:
 
 def base_config(**over) -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
-    cfg["routing"] = {"generate": ["fal", "runway"], "combine": ["runway"], "view": ["runway"], "shot_list": [],
+    cfg["routing"] = {"generate": ["fal", "runway"], "view": ["runway"], "shot_list": [],
                       "frame": ["runway"], "region_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"],
                       "stitch": []}
     cfg["inFlightPerParticipant"] = 6
@@ -130,7 +142,8 @@ class Harness:
         self.contracts = Contracts()
         self.relay = Relay(store=self.store, blobs=self.blobs, registry=reg, director=PassthroughDirector(),
                            config=lambda: self.cfg,
-                           secrets=lambda: {"event_codes": {"participant": ["HACK"], "organiser": ["ORGS"]},
+                           secrets=lambda: {"event_codes": {"participant": ["HACK", "ACME", "ACME2"], "organiser": ["ORGS"],
+                                                            "workspaces": {"ACME": "acme", "ACME2": "acme"}},
                                             "token_secret": SECRET},
                            clock=self.clock, stitch=self.stitched.append, contracts=self.contracts)
 
@@ -144,7 +157,9 @@ class Harness:
         elif status == 204:
             assert out is None
         else:
-            name = {"/session": "SessionResponse", "/uploads": "UploadResponse"}.get(path, "Job")
+            name = {"/session": "SessionResponse", "/uploads": "UploadResponse", "/library": "LibraryIndex"}.get(path, "Job")
+            if path.startswith("/library/"):
+                name = "LibraryEntry"
             if path == "/config":
                 name = None
             if name:
@@ -174,16 +189,24 @@ def asset(n: int = 1, mime="image/png") -> dict:
     return {"sha256": sha, "url": f"{CDN}/in/{sha}", "mime": mime}
 
 
+def ref(n: int = 1, name: str | None = None, role: str = "character", kind: str = "picture") -> dict:
+    """A JobInput ref: a named image (name = key_variant) or an unnamed canvas node."""
+    out = {"id": new_id("ref" if name else "node"), "role": role, "kind": kind, "asset": asset(n)}
+    if name:
+        out["name"] = name
+    return out
+
+
 def job_request(op: str, job_id: str, **inp) -> dict:
     if not inp:
         inp = {
-            "generate": {"text": "a hero", "sketch": asset(1)},
-            "view": {"view": "side", "character": {"front": asset(2)}},
-            "clip": {"image": asset(3), "character": {"front": asset(2)}},
+            "generate": {"text": "a hero", "refs": [ref(1, kind="drawing")]},
+            "view": {"view": "side", "image": asset(2)},
+            "clip": {"image": asset(3), "refs": [ref(2, "hero_front")]},
             "shot_list": {"script": "A hero walks in. She smiles. The logo shows.", "targetS": 15},
             "stitch": {"clips": [{"asset": {**asset(4, "video/mp4"), "url": f"{CDN}/out/{asset(4)['sha256']}"}, "trimS": 4}]},
         }[op]
-    return {"contractVersion": "1", "jobId": job_id, "op": op, "parentIds": [], "input": inp}
+    return {"contractVersion": "2", "jobId": job_id, "op": op, "parentIds": [], "input": inp}
 
 
 @pytest.fixture

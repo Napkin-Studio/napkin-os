@@ -22,9 +22,12 @@ import hashlib
 import json
 import logging
 import math
+import re
 import time
 from datetime import datetime, timezone
 
+import library
+import names
 import own_keys
 from contracts import Contracts, api
 from director.base import Director
@@ -34,7 +37,7 @@ from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_
 log = logging.getLogger("relay")
 
 QUOTA_CLASS = {
-    "generate": "image", "combine": "image", "view": "image", "frame": "image", "region_edit": "image",
+    "generate": "image", "view": "image", "frame": "image", "region_edit": "image",
     "clip": "video", "clip_edit": "video", "stitch": "render", "shot_list": "text",
 }
 INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
@@ -45,6 +48,14 @@ SESSION_TTL_S = 24 * 3600
 CLAN_MAX_BYTES = 5 * 1024 * 1024
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
+DEFAULT_WORKSPACE = "event"
+KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
+
+
+def workspace_of(codes: dict, code: str) -> str:
+    """The workspace an event code belongs to (EVENT_CODES "workspaces": {"CODE": "acme"})."""
+    mapped = {c.upper(): w for c, w in (codes.get("workspaces") or {}).items()}
+    return mapped.get(code, DEFAULT_WORKSPACE)
 SUBMITTING_STALE_S = 120       # a submit that never came back
 FETCH_LEASE_S = 90
 MAX_FETCH_ATTEMPTS = 3
@@ -52,7 +63,7 @@ STATUS_ERRORS = {
     "invalid_input": 400, "unauthorised": 401, "blocked": 403, "flag_off": 403,
     "quota_exhausted": 429, "queue_full": 429, "spend_stop": 503, "capability_missing": 422,
     "moderated": 422, "provider_failed": 502, "provider_unavailable": 503, "timeout": 504,
-    "uncertain": 409, "internal": 500,
+    "uncertain": 409, "conflict": 409, "internal": 500,
 }
 
 
@@ -178,6 +189,8 @@ class Relay:
                 return 200, public(self.advance(job))
             if method == "DELETE":
                 return 200, public(self.cancel(job))
+        if path == "/library" or path.startswith("/library/"):
+            return 200, self.library_route(who, method, path, body, ctx)
         if method == "POST" and path == "/clan":
             self._not_blocked(who)
             ctx["clanBytes"] = self.mirror_clan(who, headers, body)
@@ -241,8 +254,9 @@ class Relay:
         pid = participant_id(handle)
         ctx["participant"] = pid
         exp = int(self.clock()) + SESSION_TTL_S
-        token = sign({"pid": pid, "h": handle, "r": role, "exp": exp}, secrets["token_secret"])
-        return {"token": token, "participantId": pid, "handle": handle, "role": role,
+        workspace = workspace_of(codes, code)
+        token = sign({"pid": pid, "h": handle, "r": role, "w": workspace, "exp": exp}, secrets["token_secret"])
+        return {"token": token, "participantId": pid, "handle": handle, "role": role, "workspace": workspace,
                 "expiresAt": iso(exp), "quotas": self.remaining(pid, role)}
 
     def _day(self) -> str:
@@ -275,6 +289,30 @@ class Relay:
         for key in (f"clan/{who['pid']}/latest.clan", f"clan/{who['pid']}/{stamp}-{reason}.clan"):
             self.blobs.put(key, data, CLAN_MIME)
         return len(data)
+
+    # ── the workspace library ───────────────────────────────────────────────
+    def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
+        workspace = who.get("w") or DEFAULT_WORKSPACE
+        lib = library.Library(self.blobs, lambda: iso(self.clock()))
+        if method == "GET" and path == "/library":
+            return lib.index(workspace)
+        key, _, ver = path[len("/library/"):].partition("/")
+        if not KEY.match(key) or (ver and not ver.isdigit()):
+            raise ApiError("invalid_input", "A key is lowercase letters and digits, 2 to 24 of them.")
+        ctx["libraryKey"] = key
+        try:
+            if method == "GET":
+                return lib.entry(workspace, key, int(ver) if ver else None)
+            if method == "POST" and not ver:
+                self._not_blocked(who)
+                return lib.publish(workspace, key, self._json(body, "LibraryPublish"), who["h"])
+        except library.Conflict as e:
+            raise ApiError("conflict", str(e)) from None
+        except library.Missing as e:
+            raise ApiError("invalid_input", str(e), status=404) from None
+        except ValueError as e:
+            raise ApiError("invalid_input", str(e)) from None
+        raise ApiError("invalid_input", f"No route {method} {path}.", status=404)
 
     # ── admission ───────────────────────────────────────────────────────────
     def _candidates(self, cfg: dict, op: str) -> list[str]:
@@ -366,6 +404,10 @@ class Relay:
         op = req["op"]
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
+        try:  # a misspelt @name is the participant's to fix: say so now, not as a failed job
+            names.to_wire(op, req["input"])
+        except (names.UnknownName, ValueError) as e:
+            raise ApiError("invalid_input", str(e)) from None
         own = self._own_candidates(cfg, op, own_header)
         estimate, unknown = 0.0, False
         if op not in INTERNAL_OPS and not own:
@@ -394,7 +436,7 @@ class Relay:
 
         now = self.clock()
         job = {
-            "contractVersion": "1", "jobId": req["jobId"], "participantId": pid, "op": op,
+            "contractVersion": "2", "jobId": req["jobId"], "participantId": pid, "op": op,
             "quotaClass": qclass, "state": "queued", "inputHashes": sorted({a["sha256"] for a in asset_refs(req["input"])}),
             "cost": {"estimate": estimate, "reserved": estimate, "currency": "USD", "unknown": unknown},
             "createdAt": iso(now), "updatedAt": iso(now),
@@ -626,7 +668,9 @@ class Relay:
             use_config = getattr(self.director, "use_config", None)
             if use_config:  # config.json's director block: the model ids and prompt version
                 use_config(self.config().get("director") or {})
-            out = dict(self.director.direct(job["_req"], sheet))
+            req = job["_req"]
+            # The director sees wire tags (names.py); the ledger keeps the participant's names.
+            out = dict(self.director.direct({**req, "input": names.to_wire(req["op"], req.get("input") or {})}, sheet))
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e

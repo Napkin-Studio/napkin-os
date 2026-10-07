@@ -21,7 +21,7 @@ from contracts_dir import contracts_dir
 # The bundled copy in the Lambda zip, else production-tool/contracts (contracts_dir.py).
 CONTRACTS = contracts_dir()
 
-IMAGE_OPS = ("generate", "combine", "view", "frame", "region_edit")
+IMAGE_OPS = ("generate", "view", "frame", "region_edit")
 VIDEO_OPS = ("clip", "clip_edit")
 
 StatusState = Literal["queued", "running", "done", "failed", "cancelled"]

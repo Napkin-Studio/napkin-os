@@ -40,7 +40,35 @@ class Director(Protocol):
 _VIDEO_OPS = {"clip", "clip_edit"}
 _COMPOSITIONS = ["wide", "medium", "close", "medium", "close", "wide", "insert", "medium"]
 _MOVES = ["static", "push_in", "pan", "static", "track", "pull_out", "static", "orbit"]
-_VIEWS = ["three_quarter", "front", "side", "front", "three_quarter", "front", "back", "front"]
+_ELEMENT_OPS = {"generate", "frame", "clip"}
+_MAX_ANGLES = 3  # Kling: a front plus 1-3 reference images per element
+
+
+def ref_roles(inp: dict, op: str, sheet: dict | None) -> list[tuple[dict, str]]:
+    """The input refs in send order, each with its provider role.
+
+    A character key with a front and other variants is one Kling element where the sheet has
+    elements (front first, then up to 3 other variants as angles); otherwise a character ref is
+    `character` and every other role is `object`. Refs carry wire tags (names.py) by now."""
+    refs = list(inp.get("refs") or [])
+    roles = {r["id"]: ("character" if r["role"] == "character" else "object") for r in refs}
+    if sheet and (sheet.get("refs") or {}).get("element") and op in _ELEMENT_OPS:
+        by_key: dict[str, list[dict]] = {}
+        for r in refs:
+            if r["role"] == "character" and r.get("name"):
+                by_key.setdefault(r["name"].split("_", 1)[0], []).append(r)
+        ordered: list[dict] = []
+        for group in by_key.values():
+            front = next((r for r in group if r["name"].split("_", 1)[1] == "front"), None)
+            angles = [r for r in group if r is not front][:_MAX_ANGLES]
+            if front and angles:
+                roles[front["id"]] = "element_front"
+                for r in angles:
+                    roles[r["id"]] = "element_angle"
+                ordered += [front, *angles]
+        in_element = {r["id"] for r in ordered}
+        refs = ordered + [r for r in refs if r["id"] not in in_element]
+    return [(r, roles[r["id"]]) for r in refs]
 
 
 class PassthroughDirector:
@@ -67,14 +95,13 @@ class PassthroughDirector:
                 seen.add(asset["sha256"])
                 refs.append({"sha256": asset["sha256"], "name": name, "role": role})
 
-        add(inp.get("sketch"), "sketch", "character")
-        for view, asset in (inp.get("character") or {}).items():
-            add(asset, view, "character")
-        for ref in inp.get("refs") or []:
-            add(ref["asset"], ref["tag"], "character" if ref["role"] == "character" else "object")
+        if op == "view":
+            add(inp.get("image"), "current", "current")
+        for ref, role in ref_roles(inp, op, sheet):
+            add(ref["asset"], ref["tag"], role)
         if op in ("frame", "region_edit"):
             add(inp.get("image"), "current", "current")
-            # The storyboard's continuity anchors (director.v3): the frame before, then shot 1's
+            # The storyboard's continuity anchors (director.v3 on): the frame before, then shot 1's
             # frame for setting and style (the same picture is sent once, as previous).
             add(inp.get("previousFrame"), "previous", "object")
             add(inp.get("anchorFrame"), "anchor", "object")
@@ -83,7 +110,7 @@ class PassthroughDirector:
         if shot:
             prompt = f"{shot.get('action', '')} {prompt}".strip()
         if inp.get("view"):
-            prompt = f"{inp['view'].replace('_', ' ')} view of the character. {prompt}".strip()
+            prompt = f"{inp['view'].replace('-', ' ')} view of @current. {prompt}".strip()
         job = {"provider": provider, "model": model, "prompt": prompt or "the character", "refs": refs}
         if op == "clip" and inp.get("image"):
             job["firstFrame"] = inp["image"]["sha256"]
@@ -104,6 +131,7 @@ class PassthroughDirector:
     def _shot_list(self, job_request: dict) -> dict:
         inp = job_request.get("input", {})
         script = (inp.get("script") or inp.get("text") or "").strip()
+        named = [r["name"] for r in inp.get("refs") or [] if r.get("name")][:9]
         target = int(inp.get("targetS") or 15)
         n = max(2, min(8, -(-target // 5)))
         sentences = [s.strip() for s in script.replace("!", ".").replace("?", ".").split(".") if s.strip()]
@@ -118,7 +146,7 @@ class PassthroughDirector:
                 "composition": _COMPOSITIONS[i],
                 "action": action[:300],
                 "camera_move": _MOVES[i],
-                "lead_view": _VIEWS[i],
+                "refs": named,
                 "status": "planned",
             })
         return {"op": "shot_list", "shots": shots, "needsUser": None,

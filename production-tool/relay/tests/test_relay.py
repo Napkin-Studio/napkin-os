@@ -361,6 +361,6 @@ def test_stitch_rejects_clips_that_are_not_ours(h):
 
 def test_config_route_and_api_prefix(h):
     _, out = h.call("GET", "/config", expect=200)
-    assert out["contractVersion"] == "1"
+    assert out["contractVersion"] == "2"
     status, out, _ = h.relay.http("POST", "/api/session", {}, b'{"eventCode": "HACK", "handle": "zed"}')
     assert status == 200 and out["handle"] == "zed"
