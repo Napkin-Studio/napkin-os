@@ -437,3 +437,10 @@ def test_a_plain_ratio_is_mapped_to_the_nearest_runway_size():
     assert _nearest_ratio("1:1", FLASH_RATIOS) == "1024:1024"
     assert _nearest_ratio("16:9", RUNWAY_CLIP_RATIOS) in {"1280:720", "1920:1080"}
     assert _nearest_ratio("nonsense", FLASH_RATIOS) is None
+
+
+def test_a_ratio_the_model_left_out_is_taken_from_the_request():
+    # 2026-10-07: frames failed with "frame needs a ratio" when Haiku omitted it.
+    d, f = variant("generate_runway", lambda r: r["providerJob"].pop("ratio", None))
+    f["input"]["ratio"] = "4:5"
+    assert d.run(f["op"], f["input"], f["provider"]).output["providerJob"]["ratio"] == "896:1152"

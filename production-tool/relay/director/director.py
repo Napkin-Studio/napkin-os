@@ -232,6 +232,10 @@ class Director:
         if output["needsUser"] is not None:
             raise DirectorError("answered with a question and a job; send one or the other")
         job = output["providerJob"]
+        if "ratio" not in job and payload.get("ratio") and (job.get("provider"), op) not in NO_RATIO:
+            # 2026-10-07: Haiku sometimes leaves out the ratio it was given ("frame needs a ratio").
+            # Take it from the request; the nearest-size mapping below makes it fit the model.
+            job["ratio"] = payload["ratio"]
         _drop_unusable(job, op, sheet)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
