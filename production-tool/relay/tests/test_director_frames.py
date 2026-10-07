@@ -1,4 +1,4 @@
-"""Sequential storyboard frames (director.v2.1, decided 2026-10-07): every frame after the first
+"""Sequential storyboard frames (director.v3, decided 2026-10-07): every frame after the first
 carries the character views (identity), shot 1's frame as @anchor (setting, light, style) and the
 frame before as @previous (continuity), and a frame always shows its setting."""
 
@@ -42,20 +42,20 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
     edit_reply(reply), edit_input(payload)
     wire = FakeWire(reply)
     d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
-                 prompt_version="director.v2.1")
+                 prompt_version="director.v3")
     res = d.run(f["op"], payload, f["provider"])
     asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     return res, asked, wire
 
 
 def test_v2_1_is_the_default_and_the_configs_name_it():
-    assert PROMPT_VERSION == "director.v2.1"
+    assert PROMPT_VERSION == "director.v3"
     for name in ("config.testing.json", "config.event.json"):
-        assert json.loads((EXAMPLES / name).read_text())["director"]["promptVersion"] == "director.v2.1"
+        assert json.loads((EXAMPLES / name).read_text())["director"]["promptVersion"] == "director.v3"
 
 
 def test_v2_1_carries_the_frame_rules_and_keeps_v2s():
-    v2, v21 = (PROMPTS / "director.v2.md").read_text(), (PROMPTS / "director.v2.1.md").read_text()
+    v2, v21 = (PROMPTS / "director.v2.md").read_text(), (PROMPTS / "director.v3.md").read_text()
     for rule in (
         "`anchor` (input.anchorFrame)",
         "keep the setting, lighting, palette and style of @anchor",
@@ -82,8 +82,8 @@ def test_first_frame_is_drawn_from_the_views_and_shows_the_setting():
     assert [(r["name"], r["role"]) for r in job["refs"]] == [("front", "character")]
     assert "street" in job["prompt"] and "plain" not in job["prompt"]
     assert job["ratio"] == "768:1344"  # the plain 9:16 mapped to Runway's size
-    assert res.agent_block["promptVersion"] == "director.v2.1"
-    assert wire.calls[0]["system"] == (PROMPTS / "director.v2.1.md").read_text()
+    assert res.agent_block["promptVersion"] == "director.v3"
+    assert wire.calls[0]["system"] == (PROMPTS / "director.v3.md").read_text()
 
 
 def test_a_later_frame_names_the_anchor_and_the_previous_frame():

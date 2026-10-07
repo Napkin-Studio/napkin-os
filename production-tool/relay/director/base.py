@@ -74,7 +74,7 @@ class PassthroughDirector:
             add(ref["asset"], ref["tag"], "character" if ref["role"] == "character" else "object")
         if op in ("frame", "region_edit"):
             add(inp.get("image"), "current", "current")
-            # The storyboard's continuity anchors (director.v2.1): the frame before, then shot 1's
+            # The storyboard's continuity anchors (director.v3): the frame before, then shot 1's
             # frame for setting and style (the same picture is sent once, as previous).
             add(inp.get("previousFrame"), "previous", "object")
             add(inp.get("anchorFrame"), "anchor", "object")
