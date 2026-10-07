@@ -71,3 +71,25 @@ def test_real_ffmpeg_stitch(tmp_path):
     assert (res["w"], res["h"]) == (320, 568)
     assert 3.8 <= res["durationS"] <= 4.3  # 1 s + 2 s + 1 s card
     assert res["sha256"].startswith("sha256:") and len(store["ads/x.mp4"]) == res["bytes"]
+
+
+@pytest.mark.skipif(not (shutil.which("ffmpeg") and shutil.which("ffprobe") and FONTS),
+                    reason="needs ffmpeg, ffprobe and a TTF font")
+def test_clips_longer_than_their_shots_are_cut_to_the_shots(tmp_path):
+    # The FACET ad (2026-10-07): veo3.1_fast clips come back at 4, 6 or 8 s, and untrimmed
+    # 15 s of shots made a 21 s ad. With trimS = each shot's duration_s, the ad is the sum + 1 s card.
+    src = tmp_path / "src"
+    src.mkdir()
+    for name, d in (("a", 4), ("b", 6), ("c", 8)):
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", f"testsrc=d={d}:s=360x640:r=24",
+                        "-pix_fmt", "yuv420p", str(src / f"{name}.mp4")], check=True)
+    store = {}
+    res = stitch.run(
+        {"jobId": "job_t", "clips": [{"key": "a.mp4", "trimS": 3}, {"key": "b.mp4", "trimS": 2}, {"key": "c.mp4", "trimS": 4}],
+         "eventName": "Napkin", "outKey": "ads/t.mp4", "resultKey": "ads/t.json"},
+        get=lambda key, dest: shutil.copy(src / key, dest),
+        put=lambda key, p, mime: store.__setitem__(key, Path(p).read_bytes()),
+        put_json=lambda key, d: store.__setitem__(key, json.dumps(d)),
+        ffmpeg="ffmpeg", ffprobe="ffprobe", font=FONTS[0])
+    assert res["ok"], res
+    assert abs(res["durationS"] - (3 + 2 + 4 + 1)) <= 0.15

@@ -163,6 +163,16 @@ def _hashes(node) -> set:
     return set(SHA.findall(json.dumps(node)))
 
 
+def _without_dialogue(op: str, payload: dict) -> dict:
+    """A shot's dialogue is voice-over: a model told the words draws them (a "Dialogue - ..."
+    caption box in a frame, then in every clip made from it; decided 2026-10-07). The web app no
+    longer sends it for frames and clips; this keeps it from an older page or another client too."""
+    shot = payload.get("shot")
+    if op == "shot_list" or not isinstance(shot, dict) or "dialogue" not in shot:
+        return payload
+    return {**payload, "shot": {k: v for k, v in shot.items() if k != "dialogue"}}
+
+
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
                  per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
@@ -191,6 +201,7 @@ class Director:
             if op not in sheet["ops"]:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
+        payload = _without_dialogue(op, payload)
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name

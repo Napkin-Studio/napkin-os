@@ -121,3 +121,52 @@ def test_passthrough_sends_previous_then_anchor_and_one_picture_once():
     out = PassthroughDirector().direct({"jobId": "job_x", "op": "frame", "input": same}, load_sheet("runway"))
     assert [r["name"] for r in out["providerJob"]["refs"]].count("previous") == 1
     assert "anchor" not in [r["name"] for r in out["providerJob"]["refs"]]
+
+
+# ── No text in frames (decided 2026-10-07, the FACET ad) ────────────────────────────────────
+# Shot 4's frame came back as a storyboard-sheet panel with a "Dialogue - Smooth where it shines."
+# caption box, and every clip made from it kept the card. Dialogue is voice-over: it never reaches
+# the model for a frame or a clip, and the prompt asks for a full-bleed image with no text.
+
+def test_v3_forbids_text_panels_and_drawn_dialogue():
+    v3 = (PROMPTS / "director.v3.md").read_text()
+    for rule in (
+        "one full-bleed cinematic image",
+        "never a storyboard sheet or a panel on a page",
+        "no captions, no subtitles",
+        "no speech or thought bubbles",
+        "no panel borders or frames-within-frames",
+        "Full-bleed cinematic image; no text, captions, subtitles, speech bubbles, borders or panels.",
+        "Dialogue is never drawn",
+        "No text, captions, subtitles or speech bubbles.",  # clips
+        "the region is filled with the scene continuing behind it",  # "remove this card"
+        "it is voice-over, never shown on screen",  # shot_list
+    ):
+        assert rule in v3, rule
+
+
+def test_a_shot_with_dialogue_never_shows_the_model_its_words():
+    f = fixture("frame_runway_dialogue")
+    assert f["input"]["shot"]["dialogue"] == "Smooth where it shines."  # an older page still sends it
+    res, asked, wire = direct("frame_runway_dialogue")
+    assert "dialogue" not in asked["input"]["shot"]
+    assert '"dialogue"' not in wire.calls[0]["turns"][0]["text"]  # (the script may still hold the words; the prompt rules cover it)
+    assert asked["input"]["shot"]["action"] == f["input"]["shot"]["action"]  # the rest of the shot goes
+    job = res.output["providerJob"]
+    assert job["prompt"].endswith("no text, captions, subtitles, speech bubbles, borders or panels.")
+    assert "Smooth where it shines" not in job["prompt"]
+
+
+def test_clip_requests_lose_the_dialogue_too_but_shot_lists_keep_it():
+    f = fixture("clip_runway")
+    payload = copy.deepcopy(f["input"])
+    payload["shot"]["dialogue"] = "Every diamond starts as pressure."
+    wire = FakeWire(f["reply"])
+    d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
+                 prompt_version="director.v3")
+    d.run("clip", payload, "runway")
+    assert "Every diamond" not in wire.calls[0]["turns"][0]["text"]
+    assert payload["shot"]["dialogue"] == "Every diamond starts as pressure."  # the caller's copy is untouched
+    from director.director import _without_dialogue
+    shot_list = {"script": "x", "targetS": 10, "shot": {"dialogue": "kept"}}
+    assert _without_dialogue("shot_list", shot_list) is shot_list
