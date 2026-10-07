@@ -1,46 +1,55 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/customdata.schema.json",
-  "title": "Excalidraw customData on the Character canvas",
-  "description": "Every element the tool owns carries one of these in customData. Every id is also the id in the document (document.schema.json), so the canvas and the record cannot drift apart. Elements without customData are the user's own drawing. Storyboard and Video are React panels and have no customData.",
+  "title": "Excalidraw customData on the canvas",
+  "description": "Every element the tool owns carries one of these in customData. Every id is also the id in the document (document.schema.json), so the canvas and the record cannot drift apart. Elements without customData are the user's own drawing; using strokes as an input wraps them in a drawn frame. Every image node (pic, drawn, gen) can be named, which links it to a document ref. Storyboard and Video are React panels and have no customData.",
   "oneOf": [
     {
       "type": "object",
-      "title": "ref: a dropped picture or a drawing marked as a reference",
+      "title": "pic: a picture dropped or pasted onto the canvas",
       "properties": {
-        "kind": { "const": "ref" },
-        "id": { "$ref": "common.schema.json#/$defs/id" },
+        "kind": { "const": "pic" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "node_…" },
         "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-        "tag": { "$ref": "common.schema.json#/$defs/tag" },
-        "role": { "$ref": "common.schema.json#/$defs/refRole" },
-        "badge": { "type": "string", "pattern": "^[A-Z]{1,2}$", "description": "A, B, C… shown on the chip. Display only; prompts use tag." }
+        "ref": { "$ref": "common.schema.json#/$defs/id", "description": "Set when the picture is named: the document refs[] entry." }
       },
-      "required": ["kind", "id", "asset", "tag", "role", "badge"],
+      "required": ["kind", "id", "asset"],
       "additionalProperties": false
     },
     {
       "type": "object",
-      "title": "sketch: the frame the user draws the character in",
+      "title": "drawn: a frame around the user's strokes, made when they are used as an input or named",
       "properties": {
-        "kind": { "const": "sketch" },
-        "id": { "$ref": "common.schema.json#/$defs/id" },
-        "template": { "enum": ["character-3x4", "ig-1x1", "ig-4x5", "story-9x16"] }
+        "kind": { "const": "drawn" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "node_…" },
+        "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The strokes exported as PNG; re-exported when they change." },
+        "ref": { "$ref": "common.schema.json#/$defs/id" }
       },
-      "required": ["kind", "id", "template"],
+      "required": ["kind", "id", "asset"],
       "additionalProperties": false
     },
     {
       "type": "object",
-      "title": "gen: a generated image on the canvas (front candidate, combine result, view candidate)",
+      "title": "note: a text element used as an input (its words join the instruction)",
+      "properties": {
+        "kind": { "const": "note" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "node_…" }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "title": "gen: a generated image on the canvas; a node like any other, usable as an input",
       "properties": {
         "kind": { "const": "gen" },
         "id": { "$ref": "common.schema.json#/$defs/id", "description": "The job id." },
-        "op": { "enum": ["generate", "combine", "view", "region_edit"] },
-        "parentIds": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },
+        "op": { "enum": ["generate", "view", "region_edit"] },
+        "parentIds": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "description": "The node ids it was made from (pic, drawn, note or gen); each has a provenance arrow." },
         "state": { "$ref": "common.schema.json#/$defs/jobState" },
         "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-        "view": { "$ref": "common.schema.json#/$defs/view" },
-        "pickedAs": { "$ref": "common.schema.json#/$defs/view", "description": "Set when this image fills a view slot." },
+        "view": { "$ref": "common.schema.json#/$defs/view", "description": "op view: the view it was made as." },
+        "ref": { "$ref": "common.schema.json#/$defs/id", "description": "Set when the image is named: the document refs[] entry." },
         "mock": { "type": "boolean" }
       },
       "required": ["kind", "id", "op", "parentIds", "state"],

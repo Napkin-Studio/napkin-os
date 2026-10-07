@@ -1,7 +1,7 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "routing": {
-    "generate": ["fal", "runway"], "combine": ["fal", "runway"], "view": ["fal", "runway"], "shot_list": [],
+    "generate": ["fal", "runway"], "view": ["fal", "runway"], "shot_list": [],
     "frame": ["fal", "runway"], "region_edit": ["fal", "runway"], "clip": ["fal", "heygen", "runway"], "clip_edit": ["runway"], "stitch": []
   },
   "director": { "promptVersion": "director.v3", "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },

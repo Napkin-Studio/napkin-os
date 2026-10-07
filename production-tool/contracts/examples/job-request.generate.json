@@ -1,15 +1,15 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F",
   "op": "generate",
-  "parentIds": [],
+  "parentIds": ["node_01K6XA6Z0000000000000000AA", "node_01K6XA6Z0000000000000000AB", "node_01K6XA6Z0000000000000000AC"],
   "input": {
-    "text": "eyes from @eyes, colours from @palette",
+    "text": "a full-body character like the drawing, eyes from @maya_eyes, colours from the second picture",
     "chips": [],
-    "sketch": { "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mime": "image/png" },
     "refs": [
-      { "id": "ref_01K6XA6Z0000000000000000AB", "tag": "eyes", "role": "shape", "asset": { "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "mime": "image/jpeg" } },
-      { "id": "ref_01K6XA6Z0000000000000000AC", "tag": "palette", "role": "colour", "asset": { "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "mime": "image/png" } }
+      { "id": "node_01K6XA6Z0000000000000000AA", "role": "character", "kind": "drawing", "asset": { "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mime": "image/png" } },
+      { "id": "ref_01K6XA6Z0000000000000000AD", "name": "maya_eyes", "role": "shape", "kind": "picture", "asset": { "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "mime": "image/jpeg" } },
+      { "id": "node_01K6XA6Z0000000000000000AC", "role": "colour", "kind": "picture", "asset": { "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "mime": "image/png" } }
     ],
     "ratio": "4:5"
   }

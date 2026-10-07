@@ -1,14 +1,9 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "provider": "fal",
   "checked": "2026-10-06",
   "ops": {
     "generate": {
-      "model": "kling-image-o3",
-      "endpoint": "fal-ai/kling-image/o3/image-to-image",
-      "estimateUsd": 0.028
-    },
-    "combine": {
       "model": "kling-image-o3",
       "endpoint": "fal-ai/kling-image/o3/image-to-image",
       "estimateUsd": 0.028

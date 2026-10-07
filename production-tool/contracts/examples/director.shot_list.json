@@ -1,8 +1,8 @@
 {
   "op": "shot_list",
   "shots": [
-    { "id": "shot_01K6XB000000000000000000A1", "order": 1, "duration_s": 5, "composition": "wide", "action": "The hero walks into a rainy street, umbrella closed.", "camera_move": "track", "lead_view": "three_quarter" },
-    { "id": "shot_01K6XB000000000000000000A2", "order": 2, "duration_s": 5, "composition": "close", "action": "The hero smiles and opens the umbrella; the product logo shows.", "camera_move": "push_in", "lead_view": "front" }
+    { "id": "shot_01K6XB000000000000000000A1", "order": 1, "duration_s": 5, "composition": "wide", "action": "@hero_three-quarter walks into a rainy street, umbrella closed.", "camera_move": "track", "refs": ["hero_three-quarter", "brolly_closed"] },
+    { "id": "shot_01K6XB000000000000000000A2", "order": 2, "duration_s": 5, "composition": "close", "action": "@hero_front smiles and opens @brolly_open; the product logo shows.", "camera_move": "push_in", "refs": ["hero_front", "brolly_open"] }
   ],
   "needsUser": null,
   "rationale": "Two 5 s shots for a 10 s script: establish, then the product moment.",

@@ -15,12 +15,12 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 
 | File | What it fixes | Who writes / who reads |
 |---|---|---|
-| `common.schema.json` | ids (prefixed ULIDs), `sha256:` hashes, tags, roles, views, the 0-1 region, ops, quota classes, job states, cost, asset refs, outputs, error codes | everyone |
+| `common.schema.json` | ids (prefixed ULIDs), `sha256:` hashes, keys, variants, ref names, wire tags, roles, views, the 0-1 region, ops, quota classes, job states, cost, asset refs, outputs, error codes | everyone |
 | `relay-api.schema.json` | request and response bodies of every relay route, and the job ledger item | infra writes the relay; ui calls it; harness plugs in behind it |
 | `capabilities.schema.json` + `capabilities/*.json` | what each provider can do, with which model, at what price | harness writes; the director, relay and UI read |
 | `director.schema.json` | the director's strict JSON output and the logged agent block | harness |
-| `document.schema.json` | the CLAN document (shared/data.yaml): character, script, shots, frames, takes, jobs, reviews | ui writes; export and the Viewer read |
-| `customdata.schema.json` | Excalidraw `customData` on the Character canvas | ui |
+| `document.schema.json` | the CLAN document (shared/data.yaml): keys, refs, script, shots, frames, takes, jobs, reviews | ui writes; export and the Viewer read |
+| `customdata.schema.json` | Excalidraw `customData` on the canvas (pic, drawn, note, gen, pin, provenance) | ui |
 | `config.schema.json` + `examples/config.*.json` | remote `config.json`: routing per op, director models, quotas, timeouts, spend stop, flags, banner | Shrey edits during the event; web and relay read |
 
 ## Relay routes
@@ -33,6 +33,9 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `GET /jobs/{jobId}` | → `Job` | Poll no faster than `nextPollS`. |
 | `DELETE /jobs/{jobId}` | → `Job` (state `cancelled`) | Also cancels at the provider where it can. |
 | `POST /log` | `LogEntry` → 204 | Client errors and the Report button. |
+| `GET /library` | → `LibraryIndex` | The workspace's keys, latest version each. Added 2026-10-07 (v2). |
+| `GET /library/{key}` | → `LibraryEntry` | One version (`?ver=n`, latest by default). |
+| `POST /library/{key}` | `LibraryPublish` → `LibraryEntry` | Publishes the next version. 409 `conflict` when `baseVer` is not the latest. Assets must be uploaded first. |
 | `POST /clan` | `.clan` bytes → 204 | Mirror of the participant's document for the organisers, on accept and every 5 minutes (`ClanMirror` lists the headers). Max 5 MiB. Kept as `clan/<participantId>/latest.clan` plus a timestamped history. Added 2026-10-06. |
 | `GET /config` | → `config.json` | Served by CloudFront; public. |
 
@@ -76,7 +79,7 @@ The adapter owns the exact request:
 
 - **Hashes are the identity.** URLs are only hints. Every provider output is copied to our S3 and hashed before a job is `completed`.
 - **One id everywhere.** A job's id is also its Excalidraw element id and its document entry id.
-- **Tags** are stored once in the strictest form (`^[a-z][a-z0-9_]{2,15}$`). Canvas badges (A, B, C) are for display only.
+- **Names and tags.** People name images `key_variant` (`maya_laughing`); variants are free text. A provider job uses wire tags in the strictest form (`^[a-z][a-z0-9_]{2,15}$`), derived by the relay from the names (`relay/names.py`), which also rewrites `@name` in the job's words. Unnamed inputs become `in_1`, `in_2`…
 - **Region:** 0-1 coordinates of the image it sits on, origin top-left.
 - **Cancel:** where `results.cancel` is false (HeyGen), the UI hides Cancel; a cancelled job may still bill and its `cost.confirmed` says so.
 - **Moderation:** never retry a moderated job (Runway `SAFETY.INPUT.*`, fal `content_policy_violation`). It becomes `moderated`, which can't be retried.
@@ -86,7 +89,7 @@ The adapter owns the exact request:
 
 1. **Field names.** The document is snake_case, like all CLAN data here; the API is camelCase. `shot` is shared and keeps snake_case in both. The shape (separate lists joined by id) borrows from Advertising Studio, but this is its own app and does not promise compatibility with it (owner, 2026-10-06).
 2. **Job states** are pipeline.yaml's nine, in the relay and the document alike.
-3. **Views:** front, three_quarter, side, back, plus an optional side_2.
+3. **Views:** front, three_quarter, side, back, plus an optional side_2. Replaced in v2: views are variants of a key (`front`, `three-quarter`, `side`, `back`).
 4. **`blocked` and per-handle overrides** moved out of `config.json`, because it is public.
 5. **Director models:** Claude on Amazon Bedrock (eu-west-1, IAM, no API key): `eu.anthropic.claude-haiku-4-5-20251001-v1:0` per click, `eu.anthropic.claude-sonnet-5-5` for the shot list (`config.director`). Both inference profiles checked ACTIVE on 2026-10-06.
 6. **Spend caps:** $200 in `config.testing.json`, $1,300 in `config.event.json` (D2, 2026-10-06: Runway's org has 20 concurrent per model and about $3.2k of credits, so no tier purchase). This is the relay's own stop, not a limit at Runway.
@@ -96,3 +99,4 @@ The adapter owns the exact request:
    - clip_edit on Runway only (aleph2)
 8. **Sequential storyboard frames (2026-10-07).** Frames are drawn one after another with three anchors: the character views (identity), frame 1 (setting, light and style) and the previous frame (continuity). `JobInput` gains an optional `anchorFrame` (assetRef: the first storyboard frame) beside `previousFrame`, and a frame request may carry the `script` for the setting. Additive: `contractVersion` stays "1". The director names them `@anchor` and `@previous` (prompt `director.v3`). To name it, `promptVersion` in `config.schema.json` and the agent block in `director.schema.json` now also take a minor version (`director.v3`); this loosens a pattern, so every existing value stays valid.
 9. **Prompt names stay `director.vN`** (2026-10-07). A .clan keeps the contract it was created with, so documents made before the pattern was loosened refuse `director.v2.1`. The frames prompt is `director.v3`, which every document accepts; don't use dotted versions.
+10. **Contract version 2 (2026-10-07, feature canvas-solid-refs).** Breaking, so `contractVersion` is "2". The document's `character` (refs, combines, views, lock) becomes `keys[]` + `refs[]`. A shot names its refs (`shots[].refs`) instead of `lead_view`. `JobInput.sketch` and `JobInput.character` go: every image input is a ref with an optional `name` and a `kind`, and a view takes its source as `image`. The `combine` op folds into `generate` (1-14 inputs). customData `ref` and `sketch` become `pic`, `drawn` and `note`. The relay adds the workspace library routes and `workspace` on the session. The live `config.json` must drop its `combine` routing before this relay is deployed.
