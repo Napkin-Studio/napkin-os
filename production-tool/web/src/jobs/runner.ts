@@ -245,6 +245,7 @@ export class JobRunner {
   }
 
   private apply(job: Job) {
+    normalisePromptVersion(job)
     const done = job.state === 'completed'
     const prev = this.doc.get().jobs.find((x) => x.id === job.jobId)
     if (prev && !isActive(prev.state) && prev.state === job.state) return
@@ -307,4 +308,14 @@ export class JobRunner {
  *  so a local dev relay's http://localhost URL is left out (the bytes are in this browser anyway). */
 export function outputLocations(sha256: string, url: string): string[] {
   return /^https:\/\//.test(url) ? [idbLocation(sha256), url] : [idbLocation(sha256)]
+}
+
+/** Prompt files renamed without changing their content. A .clan made before the promptVersion
+ *  pattern was loosened refuses dotted names, and a job directed under the old name would be
+ *  refused on every save (2026-10-07: "director.v2.1" looped as "1 queued"). Same prompt, new name. */
+const PROMPT_RENAMES: Record<string, string> = { 'director.v2.1': 'director.v3' }
+
+export function normalisePromptVersion(job: Job): void {
+  const v = job.director?.promptVersion
+  if (job.director && v && PROMPT_RENAMES[v]) job.director = { ...job.director, promptVersion: PROMPT_RENAMES[v] }
 }
