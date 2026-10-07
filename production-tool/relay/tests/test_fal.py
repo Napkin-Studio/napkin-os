@@ -158,8 +158,9 @@ def test_unknown_tag_is_invalid_input(provider):
 
 
 def test_image_op_without_an_image_ref_is_refused(provider, fal):
+    # No picture at all. (Element refs alone now go as images: see the test at the end.)
     with pytest.raises(CapabilityMissing):
-        provider.submit(job(refs=element_refs()))
+        provider.submit(job(refs=[]))
     assert fal.fal_requests == []
 
 
@@ -743,3 +744,14 @@ def test_a_clip_edit_source_sent_as_video_is_found():
     from providers.types import ProviderJob as PJ
     pj = PJ.from_director("clip_edit", {"provider": "fal", "model": "m", "prompt": "x", "video": VIDEO, "refs": []})
     assert [(r.sha256, r.role) for r in pj.refs] == [(VIDEO, "current")]
+
+
+def test_a_generate_with_only_one_characters_variants_sends_them_as_images(provider, fal):
+    """2026-10-07: maya_front + maya_side went as one Kling element and nothing else, and Kling image
+    o3 needs at least one image in image_urls ("needs at least one image ref"). With no plain image,
+    the element's pictures go as images, and the prompt names them @Image1, @Image2."""
+    refs = [Ref(HERO, "maya_front", "element_front"), Ref(FRAME, "maya_side", "element_angle")]
+    provider.submit(job(prompt="@maya_front waving, like @maya_side", refs=refs))
+    body = fal.body()
+    assert len(body["image_urls"]) == 2 and "elements" not in body
+    assert body["prompt"] == "@Image1 waving, like @Image2"

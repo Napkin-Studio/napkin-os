@@ -262,6 +262,11 @@ class FalProvider:
 
     def _kling_image(self, job: ProviderJob) -> dict:
         urls, names, elements, tags = self._split_refs(job)
+        if not urls and elements:
+            # Kling image o3 needs at least one image in image_urls; elements alone are refused.
+            # With nothing else to send, the element's pictures go as images (@Image1, @Image2…).
+            urls = [self._url(r.sha256) for r in job.refs]
+            names, elements, tags = [r.name for r in job.refs], [], {}
         if not urls:
             raise CapabilityMissing("kling image o3 needs at least one image ref")
         body = {"prompt": self._prompt(job.prompt, names, tags), "image_urls": urls, "output_format": "png"}
