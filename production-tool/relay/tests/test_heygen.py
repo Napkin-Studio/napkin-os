@@ -329,3 +329,21 @@ def test_non_json_error_body_still_maps():
     with pytest.raises(ProviderError) as e:
         p.submit(job())
     assert e.value.code == "provider_unavailable" and e.value.retryable
+
+
+def test_a_local_inline_image_goes_as_heygen_base64_not_as_a_url():
+    """The local relay sends data URIs; HeyGen's url field must be a public HTTPS URL, and inline
+    images go as {"type": "base64", "media_type", "data"} (developers.heygen.com, 2026-10-07)."""
+    def inline(sha):
+        return AssetRef(sha, "data:image/png;base64,iVBORw0KGgo=", "image/png")
+    client = httpx.Client(transport=httpx.MockTransport(reply(202, "create_202")))
+    sent = []
+    p = HeyGenProvider("key-123", inline, client=httpx.Client(transport=httpx.MockTransport(
+        lambda r: sent.append(r) or reply(202, "create_202")(r))))
+    p.submit(job())
+    assert body_of(sent[0])["image"] == {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}
+    p.submit(refs_job(ratio="4:5"))
+    body = body_of(sent[1])
+    assert body["reference_images"][0]["type"] == "base64"
+    assert body["aspect_ratio"] == "3:4"  # reference_to_video takes 9:16, 16:9, 1:1, 3:4, 4:3, 21:9
+    client.close()

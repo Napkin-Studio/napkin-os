@@ -17,7 +17,7 @@ import httpx
 
 from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
-    Status, check_capabilities, load_sheet, video_audio,
+    Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import UnknownTag, rewrite_tags
 
@@ -25,6 +25,9 @@ BASE = "https://api.heygen.com"
 MODEL = "heygen-video-1"
 RESOLUTION = "768p"  # never 2k: it bills 3x
 MAX_PROMPT = 5000
+# reference_to_video aspect_ratio enum (developers.heygen.com/reference/create-heygen-video, 2026-10-07).
+REFERENCE_RATIOS = ("9:16", "16:9", "1:1", "3:4", "4:3", "21:9")
+BASE64_MAX = 5 * 1024 * 1024
 
 STATES = {"pending": "queued", "processing": "running", "completed": "done",
           "failed": "failed", "cancelled": "cancelled"}
@@ -107,17 +110,28 @@ class HeyGenProvider:
         body: dict = {"model": MODEL, "mode": mode, "prompt": prompt, "resolution": RESOLUTION,
                       "prompt_enhancement": "disabled"}
         if mode == "image_to_video":
-            body["image"] = {"type": "url", "url": self._assets(job.first_frame).url}
+            body["image"] = self._image(job.first_frame)
             body["aspect_ratio"] = None  # the image sets it; HeyGen wants it null
         else:
-            body["reference_images"] = [{"type": "url", "url": self._assets(r.sha256).url} for r in job.refs]
+            body["reference_images"] = [self._image(r.sha256) for r in job.refs]
             if job.ratio:
-                body["aspect_ratio"] = job.ratio
+                body["aspect_ratio"] = nearest_ratio(job.ratio, REFERENCE_RATIOS)
         if job.duration_s is not None:
             body["duration"] = int(job.duration_s)
         if job.seed is not None:
             body["seed"] = job.seed
         return body
+
+    def _image(self, sha: str) -> dict:
+        """An image as HeyGen takes it: a public HTTPS URL, or inline base64. The local relay sends
+        data URIs, and HeyGen's url field must be a public HTTPS URL; base64 is capped at 5 MB."""
+        ref = self._assets(sha)
+        if not ref.url.startswith("data:"):
+            return {"type": "url", "url": ref.url}
+        head, _, data = ref.url.partition(",")
+        if len(data) * 3 // 4 > BASE64_MAX:
+            raise ProviderError("invalid_input", "an image is over HeyGen's 5 MB inline limit", False)
+        return {"type": "base64", "media_type": head[5:].split(";")[0] or ref.mime, "data": data}
 
     def submit(self, job: ProviderJob) -> str:
         check_capabilities(self._sheet, job)

@@ -12,6 +12,7 @@ provider's error codes mapped onto ours (common.schema.json#/$defs/error).
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Literal, Optional, Protocol
@@ -93,10 +94,14 @@ class ProviderJob:
 
     @classmethod
     def from_director(cls, op: str, job: dict) -> "ProviderJob":
-        """Build from the director's camelCase providerJob."""
+        """Build from the director's camelCase providerJob. A clip_edit's source clip may come as
+        `video` (director.schema.json) rather than a ref; adapters find it as the `current` ref."""
+        refs = [Ref(r["sha256"], r["name"], r["role"]) for r in job.get("refs", [])]
+        if job.get("video") and not any(r.sha256 == job["video"] for r in refs):
+            refs.insert(0, Ref(job["video"], "current", "current"))
         return cls(
             op=op, provider=job["provider"], model=job["model"], prompt=job["prompt"],
-            refs=[Ref(r["sha256"], r["name"], r["role"]) for r in job.get("refs", [])],
+            refs=refs,
             negative=job.get("negative"), first_frame=job.get("firstFrame"),
             last_frame=job.get("lastFrame"), mask=job.get("mask"), region=job.get("region"),
             keyframe=job.get("keyframe"), angle=job.get("angle"), ratio=job.get("ratio"),
@@ -148,6 +153,23 @@ class Provider(Protocol):
 
 def load_sheet(name: str, root: Path = CONTRACTS) -> dict:
     return json.loads((root / "capabilities" / f"{name}.json").read_text())
+
+
+def nearest_ratio(ratio: str, allowed: tuple[str, ...]) -> str:
+    """The allowed W:H closest in shape to `ratio` (plain 4:5 or pixels 896:1152), for endpoints
+    that take a fixed list (fal Kling image has no 4:5; HeyGen reference_to_video)."""
+    if ratio in allowed:
+        return ratio
+    try:
+        w, h = (float(x) for x in ratio.split(":"))
+        target = math.log(w / h)
+    except (ValueError, ZeroDivisionError):
+        return allowed[0]
+
+    def shape(r: str) -> float:
+        a, b = (float(x) for x in r.split(":"))
+        return abs(math.log(a / b) - target)
+    return min(allowed, key=shape)
 
 
 def check_capabilities(sheet: dict, job: ProviderJob) -> None:

@@ -34,11 +34,13 @@ from PIL import Image, ImageOps
 
 from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
-    Status, check_capabilities, load_sheet, video_audio,
+    Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import TAG, UnknownTag, rewrite_tags
 
 QUEUE = "https://queue.fal.run"
+# fal-ai/kling-image/o3/image-to-image aspect_ratio enum (fal.ai/models/.../api, checked 2026-10-07).
+KLING_IMAGE_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9")
 SAM2 = "fal-ai/sam2/video"
 WAN = "fal-ai/wan-vace-14b/inpainting"
 
@@ -266,7 +268,7 @@ class FalProvider:
         if elements:
             body["elements"] = elements
         if job.ratio:
-            body["aspect_ratio"] = job.ratio
+            body["aspect_ratio"] = nearest_ratio(job.ratio, KLING_IMAGE_RATIOS)
         n = job.outputs or 1
         if job.op == "frame" and n >= 2:
             body.update(result_type="series", series_amount=n)  # a consistent set of frames
@@ -331,7 +333,8 @@ class FalProvider:
             body["negative_prompt"] = job.negative
         shots = [self._prompt(s.strip(), [], tags) for s in SHOT_SPLIT.split(job.prompt) if s.strip()]
         if len(shots) < 2:
-            body["prompt"] = shots[0] if shots else ""
+            # fal needs a prompt or a multi_prompt; an empty one is refused.
+            body["prompt"] = shots[0] if shots else "Subtle, natural motion; the camera holds."
             if job.duration_s is not None:
                 body["duration"] = str(_seconds(job.duration_s))  # a string, "3".."15"
             return body
@@ -342,6 +345,7 @@ class FalProvider:
             raise ProviderError("invalid_input", f"{len(shots)} shots do not fit in {total} s", False)
         each, extra = divmod(total, len(shots))
         body["multi_prompt"] = [{"prompt": s, "duration": str(each + (i < extra))} for i, s in enumerate(shots)]
+        body["duration"] = str(total)  # the top-level duration defaults to "5": say the shots' sum
         body["shot_type"] = "customize"
         return body
 
