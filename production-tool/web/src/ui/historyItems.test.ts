@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../doc/store'
-import { aboutItem, historyItems, kindOf, readable, type ChainLike } from './history'
+import { aboutItem, historyItems, kindOf, readable, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`

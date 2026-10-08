@@ -19,8 +19,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .types import (
     VIDEO_OPS, AssetResolver, ProviderError, ProviderJob,
-    ProviderOutput, Status, check_capabilities, load_sheet, video_audio,
+    ProviderOutput, Status, check_capabilities, effective_sheet, load_sheet, video_audio,
 )
+
+# The alternates in capabilities/mock.json, so local dev can exercise the regenerate menu.
+ALTERNATES = {"frame": {"mock-hq"}, "clip": {"mock-hq"}}
 
 Fetch = Callable[[str], bytes]
 
@@ -60,17 +63,22 @@ class MockProvider:
         return self._sheet
 
     def submit(self, job: ProviderJob) -> str:
-        check_capabilities(self._sheet, job)
+        check_capabilities(effective_sheet(self._sheet, job.op, job.model), job)
         request = {"op": job.op, "model": job.model, "prompt": job.prompt,
                    "refs": [r.name for r in job.refs]}
         if job.op in VIDEO_OPS:
             request["audio"] = video_audio(job)  # explicit on every video request
         self.requests.append(request)
         request_id = f"mock_{uuid.uuid4().hex[:12]}"
-        self._jobs[request_id] = {"job": job, "at": self._clock(), "cancelled": False}
+        # The input is resolved now: status() runs outside the job's context, where the
+        # relay's asset URLs are gone, so a lookup then fails ("no URL for asset").
+        sha = self._source_sha(job)
+        self._jobs[request_id] = {"job": job, "at": self._clock(), "cancelled": False,
+                                  "source": self._assets(sha).url if sha else None}
         return request_id
 
-    def _source(self, job: ProviderJob) -> Optional[bytes]:
+    @staticmethod
+    def _source_sha(job: ProviderJob) -> Optional[str]:
         """The image to stamp: the first frame, else the marked/current ref, else any ref."""
         sha = job.first_frame
         if not sha and job.keyframe:
@@ -78,7 +86,7 @@ class MockProvider:
         if not sha:
             by_role = {r.role: r.sha256 for r in reversed(job.refs)}
             sha = by_role.get("current") or by_role.get("marked") or (job.refs[0].sha256 if job.refs else None)
-        return self._fetch(self._assets(sha).url) if sha else None
+        return sha
 
     def status(self, request_id: str) -> Status:
         entry = self._jobs.get(request_id)
@@ -93,7 +101,7 @@ class MockProvider:
             return Status("running", queue_position=0, kind="mock")
         job = entry["job"]
         try:
-            source = self._source(job)
+            source = self._fetch(entry["source"]) if entry["source"] else None
         except Exception as exc:  # an unfetchable input is a provider failure, not a crash
             return Status("failed", kind="mock",
                           error=ProviderError("provider_failed", f"mock could not read its input: {exc}", True))

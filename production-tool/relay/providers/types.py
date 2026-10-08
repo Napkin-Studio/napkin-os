@@ -11,6 +11,7 @@ provider's error codes mapped onto ours (common.schema.json#/$defs/error).
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 from dataclasses import dataclass, field
@@ -153,6 +154,47 @@ class Provider(Protocol):
 
 def load_sheet(name: str, root: Path = CONTRACTS) -> dict:
     return json.loads((root / "capabilities" / f"{name}.json").read_text())
+
+
+# What an alternate may replace at the sheet level (capabilities.schema.json ops[op].alternates).
+SHEET_OVERRIDES = ("tagSyntax", "refs", "series", "outputsPerCall", "video")
+DURATION_FIELDS = ("durationsS", "minS", "maxS")
+
+
+def op_models(sheet: dict, op: str) -> list[str]:
+    """The models a participant may pick for `op` on this sheet: its own first, then its alternates."""
+    spec = sheet["ops"].get(op)
+    if spec is None:
+        return []
+    return [spec["model"]] + [a["model"] for a in spec.get("alternates", [])]
+
+
+def effective_sheet(sheet: dict, op: str, model: Optional[str]) -> dict:
+    """The sheet as `model` running `op` sees it (features/model-choice.clan).
+
+    For the op's own model (or its regionModel, or None) that is the sheet itself. For one of
+    the op's alternates it is a copy whose ops[op] holds the alternate's fields (its durations
+    replace the op's when it gives any), and whose sheet-level tagSyntax, refs, series,
+    outputsPerCall, video and seed are the alternate's where it sets them. The director, the
+    capability check, the estimate and the adapter all read this one view. Any other model gets
+    the sheet itself."""
+    spec = sheet["ops"].get(op)
+    if spec is None or model is None or model in (spec["model"], spec.get("regionModel")):
+        return sheet
+    alt = next((a for a in spec.get("alternates", []) if a["model"] == model), None)
+    if alt is None:  # not a pick: the relay refuses unknown picks before this, the director checks models
+        return sheet
+    out = copy.deepcopy(sheet)
+    merged = {k: copy.deepcopy(v) for k, v in alt.items() if k not in SHEET_OVERRIDES}
+    if not any(k in alt for k in DURATION_FIELDS):
+        merged.update({k: copy.deepcopy(spec[k]) for k in DURATION_FIELDS if k in spec})
+    out["ops"][op] = merged
+    for key in SHEET_OVERRIDES:
+        if key in alt:
+            out[key] = copy.deepcopy(alt[key])
+    if "seed" in alt:
+        out["seed"] = alt["seed"]
+    return out
 
 
 def nearest_ratio(ratio: str, allowed: tuple[str, ...]) -> str:

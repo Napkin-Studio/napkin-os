@@ -9,7 +9,7 @@
 // `continueDrawing`, which starts the next shot that has no frame. Nothing here
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
-import type { AssetRef, Frame, JobInput, ProductionDocument, StaleMark } from '../contracts/types'
+import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument, StaleMark } from '../contracts/types'
 import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
 import type { JobPurpose, UiState } from '../doc/ui'
 import type { Relay } from '../relay'
@@ -70,13 +70,13 @@ export async function frameInput(relay: Relay, d: ProductionDocument, ui: UiStat
 }
 
 /** Draw the frame for the shot at `index`: a first version, or a new one of `parent`. */
-export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame } = {}): Promise<string> {
+export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; modelChoice?: ModelChoice } = {}): Promise<string> {
   const d = deps.doc.get()
   const shot = (d.shots ?? [])[index]
   if (!shot) throw new Error('That shot is gone.')
   const input = await frameInput(deps.relay, d, deps.ui.get(), index, opts.text, !opts.parent)
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}) }
-  return deps.runner.submit('frame', input, opts.parent ? [opts.parent.job_id] : [], purpose)
+  return deps.runner.submit('frame', input, opts.parent ? [opts.parent.job_id] : [], purpose, undefined, opts.modelChoice)
 }
 
 /** Any frame (or frame region edit) job still moving. */

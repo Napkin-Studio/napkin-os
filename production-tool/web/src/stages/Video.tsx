@@ -5,7 +5,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { Region, Review, Shot, Strength, Take } from '../contracts/types'
+import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
 import { isRunning, jobAt, refsFor } from '../jobs/select'
 import { rectToRegion } from '../lib/region'
@@ -16,6 +16,9 @@ import { updateDoc } from '../doc/store'
 import { deleteFrom, removeNote, removeTake, restoreTo } from '../doc/remove'
 import { UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
+import { ModelPick } from '../ui/ModelPick'
+import { madeWith, startingChoice } from '../ui/modelChoice'
+import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -159,7 +162,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span><span className="spacer" />{open > 0 && <span className="mockbadge" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}</div>
         <div className="row wrap" style={{ gap: 4 }}>
           {takes.map((t, i) => (
-            <button key={t.id} className={`vchip ${t.selected ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ?? ''}
+            <button key={t.id} className={`vchip ${t.selected ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
               onClick={(e) => {
                 e.stopPropagation()
                 updateDoc(docStore, (d) => {
@@ -191,7 +194,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const { doc: docStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { config, controls } = useConfig()
   const video = useRef<HTMLVideoElement>(null)
   const stageBox = useRef<HTMLDivElement>(null)
   const shots = useMemo(() => doc.shots ?? [], [doc.shots])
@@ -223,6 +226,26 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const openNotes = reviews.filter((r) => !r.resolved && r.target.id === cur?.take.id)
   const fixJob = cur ? jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === cur.shot.id) : undefined
   const fixing = isRunning(doc, fixJob)
+  // The regenerate menu (features/model-choice.clan): starts on the model that made this take.
+  const [pick, setPick] = useState<ModelChoice | undefined>()
+  const made = madeWith(doc, ui, cur?.take.job_id)
+  const choice = pick ?? startingChoice(modelChoicesFor('clip', config), made.made)
+
+  /** Make the shot again from its frame, as a new take of this one. */
+  const again = async () => {
+    if (!cur) return
+    setError(null)
+    try {
+      const frame = (doc.frames ?? []).find((f) => f.shot_id === cur.shot.id && f.selected)
+      const image = await assetRef(relay, cur.shot.storyboard_frame!)
+      const refs = await refsFor(relay, doc, cur.shot)
+      await runner.submit('clip', { shot: cur.shot, image, ...(refs.length ? { refs } : {}), ratio: ui.ratio },
+        [frame?.job_id, cur.take.job_id].filter(Boolean) as string[], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id },
+        undefined, choiceToSend('clip', config, choice))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
 
   const pause = () => video.current && !video.current.paused && video.current.pause()
 
@@ -253,7 +276,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
         const frame = (doc.frames ?? []).find((f) => f.shot_id === cur.shot.id && f.selected)
         const image = await assetRef(relay, cur.shot.storyboard_frame!)
         const refs = await refsFor(relay, doc, cur.shot, text)
-        await runner.submit('clip', { shot: cur.shot, image, ...(refs.length ? { refs } : {}), ratio: ui.ratio, text }, [frame?.job_id, cur.take.job_id].filter(Boolean) as string[], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
+        await runner.submit('clip', { shot: cur.shot, image, ...(refs.length ? { refs } : {}), ratio: ui.ratio, text }, [frame?.job_id, cur.take.job_id].filter(Boolean) as string[], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids }, undefined, choiceToSend('clip', config, choice))
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -402,6 +425,11 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
             })}
             {noteUndo && Number(noteUndo.key) >= reviews.length && <UndoChip label={noteUndo.label} onUndo={runNoteUndo} />}
             {!reviews.length && <div className="faint" style={{ fontSize: 12.5 }}>Pause the clip and type. Your note sticks to that moment.</div>}
+          </div>
+          <div className="row" title={made.label}>
+            <ModelPick op="clip" value={choice} onChange={setPick} />
+            <span className="spacer" />
+            <button className="btn" disabled={fixing} onClick={again} title="Make this shot again from its frame">New take</button>
           </div>
           {openNotes.length > 0 && (
             <button className="btn primary" disabled={fixing} onClick={fix}>{fixing ? 'Making a new version…' : `Make a new version (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}</button>

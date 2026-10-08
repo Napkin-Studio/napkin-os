@@ -265,3 +265,22 @@ def test_the_failure_says_why_the_own_provider_could_not_take_the_step():
         "provider_unavailable", "heygen is unreachable: [Errno -3] Temporary failure in name resolution", retryable=True)
     job = post(h, token, "clip", headers=keys(heygen=HEYGEN_KEY))
     assert "Temporary failure in name resolution" in job["error"]["message"]
+
+
+def test_a_pick_on_their_own_key_runs_there_and_never_falls_back_to_the_event_key():
+    """features/model-choice.clan: a picked model on a provider they hold a key for runs on that key."""
+    cfg = base_config(fallbackOnly=["runway"])
+    cfg["routing"]["clip"] = ["fal", "heygen", "runway"]
+    cfg["flags"] = {**cfg["flags"], "ownKeys": True}
+    h = Harness(cfg, providers=("fal", "heygen", "runway"))
+    fakes = OwnFakes(h.blobs)
+    h.relay._own_adapters = own_keys.OwnAdapters(sheets=fakes.sheets, make=fakes)
+    token = h.sign_in()
+    req = job_request("clip", new_id("job"))
+    req["modelChoice"] = {"provider": "heygen", "model": "heygen-video-1"}
+    h.relay.own_adapters.get("heygen", HEYGEN_KEY)
+    fakes.one("heygen", HEYGEN_KEY).submit_effect = ProviderError("provider_unavailable", "busy", retryable=True)
+    job = h.call("POST", "/jobs", req, token, expect=200, headers=keys(heygen=HEYGEN_KEY, fal=FAL_KEY))[1]
+    assert job["keySource"] == "own" and job["state"] == "failed"
+    assert not h.providers["runway"].submits
+    assert ("fal", FAL_KEY) not in fakes.made  # their fal key is not the pick's provider
