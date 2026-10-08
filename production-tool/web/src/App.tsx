@@ -19,6 +19,7 @@ import { InlineConfirm } from './ui/Undo'
 import { UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { UndoButtons } from './ui/UndoButtons'
+import { SaveButton } from './ui/SaveButton'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -124,6 +125,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
         </span>
         {config.flags.ownKeys && <OwnKeysButton />}
         <UndoButtons />
+        <SaveButton />
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
         {/* Export, the handle and Sign out live in the menu: the bar keeps the run's state, keys and History. */}
         <span className="topmenu">
