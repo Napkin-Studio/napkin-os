@@ -344,11 +344,17 @@ class Relay:
         return [p for p in cfg["routing"].get(op, []) if self.registry.supports(p, op)]
 
     # ── a model the participant picked (features/model-choice.clan) ─────────
-    def _check_pick(self, cfg: dict, op: str, pick: dict | None) -> None:
-        """Refuse, before any spend or quota, a pick the routing or the sheet does not allow."""
+    def _check_pick(self, cfg: dict, op: str, pick: dict | None, own: dict | None = None) -> None:
+        """Refuse, before any spend or quota, a pick the routing or the sheet does not allow.
+        A pick on the participant's own key answers to that key's sheet, not the event's routing."""
         if pick is None:
             return
         provider, model = pick["provider"], pick["model"]
+        if own and provider in own:
+            sheet = self.own_adapters.sheet(provider)
+            if op in INTERNAL_OPS or not sheet or model not in op_models(sheet, op):
+                raise ApiError("invalid_input", f"{model} on {provider} cannot make this step. Pick another model.")
+            return
         sheet = self.registry.sheet(provider)
         if (op in INTERNAL_OPS or provider not in cfg["routing"].get(op, [])
                 or provider in cfg.get("fallbackOnly", []) or not sheet or model not in op_models(sheet, op)):
@@ -379,8 +385,10 @@ class Relay:
         except own_keys.BadKeys as e:
             raise ApiError("invalid_input", str(e)) from None
         own = {p: keys[p] for p in own_keys.PROVIDERS if p in keys and self.own_adapters.supports(p, op)}
-        if pick:  # a pick runs on the participant's key only for the picked provider
-            own = {p: k for p, k in own.items() if p == pick["provider"]}
+        if pick:
+            # A pick runs on the participant's key for the picked provider, and only there. Picking it is
+            # their choice, so fal's backup-only rule for clips does not apply (features/harness-refusals.clan).
+            return {p: k for p, k in own.items() if p == pick["provider"]}
         if op in own_keys.BACKUP_ONLY.get("fal", ()) and "heygen" not in own:
             own.pop("fal", None)
         return own
@@ -454,12 +462,12 @@ class Relay:
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
-        self._check_pick(cfg, op, pick)
+        own = self._own_candidates(cfg, op, own_header, pick)
+        self._check_pick(cfg, op, pick, own)
         try:  # a misspelt @name is the participant's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
             raise ApiError("invalid_input", str(e)) from None
-        own = self._own_candidates(cfg, op, own_header, pick)
         estimate, unknown = 0.0, False
         if op not in INTERNAL_OPS and not own:
             candidates = self._pick_candidates(cfg, op, pick) if pick else self._candidates(cfg, op)

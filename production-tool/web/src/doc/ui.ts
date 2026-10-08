@@ -2,7 +2,7 @@
 // each pending job is for (so its result lands in the right place after a
 // reload), the dev switch, drafts. Snapshotted next to the document.
 
-import type { JobRequest, Ratio, Region } from '../contracts/types'
+import type { JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { SessionResponse } from '../contracts/types'
 
@@ -11,9 +11,10 @@ export type JobPurpose =
   | { for: 'shot_list'; revId: string }
   /** how: first (frame 1), next (Next frame →), rest (the click on Draw the rest), chain (Draw the rest
    *  moving on), again (Regenerate or a region edit), update (Update what follows); older jobs have none.
-   *  fixReviewIds: a "Fix it in the shot" region edit; when it lands, a clip is made from it for these notes (jobs/fix.ts).
+   *  fixReviewIds: a "Fix it in the shot" region edit; when it lands, a clip is made from it for these notes (jobs/fix.ts),
+   *  on fixModelChoice when the participant picked a clip model in the menu.
    *  followRun: started by that run of "Update what follows" (jobs/follow.ts). */
-  | { for: 'frame'; shotId: string; parentFrameId?: string; how?: 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'; fixReviewIds?: string[]; followRun?: string }
+  | { for: 'frame'; shotId: string; parentFrameId?: string; how?: 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'; fixReviewIds?: string[]; fixModelChoice?: ModelChoice; followRun?: string }
   | { for: 'clip'; shotId: string; parentTakeId?: string; reviewIds?: string[]; followRun?: string }
   | { for: 'stitch'; followRun?: string }
 

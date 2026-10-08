@@ -264,7 +264,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
       const one = openNotes.length === 1 ? openNotes[0] : undefined
       const ids = openNotes.map((r) => r.id)
       if (fixesInShot) {
-        await fixInShot(deps, cur.shot.id, openNotes)
+        await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice))
       } else if (one?.region && controls.videoRegionEdit) {
         const v = await assetRef(relay, cur.take.asset)
         await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.comment }, [cur.take.job_id], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })

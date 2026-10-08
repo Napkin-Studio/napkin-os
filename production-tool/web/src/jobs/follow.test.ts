@@ -182,6 +182,23 @@ describe('Fix it in the shot', () => {
     }
   })
 
+  it('makes its clip on the model picked in the menu, which the fix keeps (not the routed default)', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const pick = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const note = await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } })
+    const editId = await fixInShot(s.deps, s.shotId(1), [note], pick)
+    expect(s.ui.get().jobCtx[editId]).toMatchObject({ fixModelChoice: pick })
+    expect(s.ui.get().jobCtx[editId].request.modelChoice).toBeUndefined() // the pick is for the clip, not the frame
+    await s.land()
+    const clip = await vi.waitFor(() => {
+      const c = s.all().find((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.reviewIds?.includes(note.id))
+      expect(c).toBeDefined()
+      return c!
+    }, { timeout: 2000, interval: 5 })
+    expect(s.ui.get().jobCtx[clip.id].request.modelChoice).toEqual(pick)
+  })
+
   it('goes by the box alone where the browser cannot read the frame\'s size', async () => {
     const s = await setup(2)
     await s.makeAll(false)

@@ -11,7 +11,7 @@
 //
 // It needs no video region support at the provider, only frame region edits.
 
-import type { ProductionDocument, Review } from '../contracts/types'
+import type { ModelChoice, ProductionDocument, Review } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { assetRef, boxMaskRef } from './assets'
 import { makeClip, selectedTake } from './clips'
@@ -25,8 +25,9 @@ function clipText(notes: Review[], boxedId: string): string | undefined {
   return rest.length ? rest.join('\n').slice(0, 1000) : undefined
 }
 
-/** Start the fix: the region edit on the shot's selected frame. `notes` are the open notes on the clip; one has a box. */
-export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]): Promise<string> {
+/** Start the fix: the region edit on the shot's selected frame. `notes` are the open notes on the clip; one has a box.
+ * `modelChoice`: the clip model picked in the menu, kept with the fix so step 3 uses it, after a reload too. */
+export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
   const boxed = notes.find((r) => r.region)
   if (!boxed?.region) throw new Error('Draw a box on the paused clip first.')
   const d = deps.doc.get()
@@ -46,7 +47,7 @@ export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]
     'region_edit',
     { image, region, text: boxed.comment.slice(0, 1000), ...(mask ? { mask } : {}), ...anchors },
     [frame.job_id],
-    { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id) },
+    { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id), ...(modelChoice ? { fixModelChoice: modelChoice } : {}) },
   )
 }
 
@@ -73,7 +74,9 @@ export async function continueFix(deps: FrameDeps, jobId: string, ctx: JobCtx | 
   if (!notes.length || clipStarted(d, deps, ctx.fixReviewIds)) return null
   const parentTake = (d.takes ?? []).find((t) => t.id === notes[0].target.id) ?? selectedTake(d, ctx.shotId)
   const boxed = notes.find((r) => r.region) ?? notes[0]
-  return makeClip(deps, ctx.shotId, { text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}) })
+  return makeClip(deps, ctx.shotId, {
+    text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice: ctx.fixModelChoice,
+  })
 }
 
 /** At boot: finish fixes whose frame landed but whose clip was never started. */

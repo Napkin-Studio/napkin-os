@@ -284,3 +284,28 @@ def test_a_pick_on_their_own_key_runs_there_and_never_falls_back_to_the_event_ke
     assert job["keySource"] == "own" and job["state"] == "failed"
     assert not h.providers["runway"].submits
     assert ("fal", FAL_KEY) not in fakes.made  # their fal key is not the pick's provider
+
+
+# ── a pick on an own key (features/harness-refusals.clan) ──────────────────
+VEO_FAST = {"provider": "fal", "model": "veo3.1-fast-i2v"}
+
+
+@pytest.mark.parametrize("given", [{"fal": FAL_KEY, "heygen": HEYGEN_KEY}, {"fal": FAL_KEY}])
+@pytest.mark.parametrize("event_clip", [["runway"], ["fal", "heygen", "runway"]])
+def test_a_fal_pick_runs_on_their_fal_key_for_clips(given, event_clip):
+    # 2026-10-08: with both keys the pick narrowed them to fal, then fal's backup-only rule for clips
+    # dropped fal too, so the job went to the event's routing: the event's fal key, or refused locally.
+    h, fakes = harness(routing={**base_config()["routing"], "clip": event_clip})
+    token = h.sign_in()
+    req = job_request("clip", new_id("job"))
+    req["modelChoice"] = VEO_FAST
+    job = h.call("POST", "/jobs", req, token, expect=200, headers=keys(**given))[1]
+    assert (job["keySource"], job["provider"], job["model"]) == ("own", "fal", "veo3.1-fast-i2v")
+    assert len(fakes.one("fal", FAL_KEY).submits) == 1 and not h.providers["fal"].submits
+
+
+def test_without_a_pick_a_fal_key_alone_still_leaves_clips_to_the_event():
+    h, _ = harness()
+    token = h.sign_in()
+    job = post(h, token, "clip", headers=keys(fal=FAL_KEY))
+    assert job["keySource"] == "event"
