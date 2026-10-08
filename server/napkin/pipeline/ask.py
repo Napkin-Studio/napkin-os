@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from ..doc import LENS_TITLES, LENSES, build_materials, ctx_data, ctx_facts, ctx_findings, decision, field_value, \
+from ..doc import LENS_TITLES, LENSES, build_materials, ctx_data, ctx_facts, current_facts, ctx_findings, decision, field_value, \
     lens_of_key, read_of
 from ..jev import JevError, noul
 from ..rules.cite import clean_claim
@@ -79,7 +79,7 @@ class Asker:
 
     # -- the evidence ------------------------------------------------------------
     def evidence(self, lens, extra=()):
-        pins = [f for f in list(ctx_facts(self.clan)) + list(extra)
+        pins = [f for f in list(current_facts(self.clan)) + list(extra)
                 if str(f.get("id", "")).startswith("f_") and f.get("status") != "superseded"]
         excluded = {e.get("fact_id") for e in (self.data.get("selection") or {}).get("excluded") or []}
         pins = [p for p in pins if p["id"] not in excluded]
