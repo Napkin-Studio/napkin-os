@@ -23,7 +23,7 @@ from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, IMAGE_OPS
 from providers.tags import UnknownTag, rewrite_tags
 
-from .base import view_angle
+from .base import fit_duration, view_angle
 from .model import ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -68,11 +68,8 @@ def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
     camera `angle` for a Runway view, which has no angle control, and the whole job failed).
     Dropping it is safe: a view is said in words instead. Other stray fields still fail, by design."""
     spec = sheet["ops"].get(op, {})
-    if op == "clip" and "durationS" in job and spec.get("durationsS") and job["durationS"] not in spec["durationsS"]:
-        # A 5 s shot on a model that makes 4/6/8 s clips: make the next longer allowed clip;
-        # the stitch trims each clip to its shot's length (trimS).
-        longer = [d for d in sorted(spec["durationsS"]) if d >= job["durationS"]]
-        job["durationS"] = longer[0] if longer else max(spec["durationsS"])
+    if op == "clip" and "durationS" in job:
+        job["durationS"] = fit_duration(job["durationS"], spec)
     if "angle" in job and not sheet.get("angles"):
         angle = job.pop("angle")
         if op == "view":

@@ -34,17 +34,34 @@ class CapabilityMissing(Exception):
     """The sheet rules the job out. Raised by submit, never a provider call."""
 
 
+# Who has to act on a failure (features/harness-errors.clan): the provider (an outage, a limit,
+# its own failure), the network between us, Napkin (a bug, our own storage) or the participant
+# (their input or content). The relay and the UI read it to say whose problem it is.
+SOURCES = ("provider", "network", "napkin", "input")
+DEFAULT_SOURCE = {"invalid_input": "input", "moderated": "input", "internal": "napkin",
+                  "capability_missing": "napkin"}
+
+
 class ProviderError(Exception):
-    """A provider failure, already mapped onto our error codes."""
+    """A provider failure, already mapped onto our error codes.
+
+    source: who has to act (SOURCES); by default from the code, provider for the rest.
+    accepted: the provider may have taken the job (a 2xx we could not read, a 409 naming
+    an in-flight job), so the relay must never send it anywhere else."""
 
     def __init__(self, code: str, message: str, retryable: bool = False,
-                 retry_after_s: Optional[int] = None, provider_code: Optional[str] = None):
+                 retry_after_s: Optional[int] = None, provider_code: Optional[str] = None, *,
+                 source: Optional[str] = None, accepted: bool = False):
         super().__init__(message)
         self.code, self.message, self.retryable = code, message, retryable
         self.retry_after_s, self.provider_code = retry_after_s, provider_code
+        self.source = source or DEFAULT_SOURCE.get(code, "provider")
+        if self.source not in SOURCES:
+            raise ValueError(f"unknown error source {self.source!r}")
+        self.accepted = accepted
 
     def to_dict(self) -> dict:
-        out = {"code": self.code, "message": self.message, "retryable": self.retryable}
+        out = {"code": self.code, "message": self.message, "retryable": self.retryable, "source": self.source}
         if self.retry_after_s is not None:
             out["retryAfterS"] = self.retry_after_s
         if self.provider_code:

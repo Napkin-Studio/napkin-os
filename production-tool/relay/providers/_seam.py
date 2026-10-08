@@ -51,7 +51,8 @@ class Resolver:
         except base.ProviderError:
             if sha256 in self._seen:
                 return self._seen[sha256]
-            raise types.ProviderError("invalid_input", f"no URL for asset {sha256}", False) from None
+            # The relay names every asset a job uses: a missing one is our bug, not the participant's.
+            raise types.ProviderError("internal", f"no URL for asset {sha256}", False, source="napkin") from None
         mime = base.asset_mime(sha256) or _guess_mime(url)
         if LOCAL_READER is not None and url.startswith("http://"):
             # Local dev only (relay/local.py): providers can't reach http://localhost,
@@ -74,9 +75,11 @@ def _guess_mime(url: str) -> str:
 def _error(e: types.ProviderError, *, accepted: bool = False) -> base.ProviderError:
     code = e.code if e.code in base.ERROR_CODES else "provider_failed"
     if code == "moderated":
-        return base.Moderated(e.message, provider_code=e.provider_code)
+        out = base.Moderated(e.message, provider_code=e.provider_code)
+        out.source = e.source
+        return out
     return base.ProviderError(code, e.message, provider_code=e.provider_code, retryable=e.retryable,
-                              accepted=accepted)
+                              accepted=accepted or e.accepted, source=e.source)
 
 
 def _output(o: types.ProviderOutput) -> dict:
@@ -102,7 +105,8 @@ def to_status(st: types.Status) -> base.Status:
         moderated = err.code == "moderated"
         return base.Status("moderated" if moderated else "failed",
                            error_code=err.code if err.code in base.ERROR_CODES else "provider_failed",
-                           error_message=err.message, provider_code=err.provider_code, cost_usd=st.cost_usd)
+                           error_message=err.message, provider_code=err.provider_code, cost_usd=st.cost_usd,
+                           retryable=err.retryable, source=err.source)
     return base.Status(st.state, queue_position=st.queue_position, cost_usd=st.cost_usd)
 
 
@@ -125,7 +129,10 @@ class Adapted:
         except types.CapabilityMissing as e:
             raise base.CapabilityMissing(str(e)) from e
         except types.ProviderError as e:
-            raise _error(e, accepted=isinstance(e.__cause__, _SENT_MAYBE)) from e
+            # A read or write that broke mid-call to the provider may have reached it; the same
+            # error while reading our own asset (source napkin) did not.
+            sent = e.source == "network" and isinstance(e.__cause__, _SENT_MAYBE)
+            raise _error(e, accepted=sent) from e
 
     def status(self, request_id: str) -> base.Status:
         try:

@@ -14,6 +14,7 @@ keys to fill it; they are stripped before validation.
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import time
 from typing import Protocol
@@ -43,6 +44,21 @@ _MOVES = ["static", "push_in", "pan", "static", "track", "pull_out", "static", "
 _ELEMENT_OPS = {"generate", "frame", "clip"}
 # The camera angle of each turnaround view (director.v4: front 0, three-quarter 45, side 90, back 180).
 VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
+
+
+def fit_duration(seconds: float, spec: dict) -> float:
+    """The clip length the op's model can make for a shot of `seconds` (capabilities ops[op]):
+    the next longer allowed value (4/6/8 s models), else the nearest whole second within
+    minS-maxS. Never fails the job over length: the stitch trims each clip to its shot (trimS)."""
+    if spec.get("durationsS"):
+        allowed = sorted(spec["durationsS"])
+        if seconds in allowed:
+            return seconds
+        longer = [d for d in allowed if d >= seconds]
+        return longer[0] if longer else allowed[-1]
+    if "minS" in spec or "maxS" in spec:
+        return min(max(math.ceil(seconds), spec.get("minS", 0)), spec.get("maxS", math.inf))
+    return seconds
 
 
 def view_angle(op: str, inp: dict, sheet: dict | None) -> dict | None:
@@ -136,7 +152,8 @@ class PassthroughDirector:
         if op in _VIDEO_OPS:
             job["audio"] = False
             if shot:
-                job["durationS"] = shot["duration_s"]
+                spec = ((sheet or {}).get("ops") or {}).get(op) or {}
+                job["durationS"] = fit_duration(shot["duration_s"], spec) if op == "clip" else shot["duration_s"]
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "needsUser": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}

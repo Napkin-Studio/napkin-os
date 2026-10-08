@@ -479,7 +479,8 @@ def test_completed_with_an_error_is_failed(provider, fal):
     fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_completed_error.json"))
     st = provider.status(rid)
     assert st.state == "failed"
-    assert (st.error.code, st.error.retryable, st.error.provider_code) == ("provider_failed", False, "runner_disconnected")
+    # fal's docs call runner errors transient: trying again can help (features/harness-errors.clan)
+    assert (st.error.code, st.error.retryable, st.error.provider_code) == ("provider_failed", True, "runner_disconnected")
 
 
 def test_completed_with_a_policy_error_is_moderated_and_not_retryable(provider, fal):
@@ -549,9 +550,8 @@ def test_status_429_raises_retryable(provider, fal):
 def test_unknown_status_is_provider_failed(provider, fal):
     rid = provider.submit(job())
     fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, {"status": "WEIRD"})
-    with pytest.raises(ProviderError) as e:
-        provider.status(rid)
-    assert e.value.code == "provider_failed"
+    st = provider.status(rid)  # asking again cannot help: the job ends now, not at the relay's timeout
+    assert (st.state, st.error.code, st.error.retryable) == ("failed", "provider_failed", False)
 
 
 def test_status_transport_error_is_retryable(fal):
@@ -573,7 +573,8 @@ def test_non_json_bodies_are_provider_errors(provider, fal, raw):
     fal.routes[("POST", f"/{KLING_IMAGE}")] = httpx.Response(200, content=raw)
     with pytest.raises(ProviderError) as e:
         provider.submit(job())
-    assert (e.value.code, e.value.retryable) == ("provider_unavailable", True)
+    # a 2xx: fal may have the request, so it must never be sent anywhere else
+    assert (e.value.code, e.value.retryable, e.value.accepted) == ("provider_failed", False, True)
     fal.routes.clear()
     rid = provider.submit(job())
     fal.routes[("GET", f"/{queue_app(KLING_IMAGE)}/requests/req1/status")] = httpx.Response(200, content=raw)
