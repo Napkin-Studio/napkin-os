@@ -1,0 +1,314 @@
+{
+ "endpoint": "ideogram/v4.5/edit",
+ "fetched": "2026-10-08",
+ "schema": {
+  "$defs": {
+   "File": {
+    "properties": {
+     "content_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The mime type of the file.",
+      "examples": [
+       "image/png"
+      ],
+      "title": "Content Type"
+     },
+     "file_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The name of the file. It will be auto-generated if not provided.",
+      "examples": [
+       "z9RV14K95DvU.png"
+      ],
+      "title": "File Name"
+     },
+     "file_size": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The size of the file in bytes.",
+      "examples": [
+       4404019
+      ],
+      "title": "File Size"
+     },
+     "url": {
+      "description": "The URL where the file can be downloaded from.",
+      "title": "Url",
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "title": "File",
+    "type": "object",
+    "x-fal-order-properties": [
+     "url",
+     "content_type",
+     "file_name",
+     "file_size"
+    ]
+   },
+   "ImageSize": {
+    "properties": {
+     "height": {
+      "default": 512,
+      "description": "The height of the generated image.",
+      "exclusiveMinimum": 0,
+      "maximum": 14142,
+      "title": "Height",
+      "type": "integer"
+     },
+     "width": {
+      "default": 512,
+      "description": "The width of the generated image.",
+      "exclusiveMinimum": 0,
+      "maximum": 14142,
+      "title": "Width",
+      "type": "integer"
+     }
+    },
+    "title": "ImageSize",
+    "type": "object",
+    "x-fal-order-properties": [
+     "width",
+     "height"
+    ]
+   },
+   "QueueStatus": {
+    "properties": {
+     "cancel_url": {
+      "description": "The cancel url.",
+      "type": "string"
+     },
+     "logs": {
+      "additionalProperties": true,
+      "description": "The logs.",
+      "type": "object"
+     },
+     "metrics": {
+      "additionalProperties": true,
+      "description": "The metrics.",
+      "type": "object"
+     },
+     "queue_position": {
+      "description": "The queue position.",
+      "type": "integer"
+     },
+     "request_id": {
+      "description": "The request id.",
+      "type": "string"
+     },
+     "response_url": {
+      "description": "The response url.",
+      "type": "string"
+     },
+     "status": {
+      "enum": [
+       "IN_QUEUE",
+       "IN_PROGRESS",
+       "COMPLETED"
+      ],
+      "type": "string"
+     },
+     "status_url": {
+      "description": "The status url.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "request_id"
+    ],
+    "type": "object"
+   },
+   "V45EditInput": {
+    "additionalProperties": false,
+    "properties": {
+     "edit_precision": {
+      "default": "regular",
+      "description": "regular uses Generate; high uses Precise Edit with unchanged-pixel restoration. Both always prepare structured edit instructions.",
+      "enum": [
+       "regular",
+       "high"
+      ],
+      "title": "Edit Precision",
+      "type": "string"
+     },
+     "image_size": {
+      "anyOf": [
+       {
+        "$ref": "#/$defs/ImageSize"
+       },
+       {
+        "enum": [
+         "auto",
+         "square",
+         "square_hd",
+         "portrait_4_3",
+         "landscape_4_3",
+         "portrait_16_9",
+         "landscape_16_9"
+        ],
+        "type": "string"
+       }
+      ],
+      "default": "auto",
+      "description": "auto preserves source geometry, downscaled by the provider if needed. Only unmasked regular edits accept named presets or custom sizes: dimensions >=256, multiples of 32, area <=4194304, ratio <=6:1. Named presets use standard fal dimensions.",
+      "title": "Image Size"
+     },
+     "image_url": {
+      "description": "Primary source image to edit.",
+      "title": "Image URL",
+      "type": "string"
+     },
+     "mask_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Mask matching the source dimensions. Black edits, white preserves. Must contain both regions after rounding.",
+      "title": "Mask URL"
+     },
+     "num_images": {
+      "default": 1,
+      "description": "Number of images to generate.",
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Number of Images",
+      "type": "integer"
+     },
+     "prompt": {
+      "description": "The generation or editing prompt.",
+      "examples": [
+       "A colorful storefront with a sign reading hello"
+      ],
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "Prompt",
+      "type": "string"
+     },
+     "quality": {
+      "default": "medium",
+      "description": "Quality tier for either edit precision. Defaults to medium.",
+      "enum": [
+       "very_low",
+       "low",
+       "medium",
+       "high"
+      ],
+      "title": "Quality",
+      "type": "string"
+     },
+     "reference_image_urls": {
+      "description": "Up to four references plus the primary source, or three references plus the primary source and mask.",
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 4,
+      "title": "Reference Image URLs",
+      "type": "array"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Random seed. Omit to choose automatically.",
+      "title": "Seed"
+     },
+     "sync_mode": {
+      "default": false,
+      "description": "Return image data directly in the response.",
+      "title": "Sync Mode",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "prompt",
+     "image_url"
+    ],
+    "title": "EditInputV45",
+    "type": "object",
+    "x-fal-order-properties": [
+     "prompt",
+     "image_url",
+     "reference_image_urls",
+     "mask_url",
+     "edit_precision",
+     "quality",
+     "image_size",
+     "num_images",
+     "seed",
+     "sync_mode"
+    ]
+   },
+   "V45EditOutput": {
+    "properties": {
+     "images": {
+      "examples": [
+       [
+        {
+         "url": "https://v3.fal.media/files/penguin/lHdRabS80guysb8Zw1kul_image.png"
+        }
+       ]
+      ],
+      "items": {
+       "$ref": "#/$defs/File"
+      },
+      "title": "Images",
+      "type": "array"
+     },
+     "seed": {
+      "description": "Seed used for the random number generator",
+      "examples": [
+       123456
+      ],
+      "title": "Seed",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "images",
+     "seed"
+    ],
+    "title": "OutputV3",
+    "type": "object",
+    "x-fal-order-properties": [
+     "images",
+     "seed"
+    ]
+   }
+  },
+  "$ref": "#/$defs/V45EditInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+ },
+ "source": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=ideogram/v4.5/edit"
+}
