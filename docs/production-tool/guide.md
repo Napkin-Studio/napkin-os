@@ -124,6 +124,8 @@ These are switched off by the organisers today, so you may not see them:
 
 ### Choosing a model when you regenerate
 
+Every model, its price and what each provider accepts are listed in [provider-reference.md](provider-reference.md).
+
 Your first draw and your first clip always use the event's default model. The defaults are chosen for keeping characters consistent: Nano Banana Pro for characters and frames, Kling v3 Pro for clips (the clip model that takes your named characters). Veo 3.1 has the best motion but ignores character references, so it is offered rather than used by default. When you **regenerate a frame** or make a **New take** (or a new version from notes), a **Model** menu lets you pick another vetted model. The menu starts on the model that made the version you're replacing.
 
 | Step | Default | Other choices | Approx. cost per job |
