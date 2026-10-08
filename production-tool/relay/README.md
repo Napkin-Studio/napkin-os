@@ -38,7 +38,8 @@ uv run python -m local            # http://localhost:8787
   job's first input asset as the output, labelled `kind: "mock"`.
 - Director: `director/claude.py` (`make()`) when it exists, otherwise the
   passthrough (the shot list is split evenly from the script).
-- Stitch runs in-process when `ffmpeg` is on the PATH (set `FONT_FILE` to a TTF).
+- Stitch runs in-process when `ffmpeg` is on the PATH (the end card's pieces are PNGs in
+  `production-tool/stitch/endcard/`, so no font is needed).
 - Local mode accepts `http://localhost` asset URLs; AWS requires `https://`.
 
 ## Tests
