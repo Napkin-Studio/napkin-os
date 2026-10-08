@@ -362,11 +362,16 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
           <div className="foot">
             <input className="input" placeholder={region ? 'Change what is in the box…' : 'Change this frame…'} maxLength={1000} value={text}
               onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !running && (text.trim() || !region) && regenerate()} />
-            <div className="row">
-              {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
-              {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
-              <span className="spacer" />
-              {madeStale && <UpdateFollows size="xs" progress={false} />}
+            {/* Two rows on a narrow card: what else you can do, then the actions, so the main button is never cut off. */}
+            {(parent || !region || madeStale) && (
+              <div className="row wrap">
+                {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
+                {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
+                <span className="spacer" />
+                {madeStale && <UpdateFollows size="xs" progress={false} />}
+              </div>
+            )}
+            <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
               {onNext && nextEmpty && !ui.drawingRest && (
                 <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>
               )}
