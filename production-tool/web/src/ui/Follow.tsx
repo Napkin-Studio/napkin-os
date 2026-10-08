@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { shotsBeingFixed } from '../jobs/fix'
-import { cancelFollow, followState, planFollow, planSize, planSummary, startFollow } from '../jobs/follow'
+import { cancelFollow, clipModelsFor, followState, planFollow, planSize, planSummary, startFollow } from '../jobs/follow'
 import { InlineConfirm } from './Undo'
 
 /** `progress`: show the run's progress and Stop here (the top bar does; the buttons on items do not). */
@@ -40,7 +40,7 @@ export function UpdateFollows({ size = 'sm', progress = true }: { size?: 'xs' | 
   if (asking) {
     return (
       <span className="follow" onClick={(e) => e.stopPropagation()}>
-        <InlineConfirm text={`Update what follows? ${planSummary(plan, config)}`} yes="Update" no="Not now" tone="primary"
+        <InlineConfirm text={`Update what follows? ${planSummary(plan, config, undefined, clipModelsFor(doc, plan.clips, config))}`} yes="Update" no="Not now" tone="primary"
           onNo={() => setAsking(false)}
           onYes={async () => {
             setAsking(false)

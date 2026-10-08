@@ -59,12 +59,18 @@ function estimate(op: Op, config: Config, sheets?: Sheets): number | null {
   return sheet.ops[op]?.estimateUsd ?? null
 }
 
-/** The estimated cost of a plan, from the routed providers' capability sheets. The ad (ffmpeg) costs nothing. */
-export function planCost(p: FollowPlan, config: Config, sheets?: Sheets): { usd: number; known: boolean } {
+/** The estimated cost of a plan, from the routed providers' capability sheets. The ad (ffmpeg) costs nothing.
+ *  `clipModels` (clipModelsFor): a clip kept on the model that made it is priced at that model. */
+export function planCost(p: FollowPlan, config: Config, sheets?: Sheets, clipModels: Record<string, ModelChoice> = {}): { usd: number; known: boolean } {
   const frame = estimate('frame', config, sheets)
-  const clip = estimate('clip', config, sheets)
-  const known = (!p.frames.length || frame !== null) && (!p.clips.length || clip !== null)
-  return { usd: p.frames.length * (frame ?? 0) + p.clips.length * (clip ?? 0), known }
+  const routed = estimate('clip', config, sheets)
+  const offered = modelChoicesFor('clip', config, sheets)
+  const clips = p.clips.map((id) => {
+    const pick = clipModels[id]
+    return pick ? offered.find((o) => o.provider === pick.provider && o.model === pick.model)?.estimateUsd ?? null : routed
+  })
+  const known = (!p.frames.length || frame !== null) && clips.every((c) => c !== null)
+  return { usd: p.frames.length * (frame ?? 0) + clips.reduce<number>((a, c) => a + (c ?? 0), 0), known }
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
@@ -76,8 +82,8 @@ export function planWords(p: FollowPlan): string {
 }
 
 /** "3 frames, 3 clips, 1 ad · about $2.01". */
-export function planSummary(p: FollowPlan, config: Config, sheets?: Sheets): string {
-  const c = planCost(p, config, sheets)
+export function planSummary(p: FollowPlan, config: Config, sheets?: Sheets, clipModels?: Record<string, ModelChoice>): string {
+  const c = planCost(p, config, sheets, clipModels)
   return `${planWords(p)} · ${c.known ? `about $${c.usd.toFixed(2)}` : `at least $${c.usd.toFixed(2)}`}`
 }
 

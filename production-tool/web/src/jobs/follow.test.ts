@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { JobInput, Review } from '../contracts/types'
-import { CONFIGS } from '../contracts/load'
+import { CONFIGS, SHEETS } from '../contracts/load'
 import { describeWrite } from '../doc/describe'
 import { deleteFrom, removeShot, restoreTo } from '../doc/remove'
 import { emptyDocument, SnapshotDocumentStore, SnapshotStore, updateDoc } from '../doc/store'
@@ -11,7 +11,7 @@ import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
 import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
-import { cancelFollow, continueFollow, planCost, planFollow, planSummary, startFollow } from './follow'
+import { cancelFollow, clipModelsFor, continueFollow, planCost, planFollow, planSummary, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { applyFrame } from './handlers'
@@ -392,6 +392,12 @@ describe('Update what follows', () => {
     const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['heygen', 'fal'] as const } } as unknown as typeof CONFIGS.testing
     await startFollow(s.deps, own)
     expect(s.ui.get().following?.clipModels).toEqual({ [s.shotId(1)]: veo })
+    // Priced at the kept model: Veo 3.1 Fast on fal, not the routed default (HeyGen).
+    const plan = { frames: [], clips: [s.shotId(1)], ad: false }
+    const kept = clipModelsFor(s.doc.get(), plan.clips, own)
+    const veoUsd = SHEETS.fal.ops.clip!.alternates!.find((a) => a.model === veo.model)!.estimateUsd
+    expect(planCost(plan, own, undefined, kept).usd).toBeCloseTo(veoUsd!)
+    expect(planCost(plan, own).usd).toBeCloseTo(SHEETS.heygen.ops.clip!.estimateUsd ?? 0)
     await s.settle()
     const clip = s.all().find((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.followRun)!
     expect(s.ui.get().jobCtx[clip.id].request.modelChoice).toEqual(veo)
