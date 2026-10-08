@@ -388,3 +388,34 @@ def test_the_recorded_director_output_runs_on_its_pathway(fixture_name):
     assert job["provider"] == f["provider"]
     sent = stand.to(f["provider"])
     assert sent and all(not s["errors"] for s in sent), [s["errors"] for s in sent]
+
+
+# ── the scripts ─────────────────────────────────────────────────────────────
+def _script(name: str):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, contracts_dir().parent / "relay" / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_cost_of_a_reference_production_per_pathway_is_pinned():
+    """A price change in a capability sheet shows up here, so it is seen in review."""
+    costs = {c["pathway"]: (c["totalUsd"], c["bestTotalUsd"], c["unknown"]) for c in
+             (_script("pathway_costs").costs(n) for n in PATHWAYS)}
+    assert costs == {
+        "runway": (5.84, 5.84, []),
+        "fal": (4.437, 16.453, []),
+        "heygen": (1.077, 2.053, ["clip on heygen"]),
+        "mix": (4.437, 16.453, []),
+    }
+
+
+def test_the_smoke_script_sends_nothing_without_live(monkeypatch, capsys):
+    def no_network(*a, **k):
+        raise AssertionError("the dry run made a network call")
+    monkeypatch.setattr(httpx.Client, "send", no_network)
+    assert _script("pathway_smoke").main(["--video"], env={"FAL_KEY": "x"}) == 0
+    out = capsys.readouterr().out
+    assert "dry run: nothing sent" in out and "FAL_KEY: set" in out and "x" not in out.split("FAL_KEY: set")[0]
+    assert "no RUNWAY_API_KEY" in out and "needs --mask-url" in out
