@@ -17,6 +17,13 @@ import { JobRunner } from './runner'
 import { applyFrame } from './handlers'
 import { adStatus, anythingStale, frameStale, takeStale } from './stale'
 import { wireJobs } from './wire'
+import { boxMaskPng } from '../lib/mask'
+
+// Node has no canvas: the box mask is a stand-in blob that records what it was asked for.
+vi.mock('../lib/mask', async (original) => ({
+  ...(await original<typeof import('../lib/mask')>()),
+  boxMaskPng: vi.fn(async (r: unknown, w: number, h: number) => new Blob([`mask ${w}x${h} ${JSON.stringify(r)}`], { type: 'image/png' })),
+}))
 
 // "Change anything later; update what follows on request" (decided 2026-10-07):
 // no text in frames, Fix it in the shot, the ad trimmed to the shots, the
@@ -159,6 +166,29 @@ async function addNote(s: Awaited<ReturnType<typeof setup>>, shotIndex: number, 
 }
 
 describe('Fix it in the shot', () => {
+  it('sends the box as a mask the size of the frame, for fal (features/harness-refusals.clan)', async () => {
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 720, height: 1280, close() {} }))
+    try {
+      const s = await setup(2)
+      await s.makeAll(false)
+      const region = { x: 0.1, y: 0.33, w: 0.6, h: 0.33 } // over a quarter of the frame: masked all the same
+      const editId = await fixInShot(s.deps, s.shotId(1), [await addNote(s, 1, { region })])
+      const input = s.inputOf(editId)
+      expect(input.mask?.sha256).toMatch(/^sha256:/)
+      expect(input.region).toEqual(region)
+      expect(boxMaskPng).toHaveBeenLastCalledWith(region, 720, 1280)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('goes by the box alone where the browser cannot read the frame\'s size', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const editId = await fixInShot(s.deps, s.shotId(1), [await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } })])
+    expect(s.inputOf(editId)).not.toHaveProperty('mask')
+  })
+
   it('a boxed note edits the storyboard frame, then makes the clip from the fixed frame, then the note is addressed', async () => {
     const s = await setup(3)
     await s.makeAll(false)

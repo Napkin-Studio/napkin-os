@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { Composition, CameraMove, ModelChoice, Ratio, Region, Shot } from '../contracts/types'
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
-import { assetRef } from '../jobs/assets'
+import { assetRef, boxMaskRef } from '../jobs/assets'
 import { allNamed, isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { nameOf, subjectRefs, wholeKeys } from '../lib/names'
 import { continuity, drawFrame, drawTheRest, firstUndrawn, selectFrame, selectedFrame } from '../jobs/frames'
@@ -275,6 +275,8 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         if (strokes.length && controls.maskBrush && asset?.w && asset?.h) {
           const sha = await putBlob(await maskPng(strokes, asset.w, asset.h))
           mask = await assetRef(relay, sha)
+        } else {
+          mask = await boxMaskRef(relay, current.asset, region) // a box alone: fal edits only inside a mask
         }
         // A region edit keeps the frame in its sequence: shot 1's frame and the one before go too.
         const anchors = await continuity(relay, doc, index)
