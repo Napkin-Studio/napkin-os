@@ -35,13 +35,6 @@ export interface Removal {
   staleAdded: StaleMark[]
 }
 
-/** Thrown when the last version of a frame or clip would go. */
-export class LastVersionError extends Error {
-  constructor(what: 'frame' | 'clip') {
-    super(`That is the only ${what} version left. Regenerate instead.`)
-  }
-}
-
 function blank(kind: RemovalKind, id: string, what: string): Removal {
   return { kind, id, what, ids: [], removed: [], modified: [], staleAdded: [] }
 }
@@ -126,12 +119,12 @@ export function removeShot(d: Doc, shotId: string): Removal {
   return r
 }
 
-/** One frame version. Its shot moves to the version it came from (or the newest left). */
+/** One frame version. Its shot moves to the version it came from (or the newest left). The last one may go
+ *  too: the shot then has no frame, and "Update what follows" draws it again, then its clip. */
 export function removeFrame(d: Doc, frameId: string): Removal {
   const frame = (d.frames ?? []).find((f) => f.id === frameId)
   if (!frame) throw new Error('That frame is already gone.')
   const siblings = (d.frames ?? []).filter((f) => f.shot_id === frame.shot_id)
-  if (siblings.length <= 1) throw new LastVersionError('frame')
   const v = siblings.indexOf(frame) + 1
   const r = blank('frame', frameId, `frame ${frameId} (${shotNo(d, frame.shot_id)}, v${v})`)
   takeOut(d, r, 'frames', (x: { id: string }) => x.id === frameId)
@@ -142,9 +135,9 @@ export function removeFrame(d: Doc, frameId: string): Removal {
   if (frame.selected) {
     const left = (d.frames ?? []).filter((f) => f.shot_id === frame.shot_id)
     const next = left.find((f) => f.id === frame.parent) ?? left[left.length - 1]
-    modify(r, 'frames', next, (x) => { x.selected = true })
+    if (next) modify(r, 'frames', next, (x) => { x.selected = true })
     const shot = (d.shots ?? []).find((s) => s.id === frame.shot_id)
-    if (shot) modify(r, 'shots', shot, (x) => { x.storyboard_frame = next.asset })
+    if (shot) modify(r, 'shots', shot, (x) => { if (next) x.storyboard_frame = next.asset; else delete x.storyboard_frame })
   }
   takeOutAbout(d, r, 'frame', new Set([frameId]))
   if (frame.selected) restale(d, r, (x) => { markNextStale(x, frame.shot_id); refreshClipStale(x, frame.shot_id) })
@@ -152,12 +145,12 @@ export function removeFrame(d: Doc, frameId: string): Removal {
   return r
 }
 
-/** One clip version, with the notes on it. Its shot moves to the clip it came from (or the newest left). */
+/** One clip version, with the notes on it. Its shot moves to the clip it came from (or the newest left). The last
+ *  one may go too: the shot then has no clip, and "Update what follows" makes it again. */
 export function removeTake(d: Doc, takeId: string): Removal {
   const take = (d.takes ?? []).find((t) => t.id === takeId)
   if (!take) throw new Error('That clip is already gone.')
   const siblings = (d.takes ?? []).filter((t) => t.shot_id === take.shot_id)
-  if (siblings.length <= 1) throw new LastVersionError('clip')
   const v = siblings.indexOf(take) + 1
   const r = blank('take', takeId, `clip ${takeId} (${shotNo(d, take.shot_id)}, v${v})`)
   takeOut(d, r, 'takes', (x: { id: string }) => x.id === takeId)
@@ -167,9 +160,9 @@ export function removeTake(d: Doc, takeId: string): Removal {
   if (take.selected) {
     const left = (d.takes ?? []).filter((t) => t.shot_id === take.shot_id)
     const next = left.find((t) => t.id === take.parent) ?? left[left.length - 1]
-    modify(r, 'takes', next, (x) => { x.selected = true })
+    if (next) modify(r, 'takes', next, (x) => { x.selected = true })
     const shot = (d.shots ?? []).find((s) => s.id === take.shot_id)
-    if (shot) modify(r, 'shots', shot, (x) => { x.selected_take = next.id })
+    if (shot) modify(r, 'shots', shot, (x) => { if (next) x.selected_take = next.id; else delete x.selected_take })
   }
   takeOutAbout(d, r, 'take', new Set([takeId]))
   if (take.selected) restale(d, r, (x) => refreshClipStale(x, take.shot_id))

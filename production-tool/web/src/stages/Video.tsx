@@ -172,8 +172,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
               }}>v{i + 1}</button>
           ))}
           {sel && (
-            <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete clip v${selIdx + 1}`} disabled={takes.length <= 1}
-              title={takes.length <= 1 ? 'Regenerate instead' : `Delete v${selIdx + 1}`}
+            <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete clip v${selIdx + 1}`} title={takes.length <= 1 ? 'Delete the only version: Update what follows makes it again' : `Delete v${selIdx + 1}`}
               onClick={async (e) => {
                 e.stopPropagation()
                 const r = await deleteFrom(docStore, (d) => removeTake(d, sel.id))

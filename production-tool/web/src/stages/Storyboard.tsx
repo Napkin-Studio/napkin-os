@@ -346,8 +346,8 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
               <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
               <span className="mono" title={made.label}>v{idx + 1}/{frames.length}</span>
               <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
-              <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={frames.length <= 1 || running}
-                title={frames.length <= 1 ? 'Regenerate instead' : `Delete v${idx + 1}`}
+              <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={running}
+                title={frames.length <= 1 ? 'Delete the only version: Update what follows draws it again' : `Delete v${idx + 1}`}
                 onClick={async () => {
                   setError(null)
                   try {

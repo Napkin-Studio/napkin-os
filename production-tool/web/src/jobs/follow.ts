@@ -41,10 +41,12 @@ export const planSize = (p: FollowPlan) => p.frames.length + p.clips.length + (p
 /** `fixing`: shots a fix is redoing now (shotsBeingFixed); their clip is left to the fix. */
 export function planFollow(d: ProductionDocument, fixing: ReadonlySet<string> = new Set()): FollowPlan {
   const none: FollowPlan = { frames: [], clips: [], ad: false }
-  if (!anythingStale(d)) return none
   const shots = d.shots ?? []
   const hasFrames = (d.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
   const hasTakes = (d.takes ?? []).some((t) => shots.some((s) => s.id === t.shot_id))
+  // A shot whose last frame or clip was deleted is owed one, like an out-of-date one.
+  const missing = shots.some((s) => (hasFrames && !selectedFrame(d, s.id)) || (hasTakes && !selectedTake(d, s.id)))
+  if (!anythingStale(d) && !missing) return none
   const first = shots.findIndex((s) => !!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id)))
   const frames = first >= 0 ? shots.slice(first).map((s) => s.id) : []
   const clips = hasTakes ? shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id))).map((s) => s.id) : []
