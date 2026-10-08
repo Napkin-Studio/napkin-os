@@ -98,8 +98,6 @@ def test_region_edit_on_fal_is_a_masked_inpaint():
     job = res.output["providerJob"]
     assert job["mask"] == fixture("region_edit_fal_mask")["input"]["mask"]["sha256"]
     assert job["refs"][0]["role"] == "current"
-    asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
-    assert asked["regionAreaFraction"] == 0.03  # computed here, not by the model
 
 
 def test_region_edit_on_runway_regenerates_from_the_parent():
@@ -152,7 +150,7 @@ def test_prompt_version_comes_from_the_prompt_file(tmp_path):
 
 def test_prompt_carries_the_rules():
     text = (PROMPTS / "director.v4.md").read_text()
-    for rule in ("Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer"):
+    for rule in ("Keep the seed", "whatever the region's size", "role `current`", "`audio` to false", "input.answer"):
         assert rule in text
 
 
@@ -344,19 +342,12 @@ def area(w, h):
     return edit
 
 
-@pytest.mark.parametrize("w, h, masked", [(0.5, 0.49, True), (0.5, 0.5, False), (0.6, 0.6, False)])
-def test_the_quarter_rule_picks_mask_or_regenerate_at_the_boundary(w, h, masked):
-    f = fixture("region_edit_fal_mask")
-    mask = f["input"]["mask"]["sha256"]
-
-    def reply(r):
-        if not masked:
-            del r["providerJob"]["mask"]
-    attempt("region_edit_fal_mask", reply, area(w, h))  # the right answer for the area passes
-    if masked:
-        refuses("send the mask", "region_edit_fal_mask", lambda r: r["providerJob"].pop("mask"), area(w, h))
-    else:
-        refuses("send no mask", "region_edit_fal_mask", job_edit(mask=mask), area(w, h))
+@pytest.mark.parametrize("w, h", [(0.2, 0.2), (0.5, 0.5), (0.8, 0.33), (1.0, 1.0)])
+def test_a_mask_on_a_mask_sheet_is_always_a_masked_inpaint(w, h):
+    # The 25% rule is gone (features/harness-refusals.clan): fal cannot regenerate from a
+    # reference, so a large box sent without its mask could never run there.
+    attempt("region_edit_fal_mask", lambda r: None, area(w, h))
+    refuses("send the mask", "region_edit_fal_mask", lambda r: r["providerJob"].pop("mask"), area(w, h))
 
 
 def test_a_small_region_without_a_drawn_mask_regenerates_instead():

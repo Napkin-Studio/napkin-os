@@ -68,7 +68,7 @@ def test_v4_carries_the_frame_rules():
         "A character must be identical to its refs",
         "`anchor` and `previous` are `object`",
         "neutral standing pose", "plain light background", "Never add a background scene",
-        "Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer",
+        "Keep the seed", "whatever the region's size", "role `current`", "`audio` to false", "input.answer",
     ):
         assert rule in v4, rule
 

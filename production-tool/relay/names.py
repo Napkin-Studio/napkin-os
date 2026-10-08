@@ -94,6 +94,54 @@ def _rewrite(text: str, by_name: dict[str, str]) -> str:
     return MENTION.sub(sub, text)
 
 
+def _named(payload: dict) -> set[str]:
+    """Every key_variant the job names outright: in the shot's refs, its words or the instruction."""
+    shot = payload.get("shot") or {}
+    words = [payload.get("text") or "", shot.get("action") or "", shot.get("dialogue") or ""]
+    named = {n for n in shot.get("refs") or [] if "_" in n}
+    named |= {m for w in words for m in MENTION.findall(w) if "_" in m}
+    return named
+
+
+def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str]]:
+    """The job input with its character refs cut to what `sheet` takes (refs.maxCharacter, refs.max),
+    and the names it dropped (features/harness-refusals.clan).
+
+    A bare key (`@uberto`) brings its front and up to 3 more views, so two whole characters can be 8
+    character refs where fal and Runway take 5. Only views the job does not name outright are dropped,
+    last first: a front stays (a bare key stands for it), and so does any picture named in the shot's
+    refs or its words. When that is not enough the input goes as it is and the sheet check refuses it.
+    """
+    limits = (sheet or {}).get("refs") or {}
+    refs = payload.get("refs") or []
+    if op == "shot_list" or not refs or not limits:
+        return payload, []
+    # anchorFrame, previousFrame and a region edit's image go as refs too (director.v4).
+    reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op == "region_edit")
+    max_char = limits.get("maxCharacter", len(refs))
+    max_all = max(limits.get("max", len(refs) + reserved) - reserved, 0)
+    named = _named(payload)
+    kept = list(refs)
+    dropped: list[str] = []
+
+    def over() -> bool:
+        return sum(r.get("role") == "character" for r in kept) > max_char or len(kept) > max_all
+
+    for r in reversed(refs):
+        if not over():
+            break
+        name = r.get("name") or ""
+        if "_" not in name or name.endswith("_front") or name in named:
+            continue
+        if r.get("role") != "character" and len(kept) <= max_all:
+            continue
+        kept.remove(r)
+        dropped.append(name)
+    if not dropped:
+        return payload, []
+    return {**payload, "refs": kept}, dropped
+
+
 def to_wire(op: str, payload: dict) -> dict:
     """A copy of the job input with wire tags on its refs and in its words. shot_list is unchanged."""
     if op == "shot_list":

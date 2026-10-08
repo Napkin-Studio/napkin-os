@@ -31,7 +31,6 @@ PURPOSE = "director"
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
 SHA = re.compile(r"sha256:[0-9a-f]{64}")
 VIDEO_OPS = ("clip", "clip_edit")
-MASK_BELOW = 0.25  # a region under this share of the image is a masked inpaint where the sheet and input allow
 
 # What the provider's endpoint accepts that a schema or sheet cannot say (provider docs, checked 2026-10-06).
 # Runway's image ratios are pixel pairs, a different list per model (openapi: text_to_image).
@@ -228,9 +227,6 @@ class Director:
         if sheet:
             ask["provider"] = provider_name
             ask["sheet"] = sheet
-        if payload.get("region"):
-            r = payload["region"]
-            ask["regionAreaFraction"] = round(r["w"] * r["h"], 4)  # the 25% rule is arithmetic; not left to the model
 
         usage = Usage()
         t0 = time.monotonic()
@@ -324,11 +320,14 @@ class Director:
         if not any(r["role"] == "current" and r["sha256"] == image for r in job["refs"]):
             raise DirectorError("a region edit needs the edited image as a ref with role current")
         region, mask = payload.get("region"), payload.get("mask")
-        masked = bool(region and mask and sheet["mask"] != "none" and region["w"] * region["h"] < MASK_BELOW)
+        # Masked wherever the sheet takes masks, whatever the box's size: fal's edit model cannot
+        # regenerate from a reference, so a large box sent without its mask could never run there
+        # (features/harness-refusals.clan; the 25% rule is gone).
+        masked = bool(region and mask and sheet["mask"] != "none")
         if masked and job.get("mask") != mask["sha256"]:
-            raise DirectorError(f"a region under {MASK_BELOW:.0%} of the image is a masked inpaint: send the mask")
+            raise DirectorError("a region with a mask on a sheet that takes masks is a masked inpaint: send the mask")
         if not masked and job.get("mask"):
-            raise DirectorError(f"this region is a reference-based regenerate (over {MASK_BELOW:.0%}, no mask or no mask support): send no mask")
+            raise DirectorError("this region is a reference-based regenerate (no mask, or the sheet takes none): send no mask")
 
     @staticmethod
     def _check_provider_limits(op: str, sheet: dict, job: dict) -> None:

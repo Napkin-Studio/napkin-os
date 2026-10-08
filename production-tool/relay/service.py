@@ -37,6 +37,30 @@ from providers.types import effective_sheet, op_models
 
 log = logging.getLogger("relay")
 
+PROVIDER_NAMES = {"fal": "fal", "runway": "Runway", "heygen": "HeyGen", "mock": "Mock"}
+
+# What to change when a step asks for more than the provider takes (features/harness-refusals.clan).
+SHEET_HINTS = (
+    ("character refs", "Name fewer characters in this shot, or a single view (@maya_front) instead of a whole character (@maya)."),
+    (" refs", "Name fewer pictures in this shot."),
+    ("needs a mask", "Paint over the area with the brush, or remove the box."),
+    ("takes no mask", "Remove the painted area and use a box."),
+    ("duration", "Change the shot's length."),
+)
+
+
+def sheet_refusal(op: str, last_error: str) -> str:
+    """The message for a step every provider ruled out on its sheet: what the limit is and what to change.
+    Not a Napkin problem and not the participant's account; sending it again cannot work."""
+    provider, _, reason = last_error.partition(": ")
+    reason = reason or last_error
+    for subject in (provider, op):  # "fal takes at most 5 character refs", "region_edit needs a mask"
+        if subject and reason.startswith(f"{subject} "):
+            reason = "it " + reason[len(subject) + 1:]
+    hint = next((h for k, h in SHEET_HINTS if k in reason), "Change the step and send it again.")
+    name = PROVIDER_NAMES.get(provider, provider or "The provider")
+    return f"{name} cannot do this {op.replace('_', ' ')}: {reason}. {hint}"
+
 QUOTA_CLASS = {
     "generate": "image", "view": "image", "frame": "image", "region_edit": "image",
     "clip": "video", "clip_edit": "video", "stitch": "render", "shot_list": "text",
@@ -617,6 +641,10 @@ class Relay:
             if job["state"] != "queued":
                 return self._with_poll(job)
         if not [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]:
+            if job["_tried"] and job.get("_sheetOnly") and job.get("_lastError"):
+                # Every provider ruled the request out on its sheet: sending it again cannot work.
+                return self._fail(job, "capability_missing", sheet_refusal(job["op"], job["_lastError"]),
+                                  paid=False, refund=True)
             message = "No provider could take this job. Try again."
             if self._is_own(job):
                 names = " or ".join(own_keys.NAMES[p] for p in job["_own"])
@@ -670,8 +698,11 @@ class Relay:
                 return self._fail(job, "uncertain", "The provider may have this job; it will not be sent again.",
                                   provider_code=e.provider_code, director=block)
             if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
+                # A sheet refusal is about the request; an outage or a full queue is about the provider.
+                sheet_only = job.get("_sheetOnly", True) and (isinstance(e, CapabilityMissing) or e.code == "capability_missing")
                 back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                  _tried=job["_tried"] + [provider], _lastError=f"{provider}: {e.message}"[:300])
+                                  _tried=job["_tried"] + [provider], _lastError=f"{provider}: {e.message}"[:300],
+                                  _sheetOnly=sheet_only)
                 self.store.incr(slot, "n", -1)
                 if back is None:
                     log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
@@ -702,8 +733,12 @@ class Relay:
             if use_config:  # config.json's director block: the model ids and prompt version
                 use_config(self.config().get("director") or {})
             req = job["_req"]
+            # Extra views over this provider's ref limits are left out, not refused (names.fit_refs).
+            inp, dropped = names.fit_refs(req["op"], req.get("input") or {}, sheet)
+            if dropped:
+                log.info("job %s: left out %s for %s's ref limits", job["jobId"], ", ".join(dropped), job.get("provider"))
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
-            out = dict(self.director.direct({**req, "input": names.to_wire(req["op"], req.get("input") or {})}, sheet))
+            out = dict(self.director.direct({**req, "input": names.to_wire(req["op"], inp)}, sheet))
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
