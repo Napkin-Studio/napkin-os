@@ -9,7 +9,7 @@ import { putBlob } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
-import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
+import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
 import { cancelFollow, clipModelsFor, continueFollow, planCost, planFollow, planSummary, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
@@ -302,9 +302,10 @@ describe('the ad is trimmed to the shots', () => {
     expect(s.inputOf(id).clips!.map((c) => c.trimS)).toEqual([3, 2, 4, 4, 2])
   })
 
-  it('ad length = the sum of the shots + the 1 s end card (the FACET ad: 15 s of shots is 16 s, not 21)', () => {
-    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(16)
-    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(7.5)
+  it('ad length = the sum of the shots + the 2.5 s end card (the FACET ad: 15 s of shots is 17.5 s, not 21)', () => {
+    expect(END_CARD_S).toBe(2.5)
+    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(17.5)
+    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(9)
   })
 })
 

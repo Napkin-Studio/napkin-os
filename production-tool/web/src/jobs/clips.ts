@@ -49,7 +49,7 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc' | 'ui'>)
     const t = selectedTake(d, s.id)
     if (!t) throw new Error(`Shot ${s.order} has no clip yet.`)
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
-    // trimmed to its shot: the ad is the sum of the shots plus the 1 s end card.
+    // trimmed to its shot: the ad is the sum of the shots plus the end card (END_CARD_S).
     clips.push({ asset: await assetRef(deps.relay, t.asset), trimS: s.duration_s })
     parents.push(t.job_id)
   }
@@ -62,8 +62,8 @@ export async function renderAd(deps: FrameDeps, purpose: Partial<Extract<JobPurp
   return deps.runner.submit('stitch', input, parents, { for: 'stitch', ...purpose })
 }
 
-/** The end card the stitch adds after the clips (stitch.py CARD_S). */
-export const END_CARD_S = 1
+/** The end card the stitch adds after the clips: the 2.5 s roll-up card (stitch.py CARD_S). */
+export const END_CARD_S = 2.5
 
 /** How long the rendered ad is: the shots' lengths plus the end card. */
 export function adLengthS(shots: Pick<Shot, 'duration_s'>[]): number {

@@ -71,7 +71,7 @@ export function Video() {
   const render = async () => {
     setError(null)
     try {
-      // Each clip is cut to its shot's length (trimS): the ad is the shots plus the 1 s end card.
+      // Each clip is cut to its shot's length (trimS): the ad is the shots plus the 2.5 s end card.
       await renderAd(deps)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
