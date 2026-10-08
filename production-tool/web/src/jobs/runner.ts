@@ -130,8 +130,9 @@ export class JobRunner {
     }
   }
 
-  /** Re-run a failed job as a new job (same input, new id: the old id would return the same failure). */
-  async retry(jobId: string): Promise<string | null> {
+  /** Re-run a failed job as a new job (same input, new id: the old id would return the same failure).
+   *  `modelChoice`: run it on another model this time (null: the routed default); left out, the same pick. */
+  async retry(jobId: string, modelChoice?: ModelChoice | null): Promise<string | null> {
     const ctx = this.ui.get().jobCtx[jobId]
     if (!ctx) return null
     const { request, dismissed: _d, retriedAs: _r, ...purpose } = ctx
@@ -143,7 +144,8 @@ export class JobRunner {
         c.retriedAs = newJobId
       }
     })
-    await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId, request.modelChoice)
+    const pick = modelChoice === undefined ? request.modelChoice : modelChoice ?? undefined
+    await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId, pick)
     return newJobId
   }
 

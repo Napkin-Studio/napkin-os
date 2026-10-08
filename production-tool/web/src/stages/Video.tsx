@@ -416,7 +416,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           {progress?.running && (
             <div className="faint" role="status" style={{ fontSize: 12.5, fontWeight: 600 }}>{progress.step === 'frame' ? 'Fixing the frame…' : 'Making the clip…'}</div>
           )}
-          {fixJob && <div style={{ height: 96, borderRadius: 12, overflow: 'hidden' }}><JobNode jobId={fixJob} /></div>}
+          {fixJob && <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden', display: 'flex' }}><JobNode jobId={fixJob} /></div>}
           <div className="comments">
             {reviews.flatMap((r, i) => {
               const v = takesOf(doc.takes ?? [], cur.shot.id).findIndex((x) => x.id === r.target.id) + 1

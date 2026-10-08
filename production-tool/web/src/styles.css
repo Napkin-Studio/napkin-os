@@ -217,6 +217,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .errnode.compact { padding: 8px; gap: 4px; font-size: 11.5px; overflow: hidden; }
 .errnode.compact .msg { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .errnode.compact .row { gap: 4px; flex-wrap: wrap; justify-content: center; }
+.errnode .othermodel { gap: 6px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
+.errnode .othermodel .select { max-width: 200px; }
+.errnode.compact .othermodel .select { max-width: 110px; font-size: 11px; }
+.errnode.compact:has(.othermodel) .msg { -webkit-line-clamp: 2; }
 .errnode .code { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 
 /* ── Character stage ─────────────────────────────────────────────────────── */

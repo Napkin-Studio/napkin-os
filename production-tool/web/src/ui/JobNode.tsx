@@ -1,8 +1,10 @@
 // A job in place: where its output will land, it shows the queue position and
-// elapsed time; when it fails, the error with Retry and Report. Never a toast.
+// elapsed time; when it fails, the error with Retry, another model to try, and Report. Never a toast.
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices } from '../app/context'
+import { choiceToSend, modelChoicesFor } from '../capabilities'
+import type { DocJob } from '../contracts/types'
 import { isActive } from '../jobs/runner'
 import { cancelText, mayStillCharge } from './cancel'
 import { InlineConfirm } from './Undo'
@@ -56,6 +58,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
           )}
           <button className="btn xs ghost" onClick={() => runner.dismiss(jobId)}>Clear</button>
         </div>
+        {!cancelled && <OtherModel job={job} compact={compact} onRetried={onRetried} />}
       </div>
     )
   }
@@ -73,6 +76,32 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
       {!compact && (confirming
         ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
         : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)}
+    </div>
+  )
+}
+
+const keyOf = (c: { provider: string; model: string }) => `${c.provider}:${c.model}`
+
+/** A failed job, sent again on another model: whatever made it fail (an account out of credit, a model
+ *  that cannot take the step) may not hold on the next one. Starts on a model from another provider. */
+function OtherModel({ job, compact, onRetried }: { job: DocJob; compact: boolean; onRetried?: (newId: string) => void }) {
+  const { runner } = useServices()
+  const { config } = useConfig()
+  const options = modelChoicesFor(job.op, config).filter((o) => !(o.provider === job.provider && o.model === job.model))
+  const [chosen, setChosen] = useState<string | undefined>()
+  if (!options.length) return null
+  const start = options.find((o) => o.provider !== job.provider) ?? options[0]
+  const pick = options.find((o) => keyOf(o) === chosen) ?? start
+  return (
+    <div className="row othermodel" onClick={(e) => e.stopPropagation()}>
+      {!compact && <span className="faint">Try another model</span>}
+      <select className="select xs" aria-label="Another model to try" value={keyOf(pick)} onChange={(e) => setChosen(e.target.value)}>
+        {options.map((o) => <option key={keyOf(o)} value={keyOf(o)}>{o.label} · {o.provider}</option>)}
+      </select>
+      <button className="btn xs primary" onClick={async () => {
+        const id = await runner.retry(job.id, choiceToSend(job.op, config, pick) ?? null)
+        if (id) onRetried?.(id)
+      }}>{compact ? 'Try' : 'Try it'}</button>
     </div>
   )
 }

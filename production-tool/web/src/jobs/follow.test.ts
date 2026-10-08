@@ -416,6 +416,21 @@ describe('Update what follows', () => {
     expect(planFollow(s.doc.get(), fixing).clips).not.toContain(s.shotId(1))
   })
 
+  it('a failed job can be sent again on another model (the error card\'s "Try another model")', async () => {
+    const s = await setup(1)
+    await s.makeAll(false)
+    const id = await makeClip(s.deps, s.shotId(0), { parentTake: s.takeOf(0) })
+    await s.runner.cancel(id) // like HeyGen out of credit: the step ended without a clip
+    const veo = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const again = (await s.runner.retry(id, veo))!
+    expect(s.ui.get().jobCtx[again].request.modelChoice).toEqual(veo)
+    expect(s.ui.get().jobCtx[again]).toMatchObject({ for: 'clip', parentTakeId: s.takeOf(0).id })
+    expect(s.ui.get().jobCtx[id]).toMatchObject({ dismissed: true, retriedAs: again })
+    await s.runner.cancel(again)
+    const routed = (await s.runner.retry(again, null))! // the routed default this time
+    expect(s.ui.get().jobCtx[routed].request.modelChoice).toBeUndefined()
+  })
+
   it('runs frames one at a time in order, then the clips, then the ad, and writes one chain entry', async () => {
     const s = await setup(4)
     await s.makeAll()
