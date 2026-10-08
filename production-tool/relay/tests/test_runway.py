@@ -169,9 +169,11 @@ def test_malformed_success_replies_become_provider_errors(runway, server, reply)
     server.replies += [reply, reply]
     with pytest.raises(ProviderError) as e:
         runway.submit(job())
-    assert e.value.code in ("provider_failed", "provider_unavailable") and e.value.retryable
-    with pytest.raises(ProviderError):
+    # a 2xx: Runway may have the task, so it must never be sent anywhere else
+    assert (e.value.code, e.value.retryable, e.value.accepted) == ("provider_failed", False, True)
+    with pytest.raises(ProviderError) as e:
         runway.status("task_1")
+    assert e.value.retryable  # a garbled poll is asked again
 
 
 def test_clip_edit_without_a_source_video_or_with_half_a_range_refuses(runway, server):
@@ -315,9 +317,8 @@ def test_status_done_video(runway, server):
 
 def test_unknown_task_status_is_provider_failed(runway, server):
     server.reply(200, {"id": "t", "status": "WEIRD"})
-    with pytest.raises(ProviderError) as e:
-        runway.status("t")
-    assert e.value.code == "provider_failed"
+    st = runway.status("t")  # asking again cannot help: the job ends now, not at the relay's timeout
+    assert (st.state, st.error.code, st.error.retryable) == ("failed", "provider_failed", False)
 
 
 # (failureCode, error code, retryable)

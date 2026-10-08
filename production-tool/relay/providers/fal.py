@@ -62,9 +62,18 @@ NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
 VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
 ALTERNATES = {"frame": NANO, "clip": VEO}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
-# pydantic-style 422 types: the request itself is wrong. Any other 422 type is fal's failure.
+# 422 types that say the input is wrong: pydantic's, and fal's own (fal.ai/docs/documentation/
+# model-apis/errors, read 2026-10-08). Any other 422 type is fal's failure.
 INVALID_TYPES = ("missing", "value_error", "type_error", "string_", "int_", "float_", "bool_", "enum",
-                 "literal", "greater", "less", "too_", "url_", "json_", "list_", "dict_", "extra_forbidden")
+                 "literal", "greater", "less", "too_", "url_", "json_", "list_", "dict_", "extra_forbidden",
+                 "sequence_", "multiple_of", "one_of", "input_value_error", "image_", "file_too_large",
+                 "face_detection", "feature_not_supported", "unsupported_", "audio_duration", "video_duration",
+                 "invalid_archive", "archive_")
+# Failures fal calls transient (its runners, timeouts, downstream services): trying again can help.
+TRANSIENT_TYPES = ("generation_timeout", "request_timeout", "startup_timeout", "runner_", "downstream_service",
+                   "internal_server_error", "internal_error")
+# fal could not download the input we gave it: our URL, so our problem.
+DOWNLOAD_FAILED = "file_download_error"
 SHOT_SPLIT = re.compile(r"^---\s*$", re.M)
 
 
@@ -97,6 +106,10 @@ def _error(resp: httpx.Response) -> ProviderError:
         return ProviderError("provider_unavailable", message, True, 5, code)
     if resp.status_code in (401, 403):
         return ProviderError("provider_failed", "fal rejected the API key", False, provider_code=code)
+    if resp.status_code in (404, 405):  # our endpoint or queue path (2026-10-07: the 405 on status)
+        return ProviderError("internal", message, False, provider_code=code, source="napkin")
+    if code == DOWNLOAD_FAILED:
+        return ProviderError("internal", message, True, provider_code=code, source="napkin")
     if resp.status_code == 422 and types and not types[0].startswith(INVALID_TYPES):
         return ProviderError("provider_failed", message, False, provider_code=code)  # e.g. no_media_generated
     return ProviderError("invalid_input", message, False, provider_code=code)
@@ -132,7 +145,10 @@ def _status_error(body: dict) -> ProviderError:
     message = str(body.get("error") or "fal failed the request")
     if "content_policy_violation" in (error_type + message):
         return ProviderError("moderated", message, False, provider_code="content_policy_violation")
-    return ProviderError("provider_failed", message, False, provider_code=error_type or None)
+    if error_type == DOWNLOAD_FAILED:
+        return ProviderError("internal", message, True, provider_code=error_type, source="napkin")
+    transient = error_type.startswith(TRANSIENT_TYPES)
+    return ProviderError("provider_failed", message, transient, provider_code=error_type or None)
 
 
 def _outputs(result: dict) -> list[ProviderOutput]:
@@ -174,26 +190,30 @@ class FalProvider:
         try:
             return self._client.request(method, f"{QUEUE}/{path}", headers=headers, **kw)
         except httpx.TransportError as exc:
-            raise ProviderError("provider_unavailable", f"fal is unreachable: {exc}", True, 5, "transport_error") from exc
+            raise ProviderError("provider_unavailable", f"fal is unreachable: {exc}", True, 5, "transport_error",
+                                source="network") from exc
 
     def _fetch(self, sha: str) -> bytes:
         url = self._assets(sha).url
         try:
             resp = self._client.get(url)
-        except httpx.TransportError as exc:
-            raise ProviderError("internal", f"could not read {url}: {exc}", True) from exc
+        except httpx.TransportError as exc:  # our own asset, not a call to fal: never "maybe sent"
+            raise ProviderError("internal", f"could not read {url}: {exc}", True, source="napkin") from exc
         if resp.status_code >= 400:
-            raise ProviderError("internal", f"could not read {url}: HTTP {resp.status_code}", True)
+            raise ProviderError("internal", f"could not read {url}: HTTP {resp.status_code}", True, source="napkin")
         return resp.content
 
     def _enqueue(self, endpoint: str, body: dict) -> str:
         resp = self._call("POST", endpoint, json=body)
         if resp.status_code >= 400:
             raise _error(resp)
-        body = _json(resp)
+        try:  # a 2xx: fal has the request, so whatever we cannot read must never be sent elsewhere
+            body = _json(resp)
+        except ProviderError as exc:
+            raise ProviderError("provider_failed", exc.message, False, accepted=True) from exc
         rid = body.get("request_id")
         if not rid:
-            raise ProviderError("provider_failed", "fal's reply carries no request_id", False)
+            raise ProviderError("provider_failed", "fal's reply carries no request_id", False, accepted=True)
         # The id keeps the endpoint (for the sheet's price) and the queue app (for the URLs).
         return f"{endpoint}>{queue_app(endpoint, body.get('status_url'))}:{rid}"
 
@@ -256,8 +276,8 @@ class FalProvider:
         """Our mask (white = change) as the endpoint reads it, as a PNG data URI."""
         try:
             img = Image.open(io.BytesIO(self._fetch(sha))).convert("L")
-        except OSError as exc:
-            raise ProviderError("invalid_input", f"the mask is not an image: {exc}", False) from exc
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise ProviderError("invalid_input", f"the mask is not an image we can read: {exc}", False) from exc
         if size and img.size != size:
             raise ProviderError("invalid_input", f"mask is {img.size[0]}x{img.size[1]}, source is {size[0]}x{size[1]}", False)
         img = img.point(lambda v: 255 if v >= 128 else 0)
@@ -311,10 +331,14 @@ class FalProvider:
         if (job.outputs or 1) > MAX_VIEW_OUTPUTS:
             raise CapabilityMissing(f"view returns at most {MAX_VIEW_OUTPUTS} outputs per call")
         ref = self._source(job)
+        try:
+            horizontal, vertical = float(job.angle["horizontal"]), float(job.angle.get("vertical", 0))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ProviderError("invalid_input", f"view angle {job.angle!r} is not a number of degrees", False) from exc
         body = {
             "image_urls": [self._url(ref.sha256)],
-            "horizontal_angle": float(job.angle["horizontal"]),
-            "vertical_angle": float(job.angle.get("vertical", 0)),
+            "horizontal_angle": horizontal,
+            "vertical_angle": vertical,
             "num_images": job.outputs or 1,
             "output_format": "png",
         }
@@ -332,7 +356,10 @@ class FalProvider:
         others = [r for r in job.refs if r is not source]
         if len(others) > 3:
             raise CapabilityMissing("ideogram takes at most 3 reference images with a mask")
-        size = Image.open(io.BytesIO(self._fetch(source.sha256))).size
+        try:
+            size = Image.open(io.BytesIO(self._fetch(source.sha256))).size
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
         body = {
             "prompt": self._prompt(job.prompt, [r.name for r in others], {}, "none"),
             "image_url": self._url(source.sha256),
@@ -450,8 +477,8 @@ class FalProvider:
             return Status("queued", queue_position=body.get("queue_position"))
         if state == "IN_PROGRESS":
             return Status("running", queue_position=0)
-        if state != "COMPLETED":
-            raise ProviderError("provider_failed", f"unknown fal status {state!r}", False)
+        if state != "COMPLETED":  # asking again cannot help: end the job now, not at the timeout
+            return Status("failed", error=ProviderError("provider_failed", f"unknown fal status {state!r}", False))
         if body.get("error"):
             return Status("failed", error=_status_error(body))
         self._completed.add(request_id)

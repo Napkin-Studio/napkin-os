@@ -80,8 +80,10 @@ def _http_error(resp: httpx.Response) -> ProviderError:
         return ProviderError("provider_unavailable", message, True, retry_after_s=after)
     if resp.status_code >= 500:
         return ProviderError("provider_unavailable", message, True)
-    if resp.status_code in (401, 403, 404, 405):  # our key, route or task id, not the participant's input
-        return ProviderError("provider_failed", message, False)
+    if resp.status_code in (401, 403):  # the account's key: the relay decides what to do about it
+        return ProviderError("provider_failed", message, False, provider_code=str(resp.status_code))
+    if resp.status_code in (404, 405):  # our route or task id: a Napkin bug, not the participant's input
+        return ProviderError("provider_failed", message, False, provider_code=str(resp.status_code), source="napkin")
     return ProviderError("invalid_input", message, False)
 
 
@@ -106,7 +108,8 @@ class RunwayProvider:
         try:
             return self._client.request(method, BASE_URL + path, headers=headers, **kw)
         except httpx.TransportError as exc:
-            raise ProviderError("provider_unavailable", f"Runway could not be reached: {exc}", True) from exc
+            raise ProviderError("provider_unavailable", f"Runway could not be reached: {exc}", True,
+                                source="network") from exc
 
     def _ok(self, resp: httpx.Response) -> dict:
         if resp.status_code >= 300:
@@ -215,16 +218,30 @@ class RunwayProvider:
     def submit(self, job: ProviderJob) -> str:
         build = {"clip": self._clip, "clip_edit": self._clip_edit}.get(job.op, self._image)
         path, body = build(job)
-        task = self._ok(self._call("POST", path, json=body))
+        resp = self._call("POST", path, json=body)
+        if resp.status_code >= 300:
+            raise _http_error(resp)
+        try:  # a 2xx: Runway has the task, so whatever we cannot read must never be sent elsewhere
+            task = self._ok(resp)
+        except ProviderError as exc:
+            raise ProviderError("provider_failed", exc.message, False, accepted=True) from exc
         if not task.get("id"):
-            raise ProviderError("provider_failed", "Runway accepted the job but sent no task id", True)
+            raise ProviderError("provider_failed", "Runway accepted the job but sent no task id", False, accepted=True)
         return task["id"]
 
     def status(self, request_id: str) -> Status:
-        task = self._ok(self._call("GET", f"/v1/tasks/{request_id}"))
+        try:
+            task = self._ok(self._call("GET", f"/v1/tasks/{request_id}"))
+        except ProviderError as exc:
+            if exc.retryable:  # 429, 5xx, the network: the relay asks again
+                raise
+            return Status("failed", error=exc)  # 401/403/404 on our task: asking again cannot help
+        if task.get("status") is None:  # an empty or partial reply (a proxy's): ask again
+            raise ProviderError("provider_unavailable", "Runway's task reply has no status", True)
         state = STATES.get(task.get("status"))
         if state is None:
-            raise ProviderError("provider_failed", f"unknown Runway task status {task.get('status')!r}", False)
+            return Status("failed", error=ProviderError(
+                "provider_failed", f"unknown Runway task status {task.get('status')!r}", False))
         credits = (task.get("cost") or {}).get("credits")
         cost = None if credits is None else round(credits * USD_PER_CREDIT, 4)
         if state == "failed":
