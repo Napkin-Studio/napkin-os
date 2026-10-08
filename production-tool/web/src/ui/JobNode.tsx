@@ -3,11 +3,13 @@
 // Report, Clear. Never a toast.
 
 import { useCallback, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices } from '../app/context'
-import { choiceToSend, modelChoicesFor } from '../capabilities'
+import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import type { DocJob } from '../contracts/types'
 import { isActive } from '../jobs/runner'
 import { cancelText, mayStillCharge } from './cancel'
+import { AgentFigure } from './agents/AgentFigure'
+import { whoIsWorking } from './agents/cast'
 import { Float } from './Float'
 import { otherModels } from './modelChoice'
 import { ModelItems } from './ModelPick'
@@ -29,6 +31,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   useJobsTick()
   const job = doc.jobs.find((j) => j.id === jobId)
   const live = runner.liveInfo(jobId)
+  const ui = useUi()
   const state = live?.state ?? job?.state ?? 'queued'
   const running = isActive(state)
   const elapsed = useElapsed(job?.created_at, running)
@@ -37,6 +40,10 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   const { config } = useConfig()
 
   if (!job) return null
+  const ctx = ui.jobCtx[jobId]
+  const shotId = ctx && 'shotId' in ctx ? ctx.shotId : undefined
+  const order = shotId ? (doc.shots ?? []).find((x) => x.id === shotId)?.order : undefined
+  const who = whoIsWorking(job, state, ctx, order)
 
   if (state === 'failed' || state === 'cancelled') {
     const err = job.error
@@ -50,6 +57,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
     const reportLabel = reported === 'yes' ? 'Reported' : reported === 'failed' ? 'Report again' : 'Report'
     return (
       <div className={`errnode ${compact ? 'compact' : ''}`} role="alert">
+        {!compact && <AgentFigure agent={who.agent} state={who.state} size={46} decorative />}
         <div className="msg" title={compact ? err?.message : undefined}>{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
         {!compact && err?.code && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
         {/* One floating bar of what to do next: Retry, another model, Report, Clear. */}
@@ -76,12 +84,13 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   if (!running) return null
 
   const q = live?.queuePosition
+  const model = job.model ? modelLabel(job.provider, job.model) : undefined
   return (
-    <div className="pending" aria-live="polite">
-      <div className="spinner" />
-      <div className="state">{STATE_LABEL[state] ?? 'Working…'}</div>
-      <div className="meta">
-        {q ? `#${q} in queue · ` : ''}{fmtElapsed(elapsed)}
+    <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+      {!compact && <div className="state">{who.line}</div>}
+      <div className="meta" title={compact ? who.line : undefined}>
+        {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
       {!compact && (confirming
         ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />

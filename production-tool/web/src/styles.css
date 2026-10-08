@@ -221,6 +221,12 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 }
 @keyframes drift { to { background-position: 28px 0; } }
 .pending .state { font-weight: 700; color: var(--ink); font-size: 13px; }
+/* The agent at work where the result will land: Dex's blue glow under the stripes. */
+.pending { background: radial-gradient(120% 90% at 50% 100%, var(--tool-soft), transparent 60%), repeating-linear-gradient(-45deg, var(--soft) 0 10px, var(--card) 10px 20px); background-size: auto, 28px 28px; animation: drift-2 1.6s linear infinite; }
+@keyframes drift-2 { to { background-position: 0 0, 28px 0; } }
+.pending.compact { gap: 2px; padding: 6px; }
+.pending.compact .meta { font-size: 10.5px; }
+.errnode .agent-figure { margin-bottom: -2px; }
 .pending .meta { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink3); }
 .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--create); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
