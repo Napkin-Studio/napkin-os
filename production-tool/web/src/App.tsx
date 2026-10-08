@@ -17,6 +17,7 @@ import { startOver, START_OVER_TEXT } from './app/startOver'
 import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
 import { UpdateFollows } from './ui/Follow'
+import { UpdateBox } from './ui/UpdateBox'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -68,6 +69,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         {stage === 'storyboard' && <div className="stage-pane"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane"><Video /></div>}
       </div>
+      <UpdateBox />
       {!import.meta.env.PROD && <DevSwitch />}
     </>
   )
