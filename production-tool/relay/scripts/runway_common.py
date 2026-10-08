@@ -52,7 +52,9 @@ CLIP_RATIO = "1280:720"
 DATA_URI_MAX = 5 * 1024 * 1024  # Runway's limit for an encoded image data URI
 GATE_NOTE = "thresholds untuned, judged on the raw model output"
 EXT = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "video/mp4": "mp4"}
-FIRST_FRAME_NEEDS_HTTPS = "needs an https image URL: Runway rejects data URIs as a clip's first frame"
+UPLOAD_NOTE = "will upload the first frame to Runway (free, ephemeral)"
+UPLOADS_URL = "https://api.dev.runwayml.com/v1/uploads"
+UPLOADS_VERSION = "2024-11-06"
 
 
 def is_https(url: Optional[str]) -> bool:
@@ -138,8 +140,53 @@ class Assets:
         self._refs[sha] = AssetRef(sha, uri, mime)
         return self._refs[sha]
 
+    def add_uploaded(self, data: bytes, mime: str, runway_uri: str) -> str:
+        """Register bytes already uploaded to Runway: the adapter sends the runway:// uri as is."""
+        sha = "sha256:" + hashlib.sha256(data).hexdigest()
+        self._refs[sha] = AssetRef(sha, runway_uri, mime)
+        return sha
+
     def __call__(self, sha: str) -> AssetRef:
         return self._refs[sha]
+
+
+def _upload_failed(step: str, resp: httpx.Response) -> ProviderError:
+    return ProviderError("provider_failed", f"Runway upload {step} failed: HTTP {resp.status_code} "
+                         f"{scrub(resp.text[:200])}", False)
+
+
+def ephemeral_upload(client: httpx.Client, api_key: str, data: bytes, mime: str, filename: str) -> str:
+    """Upload bytes to Runway's ephemeral store (free, valid 24 h) and return the runway:// uri.
+    Step 1 asks POST /v1/uploads for a presigned form; step 2 posts the form fields and then the file."""
+    headers = {"Authorization": f"Bearer {api_key}", "X-Runway-Version": UPLOADS_VERSION}
+    try:
+        resp = client.post(UPLOADS_URL, headers=headers, json={"filename": filename, "type": "ephemeral"})
+        if not resp.is_success:
+            raise _upload_failed("request", resp)
+        info = resp.json()
+        upload_url, fields, runway_uri = info["uploadUrl"], info["fields"], info["runwayUri"]
+        # No Authorization here: the presigned form is the credential, and the host is not Runway's API.
+        resp = client.post(upload_url, data=fields, files={"file": (filename, data, mime)})
+        if not resp.is_success:
+            raise _upload_failed("transfer", resp)
+    except (ValueError, KeyError, TypeError) as exc:  # a reply that is not the documented shape
+        raise ProviderError("provider_failed", f"Runway upload reply was not understood ({type(exc).__name__})",
+                            False) from exc
+    except httpx.TransportError as exc:
+        raise ProviderError("provider_failed", f"Runway upload could not be reached: {type(exc).__name__}",
+                            False) from exc
+    return runway_uri
+
+
+def first_frame_ref(assets: Assets, client: httpx.Client, api_key: str, fetch: Callable[[str], bytes],
+                    url: str) -> str:
+    """A clip's first frame. An https URL is used as is. Anything else (Runway rejects a data URI here)
+    is fetched once, shrunk, uploaded ephemerally, and registered under its runway:// uri."""
+    if is_https(url):
+        return assets.add_url(url, "image/png")
+    data, mime = fit_image(fetch(url))
+    uri = ephemeral_upload(client, api_key, data, mime, f"first_frame.{EXT[mime]}")
+    return assets.add_uploaded(data, mime, uri)
 
 
 def _data_uri_len(n_bytes: int, mime: str) -> int:
