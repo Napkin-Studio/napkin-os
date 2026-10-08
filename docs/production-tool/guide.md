@@ -1,21 +1,33 @@
-# Napkin Production Tool: guide
+# Napkin Production Tool: user guide
 
-This guide is for two groups:
-- **Part 1** is for people using the tool: participants and organisers.
-- **Part 2** is for people running or developing it on their own computer.
+Make a short ad from a sketch: create your characters, storyboard a script, and turn the frames into
+video clips. This guide is for participants and organisers. Anything not built yet is marked
+**Planned**.
 
-It describes the code on `feat/harness-pathways` as of 2026-10-08. Anything not built yet is marked **Planned**.
+## Quick start
 
-Related documents:
-- the event specification: [`hackathon-spec.md`](hackathon-spec.md);
-- the provider notes: [`providers.md`](providers.md);
-- the feature records in [`features/`](../../features/), starting with `model-choice.clan` and `harness-errors.clan`.
+1. **Sign in** with the event code from the organisers and your name.
+2. **Canvas:** draw or drop a picture of your character, press **Generate**, then **Name** the result
+   (for example `maya_front`) and press **Make the other views**.
+3. **Storyboard:** write a few lines of script using your names (*"@maya opens her umbrella and
+   grins."*), press **Plan shots**, then **Draw frame 1** and **Draw the rest**.
+4. **Video:** press **Make clips**, leave notes on any clip to improve it, then **Render ad** and
+   **Download**.
 
----
+## Contents
 
-## Part 1: Using the tool
+- [What it does](#what-it-does)
+- [Signing in](#signing-in)
+- [Stage 1: Canvas](#stage-1-canvas)
+- [Naming references](#naming-references)
+- [Stage 2: Storyboard](#stage-2-storyboard)
+- [Stage 3: Video](#stage-3-video)
+- [Choosing a model when you regenerate](#choosing-a-model-when-you-regenerate)
+- [Your keys (your own fal or HeyGen account)](#your-keys-your-own-fal-or-heygen-account)
+- [Costs and limits](#costs-and-limits)
+- [What the job states and errors mean](#what-the-job-states-and-errors-mean)
 
-### What it does
+## What it does
 
 You make an ad in three stages:
 
@@ -25,11 +37,11 @@ You make an ad in three stages:
 
 Behind the scenes, the tool sends each step to an image or video service: fal, Runway or HeyGen. The organisers choose which service does which step.
 
-### Signing in
+## Signing in
 
 Enter the **event code** from the organisers and **your name**, then press **Start**. Organiser codes get higher daily limits (see [Costs and limits](#costs-and-limits)).
 
-### Stage 1: Canvas
+## Stage 1: Canvas
 
 The canvas shows three hints: **Make**, **Generate**, **Name**.
 
@@ -56,7 +68,7 @@ Other canvas actions:
 | **Clean up** | Removes pictures nothing uses any more. It asks first, and it clears the undo history. |
 | **Go to Storyboard →** | Enabled once at least one image has a name. |
 
-### Naming references
+## Naming references
 
 A name has the form **`key_variant`**:
 
@@ -80,9 +92,9 @@ Two technical details:
 - The director may leave a pose picture out when a service's reference limit is full.
 - The shot's action text can override the pose.
 
-**Planned (strict-refs):** named variants that are always sent and that fix the pose and expression.
+**Planned:** named poses and expressions that are always sent and always followed.
 
-### Stage 2: Storyboard
+## Stage 2: Storyboard
 
 1. **Script.** Write what happens in your ad (up to 600 characters). Use your names, e.g. *"@maya opens @brolly_red and grins."*
 2. **Length and format.** Pick the ad length (10, 15 or 20 s) and the shape (9:16, 1:1 or 16:9).
@@ -104,7 +116,7 @@ Two technical details:
 
 A frame marked **Out of date** was drawn before something it depends on changed, such as an earlier frame. Consider redrawing it.
 
-### Stage 3: Video
+## Stage 3: Video
 
 One clip is made per frame.
 
@@ -122,9 +134,9 @@ These are switched off by the organisers today, so you may not see them:
 - **Change the feel**: small, noticeable or big changes (Adhere / Flex / Reimagine).
 - **Box on a paused frame**: region edits on video.
 
-### Choosing a model when you regenerate
+## Choosing a model when you regenerate
 
-Every model, its price and what each provider accepts are listed in [provider-reference.md](provider-reference.md).
+Every model, its price and what each service accepts are listed in the [provider reference](provider-reference.md).
 
 Your first draw and your first clip always use the event's default model. The defaults are chosen for keeping characters consistent: Nano Banana Pro for characters and frames, Kling v3 Pro for clips (the clip model that takes your named characters). Veo 3.1 has the best motion but ignores character references, so it is offered rather than used by default. When you **regenerate a frame** or make a **New take** (or a new version from notes), a **Model** menu lets you pick another vetted model. The menu starts on the model that made the version you're replacing.
 
@@ -139,7 +151,7 @@ Notes:
 - **Runway is never offered.** It's the event's safety net. If the service you picked can't take the job, the tool makes it with Runway's default model instead. Hover the version or take afterwards: the tooltip names the model, and in that case says something like *"Veo 3.1 (runway), because fal could not take Veo 3.1 Fast"*.
 - **The menu isn't on the canvas** (Generate, views, region edits).
 
-### Your keys (your own fal or HeyGen account)
+## Your keys (your own fal or HeyGen account)
 
 When the organisers switch it on, a **Your keys** button appears in the top bar. Enter a fal key ("For pictures, frames and clip edits") and/or a HeyGen key ("For clips"), then **Save**.
 
@@ -150,14 +162,14 @@ When the organisers switch it on, a **Your keys** button appears in the top bar.
 - **No fallback to the event's account.** If your key is refused, you'll see *"Your fal key was refused…"*. If your account is busy, the step fails rather than running on the event's money.
 - **No daily quota and no event spend** for steps on your own key. The limit on jobs running at once still applies.
 - **Where the keys live:**
-  - Only in this browser tab (sessionStorage). Closing the tab forgets them, and **Forget my keys** clears them.
+  - Only in this browser tab . Closing the tab forgets them, and **Forget my keys** clears them.
   - They're never saved in your document or its export.
   - They're sent to the relay only when a job is submitted.
   - The relay stores the key a job needs encrypted (AES-GCM), and never logs it, returns it or stores it readable.
 
-### Costs and limits
+## Costs and limits
 
-The values below are from the event config example (`contracts/examples/config.event.json`). The organisers can change them without a release.
+These are the usual event settings. The organisers can change them at any time.
 
 | Limit | Value |
 |---|---|
@@ -177,16 +189,16 @@ Estimated cost per job with the default models:
 | Clip | $0.56 (Kling v3 Pro, 5 s) | $1.20 (Veo 3.1, 6 s) | not published |
 | Clip edit | $0.72 (Luma Ray 3.2) | $1.40 (aleph2) | — |
 
-A whole reference production (one character with 3 views, 8 frames, 6 clips and a clip edit) comes to about $5.54 on fal; `relay/scripts/pathway_costs.py` prints it for every pathway.
+A typical ad (one character with 3 views, 8 frames, 6 clips and one clip edit) comes to about $5.54 with the default models.
 
-### What the job states and errors mean
+## What the job states and errors mean
 
 A job card moves through **Sending… → In the queue → Making it… → Almost there…** and then shows the result.
 
 | You see | Meaning | What to do |
 |---|---|---|
 | **In the queue** | Waiting for a free slot: your 2-at-once limit, or the service's. | Nothing; it starts by itself. |
-| **Checking with the provider…** | The service may already have the job but didn't confirm it. Napkin never sends it twice, so you're never charged twice. | Wait. If it stays, report it. **Known issue:** it can spin indefinitely today; the fix is with the web team. |
+| **Checking with the provider…** | The service may already have the job but didn't confirm it. Napkin never sends it twice, so you're never charged twice. | Wait. If it stays, report it. **Known issue:** it can keep spinning; a fix is on the way. |
 | **Retry** | The job failed in a way that trying again may fix (service busy or down, a network blip). | Press **Retry**. |
 | An error **without Retry** | Trying again won't help as is, e.g. a name with no picture, or content the service refused. | Change the input, or **Clear** the card. |
 | Content refused (moderated) | The service's safety filter refused the prompt or picture. It's never retried automatically, and some services still bill it. | Change the words or pictures. |
@@ -207,84 +219,4 @@ For example, a HeyGen outage now falls back to Runway instead of getting stuck, 
 
 ---
 
-## Part 2: Running it locally
-
-### Prerequisites
-
-| Tool | Version / note |
-|---|---|
-| uv | With Python 3.12 (the relay requires `>=3.12,<3.13`). |
-| Node | 20, as CI uses. If your shell's `npm`/`node` are nvm lazy-load wrappers that fail ("command not found: _load_nvm"), put the real binaries first: `export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH"`. |
-| Rust | With the `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`. |
-| wasm-bindgen-cli | Must match `crates/napkin-wasm/Cargo.toml`, currently **0.2.128**: `cargo install wasm-bindgen-cli --version 0.2.128 --locked`. |
-| terraform | Only if your changes reach `infra/`; the check script runs it then. |
-
-### One-time setup
-
-1. Turn on the repo's git hooks: `git config core.hooksPath .githooks`.
-2. Build the CLAN store's wasm. Without it, the web app fails at start with *"Failed to resolve import ./wasm/napkin_wasm.js"*.
-   ```
-   cd production-tool/clan-store && npm ci && npm run build
-   ```
-3. Install the web app's packages: `cd production-tool/web && npm ci`.
-4. Put provider keys in a `.env` file at the repo root. It's gitignored; **never commit it**. Only the steps whose key is present can run for real:
-   ```
-   FAL_KEY=...
-   RUNWAY_API_KEY=...
-   HEYGEN_API_KEY=...
-   ```
-   A provider with no key is skipped at start, with a log line like "provider runway failed to start". Steps routed only to it can't run.
-
-### Start the relay (the local server)
-
-The local relay keeps everything in memory, so restarting it forgets all jobs. It signs in with event code **`LOCAL`** (participant) or **`ORGLOCAL`** (organiser).
-
-```
-cd production-tool/relay
-set -a; source ../../.env; set +a        # loads the keys into this shell only
-LOCAL_CONFIG=/path/to/config.json uv run --frozen --python 3.12 python -m local --port 8787
-```
-
-- **Config:**
-  - Without `LOCAL_CONFIG`, every step runs on the free **mock** provider, which returns your input stamped "MOCK".
-  - With `LOCAL_CONFIG`, it reads your config file (same shape as `contracts/examples/config.*.json`) and re-reads it every 30 s, so routing and flag changes need no restart.
-  - To use real services, route steps to them, e.g. `"frame": ["fal", "mock"]` with `"fallbackOnly": ["mock"]`.
-- **No director model configured** (`ANTHROPIC_API_KEY` or `NAPKIN_MODEL_API` unset): a simple passthrough director writes prompts from the shot text. That's fine for testing routing; it isn't representative of prompt quality.
-- **Use `--frozen`:** without it, `uv` rewrites the out-of-date `uv.lock` on every run (see [Gotchas](#gotchas)).
-
-### Start the web app
-
-```
-cd production-tool/web
-VITE_RELAY_URL=http://127.0.0.1:8787 npx vite --port 5173 --strictPort --host 127.0.0.1
-```
-
-Open **http://127.0.0.1:5173**:
-- **Use `127.0.0.1`, not `localhost`.** Vite can bind to IPv6 (`::1`) while the relay listens on IPv4, and then one side can't reach the other.
-- **Dev switch:** the **⚙ Dev** button picks the config. Use "From the relay (GET /config)" to follow your local relay.
-- **Spending:** jobs routed to fal, Runway or HeyGen spend real money on the keys in your `.env`.
-
-### Running the tests
-
-| What | Command |
-|---|---|
-| Relay | `cd production-tool/relay && uv run --frozen --python 3.12 --with pytest --with 'moto[dynamodb]' --with 'moto[s3]' --with 'moto[ssm]' python -m pytest -q` |
-| Contracts | `uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py` |
-| Web | `cd production-tool/web && npm run lint && npm test && npm run build:web` |
-| Everything a change reaches | `scripts/check.sh` from the repo root (`--list` shows what will run; `--base <branch>` compares against another branch) |
-
-The pre-push hook runs `scripts/check.sh` and refuses the push if it fails. Never use `--no-verify`.
-
-### Gotchas
-
-- **`History.tsx` vs `history.ts`:** on macOS, `import './ui/History'` used to resolve to `history.ts`, and the app failed at start. The helper is now `historyItems.ts` (fixed 2026-10-08). If a stale cache shows the old error, restart Vite with `--force`.
-- **`uv.lock` rewritten:** `relay/uv.lock` and `stitch/uv.lock` are behind `pyproject.toml` (moto is missing from the dev group), so any `uv run` without `--frozen` rewrites them. Restore them with `git checkout -- production-tool/relay/uv.lock production-tool/stitch/uv.lock` until they're regenerated.
-- **A new branch's checks reach `infra/`:** with no upstream, `scripts/check.sh` compares against `develop`, which pulls in the whole Production Tool history, including `infra/`. That needs terraform installed. Use `--base <your base branch>` to check only your own changes.
-
-### Changing things: the feature workflow
-
-Every non-trivial change gets a feature record and an approved design before code:
-- `scripts/feature new`, `show`, `status` and `log`;
-- the rules are in [`CLAUDE.md`](../../CLAUDE.md) and [`features/README.md`](../../features/README.md).
-
-Branches are `feat/<slug>`. Pull requests go into `develop` and are squash-merged.
+Running the tool yourself or working on its code: see the [developer guide](developer-guide.md).
