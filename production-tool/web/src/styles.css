@@ -185,7 +185,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .followchip.failed { background: var(--danger-bg); color: var(--danger); }
 /* On a narrow bar the studio's name gives way; the tool's name stays. */
 @media (max-width: 1100px) { .brand .brand-studio { display: none; } }
-.topmenu .menu .menu-head { padding: 6px 10px 4px; }
 .jobchip { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
 .jobchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-green); }
 .jobchip.busy .dot { background: var(--create); animation: pulse 1.2s var(--ease) infinite; }
@@ -398,9 +397,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .iconbtn-del { font-size: 13px; line-height: 1; }
 .comment .del { visibility: hidden; }
 .comment:hover .del, .comment:focus-within .del { visibility: visible; }
-.topmenu { position: relative; }
-.topmenu .menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 180px; padding: 6px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); z-index: 20; display: flex; flex-direction: column; gap: 2px; }
-.topmenu .menu .btn { justify-content: flex-start; width: 100%; }
 .startover { display: flex; justify-content: center; padding: 10px 16px; }
 .startover .confirm { max-width: 560px; }
 
@@ -411,7 +407,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .topbar-right .follow .confirm { position: absolute; right: 16px; top: calc(var(--topbar-h) - 4px); z-index: 30; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
 
 /* ── Your own provider keys (keys/OwnKeysPanel.tsx) ── */
-.topmenu .ownkeys { width: 320px; padding: 14px; gap: 10px; font-size: 12.5px; }
+.fpanel.ownkeys { width: 320px; padding: 14px; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; }
 .ownkeys-use { list-style: none; margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); display: flex; flex-direction: column; gap: 4px; }
 .ownkeys-use li { display: flex; justify-content: space-between; gap: 8px; }
 
@@ -426,3 +422,19 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .updatebox .ub-item img, .updatebox .ub-empty { width: 48px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--soft); flex-shrink: 0; }
 .updatebox .ub-job { height: 110px; border-radius: 12px; overflow: hidden; display: flex; }
 .updatebox .modelpick .select { max-width: 100%; }
+
+/* ── Floating menus and panels (ui/Float.tsx): one recipe everywhere ── */
+.float { position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; box-shadow: var(--shadow-pop); color: var(--ink); font-size: 13px; }
+.fmenu { padding: 6px; display: flex; flex-direction: column; gap: 1px; min-width: 220px; max-width: min(360px, calc(100vw - 16px)); }
+.fpanel { padding: 14px; max-width: calc(100vw - 16px); }
+.fmi { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-weight: 500; color: var(--ink); text-align: left; cursor: pointer; }
+.fmi:hover:not(:disabled), .fmi:focus-visible { background: var(--soft); outline: none; }
+.fmi:disabled { opacity: 0.45; cursor: not-allowed; }
+.fmi.danger { color: var(--danger); }
+.fmi-ico { width: 16px; text-align: center; color: var(--ink2); flex-shrink: 0; }
+.fmi.danger .fmi-ico { color: inherit; }
+.fmi-text { flex: 1; min-width: 0; }
+.fmi-hint { margin-left: auto; font: 500 11px var(--f-mono); color: var(--ink3); white-space: nowrap; }
+.fhead { padding: 8px 10px 4px; font: 500 10.5px var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); }
+.fsep { height: 1px; background: var(--line-soft); margin: 4px 2px; }
+.fhead.handle { text-transform: none; letter-spacing: 0; font-size: 12px; }

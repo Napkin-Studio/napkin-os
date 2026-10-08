@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
@@ -18,6 +18,7 @@ import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
 import { UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
+import { Float, MenuItem } from './ui/Float'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -82,7 +83,9 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
   const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
-  const [menu, setMenu] = useState(false)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
   const stage = doc.stage.current
   const reachable = (s: StageName) =>
     s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
@@ -123,33 +126,31 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
         </span>
         {config.flags.ownKeys && <OwnKeysButton />}
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
-        {/* Export, the handle and Sign out live in the menu: the bar keeps the run's state, keys and History. */}
-        <span className="topmenu">
-          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-          {menu && (
-            <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.session?.handle ?? doc.participant.handle}</span>
-              <button className="btn sm ghost" role="menuitem" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
-                setExporting(true)
-                try {
-                  const { blob, name } = await exportBundle(docStore)
-                  download(blob, name)
-                } finally {
-                  setExporting(false)
-                  setMenu(false)
-                }
-              }}>{exporting ? 'Packing…' : 'Export'}</button>
-              {relay.kind === 'http' && ui.session && (
-                <button className="btn sm ghost" role="menuitem" onClick={() => {
-                  setMenu(false)
-                  relay.useToken(null)
-                  uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
-                }}>Sign out</button>
-              )}
-              <button className="btn sm ghost" role="menuitem" style={{ color: 'var(--danger)' }} onClick={() => { setMenu(false); onStartOver() }}>Start over…</button>
-            </span>
+        {/* Export, the handle, Sign out and Start over live in the menu: the bar keeps the run's state, keys and History.
+            Undo and Redo (features/system-undo.clan) will sit just left of History. */}
+        <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
+        <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
+          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}</div>
+          <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
+            setExporting(true)
+            try {
+              const { blob, name } = await exportBundle(docStore)
+              download(blob, name)
+            } finally {
+              setExporting(false)
+              closeMenu()
+            }
+          }}>{exporting ? 'Packing…' : 'Export'}</MenuItem>
+          {relay.kind === 'http' && ui.session && (
+            <MenuItem icon="⎋" onSelect={() => {
+              closeMenu()
+              relay.useToken(null)
+              uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
+            }}>Sign out</MenuItem>
           )}
-        </span>
+          <div className="fsep" />
+          <MenuItem icon="↺" danger onSelect={() => { closeMenu(); onStartOver() }}>Start over…</MenuItem>
+        </Float>
       </div>
     </header>
   )

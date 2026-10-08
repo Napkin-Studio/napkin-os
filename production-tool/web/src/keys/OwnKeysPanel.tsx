@@ -1,20 +1,25 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useOwnKeys, useServices } from '../app/context'
+import { Float } from '../ui/Float'
 import { SHEETS } from '../contracts/load'
 import { keyUse, OWN_NAMES as NAMES, type OwnKeys, type OwnProvider } from './ownKeys'
 
 export function OwnKeysButton() {
   const keys = useOwnKeys()
+  const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
   const count = Object.keys(keys).length
   return (
-    <span className="topmenu">
-      <button className={`btn sm ${open ? 'on' : ''}`} aria-expanded={open} title="Use your own fal or HeyGen account"
+    <>
+      <button ref={ref} className={`btn sm ${open ? 'on' : ''}`} aria-expanded={open} title="Use your own fal or HeyGen account"
         onClick={() => setOpen(!open)}>
         {count ? `Your keys · ${count}` : 'Your keys'}
       </button>
-      {open && <OwnKeysPanel onClose={() => setOpen(false)} />}
-    </span>
+      <Float anchor={ref} open={open} onClose={close} align="end" role="dialog" label="Your keys" className="ownkeys">
+        <OwnKeysPanel onClose={close} />
+      </Float>
+    </>
   )
 }
 
@@ -24,7 +29,7 @@ function OwnKeysPanel({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<OwnKeys>(saved)
   const changed = (draft.fal ?? '') !== (saved.fal ?? '') || (draft.heygen ?? '') !== (saved.heygen ?? '')
   return (
-    <form className="menu ownkeys" onSubmit={(e) => { e.preventDefault(); ownKeys.set(draft); onClose() }}>
+    <form className="stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); ownKeys.set(draft); onClose() }}>
       <b>Use your own accounts</b>
       <span className="faint">Steps your keys cover run on your account and are billed to you. Everything else runs on the event's account.</span>
       {(['fal', 'heygen'] as OwnProvider[]).map((p) => (
