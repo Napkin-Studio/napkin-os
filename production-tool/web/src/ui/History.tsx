@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useDoc } from '../app/context'
 import type { ClanBackedStore } from '../doc/clan'
 import { download, exportClanFile } from '../export'
-import { historyItems, type ChainLike } from './history'
+import { historyItems, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
 import './history.css'
 
