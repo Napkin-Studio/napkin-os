@@ -14,7 +14,7 @@ Step 0 is GET /v1/organization (free): the tier and each model's concurrency. --
 does just that, without --live.
 
 Inputs, no redirects, with a Content-Type and Content-Length:
-  --image-url   combine, view, frame, region_edit (fetched once and sent as a data URI, so a local
+  --image-url   view, frame, region_edit (fetched once and sent as a data URI, so a local
                 http URL will do); clip (its first frame: Runway rejects a data URI there, so it
                 needs an https URL, else the op is 'blocked': nothing is submitted)
   --video-url   clip_edit (https mp4, 2-30 s; blocked if it is not https)
@@ -36,8 +36,8 @@ from runway_common import (
 )
 from providers import ProviderError, Ref, load_sheet
 
-OPS = ("generate", "combine", "view", "frame", "region_edit", "clip", "clip_edit")
-NEEDS = {"combine": "image", "view": "image", "frame": "image", "region_edit": "image",
+OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
+NEEDS = {"view": "image", "frame": "image", "region_edit": "image",
          "clip": "image", "clip_edit": "video"}
 FLAG = {"image": "--image-url", "video": "--video-url"}
 VIDEO_NEEDS_HTTPS = "needs an https video URL: Runway cannot fetch a local video for a clip edit"
@@ -90,9 +90,6 @@ def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[
         sha = assets.add_url(urls["image"], "image/png")
         return make_job(sheet, op, "She turns and smiles.", ratio=CLIP_RATIO, duration_s=4, first_frame=sha)
     sha = image_ref(assets, fetch, urls["image"])  # an image op takes the bytes inline
-    if op == "combine":
-        return make_job(sheet, op, "@hero and @prop together on a wooden table, photo.", ratio=IMAGE_RATIO,
-                        refs=[Ref(sha, "hero", "character"), Ref(sha, "prop", "object")])
     if op == "view":
         return make_job(sheet, op, "@hero seen from the side, full body, plain background.", ratio=IMAGE_RATIO,
                         refs=[Ref(sha, "hero", "character")])

@@ -1,7 +1,7 @@
 // The local blob store: bytes by content address. Documents hold only hashes
 // and locations (idb://sha256/<hex> first); the bytes live here.
 
-import { idbGet, idbPut } from './idb'
+import { idbDelete, idbGet, idbPut } from './idb'
 import { hexOf, sha256Of } from './hash'
 
 const urls = new Map<string, string>()
@@ -47,6 +47,15 @@ export async function blobUrl(sha: string): Promise<string | undefined> {
 
 export function cachedBlobUrl(sha: string): string | undefined {
   return urls.get(sha)
+}
+
+/** Forget a blob in this browser (Clean up). */
+export async function deleteBlob(sha: string): Promise<void> {
+  live.delete(sha)
+  const url = urls.get(sha)
+  if (url) URL.revokeObjectURL(url)
+  urls.delete(sha)
+  await idbDelete('blobs', hexOf(sha))
 }
 
 export function idbLocation(sha: string): string {

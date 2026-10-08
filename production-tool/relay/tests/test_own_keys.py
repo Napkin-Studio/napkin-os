@@ -254,3 +254,14 @@ def test_own_adapters_are_reused_per_key():
     adapters.get("fal", "k1")
     assert len(made) == 4  # k1 fell out of the cache of two
     assert not adapters.supports("runway", "generate")
+
+
+def test_the_failure_says_why_the_own_provider_could_not_take_the_step():
+    """2026-10-07: fal was unreachable (DNS) and the participant read only "could not take this step"."""
+    h, fakes = harness()
+    token = h.sign_in()
+    h.relay.own_adapters.get("heygen", HEYGEN_KEY)
+    fakes.one("heygen", HEYGEN_KEY).submit_effect = ProviderError(
+        "provider_unavailable", "heygen is unreachable: [Errno -3] Temporary failure in name resolution", retryable=True)
+    job = post(h, token, "clip", headers=keys(heygen=HEYGEN_KEY))
+    assert "Temporary failure in name resolution" in job["error"]["message"]

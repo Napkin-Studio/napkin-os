@@ -82,7 +82,7 @@ export class JobRunner {
   // ── submit / retry / cancel ──
 
   async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job')): Promise<string> {
-    const request: JobRequest = { contractVersion: '1', jobId, op, parentIds, input }
+    const request: JobRequest = { contractVersion: '2', jobId, op, parentIds, input }
     const hashes = new Set<string>()
     collectHashes(input, hashes)
     const now = new Date().toISOString()

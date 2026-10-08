@@ -1,14 +1,14 @@
 // Deleting things from the document, and putting them back.
 //
-// The contract is locked, so a delete is only a change of data: items leave
+// A delete is only a change of data: items leave
 // their arrays, references to them are cleared or moved on, and the chain gets
 // one entry ("deleted frame frame_… (shot 2)"). Each delete returns a Removal
 // that says exactly what it took out and what it changed, so Undo can put it
 // all back with one patch ("restored …"). Bytes are never touched: the assets
 // list and the blob stores keep every picture and clip.
 
-import type { DocJob, ProductionDocument, StaleMark, Target, View, ViewPick } from '../contracts/types'
-import { describeRemoval, viewLabel } from './describe'
+import type { DocJob, ProductionDocument, StaleMark, Target } from '../contracts/types'
+import { describeRemoval } from './describe'
 import { createMergePatch, deepEqual } from './mergePatch'
 import type { DocumentStore } from './types'
 
@@ -29,8 +29,6 @@ export interface Removal {
   removed: { list: ListName; index: number; value: unknown }[]
   /** Items changed on the way (selection moved, order renumbered), as they were. */
   modified: { list: ListName; id: string; before: unknown }[]
-  /** View slots changed, as they were. */
-  views: { view: View; before?: ViewPick }[]
   /** Out-of-date marks this delete added. */
   staleAdded: StaleMark[]
 }
@@ -43,7 +41,7 @@ export class LastVersionError extends Error {
 }
 
 function blank(kind: RemovalKind, id: string, what: string): Removal {
-  return { kind, id, what, ids: [], removed: [], modified: [], views: [], staleAdded: [] }
+  return { kind, id, what, ids: [], removed: [], modified: [], staleAdded: [] }
 }
 
 function list(d: Doc, name: ListName): { id?: string }[] {
@@ -185,44 +183,35 @@ export function usersOf(d: Doc, asset: string): Target[] {
 }
 
 /**
- * A generated image left the canvas. Nothing about its job changes (the job
- * is the record of what was made and paid for); a view slot it filled goes to
- * `next[view]` (the next candidate) or empties. After the character is
- * locked, frames and clips made from it are marked out of date, not deleted.
+ * A generated image left the canvas. Nothing about its job changes (the job is
+ * the record of what was made and paid for), and a name on it stays: a named
+ * image is a solid reference and lives on in References until Clean up finds
+ * nothing using it. Undo brings the node back.
  */
-export function removeGen(d: Doc, jobId: string, next: Partial<Record<View, ViewPick>> = {}, now = new Date().toISOString()): Removal {
+export function removeGen(d: Doc, jobId: string): Removal {
   const r = blank('gen', jobId, `generated image ${jobId}`)
-  const said: string[] = []
-  for (const [view, pick] of Object.entries(d.character.views) as [View, ViewPick | undefined][]) {
-    if (pick?.job_id !== jobId) continue
-    r.views.push({ view, before: structuredClone(pick) })
-    const after = next[view]
-    if (after) d.character.views[view] = after
-    else delete d.character.views[view]
-    said.push(after ? `was ${viewLabel(view)}; ${after.job_id} took its place` : `was ${viewLabel(view)}; the slot is empty`)
-    if (d.character.locked) {
-      d.stale ??= []
-      for (const target of usersOf(d, pick.asset)) {
-        const mark: StaleMark = { target, caused_by: { kind: 'view', id: view }, reason: `The ${viewLabel(view)} view it was made from was deleted.`, marked_at: now }
-        if (d.stale.some((s) => deepEqual(s.target, target) && deepEqual(s.caused_by, mark.caused_by))) continue
-        d.stale.push(mark)
-        r.staleAdded.push(mark)
-      }
-    }
-  }
-  if (r.staleAdded.length) said.push(`${plural(r.staleAdded.length, 'frame or clip', 'frames and clips')} marked out of date`)
-  if (said.length) r.note = said.join('; ')
-  r.ids = [jobId, ...r.views.map((v) => v.before!.asset)]
+  const named = d.refs.filter((x) => x.node === jobId)
+  if (named.length) r.note = `its name ${named.map((x) => `@${x.key}_${x.variant}`).join(', ')} stays in References`
+  r.ids = [jobId]
   return r
+}
+
+/** Frames and clips made from `asset` are out of date because the ref `name` now shows another image. */
+export function markStale(d: Doc, asset: string, refId: string, reason: string, now = new Date().toISOString()): StaleMark[] {
+  const added: StaleMark[] = []
+  d.stale ??= []
+  for (const target of usersOf(d, asset)) {
+    const mark: StaleMark = { target, caused_by: { kind: 'ref', id: refId }, reason, marked_at: now }
+    if (d.stale.some((s) => deepEqual(s.target, target) && deepEqual(s.caused_by, mark.caused_by))) continue
+    d.stale.push(mark)
+    added.push(mark)
+  }
+  return added
 }
 
 /** Put back exactly what a removal took out and changed. */
 export function restore(d: Doc, r: Removal) {
   if (r.staleAdded.length) d.stale = (d.stale ?? []).filter((s) => !r.staleAdded.some((m) => deepEqual(m, s)))
-  for (const { view, before } of r.views) {
-    if (before) d.character.views[view] = structuredClone(before)
-    else delete d.character.views[view]
-  }
   for (const { list: name, index, value } of [...r.removed].sort((a, b) => a.index - b.index)) {
     const arr = list(d, name)
     const id = (value as { id?: string }).id

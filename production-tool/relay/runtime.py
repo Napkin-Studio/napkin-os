@@ -45,13 +45,15 @@ class CachedConfig:
 
 
 def parse_event_codes(raw: str) -> dict:
-    """{"participant": [...], "organiser": [...]} or a comma-separated list of
-    participant codes."""
+    """{"participant": [...], "organiser": [...], "workspaces": {"CODE": "acme"}} or a
+    comma-separated list of participant codes. A code missing from workspaces signs in to the
+    shared "event" workspace."""
     raw = (raw or "").strip()
     if raw.startswith("{"):
         data = json.loads(raw)
-        return {"participant": list(data.get("participant", [])), "organiser": list(data.get("organiser", []))}
-    return {"participant": [c.strip() for c in raw.split(",") if c.strip()], "organiser": []}
+        return {"participant": list(data.get("participant", [])), "organiser": list(data.get("organiser", [])),
+                "workspaces": dict(data.get("workspaces", {}))}
+    return {"participant": [c.strip() for c in raw.split(",") if c.strip()], "organiser": [], "workspaces": {}}
 
 
 class EnvSecrets:

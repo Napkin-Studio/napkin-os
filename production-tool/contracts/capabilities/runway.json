@@ -1,19 +1,9 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "provider": "runway",
   "checked": "2026-10-06",
   "ops": {
     "generate": {
-      "model": "gemini_image3.1_flash",
-      "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.07,
-      "seed": false,
-      "outputs": [
-        1,
-        4
-      ]
-    },
-    "combine": {
       "model": "gemini_image3.1_flash",
       "endpoint": "POST /v1/text_to_image",
       "estimateUsd": 0.07,

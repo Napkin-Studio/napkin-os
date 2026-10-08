@@ -9,13 +9,6 @@
       "url": "https://hack.napkin.ie/in/sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "mime": "image/png"
     },
-    "character": {
-      "front": {
-        "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
-        "url": "https://hack.napkin.ie/in/sha256:7777777777777777777777777777777777777777777777777777777777777777",
-        "mime": "image/png"
-      }
-    },
     "shot": {
       "id": "shot_01K6XB000000000000000000A1",
       "order": 1,
@@ -23,9 +16,24 @@
       "composition": "wide",
       "action": "The hero walks into a rainy street, umbrella closed.",
       "camera_move": "track",
-      "lead_view": "three_quarter"
+      "refs": [
+        "hero_front"
+      ]
     },
-    "ratio": "9:16"
+    "ratio": "9:16",
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000010VW",
+        "name": "hero_front",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "url": "https://hack.napkin.ie/in/sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "mime": "image/png"
+        }
+      }
+    ]
   },
   "reply": {
     "op": "clip",

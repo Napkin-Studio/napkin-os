@@ -1,48 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { badgeFor, isValidTag, sanitizeTag, uniqueTag } from './tags'
 import { rectToRegion, regionAround, regionToRect } from './region'
 import { checkDurations, splitTarget, totalSeconds } from './shots'
 import { ID_PATTERN, newId } from './ulid'
-
-describe('tags', () => {
-  it.each([
-    ['Eyes', 'eyes'],
-    ['My Hero!', 'my_hero'],
-    ['  2 cool  cats ', 'cool_cats'],
-    ['Café crème', 'cafe_creme'],
-    ['ab', 'abx'],
-    ['a', 'axx'],
-    ['this is a very long tag indeed', 'this_is_a_very_l'],
-    ['__x__', 'xxx'],
-    ['123', ''],
-    ['', ''],
-  ])('sanitises %j → %j', (input, out) => {
-    expect(sanitizeTag(input)).toBe(out)
-    if (out) expect(isValidTag(out)).toBe(true)
-  })
-
-  it('makes unique tags inside 16 characters', () => {
-    expect(uniqueTag('eyes', ['eyes'])).toBe('eyes_2')
-    expect(uniqueTag('eyes', ['eyes', 'eyes_2'])).toBe('eyes_3')
-    const long = uniqueTag('abcdefghijklmnop', ['abcdefghijklmnop'])
-    expect(long).toBe('abcdefghijklmn_2')
-    expect(isValidTag(long)).toBe(true)
-    expect(uniqueTag('!!!', [])).toBe('ref')
-  })
-
-  it('default tags from badges are valid and short (@ref_a, @ref_b…)', () => {
-    const tags: string[] = []
-    for (let i = 0; i < 60; i++) tags.push(uniqueTag(`ref_${badgeFor(i).toLowerCase()}`, tags))
-    expect(tags.slice(0, 3)).toEqual(['ref_a', 'ref_b', 'ref_c'])
-    expect(tags[26]).toBe('ref_aa')
-    for (const t of tags) expect(isValidTag(t)).toBe(true)
-    expect(new Set(tags).size).toBe(tags.length)
-  })
-
-  it('badges run A…Z then AA', () => {
-    expect([0, 1, 25, 26, 27].map(badgeFor)).toEqual(['A', 'B', 'Z', 'AA', 'AB'])
-  })
-})
 
 describe('region math', () => {
   const display = { w: 400, h: 200 }
@@ -94,6 +53,6 @@ describe('shot durations', () => {
 
 describe('ids', () => {
   it('are prefixed ULIDs per common.schema.json', () => {
-    for (const p of ['job', 'ref', 'shot', 'frame', 'take', 'rev', 'combine', 'pin'] as const) expect(newId(p)).toMatch(ID_PATTERN)
+    for (const p of ['job', 'ref', 'node', 'shot', 'frame', 'take', 'rev', 'pin'] as const) expect(newId(p)).toMatch(ID_PATTERN)
   })
 })

@@ -9,7 +9,8 @@
 //   #moderate  → the job fails with moderated (not retryable)
 
 import type {
-  Config, ContractError, InputMime, Job, JobRequest, JobState, LogEntry, Output, SessionRequest, SessionResponse, Shot,
+  AssetRef, Config, ContractError, InputMime, Job, JobRequest, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
+  SessionRequest, SessionResponse, Shot,
 } from '../contracts/types'
 import { quotaClassOf } from '../contracts/types'
 import { getBlob, putBlob } from '../lib/blobs'
@@ -65,10 +66,12 @@ function collectHashes(v: unknown, out: Set<string>) {
 
 const COMPOSITIONS: Shot['composition'][] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
 const MOVES: Shot['camera_move'][] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
-const LEADS: NonNullable<Shot['lead_view']>[] = ['three_quarter', 'front', 'side', 'front', 'back', 'three_quarter']
-
-/** The mock director: split the script into sentences, one shot each, seconds summing to the target. */
-export function mockShotList(script: string, targetS: number): Shot[] {
+/** The mock director: split the script into sentences, one shot each, seconds summing to the target;
+ * each shot shows every character it was given, by its bare key when it has a front (the real
+ * director picks a variant only when the moment needs one). */
+export function mockShotList(script: string, targetS: number, names: string[] = []): Shot[] {
+  const keys = names.filter((n) => n.endsWith('_front')).map((n) => n.split('_')[0])
+  names = [...keys, ...names.filter((n) => !keys.includes(n.split('_')[0]))]
   const durations = splitTarget(targetS)
   const sentences = script.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean)
   return durations.map((d, i) => ({
@@ -78,7 +81,7 @@ export function mockShotList(script: string, targetS: number): Shot[] {
     composition: COMPOSITIONS[i % COMPOSITIONS.length],
     action: (sentences[i] ?? sentences[sentences.length - 1] ?? 'Our hero looks at the camera.').slice(0, 300),
     camera_move: MOVES[i % MOVES.length],
-    lead_view: LEADS[i % LEADS.length],
+    refs: names.slice(0, 9),
     status: 'planned' as const,
   }))
 }
@@ -89,6 +92,7 @@ export class MockRelay implements Relay {
   private readonly running = new Map<string, Promise<void>>()
   private readonly opts: Required<Omit<MockOptions, 'persistKey'>> & { persistKey: string | null }
   private participantId = 'p_mock000'
+  private handle = 'you'
 
   constructor(opts: MockOptions) {
     this.opts = {
@@ -123,11 +127,13 @@ export class MockRelay implements Relay {
 
   async session(req: SessionRequest): Promise<SessionResponse> {
     this.participantId = 'p_' + (req.handle.toLowerCase().replace(/[^a-z0-9]/g, '') + 'mock00').slice(0, 8)
+    this.handle = req.handle
     return {
       token: 'mock-token',
       participantId: this.participantId,
       handle: req.handle,
       role: 'participant',
+      workspace: 'mock',
       expiresAt: new Date(this.opts.now() + 24 * 3600 * 1000).toISOString(),
       quotas: { image: 40, video: 6, render: 3 },
     }
@@ -146,7 +152,7 @@ export class MockRelay implements Relay {
   }
 
   async createJob(req: JobRequest): Promise<Job> {
-    if (req.contractVersion !== '1') {
+    if (req.contractVersion !== '2') {
       throw new RelayError({ code: 'invalid_input', message: 'Unknown contract version.', retryable: false }, 400)
     }
     const existing = this.ledger.get(req.jobId)
@@ -181,7 +187,58 @@ export class MockRelay implements Relay {
     return null
   }
 
-  async fetchOutput(output: Output): Promise<Blob> {
+  /** The workspace library, in this browser only (localStorage when the ledger persists). */
+  private libraryData(): Record<Key, LibraryEntry[]> {
+    if (!this.opts.persistKey) return this.memLibrary
+    try {
+      return JSON.parse(localStorage.getItem('napkin-pt.mock-library') ?? '{}') as Record<Key, LibraryEntry[]>
+    } catch {
+      return this.memLibrary
+    }
+  }
+
+  private memLibrary: Record<Key, LibraryEntry[]> = {}
+
+  private saveLibrary(data: Record<Key, LibraryEntry[]>) {
+    this.memLibrary = data
+    if (!this.opts.persistKey) return
+    try {
+      localStorage.setItem('napkin-pt.mock-library', JSON.stringify(data))
+    } catch { /* storage blocked: memory only */ }
+  }
+
+  async library(): Promise<LibraryIndex> {
+    const data = this.libraryData()
+    return {
+      workspace: 'mock',
+      keys: Object.values(data).map((versions) => {
+        const e = versions[versions.length - 1]
+        const cover = (e.refs.find((r) => r.variant === 'front') ?? e.refs[0]).asset
+        return { key: e.key, ver: e.ver, role: e.role, by: e.by, at: e.at, variants: e.refs.map((r) => r.variant), cover }
+      }).sort((a, b) => a.key.localeCompare(b.key)),
+    }
+  }
+
+  async libraryEntry(key: Key, ver?: number): Promise<LibraryEntry> {
+    const versions = this.libraryData()[key] ?? []
+    const e = ver ? versions.find((v) => v.ver === ver) : versions[versions.length - 1]
+    if (!e) throw new RelayError({ code: 'invalid_input', message: `There is no ${key} in your workspace's library.`, retryable: false }, 404)
+    return e
+  }
+
+  async publish(key: Key, req: LibraryPublish): Promise<LibraryEntry> {
+    const data = this.libraryData()
+    const versions = data[key] ?? []
+    const latest = versions.length ? versions[versions.length - 1].ver : 0
+    if (req.baseVer !== latest) {
+      throw new RelayError({ code: 'conflict', message: `Someone published version ${latest} of this key since yours. Import it first, then publish.`, retryable: false }, 409)
+    }
+    const entry: LibraryEntry = { workspace: 'mock', key, ver: latest + 1, role: req.role, by: this.handle, at: new Date(this.opts.now()).toISOString(), refs: req.refs }
+    this.saveLibrary({ ...data, [key]: [...versions, entry] })
+    return entry
+  }
+
+  async fetchOutput(output: Output | AssetRef): Promise<Blob> {
     const blob = await this.opts.getInput(output.sha256)
     if (!blob) throw new RelayError({ code: 'internal', message: 'The mock result is gone (storage was cleared).', retryable: true })
     return blob
@@ -204,7 +261,7 @@ export class MockRelay implements Relay {
         } else if (/#fail/i.test(text)) {
           item.done = { state: 'failed', at: this.opts.now(), error: { code: 'provider_failed', message: 'The provider could not make this one. Try again.', retryable: true } }
         } else if (req.op === 'shot_list') {
-          item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10), outputs: [] }
+          item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))), outputs: [] }
         } else {
           const rendered = await this.opts.renderer.render(req, this.opts.getInput)
           const outputs: Output[] = []
@@ -249,7 +306,7 @@ export class MockRelay implements Relay {
     const hashes = new Set<string>()
     collectHashes(req.input, hashes)
     const job: Job = {
-      contractVersion: '1',
+      contractVersion: '2',
       jobId,
       participantId: this.participantId,
       op: req.op,

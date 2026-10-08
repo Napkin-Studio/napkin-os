@@ -38,7 +38,7 @@ export function shot(i: number) {
     composition: 'medium',
     action: `Shot ${i + 1}: our hero opens the umbrella as the rain starts, and smiles at the camera.`,
     camera_move: 'push_in',
-    lead_view: 'front',
+    refs: ['hero_front'],
     status: 'planned',
   }
 }

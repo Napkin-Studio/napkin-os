@@ -7,7 +7,9 @@ Sign in with event code LOCAL (participant) or ORGLOCAL (organiser). Routes are
 served both bare (/jobs) and under /api (/api/jobs), as CloudFront does.
 
 Config: LOCAL_CONFIG=<file> (re-read every 30 s), otherwise
-contracts/examples/config.testing.json with every step routed to mock.
+contracts/examples/config.testing.json with every step routed to mock and
+participants' own keys on: a fal or HeyGen key typed into Your keys runs that
+step on the participant's account; with no key, everything runs on mock.
 If providers/mock.py (harness lane) is missing, a stub stands in for it: it
 returns an input asset after 2 s, labelled kind "mock".
 """
@@ -37,6 +39,9 @@ from service import Relay
 from store import MemoryStore
 
 HERE = Path(__file__).resolve().parent
+# Every header the web app sends. The browser preflights each one; a header missing here drops
+# the request before it leaves the browser (2026-10-07: X-Own-Keys on POST /jobs).
+CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys"
 log = logging.getLogger("relay.local")
 
 
@@ -44,6 +49,7 @@ def default_config() -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     cfg["routing"] = {op: ([] if op in ("shot_list", "stitch") else ["mock"]) for op in cfg["routing"]}
     cfg["eventName"] = "Local dev"
+    cfg["flags"]["ownKeys"] = True
     return cfg
 
 
@@ -135,7 +141,7 @@ def serve(port: int, data_dir: Path) -> None:
         def _cors(self):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Clan-Reason")
+            self.send_header("Access-Control-Allow-Headers", CORS_ALLOW_HEADERS)
 
         def _send(self, status: int, body: bytes = b"", ctype: str = "application/json", head=False):
             self.send_response(status)

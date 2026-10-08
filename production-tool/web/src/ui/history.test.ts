@@ -16,20 +16,23 @@ function doc() {
     { id: J1, op: 'generate', state: 'completed', parent_ids: [], input_hashes: [SHA('a')], outputs: [SHA('b')], created_at: T(40) },
     { id: J2, op: 'view', state: 'completed', parent_ids: [J1], input_hashes: [SHA('b')], outputs: [SHA('c')], created_at: T(45) },
   )
-  d.character.views.front = { asset: SHA('b'), job_id: J1 }
-  d.character.views.side = { asset: SHA('c'), job_id: J2 }
+  d.keys.push({ key: 'hero', role: 'character' })
+  d.refs.push(
+    { id: 'ref_01K6XA7Q3M9V2D4R8T0B000001', key: 'hero', variant: 'front', asset: SHA('b'), node: J1 },
+    { id: 'ref_01K6XA7Q3M9V2D4R8T0B000002', key: 'hero', variant: 'side', asset: SHA('c'), node: J2 },
+  )
   return d
 }
 
 // Newest first, as the chain gives it.
 const entries: ChainLike[] = [
-  { agent: 'maya', action: 'picked as Side', rationale: `${SHA('c')} · ${J2}`, timestamp: T(47), fields_changed: ['character'] },
+  { agent: 'maya', action: 'named @hero_side', rationale: `ref_01K6XA7Q3M9V2D4R8T0B000002 · ${SHA('c')}`, timestamp: T(47), fields_changed: ['refs'] },
   { agent: 'fal · qwen-edit', action: `made view ${J2}`, rationale: `cost $0.03 confirmed · 20 s · out ${SHA('c')}`, timestamp: T(46) },
-  { agent: 'maya', action: 'locked the character', rationale: '', timestamp: T(44), pinned: true, fields_changed: ['character', 'stage'] },
+  { agent: 'maya', action: 'published hero to the acme library', rationale: 'version 1', timestamp: T(44), pinned: true, fields_changed: ['keys'] },
   { agent: 'runway · gen4_image', action: `made generate ${J1}`, rationale: `cost $0.07 confirmed · 41 s · out ${SHA('b')}`, timestamp: T(41) },
-  { agent: 'director · claude-sonnet-4-5 · director.v1', action: `directed generate ${J1}`, rationale: 'The sketch sets the pose · prompt: "@ref_a, front view"', timestamp: T(41) },
-  { agent: 'maya', action: 'generated a front view', rationale: `from @ref_a · ${J1}`, timestamp: T(40), fields_changed: ['jobs'] },
-  { agent: 'maya', action: 'added a picture as @ref_a', rationale: `ref_01K6XA7Q3M9V2D4R8T0B000009 · ${SHA('a')}`, timestamp: T(39), fields_changed: ['character'] },
+  { agent: 'director · claude-sonnet-4-5 · director.v1', action: `directed generate ${J1}`, rationale: 'The drawing sets the pose · prompt: "@hero_eyes, front view"', timestamp: T(41) },
+  { agent: 'maya', action: 'generated from 1 input', rationale: `from @hero_eyes · ${J1}`, timestamp: T(40), fields_changed: ['jobs'] },
+  { agent: 'maya', action: 'named @hero_eyes', rationale: `ref_01K6XA7Q3M9V2D4R8T0B000009 · ${SHA('a')}`, timestamp: T(39), fields_changed: ['refs'] },
   { agent: 'maya', action: 'signed in as @maya', timestamp: T(38) },
 ]
 
@@ -40,24 +43,24 @@ describe('History', () => {
 
   it('narrows to an item through the jobs that made it and the pictures they took in', () => {
     const items = historyItems(doc())
-    expect(items.map((i) => i.label)).toEqual(['Front view', 'Side view'])
+    expect(items.map((i) => i.label)).toEqual(['@hero_front', '@hero_side'])
     const front = items[0]
     expect(entries.filter((e) => aboutItem(e, front)).map((e) => e.action)).toEqual([
-      `made generate ${J1}`, `directed generate ${J1}`, 'generated a front view', 'added a picture as @ref_a',
+      `made generate ${J1}`, `directed generate ${J1}`, 'generated from 1 input', 'named @hero_eyes',
     ])
     // The side view came from the front: its history includes the front's.
     const side = items[1]
     const about = entries.filter((e) => aboutItem(e, side)).map((e) => e.action)
-    expect(about).toContain('picked as Side')
+    expect(about).toContain('named @hero_side')
     expect(about).toContain(`made view ${J2}`)
     expect(about).toContain(`directed generate ${J1}`)
-    expect(about).toContain('added a picture as @ref_a')
-    expect(about).not.toContain('locked the character')
+    expect(about).toContain('named @hero_eyes')
+    expect(about).not.toContain('published hero to the acme library')
   })
 
   it('renders entries newest first with who, what, why and fields', () => {
     const html = renderToStaticMarkup(createElement(HistoryList, { entries, handle: 'maya' }))
-    expect(html.indexOf('picked as Side')).toBeLessThan(html.indexOf('signed in as @maya'))
+    expect(html.indexOf('named @hero_side')).toBeLessThan(html.indexOf('signed in as @maya'))
     expect(html).toContain('data-kind="director"')
     expect(html).toContain('data-kind="provider"')
     expect(html).toContain('data-kind="participant"')

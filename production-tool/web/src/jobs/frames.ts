@@ -1,7 +1,8 @@
 // Storyboard frames, drawn one after another (decided 2026-10-07). Every frame
-// has up to three anchors: the character views (identity), the selected frame
-// of shot 1 (`anchorFrame`: setting, light, style) and the selected frame of
-// the shot before (`previousFrame`: continuity). Frame 1 has only the views.
+// has up to three anchors: the shot's named refs (identity: `shot.refs`, as
+// @maya_front, @lamp_on), the selected frame of shot 1 (`anchorFrame`: setting,
+// light, style) and the selected frame of the shot before (`previousFrame`:
+// continuity). Frame 1 has only the refs.
 //
 // "Draw the rest" is a flag in the UI state (snapshotted, so it survives a
 // reload): each time a frame lands, the runner's completion hook calls
@@ -14,7 +15,7 @@ import type { JobPurpose, UiState } from '../doc/ui'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
-import { characterInput } from './select'
+import { refsFor } from './select'
 
 export interface FrameDeps {
   relay: Relay
@@ -56,11 +57,11 @@ export function scriptText(d: ProductionDocument): string | undefined {
 export async function frameInput(relay: Relay, d: ProductionDocument, ui: UiState, index: number, text?: string, strict = true): Promise<JobInput> {
   const shot = (d.shots ?? [])[index]
   if (!shot) throw new Error('That shot is gone.')
-  const character = await characterInput(relay, d)
+  const refs = await refsFor(relay, d, shot, text)
   const script = scriptText(d)
   return {
     shot,
-    character,
+    ...(refs.length ? { refs } : {}),
     ratio: ui.ratio,
     ...(script ? { script } : {}),
     ...(text?.trim() ? { text: text.trim() } : {}),

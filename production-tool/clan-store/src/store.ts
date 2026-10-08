@@ -106,12 +106,13 @@ export class ClanDocumentStore implements DocumentStore {
     return this.serial(async () => {
       const { participant } = init
       const first: Doc = {
-        contract_version: '1',
+        contract_version: '2',
         app: 'production-tool',
         participant: { id: participant.id, handle: participant.handle },
         stage: { current: 'character' },
         assets: [],
-        character: { refs: [], views: {}, locked: false },
+        keys: [],
+        refs: [],
         jobs: [],
       }
       assertValid(first, 'the new document')

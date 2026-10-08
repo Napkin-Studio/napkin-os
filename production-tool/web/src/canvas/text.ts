@@ -34,20 +34,3 @@ export function frameText(els: readonly El[], frame: El): string {
     .join('\n')
     .slice(0, MAX_TEXT)
 }
-
-/**
- * A Combine instruction plus the words written in any drawing among its items.
- * The user's instruction comes first and is never cut; the notes fill what is left.
- */
-export function withNotes(instruction: string, notes: { tag: string; text: string }[], max = MAX_TEXT): string {
-  const base = instruction.trim().slice(0, max)
-  let out = base
-  for (const n of notes) {
-    if (!n.text.trim()) continue
-    const add = `${out ? '\n' : ''}Written in @${n.tag}: ${n.text.trim().replace(/\n/g, ' / ')}`
-    const room = max - out.length
-    if (room <= 0) break
-    out += add.slice(0, room)
-  }
-  return out
-}

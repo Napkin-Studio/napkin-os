@@ -1,6 +1,6 @@
 # Values are never in Terraform. Put each by hand after the apply:
 #   aws secretsmanager put-secret-value --secret-id napkin-hackathon/RUNWAY_API_KEY --secret-string '...'
-# EVENT_CODES is JSON: {"participant": ["..."], "organiser": ["..."]}
+# EVENT_CODES is JSON: {"participant": ["..."], "organiser": ["..."], "workspaces": {"CODE": "team"}}
 # TOKEN_SECRET is any random string of 32+ characters (openssl rand -hex 32).
 # The relay copies them into its environment and re-reads them every 5 minutes.
 

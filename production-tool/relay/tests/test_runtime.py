@@ -21,8 +21,9 @@ def test_tokens_round_trip_and_reject_tampering():
 
 
 def test_event_codes_parse():
-    assert parse_event_codes('{"participant": ["A"], "organiser": ["B"]}') == {"participant": ["A"], "organiser": ["B"]}
-    assert parse_event_codes("A, B") == {"participant": ["A", "B"], "organiser": []}
+    assert parse_event_codes('{"participant": ["A"], "organiser": ["B"]}') == {"participant": ["A"], "organiser": ["B"], "workspaces": {}}
+    assert parse_event_codes('{"participant": ["A"], "workspaces": {"A": "acme"}}')["workspaces"] == {"A": "acme"}
+    assert parse_event_codes("A, B") == {"participant": ["A", "B"], "organiser": [], "workspaces": {}}
 
 
 def test_config_cache_keeps_the_last_good_config():

@@ -7,7 +7,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
-import { characterInput, isRunning, jobAt } from '../jobs/select'
+import { isRunning, jobAt, refsFor } from '../jobs/select'
 import { rectToRegion } from '../lib/region'
 import { newId } from '../lib/ulid'
 import { fmtTime, useBlobUrl } from '../ui/hooks'
@@ -51,10 +51,10 @@ export function Video() {
     if (!frameSha) throw new Error('This shot has no frame yet.')
     const frame = (doc.frames ?? []).find((f) => f.shot_id === s.id && f.selected)
     const image = await assetRef(relay, frameSha)
-    const character = await characterInput(relay, doc)
+    const refs = await refsFor(relay, doc, s, extra.text)
     await runner.submit(
       'clip',
-      { shot: s, image, character, ratio: ui.ratio, ...(extra.text ? { text: extra.text } : {}) },
+      { shot: s, image, ...(refs.length ? { refs } : {}), ratio: ui.ratio, ...(extra.text ? { text: extra.text } : {}) },
       [frame?.job_id, extra.parentTake?.job_id].filter(Boolean) as string[],
       { for: 'clip', shotId: s.id, ...(extra.parentTake ? { parentTakeId: extra.parentTake.id } : {}), ...(extra.reviewIds ? { reviewIds: extra.reviewIds } : {}) },
     )
@@ -252,8 +252,8 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
         const text = openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.comment}`).join('\n').slice(0, 1000)
         const frame = (doc.frames ?? []).find((f) => f.shot_id === cur.shot.id && f.selected)
         const image = await assetRef(relay, cur.shot.storyboard_frame!)
-        const character = await characterInput(relay, doc)
-        await runner.submit('clip', { shot: cur.shot, image, character, ratio: ui.ratio, text }, [frame?.job_id, cur.take.job_id].filter(Boolean) as string[], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
+        const refs = await refsFor(relay, doc, cur.shot, text)
+        await runner.submit('clip', { shot: cur.shot, image, ...(refs.length ? { refs } : {}), ratio: ui.ratio, text }, [frame?.job_id, cur.take.job_id].filter(Boolean) as string[], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')

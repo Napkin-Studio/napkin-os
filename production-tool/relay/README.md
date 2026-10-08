@@ -27,7 +27,12 @@ uv run python -m local            # http://localhost:8787
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.
 - Config: `contracts/examples/config.testing.json` with every step routed to
-  `mock`, or `LOCAL_CONFIG=path/to/config.json` (re-read every 30 s).
+  `mock` and own keys on, or `LOCAL_CONFIG=path/to/config.json` (re-read every 30 s).
+- Your own keys: run the web app against this relay (`npm run dev:relay` in
+  `production-tool/web`), sign in with `LOCAL`, and type a fal or HeyGen key
+  into **Your keys**. Those steps then run on that account; with no key they run on
+  mock. Inputs reach providers inline (data URIs), since they cannot fetch
+  `http://localhost`.
 - Providers: whatever `providers/<name>.py` adapters exist. Without
   `providers/mock.py`, a stub stands in for mock: after 2 s it returns the
   job's first input asset as the output, labelled `kind: "mock"`.

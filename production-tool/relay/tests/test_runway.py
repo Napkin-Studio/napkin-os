@@ -67,7 +67,7 @@ def test_request_carries_key_version_and_returns_the_task_id(runway, server):
     assert len(server.requests) == 1  # submit never polls
 
 
-@pytest.mark.parametrize("op", ["generate", "combine", "view", "frame"])
+@pytest.mark.parametrize("op", ["generate", "view", "frame"])
 def test_image_ops_build_the_exact_body(runway, server, op):
     runway.submit(job(op, refs=[Ref(SHA, "hero", "character"), Ref(SHB, "prop_one", "object")],
                       prompt="@hero holds @prop_one", outputs=4))
