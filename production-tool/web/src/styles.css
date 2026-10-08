@@ -402,3 +402,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .modelpick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; flex-wrap: wrap; }
 .modelpick .select { max-width: 260px; }
 .modelpick .modelnote { flex-basis: 100%; font-size: 11.5px; }
+
+/* The update box (ui/UpdateBox.tsx): floats above every stage while a steered update runs. */
+.updatebox { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 360px; max-width: calc(100vw - 40px); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-pop); font-size: 13px; }
+.updatebox .ub-item { gap: 10px; align-items: center; }
+.updatebox .ub-item img, .updatebox .ub-empty { width: 48px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--soft); flex-shrink: 0; }
+.updatebox .ub-job { height: 110px; border-radius: 12px; overflow: hidden; display: flex; }
+.updatebox .modelpick .select { max-width: 100%; }

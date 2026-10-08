@@ -57,10 +57,20 @@ export interface FollowRun {
   adDone: boolean
   /** Stop after the job running now. */
   cancel?: boolean
-  /** The model each shot's clip is made again on: the one that made the clip it replaces, where the
-   *  menu offers it (features/production-tool-ui.clan). Absent: the routed default. */
-  clipModels?: Record<string, ModelChoice>
+  /** Steered (the Update button): each item waits in the update box for the user's words, model and
+   *  "Make it". Off: the run goes on by itself ("Do the rest as they are"). */
+  steer?: boolean
+  /** The item the update box shows now. */
+  awaiting?: FollowItem
+  /** The model to send per step (absent: the routed default): the last that worked, then the box's pick. */
+  models?: { frame?: ModelChoice; clip?: ModelChoice }
+  /** Old versions already taken out because their replacement landed. */
+  replaced?: string[]
+  /** How many items the run started with, for "2 of 5". */
+  total?: number
 }
+
+export interface FollowItem { kind: 'frame' | 'clip'; shotId: string }
 
 export function initialUi(): UiState {
   return {

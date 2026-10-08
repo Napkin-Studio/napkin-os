@@ -1,21 +1,28 @@
 // "Update what follows" (decided 2026-10-07, "Change anything later; update what
-// follows on request"). Never automatic: the user sees the work and its cost and
-// says yes. Then, in order:
+// follows on request"; steered since 2026-10-09). Never automatic. In order:
 //
 //   1. out-of-date frames, one at a time, each from shot 1's frame and the one
 //      before (the Draw the rest machinery in frames.ts);
 //   2. a clip for every shot whose selected frame changed (or that has none);
-//   3. the ad, when there was one.
+//   3. the ad, when there was one (free, nothing to steer: it just runs).
 //
-// Every step is a new version: nothing earlier is deleted. The run is a flag in
-// the UI state (snapshotted), moved on by the runner's completion hooks and at
-// boot, like Draw the rest, so it resumes after a reload. Cancel stops it after
-// the job running now. A failed step waits: Retry on that job moves the run on.
+// Steered (the Update button), each frame and clip waits in the update box
+// (ui/UpdateBox.tsx) for the user's words for that request, a model (starting on
+// the last that worked for that step) and "Make it". "Do the rest as they are"
+// turns steering off and the run goes on with the box's models. A new version
+// replaces the old one only once it has landed; if it fails, the old one stays and
+// the box shows the error, to make it again on another model.
+//
+// The run is a flag in the UI state (snapshotted), moved on by the runner's
+// completion hooks and at boot, so it resumes after a reload. Stop ends it after
+// the job running now.
 
 import type { Config, ModelChoice, Op, ProductionDocument } from '../contracts/types'
-import type { FollowRun, JobCtx } from '../doc/ui'
+import type { FollowItem, FollowRun, JobCtx } from '../doc/ui'
 import { describeFollow } from '../doc/describe'
 import { choiceToSend, modelChoicesFor, routedSheet, type Sheets } from '../capabilities'
+import { removeFrame, removeTake } from '../doc/remove'
+import { updateDoc } from '../doc/store'
 import { newId } from '../lib/ulid'
 import { makeClip, renderAd, selectedTake } from './clips'
 import { shotsBeingFixed } from './fix'
@@ -61,18 +68,15 @@ function estimate(op: Op, config: Config, sheets?: Sheets): number | null {
   return sheet.ops[op]?.estimateUsd ?? null
 }
 
-/** The estimated cost of a plan, from the routed providers' capability sheets. The ad (ffmpeg) costs nothing.
- *  `clipModels` (clipModelsFor): a clip kept on the model that made it is priced at that model. */
-export function planCost(p: FollowPlan, config: Config, sheets?: Sheets, clipModels: Record<string, ModelChoice> = {}): { usd: number; known: boolean } {
-  const frame = estimate('frame', config, sheets)
-  const routed = estimate('clip', config, sheets)
-  const offered = modelChoicesFor('clip', config, sheets)
-  const clips = p.clips.map((id) => {
-    const pick = clipModels[id]
-    return pick ? offered.find((o) => o.provider === pick.provider && o.model === pick.model)?.estimateUsd ?? null : routed
-  })
-  const known = (!p.frames.length || frame !== null) && clips.every((c) => c !== null)
-  return { usd: p.frames.length * (frame ?? 0) + clips.reduce<number>((a, c) => a + (c ?? 0), 0), known }
+/** The estimated cost of a plan, from the capability sheets: each step at its model (`models`, what
+ *  the run sends; absent, the routed default). The ad (ffmpeg) costs nothing. */
+export function planCost(p: FollowPlan, config: Config, sheets?: Sheets, models: FollowRun['models'] = {}): { usd: number; known: boolean } {
+  const price = (op: 'frame' | 'clip', pick?: ModelChoice) =>
+    pick ? modelChoicesFor(op, config, sheets).find((o) => o.provider === pick.provider && o.model === pick.model)?.estimateUsd ?? null : estimate(op, config, sheets)
+  const frame = price('frame', models.frame)
+  const clip = price('clip', models.clip)
+  const known = (!p.frames.length || frame !== null) && (!p.clips.length || clip !== null)
+  return { usd: p.frames.length * (frame ?? 0) + p.clips.length * (clip ?? 0), known }
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
@@ -84,8 +88,8 @@ export function planWords(p: FollowPlan): string {
 }
 
 /** "3 frames, 3 clips, 1 ad · about $2.01". */
-export function planSummary(p: FollowPlan, config: Config, sheets?: Sheets, clipModels?: Record<string, ModelChoice>): string {
-  const c = planCost(p, config, sheets, clipModels)
+export function planSummary(p: FollowPlan, config: Config, sheets?: Sheets, models?: FollowRun['models']): string {
+  const c = planCost(p, config, sheets, models)
   return `${planWords(p)} · ${c.known ? `about $${c.usd.toFixed(2)}` : `at least $${c.usd.toFixed(2)}`}`
 }
 
@@ -117,37 +121,126 @@ export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx |
   return { running, failed, done: run.framesDone.length + run.clipsDone.length + (run.adDone ? 1 : 0) }
 }
 
-/** Start a run of the plan as it stands now. */
-/** The model to make each planned clip again on: the one that made the selected clip, where the menu
- *  offers it and it is not the routed default (which runs anyway). A clip made on fal stays on fal. */
-export function clipModelsFor(d: ProductionDocument, shotIds: string[], config: Config): Record<string, ModelChoice> {
-  const offered = modelChoicesFor('clip', config)
-  const out: Record<string, ModelChoice> = {}
-  for (const id of shotIds) {
-    const t = selectedTake(d, id)
-    if (!t?.provider || !t.model || t.kind === 'mock') continue
-    const pick = { provider: t.provider, model: t.model }
-    if (!offered.some((o) => o.provider === pick.provider && o.model === pick.model)) continue
-    const send = choiceToSend('clip', config, pick)
-    if (send) out[id] = send
+/** The last model that made a `op` job that worked, where the menu offers it: where the update box
+ *  starts, so a provider that just failed (out of credit) is not tried again by default. */
+export function lastWorkedModel(d: ProductionDocument, op: 'frame' | 'clip', config: Config, sheets?: Sheets): ModelChoice | undefined {
+  const offered = modelChoicesFor(op, config, sheets)
+  for (let i = d.jobs.length - 1; i >= 0; i--) {
+    const j = d.jobs[i]
+    if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model) continue
+    const o = offered.find((x) => x.provider === j.provider && x.model === j.model)
+    if (o) return { provider: o.provider, model: o.model }
+  }
+  return offered[0] && { provider: offered[0].provider, model: offered[0].model }
+}
+
+/** What a run sends per step at the start: the last model that worked (none: the routed default). */
+export function startModels(d: ProductionDocument, config: Config, sheets?: Sheets): NonNullable<FollowRun['models']> {
+  const out: NonNullable<FollowRun['models']> = {}
+  for (const op of ['frame', 'clip'] as const) {
+    const send = choiceToSend(op, config, lastWorkedModel(d, op, config, sheets), sheets)
+    if (send) out[op] = send
   }
   return out
 }
 
-/** `config`: the routing as this participant sees it, to keep each clip on the model that made it. */
-export async function startFollow(deps: FrameDeps, config?: Config): Promise<FollowPlan> {
+/** Start a run of the plan as it stands now. `config`: the routing this participant sees (the models
+ *  to start on). `steer`: wait for the update box on each frame and clip (the Update button). */
+export async function startFollow(deps: FrameDeps, config?: Config, opts: { steer?: boolean } = {}): Promise<FollowPlan> {
   const d = deps.doc.get()
   const plan = planFollow(d, shotsBeingFixed(d, (id) => ctxOf(deps, id)))
   if (!planSize(plan) || deps.ui.get().following) return plan
-  const clipModels = config ? clipModelsFor(d, d.shots?.map((s) => s.id) ?? [], config) : {}
+  const models = config ? startModels(d, config) : {}
   deps.ui.update((u) => {
     u.following = {
       id: newId('follow'), startedAt: new Date().toISOString(), ad: plan.ad, clipShots: plan.clips, framesDone: [], clipsDone: [], adDone: false,
-      ...(Object.keys(clipModels).length ? { clipModels } : {}),
+      total: planSize(plan), ...(opts.steer ? { steer: true } : {}), ...(Object.keys(models).length ? { models } : {}),
     }
   })
   await continueFollow(deps)
   return plan
+}
+
+/** The update box's "Make it": the awaited item, with the user's words for this request only (never the
+ *  script) and the model picked (null: the routed default). A failed try of it is put aside first. */
+export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelChoice?: ModelChoice | null } = {}): Promise<string | null> {
+  const run = deps.ui.get().following
+  const item = run?.awaiting
+  if (!run || !item) return null
+  for (const j of runJobs(deps, run)) {
+    const c = ctxOf(deps, j.id)
+    if (c && itemOf(c)?.shotId === item.shotId && itemOf(c)?.kind === item.kind && (j.state === 'failed' || j.state === 'cancelled')) {
+      deps.ui.update((u) => { const x = u.jobCtx[j.id]; if (x) x.dismissed = true })
+    }
+  }
+  deps.ui.update((u) => {
+    const r = u.following
+    if (!r) return
+    r.awaiting = undefined
+    if (opts.modelChoice !== undefined) {
+      r.models = { ...r.models }
+      if (opts.modelChoice) r.models[item.kind] = opts.modelChoice
+      else delete r.models[item.kind]
+    }
+    if (item.kind === 'frame' && !r.framesDone.includes(item.shotId)) r.framesDone.push(item.shotId)
+    if (item.kind === 'frame' && !r.clipShots.includes(item.shotId)) r.clipShots.push(item.shotId)
+    if (item.kind === 'clip' && !r.clipsDone.includes(item.shotId)) r.clipsDone.push(item.shotId)
+  })
+  return send(deps, deps.ui.get().following ?? run, item, opts.text?.trim() || undefined)
+}
+
+/** The update box's "Do the rest as they are": this item and every one after it on the box's models, no words. */
+export async function restAsTheyAre(deps: FrameDeps, modelChoice?: ModelChoice | null) {
+  deps.ui.update((u) => { if (u.following) u.following.steer = false })
+  if (deps.ui.get().following?.awaiting) await makeAwaited(deps, { modelChoice })
+  else await continueFollow(deps)
+}
+
+const itemOf = (c: JobCtx): FollowItem | undefined =>
+  c.for === 'frame' ? { kind: 'frame', shotId: c.shotId } : c.for === 'clip' ? { kind: 'clip', shotId: c.shotId } : undefined
+
+/** Send one item: a frame again from the one before (keeping what was asked of it, unless the box has
+ *  words), or a clip from the shot's frame; on the run's model for that step. */
+async function send(deps: FrameDeps, run: FollowRun, item: FollowItem, words?: string): Promise<string | null> {
+  const d = deps.doc.get()
+  const shots = d.shots ?? []
+  const i = shots.findIndex((s) => s.id === item.shotId)
+  if (i < 0) return null
+  const modelChoice = run.models?.[item.kind]
+  if (item.kind === 'frame') {
+    const parent = selectedFrame(d, item.shotId)
+    // Keep what the user asked of this frame when it was drawn (not a region edit's words: that is for a box).
+    const made = parent ? d.jobs.find((j) => j.id === parent.job_id) : undefined
+    const text = words ?? (made?.op === 'frame' ? made.text : undefined)
+    return drawFrame(deps, i, 'update', { followRun: run.id, ...(parent ? { parent } : {}), ...(text ? { text } : {}), ...(modelChoice ? { modelChoice } : {}) })
+  }
+  const parentTake = selectedTake(d, item.shotId)
+  const made = parentTake ? d.jobs.find((j) => j.id === parentTake.job_id) : undefined
+  const text = words ?? (made?.op === 'clip' ? made.text : undefined)
+  return makeClip(deps, item.shotId, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), purpose: { followRun: run.id }, ...(modelChoice ? { modelChoice } : {}) })
+}
+
+/** A replacement that landed takes its old version out (once). Only versions this run replaced. */
+async function replaceLanded(deps: FrameDeps, run: FollowRun) {
+  const d = deps.doc.get()
+  const gone: string[] = []
+  for (const j of runJobs(deps, run)) {
+    if (j.state !== 'completed') continue
+    const c = ctxOf(deps, j.id)
+    const old = c?.for === 'frame' ? c.parentFrameId : c?.for === 'clip' ? c.parentTakeId : undefined
+    if (!old || run.replaced?.includes(old)) continue
+    const landed = c?.for === 'frame' ? (d.frames ?? []).some((f) => f.job_id === j.id) : (d.takes ?? []).some((t) => t.job_id === j.id)
+    if (!landed) continue
+    gone.push(old)
+  }
+  if (!gone.length) return
+  deps.ui.update((u) => { if (u.following) u.following.replaced = [...(u.following.replaced ?? []), ...gone] })
+  await updateDoc(deps.doc, (x) => {
+    for (const id of gone) {
+      if ((x.frames ?? []).some((f) => f.id === id && !f.selected)) removeFrame(x, id)
+      else if ((x.takes ?? []).some((t) => t.id === id && !t.selected)) removeTake(x, id)
+    }
+  }, 'replaced by its update')
 }
 
 /** Stop after the job running now (or at once, when nothing is running). */
@@ -192,10 +285,20 @@ async function step(deps: FrameDeps): Promise<void> {
     const run = deps.ui.get().following
     if (!run) return
     const jobs = runJobs(deps, run)
+    await replaceLanded(deps, run)
     if (jobs.some((j) => isActive(j.state))) return
     if (run.cancel) return void (await finish(deps, run, true))
     const last = jobs.at(-1)
-    if (last && (last.state === 'failed' || last.state === 'cancelled')) return // waits for Retry, or Cancel
+    if (last && (last.state === 'failed' || last.state === 'cancelled')) {
+      // Waits: the box shows the failed item to make again (on another model), or Retry on its card.
+      const c = ctxOf(deps, last.id)
+      const item = c ? itemOf(c) : undefined
+      if (run.steer && item && !(run.awaiting?.kind === item.kind && run.awaiting.shotId === item.shotId)) {
+        deps.ui.update((u) => { if (u.following) u.following.awaiting = item })
+      }
+      return
+    }
+    if (run.awaiting) return // the box is waiting for the user
     const d = deps.doc.get()
     const shots = d.shots ?? []
     const note = (fn: (r: FollowRun) => void) => deps.ui.update((u) => { if (u.following) fn(u.following) })
@@ -205,15 +308,12 @@ async function step(deps: FrameDeps): Promise<void> {
     const i = shots.findIndex((s) => !run.framesDone.includes(s.id) && (!!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id))))
     if (i >= 0) {
       const shot = shots[i]
-      const parent = selectedFrame(d, shot.id)
-      // Keep what the user asked of this frame when it was drawn (not a region edit's words: that is for a box).
-      const made = parent ? d.jobs.find((j) => j.id === parent.job_id) : undefined
-      const text = made?.op === 'frame' ? made.text : undefined
+      if (run.steer) return void note((r) => { r.awaiting = { kind: 'frame', shotId: shot.id } })
       note((r) => {
         r.framesDone.push(shot.id)
         if (!r.clipShots.includes(shot.id)) r.clipShots.push(shot.id)
       })
-      await drawFrame(deps, i, 'update', { followRun: run.id, ...(parent ? { parent } : {}), ...(text ? { text } : {}) })
+      await send(deps, run, { kind: 'frame', shotId: shot.id })
       return
     }
 
@@ -222,12 +322,9 @@ async function step(deps: FrameDeps): Promise<void> {
     const fixing = shotsBeingFixed(d, (id) => ctxOf(deps, id))
     const next = shots.find((s) => !run.clipsDone.includes(s.id) && !fixing.has(s.id) && (run.clipShots.includes(s.id) || !!takeStale(d, s.id) || (hasTakes && !selectedTake(d, s.id))))
     if (next) {
-      const parentTake = selectedTake(d, next.id)
-      const made = parentTake ? d.jobs.find((j) => j.id === parentTake.job_id) : undefined
-      const text = made?.op === 'clip' ? made.text : undefined
+      if (run.steer) return void note((r) => { r.awaiting = { kind: 'clip', shotId: next.id } })
       note((r) => r.clipsDone.push(next.id))
-      const modelChoice = run.clipModels?.[next.id]
-      await makeClip(deps, next.id, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), purpose: { followRun: run.id }, ...(modelChoice ? { modelChoice } : {}) })
+      await send(deps, run, { kind: 'clip', shotId: next.id })
       return
     }
 
