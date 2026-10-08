@@ -101,14 +101,16 @@ def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
         job["refs"] = []
 
 
-def provider_ratio(provider: str, op: str, ratio: Optional[str]) -> Optional[str]:
+def provider_ratio(provider: str, op: str, ratio: Optional[str], model: Optional[str] = None) -> Optional[str]:
     """Our ratio ('9:16') in the provider's form: None where the endpoint takes none; Runway's
-    nearest allowed pixel pair; W:H as it is for the others."""
+    nearest allowed pixel pair for the model (Gemini 3 Pro and 3.1 Flash take different sizes);
+    W:H as it is for the others."""
     if not ratio or (provider, op) in NO_RATIO:
         return None
     if provider != "runway":
         return ratio
-    allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if op == "region_edit" else FLASH_RATIOS
+    pro = model == "gemini_image3_pro" or (model is None and op == "region_edit")
+    allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if pro else FLASH_RATIOS
     return ratio if ratio in allowed else _nearest_ratio(ratio, allowed)
 
 
@@ -267,7 +269,9 @@ class Director:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
         if job["model"] not in models:
-            raise DirectorError(f"model {job['model']!r} is not the sheet's model for {op}")
+            # The routing chose the model, not the director: a reply naming another one (an older
+            # default, a recorded answer) runs on the sheet's (features/default-models.clan).
+            job["model"] = sheet["ops"][op]["model"]
         stray = _hashes(job) - _hashes(payload) - extra
         if stray:
             raise DirectorError(f"the job names artifacts that are not in the input: {sorted(stray)[0]}")
@@ -327,7 +331,7 @@ class Director:
         if ratio and provider == "runway":
             # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
             # size this model takes rather than failing the job (2026-10-07: storyboard frames).
-            fitted = provider_ratio(provider, op, ratio)
+            fitted = provider_ratio(provider, op, ratio, job.get("model"))
             if not fitted:
                 raise DirectorError(f"runway {op} does not take ratio {ratio!r}")
             job["ratio"] = fitted

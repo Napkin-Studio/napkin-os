@@ -58,9 +58,9 @@ def test_a_pick_its_provider_cannot_take_falls_back_to_runway_default():
     h = harness()
     h.providers["fal"].submit_effect = ProviderError("provider_unavailable", "503 from fal")
     job = post(h, h.sign_in(), VEO)
-    assert (job["provider"], job["model"]) == ("runway", "veo3.1_fast")
+    assert (job["provider"], job["model"]) == ("runway", "veo3.1")
     assert job["fallbackFrom"] == VEO
-    assert job["cost"]["reserved"] == 0.6  # settled at the provider that ran
+    assert job["cost"]["reserved"] == 1.2  # settled at the provider that ran (Veo 3.1 on Runway)
     assert h.providers["heygen"].submits == []  # another picked-from provider is never tried
 
 
@@ -102,8 +102,14 @@ def test_effective_sheet_puts_the_alternate_over_the_op_and_the_sheet():
     assert veo["refs"]["max"] == 0 and veo["video"]["firstFrameWithRefs"] is False
     assert "alternates" not in veo["ops"]["clip"]
     assert fal["refs"]["max"] == 10  # the sheet itself is untouched
-    nano = effective_sheet(fal, "frame", "nano-banana-pro-edit")
-    assert nano["tagSyntax"] == "image_n" and nano["seed"] is True and nano["ops"]["frame"]["estimateUsd"] == 0.15
+    # The op's own model carries its own settings (features/default-models.clan): Nano Banana Pro.
+    for model in (None, "nano-banana-pro-edit"):
+        nano = effective_sheet(fal, "frame", model)
+        assert nano["tagSyntax"] == "image_n" and nano["seed"] is True and nano["refs"]["element"] is False
+        assert nano["ops"]["frame"]["estimateUsd"] == 0.15
+    kling = effective_sheet(fal, "frame", "kling-image-o3")  # an alternate keeps the sheet's Kling settings
+    assert kling["tagSyntax"] == "at_image_n" and kling["refs"]["element"] is True
+    assert kling["ops"]["frame"]["endpoint"] == "fal-ai/kling-image/o3/image-to-image"
     assert effective_sheet(fal, "clip", "kling-v3-pro-i2v") is fal
     assert effective_sheet(fal, "clip", None) is fal
 

@@ -124,17 +124,17 @@ These are switched off by the organisers today, so you may not see them:
 
 ### Choosing a model when you regenerate
 
-Your first draw and your first clip always use the event's default model. When you **regenerate a frame** or make a **New take** (or a new version from notes), a **Model** menu lets you pick another vetted model. The menu starts on the model that made the version you're replacing.
+Your first draw and your first clip always use the event's default model. The defaults are chosen for keeping characters consistent: Nano Banana Pro for characters and frames, Kling v3 Pro for clips (the clip model that takes your named characters). Veo 3.1 has the best motion but ignores character references, so it is offered rather than used by default. When you **regenerate a frame** or make a **New take** (or a new version from notes), a **Model** menu lets you pick another vetted model. The menu starts on the model that made the version you're replacing.
 
 | Step | Default | Other choices | Approx. cost per job |
 |---|---|---|---|
-| Storyboard frame | Kling O3 (fal) | Nano Banana 2 (fal), Nano Banana Pro (fal) | ~$0.028 / ~$0.08 / ~$0.15 |
+| Storyboard frame | Nano Banana Pro (fal) | Kling O3 (fal), Nano Banana 2 (fal) | ~$0.15 / ~$0.028 / ~$0.08 |
 | Clip | Kling v3 Pro (fal) | Veo 3.1 Fast (fal), Veo 3.1 (fal), HeyGen Video 1 | ~$0.56 / ~$0.90 / ~$2.40 / price not published |
 
 Notes:
 - **Veo ignores character references.** It works from the frame only, as its menu note says. For clips where exact characters matter, stay on Kling v3 Pro.
 - **Prices are estimates** from the services' price lists. The Veo prices are an upper bound.
-- **Runway is never offered.** It's the event's safety net. If the service you picked can't take the job, the tool makes it with Runway's default model instead. Hover the version or take afterwards: the tooltip names the model, and in that case says something like *"Veo 3.1 Fast (runway), because fal could not take Veo 3.1"*.
+- **Runway is never offered.** It's the event's safety net. If the service you picked can't take the job, the tool makes it with Runway's default model instead. Hover the version or take afterwards: the tooltip names the model, and in that case says something like *"Veo 3.1 (runway), because fal could not take Veo 3.1 Fast"*.
 - **The menu isn't on the canvas** (Generate, views, region edits).
 
 ### Your keys (your own fal or HeyGen account)
@@ -168,12 +168,14 @@ Estimated cost per job with the default models:
 
 | Step | fal | Runway (fallback) | HeyGen |
 |---|---|---|---|
-| Canvas generate | $0.028 | $0.07 | — |
-| View (turnaround) | $0.035 | $0.07 | — |
-| Storyboard frame | $0.028 | $0.07 | — |
-| Region edit | $0.06 | $0.20 | — |
-| Clip | $0.56 | $0.60 | not published |
-| Clip edit | $0.72 | $1.40 | — |
+| Canvas generate | $0.15 (Nano Banana Pro) | $0.20 (Gemini 3 Pro) | — |
+| View (turnaround) | $0.035 (Qwen multi-angle) | $0.20 (Gemini 3 Pro) | — |
+| Storyboard frame | $0.15 (Nano Banana Pro) | $0.20 (Gemini 3 Pro) | — |
+| Region edit | $0.06 (Ideogram v4.5) | $0.20 (Gemini 3 Pro) | — |
+| Clip | $0.56 (Kling v3 Pro, 5 s) | $1.20 (Veo 3.1, 6 s) | not published |
+| Clip edit | $0.72 (Luma Ray 3.2) | $1.40 (aleph2) | — |
+
+A whole reference production (one character with 3 views, 8 frames, 6 clips and a clip edit) comes to about $5.54 on fal; `relay/scripts/pathway_costs.py` prints it for every pathway.
 
 ### What the job states and errors mean
 

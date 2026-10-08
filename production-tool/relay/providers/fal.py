@@ -60,7 +60,11 @@ IMAGE_OPS = {"generate", "frame"}
 # with their request shapes checked against fal's OpenAPI schemas on 2026-10-08.
 NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
 VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
-ALTERNATES = {"frame": NANO, "clip": VEO}
+KLING_IMAGE = "kling-image-o3"
+# Nano Banana Pro is the default for generate and frame (features/default-models.clan); Kling O3
+# and Nano Banana 2 are offered beside it.
+ALTERNATES = {"generate": {KLING_IMAGE, "nano-banana-2-edit"}, "frame": {KLING_IMAGE, "nano-banana-2-edit"},
+              "clip": VEO}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
 # 422 types that say the input is wrong: pydantic's, and fal's own (fal.ai/docs/documentation/
 # model-apis/errors, read 2026-10-08). Any other 422 type is fal's failure.
@@ -447,14 +451,16 @@ class FalProvider:
         sheet = effective_sheet(self._sheet, job.op, job.model)  # an alternate the participant picked
         check_capabilities(sheet, job)
         endpoint = sheet["ops"][job.op]["endpoint"]
+        # The builder follows the endpoint the sheet chose, so the body always fits it
+        # (with Nano Banana as the default, a job naming no known model goes there too).
         if job.op in IMAGE_OPS:
-            body = self._nano(job) if job.model in NANO else self._kling_image(job)
+            body = self._nano(job) if "nano-banana" in endpoint else self._kling_image(job)
         elif job.op == "view":
             body = self._view(job)
         elif job.op == "region_edit":
             body = self._region_edit(job)
         elif job.op == "clip":
-            body = self._veo(job) if job.model in VEO else self._clip(job)
+            body = self._veo(job) if "/veo" in endpoint else self._clip(job)
         else:
             endpoint, body = self._clip_edit(job)
             if endpoint == SAM2:

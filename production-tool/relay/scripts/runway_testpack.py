@@ -63,6 +63,7 @@ from region import DEFAULT_THRESHOLDS, evaluate_gate, paste_back
 
 RESULTS = RELAY / "results" / "runway-testpack.json"
 SAVE_DIR = RELAY / "results" / "outputs"
+FLASH = "gemini_image3.1_flash"
 STAGES = (("g",), ("b", "a", "d"), ("f",), ("c", "e"))
 ITEMS = tuple("abcdefg")
 NEEDS = {"a": "--image-url", "b": "--input-url", "c": "--image-url", "d": "--image-url", "e": "--image-url"}
@@ -336,7 +337,10 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
     if bad := [i for i in only if i not in ITEMS]:
         out(f"unknown items: {', '.join(bad)}")
         return 2
+    # Items a, b, d and f measure Gemini 3.1 Flash, no longer Runway's default (features/default-models.clan).
     sheet = load_sheet("runway")
+    for op in ("generate", "view", "frame"):
+        sheet = sheet_with_model(sheet, op, FLASH)
     rows = plan(sheet, only)
     inputs = {"--image-url": args.image_url, "--input-url": args.input_url}
 
@@ -365,7 +369,7 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
         return 2
 
     assets, tap = Assets(), Tap(runtime.get("clock", time.monotonic))
-    runner = Runner(factory(key, assets, tap), Budget(args.max_usd), tap=tap, **runtime)
+    runner = Runner(factory(key, assets, tap, sheet), Budget(args.max_usd), tap=tap, **runtime)
     ctx = Ctx(runner, assets, key, factory, args, fetch, head, make_client(transport=transport))
     items: dict[str, dict] = {}
     for stage in STAGES:

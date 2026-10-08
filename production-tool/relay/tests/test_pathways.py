@@ -251,9 +251,20 @@ def test_runway_frames_keep_each_reference_with_its_own_tag():
     assert "@maya_front" in body["promptText"]
 
 
-def test_fal_frames_send_a_character_as_one_element():
+def test_fal_frames_default_to_nano_banana_pro_with_each_picture_numbered():
+    """features/default-models.clan: every picture is its own image n, so none is lost in an element."""
     h, stand = pathway("fal")
     run(h, "frame", INPUTS["frame"])
+    sent = stand.to("fal")[0]
+    assert sent["endpoint"] == "fal-ai/nano-banana-pro/edit" and not sent["errors"]
+    urls = sent["body"]["image_urls"]
+    assert [u.rsplit("/", 1)[1] for u in urls[:2]] == [r["asset"]["sha256"] for r in INPUTS["frame"]["refs"]]
+    assert "image 1" in sent["body"]["prompt"] and "elements" not in sent["body"]
+
+
+def test_fal_frames_picked_on_kling_send_a_character_as_one_element():
+    h, stand = pathway("fal")
+    run(h, "frame", INPUTS["frame"], modelChoice={"provider": "fal", "model": "kling-image-o3"})
     body = stand.to("fal")[0]["body"]
     assert body["elements"][0]["frontal_image_url"].endswith(INPUTS["frame"]["refs"][0]["asset"]["sha256"])
     assert len(body["elements"][0]["reference_image_urls"]) == 1
@@ -298,13 +309,13 @@ def test_a_single_provider_pathway_fails_clearly_with_nothing_to_fall_back_to(na
 
 def test_a_pick_runs_its_model_and_falls_back_to_runway_default_on_the_mix():
     h, stand = pathway("mix")
-    pick = {"provider": "fal", "model": "nano-banana-pro-edit"}
+    pick = {"provider": "fal", "model": "kling-image-o3"}
     job = run(h, "frame", INPUTS["frame"], modelChoice=pick)
-    assert (job["provider"], job["model"]) == ("fal", "nano-banana-pro-edit")
-    assert stand.to("fal")[-1]["endpoint"] == "fal-ai/nano-banana-pro/edit" and not stand.to("fal")[-1]["errors"]
+    assert (job["provider"], job["model"]) == ("fal", "kling-image-o3")
+    assert stand.to("fal")[-1]["endpoint"] == "fal-ai/kling-image/o3/image-to-image" and not stand.to("fal")[-1]["errors"]
     stand.refuse["fal"] = "503"
     job = run(h, "frame", INPUTS["frame"], modelChoice=pick)
-    assert (job["provider"], job["model"], job["fallbackFrom"]) == ("runway", "gemini_image3.1_flash", pick)
+    assert (job["provider"], job["model"], job["fallbackFrom"]) == ("runway", "gemini_image3_pro", pick)
 
 
 def test_a_clip_heygen_may_already_have_is_never_sent_anywhere_else():
@@ -403,11 +414,11 @@ def test_the_cost_of_a_reference_production_per_pathway_is_pinned():
     """A price change in a capability sheet shows up here, so it is seen in review."""
     costs = {c["pathway"]: (c["totalUsd"], c["bestTotalUsd"], c["unknown"]) for c in
              (_script("pathway_costs").costs(n) for n in PATHWAYS)}
-    assert costs == {
-        "runway": (5.84, 5.84, []),
-        "fal": (4.437, 16.453, []),
-        "heygen": (1.077, 2.053, ["clip on heygen"]),
-        "mix": (4.437, 16.453, []),
+    assert costs == {  # features/default-models.clan: a good model always
+        "runway": (11.0, 11.0, []),
+        "fal": (5.535, 16.575, []),
+        "heygen": (2.175, 2.175, ["clip on heygen"]),
+        "mix": (5.535, 16.575, []),
     }
 
 

@@ -234,7 +234,6 @@ def variant(name, edit):
     ("clip_runway", lambda r: r["providerJob"]["refs"].append(
         {"sha256": "sha256:" + "9" * 64, "name": "x", "role": "object"}), "not in the input"),
     ("generate_runway", lambda r: r["providerJob"].update(provider="fal"), "routed provider"),
-    ("generate_runway", lambda r: r["providerJob"].update(model="kling-image-o3"), "sheet's model"),
     ("generate_runway", lambda r: r["providerJob"].update(prompt="Draw @ghost"), "not one of the refs"),
     ("generate_runway", lambda r: r.update(op="view"), "answered op"),
 ])
@@ -464,3 +463,13 @@ def test_shot_list_names_only_refs_it_was_given():
 def test_a_view_angle_the_model_left_out_is_filled_from_the_view():
     res = attempt("view_fal", lambda r: r["providerJob"].pop("angle"))
     assert res.output["providerJob"]["angle"] == {"horizontal": 90.0, "vertical": 0.0}
+
+
+def test_a_reply_naming_another_model_runs_on_the_sheets():
+    """The routing chooses the model (features/default-models.clan): a recorded reply that names an
+    older default still runs, on the sheet's model, instead of failing the job."""
+    reply = fixture("generate_runway")["reply"]
+    reply["providerJob"]["model"] = "gemini_image3.1_flash"
+    d, _ = make(reply)
+    out = run("generate_runway", d)
+    assert out.output["providerJob"]["model"] == load_sheet("runway")["ops"]["generate"]["model"]

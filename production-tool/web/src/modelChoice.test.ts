@@ -11,13 +11,13 @@ const keys = (c: Config, op: 'frame' | 'clip') => modelChoicesFor(op, c).map((o)
 
 describe('the regenerate menu', () => {
   it('lists each routed provider that is not fallback-only, own model first, then alternates', () => {
-    expect(keys(event, 'frame')).toEqual(['fal:kling-image-o3', 'fal:nano-banana-2-edit', 'fal:nano-banana-pro-edit'])
+    expect(keys(event, 'frame')).toEqual(['fal:nano-banana-pro-edit', 'fal:kling-image-o3', 'fal:nano-banana-2-edit'])
     expect(keys(event, 'clip')).toEqual(['fal:kling-v3-pro-i2v', 'fal:veo3.1-fast-i2v', 'fal:veo3.1-i2v', 'heygen:heygen-video-1'])
   })
 
   it('offers Runway when the config does not name it fallback-only', () => {
     const open = { ...event, fallbackOnly: undefined }
-    expect(keys(open, 'frame')).toContain('runway:gemini_image3.1_flash')
+    expect(keys(open, 'frame')).toContain('runway:gemini_image3_pro')
   })
 
   it('carries labels, notes and estimates from the sheets', () => {

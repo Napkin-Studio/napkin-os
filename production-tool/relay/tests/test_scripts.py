@@ -226,9 +226,9 @@ def test_a_moderated_job_is_submitted_once(runtime):
 def test_max_usd_stops_before_overspending(runtime):
     log = new_log()
     code, text = run(runway_smoke, ["--live", "--ops", "generate,view,frame", "--image-url", IMG,
-                                    "--max-usd", "0.10"],
-                     factory=fake_factory(log, cost=0.07), fetch=lambda url: _gradient(), **runtime)
-    assert len(log["jobs"]) == 1  # a second $0.07 job would pass $0.10
+                                    "--max-usd", "0.30"],
+                     factory=fake_factory(log, cost=0.2), fetch=lambda url: _gradient(), **runtime)
+    assert len(log["jobs"]) == 1  # a second $0.20 Gemini 3 Pro job would pass $0.30
     assert code == 1 and "--max-usd" in text
 
 
@@ -271,7 +271,7 @@ def test_polls_no_faster_than_5_s_and_times_the_throttle(clock):
     assert all(s >= 5 for s in polls) and len(polls) == 4
     assert rec["throttled_s"] == pytest.approx(2 * (5 + 0.5 * runway_common.JITTER_S))
     post = json.loads(requests[0].content)
-    assert post["audio"] is False and post["model"] == "veo3.1_fast"
+    assert post["audio"] is False and post["model"] == "veo3.1"
     assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
     assert runner.budget.spent == pytest.approx(0.4)
 
