@@ -33,6 +33,7 @@ from contracts import Contracts, api
 from director.base import Director
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
+from providers.types import effective_sheet, op_models
 
 log = logging.getLogger("relay")
 
@@ -318,6 +319,22 @@ class Relay:
     def _candidates(self, cfg: dict, op: str) -> list[str]:
         return [p for p in cfg["routing"].get(op, []) if self.registry.supports(p, op)]
 
+    # ── a model the participant picked (features/model-choice.clan) ─────────
+    def _check_pick(self, cfg: dict, op: str, pick: dict | None) -> None:
+        """Refuse, before any spend or quota, a pick the routing or the sheet does not allow."""
+        if pick is None:
+            return
+        provider, model = pick["provider"], pick["model"]
+        sheet = self.registry.sheet(provider)
+        if (op in INTERNAL_OPS or provider not in cfg["routing"].get(op, [])
+                or provider in cfg.get("fallbackOnly", []) or not sheet or model not in op_models(sheet, op)):
+            raise ApiError("invalid_input", f"{model} on {provider} cannot make this step. Pick another model.")
+
+    def _pick_candidates(self, cfg: dict, op: str, pick: dict) -> list[str]:
+        """The picked provider, then the fallback-only providers routed for the op."""
+        fallback = [p for p in cfg["routing"].get(op, []) if p in cfg.get("fallbackOnly", []) and p != pick["provider"]]
+        return [p for p in [pick["provider"], *fallback] if self.registry.supports(p, op)]
+
     # ── own keys ────────────────────────────────────────────────────────────
     @property
     def own_adapters(self) -> own_keys.OwnAdapters:
@@ -328,7 +345,7 @@ class Relay:
     def _sealer(self) -> own_keys.Sealer:
         return own_keys.Sealer(self.secrets()["token_secret"])
 
-    def _own_candidates(self, cfg: dict, op: str, raw: str | None) -> dict[str, str]:
+    def _own_candidates(self, cfg: dict, op: str, raw: str | None, pick: dict | None = None) -> dict[str, str]:
         """The participant's keys for the providers that can do this op, in
         preference order. Empty: the job runs on the event's routing."""
         if op in INTERNAL_OPS or not cfg["flags"].get("ownKeys"):
@@ -338,6 +355,8 @@ class Relay:
         except own_keys.BadKeys as e:
             raise ApiError("invalid_input", str(e)) from None
         own = {p: keys[p] for p in own_keys.PROVIDERS if p in keys and self.own_adapters.supports(p, op)}
+        if pick:  # a pick runs on the participant's key only for the picked provider
+            own = {p: k for p, k in own.items() if p == pick["provider"]}
         if op in own_keys.BACKUP_ONLY.get("fal", ()) and "heygen" not in own:
             own.pop("fal", None)
         return own
@@ -349,6 +368,9 @@ class Relay:
     def _job_candidates(self, cfg: dict, job: dict) -> list[str]:
         if self._is_own(job):
             return list(job["_own"])
+        pick = job["_req"].get("modelChoice")
+        if pick:
+            return self._pick_candidates(cfg, job["op"], pick)
         return self._candidates(cfg, job["op"])
 
     def _sheet(self, job: dict, provider: str | None = None) -> dict | None:
@@ -392,8 +414,11 @@ class Relay:
         if off:
             raise ApiError("flag_off", off)
 
-    def _estimate(self, op: str, provider: str) -> tuple[float, bool]:
-        price = ((self.registry.sheet(provider) or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
+    def _estimate(self, op: str, provider: str, model: str | None = None) -> tuple[float, bool]:
+        sheet = self.registry.sheet(provider)
+        if sheet and op in sheet.get("ops", {}):
+            sheet = effective_sheet(sheet, op, model)
+        price = ((sheet or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
 
     def create_job(self, who: dict, req: dict, own_header: str | None = None) -> dict:
@@ -404,17 +429,19 @@ class Relay:
         op = req["op"]
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
+        pick = req.get("modelChoice")
+        self._check_pick(cfg, op, pick)
         try:  # a misspelt @name is the participant's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
             raise ApiError("invalid_input", str(e)) from None
-        own = self._own_candidates(cfg, op, own_header)
+        own = self._own_candidates(cfg, op, own_header, pick)
         estimate, unknown = 0.0, False
         if op not in INTERNAL_OPS and not own:
-            candidates = self._candidates(cfg, op)
+            candidates = self._pick_candidates(cfg, op, pick) if pick else self._candidates(cfg, op)
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
-            prices = [self._estimate(op, p) for p in candidates]
+            prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
         if estimate > 0 and self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
@@ -602,12 +629,16 @@ class Relay:
     def _submit(self, job: dict, cfg: dict, provider: str, slot: str) -> dict | None:
         """Director, then provider submit. None means the provider refused before
         accepting and the job is back in the queue for the next provider."""
-        sheet = self._sheet(job, provider)
-        estimate, unknown = (0.0, False) if self._is_own(job) else self._estimate(job["op"], provider)
+        # A picked model runs on its own provider; anywhere else (the fallback) the default runs.
+        pick = job["_req"].get("modelChoice")
+        picked = pick["model"] if pick and pick["provider"] == provider else None
+        sheet = effective_sheet(self._sheet(job, provider), job["op"], picked)
+        estimate, unknown = (0.0, False) if self._is_own(job) else self._estimate(job["op"], provider, picked)
         cost = {**job["cost"], "estimate": estimate, "reserved": estimate, "unknown": unknown}
         model = sheet["ops"][job["op"]]["model"]
+        moved = {"fallbackFrom": pick} if pick and not picked else {}
         saved = self._save(job, state="submitting", provider=provider, model=model, _slot=slot,
-                           _queue="r", cost=cost, queuePosition=None)
+                           _queue="r", cost=cost, queuePosition=None, **moved)
         if saved is None:
             self.store.incr(slot, "n", -1)
             return self._reload(job)

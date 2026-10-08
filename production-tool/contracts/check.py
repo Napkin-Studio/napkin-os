@@ -63,5 +63,19 @@ for f in sorted(HERE.glob("examples/config.*.json")):
             if op not in sheets.get(p, {}).get("ops", {}):
                 failures += 1
                 print(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
+    config = json.loads(f.read_text())
+    routed = {p for providers in config["routing"].values() for p in providers}
+    for p in config.get("fallbackOnly", []):
+        if p not in routed:
+            failures += 1
+            print(f"✗ {f.relative_to(HERE)}: fallbackOnly names {p}, which no op routes to")
+
+# A pick names a model by provider and model id, so an op's models must be distinct.
+for provider, sheet in sheets.items():
+    for op, spec in sheet["ops"].items():
+        models = [spec["model"]] + [a["model"] for a in spec.get("alternates", [])]
+        if len(set(models)) != len(models):
+            failures += 1
+            print(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
 
 sys.exit(1 if failures else 0)

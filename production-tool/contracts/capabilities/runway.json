@@ -27,6 +27,7 @@
       "model": "gemini_image3.1_flash",
       "endpoint": "POST /v1/text_to_image",
       "estimateUsd": 0.07,
+      "label": "Gemini 3.1 Flash",
       "seed": false,
       "outputs": [
         1,
@@ -47,6 +48,7 @@
       "model": "veo3.1_fast",
       "endpoint": "POST /v1/image_to_video",
       "estimateUsd": 0.6,
+      "label": "Veo 3.1 Fast",
       "durationsS": [
         4,
         6,

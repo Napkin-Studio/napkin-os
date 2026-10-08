@@ -157,6 +157,10 @@
         },
         "input": {
           "$ref": "#/$defs/JobInput"
+        },
+        "modelChoice": {
+          "$ref": "#/$defs/ModelChoice",
+          "description": "The model the participant picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider routed for the op and not in config fallbackOnly. Absent: the routing's default. The job runs on that provider and model; when that provider cannot take it, on the first fallbackOnly provider routed for the op, with its default model (Job.fallbackFrom says so). An own-key pick never falls back to the event key. Added 2026-10-08 (additive)."
         }
       },
       "required": [
@@ -165,6 +169,24 @@
         "op",
         "parentIds",
         "input"
+      ],
+      "additionalProperties": false
+    },
+    "ModelChoice": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "$ref": "common.schema.json#/$defs/provider"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "provider",
+        "model"
       ],
       "additionalProperties": false
     },
@@ -367,6 +389,10 @@
         },
         "model": {
           "type": "string"
+        },
+        "fallbackFrom": {
+          "$ref": "#/$defs/ModelChoice",
+          "description": "The participant picked this model, its provider could not take the job, and it ran on the fallback provider instead. Added 2026-10-08 (additive)."
         },
         "requestId": {
           "type": "string",

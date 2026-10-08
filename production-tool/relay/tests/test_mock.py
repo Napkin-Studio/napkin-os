@@ -9,7 +9,7 @@ from referencing import Registry, Resource
 from providers import (
     AssetRef, CapabilityMissing, MockProvider, ProviderJob, Ref, check_capabilities, load_sheet,
 )
-from providers.types import CONTRACTS
+from providers.types import CONTRACTS, ProviderError
 
 SHA = "sha256:" + "a" * 64
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -164,3 +164,22 @@ def test_character_ref_limit():
     refs = [Ref(SHA, f"c{i}", "character") for i in range(6)]
     with pytest.raises(CapabilityMissing):
         check_capabilities(load_sheet("runway"), job(refs=refs))
+
+
+def test_the_input_is_resolved_at_submit_because_status_runs_outside_the_job(clock):
+    """The relay's asset URLs exist only while the job is being submitted (base.set_job_context);
+    a later status() that looked them up failed with "no URL for asset" (2026-10-08, local dev)."""
+    live = {"job": True}
+
+    def assets(sha):
+        if not live["job"]:
+            raise ProviderError("invalid_input", f"no URL for asset {sha}", False)
+        return AssetRef(sha, f"https://cdn.test/{sha[-8:]}.png", "image/png")
+
+    provider = MockProvider(assets, lambda url: _png(), clock=clock)
+    rid = provider.submit(ProviderJob(op="generate", provider="mock", model="mock", prompt="a fox",
+                                      refs=[Ref(SHA, "in_1", "character")]))
+    live["job"] = False
+    clock.t = 10
+    status = provider.status(rid)
+    assert status.state == "done" and status.outputs

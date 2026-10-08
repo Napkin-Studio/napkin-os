@@ -78,6 +78,10 @@ def _retry_after(response: httpx.Response) -> Optional[int]:
         return None
 
 
+# No alternates: this provider runs only its sheet's own model per op (features/model-choice.clan).
+ALTERNATES: dict[str, set[str]] = {}
+
+
 class HeyGenProvider:
     name = "heygen"
 

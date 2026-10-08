@@ -85,6 +85,10 @@ def _http_error(resp: httpx.Response) -> ProviderError:
     return ProviderError("invalid_input", message, False)
 
 
+# No alternates: this provider runs only its sheet's own model per op (features/model-choice.clan).
+ALTERNATES: dict[str, set[str]] = {}
+
+
 class RunwayProvider:
     name = "runway"
 

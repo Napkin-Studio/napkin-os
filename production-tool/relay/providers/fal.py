@@ -34,13 +34,15 @@ from PIL import Image, ImageOps
 
 from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
-    Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
+    Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import TAG, UnknownTag, rewrite_tags
 
 QUEUE = "https://queue.fal.run"
 # fal-ai/kling-image/o3/image-to-image aspect_ratio enum (fal.ai/models/.../api, checked 2026-10-07).
 KLING_IMAGE_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9")
+# fal-ai/nano-banana-pro/edit and nano-banana-2/edit aspect_ratio enums share these (OpenAPI, 2026-10-08).
+NANO_RATIOS = ("21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16")
 SAM2 = "fal-ai/sam2/video"
 WAN = "fal-ai/wan-vace-14b/inpainting"
 
@@ -54,6 +56,11 @@ MASK_POLARITY = {
 }
 
 IMAGE_OPS = {"generate", "frame"}
+# The alternates (capabilities/fal.json ops[op].alternates) this adapter builds a request for,
+# with their request shapes checked against fal's OpenAPI schemas on 2026-10-08.
+NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
+VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
+ALTERNATES = {"frame": NANO, "clip": VEO}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
 # pydantic-style 422 types: the request itself is wrong. Any other 422 type is fal's failure.
 INVALID_TYPES = ("missing", "value_error", "type_error", "string_", "int_", "float_", "bool_", "enum",
@@ -281,6 +288,23 @@ class FalProvider:
             body.update(result_type="single", num_images=n)
         return body
 
+    def _nano(self, job: ProviderJob) -> dict:
+        """Nano Banana edit: every ref is an image, named 'image n' by its place in image_urls."""
+        if not job.refs:
+            raise CapabilityMissing("nano banana edit needs at least one image ref")
+        body = {
+            "prompt": self._prompt(job.prompt, [r.name for r in job.refs], {}, "image_n"),
+            "image_urls": [self._url(r.sha256) for r in job.refs],
+            "num_images": job.outputs or 1,
+            "output_format": "png",
+            "resolution": "1K",
+        }
+        if job.ratio:
+            body["aspect_ratio"] = nearest_ratio(job.ratio, NANO_RATIOS)
+        if job.seed is not None:
+            body["seed"] = job.seed
+        return body
+
     def _view(self, job: ProviderJob) -> dict:
         if not job.angle:
             raise ProviderError("invalid_input", "view needs an angle", False)
@@ -354,6 +378,26 @@ class FalProvider:
         body["shot_type"] = "customize"
         return body
 
+    def _veo(self, job: ProviderJob) -> dict:
+        """Veo 3.1 image-to-video: the frame and words only (no refs or elements), 4s/6s/8s."""
+        if not job.first_frame:
+            raise CapabilityMissing("clip needs a first frame")
+        prompt = self._prompt(job.prompt, [], {}, "none") if job.prompt else ""
+        body = {
+            "image_url": self._url(job.first_frame),
+            "prompt": prompt or "Subtle, natural motion; the camera holds.",
+            "generate_audio": video_audio(job),
+            "aspect_ratio": "auto",  # the first frame sets the shape
+            "resolution": "720p",
+        }
+        if job.duration_s is not None:
+            body["duration"] = f"{_seconds(job.duration_s)}s"
+        if job.negative:
+            body["negative_prompt"] = job.negative
+        if job.seed is not None:
+            body["seed"] = job.seed
+        return body
+
     def _clip_edit(self, job: ProviderJob) -> tuple[str, dict]:
         video = self._video(job)
         if not job.mask:  # the feel edit
@@ -373,16 +417,17 @@ class FalProvider:
     # --- the Provider interface ---
 
     def submit(self, job: ProviderJob) -> str:
-        check_capabilities(self._sheet, job)
-        endpoint = self._sheet["ops"][job.op]["endpoint"]
+        sheet = effective_sheet(self._sheet, job.op, job.model)  # an alternate the participant picked
+        check_capabilities(sheet, job)
+        endpoint = sheet["ops"][job.op]["endpoint"]
         if job.op in IMAGE_OPS:
-            body = self._kling_image(job)
+            body = self._nano(job) if job.model in NANO else self._kling_image(job)
         elif job.op == "view":
             body = self._view(job)
         elif job.op == "region_edit":
             body = self._region_edit(job)
         elif job.op == "clip":
-            body = self._clip(job)
+            body = self._veo(job) if job.model in VEO else self._clip(job)
         else:
             endpoint, body = self._clip_edit(job)
             if endpoint == SAM2:
@@ -432,7 +477,8 @@ class FalProvider:
         if not outputs:
             return Status("failed", error=ProviderError("provider_failed", "fal returned no media", False))
         images = [o for o in outputs if o.mime.startswith("image/")]
-        estimates = [op["estimateUsd"] for op in self._sheet["ops"].values() if op["endpoint"] == endpoint]
+        estimates = [m["estimateUsd"] for op in self._sheet["ops"].values() for m in [op, *op.get("alternates", [])]
+                     if m["endpoint"] == endpoint and m.get("estimateUsd") is not None]
         cost = estimates[0] * len(images) if images and estimates else None
         return Status("done", queue_position=0, outputs=outputs, cost_usd=cost)
 
