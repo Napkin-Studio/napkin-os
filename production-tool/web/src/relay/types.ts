@@ -2,7 +2,8 @@
 // HttpRelay (VITE_RELAY_URL) and MockRelay (in the browser, no backend).
 
 import type {
-  AssetRef, Config, ContractError, InputMime, Job, JobRequest, LogEntry, Output, SessionRequest, SessionResponse,
+  AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
+  SessionRequest, SessionResponse,
 } from '../contracts/types'
 
 export interface UploadResult extends AssetRef {
@@ -18,6 +19,8 @@ export interface Relay {
   useToken(token: string | null): void
   /** Called when the server refuses the session (401). The app clears it and shows sign-in. */
   onUnauthorised?: () => void
+  /** The participant's own keys, sent on POST /jobs only (X-Own-Keys). The mock ignores them. */
+  ownKeys?: () => string | null
   /** Hash in the browser, POST /uploads, PUT the bytes when the relay doesn't have them. */
   upload(blob: Blob, mime: InputMime): Promise<UploadResult>
   /** POST /jobs (idempotent on jobId) */
@@ -30,8 +33,14 @@ export interface Relay {
   log(entry: LogEntry): Promise<void>
   /** GET /config, or null when the relay doesn't serve one. */
   config(): Promise<Config | null>
-  /** The bytes of a job output (copied into our S3 by the relay; the mock keeps them locally). */
-  fetchOutput(output: Output): Promise<Blob>
+  /** The bytes of a job output or an uploaded image (our S3 behind the relay; the mock keeps them locally). */
+  fetchOutput(output: Output | AssetRef): Promise<Blob>
+  /** GET /library: the workspace's solid keys, latest version each. */
+  library(): Promise<LibraryIndex>
+  /** GET /library/{key}[/{ver}] */
+  libraryEntry(key: Key, ver?: number): Promise<LibraryEntry>
+  /** POST /library/{key}: publish the next version (409 conflict when baseVer is not the latest). */
+  publish(key: Key, req: LibraryPublish): Promise<LibraryEntry>
 }
 
 /** A non-2xx relay answer, carrying the contract error. */

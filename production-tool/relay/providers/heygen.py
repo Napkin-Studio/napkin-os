@@ -17,7 +17,7 @@ import httpx
 
 from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
-    Status, check_capabilities, load_sheet, video_audio,
+    Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import UnknownTag, rewrite_tags
 
@@ -25,6 +25,9 @@ BASE = "https://api.heygen.com"
 MODEL = "heygen-video-1"
 RESOLUTION = "768p"  # never 2k: it bills 3x
 MAX_PROMPT = 5000
+# reference_to_video aspect_ratio enum (developers.heygen.com/reference/create-heygen-video, 2026-10-07).
+REFERENCE_RATIOS = ("9:16", "16:9", "1:1", "3:4", "4:3", "21:9")
+BASE64_MAX = 5 * 1024 * 1024
 
 STATES = {"pending": "queued", "processing": "running", "completed": "done",
           "failed": "failed", "cancelled": "cancelled"}
@@ -47,9 +50,9 @@ def _body(response: httpx.Response) -> dict:
 
 def _video_id(response: httpx.Response) -> str:
     video_id = (_body(response).get("data") or {}).get("video_id")
-    if not video_id:
+    if not video_id:  # a 2xx: HeyGen has the clip, so it must never be sent anywhere else
         raise ProviderError("provider_failed", "HeyGen accepted the job but sent no video_id", False,
-                            provider_code=str(response.status_code))
+                            provider_code=str(response.status_code), accepted=True)
     return video_id
 
 
@@ -73,6 +76,10 @@ def _retry_after(response: httpx.Response) -> Optional[int]:
         return max(0, int(float(response.headers["Retry-After"])))
     except (KeyError, ValueError):
         return None
+
+
+# No alternates: this provider runs only its sheet's own model per op (features/model-choice.clan).
+ALTERNATES: dict[str, set[str]] = {}
 
 
 class HeyGenProvider:
@@ -107,17 +114,35 @@ class HeyGenProvider:
         body: dict = {"model": MODEL, "mode": mode, "prompt": prompt, "resolution": RESOLUTION,
                       "prompt_enhancement": "disabled"}
         if mode == "image_to_video":
-            body["image"] = {"type": "url", "url": self._assets(job.first_frame).url}
+            body["image"] = self._image(job.first_frame)
             body["aspect_ratio"] = None  # the image sets it; HeyGen wants it null
         else:
-            body["reference_images"] = [{"type": "url", "url": self._assets(r.sha256).url} for r in job.refs]
+            body["reference_images"] = [self._image(r.sha256) for r in job.refs]
             if job.ratio:
-                body["aspect_ratio"] = job.ratio
+                body["aspect_ratio"] = nearest_ratio(job.ratio, REFERENCE_RATIOS)
         if job.duration_s is not None:
             body["duration"] = int(job.duration_s)
         if job.seed is not None:
             body["seed"] = job.seed
         return body
+
+    def _image(self, sha: str) -> dict:
+        """An image as HeyGen takes it: a public HTTPS URL, or inline base64. The local relay sends
+        data URIs, and HeyGen's url field must be a public HTTPS URL; base64 is capped at 5 MB."""
+        ref = self._assets(sha)
+        if not ref.url.startswith("data:"):
+            return {"type": "url", "url": ref.url}
+        head, _, data = ref.url.partition(",")
+        if len(data) * 3 // 4 > BASE64_MAX:
+            raise ProviderError("invalid_input", "an image is over HeyGen's 5 MB inline limit", False)
+        return {"type": "base64", "media_type": head[5:].split(";")[0] or ref.mime, "data": data}
+
+    def _call(self, method: str, url: str, **kw) -> httpx.Response:
+        try:
+            return self._client.request(method, url, **kw)
+        except httpx.TransportError as exc:
+            raise ProviderError("provider_unavailable", f"HeyGen could not be reached: {exc}", True, 5,
+                                "transport_error", source="network") from exc
 
     def submit(self, job: ProviderJob) -> str:
         check_capabilities(self._sheet, job)
@@ -128,8 +153,8 @@ class HeyGenProvider:
             "audio": video_audio(job),  # the contract value; HeyGen has no such field
             "audioSent": False,         # clips always carry sound, so nothing is sent
         })
-        response = self._client.post(f"{BASE}/v3/models/videos", json=body,
-                                     headers={**self._headers, "Idempotency-Key": key})
+        response = self._call("POST", f"{BASE}/v3/models/videos", json=body,
+                              headers={**self._headers, "Idempotency-Key": key})
         if response.status_code == 409:
             # The same job is already running: carry on with its id when HeyGen names it.
             video_id = (_body(response).get("data") or {}).get("video_id")
@@ -141,16 +166,26 @@ class HeyGenProvider:
     def status(self, request_id: str) -> Status:
         if request_id in self._cancelled:
             return Status("cancelled")
-        response = self._client.get(f"{BASE}/v3/models/videos/{request_id}", headers=self._headers)
-        self._raise_for_status(response)
+        response = self._call("GET", f"{BASE}/v3/models/videos/{request_id}", headers=self._headers)
+        try:
+            self._raise_for_status(response)
+        except ProviderError as exc:
+            if exc.retryable:  # 429, 5xx: the relay asks again
+                raise
+            if response.status_code in (400, 404, 422):  # our video id or route, not the participant's input
+                exc = ProviderError("internal", exc.message, False, provider_code=exc.provider_code, source="napkin")
+            return Status("failed", error=exc)  # asking again cannot help
         data = _body(response).get("data") or {}
+        if data.get("status") is None:  # an empty or partial reply: ask again
+            raise ProviderError("provider_unavailable", "HeyGen's reply has no status", True, 5)
         state = STATES.get(data.get("status"))
         if state is None:
             return Status("failed", error=ProviderError(
                 "provider_failed", f"unknown HeyGen status {data.get('status')!r}"))
         if state == "done":
             if not data.get("video_url"):
-                raise ProviderError("provider_failed", "HeyGen finished the clip but sent no video_url", False)
+                return Status("failed", error=ProviderError(
+                    "provider_failed", "HeyGen finished the clip but sent no video_url", False))
             output = ProviderOutput(url=data["video_url"], mime="video/mp4", w=data.get("width"),
                                     h=data.get("height"), duration_s=data.get("duration"))
             return Status("done", outputs=[output])
@@ -174,9 +209,9 @@ class HeyGenProvider:
         message = _message(_body(response), f"HeyGen answered {code}")
         if code == 402:
             raise ProviderError("provider_failed", f"HeyGen credit is exhausted: {message}", False, provider_code="402")
-        if code == 409:
-            raise ProviderError("provider_unavailable", f"the same clip is already in progress: {message}",
-                                True, _retry_after(response) or 5, "409")
+        if code == 409:  # HeyGen is already making this clip: sending it elsewhere would pay twice
+            raise ProviderError("provider_failed", f"the same clip is already in progress at HeyGen: {message}",
+                                False, provider_code="409", accepted=True)
         if code == 429:
             raise ProviderError("provider_unavailable", message, True, _retry_after(response) or 5, "429")
         if code >= 500:

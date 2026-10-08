@@ -2,18 +2,24 @@
   "op": "generate",
   "provider": "runway",
   "input": {
-    "text": "eyes from @eyes, colours from @palette",
+    "text": "eyes from @maya_eyes, colours from @maya_palette",
     "chips": [],
-    "sketch": {
-      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "mime": "image/png"
-    },
     "refs": [
       {
+        "id": "node_01K6XA6Z0000000000000000AA",
+        "role": "character",
+        "kind": "drawing",
+        "asset": {
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "mime": "image/png"
+        }
+      },
+      {
         "id": "ref_01K6XA6Z0000000000000000AB",
-        "tag": "eyes",
+        "name": "maya_eyes",
         "role": "shape",
+        "kind": "picture",
         "asset": {
           "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -22,8 +28,9 @@
       },
       {
         "id": "ref_01K6XA6Z0000000000000000AC",
-        "tag": "palette",
+        "name": "maya_palette",
         "role": "colour",
+        "kind": "picture",
         "asset": {
           "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -38,21 +45,21 @@
     "providerJob": {
       "provider": "runway",
       "model": "gemini_image3.1_flash",
-      "prompt": "Full-body front view of the character drawn in @sketch, flat 2D illustration, plain background. Eyes shaped like @eyes. Colour palette of @palette.",
+      "prompt": "Full-body front view of the character drawn in @in_1, flat 2D illustration, plain background. Eyes shaped like @maya_eyes. Colour palette of @maya_palette.",
       "refs": [
         {
           "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "name": "sketch",
+          "name": "in_1",
           "role": "character"
         },
         {
           "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "name": "eyes",
+          "name": "maya_eyes",
           "role": "object"
         },
         {
           "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-          "name": "palette",
+          "name": "maya_palette",
           "role": "object"
         }
       ],

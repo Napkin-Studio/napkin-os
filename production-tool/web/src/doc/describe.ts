@@ -1,13 +1,13 @@
 // What a participant's write means, in the decision chain's words.
 //
-// The panels name their writes with short internal actions ('pick front',
-// 'sync refs', `submit ${op}`, …). This turns one into the entry the chain
-// keeps ("picked as Front", "added ref @ref_a", "drew the frame for shot 2"),
+// The panels name their writes with short internal actions ('name', 'publish',
+// `submit ${op}`, …). This turns one into the entry the chain keeps ("named
+// @maya_front", "generated from 3 inputs", "drew the frame for shot 2"),
 // or null for bookkeeping (a job's state, an asset list, the stage), which is
 // written without an entry. Ids go at the end of the rationale, so the History
 // panel can find every entry about an item.
 
-import type { DocJob, ProductionDocument, View } from '../contracts/types'
+import type { DocJob, NamedRef, ProductionDocument, View } from '../contracts/types'
 import type { Removal } from './remove'
 import type { JobCtx } from './ui'
 
@@ -28,7 +28,7 @@ const QUIET = new Set([
   'edit', 'stage', 'add picture', 'script revision', 'shot list', 'frame', 'take', 'ad', 'sync',
 ])
 
-const VIEW_LABEL: Record<View, string> = { front: 'Front', three_quarter: '3/4', side: 'Side', back: 'Back', side_2: 'Side 2' }
+const VIEW_LABEL: Record<View, string> = { front: 'Front', 'three-quarter': '3/4', side: 'Side', back: 'Back' }
 
 export function viewLabel(v: string): string {
   return VIEW_LABEL[v as View] ?? v
@@ -68,13 +68,14 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
   const ids = tail(shotId, job.id)
   switch (job.op) {
     case 'generate': {
-      const refs = (input.refs ?? []).map((r) => `@${r.tag}`)
-      const from = [input.sketch ? 'the sketch' : '', ...refs].filter(Boolean).join(', ')
+      const refs = input.refs ?? []
+      const named = refs.filter((r) => r.name).map((r) => `@${r.name}`)
+      const drawings = refs.filter((r) => !r.name && r.kind === 'drawing').length
+      const others = refs.filter((r) => !r.name && r.kind !== 'drawing').length
+      const from = [...named, drawings && plural(drawings, 'drawing'), others && plural(others, 'picture')].filter(Boolean).join(', ')
       const more = (input.chips ?? []).includes('more_options')
-      return { action: more ? 'generated front view options' : 'generated a front view', rationale: words(from && `from ${from}`, ids) }
+      return { action: more ? 'generated options' : `generated from ${plural(refs.length || 1, 'input')}`, rationale: words(clip(input.text ?? job.text), from && `from ${from}`, ids) }
     }
-    case 'combine':
-      return { action: `combined ${(input.refs ?? []).length} pictures`, rationale: words(clip(input.text ?? job.text), (input.refs ?? []).map((r) => `@${r.tag}`).join(', '), ids) }
     case 'view':
       return { action: `asked for the ${viewLabel(input.view ?? 'other')} view`, rationale: words(ids) }
     case 'shot_list':
@@ -85,7 +86,7 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
       const from = words(input.anchorFrame && 'kept the setting of frame 1', input.previousFrame && 'continued from the frame before')
       if (how === 'update') return { action: `drew ${shotNo(after, shotId)}'s frame again`, rationale: words('updating what follows', from, ids) }
       if (again) return { action: `made a new version of ${shotNo(after, shotId)}'s frame`, rationale: words(clip(input.text), `from ${ctx.parentFrameId}`, from, ids) }
-      if (how === 'first') return { action: 'drew frame 1', rationale: words('from the character views', ids) }
+      if (how === 'first') return { action: 'drew frame 1', rationale: words((input.refs ?? []).map((r) => r.name && `@${r.name}`).filter(Boolean).join(', '), ids) }
       if (how === 'next') return { action: `drew the next frame (${shotNo(after, shotId)})`, rationale: words(clip(input.text), from, ids) }
       if (how === 'rest') return { action: 'drew the rest', rationale: words(`starting with ${shotNo(after, shotId)}`, from, ids) }
       if (how === 'chain') return { action: `drew the next frame (${shotNo(after, shotId)})`, rationale: words('drawing the rest', from, ids) }
@@ -108,29 +109,32 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
   }
 }
 
-function describeRefs(before: ProductionDocument, after: ProductionDocument, restoring = false): Described | null {
-  const was = new Map(before.character.refs.map((r) => [r.id, r]))
-  const now = new Map(after.character.refs.map((r) => [r.id, r]))
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+const at = (r: NamedRef) => `@${r.key}_${r.variant}`
+
+/** Names given, changed or taken off since `before`. */
+function describeNames(before: ProductionDocument, after: ProductionDocument): Described | null {
+  const was = new Map(before.refs.map((r) => [r.id, r]))
+  const now = new Map(after.refs.map((r) => [r.id, r]))
   const said: string[] = []
   const ids: string[] = []
   for (const [id, r] of now) {
     const p = was.get(id)
-    if (!p) {
-      said.push(restoring ? `restored ref @${r.tag}` : `added ${r.kind === 'sketch' ? 'a drawing' : 'a picture'} as @${r.tag}`)
-      ids.push(id, r.asset)
-    } else if (p.role !== r.role) {
-      said.push(`set @${r.tag} as ${r.role}`)
-      ids.push(id)
-    } else if (p.tag !== r.tag) {
-      said.push(`tagged @${r.tag}`)
-      ids.push(id)
-    }
+    if (!p) said.push(`named ${at(r)}`)
+    else if (at(p) !== at(r)) said.push(`renamed ${at(p)} to ${at(r)}`)
+    else if (p.asset !== r.asset) said.push(`${at(r)} now shows another image`)
+    else continue
+    ids.push(id, r.asset)
   }
   for (const [id, r] of was) {
     if (!now.has(id)) {
-      said.push(`deleted ref @${r.tag}`)
+      said.push(`took the name ${at(r)} off`)
       ids.push(id)
     }
+  }
+  for (const k of after.keys) {
+    const p = before.keys.find((x) => x.key === k.key)
+    if (p && p.role !== k.role) said.push(`set ${k.key} as ${k.role}`)
   }
   if (!said.length) return null
   return { action: said.join('; '), rationale: words(tail(...ids)) }
@@ -155,27 +159,20 @@ export function describeWrite(action: string, before: ProductionDocument, after:
   if (action.startsWith('deleted ') || action.startsWith('restored ')) return { action }
   if (action.startsWith('complete ')) return null
   if (QUIET.has(action)) return null
-  if (action.startsWith('pick ')) {
-    const view = action.slice(5) as View
-    const v = after.character.views[view]
-    if (!v || before.character.views[view]?.asset === v.asset) return null
-    return { action: `picked as ${viewLabel(view)}`, rationale: tail(v.asset, v.job_id) }
-  }
   switch (action) {
-    case 'sync refs':
-      return describeRefs(before, after)
-    case 'restore refs':
-      return describeRefs(before, after, true)
-    case 'tag': {
-      const changed = after.character.refs.find((r) => {
-        const p = before.character.refs.find((x) => x.id === r.id)
-        return p && (p.tag !== r.tag || p.label !== r.label)
-      })
-      return changed ? { action: `tagged a ref @${changed.tag}`, rationale: words(changed.label && `"${changed.label}"`, changed.id) } : null
+    case 'name':
+      return describeNames(before, after)
+    case 'publish': {
+      const k = after.keys.find((x) => x.library && x.library.ver !== before.keys.find((y) => y.key === x.key)?.library?.ver)
+      return k?.library ? { action: `published ${k.key} to the ${k.library.workspace} library`, rationale: words(`version ${k.library.ver}`), mirror: true } : null
     }
-    case 'lock character': {
-      const views = Object.entries(after.character.views).map(([k, v]) => `${viewLabel(k)} ${v?.job_id ?? ''}`.trim())
-      return { action: 'locked the character', rationale: words(views.join(', ')), pinned: true, mirror: true }
+    case 'import': {
+      const k = after.keys.find((x) => x.library && x.library.ver !== before.keys.find((y) => y.key === x.key)?.library?.ver)
+      return k?.library ? { action: `imported ${k.key} from the library`, rationale: words(`version ${k.library.ver} by @${k.library.by}`, after.refs.filter((r) => r.key === k.key).map(at).join(', ')) } : null
+    }
+    case 'clean up': {
+      const gone = before.assets.length - after.assets.length
+      return gone > 0 ? { action: `cleaned up ${plural(gone, 'unused picture')}` } : null
     }
     case 'lock storyboard': {
       const shots = after.shots ?? []

@@ -1,0 +1,328 @@
+{
+ "endpoint": "fal-ai/sam2/video",
+ "fetched": "2026-10-08",
+ "schema": {
+  "$defs": {
+   "BoxPrompt": {
+    "properties": {
+     "frame_index": {
+      "default": 0,
+      "description": "The frame index to interact with.",
+      "title": "Frame Index",
+      "type": "integer"
+     },
+     "x_max": {
+      "default": 0,
+      "description": "X Max Coordinate of the prompt",
+      "title": "X Max",
+      "type": "integer"
+     },
+     "x_min": {
+      "default": 0,
+      "description": "X Min Coordinate of the box",
+      "title": "X Min",
+      "type": "integer"
+     },
+     "y_max": {
+      "default": 0,
+      "description": "Y Max Coordinate of the prompt",
+      "title": "Y Max",
+      "type": "integer"
+     },
+     "y_min": {
+      "default": 0,
+      "description": "Y Min Coordinate of the box",
+      "title": "Y Min",
+      "type": "integer"
+     }
+    },
+    "title": "BoxPrompt",
+    "type": "object",
+    "x-fal-order-properties": [
+     "x_min",
+     "y_min",
+     "x_max",
+     "y_max",
+     "frame_index"
+    ]
+   },
+   "File": {
+    "properties": {
+     "content_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The mime type of the file.",
+      "examples": [
+       "image/png"
+      ],
+      "title": "Content Type"
+     },
+     "file_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The name of the file. It will be auto-generated if not provided.",
+      "examples": [
+       "z9RV14K95DvU.png"
+      ],
+      "title": "File Name"
+     },
+     "file_size": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The size of the file in bytes.",
+      "examples": [
+       4404019
+      ],
+      "title": "File Size"
+     },
+     "url": {
+      "description": "The URL where the file can be downloaded from.",
+      "title": "Url",
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "title": "File",
+    "type": "object",
+    "x-fal-order-properties": [
+     "url",
+     "content_type",
+     "file_name",
+     "file_size"
+    ]
+   },
+   "PointPrompt": {
+    "properties": {
+     "frame_index": {
+      "default": 0,
+      "description": "The frame index to interact with.",
+      "title": "Frame Index",
+      "type": "integer"
+     },
+     "label": {
+      "default": 1,
+      "description": "Label of the prompt. 1 for foreground, 0 for background",
+      "enum": [
+       0,
+       1
+      ],
+      "title": "Label",
+      "type": "integer"
+     },
+     "x": {
+      "default": 305,
+      "description": "X Coordinate of the prompt",
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "default": 350,
+      "description": "Y Coordinate of the prompt",
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "title": "PointPrompt",
+    "type": "object",
+    "x-fal-order-properties": [
+     "x",
+     "y",
+     "label",
+     "frame_index"
+    ]
+   },
+   "QueueStatus": {
+    "properties": {
+     "cancel_url": {
+      "description": "The cancel url.",
+      "type": "string"
+     },
+     "logs": {
+      "additionalProperties": true,
+      "description": "The logs.",
+      "type": "object"
+     },
+     "metrics": {
+      "additionalProperties": true,
+      "description": "The metrics.",
+      "type": "object"
+     },
+     "queue_position": {
+      "description": "The queue position.",
+      "type": "integer"
+     },
+     "request_id": {
+      "description": "The request id.",
+      "type": "string"
+     },
+     "response_url": {
+      "description": "The response url.",
+      "type": "string"
+     },
+     "status": {
+      "enum": [
+       "IN_QUEUE",
+       "IN_PROGRESS",
+       "COMPLETED"
+      ],
+      "type": "string"
+     },
+     "status_url": {
+      "description": "The status url.",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "request_id"
+    ],
+    "type": "object"
+   },
+   "Sam2VideoInput": {
+    "properties": {
+     "apply_mask": {
+      "default": false,
+      "description": "Apply the mask on the video.",
+      "title": "Apply Mask",
+      "type": "boolean"
+     },
+     "boundingbox_zip": {
+      "default": false,
+      "description": "Return per-frame bounding box overlays as a zip archive.",
+      "title": "Boundingbox Zip",
+      "type": "boolean"
+     },
+     "box_prompts": {
+      "default": [],
+      "description": "Coordinates for boxes",
+      "examples": [
+       [
+        {
+         "frame_index": 0,
+         "x_max": 500,
+         "x_min": 300,
+         "y_max": 400,
+         "y_min": 0
+        }
+       ]
+      ],
+      "items": {
+       "$ref": "#/$defs/BoxPrompt"
+      },
+      "title": "Box Prompts",
+      "type": "array"
+     },
+     "mask_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The URL of the mask to be applied initially.",
+      "title": "Mask Url"
+     },
+     "prompts": {
+      "default": [],
+      "description": "List of prompts to segment the video",
+      "examples": [
+       [
+        {
+         "frame_index": 0,
+         "label": 1,
+         "x": 210,
+         "y": 350
+        },
+        {
+         "frame_index": 0,
+         "label": 1,
+         "x": 250,
+         "y": 220
+        }
+       ]
+      ],
+      "items": {
+       "$ref": "#/$defs/PointPrompt"
+      },
+      "title": "Prompts",
+      "type": "array"
+     },
+     "video_url": {
+      "description": "The URL of the video to be segmented.",
+      "examples": [
+       "https://drive.google.com/uc?id=1iOFYbNITYwrebBBp9kaEGhBndFSRLz8k"
+      ],
+      "title": "Video Url",
+      "type": "string"
+     }
+    },
+    "required": [
+     "video_url"
+    ],
+    "title": "SAM2VideoRLEInput",
+    "type": "object",
+    "x-fal-order-properties": [
+     "video_url",
+     "mask_url",
+     "prompts",
+     "box_prompts",
+     "apply_mask",
+     "boundingbox_zip"
+    ]
+   },
+   "Sam2VideoOutput": {
+    "properties": {
+     "boundingbox_frames_zip": {
+      "anyOf": [
+       {
+        "$ref": "#/$defs/File"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Zip file containing per-frame bounding box overlays."
+     },
+     "video": {
+      "$ref": "#/$defs/File",
+      "description": "The segmented video."
+     }
+    },
+    "required": [
+     "video"
+    ],
+    "title": "SAM2VideoOutput",
+    "type": "object",
+    "x-fal-order-properties": [
+     "video",
+     "boundingbox_frames_zip"
+    ]
+   }
+  },
+  "$ref": "#/$defs/Sam2VideoInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+ },
+ "source": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/sam2/video"
+}

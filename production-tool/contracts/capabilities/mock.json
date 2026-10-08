@@ -1,14 +1,9 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "provider": "mock",
   "checked": "2026-10-06",
   "ops": {
     "generate": {
-      "model": "mock",
-      "endpoint": "mock://image",
-      "estimateUsd": 0
-    },
-    "combine": {
       "model": "mock",
       "endpoint": "mock://image",
       "estimateUsd": 0
@@ -21,7 +16,11 @@
     "frame": {
       "model": "mock",
       "endpoint": "mock://image",
-      "estimateUsd": 0
+      "estimateUsd": 0,
+      "label": "Mock",
+      "alternates": [
+        { "model": "mock-hq", "endpoint": "mock://image", "estimateUsd": 0, "label": "Mock HQ", "note": "Local stand-in for a better model" }
+      ]
     },
     "region_edit": {
       "model": "mock",
@@ -33,7 +32,11 @@
       "endpoint": "mock://video",
       "estimateUsd": 0,
       "minS": 2,
-      "maxS": 15
+      "maxS": 15,
+      "label": "Mock",
+      "alternates": [
+        { "model": "mock-hq", "endpoint": "mock://video", "estimateUsd": 0, "label": "Mock HQ", "note": "Local stand-in for a better model", "minS": 2, "maxS": 15 }
+      ]
     },
     "clip_edit": {
       "model": "mock",

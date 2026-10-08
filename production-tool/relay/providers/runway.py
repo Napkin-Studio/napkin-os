@@ -18,7 +18,7 @@ import httpx
 
 from .types import (
     VIDEO_OPS, AssetResolver, CapabilityMissing, ProviderError, ProviderJob,
-    ProviderOutput, Status, check_capabilities, load_sheet, video_audio,
+    ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import UnknownTag, rewrite_tags
 
@@ -80,9 +80,17 @@ def _http_error(resp: httpx.Response) -> ProviderError:
         return ProviderError("provider_unavailable", message, True, retry_after_s=after)
     if resp.status_code >= 500:
         return ProviderError("provider_unavailable", message, True)
-    if resp.status_code in (401, 403, 404, 405):  # our key, route or task id, not the participant's input
-        return ProviderError("provider_failed", message, False)
+    if resp.status_code in (401, 403):  # the account's key: the relay decides what to do about it
+        return ProviderError("provider_failed", message, False, provider_code=str(resp.status_code))
+    if resp.status_code in (404, 405):  # our route or task id: a Napkin bug, not the participant's input
+        return ProviderError("provider_failed", message, False, provider_code=str(resp.status_code), source="napkin")
     return ProviderError("invalid_input", message, False)
+
+
+# The previous defaults, kept as alternates (features/default-models.clan). Runway is fallback-only,
+# so the menu never offers them; scripts and a config without fallbackOnly can still pick them.
+ALTERNATES = {"generate": {"gemini_image3.1_flash"}, "view": {"gemini_image3.1_flash"},
+              "frame": {"gemini_image3.1_flash"}, "clip": {"veo3.1_fast"}}
 
 
 class RunwayProvider:
@@ -102,7 +110,8 @@ class RunwayProvider:
         try:
             return self._client.request(method, BASE_URL + path, headers=headers, **kw)
         except httpx.TransportError as exc:
-            raise ProviderError("provider_unavailable", f"Runway could not be reached: {exc}", True) from exc
+            raise ProviderError("provider_unavailable", f"Runway could not be reached: {exc}", True,
+                                source="network") from exc
 
     def _ok(self, resp: httpx.Response) -> dict:
         if resp.status_code >= 300:
@@ -116,6 +125,10 @@ class RunwayProvider:
         return body
 
     # Building the request
+
+    def _model(self, job: ProviderJob) -> str:
+        """The model the job names when the sheet lists it for the op, else the op's own."""
+        return effective_sheet(self._sheet, job.op, job.model)["ops"][job.op]["model"]
 
     def _tagged(self, names: list[str], prompt: str) -> str:
         try:
@@ -131,14 +144,64 @@ class RunwayProvider:
         if job.op in VIDEO_OPS and job.seed is not None and not 0 <= job.seed <= MAX_SEED:
             raise CapabilityMissing(f"seed must be 0-{MAX_SEED}")
 
+    def _marked(self, current: Ref, region: dict) -> str:
+        """The current image with the box drawn on it, as a PNG data URI (Runway has no masks).
+        Nothing upstream makes this picture: the director sends the image and the box, so every
+        Runway region edit failed until the adapter drew it (pathway matrix, 2026-10-08)."""
+        import base64
+
+        from region.image_ops import draw_box
+        from region.pipeline import BOX_COLOUR, BOX_WIDTH_PX
+
+        url = self._assets(current.sha256).url
+        try:
+            if url.startswith("data:"):
+                data = base64.b64decode(url.split(",", 1)[1])
+            else:
+                resp = self._client.get(url)
+                resp.raise_for_status()
+                data = resp.content
+        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            raise ProviderError("internal", f"could not read the image to edit: {exc}", True, source="napkin") from exc
+        try:
+            png = draw_box(data, region, BOX_COLOUR, BOX_WIDTH_PX)
+        except Exception as exc:  # PIL: not an image we can read
+            raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
+        return "data:image/png;base64," + base64.b64encode(png).decode()
+
+    def _own_ratio(self, current: Ref) -> str:
+        """The Gemini 3 Pro size nearest the edited picture's own shape (Runway needs a ratio)."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        from director.director import PRO_RATIOS
+
+        url = self._assets(current.sha256).url
+        try:
+            data = base64.b64decode(url.split(",", 1)[1]) if url.startswith("data:") else self._client.get(url).content
+            w, h = Image.open(io.BytesIO(data)).size
+        except Exception as exc:
+            raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
+        return nearest_ratio(f"{w}:{h}", tuple(sorted(PRO_RATIOS)))
+
     def _image(self, job: ProviderJob) -> tuple[str, dict]:
         refs = list(job.refs)
         prompt = job.prompt
+        uris: dict[str, str] = {}  # pictures made here rather than uploaded (the marked copy)
         if job.op == "region_edit":
             by_role = {r.role: r for r in refs}
-            if "current" not in by_role or "marked" not in by_role:
-                raise CapabilityMissing("region_edit needs a 'current' and a 'marked' ref")
+            if "current" not in by_role:
+                raise CapabilityMissing("region_edit needs a 'current' ref")
+            if "marked" not in by_role:
+                if not job.region:
+                    raise CapabilityMissing("region_edit needs a 'marked' ref or a region to draw")
+                by_role["marked"] = Ref("marked:box", "marked", "marked")
+                uris["marked:box"] = self._marked(by_role["current"], job.region)
             current, marked = by_role["current"], by_role["marked"]
+            if not job.ratio:  # the web sends none for an edit: keep the picture's own shape
+                job = dataclasses.replace(job, ratio=self._own_ratio(current))
             refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
             prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
         self._check(job, "image", prompt)
@@ -149,14 +212,14 @@ class RunwayProvider:
         if not job.ratio:
             raise ProviderError("invalid_input", f"{job.op} needs a ratio", False)
         body = {
-            "model": self._sheet["ops"][job.op]["model"],
+            "model": self._model(job),
             "promptText": self._tagged([r.name for r in refs], prompt),
             "ratio": job.ratio,
             "outputCount": job.outputs or 1,
         }
         if refs:
             body["referenceImages"] = [
-                {"uri": self._assets(r.sha256).url, "tag": r.name,
+                {"uri": uris.get(r.sha256) or self._assets(r.sha256).url, "tag": r.name,
                  "subject": "human" if r.role == "character" else "object"} for r in refs]
         return "/v1/text_to_image", body
 
@@ -170,7 +233,7 @@ class RunwayProvider:
         if job.last_frame:
             frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
         body = {
-            "model": self._sheet["ops"]["clip"]["model"],
+            "model": self._model(job),
             "promptImage": frames,
             "promptText": self._tagged([r.name for r in job.refs], job.prompt),
             "ratio": job.ratio,
@@ -190,7 +253,7 @@ class RunwayProvider:
         if not videos:
             raise CapabilityMissing("clip_edit needs the source video (video/mp4) among its refs")
         body = {
-            "model": self._sheet["ops"]["clip_edit"]["model"],
+            "model": self._model(job),
             "videoUri": videos[0].url,
             "promptText": self._tagged([r.name for r in job.refs], job.prompt),
         }  # aleph2 has no audio parameter, so unlike clip this body cannot set it
@@ -211,16 +274,30 @@ class RunwayProvider:
     def submit(self, job: ProviderJob) -> str:
         build = {"clip": self._clip, "clip_edit": self._clip_edit}.get(job.op, self._image)
         path, body = build(job)
-        task = self._ok(self._call("POST", path, json=body))
+        resp = self._call("POST", path, json=body)
+        if resp.status_code >= 300:
+            raise _http_error(resp)
+        try:  # a 2xx: Runway has the task, so whatever we cannot read must never be sent elsewhere
+            task = self._ok(resp)
+        except ProviderError as exc:
+            raise ProviderError("provider_failed", exc.message, False, accepted=True) from exc
         if not task.get("id"):
-            raise ProviderError("provider_failed", "Runway accepted the job but sent no task id", True)
+            raise ProviderError("provider_failed", "Runway accepted the job but sent no task id", False, accepted=True)
         return task["id"]
 
     def status(self, request_id: str) -> Status:
-        task = self._ok(self._call("GET", f"/v1/tasks/{request_id}"))
+        try:
+            task = self._ok(self._call("GET", f"/v1/tasks/{request_id}"))
+        except ProviderError as exc:
+            if exc.retryable:  # 429, 5xx, the network: the relay asks again
+                raise
+            return Status("failed", error=exc)  # 401/403/404 on our task: asking again cannot help
+        if task.get("status") is None:  # an empty or partial reply (a proxy's): ask again
+            raise ProviderError("provider_unavailable", "Runway's task reply has no status", True)
         state = STATES.get(task.get("status"))
         if state is None:
-            raise ProviderError("provider_failed", f"unknown Runway task status {task.get('status')!r}", False)
+            return Status("failed", error=ProviderError(
+                "provider_failed", f"unknown Runway task status {task.get('status')!r}", False))
         credits = (task.get("cost") or {}).get("credits")
         cost = None if credits is None else round(credits * USD_PER_CREDIT, 4)
         if state == "failed":

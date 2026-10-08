@@ -1,7 +1,7 @@
 // The chain entries as a list: who (you, the director, the provider), what,
 // why, and which fields changed. Presentational, so it renders in a test.
 
-import { aboutItem, kindOf, readable, timeOf, type AgentKind, type ChainLike, type HistoryItem } from './history'
+import { aboutItem, kindOf, readable, timeOf, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
 
 const KIND_ICON: Record<AgentKind, string> = { participant: '●', director: '◆', provider: '▲' }
 

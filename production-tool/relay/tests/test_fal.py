@@ -11,7 +11,7 @@ from referencing import Registry, Resource
 
 from providers import AssetRef, CapabilityMissing, ProviderError, ProviderJob, Ref, load_sheet
 from providers.types import CONTRACTS
-from providers.fal import MASK_POLARITY, SAM2, WAN, FalProvider
+from providers.fal import MASK_POLARITY, SAM2, WAN, FalProvider, queue_app
 
 FIXTURES = Path(__file__).parent / "fixtures" / "fal"
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -68,7 +68,11 @@ class Fal:
             return route
         assert request.method == "POST", f"unexpected {request.method} {request.url.path}"
         self.n += 1
-        return httpx.Response(200, json={**fixture("submit.json"), "request_id": f"req{self.n}"})
+        # Like fal: the queue URLs sit under the base app (owner/app), never the endpoint's sub-path.
+        rid, app = f"req{self.n}", "/".join(request.url.path.strip("/").split("/")[:2])
+        base = f"https://queue.fal.run/{app}/requests/{rid}"
+        return httpx.Response(200, json={**fixture("submit.json"), "request_id": rid, "status_url": f"{base}/status",
+                                         "response_url": base, "cancel_url": f"{base}/cancel"})
 
     @property
     def fal_requests(self):
@@ -90,7 +94,9 @@ def provider(fal):
 
 
 def job(op="generate", **kw):
-    return ProviderJob(op=op, provider="fal", model="m", prompt=kw.pop("prompt", "a fox"),
+    # Image steps default to Nano Banana Pro (features/default-models.clan); these tests are Kling's.
+    model = kw.pop("model", "kling-image-o3" if op in ("generate", "frame") else "m")
+    return ProviderJob(op=op, provider="fal", model=model, prompt=kw.pop("prompt", "a fox"),
                        refs=kw.pop("refs", [Ref(HERO, "hero", "character")]), **kw)
 
 
@@ -107,15 +113,15 @@ def test_sheet_matches_schema():
 
 def test_submit_returns_the_id_and_makes_one_call(provider, fal):
     rid = provider.submit(job())
-    assert rid == f"{KLING_IMAGE}:req1"
+    assert rid == f"{KLING_IMAGE}>fal-ai/kling-image:req1"
     assert [(r.method, r.url.path) for r in fal.fal_requests] == [("POST", f"/{KLING_IMAGE}")]
 
 
 def test_every_fal_call_carries_the_key_and_disables_fallback(provider, fal):
     rid = provider.submit(job(op="region_edit", mask=MASK, refs=[Ref(HERO, "marked", "current")]))
-    fal.on("GET", f"{IDEOGRAM}/requests/req1/status", 200, fixture("status_in_progress.json"))
+    fal.on("GET", f"{queue_app(IDEOGRAM)}/requests/req1/status", 200, fixture("status_in_progress.json"))
     provider.status(rid)
-    fal.on("PUT", f"{IDEOGRAM}/requests/req1/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
+    fal.on("PUT", f"{queue_app(IDEOGRAM)}/requests/req1/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
     provider.cancel(rid)
     assert len(fal.fal_requests) == 3
     for r in fal.fal_requests:
@@ -154,8 +160,9 @@ def test_unknown_tag_is_invalid_input(provider):
 
 
 def test_image_op_without_an_image_ref_is_refused(provider, fal):
+    # No picture at all. (Element refs alone now go as images: see the test at the end.)
     with pytest.raises(CapabilityMissing):
-        provider.submit(job(refs=element_refs()))
+        provider.submit(job(refs=[]))
     assert fal.fal_requests == []
 
 
@@ -216,7 +223,8 @@ def test_clip_multi_shot_splits_on_dashes_and_the_durations_add_up(provider, fal
     provider.submit(job(op="clip", prompt="@hero opens the door\n---\n@hero steps out\n---\nwide shot",
                         refs=element_refs(), first_frame=FRAME, duration_s=10))
     body = fal.body()
-    assert "prompt" not in body and "duration" not in body
+    # The top-level duration defaults to "5" on fal, so it says the shots' sum (docs checked 2026-10-07).
+    assert "prompt" not in body and body["duration"] == "10"
     assert body["shot_type"] == "customize"
     assert [(s["prompt"], s["duration"]) for s in body["multi_prompt"]] == [
         ("@Element1 opens the door", "4"), ("@Element1 steps out", "3"), ("wide shot", "3")]
@@ -295,20 +303,20 @@ def region_job():
 
 def test_region_edit_chain_runs_sam2_then_wan(provider, fal):
     rid = provider.submit(region_job())
-    assert rid == f"{SAM2}:req1"
+    assert rid == f"{SAM2}>{queue_app(SAM2)}:req1"
     sam = fal.body()
     assert fal.fal_requests[-1].url.path == f"/{SAM2}"
     assert sam["video_url"] == "https://cdn.test/6666"
     assert _decode(sam["mask_url"]).getpixel((5, 5)) == 255  # not inverted (unverified, see above)
 
-    fal.on("GET", f"{SAM2}/requests/req1/status", 200, fixture("status_in_queue.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1/status", 200, fixture("status_in_queue.json"))
     assert provider.status(rid).state == "queued"
 
-    fal.on("GET", f"{SAM2}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{SAM2}/requests/req1", 200, fixture("result_sam2.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1", 200, fixture("result_sam2.json"))
     assert provider.status(rid).state == "running"      # COMPLETED seen
     assert provider.status(rid).state == "running"      # result fetched
-    assert fal.fal_requests[-1].url.path == f"/{SAM2}/requests/req1"
+    assert fal.fal_requests[-1].url.path == f"/{queue_app(SAM2)}/requests/req1"
     st = provider.status(rid)                           # wan submitted
     assert st.state == "running" and st.outputs == []
     wan = fal.body()
@@ -318,10 +326,10 @@ def test_region_edit_chain_runs_sam2_then_wan(provider, fal):
     assert wan["enable_safety_checker"] is True
 
     # the same id now follows the wan request, and it is not submitted twice
-    fal.on("GET", f"{WAN}/requests/req2/status", 200, fixture("status_in_progress.json"))
+    fal.on("GET", f"{queue_app(WAN)}/requests/req2/status", 200, fixture("status_in_progress.json"))
     assert provider.status(rid).state == "running"
-    fal.on("GET", f"{WAN}/requests/req2/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{WAN}/requests/req2", 200, fixture("result_video.json"))
+    fal.on("GET", f"{queue_app(WAN)}/requests/req2/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(WAN)}/requests/req2", 200, fixture("result_video.json"))
     assert provider.status(rid).state == "running"
     done = provider.status(rid)
     assert done.state == "done" and done.outputs[0].mime == "video/mp4" and done.cost_usd is None
@@ -330,7 +338,7 @@ def test_region_edit_chain_runs_sam2_then_wan(provider, fal):
 
 def test_chain_cancel_stops_wan_from_starting(provider, fal):
     rid = provider.submit(region_job())
-    fal.on("PUT", f"{SAM2}/requests/req1/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
+    fal.on("PUT", f"{queue_app(SAM2)}/requests/req1/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
     provider.cancel(rid)
     assert provider.status(rid).state == "cancelled"
     assert [r.method for r in fal.fal_requests] == ["POST", "PUT"]
@@ -344,8 +352,8 @@ def test_a_lost_chain_fails_without_retry(provider):
 def _at_hand_over(provider, fal):
     """A chain whose sam2 is done and whose wan request is next."""
     rid = provider.submit(region_job())
-    fal.on("GET", f"{SAM2}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{SAM2}/requests/req1", 200, fixture("result_sam2.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1", 200, fixture("result_sam2.json"))
     provider.status(rid)
     provider.status(rid)
     return rid
@@ -353,8 +361,8 @@ def _at_hand_over(provider, fal):
 
 def test_every_chain_poll_is_one_fal_call(provider, fal):
     rid = provider.submit(region_job())
-    fal.on("GET", f"{SAM2}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{SAM2}/requests/req1", 200, fixture("result_sam2.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1", 200, fixture("result_sam2.json"))
     for _ in range(3):
         before = len(fal.fal_requests)
         provider.status(rid)
@@ -364,15 +372,15 @@ def test_every_chain_poll_is_one_fal_call(provider, fal):
 def test_chain_cancel_after_hand_over_cancels_wan(provider, fal):
     rid = _at_hand_over(provider, fal)
     provider.status(rid)
-    fal.on("PUT", f"{WAN}/requests/req2/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
+    fal.on("PUT", f"{queue_app(WAN)}/requests/req2/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
     provider.cancel(rid)
-    assert fal.fal_requests[-1].url.path == f"/{WAN}/requests/req2/cancel"
+    assert fal.fal_requests[-1].url.path == f"/{queue_app(WAN)}/requests/req2/cancel"
     assert provider.status(rid).state == "cancelled"
 
 
 def test_chain_sam2_failure_ends_the_job(provider, fal):
     rid = provider.submit(region_job())
-    fal.on("GET", f"{SAM2}/requests/req1/status", 200, fixture("status_completed_error.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1/status", 200, fixture("status_completed_error.json"))
     assert provider.status(rid).state == "failed"
     before = len(fal.fal_requests)
     assert provider.status(rid).state == "failed"
@@ -381,8 +389,8 @@ def test_chain_sam2_failure_ends_the_job(provider, fal):
 
 def test_chain_sam2_without_a_video_fails(provider, fal):
     rid = provider.submit(region_job())
-    fal.on("GET", f"{SAM2}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{SAM2}/requests/req1", 200, {"images": [{"url": "https://x/a.png"}]})
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(SAM2)}/requests/req1", 200, {"images": [{"url": "https://x/a.png"}]})
     provider.status(rid)
     st = provider.status(rid)
     assert (st.state, st.error.retryable) == ("failed", False)
@@ -406,7 +414,7 @@ def test_chain_wan_enqueue_5xx_raises_then_retries_without_double_submit(provide
     assert e.value.retryable
     del fal.routes[("POST", f"/{WAN}")]
     assert provider.status(rid).state == "running"
-    fal.on("GET", f"{WAN}/requests/req2/status", 200, fixture("status_in_progress.json"))
+    fal.on("GET", f"{queue_app(WAN)}/requests/req2/status", 200, fixture("status_in_progress.json"))
     assert provider.status(rid).state == "running"
     assert [r.url.path for r in fal.fal_requests if r.url.path == f"/{WAN}"] == [f"/{WAN}", f"/{WAN}"]
 
@@ -431,7 +439,7 @@ def test_chain_wan_enqueue_with_no_answer_is_not_resent(fal):
 def test_chain_wan_failure_is_failed(provider, fal):
     rid = _at_hand_over(provider, fal)
     provider.status(rid)
-    fal.on("GET", f"{WAN}/requests/req2/status", 200, fixture("status_completed_policy.json"))
+    fal.on("GET", f"{queue_app(WAN)}/requests/req2/status", 200, fixture("status_completed_policy.json"))
     st = provider.status(rid)
     assert (st.state, st.error.code) == ("failed", "moderated")
 
@@ -440,7 +448,7 @@ def test_chain_wan_failure_is_failed(provider, fal):
 
 def test_status_maps_queue_progress_and_done(provider, fal):
     rid = provider.submit(job())
-    path = f"{KLING_IMAGE}/requests/req1"
+    path = f"{queue_app(KLING_IMAGE)}/requests/req1"
     fal.on("GET", path + "/status", 200, fixture("status_in_queue.json"))
     st = provider.status(rid)
     assert (st.state, st.queue_position) == ("queued", 3)
@@ -462,7 +470,7 @@ def test_status_maps_queue_progress_and_done(provider, fal):
 
 def test_a_poll_is_one_call_while_the_job_runs(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, fixture("status_in_progress.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_in_progress.json"))
     before = len(fal.fal_requests)
     provider.status(rid)
     assert len(fal.fal_requests) - before == 1
@@ -470,23 +478,24 @@ def test_a_poll_is_one_call_while_the_job_runs(provider, fal):
 
 def test_completed_with_an_error_is_failed(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, fixture("status_completed_error.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_completed_error.json"))
     st = provider.status(rid)
     assert st.state == "failed"
-    assert (st.error.code, st.error.retryable, st.error.provider_code) == ("provider_failed", False, "runner_disconnected")
+    # fal's docs call runner errors transient: trying again can help (features/harness-errors.clan)
+    assert (st.error.code, st.error.retryable, st.error.provider_code) == ("provider_failed", True, "runner_disconnected")
 
 
 def test_completed_with_a_policy_error_is_moderated_and_not_retryable(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, fixture("status_completed_policy.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_completed_policy.json"))
     st = provider.status(rid)
     assert (st.state, st.error.code, st.error.retryable) == ("failed", "moderated", False)
 
 
 def test_result_422_content_policy_is_moderated(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1", 422, fixture("error_policy_422.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1", 422, fixture("error_policy_422.json"))
     provider.status(rid)
     st = provider.status(rid)
     assert (st.state, st.error.code, st.error.retryable) == ("failed", "moderated", False)
@@ -495,16 +504,16 @@ def test_result_422_content_policy_is_moderated(provider, fal):
 
 def test_no_media_generated_is_failed(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1", 200, {"images": []})
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1", 200, {"images": []})
     provider.status(rid)
     assert provider.status(rid).error.code == "provider_failed"
 
 
 def _completed(provider, fal, result_status, result_body):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, fixture("status_completed.json"))
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1", result_status, result_body)
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1", result_status, result_body)
     provider.status(rid)
     return rid
 
@@ -521,20 +530,20 @@ def test_result_5xx_raises_and_the_next_poll_fetches_the_result_again(provider, 
     with pytest.raises(ProviderError) as e:
         provider.status(rid)
     assert e.value.retryable
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1", 200, fixture("result_kling_image.json"))
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1", 200, fixture("result_kling_image.json"))
     assert provider.status(rid).state == "done"
 
 
 def test_status_get_4xx_is_a_failed_status_not_an_exception(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 404, {"detail": "Request not found"})
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 404, {"detail": "Request not found"})
     st = provider.status(rid)
     assert (st.state, st.error.retryable) == ("failed", False)
 
 
 def test_status_429_raises_retryable(provider, fal):
     rid = provider.submit(job())
-    fal.routes[("GET", f"/{KLING_IMAGE}/requests/req1/status")] = httpx.Response(429, headers={"retry-after": "9"}, json={})
+    fal.routes[("GET", f"/{queue_app(KLING_IMAGE)}/requests/req1/status")] = httpx.Response(429, headers={"retry-after": "9"}, json={})
     with pytest.raises(ProviderError) as e:
         provider.status(rid)
     assert (e.value.retryable, e.value.retry_after_s) == (True, 9)
@@ -542,10 +551,9 @@ def test_status_429_raises_retryable(provider, fal):
 
 def test_unknown_status_is_provider_failed(provider, fal):
     rid = provider.submit(job())
-    fal.on("GET", f"{KLING_IMAGE}/requests/req1/status", 200, {"status": "WEIRD"})
-    with pytest.raises(ProviderError) as e:
-        provider.status(rid)
-    assert e.value.code == "provider_failed"
+    fal.on("GET", f"{queue_app(KLING_IMAGE)}/requests/req1/status", 200, {"status": "WEIRD"})
+    st = provider.status(rid)  # asking again cannot help: the job ends now, not at the relay's timeout
+    assert (st.state, st.error.code, st.error.retryable) == ("failed", "provider_failed", False)
 
 
 def test_status_transport_error_is_retryable(fal):
@@ -567,15 +575,16 @@ def test_non_json_bodies_are_provider_errors(provider, fal, raw):
     fal.routes[("POST", f"/{KLING_IMAGE}")] = httpx.Response(200, content=raw)
     with pytest.raises(ProviderError) as e:
         provider.submit(job())
-    assert (e.value.code, e.value.retryable) == ("provider_unavailable", True)
+    # a 2xx: fal may have the request, so it must never be sent anywhere else
+    assert (e.value.code, e.value.retryable, e.value.accepted) == ("provider_failed", False, True)
     fal.routes.clear()
     rid = provider.submit(job())
-    fal.routes[("GET", f"/{KLING_IMAGE}/requests/req1/status")] = httpx.Response(200, content=raw)
+    fal.routes[("GET", f"/{queue_app(KLING_IMAGE)}/requests/req1/status")] = httpx.Response(200, content=raw)
     with pytest.raises(ProviderError) as e:
         provider.status(rid)
     assert e.value.code == "provider_unavailable"
-    fal.routes[("GET", f"/{KLING_IMAGE}/requests/req1/status")] = httpx.Response(200, json=fixture("status_completed.json"))
-    fal.routes[("GET", f"/{KLING_IMAGE}/requests/req1")] = httpx.Response(200, content=raw)
+    fal.routes[("GET", f"/{queue_app(KLING_IMAGE)}/requests/req1/status")] = httpx.Response(200, json=fixture("status_completed.json"))
+    fal.routes[("GET", f"/{queue_app(KLING_IMAGE)}/requests/req1")] = httpx.Response(200, content=raw)
     provider.status(rid)
     with pytest.raises(ProviderError) as e:
         provider.status(rid)
@@ -675,27 +684,82 @@ def test_seed_and_unsupported_ops_are_refused_before_any_call(provider, fal):
     assert fal.requests == []
 
 
-def test_nano_banana_is_not_used():
-    assert not any("nano-banana" in op["endpoint"] for op in load_sheet("fal")["ops"].values())
+def test_characters_and_frames_default_to_nano_banana_pro_with_kling_beside_it():
+    """features/default-models.clan: a good model always, chosen for keeping characters."""
+    sheet = load_sheet("fal")
+    for op in ("generate", "frame"):
+        assert sheet["ops"][op]["endpoint"] == "fal-ai/nano-banana-pro/edit"
+        assert "kling-image-o3" in [a["model"] for a in sheet["ops"][op]["alternates"]]
+    assert sheet["ops"]["clip"]["model"] == "kling-v3-pro-i2v"  # the clip model that keeps named characters
 
 
 # --- cancel ---
 
 def test_cancel_puts_to_the_cancel_url(provider, fal):
     rid = provider.submit(job())
-    fal.on("PUT", f"{KLING_IMAGE}/requests/req1/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
+    fal.on("PUT", f"{queue_app(KLING_IMAGE)}/requests/req1/cancel", 202, {"status": "CANCELLATION_REQUESTED"})
     provider.cancel(rid)
     assert fal.fal_requests[-1].method == "PUT"
-    assert fal.fal_requests[-1].url.path == f"/{KLING_IMAGE}/requests/req1/cancel"
+    assert fal.fal_requests[-1].url.path == f"/{queue_app(KLING_IMAGE)}/requests/req1/cancel"
 
 
 def test_cancel_of_a_finished_request_is_fine(provider, fal):
     rid = provider.submit(job())
-    fal.on("PUT", f"{KLING_IMAGE}/requests/req1/cancel", 400, fixture("error_already_completed.json"))
+    fal.on("PUT", f"{queue_app(KLING_IMAGE)}/requests/req1/cancel", 400, fixture("error_already_completed.json"))
     provider.cancel(rid)
 
 
 def test_cancel_of_an_unknown_request_raises(provider, fal):
-    fal.on("PUT", f"{KLING_IMAGE}/requests/ghost/cancel", 404, {"detail": "not found"})
+    fal.on("PUT", f"{queue_app(KLING_IMAGE)}/requests/ghost/cancel", 404, {"detail": "not found"})
     with pytest.raises(ProviderError):
         provider.cancel(f"{KLING_IMAGE}:ghost")
+
+
+def test_queue_urls_use_the_base_app_not_the_endpoint_sub_path(provider, fal):
+    """2026-10-07: polling fal-ai/kling-image/o3/image-to-image/requests/<id>/status got 405 from fal;
+    the queue serves status, result and cancel under the base app (the submit reply's status_url)."""
+    assert queue_app(KLING_IMAGE) == "fal-ai/kling-image"
+    assert queue_app("whatever/the/endpoint", "https://queue.fal.run/fal-ai/kling-image/requests/r/status") == "fal-ai/kling-image"
+    rid = provider.submit(job())
+    fal.on("GET", "fal-ai/kling-image/requests/req1/status", 200, fixture("status_completed.json"))
+    fal.on("GET", "fal-ai/kling-image/requests/req1", 200, fixture("result_kling_image.json"))
+    provider.status(rid)
+    done = provider.status(rid)
+    assert done.state == "done"
+    assert [r.url.path for r in fal.fal_requests[1:]] == ["/fal-ai/kling-image/requests/req1/status", "/fal-ai/kling-image/requests/req1"]
+    # An id written before the queue app was kept still polls the right place.
+    assert provider._split(f"{KLING_IMAGE}:req1") == (KLING_IMAGE, "fal-ai/kling-image", "req1")
+
+
+def test_kling_image_gets_an_aspect_ratio_from_its_list(provider, fal):
+    """Kling image o3 takes 16:9, 9:16, 1:1, 4:3, 3:4, 3:2, 2:3, 21:9: the canvas's 4:5 becomes 3:4."""
+    provider.submit(job(ratio="4:5"))
+    assert fal.body()["aspect_ratio"] == "3:4"
+    provider.submit(job(ratio="896:1152"))
+    assert fal.body()["aspect_ratio"] == "3:4"
+    provider.submit(job(ratio="9:16"))
+    assert fal.body()["aspect_ratio"] == "9:16"
+
+
+def test_a_clip_with_no_words_still_sends_a_prompt(provider, fal):
+    provider.submit(job(op="clip", prompt="", refs=[], first_frame=FRAME))
+    assert fal.body()["prompt"]
+
+
+def test_a_clip_edit_source_sent_as_video_is_found():
+    """director.schema.json lets the director name the source clip as `video`; adapters look for the
+    `current` ref, so from_director turns one into the other."""
+    from providers.types import ProviderJob as PJ
+    pj = PJ.from_director("clip_edit", {"provider": "fal", "model": "m", "prompt": "x", "video": VIDEO, "refs": []})
+    assert [(r.sha256, r.role) for r in pj.refs] == [(VIDEO, "current")]
+
+
+def test_a_generate_with_only_one_characters_variants_sends_them_as_images(provider, fal):
+    """2026-10-07: maya_front + maya_side went as one Kling element and nothing else, and Kling image
+    o3 needs at least one image in image_urls ("needs at least one image ref"). With no plain image,
+    the element's pictures go as images, and the prompt names them @Image1, @Image2."""
+    refs = [Ref(HERO, "maya_front", "element_front"), Ref(FRAME, "maya_side", "element_angle")]
+    provider.submit(job(prompt="@maya_front waving, like @maya_side", refs=refs))
+    body = fal.body()
+    assert len(body["image_urls"]) == 2 and "elements" not in body
+    assert body["prompt"] == "@Image1 waving, like @Image2"

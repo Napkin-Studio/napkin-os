@@ -1,15 +1,19 @@
 """Where artifacts live: S3 behind CloudFront (Lambda) or a local directory
 served by the dev server. Keys: in/sha256:<hex> (uploads), out/sha256:<hex>
-(provider outputs), ads/<jobId>.mp4 and ads/<jobId>.json (stitch)."""
+(provider outputs), ads/<jobId>.mp4 and ads/<jobId>.json (stitch),
+library/<workspace>/… (the workspace library, library.py)."""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import threading
 import urllib.request
 from pathlib import Path
 
 FETCH_TIMEOUT_S = 60
 MAX_FETCH_BYTES = 200 * 1024 * 1024
+_LOCAL_LOCK = threading.Lock()
 
 
 def http_fetch(url: str) -> bytes:
@@ -70,6 +74,27 @@ class S3Blobs:
             return None
         return json.loads(r["Body"].read())
 
+    def get_json_tagged(self, key: str) -> tuple[dict | None, str | None]:
+        """The object and its ETag, for a conditional write back (put_json_if)."""
+        try:
+            r = self.s3.get_object(Bucket=self.bucket, Key=key)
+        except self.s3.exceptions.NoSuchKey:
+            return None, None
+        return json.loads(r["Body"].read()), r["ETag"]
+
+    def put_json_if(self, key: str, data: dict, etag: str | None) -> bool:
+        """Write only if the object is still the one read (etag), or still absent (None).
+        False when someone else wrote first: read again and retry."""
+        cond = {"IfMatch": etag} if etag else {"IfNoneMatch": "*"}
+        try:
+            self.s3.put_object(Bucket=self.bucket, Key=key, Body=json.dumps(data).encode(),
+                               ContentType="application/json", **cond)
+            return True
+        except self.s3.exceptions.ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("PreconditionFailed", "ConditionalRequestConflict", "412", "409"):
+                return False
+            raise
+
     def fetch(self, url: str) -> bytes:
         key = self.key_for_url(url)
         if key:
@@ -117,6 +142,21 @@ class LocalBlobs:
     def get_json(self, key: str) -> dict | None:
         p = self.path(key)
         return json.loads(p.read_text()) if p.exists() else None
+
+    def get_json_tagged(self, key: str) -> tuple[dict | None, str | None]:
+        p = self.path(key)
+        if not p.exists():
+            return None, None
+        raw = p.read_bytes()
+        return json.loads(raw), hashlib.sha256(raw).hexdigest()
+
+    def put_json_if(self, key: str, data: dict, etag: str | None) -> bool:
+        with _LOCAL_LOCK:
+            _, now = self.get_json_tagged(key)
+            if now != etag:
+                return False
+            self.put(key, json.dumps(data).encode(), "application/json")
+            return True
 
     def fetch(self, url: str) -> bytes:
         key = self.key_for_url(url)

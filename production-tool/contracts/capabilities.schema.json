@@ -70,6 +70,47 @@
               "minimum": 1
             },
             "description": "Allowed outputs per call for this op, e.g. [1, 4]. Added 2026-10-06 (additive)."
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "The model's name in the regenerate menu (\"Kling O3\"). Added 2026-10-08 (additive)."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "One line on what the model is good for, shown beside it in the menu. Added 2026-10-08 (additive)."
+          },
+          "tagSyntax": { "$ref": "#/properties/tagSyntax", "description": "For this op's own model, replaces the sheet's (features/default-models.clan). Added 2026-10-08 (additive)." },
+          "refs": { "$ref": "#/properties/refs", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
+          "series": { "$ref": "#/properties/series", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
+          "outputsPerCall": { "$ref": "#/properties/outputsPerCall", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
+          "video": { "$ref": "#/properties/video", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
+          "alternates": {
+            "type": "array",
+            "description": "Vetted models a participant may pick for this op when they regenerate (features/model-choice.clan). Each is offered with its own estimate; a pick runs on this provider with the alternate's fields over the op's, and its overrides over the sheet's. Only models the adapter builds a request for (its SUPPORTED list). Added 2026-10-08 (additive).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "model": { "type": "string" },
+                "endpoint": { "type": "string" },
+                "estimateUsd": { "type": ["number", "null"], "minimum": 0, "description": "One job at the op's default length, on the same basis as the op's own estimate." },
+                "label": { "type": "string", "maxLength": 40 },
+                "note": { "type": "string", "maxLength": 80 },
+                "maxS": { "type": "number" },
+                "minS": { "type": "number" },
+                "durationsS": { "type": "array", "items": { "type": "number" } },
+                "seed": { "type": "boolean" },
+                "outputs": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+                "tagSyntax": { "$ref": "#/properties/tagSyntax", "description": "Replaces the sheet's for this model." },
+                "refs": { "$ref": "#/properties/refs", "description": "Replaces the sheet's for this model." },
+                "series": { "$ref": "#/properties/series", "description": "Replaces the sheet's for this model." },
+                "outputsPerCall": { "$ref": "#/properties/outputsPerCall", "description": "Replaces the sheet's for this model." },
+                "video": { "$ref": "#/properties/video", "description": "Replaces the sheet's for this model." }
+              },
+              "required": ["model", "endpoint", "estimateUsd", "label"],
+              "additionalProperties": false
+            }
           }
         },
         "required": [

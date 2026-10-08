@@ -11,6 +11,7 @@ import { openDocument } from './doc/open'
 import { postClanMirror } from './doc/clan'
 import { JobRunner } from './jobs/runner'
 import { resumeChains, wireJobs } from './jobs/wire'
+import { OwnKeysStore } from './keys/ownKeys'
 import { idbGet } from './lib/idb'
 import { createRelay, relayId } from './relay'
 
@@ -39,6 +40,8 @@ async function boot() {
     ui.update((u) => { u.session = session; u.sessionFor = here })
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null
+  const ownKeys = new OwnKeysStore()
+  relay.ownKeys = () => ownKeys.header()
   const runner = new JobRunner(relay, doc, ui)
   runner.stage = () => doc.get().stage.current
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
@@ -60,7 +63,7 @@ async function boot() {
     void ui.flush()
   })
 
-  const services: Services = { relay, doc, ui, runner, remoteConfig, clan, storeNote }
+  const services: Services = { relay, doc, ui, runner, remoteConfig, clan, storeNote, ownKeys }
   // For poking at in the dev server's console (and the e2e checks); not in a build.
   if (import.meta.env.DEV) (window as unknown as { __pt: Services }).__pt = services
   createRoot(document.getElementById('root')!).render(

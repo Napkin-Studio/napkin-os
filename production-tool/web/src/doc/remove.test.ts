@@ -10,14 +10,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { CanvasDocSync, type SceneEl } from '../canvas/sync'
 import { effectiveConfig } from '../capabilities'
-import type { CustomData, DocJob, ProductionDocument, Shot, View } from '../contracts/types'
+import type { CustomData, DocJob, ProductionDocument, Shot } from '../contracts/types'
 import { JobRunner } from '../jobs/runner'
 import { newId } from '../lib/ulid'
 import { HttpRelay } from '../relay/http'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { cancelText, mayStillCharge } from '../ui/cancel'
 import { ClanBackedStore } from './clan'
-import { deleteFrom, LastVersionError, removeFrame, removeNote, removeShot, removeTake, restoreTo, shotDeleteText } from './remove'
+import { deleteFrom, LastVersionError, markStale, removeFrame, removeNote, removeShot, removeTake, restoreTo, shotDeleteText } from './remove'
 import { emptyDocument, SnapshotStore, updateDoc } from './store'
 import { initialUi, type UiState } from './ui'
 
@@ -36,18 +36,17 @@ function job(op: DocJob['op'], inputs: string[], out: string, state: DocJob['sta
 }
 
 function shot(order: number): Shot {
-  return { id: newId('shot'), order, duration_s: 5, composition: 'medium', action: `shot ${order}`, camera_move: 'static', lead_view: 'front', status: 'locked' }
+  return { id: newId('shot'), order, duration_s: 5, composition: 'medium', action: `shot ${order}`, camera_move: 'static', refs: ['hero_front'], status: 'locked' }
 }
 
-/** A participant part-way through: a front view, two shots with frames and clips, a note. */
+/** A participant part-way through: a named front, two shots with frames and clips, a note. */
 function fixture() {
   const d = emptyDocument(maya)
   const gFront = job('generate', [SHA('a')], SHA('b'))
   const gFront2 = job('generate', [SHA('a')], SHA('c'))
   d.jobs.push(gFront, gFront2)
-  d.character.views.front = { asset: SHA('b'), job_id: gFront.id, picked_at: T }
-  d.character.locked = true
-  d.character.locked_at = T
+  d.keys.push({ key: 'hero', role: 'character' })
+  d.refs.push({ id: newId('ref'), key: 'hero', variant: 'front', asset: SHA('b'), node: gFront.id, named_at: T })
   const s1 = shot(1)
   const s2 = shot(2)
   const s3 = shot(3)
@@ -179,57 +178,45 @@ function genEl(j: DocJob, extra: Partial<Extract<CustomData, { kind: 'gen' }>> =
   return { id: j.id, type: 'image', customData }
 }
 
-function refEl(id: string, tag: string, asset: string): SceneEl {
-  return { id: `el_${id}`, type: 'image', customData: { kind: 'ref', id, asset, tag, role: 'other', badge: 'A' } }
-}
-
 const del = (els: SceneEl[], id: string, isDeleted = true) => els.map((e) => (e.id === id ? { ...e, isDeleted } : e))
 
 function canvas(s: ClanBackedStore) {
-  const picked: Map<string, View | undefined>[] = []
   const cancelled: string[] = []
-  const sync = new CanvasDocSync({ doc: s, setPickedAs: (m) => picked.push(m), cancel: (id) => cancelled.push(id) })
-  return { sync, picked, cancelled }
+  const sync = new CanvasDocSync({ doc: s, cancel: (id) => cancelled.push(id) })
+  return { sync, cancelled }
 }
 
 describe('canvas delete ↔ document', () => {
-  it('a picked front view: the next candidate takes the slot; frames made from it are marked out of date, not deleted; Ctrl+Z restores', async () => {
-    const { d, gFront, gFront2, f2, f3 } = fixture()
+  it('a named image: its name stays in References, nothing else changes; Ctrl+Z restores', async () => {
+    const { d, gFront, gFront2 } = fixture()
     const s = await store(d)
     const before = plain(s.get())
-    const { sync, picked } = canvas(s)
-    let els = [genEl(gFront, { pickedAs: 'front' }), genEl(gFront2)]
+    const { sync } = canvas(s)
+    let els = [genEl(gFront), genEl(gFront2)]
     await sync.gens(els)
 
     els = del(els, gFront.id)
     await sync.gens(els)
-    const after = s.get()
-    expect(after.character.views.front!.job_id).toBe(gFront2.id)
-    expect(picked.at(-1)).toEqual(new Map([[gFront2.id, 'front']]))
-    expect(after.frames).toHaveLength(3)
-    const stale = after.stale!.map((x) => x.target.id)
-    expect(stale).toEqual(expect.arrayContaining([f2.id, f3.id]))
-    expect(after.stale!.every((x) => x.caused_by.kind === 'view' && x.caused_by.id === 'front' && x.reason)).toBe(true)
-    expect(validate(after), JSON.stringify(validate.errors)).toBe(true)
+    expect(plain(s.get())).toEqual(before)
+    expect(s.get().refs[0].node).toBe(gFront.id)
     let e = await entries(s)
     expect(e.map((x) => x.action)).toEqual([`deleted generated image ${gFront.id}`])
-    expect(e[0].rationale).toContain(`was Front; ${gFront2.id} took its place`)
+    expect(e[0].rationale).toContain('its name @hero_front stays in References')
 
     // Excalidraw's Ctrl+Z brings the element back.
     els = del(els, gFront.id, false)
     await sync.gens(els)
     expect(plain(s.get())).toEqual(before)
-    expect(picked.at(-1)).toEqual(new Map<string, View | undefined>([[gFront2.id, undefined], [gFront.id, 'front']]))
     e = await entries(s)
     expect(e.map((x) => x.action)).toEqual([`deleted generated image ${gFront.id}`, `restored generated image ${gFront.id}`])
   })
 
-  it('an image in no slot: no data changes, still one entry each way', async () => {
+  it('an image with no name: no data changes, still one entry each way', async () => {
     const { d, gFront, gFront2 } = fixture()
     const s = await store(d)
     const before = plain(s.get())
     const { sync } = canvas(s)
-    let els = [genEl(gFront, { pickedAs: 'front' }), genEl(gFront2)]
+    let els = [genEl(gFront), genEl(gFront2)]
     await sync.gens(els)
     els = del(els, gFront2.id)
     await sync.gens(els)
@@ -255,25 +242,15 @@ describe('canvas delete ↔ document', () => {
     expect((await entries(s)).map((x) => x.action)).toEqual([`deleted generated image ${running.id}`])
   })
 
-  it('a reference: deleted from character.refs, and Ctrl+Z brings it back with its label', async () => {
-    const d = emptyDocument(maya)
-    const refId = newId('ref')
-    d.assets.push({ sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: ['idb://sha256/' + 'a'.repeat(64)] })
-    d.character.refs.push({ id: refId, asset: SHA('a'), tag: 'eyes', role: 'other', kind: 'picture', label: 'Eyes!' })
-    const s = await store(d)
-    const before = plain(s.get())
-    const { sync } = canvas(s)
-    let els = [refEl(refId, 'eyes', SHA('a'))]
-    sync.refs(els)
-    els = del(els, `el_${refId}`)
-    sync.refs(els)
-    expect(s.get().character.refs).toEqual([])
-    expect(s.get().assets).toEqual(before.assets)
-    els = del(els, `el_${refId}`, false)
-    sync.refs(els)
-    expect(plain(s.get())).toEqual(before)
-    const e = await entries(s)
-    expect(e.map((x) => x.action)).toEqual(['deleted ref @eyes', 'restored ref @eyes'])
+  it('a name that moves to another image marks what was made from the old one out of date, once', () => {
+    const { d, f2, f3 } = fixture()
+    const ref = d.refs[0]
+    const added = markStale(d, ref.asset, ref.id, '@hero_front now shows another image.', T)
+    // Frames 2 and 3 took the old front in; frame 1 (SHA d's job) did too.
+    expect(added.map((m) => m.target.id)).toEqual(expect.arrayContaining([f2.id, f3.id]))
+    expect(added.every((m) => m.caused_by.kind === 'ref' && m.caused_by.id === ref.id)).toBe(true)
+    expect(markStale(d, ref.asset, ref.id, 'again', T)).toEqual([])
+    expect(validate(d), JSON.stringify(validate.errors)).toBe(true)
   })
 })
 
@@ -285,7 +262,7 @@ describe('cancel', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), method: init?.method ?? 'GET' })
       return new Response(JSON.stringify({
-        contractVersion: '1', jobId: decodeURIComponent(String(url).split('/').pop()!), participantId: 'p_maya01', op: 'clip', quotaClass: 'video', state: 'cancelled', inputHashes: [],
+        contractVersion: '2', jobId: decodeURIComponent(String(url).split('/').pop()!), participantId: 'p_maya01', op: 'clip', quotaClass: 'video', state: 'cancelled', inputHashes: [],
         cost: { currency: 'USD', unknown: true }, kind: 'real', provider: 'heygen', model: 'avatar-iv', createdAt: T, updatedAt: T,
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }))

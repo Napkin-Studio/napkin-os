@@ -15,8 +15,8 @@
         "composition": "extreme_close",
         "action": "In darkness, a chisel scrapes across walnut grain; one facet glints.",
         "camera_move": "static",
-        "lead_view": "front",
-        "dialogue": "Every diamond starts as pressure."
+        "dialogue": "Every diamond starts as pressure.",
+        "refs": []
       },
       {
         "id": "shot_01K6XB000000000000000000F2",
@@ -25,7 +25,7 @@
         "composition": "medium",
         "action": "The finished walnut mask turns slowly on a pedestal, facets catching the light.",
         "camera_move": "orbit",
-        "lead_view": "three_quarter"
+        "refs": []
       },
       {
         "id": "shot_01K6XB000000000000000000F3",
@@ -34,12 +34,12 @@
         "composition": "close",
         "action": "The mask rests facing the viewer on black. On screen: \"FACET\"",
         "camera_move": "push_in",
-        "lead_view": "front"
+        "refs": []
       }
     ],
     "needsUser": null,
     "rationale": "Spoken line kept as dialogue (voice-over); the title card goes into shot 3's action as On screen text.",
     "confidence": 0.8
   },
-  "recorded": "Written to the director.v3 on-screen text rules (not a live reply), 2026-10-07"
+  "recorded": "Written to the director.v4 (ported from v3, 2026-10-08) on-screen text rules (not a live reply), 2026-10-07"
 }

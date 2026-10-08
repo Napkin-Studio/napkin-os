@@ -1,12 +1,12 @@
 // Clips and the ad, as requests. Shared by the Video stage, "Fix it in the shot"
 // (jobs/fix.ts) and "Update what follows" (jobs/follow.ts).
 
-import type { JobInput, ProductionDocument, Shot, Take } from '../contracts/types'
+import type { JobInput, ModelChoice, ProductionDocument, Shot, Take } from '../contracts/types'
 import type { JobPurpose } from '../doc/ui'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
-import { characterInput, jobShot } from './select'
+import { jobShot, refsFor } from './select'
 
 export { jobShot }
 
@@ -14,11 +14,11 @@ export function selectedTake(d: ProductionDocument, shotId: string): Take | unde
   return (d.takes ?? []).find((t) => t.shot_id === shotId && t.selected)
 }
 
-/** A clip for a shot from its selected storyboard frame. */
+/** A clip for a shot from its selected storyboard frame, on `modelChoice` when the participant picked one. */
 export async function makeClip(
   deps: FrameDeps,
   shotId: string,
-  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; purpose?: Partial<Extract<JobPurpose, { for: 'clip' }>> } = {},
+  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; purpose?: Partial<Extract<JobPurpose, { for: 'clip' }>>; modelChoice?: ModelChoice } = {},
 ): Promise<string> {
   const d = deps.doc.get()
   const shot = (d.shots ?? []).find((s) => s.id === shotId)
@@ -27,9 +27,9 @@ export async function makeClip(
   const frameSha = frame?.asset ?? shot.storyboard_frame
   if (!frameSha) throw new Error('This shot has no frame yet.')
   const image = await assetRef(deps.relay, frameSha)
-  const character = await characterInput(deps.relay, d)
   const text = extra.text?.trim()
-  const input: JobInput = { shot: jobShot(shot), image, character, ratio: deps.ui.get().ratio, ...(text ? { text: text.slice(0, 1000) } : {}) }
+  const refs = await refsFor(deps.relay, d, shot, text)
+  const input: JobInput = { shot: jobShot(shot), image, ...(refs.length ? { refs } : {}), ratio: deps.ui.get().ratio, ...(text ? { text: text.slice(0, 1000) } : {}) }
   const purpose: JobPurpose = {
     for: 'clip',
     shotId: shot.id,
@@ -37,7 +37,7 @@ export async function makeClip(
     ...(extra.reviewIds?.length ? { reviewIds: extra.reviewIds } : {}),
     ...extra.purpose,
   }
-  return deps.runner.submit('clip', input, [frame?.job_id, extra.parentTake?.job_id].filter(Boolean) as string[], purpose)
+  return deps.runner.submit('clip', input, [frame?.job_id, extra.parentTake?.job_id].filter(Boolean) as string[], purpose, undefined, extra.modelChoice)
 }
 
 /** The stitch request: every shot's selected clip in order, cut to the shot's length. */

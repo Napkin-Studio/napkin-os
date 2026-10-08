@@ -195,10 +195,10 @@ def test_smoke_runs_each_op_and_sets_audio_off(runtime):
                      factory=fake_factory(log), fetch=lambda url: _gradient(), **runtime)
     assert code == 0, text
     ops = [j.op for j, _ in log["jobs"]]
-    assert ops == ["generate", "combine", "view", "frame", "region_edit", "clip", "clip_edit"]
+    assert ops == ["generate", "view", "frame", "region_edit", "clip", "clip_edit"]
     clip = next(j for j, _ in log["jobs"] if j.op == "clip")
     assert clip.audio is False and clip.duration_s == 4
-    assert text.count("done") >= 6
+    assert text.count("done") >= 5
 
 
 def test_smoke_exits_non_zero_when_an_op_fails(runtime):
@@ -225,10 +225,10 @@ def test_a_moderated_job_is_submitted_once(runtime):
 
 def test_max_usd_stops_before_overspending(runtime):
     log = new_log()
-    code, text = run(runway_smoke, ["--live", "--ops", "generate,combine,view", "--image-url", IMG,
-                                    "--max-usd", "0.10"],
-                     factory=fake_factory(log, cost=0.07), fetch=lambda url: _gradient(), **runtime)
-    assert len(log["jobs"]) == 1  # a second $0.07 job would pass $0.10
+    code, text = run(runway_smoke, ["--live", "--ops", "generate,view,frame", "--image-url", IMG,
+                                    "--max-usd", "0.30"],
+                     factory=fake_factory(log, cost=0.2), fetch=lambda url: _gradient(), **runtime)
+    assert len(log["jobs"]) == 1  # a second $0.20 Gemini 3 Pro job would pass $0.30
     assert code == 1 and "--max-usd" in text
 
 
@@ -271,7 +271,7 @@ def test_polls_no_faster_than_5_s_and_times_the_throttle(clock):
     assert all(s >= 5 for s in polls) and len(polls) == 4
     assert rec["throttled_s"] == pytest.approx(2 * (5 + 0.5 * runway_common.JITTER_S))
     post = json.loads(requests[0].content)
-    assert post["audio"] is False and post["model"] == "veo3.1_fast"
+    assert post["audio"] is False and post["model"] == "veo3.1"
     assert requests[0].headers["Authorization"] == f"Bearer {KEY}"
     assert runner.budget.spent == pytest.approx(0.4)
 
@@ -536,23 +536,27 @@ def test_a_transparent_source_is_laid_on_white_not_black():
     assert Image.open(io.BytesIO(png)).getpixel((1, 1)) == (255, 255, 255)
 
 
-def test_clip_ab_and_the_url_test_are_blocked_without_an_https_url(tmp_path, runtime):
+def test_the_url_test_is_blocked_without_an_https_url(tmp_path, runtime):
     bodies = []
-    code, text, res, _ = pack(tmp_path, runtime, "b,e", factory=real_adapter_factory(bodies), image=LOCAL,
+    code, text, res, _ = pack(tmp_path, runtime, "b", factory=real_adapter_factory(bodies), image=LOCAL,
                               input_url=LOCAL, fetch=lambda url: pytest.fail("fetched for a blocked item"))
     assert bodies == [] and res["spent_usd"] == 0
-    for name in "be":
-        assert res["items"][name]["status"] == "blocked"
-        assert res["items"][name]["reason"].startswith("needs an https")
-    assert "data URIs as a clip's first frame" in res["items"]["e"]["reason"]
+    assert res["items"]["b"]["status"] == "blocked"
+    assert res["items"]["b"]["reason"].startswith("needs an https")
     assert "blocked" in text and code == 0
 
 
-def test_the_dry_run_shows_the_blocked_items_and_spends_nothing():
-    _, text = run(runway_testpack, ["--image-url", LOCAL, "--input-url", LOCAL], factory=no_http_factory)
-    assert text.count("BLOCKED: needs an https") == 2 and "dry run" in text
-    _, text = run(runway_smoke, ["--image-url", LOCAL, "--video-url", "http://x.test/v.mp4"], factory=no_http_factory)
-    assert text.count("BLOCKED: needs an https") == 2
+def test_the_dry_run_shows_the_blocked_items_and_the_upload_and_spends_nothing():
+    _, text = run(runway_testpack, ["--image-url", LOCAL, "--input-url", LOCAL], factory=no_http_factory,
+                  fetch=lambda url: pytest.fail("dry run fetched"), transport=refusing_transport())
+    assert text.count("BLOCKED: needs an https") == 1 and "dry run" in text
+    (e_line,) = [ln for ln in text.splitlines() if ln.startswith("  e ")]
+    assert "will upload the first frame to Runway (free, ephemeral)" in e_line and "~$" in e_line
+    _, text = run(runway_smoke, ["--image-url", LOCAL, "--video-url", "http://x.test/v.mp4"], factory=no_http_factory,
+                  fetch=lambda url: pytest.fail("dry run fetched"), transport=refusing_transport())
+    assert text.count("BLOCKED: needs an https") == 1
+    (clip_line,) = [ln for ln in text.splitlines() if ln.startswith("  clip ")]
+    assert "will upload the first frame to Runway (free, ephemeral)" in clip_line
 
 
 def test_an_https_url_lets_the_clip_ab_proceed(tmp_path, runtime):
@@ -562,14 +566,131 @@ def test_an_https_url_lets_the_clip_ab_proceed(tmp_path, runtime):
     assert all(path == "/v1/image_to_video" and b["promptImage"][0]["uri"] == IMG for path, b in bodies)
 
 
-def test_smoke_blocks_the_clips_on_a_local_image_and_sends_the_others_inline(runtime):
-    bodies = []
+def test_smoke_uploads_the_local_first_frame_and_blocks_only_the_clip_edit(runtime):
+    bodies, uploads = [], []
     code, text = run(runway_smoke, ["--live", "--ops", "view,clip,clip_edit", "--image-url", LOCAL,
                                     "--video-url", "http://127.0.0.1/v.mp4"],
-                     factory=real_adapter_factory(bodies), fetch=lambda url: _gradient(), **runtime)
-    assert [path for path, _ in bodies] == ["/v1/text_to_image"]
+                     factory=real_adapter_factory(bodies), fetch=lambda url: _gradient(),
+                     transport=upload_transport(uploads), **runtime)
+    assert [path for path, _ in bodies] == ["/v1/text_to_image", "/v1/image_to_video"]
     assert uris(bodies[0][1])[0].startswith("data:image/png")
-    assert text.count("blocked") >= 2 and code == 1
+    assert bodies[1][1]["promptImage"] == [{"uri": RUNWAY_URI, "position": "first"}]
+    assert len(uploads) == 2 and text.count("blocked") == 1 and code == 1
+    assert KEY not in text
+
+
+def test_smoke_clip_with_a_failed_upload_submits_nothing(runtime):
+    bodies, uploads = [], []
+    code, text = run(runway_smoke, ["--live", "--ops", "clip", "--image-url", LOCAL],
+                     factory=real_adapter_factory(bodies), fetch=lambda url: _gradient(),
+                     transport=upload_transport(uploads, fail_step=1), **runtime)
+    assert bodies == [] and code == 1 and "failed" in text and KEY not in text
+
+
+# --- the ephemeral upload of a clip's first frame
+
+RUNWAY_URI = "runway://uploads/abc123"
+FIELDS = {"key": "tmp/abc/first_frame.png", "policy": "p0l1cy", "x-amz-signature": "s1g"}
+UPLOAD_URL = "https://s3.test/bucket"
+
+
+def refusing_transport():
+    def refuse(request):
+        pytest.fail(f"sent {request.method} {request.url}")
+    return httpx.MockTransport(refuse)
+
+
+def upload_transport(log, fail_step=None):
+    """Runway's two upload steps; every request is appended to `log`."""
+    def handler(request):
+        log.append(request)
+        if request.url.path == "/v1/uploads":
+            if fail_step == 1:
+                return httpx.Response(403, text="no credits")
+            return httpx.Response(200, json={"uploadUrl": UPLOAD_URL, "fields": FIELDS, "runwayUri": RUNWAY_URI})
+        if fail_step == 2:
+            return httpx.Response(400, text="<Error>bad policy</Error>")
+        return httpx.Response(204)
+    return httpx.MockTransport(handler)
+
+
+def pack_e(tmp_path, runtime, transport, jobs=None, **kw):
+    bodies = jobs if jobs is not None else []
+    out = tmp_path / "runway-testpack.json"
+    code, text = run(runway_testpack, ["--live", "--only", "e", "--image-url", kw.get("image", LOCAL),
+                                       "--out", str(out), "--save-dir", str(tmp_path / "outputs")],
+                     factory=real_adapter_factory(bodies), fetch=lambda url: _gradient(), transport=transport,
+                     **runtime)
+    return code, text, json.loads(out.read_text()), out, bodies
+
+
+def multipart_parts(request):
+    """The (name, body) of each part of a multipart request, in order."""
+    boundary = request.headers["content-type"].split("boundary=")[1].encode()
+    parts = [p for p in request.content.split(b"--" + boundary) if b"Content-Disposition" in p]
+    out = []
+    for p in parts:
+        head, _, body = p.partition(b"\r\n\r\n")
+        name = head.split(b'name="')[1].split(b'"')[0].decode()
+        out.append((name, body.rsplit(b"\r\n", 1)[0]))
+    return out
+
+
+def test_clip_ab_uploads_a_local_first_frame_and_uses_the_runway_uri(tmp_path, runtime):
+    log = []
+    code, text, res, out, bodies = pack_e(tmp_path, runtime, upload_transport(log))
+    assert code == 0 and res["items"]["e"]["status"] == "needs_eyes", text
+    step1, step2 = log
+    assert step1.method == "POST" and step1.url == "https://api.dev.runwayml.com/v1/uploads"
+    assert json.loads(step1.content) == {"filename": "first_frame.png", "type": "ephemeral"}
+    assert step1.headers["authorization"] == f"Bearer {KEY}" and step1.headers["x-runway-version"] == "2024-11-06"
+    assert str(step2.url) == UPLOAD_URL and "authorization" not in step2.headers
+    assert step2.headers["content-type"].startswith("multipart/form-data")
+    parts = multipart_parts(step2)
+    assert [n for n, _ in parts] == [*FIELDS, "file"]  # every field, the file last
+    assert dict(parts[:-1]) == {k: v.encode() for k, v in FIELDS.items()}
+    assert parts[-1][1].startswith(b"\x89PNG")
+    assert len(bodies) == 3
+    for path, b in bodies:
+        assert path == "/v1/image_to_video" and b["promptImage"] == [{"uri": RUNWAY_URI, "position": "first"}]
+        assert b["audio"] is False
+    blob = out.read_text() + out.with_suffix(".md").read_text() + (tmp_path / "index.html").read_text() + text
+    assert KEY not in blob and "x-amz-signature" not in blob
+
+
+@pytest.mark.parametrize("step,message", [(1, "request failed: HTTP 403"), (2, "transfer failed: HTTP 400")])
+def test_a_failed_upload_errors_the_item_and_submits_no_job(tmp_path, runtime, step, message):
+    log = []
+    code, text, res, out, bodies = pack_e(tmp_path, runtime, upload_transport(log, fail_step=step))
+    e = res["items"]["e"]
+    assert e["status"] == "error" and message in e["error"] and "ProviderError" in e["error"]
+    assert bodies == [] and res["spent_usd"] == 0 and code == 1
+    assert len(log) == step
+    assert KEY not in out.read_text() + text
+
+
+def test_a_dry_run_makes_no_upload_request(tmp_path):
+    code, text = run(runway_testpack, ["--image-url", LOCAL, "--only", "e", "--out", str(tmp_path / "r.json")],
+                     transport=refusing_transport(), factory=no_http_factory,
+                     fetch=lambda url: pytest.fail("dry run fetched"))
+    assert code == 0 and "will upload the first frame" in text
+
+
+def test_an_https_image_url_skips_the_upload(tmp_path, runtime):
+    log = []
+    code, text, res, out, bodies = pack_e(tmp_path, runtime, upload_transport(log), image=IMG)
+    assert log == [] and len(bodies) == 3
+    assert all(b["promptImage"][0]["uri"] == IMG for _, b in bodies)
+
+
+def test_ephemeral_upload_errors_do_not_carry_the_key():
+    def handler(request):
+        return httpx.Response(500, text="boom")
+    with pytest.raises(runway_common.ProviderError) as info:
+        runway_common.ephemeral_upload(make_client(transport=httpx.MockTransport(handler)), KEY, b"x", "image/png",
+                                       "first_frame.png")
+    err = info.value
+    assert err.code == "provider_failed" and err.retryable is False and KEY not in err.message
 
 
 # --- saved outputs and the results page
@@ -699,14 +820,14 @@ def test_the_results_page_links_the_saved_files(tmp_path, runtime):
 
 def test_report_only_rebuilds_the_page_without_a_key_or_the_network(tmp_path, runtime):
     server = RegionServer(20)  # every edit passes: which ones do depends on thread order
-    _, _, _, out = pack(tmp_path, runtime, "b,c,e", factory=server.factory, fetch=server.fetch,
+    _, _, _, out = pack(tmp_path, runtime, "b,c", factory=server.factory, fetch=server.fetch,
                         image=LOCAL, input_url=LOCAL)  # LOCAL is not IMG: the server fetches it as an output
     (tmp_path / "index.html").unlink()
     code, text = run(runway_testpack, ["--report-only", "--out", str(out)], env={}, factory=no_http_factory,
                      fetch=lambda url: pytest.fail("report-only fetched"))
     page = (tmp_path / "index.html").read_text()
     assert code == 0 and "outputs/c/edit_01/final.png" in page
-    assert page.count("blocked") >= 2 and "needs an https" in page
+    assert "blocked" in page and "needs an https" in page
     code, text = run(runway_testpack, ["--report-only", "--out", str(tmp_path / "none.json")], env={})
     assert code == 2
 

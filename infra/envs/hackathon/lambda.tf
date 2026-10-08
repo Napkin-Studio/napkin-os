@@ -57,7 +57,7 @@ data "aws_iam_policy_document" "relay" {
   statement {
     sid       = "Objects"
     actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = [for p in ["in/*", "out/*", "ads/*", "clan/*"] : "${aws_s3_bucket.site.arn}/${p}"]
+    resources = [for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*"] : "${aws_s3_bucket.site.arn}/${p}"]
   }
   statement {
     sid       = "Config"
@@ -72,7 +72,7 @@ data "aws_iam_policy_document" "relay" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["in/*", "out/*", "ads/*"]
+      values   = ["in/*", "out/*", "ads/*", "library/*"]
     }
   }
   statement {

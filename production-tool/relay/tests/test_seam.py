@@ -25,13 +25,13 @@ REPLY = {
     "op": "generate",
     "providerJob": {
         "provider": "runway", "model": "gemini_image3.1_flash",
-        "prompt": "Full-body front view of the character drawn in @sketch. Eyes shaped like @eyes. Colour palette of @palette.",
-        "refs": [{"sha256": A, "name": "sketch", "role": "character"},
-                 {"sha256": B, "name": "eyes", "role": "object"},
-                 {"sha256": C, "name": "palette", "role": "object"}],
+        "prompt": "Full-body front view of the character drawn in @in_1. Eyes shaped like @maya_eyes. Colour palette of @in_2.",
+        "refs": [{"sha256": A, "name": "in_1", "role": "character"},
+                 {"sha256": B, "name": "maya_eyes", "role": "object"},
+                 {"sha256": C, "name": "in_2", "role": "object"}],
         "ratio": "896:1152", "outputs": 1,
     },
-    "needsUser": None, "rationale": "Sketch as the character; eyes and palette as object refs.", "confidence": 0.8,
+    "needsUser": None, "rationale": "The drawing as the character; the eyes and the palette as object refs.", "confidence": 0.8,
 }
 OUT_URL = "https://dnznrvs05pmza.cloudfront.net/front.png?_jwt=x"
 
@@ -70,9 +70,11 @@ class FakeRunway:
 def generate_input() -> dict:
     def ref(sha, mime="image/png"):
         return {"sha256": sha, "url": f"{CDN}/in/{sha}", "mime": mime}
-    return {"text": "eyes from @eyes, colours from @palette", "chips": [], "sketch": ref(A), "ratio": "4:5",
-            "refs": [{"id": "ref_01K6XA6Z0000000000000000AB", "tag": "eyes", "role": "shape", "asset": ref(B, "image/jpeg")},
-                     {"id": "ref_01K6XA6Z0000000000000000AC", "tag": "palette", "role": "colour", "asset": ref(C)}]}
+    return {"text": "eyes from @maya_eyes, colours from the last picture", "chips": [], "ratio": "4:5",
+            "refs": [{"id": "node_01K6XA6Z0000000000000000AA", "role": "character", "kind": "drawing", "asset": ref(A)},
+                     {"id": "ref_01K6XA6Z0000000000000000AB", "name": "maya_eyes", "role": "shape", "kind": "picture",
+                      "asset": ref(B, "image/jpeg")},
+                     {"id": "node_01K6XA6Z0000000000000000AC", "role": "colour", "kind": "picture", "asset": ref(C)}]}
 
 
 @pytest.fixture
@@ -102,9 +104,9 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     assert post.url.path == "/v1/text_to_image"
     assert post.headers["Authorization"] == "Bearer rw-key"
     body = json.loads(post.content)
-    assert body["model"] == "gemini_image3.1_flash" and body["ratio"] == "896:1152" and body["outputCount"] == 1
+    assert body["model"] == "gemini_image3_pro" and body["ratio"] == "896:1152" and body["outputCount"] == 1
     assert [(r["uri"], r["tag"], r["subject"]) for r in body["referenceImages"]] == [
-        (f"{CDN}/in/{A}", "sketch", "human"), (f"{CDN}/in/{B}", "eyes", "object"), (f"{CDN}/in/{C}", "palette", "object")]
+        (f"{CDN}/in/{A}", "in_1", "human"), (f"{CDN}/in/{B}", "maya_eyes", "object"), (f"{CDN}/in/{C}", "in_2", "object")]
     # the director ran on config.json's model, and saw the routed sheet
     assert wire.calls[0]["model"] == base_config()["director"]["perClickModel"]
     assert '"provider":"runway"' in wire.calls[0]["turns"][0]["text"]
@@ -117,7 +119,7 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     (out,) = done["outputs"]
     assert out["url"].startswith(f"{CDN}/out/sha256:") and out["mime"] == "image/png"
     assert done["director"]["model"] == base_config()["director"]["perClickModel"]
-    assert done["director"]["promptVersion"] == "director.v3"
+    assert done["director"]["promptVersion"] == "director.v4"
 
 
 def test_director_wrapper_output_validates_against_the_contract():
@@ -126,7 +128,7 @@ def test_director_wrapper_output_validates_against_the_contract():
     sheet = types.load_sheet("runway")
     out = d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()}, sheet)
     assert out.pop("_model") == d.director.per_click_model
-    assert out.pop("_promptVersion") == "director.v3"
+    assert out.pop("_promptVersion") == "director.v4"
     assert Contracts().errors("director.schema.json", out) == []
 
 
@@ -137,7 +139,7 @@ def test_director_takes_model_ids_from_config():
     d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()},
              types.load_sheet("runway"))
     assert wire.calls[0]["model"] == "eu.anthropic.claude-test"
-    assert d.director.prompt_version == "director.v3"  # v9 is not bundled
+    assert d.director.prompt_version == "director.v4"  # v9 is not bundled
 
 
 def test_load_director_is_passthrough_without_a_model(monkeypatch):

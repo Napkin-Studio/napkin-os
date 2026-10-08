@@ -14,11 +14,12 @@ import { HistoryPanel } from './ui/History'
 import { CLAN_DB } from './doc/clan'
 import { relayId } from './relay'
 import { startOver, START_OVER_TEXT } from './app/startOver'
+import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
 import { UpdateFollows } from './ui/Follow'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
-  { id: 'character', n: 1, label: 'Character' },
+  { id: 'character', n: 1, label: 'Canvas' },
   { id: 'storyboard', n: 2, label: 'Storyboard' },
   { id: 'video', n: 3, label: 'Video' },
 ]
@@ -76,12 +77,13 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
   const { doc: docStore, relay, ui: uiStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
+  const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
   const [menu, setMenu] = useState(false)
   const stage = doc.stage.current
   const reachable = (s: StageName) =>
-    s === 'character' || (s === 'storyboard' && doc.character.locked) || (s === 'video' && doc.character.locked && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
+    s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
   const order = STAGES.findIndex((s) => s.id === stage)
   const active = doc.jobs.filter((j) => isActive(j.state))
   const queued = active.filter((j) => j.state === 'queued').length
@@ -117,6 +119,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
           <span className="dot" />
           {active.length ? `${running} running · ${queued} queued` : 'Nothing running'}
         </span>
+        {config.flags.ownKeys && <OwnKeysButton />}
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
         <button className="btn sm" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
           setExporting(true)
@@ -212,7 +215,7 @@ function SignIn() {
         }
       }}>
         <div className="row" style={{ gap: 10 }}><StudioMark size={28} /><b style={{ fontSize: 18, letterSpacing: '-0.02em' }}>Napkin Production Tool</b></div>
-        <p className="muted" style={{ margin: 0 }}>Make a character, storyboard it, and turn it into an ad.</p>
+        <p className="muted" style={{ margin: 0 }}>Make your characters on a free canvas, storyboard them, and turn it into an ad.</p>
         <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Event code</span><input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus /></label>
         <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Your name</span><input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[A-Za-z0-9_.\-]{2,24}" title="2-24 letters, numbers, . _ or -" /></label>
         {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600 }}>{error}</div>}

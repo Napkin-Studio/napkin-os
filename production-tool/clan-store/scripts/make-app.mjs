@@ -17,12 +17,13 @@ const here = dirname(fileURLToPath(import.meta.url))
 const pkg = join(here, '..')
 const clan = process.env.CLAN_BIN || 'clan'
 const TEMPLATE_DATA = {
-  contract_version: '1',
+  contract_version: '2',
   app: 'production-tool',
   participant: { id: 'template', handle: 'template' },
   stage: { current: 'character' },
   assets: [],
-  character: { refs: [], views: {}, locked: false },
+  keys: [],
+  refs: [],
   jobs: [],
 }
 const tmp = mkdtempSync(join(tmpdir(), 'pt-app-'))

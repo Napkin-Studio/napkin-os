@@ -28,7 +28,7 @@
       "properties": {
         "token": {
           "type": "string",
-          "description": "Signed, 24 h. Carries participantId and role."
+          "description": "Signed, 24 h. Carries participantId, role and workspace."
         },
         "participantId": {
           "type": "string",
@@ -36,6 +36,11 @@
         },
         "handle": {
           "type": "string"
+        },
+        "workspace": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "description": "The team the event code belongs to (EVENT_CODES workspaces map; \"event\" when the code is not mapped). The library is shared within it."
         },
         "role": {
           "enum": [
@@ -73,6 +78,7 @@
         "token",
         "participantId",
         "handle",
+        "workspace",
         "role",
         "expiresAt",
         "quotas"
@@ -131,7 +137,7 @@
     },
     "JobRequest": {
       "type": "object",
-      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice.",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. Optional header X-Own-Keys: JSON {\"fal\"?: key, \"heygen\"?: key}, read only when config flags.ownKeys is on: a step those providers can do runs on that key (HeyGen before fal for clip), any other step on the event routing. A key the provider refuses fails the job; it never falls back to the event key. Keys are never returned or logged.",
       "properties": {
         "contractVersion": {
           "$ref": "common.schema.json#/$defs/contractVersion"
@@ -151,6 +157,10 @@
         },
         "input": {
           "$ref": "#/$defs/JobInput"
+        },
+        "modelChoice": {
+          "$ref": "#/$defs/ModelChoice",
+          "description": "The model the participant picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider routed for the op and not in config fallbackOnly. Absent: the routing's default. The job runs on that provider and model; when that provider cannot take it, on the first fallbackOnly provider routed for the op, with its default model (Job.fallbackFrom says so). An own-key pick never falls back to the event key. Added 2026-10-08 (additive)."
         }
       },
       "required": [
@@ -162,6 +172,24 @@
       ],
       "additionalProperties": false
     },
+    "ModelChoice": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "$ref": "common.schema.json#/$defs/provider"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ],
+      "additionalProperties": false
+    },
     "JobInput": {
       "type": "object",
       "description": "What the user asked for, in our terms. The director turns it into a provider job. Which fields apply depends on op; the relay rejects missing ones with invalid_input.",
@@ -169,7 +197,7 @@
         "text": {
           "type": "string",
           "maxLength": 1000,
-          "description": "The user's words: the Combine instruction, the text box under a frame or clip, the region note, the feel change."
+          "description": "The user's words: the Generate instruction (with the text of any selected notes), the text box under a frame or clip, the region note, the feel change."
         },
         "chips": {
           "type": "array",
@@ -179,24 +207,31 @@
           },
           "maxItems": 8
         },
-        "sketch": {
-          "$ref": "common.schema.json#/$defs/assetRef",
-          "description": "generate, combine: the frame's drawing exported as PNG, with labels and arrows stripped."
-        },
         "refs": {
           "type": "array",
           "maxItems": 14,
+          "description": "Every image input, in the order chosen. generate: the selected nodes. view: named refs of the same key besides the source. frame, clip: the shot's named refs. The relay gives each a wire tag (relay/names.py) before the director sees the job.",
           "items": {
             "type": "object",
             "properties": {
               "id": {
-                "$ref": "common.schema.json#/$defs/id"
+                "$ref": "common.schema.json#/$defs/id",
+                "description": "The ref id for a named image, else the canvas node id."
               },
-              "tag": {
-                "$ref": "common.schema.json#/$defs/tag"
+              "name": {
+                "$ref": "common.schema.json#/$defs/refName",
+                "description": "key_variant for a named image; absent for an unnamed node (the relay numbers those in_1, in_2…)."
               },
               "role": {
                 "$ref": "common.schema.json#/$defs/refRole"
+              },
+              "kind": {
+                "enum": [
+                  "drawing",
+                  "picture",
+                  "generated"
+                ],
+                "description": "drawing: the participant's own strokes, a rough guide for shape and pose, not a finished look."
               },
               "asset": {
                 "$ref": "common.schema.json#/$defs/assetRef"
@@ -204,41 +239,16 @@
             },
             "required": [
               "id",
-              "tag",
               "role",
+              "kind",
               "asset"
             ],
             "additionalProperties": false
           }
         },
-        "character": {
-          "type": "object",
-          "description": "view, frame, clip, clip_edit: the locked character views. front is required; the others as chosen.",
-          "properties": {
-            "front": {
-              "$ref": "common.schema.json#/$defs/assetRef"
-            },
-            "three_quarter": {
-              "$ref": "common.schema.json#/$defs/assetRef"
-            },
-            "side": {
-              "$ref": "common.schema.json#/$defs/assetRef"
-            },
-            "back": {
-              "$ref": "common.schema.json#/$defs/assetRef"
-            },
-            "side_2": {
-              "$ref": "common.schema.json#/$defs/assetRef"
-            }
-          },
-          "required": [
-            "front"
-          ],
-          "additionalProperties": false
-        },
         "view": {
           "$ref": "common.schema.json#/$defs/view",
-          "description": "view: which view to make."
+          "description": "view: which view to make from image (the source)."
         },
         "script": {
           "type": "string",
@@ -265,7 +275,7 @@
         },
         "image": {
           "$ref": "common.schema.json#/$defs/assetRef",
-          "description": "region_edit: the image being edited. clip: the storyboard frame."
+          "description": "region_edit: the image being edited. view: the source image. clip: the storyboard frame."
         },
         "region": {
           "$ref": "common.schema.json#/$defs/region"
@@ -370,8 +380,19 @@
         "provider": {
           "$ref": "common.schema.json#/$defs/provider"
         },
+        "keySource": {
+          "enum": [
+            "own",
+            "event"
+          ],
+          "description": "Whose provider key runs this job: the participant's own (sent in X-Own-Keys; billed to them, no event spend or daily quota) or the event's. Absent on shot_list and stitch, and on jobs from before own keys."
+        },
         "model": {
           "type": "string"
+        },
+        "fallbackFrom": {
+          "$ref": "#/$defs/ModelChoice",
+          "description": "The participant picked this model, its provider could not take the job, and it ran on the fallback provider instead. Added 2026-10-08 (additive)."
         },
         "requestId": {
           "type": "string",
@@ -511,6 +532,151 @@
           "const": 5242880
         }
       },
+      "additionalProperties": false
+    },
+    "LibraryRef": {
+      "type": "object",
+      "description": "One variant of a published key.",
+      "properties": {
+        "variant": {
+          "$ref": "common.schema.json#/$defs/variant"
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/assetRef"
+        }
+      },
+      "required": [
+        "variant",
+        "asset"
+      ],
+      "additionalProperties": false
+    },
+    "LibraryPublish": {
+      "type": "object",
+      "description": "POST /library/{key}: publish the key's current refs as the next version. Every asset must already be uploaded (POST /uploads). baseVer is the version the document holds (0 for a new key); a newer one on the server is a 409 conflict, so two people never overwrite each other.",
+      "properties": {
+        "role": {
+          "$ref": "common.schema.json#/$defs/refRole"
+        },
+        "baseVer": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "items": {
+            "$ref": "#/$defs/LibraryRef"
+          }
+        }
+      },
+      "required": [
+        "role",
+        "baseVer",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "LibraryEntry": {
+      "type": "object",
+      "description": "GET /library/{key} (latest) or /library/{key}/{ver}, and the response of a publish: one immutable version of a key. Stored at s3 library/<workspace>/<key>/<ver>.json.",
+      "properties": {
+        "workspace": {
+          "type": "string"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "ver": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/refRole"
+        },
+        "by": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LibraryRef"
+          }
+        }
+      },
+      "required": [
+        "workspace",
+        "key",
+        "ver",
+        "role",
+        "by",
+        "at",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "LibraryIndex": {
+      "type": "object",
+      "description": "GET /library: the workspace's keys, latest version each. Stored at s3 library/<workspace>/index.json, written with If-Match on its ETag.",
+      "properties": {
+        "workspace": {
+          "type": "string"
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "$ref": "common.schema.json#/$defs/key"
+              },
+              "ver": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "role": {
+                "$ref": "common.schema.json#/$defs/refRole"
+              },
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "variants": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/variant"
+                }
+              },
+              "cover": {
+                "$ref": "common.schema.json#/$defs/assetRef",
+                "description": "The front variant if there is one, else the first."
+              }
+            },
+            "required": [
+              "key",
+              "ver",
+              "role",
+              "by",
+              "at",
+              "variants",
+              "cover"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "workspace",
+        "keys"
+      ],
       "additionalProperties": false
     }
   }

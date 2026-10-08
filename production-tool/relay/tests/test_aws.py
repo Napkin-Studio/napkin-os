@@ -140,7 +140,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5}, sess["token"])
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
     # no adapters exist yet in this lane: routing finds no provider
-    req = {"contractVersion": "1", "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "parentIds": [],
+    req = {"contractVersion": "2", "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "parentIds": [],
            "input": {"text": "x"}}
     status, out = http("POST", "/api/jobs", req, sess["token"])
     assert status == 422 and out["error"]["code"] == "capability_missing"

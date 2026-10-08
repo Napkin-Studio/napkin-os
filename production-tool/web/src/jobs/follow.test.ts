@@ -48,11 +48,8 @@ async function setup(shotCount = 3) {
   const deps: FrameDeps = { relay, doc, ui, runner }
   wireJobs(deps)
 
-  const front = await putBlob(new Blob(['front view'], { type: 'image/png' }))
   const script = 'A razor on a marble sink. A hand picks it up. The blade glides. The logo.'
   await updateDoc(doc, (d) => {
-    d.character.views.front = { asset: front, job_id: newId('job'), picked_at: new Date().toISOString() }
-    d.character.locked = true
     const rev = newId('rev')
     d.script = { current: rev, revisions: [{ id: rev, created_at: new Date().toISOString(), imported_text: script, target_s: 15, status: 'draft' }] }
     const base = mockShotList(script, 15)[0]
@@ -131,6 +128,26 @@ describe('no text in frames: the dialogue is voice-over', () => {
     for (const j of s.all().filter((x) => x.op === 'frame' || x.op === 'clip')) {
       expect(JSON.stringify(s.inputOf(j.id))).not.toContain(DIALOGUE)
     }
+  })
+})
+
+describe('a new take', () => {
+  it('sends the shot\'s named refs and the model picked in the menu (New take and Fix share makeClip)', async () => {
+    const s = await setup(2)
+    const front = await putBlob(new Blob(['hero front'], { type: 'image/png' }))
+    await updateDoc(s.doc, (d) => {
+      d.keys.push({ key: 'hero', role: 'character' })
+      d.refs.push({ id: newId('ref'), key: 'hero', variant: 'front', asset: front, node: newId('node') })
+      d.shots![0].refs = ['hero']
+    })
+    await s.makeAll(false)
+    const pick = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const id = await makeClip(s.deps, s.shotId(0), { parentTake: s.takeOf(0), modelChoice: pick })
+    const request = s.ui.get().jobCtx[id].request
+    expect(request.input.refs?.map((r) => r.name)).toEqual(['hero_front'])
+    expect(request.input.shot).not.toHaveProperty('dialogue')
+    expect(request.modelChoice).toEqual(pick)
+    expect(s.ui.get().jobCtx[id]).toMatchObject({ for: 'clip', parentTakeId: s.takeOf(0).id })
   })
 })
 
@@ -287,9 +304,9 @@ describe('Update what follows', () => {
     const plan = planFollow(s.doc.get())
     // Frames 3 and 4 follow frame 2; clips for shots 2-4 (2's frame changed); then the ad.
     expect(plan).toEqual({ frames: [s.shotId(2), s.shotId(3)], clips: [s.shotId(1), s.shotId(2), s.shotId(3)], ad: true })
-    // Runway: frame $0.07, clip $0.60 (contracts/capabilities/runway.json); the ad is ffmpeg.
-    expect(planCost(plan, runway).usd).toBeCloseTo(2 * 0.07 + 3 * 0.6)
-    expect(planSummary(plan, runway)).toBe('2 frames, 3 clips, 1 ad · about $1.94')
+    // Runway: frame $0.20 (Gemini 3 Pro), clip $1.20 (Veo 3.1) (contracts/capabilities/runway.json); the ad is ffmpeg.
+    expect(planCost(plan, runway).usd).toBeCloseTo(2 * 0.2 + 3 * 1.2)
+    expect(planSummary(plan, runway)).toBe('2 frames, 3 clips, 1 ad · about $4.00')
     expect(planSummary(plan, CONFIGS.testing)).toMatch(/^2 frames, 3 clips, 1 ad · /)
   })
 

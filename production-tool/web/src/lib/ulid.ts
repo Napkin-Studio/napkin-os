@@ -3,7 +3,7 @@
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 
-export type IdPrefix = 'job' | 'ref' | 'shot' | 'frame' | 'take' | 'rev' | 'combine' | 'pin' | 'sketch' | 'exp' | 'follow'
+export type IdPrefix = 'job' | 'ref' | 'node' | 'shot' | 'frame' | 'take' | 'rev' | 'pin' | 'exp' | 'follow'
 
 export const ID_PATTERN = /^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$/
 

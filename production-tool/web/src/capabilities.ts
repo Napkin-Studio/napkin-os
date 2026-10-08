@@ -4,15 +4,18 @@
 // checks a provider by name; everything goes through `controlsFor`.
 
 import { CONFIGS, SHEETS } from './contracts/load'
-import type { CapabilitySheet, Config, Flags, Op, Provider } from './contracts/types'
+import type { CapabilitySheet, Config, Flags, ModelChoice, Op, Provider } from './contracts/types'
 import { OPS } from './contracts/types'
 
 export type Sheets = Partial<Record<Provider, CapabilitySheet>>
 
 export interface Controls {
-  /** Character */
+  /** Canvas */
   generate: boolean
-  combine: boolean
+  /** How many image inputs one Generate may take on the routed provider (refs.max, at most 14). */
+  generateMax: number
+  /** …of which characters (refs.maxCharacter), when the sheet limits them. */
+  generateCharacters: number
   views: boolean
   /** Turnaround by exact camera angle (sheet.angles on the view provider). */
   angles: boolean
@@ -60,7 +63,6 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
   const f = config.flags
   const s = (op: Op) => routedSheet(op, config, sheets)
   const gen = s('generate')
-  const combine = s('combine')
   const view = s('view')
   const frame = s('frame')
   const regionEdit = s('region_edit')
@@ -73,7 +75,8 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
   const feelEdit = video && f.feelEdit && !!clipEdit && clipEdit.video.feelEdit !== 'none'
   return {
     generate: !!gen,
-    combine: !!combine,
+    generateMax: Math.min(14, gen?.refs.max ?? 0),
+    generateCharacters: Math.min(14, gen?.refs.maxCharacter ?? gen?.refs.max ?? 0),
     views: !!view,
     angles: !!view && view.angles,
     regionEditCanvas: f.regionEditCanvas && !!regionEdit,
@@ -94,6 +97,47 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
     stitch: video && f.stitch,
     moreOptions: f.moreOptions && (gen?.outputsPerCall ?? 1) > 1,
   }
+}
+
+// ── The regenerate menu (features/model-choice.clan) ──
+
+/** One model a participant may pick when they regenerate. */
+export interface ModelOption extends ModelChoice {
+  label: string
+  note?: string
+  estimateUsd: number | null
+}
+
+/** What the menu offers for an op: each routed provider that is not fallback-only, in routing
+ *  order, its own model first and then its alternates. The relay checks every pick again. */
+export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS): ModelOption[] {
+  const out: ModelOption[] = []
+  for (const provider of config.routing[op] ?? []) {
+    if (config.fallbackOnly?.includes(provider)) continue
+    const spec = sheets[provider]?.ops[op]
+    if (!spec) continue
+    out.push({ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note, estimateUsd: spec.estimateUsd ?? null })
+    for (const a of spec.alternates ?? []) out.push({ provider, model: a.model, label: a.label, note: a.note, estimateUsd: a.estimateUsd })
+  }
+  return out
+}
+
+/** The pick to send with a job: none for the routing's first model, which routes as before. */
+export function choiceToSend(op: Op, config: Config, choice: ModelChoice | undefined, sheets: Sheets = SHEETS): ModelChoice | undefined {
+  if (!choice) return undefined
+  const first = modelChoicesFor(op, config, sheets)[0]
+  return first && first.provider === choice.provider && first.model === choice.model ? undefined : { provider: choice.provider, model: choice.model }
+}
+
+/** A model's menu name on any sheet ("Veo 3.1 Fast"), else its id. */
+export function modelLabel(provider: Provider | undefined, model: string | undefined, sheets: Sheets = SHEETS): string | undefined {
+  if (!model) return undefined
+  for (const spec of Object.values(sheets[provider ?? 'mock']?.ops ?? {})) {
+    if (spec?.model === model) return spec.label ?? model
+    const alt = spec?.alternates?.find((a) => a.model === model)
+    if (alt) return alt.label
+  }
+  return model
 }
 
 // ── The dev switch: pick a config and a provider set to see the UI change ──
@@ -118,7 +162,7 @@ export const PROVIDER_CHOICES: { id: ProviderChoice; label: string }[] = [
 
 const ALL_FLAGS_ON: Flags = {
   storyboard: true, video: true, stitch: true, regionEditFrames: true, regionEditCanvas: true,
-  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true,
+  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, ownKeys: true,
 }
 
 function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {

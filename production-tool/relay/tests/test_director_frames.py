@@ -1,5 +1,5 @@
-"""Sequential storyboard frames (director.v3, decided 2026-10-07): every frame after the first
-carries the character views (identity), shot 1's frame as @anchor (setting, light, style) and the
+"""Sequential storyboard frames (director.v3, decided 2026-10-07; director.v4 since contract v2): every
+frame carries the shot's named refs (identity), and every frame after the first shot 1's frame as @anchor (setting, light, style) and the
 frame before as @previous (continuity), and a frame always shows its setting."""
 
 import copy
@@ -12,6 +12,7 @@ from director import Director, DirectorError
 from director.base import PassthroughDirector
 from director.claude import PROMPT_VERSION
 from director.model import ModelPort, Reply
+from names import to_wire
 from providers import load_sheet
 
 HERE = Path(__file__).parent
@@ -42,20 +43,20 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
     edit_reply(reply), edit_input(payload)
     wire = FakeWire(reply)
     d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
-                 prompt_version="director.v3")
-    res = d.run(f["op"], payload, f["provider"])
+                 prompt_version="director.v4")
+    res = d.run(f["op"], to_wire(f["op"], payload), f["provider"])
     asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     return res, asked, wire
 
 
-def test_v2_1_is_the_default_and_the_configs_name_it():
-    assert PROMPT_VERSION == "director.v3"
+def test_v4_is_the_default_and_the_configs_name_it():
+    assert PROMPT_VERSION == "director.v4"
     for name in ("config.testing.json", "config.event.json"):
-        assert json.loads((EXAMPLES / name).read_text())["director"]["promptVersion"] == "director.v3"
+        assert json.loads((EXAMPLES / name).read_text())["director"]["promptVersion"] == "director.v4"
 
 
-def test_v2_1_carries_the_frame_rules_and_keeps_v2s():
-    v2, v21 = (PROMPTS / "director.v2.md").read_text(), (PROMPTS / "director.v3.md").read_text()
+def test_v4_carries_the_frame_rules():
+    v4 = (PROMPTS / "director.v4.md").read_text()
     for rule in (
         "`anchor` (input.anchorFrame)",
         "keep the setting, lighting, palette and style of @anchor",
@@ -63,15 +64,13 @@ def test_v2_1_carries_the_frame_rules_and_keeps_v2s():
         "The frame MUST show the shot's setting",
         "never a character on a plain or empty background",
         "apply ONLY to generate and view, never to frame",
-        "The character must be identical to the views",
+        "the ones `shot.refs` lists",
+        "A character must be identical to its refs",
         "`anchor` and `previous` are `object`",
+        "neutral standing pose", "plain light background", "Never add a background scene",
+        "Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer",
     ):
-        assert rule in v21, rule
-    # Everything v2 asked of generate and view is still there.
-    for rule in ("It sets the design", "neutral standing pose", "plain light background", "Never add a background scene",
-                 "canonical @tags", "Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer"):
-        assert rule in v21, rule
-    assert "anchorFrame" not in v2
+        assert rule in v4, rule
 
 
 def test_first_frame_is_drawn_from_the_views_and_shows_the_setting():
@@ -79,11 +78,11 @@ def test_first_frame_is_drawn_from_the_views_and_shows_the_setting():
     assert "anchorFrame" not in asked["input"] and "previousFrame" not in asked["input"]
     assert asked["input"]["script"].startswith("It starts to rain")  # the script reaches the director for the setting
     job = res.output["providerJob"]
-    assert [(r["name"], r["role"]) for r in job["refs"]] == [("front", "character")]
+    assert [(r["name"], r["role"]) for r in job["refs"]] == [("hero_front", "character")]
     assert "street" in job["prompt"] and "plain" not in job["prompt"]
     assert job["ratio"] == "768:1344"  # the plain 9:16 mapped to Runway's size
-    assert res.agent_block["promptVersion"] == "director.v3"
-    assert wire.calls[0]["system"] == (PROMPTS / "director.v3.md").read_text()
+    assert res.agent_block["promptVersion"] == "director.v4"
+    assert wire.calls[0]["system"] == (PROMPTS / "director.v4.md").read_text()
 
 
 def test_a_later_frame_names_the_anchor_and_the_previous_frame():
@@ -94,7 +93,7 @@ def test_a_later_frame_names_the_anchor_and_the_previous_frame():
     by_name = {r["name"]: r for r in job["refs"]}
     assert by_name["anchor"] == {"sha256": f["anchorFrame"]["sha256"], "name": "anchor", "role": "object"}
     assert by_name["previous"] == {"sha256": f["previousFrame"]["sha256"], "name": "previous", "role": "object"}
-    assert by_name["front"]["role"] == by_name["side"]["role"] == "character"
+    assert by_name["hero_front"]["role"] == by_name["hero_side"]["role"] == "character"
     assert "@anchor" in job["prompt"] and "@previous" in job["prompt"]
 
 
@@ -114,6 +113,7 @@ def test_an_unused_anchor_tag_is_refused():
 
 def test_passthrough_sends_previous_then_anchor_and_one_picture_once():
     f = fixture("frame_runway_anchor")
+    f["input"] = to_wire("frame", f["input"])
     out = PassthroughDirector().direct({"jobId": "job_x", "op": "frame", "input": f["input"]}, load_sheet("runway"))
     names = [(r["name"], r["role"]) for r in out["providerJob"]["refs"]]
     assert names[-2:] == [("previous", "object"), ("anchor", "object")]
@@ -128,10 +128,10 @@ def test_passthrough_sends_previous_then_anchor_and_one_picture_once():
 # caption box, and every clip made from it kept the card. Dialogue is voice-over: it never reaches
 # the model for a frame or a clip, and the prompt asks for a full-bleed image with no text.
 
-def test_v3_draws_only_the_scripts_on_screen_text_and_never_a_storyboard_sheet():
+def test_v4_draws_only_the_scripts_on_screen_text_and_never_a_storyboard_sheet():
     # Owner decision 2026-10-07: text only when the script asks for it on screen (carried in the
     # shot's action as On screen: "..."), drawn exactly; spoken lines never; storyboard layout never.
-    v3 = (PROMPTS / "director.v3.md").read_text()
+    v4 = (PROMPTS / "director.v4.md").read_text()
     for rule in (
         "one full-bleed cinematic image",
         "Never, in any case, a storyboard sheet or a panel on a page",
@@ -148,7 +148,7 @@ def test_v3_draws_only_the_scripts_on_screen_text_and_never_a_storyboard_sheet()
         "write it into that shot's `action` in quotes, exactly as the script spells it: `On screen: \"FACET\"`",
         "never invent on-screen text",
     ):
-        assert rule in v3, rule
+        assert rule in v4, rule
 
 
 def test_on_screen_text_in_the_action_is_asked_for_exactly():
@@ -165,7 +165,7 @@ def test_the_shot_list_moves_script_supers_into_the_action_and_keeps_spoken_line
     f = fixture("shot_list_on_screen")
     wire = FakeWire(f["reply"])
     d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
-                 prompt_version="director.v3")
+                 prompt_version="director.v4")
     res = d.run("shot_list", copy.deepcopy(f["input"]))
     shots = res.output["shots"]
     assert shots[-1]["action"].endswith('On screen: "FACET"')
@@ -192,7 +192,7 @@ def test_clip_requests_lose_the_dialogue_too_but_shot_lists_keep_it():
     payload["shot"]["dialogue"] = "Every diamond starts as pressure."
     wire = FakeWire(f["reply"])
     d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
-                 prompt_version="director.v3")
+                 prompt_version="director.v4")
     d.run("clip", payload, "runway")
     assert "Every diamond" not in wire.calls[0]["turns"][0]["text"]
     assert payload["shot"]["dialogue"] == "Every diamond starts as pressure."  # the caller's copy is untouched

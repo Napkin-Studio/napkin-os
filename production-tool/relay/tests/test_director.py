@@ -7,6 +7,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 from director import Director, DirectorError, bundle, load_schemas
+from names import to_wire
 from director.model import ModelError, ModelPort, Reply
 from providers import load_sheet
 from providers.types import CONTRACTS
@@ -44,8 +45,9 @@ def make(*replies, **kw):
 
 
 def run(name, director, **kw):
+    """As the relay does: names become wire tags (names.py) before the director sees the input."""
     f = fixture(name)
-    return director.run(f["op"], f["input"], f["provider"], **kw)
+    return director.run(f["op"], to_wire(f["op"], f["input"]), f["provider"], **kw)
 
 
 # --- the copied model port ---------------------------------------------------
@@ -82,10 +84,10 @@ def test_generate_on_runway():
     res = run("generate_runway", d, job_id="job_x")
     job = res.output["providerJob"]
     assert job["provider"] == "runway" and job["ratio"] == "896:1152"
-    assert [r["name"] for r in job["refs"]] == ["sketch", "eyes", "palette"]
+    assert [r["name"] for r in job["refs"]] == ["in_1", "maya_eyes", "maya_palette"]
     assert res.usage == {"input_tokens": 120, "output_tokens": 60}
     sent = wire.calls[0]
-    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == (PROMPTS / "director.v2.md").read_text()
+    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == (PROMPTS / "director.v4.md").read_text()
     asked = json.loads(sent["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     assert asked["provider"] == "runway" and asked["sheet"]["tagSyntax"] == "at_tag" and asked["op"] == "generate"
 
@@ -134,7 +136,7 @@ def test_agent_block_logs_the_prompt_version():
     d, _ = make(fixture("generate_runway")["reply"])
     res = run("generate_runway", d)
     block = res.agent_block
-    assert block["promptVersion"] == "director.v2" and block["model"] == "claude-haiku-4-5"
+    assert block["promptVersion"] == "director.v4" and block["model"] == "claude-haiku-4-5"
     assert block["output"] == res.output and block["rationale"] == res.output["rationale"]
     assert isinstance(block["latencyMs"], int)
 
@@ -148,29 +150,37 @@ def test_prompt_version_comes_from_the_prompt_file(tmp_path):
     assert wire.calls[0]["system"] == "You are the director."
 
 
-@pytest.mark.parametrize("version", ["director.v1", "director.v2"])
-def test_prompt_carries_the_rules(version):
-    text = (PROMPTS / f"{version}.md").read_text()
-    for rule in ("canonical @tags", "Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer"):
+def test_prompt_carries_the_rules():
+    text = (PROMPTS / "director.v4.md").read_text()
+    for rule in ("Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer"):
         assert rule in text
 
 
-def test_v2_keeps_the_sketch_and_limits_each_ref_to_its_tag():
-    text = (PROMPTS / "director.v2.md").read_text()
+def test_only_the_v4_prompt_is_bundled():
+    """Contract v2 has no sketch or character views: the older prompts would name inputs that no longer exist."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v4.md"]
+
+
+def test_v4_names_refs_and_limits_each_ref_to_what_it_names():
+    text = (PROMPTS / "director.v4.md").read_text()
     for rule in (
-        "never \"the sketch provided\"",           # every ref, the sketch too, by its @tag
-        "It sets the design",                        # the sketch is the character
-        "It is the user's instruction",              # input.text, the frame's words
+        "its wire tag, already made for you",        # names.py made the tags; use them as given
+        "`key_variant`",                             # refs that share a key are one character
+        "never \"the sketch provided\"",           # every ref by its @tag, drawings too
+        "it sets the design",                        # a drawing with role character is the character
+        "It is the user's instruction",              # input.text, typed words and notes
         "it wins over the defaults",
-        "only what its tag names",                   # a ref adds what its tag says, nothing else
-        "never the picture's subject, species",      # @texture is material, not the subject
-        "read the purpose from the tag name",        # role other
+        "only what its name, role and the words say",
+        "never the picture's subject, species",      # a texture is material, not the subject
         "neutral standing pose",                     # defaults
         "plain light background",
-        "not photoreal",                             # the sketch's level of simplicity
+        "not photoreal",                             # the drawing's level of simplicity
         "show it once, in the neutral pose",         # several poses, one character
         "Never add a background scene",
         "do not ask",                                # the UI cannot show needsUser yet
+        "`element_front` first",                     # a character key is one Kling element
+        "Use only keys and names from `input.refs`", # shot_list names only refs that exist
+        "use its bare key",                           # a whole character by its key
     ):
         assert rule in text, rule
 
@@ -180,16 +190,16 @@ def test_v2_generate_follows_the_frame_text_and_names_every_ref():
     the frame, and a feather photo tagged @texture with role other."""
     f = fixture("generate_runway_texture")
     d, wire = make(f["reply"])
-    res = d.run(f["op"], f["input"], f["provider"])
+    res = d.run(f["op"], to_wire(f["op"], f["input"]), f["provider"])
     asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
-    assert asked["input"]["text"] == f["input"]["text"]  # the frame's words reach the director
+    assert asked["input"]["text"] == f["input"]["text"]  # the participant's words reach the director
     job = res.output["providerJob"]
-    assert [r["name"] for r in job["refs"]] == ["sketch", "texture"]
+    assert [r["name"] for r in job["refs"]] == ["in_1", "maya_texture"]
     assert [r["role"] for r in job["refs"]] == ["character", "object"]
     prompt = job["prompt"]
-    assert "@sketch" in prompt and "@texture" in prompt and "sketch provided" not in prompt
+    assert "@in_1" in prompt and "@maya_texture" in prompt and "sketch provided" not in prompt
     assert "AI agent" in prompt and "material" in prompt and "2D illustration" in prompt
-    assert res.output["needsUser"] is None and res.agent_block["promptVersion"] == "director.v2"
+    assert res.output["needsUser"] is None and res.agent_block["promptVersion"] == "director.v4"
 
 
 # --- failures are loud -------------------------------------------------------
@@ -210,6 +220,7 @@ def test_one_bad_answer_then_a_good_one_succeeds():
 
 def variant(name, edit):
     f = fixture(name)
+    f["input"] = to_wire(f["op"], f["input"])
     reply = copy.deepcopy(f["reply"])
     edit(reply)
     d, _ = make(reply)
@@ -223,9 +234,8 @@ def variant(name, edit):
     ("clip_runway", lambda r: r["providerJob"]["refs"].append(
         {"sha256": "sha256:" + "9" * 64, "name": "x", "role": "object"}), "not in the input"),
     ("generate_runway", lambda r: r["providerJob"].update(provider="fal"), "routed provider"),
-    ("generate_runway", lambda r: r["providerJob"].update(model="kling-image-o3"), "sheet's model"),
     ("generate_runway", lambda r: r["providerJob"].update(prompt="Draw @ghost"), "not one of the refs"),
-    ("generate_runway", lambda r: r.update(op="combine"), "answered op"),
+    ("generate_runway", lambda r: r.update(op="view"), "answered op"),
 ])
 def test_what_the_sheet_or_the_input_rules_out_raises(name, edit, why):
     d, f = variant(name, edit)
@@ -238,11 +248,11 @@ def test_clip_with_first_frame_and_refs_keeps_the_frame_on_runway():
     # so every Runway clip failed. The storyboard frame already shows the character: keep the frame,
     # drop the refs, and name them in words.
     d, f = variant("clip_runway", lambda r: (r["providerJob"]["refs"].append(
-        {"sha256": fixture("clip_runway")["input"]["character"]["front"]["sha256"], "name": "front", "role": "character"}),
-        r["providerJob"].update(prompt=r["providerJob"]["prompt"] + " Keep @front on model.")))
+        {"sha256": fixture("clip_runway")["input"]["refs"][0]["asset"]["sha256"], "name": "hero_front", "role": "character"}),
+        r["providerJob"].update(prompt=r["providerJob"]["prompt"] + " Keep @hero_front on model.")))
     job = d.run(f["op"], f["input"], f["provider"]).output["providerJob"]
     assert job["refs"] == [] and job["firstFrame"]
-    assert "@front" not in job["prompt"] and "the character" in job["prompt"]
+    assert "@hero_front" not in job["prompt"] and "the character" in job["prompt"]
 
 
 def test_a_clip_length_the_model_cannot_make_is_rounded_up():
@@ -275,7 +285,7 @@ def attempt(name, edit_reply=lambda r: None, edit_input=lambda i: None, **kw):
     reply, payload = copy.deepcopy(f["reply"]), copy.deepcopy(f["input"])
     edit_reply(reply), edit_input(payload)
     d, _ = make(reply)
-    return d.run(f["op"], payload, f["provider"], **kw)
+    return d.run(f["op"], to_wire(f["op"], payload), f["provider"], **kw)
 
 
 def job_edit(**fields):
@@ -290,8 +300,7 @@ def refuses(why, *args, **kw):
 def test_view_on_fal_sends_the_angle_the_prompt_maps():
     res = attempt("view_fal")
     assert res.output["providerJob"]["angle"] == {"horizontal": 90, "vertical": 0}
-    for v in ("director.v1", "director.v2"):
-        assert "front 0, three_quarter 45, side 90, back 180" in (PROMPTS / f"{v}.md").read_text()
+    assert "front 0, three-quarter 45, side 90, back 180" in (PROMPTS / "director.v4.md").read_text()
 
 
 def test_clip_edit_on_runway_needs_the_keyframe_the_relay_made():
@@ -382,7 +391,7 @@ def test_recorded_ratios_are_in_the_providers_lists():
     ("clip_edit_fal_mask", job_edit(keyframe={"sha256": "sha256:" + "2" * 64, "atS": 1}), "takes no keyframe"),
     ("clip_edit_runway", job_edit(strength="flex"), "takes no edit strength"),
     ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="Ab"), "canonical tags"),
-    ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="sketch"), "canonical tags"),
+    ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="in_1"), "canonical tags"),
 ])
 def test_ref_and_edit_guards(name, edit, why):
     refuses(why, name, edit, extra_hashes=(KEYFRAME,))
@@ -444,3 +453,23 @@ def test_a_ratio_the_model_left_out_is_taken_from_the_request():
     d, f = variant("generate_runway", lambda r: r["providerJob"].pop("ratio", None))
     f["input"]["ratio"] = "4:5"
     assert d.run(f["op"], f["input"], f["provider"]).output["providerJob"]["ratio"] == "896:1152"
+
+
+def test_shot_list_names_only_refs_it_was_given():
+    assert run("shot_list", make(fixture("shot_list")["reply"])[0]).output["shots"][0]["refs"] == ["hero_front"]
+    refuses("not an input ref", "shot_list", lambda r: r["shots"][0].update(refs=["hero_sad"]))
+
+
+def test_a_view_angle_the_model_left_out_is_filled_from_the_view():
+    res = attempt("view_fal", lambda r: r["providerJob"].pop("angle"))
+    assert res.output["providerJob"]["angle"] == {"horizontal": 90.0, "vertical": 0.0}
+
+
+def test_a_reply_naming_another_model_runs_on_the_sheets():
+    """The routing chooses the model (features/default-models.clan): a recorded reply that names an
+    older default still runs, on the sheet's model, instead of failing the job."""
+    reply = fixture("generate_runway")["reply"]
+    reply["providerJob"]["model"] = "gemini_image3.1_flash"
+    d, _ = make(reply)
+    out = run("generate_runway", d)
+    assert out.output["providerJob"]["model"] == load_sheet("runway")["ops"]["generate"]["model"]

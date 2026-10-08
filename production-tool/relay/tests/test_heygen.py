@@ -194,11 +194,12 @@ def test_409_with_video_id_is_the_same_job():
     assert p.submit(job()) == "vid_abc123"
 
 
-def test_409_without_video_id_is_retryable():
+def test_409_without_video_id_is_accepted_so_it_never_goes_elsewhere():
+    """HeyGen is already making this clip: sending it to the next provider would pay twice."""
     p = make(lambda r: httpx.Response(409, json={"error": {"message": "in progress"}}))
     with pytest.raises(ProviderError) as e:
         p.submit(job())
-    assert e.value.code == "provider_unavailable" and e.value.retryable
+    assert (e.value.code, e.value.retryable, e.value.accepted) == ("provider_failed", False, True)
 
 
 def test_429_carries_retry_after():
@@ -264,16 +265,15 @@ def test_submit_with_malformed_success_body_is_provider_failed(response):
     assert e.value.code == "provider_failed" and not e.value.retryable
 
 
-def test_done_without_video_url_is_provider_failed():
-    p = make(lambda r: httpx.Response(200, json={"data": {"status": "completed"}}))
+def test_done_without_video_url_ends_the_job():
+    s = make(lambda r: httpx.Response(200, json={"data": {"status": "completed"}})).status("vid_abc123")
+    assert (s.state, s.error.code, s.error.retryable) == ("failed", "provider_failed", False)
+
+
+def test_status_with_malformed_body_is_asked_again():
     with pytest.raises(ProviderError) as e:
-        p.status("vid_abc123")
-    assert e.value.code == "provider_failed" and not e.value.retryable
-
-
-def test_status_with_malformed_body_is_a_failed_status():
-    s = make(lambda r: httpx.Response(200, text="oops")).status("vid_abc123")
-    assert s.state == "failed" and s.error.code == "provider_failed"
+        make(lambda r: httpx.Response(200, text="oops")).status("vid_abc123")
+    assert (e.value.code, e.value.retryable) == ("provider_unavailable", True)
 
 
 def test_unknown_status_string_is_provider_failed():
@@ -296,13 +296,6 @@ def test_429_without_retry_after_waits_5():
     with pytest.raises(ProviderError) as e:
         make(reply(429)).submit(job())
     assert e.value.retryable and e.value.retry_after_s == 5
-
-
-def test_409_without_video_id_waits_5():
-    p = make(lambda r: httpx.Response(409, json={"error": {"message": "in progress"}}))
-    with pytest.raises(ProviderError) as e:
-        p.submit(job())
-    assert e.value.retry_after_s == 5
 
 
 def test_5xx_passes_retry_after_through():
@@ -329,3 +322,21 @@ def test_non_json_error_body_still_maps():
     with pytest.raises(ProviderError) as e:
         p.submit(job())
     assert e.value.code == "provider_unavailable" and e.value.retryable
+
+
+def test_a_local_inline_image_goes_as_heygen_base64_not_as_a_url():
+    """The local relay sends data URIs; HeyGen's url field must be a public HTTPS URL, and inline
+    images go as {"type": "base64", "media_type", "data"} (developers.heygen.com, 2026-10-07)."""
+    def inline(sha):
+        return AssetRef(sha, "data:image/png;base64,iVBORw0KGgo=", "image/png")
+    client = httpx.Client(transport=httpx.MockTransport(reply(202, "create_202")))
+    sent = []
+    p = HeyGenProvider("key-123", inline, client=httpx.Client(transport=httpx.MockTransport(
+        lambda r: sent.append(r) or reply(202, "create_202")(r))))
+    p.submit(job())
+    assert body_of(sent[0])["image"] == {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo="}
+    p.submit(refs_job(ratio="4:5"))
+    body = body_of(sent[1])
+    assert body["reference_images"][0]["type"] == "base64"
+    assert body["aspect_ratio"] == "3:4"  # reference_to_video takes 9:16, 16:9, 1:1, 3:4, 4:3, 21:9
+    client.close()

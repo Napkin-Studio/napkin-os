@@ -18,7 +18,7 @@ describe('capability gating', () => {
     expect(c.series).toBe(false)
     expect(c.feelStrength).toBe(false)
     // …but keeps the basics
-    expect(c.generate && c.combine && c.views && c.storyboard && c.regionEditFrames && c.video).toBe(true)
+    expect(c.generate && c.generateMax > 0 && c.views && c.storyboard && c.regionEditFrames && c.video).toBe(true)
     expect(c.videoRegionEdit).toBe(true) // aleph2 keyframe edit
     expect(c.feelEdit).toBe(true) // feelEdit: prompt
   })
@@ -64,7 +64,7 @@ describe('capability gating', () => {
     expect(c.feelStrength).toBe(false)
     expect(c.regionEditCanvas).toBe(false)
     expect(c.moreOptions).toBe(false)
-    expect(c.generate && c.combine && c.views && c.storyboard && c.video && c.stitch).toBe(true)
+    expect(c.generate && c.generateMax > 0 && c.views && c.storyboard && c.video && c.stitch).toBe(true)
   })
 
   it('Fix it in the shot shows with the event flags on every provider, whatever its video region support', () => {

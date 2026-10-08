@@ -67,12 +67,12 @@ def test_request_carries_key_version_and_returns_the_task_id(runway, server):
     assert len(server.requests) == 1  # submit never polls
 
 
-@pytest.mark.parametrize("op", ["generate", "combine", "view", "frame"])
+@pytest.mark.parametrize("op", ["generate", "view", "frame"])
 def test_image_ops_build_the_exact_body(runway, server, op):
     runway.submit(job(op, refs=[Ref(SHA, "hero", "character"), Ref(SHB, "prop_one", "object")],
                       prompt="@hero holds @prop_one", outputs=4))
     assert server.body == {
-        "model": "gemini_image3.1_flash",
+        "model": "gemini_image3_pro",
         "promptText": "@hero holds @prop_one",
         "ratio": "1024:1024",
         "outputCount": 4,
@@ -85,7 +85,7 @@ def test_image_ops_build_the_exact_body(runway, server, op):
 
 def test_no_refs_sends_no_reference_images_and_one_output(runway, server):
     runway.submit(job(refs=[], prompt="a red fox"))
-    assert server.body == {"model": "gemini_image3.1_flash", "promptText": "a red fox",
+    assert server.body == {"model": "gemini_image3_pro", "promptText": "a red fox",
                            "ratio": "1024:1024", "outputCount": 1}
 
 
@@ -111,7 +111,7 @@ def test_clip_builds_the_exact_body_with_audio_off(runway, server):
                       prompt="she walks away", negative="blur", seed=42))
     assert server.requests[0].url.path == "/v1/image_to_video"
     assert server.body == {
-        "model": "veo3.1_fast",
+        "model": "veo3.1",
         "promptImage": [{"uri": URL[SHA], "position": "first"}, {"uri": URL[SHB], "position": "last"}],
         "promptText": "she walks away",
         "ratio": "1280:720",
@@ -169,9 +169,11 @@ def test_malformed_success_replies_become_provider_errors(runway, server, reply)
     server.replies += [reply, reply]
     with pytest.raises(ProviderError) as e:
         runway.submit(job())
-    assert e.value.code in ("provider_failed", "provider_unavailable") and e.value.retryable
-    with pytest.raises(ProviderError):
+    # a 2xx: Runway may have the task, so it must never be sent anywhere else
+    assert (e.value.code, e.value.retryable, e.value.accepted) == ("provider_failed", False, True)
+    with pytest.raises(ProviderError) as e:
         runway.status("task_1")
+    assert e.value.retryable  # a garbled poll is asked again
 
 
 def test_clip_edit_without_a_source_video_or_with_half_a_range_refuses(runway, server):
@@ -315,9 +317,8 @@ def test_status_done_video(runway, server):
 
 def test_unknown_task_status_is_provider_failed(runway, server):
     server.reply(200, {"id": "t", "status": "WEIRD"})
-    with pytest.raises(ProviderError) as e:
-        runway.status("t")
-    assert e.value.code == "provider_failed"
+    st = runway.status("t")  # asking again cannot help: the job ends now, not at the relay's timeout
+    assert (st.state, st.error.code, st.error.retryable) == ("failed", "provider_failed", False)
 
 
 # (failureCode, error code, retryable)

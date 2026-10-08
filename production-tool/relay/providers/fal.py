@@ -27,17 +27,22 @@ import base64
 import io
 import re
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from PIL import Image, ImageOps
 
 from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
-    Status, check_capabilities, load_sheet, video_audio,
+    Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import TAG, UnknownTag, rewrite_tags
 
 QUEUE = "https://queue.fal.run"
+# fal-ai/kling-image/o3/image-to-image aspect_ratio enum (fal.ai/models/.../api, checked 2026-10-07).
+KLING_IMAGE_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9")
+# fal-ai/nano-banana-pro/edit and nano-banana-2/edit aspect_ratio enums share these (OpenAPI, 2026-10-08).
+NANO_RATIOS = ("21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16")
 SAM2 = "fal-ai/sam2/video"
 WAN = "fal-ai/wan-vace-14b/inpainting"
 
@@ -50,11 +55,29 @@ MASK_POLARITY = {
     WAN: "unverified",  # takes the mask video that sam2 makes, so it is never converted here
 }
 
-IMAGE_OPS = {"generate", "combine", "frame"}
+IMAGE_OPS = {"generate", "frame"}
+# The alternates (capabilities/fal.json ops[op].alternates) this adapter builds a request for,
+# with their request shapes checked against fal's OpenAPI schemas on 2026-10-08.
+NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
+VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
+KLING_IMAGE = "kling-image-o3"
+# Nano Banana Pro is the default for generate and frame (features/default-models.clan); Kling O3
+# and Nano Banana 2 are offered beside it.
+ALTERNATES = {"generate": {KLING_IMAGE, "nano-banana-2-edit"}, "frame": {KLING_IMAGE, "nano-banana-2-edit"},
+              "clip": VEO}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
-# pydantic-style 422 types: the request itself is wrong. Any other 422 type is fal's failure.
+# 422 types that say the input is wrong: pydantic's, and fal's own (fal.ai/docs/documentation/
+# model-apis/errors, read 2026-10-08). Any other 422 type is fal's failure.
 INVALID_TYPES = ("missing", "value_error", "type_error", "string_", "int_", "float_", "bool_", "enum",
-                 "literal", "greater", "less", "too_", "url_", "json_", "list_", "dict_", "extra_forbidden")
+                 "literal", "greater", "less", "too_", "url_", "json_", "list_", "dict_", "extra_forbidden",
+                 "sequence_", "multiple_of", "one_of", "input_value_error", "image_", "file_too_large",
+                 "face_detection", "feature_not_supported", "unsupported_", "audio_duration", "video_duration",
+                 "invalid_archive", "archive_")
+# Failures fal calls transient (its runners, timeouts, downstream services): trying again can help.
+TRANSIENT_TYPES = ("generation_timeout", "request_timeout", "startup_timeout", "runner_", "downstream_service",
+                   "internal_server_error", "internal_error")
+# fal could not download the input we gave it: our URL, so our problem.
+DOWNLOAD_FAILED = "file_download_error"
 SHOT_SPLIT = re.compile(r"^---\s*$", re.M)
 
 
@@ -87,9 +110,26 @@ def _error(resp: httpx.Response) -> ProviderError:
         return ProviderError("provider_unavailable", message, True, 5, code)
     if resp.status_code in (401, 403):
         return ProviderError("provider_failed", "fal rejected the API key", False, provider_code=code)
+    if resp.status_code in (404, 405):  # our endpoint or queue path (2026-10-07: the 405 on status)
+        return ProviderError("internal", message, False, provider_code=code, source="napkin")
+    if code == DOWNLOAD_FAILED:
+        return ProviderError("internal", message, True, provider_code=code, source="napkin")
     if resp.status_code == 422 and types and not types[0].startswith(INVALID_TYPES):
         return ProviderError("provider_failed", message, False, provider_code=code)  # e.g. no_media_generated
     return ProviderError("invalid_input", message, False, provider_code=code)
+
+
+def queue_app(endpoint: str, status_url: Optional[str] = None) -> str:
+    """The app id fal's queue serves status, result and cancel under. It is not the endpoint:
+    for an endpoint with a sub-path (fal-ai/kling-image/o3/image-to-image) the queue answers
+    only under the base app (fal-ai/kling-image) and gives 405 on the full path (2026-10-07:
+    every own-key job failed on its first status poll). The submit reply's status_url names it;
+    without one, the app is the endpoint's first two segments (owner/app)."""
+    if status_url:
+        path = urlparse(status_url).path.strip("/")
+        if "/requests/" in path:
+            return path.split("/requests/", 1)[0]
+    return "/".join(endpoint.split("/")[:2])
 
 
 def _json(resp: httpx.Response) -> dict:
@@ -109,7 +149,10 @@ def _status_error(body: dict) -> ProviderError:
     message = str(body.get("error") or "fal failed the request")
     if "content_policy_violation" in (error_type + message):
         return ProviderError("moderated", message, False, provider_code="content_policy_violation")
-    return ProviderError("provider_failed", message, False, provider_code=error_type or None)
+    if error_type == DOWNLOAD_FAILED:
+        return ProviderError("internal", message, True, provider_code=error_type, source="napkin")
+    transient = error_type.startswith(TRANSIENT_TYPES)
+    return ProviderError("provider_failed", message, transient, provider_code=error_type or None)
 
 
 def _outputs(result: dict) -> list[ProviderOutput]:
@@ -151,31 +194,39 @@ class FalProvider:
         try:
             return self._client.request(method, f"{QUEUE}/{path}", headers=headers, **kw)
         except httpx.TransportError as exc:
-            raise ProviderError("provider_unavailable", f"fal is unreachable: {exc}", True, 5, "transport_error") from exc
+            raise ProviderError("provider_unavailable", f"fal is unreachable: {exc}", True, 5, "transport_error",
+                                source="network") from exc
 
     def _fetch(self, sha: str) -> bytes:
         url = self._assets(sha).url
         try:
             resp = self._client.get(url)
-        except httpx.TransportError as exc:
-            raise ProviderError("internal", f"could not read {url}: {exc}", True) from exc
+        except httpx.TransportError as exc:  # our own asset, not a call to fal: never "maybe sent"
+            raise ProviderError("internal", f"could not read {url}: {exc}", True, source="napkin") from exc
         if resp.status_code >= 400:
-            raise ProviderError("internal", f"could not read {url}: HTTP {resp.status_code}", True)
+            raise ProviderError("internal", f"could not read {url}: HTTP {resp.status_code}", True, source="napkin")
         return resp.content
 
     def _enqueue(self, endpoint: str, body: dict) -> str:
         resp = self._call("POST", endpoint, json=body)
         if resp.status_code >= 400:
             raise _error(resp)
-        rid = _json(resp).get("request_id")
+        try:  # a 2xx: fal has the request, so whatever we cannot read must never be sent elsewhere
+            body = _json(resp)
+        except ProviderError as exc:
+            raise ProviderError("provider_failed", exc.message, False, accepted=True) from exc
+        rid = body.get("request_id")
         if not rid:
-            raise ProviderError("provider_failed", "fal's reply carries no request_id", False)
-        return f"{endpoint}:{rid}"
+            raise ProviderError("provider_failed", "fal's reply carries no request_id", False, accepted=True)
+        # The id keeps the endpoint (for the sheet's price) and the queue app (for the URLs).
+        return f"{endpoint}>{queue_app(endpoint, body.get('status_url'))}:{rid}"
 
     @staticmethod
-    def _split(request_id: str) -> tuple[str, str]:
-        endpoint, _, rid = request_id.rpartition(":")
-        return endpoint, rid
+    def _split(request_id: str) -> tuple[str, str, str]:
+        """endpoint, queue app, fal request id."""
+        head, _, rid = request_id.rpartition(":")
+        endpoint, _, app = head.partition(">")
+        return endpoint, app or queue_app(endpoint), rid
 
     # --- building requests ---
 
@@ -229,8 +280,8 @@ class FalProvider:
         """Our mask (white = change) as the endpoint reads it, as a PNG data URI."""
         try:
             img = Image.open(io.BytesIO(self._fetch(sha))).convert("L")
-        except OSError as exc:
-            raise ProviderError("invalid_input", f"the mask is not an image: {exc}", False) from exc
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise ProviderError("invalid_input", f"the mask is not an image we can read: {exc}", False) from exc
         if size and img.size != size:
             raise ProviderError("invalid_input", f"mask is {img.size[0]}x{img.size[1]}, source is {size[0]}x{size[1]}", False)
         img = img.point(lambda v: 255 if v >= 128 else 0)
@@ -242,18 +293,40 @@ class FalProvider:
 
     def _kling_image(self, job: ProviderJob) -> dict:
         urls, names, elements, tags = self._split_refs(job)
+        if not urls and elements:
+            # Kling image o3 needs at least one image in image_urls; elements alone are refused.
+            # With nothing else to send, the element's pictures go as images (@Image1, @Image2…).
+            urls = [self._url(r.sha256) for r in job.refs]
+            names, elements, tags = [r.name for r in job.refs], [], {}
         if not urls:
             raise CapabilityMissing("kling image o3 needs at least one image ref")
         body = {"prompt": self._prompt(job.prompt, names, tags), "image_urls": urls, "output_format": "png"}
         if elements:
             body["elements"] = elements
         if job.ratio:
-            body["aspect_ratio"] = job.ratio
+            body["aspect_ratio"] = nearest_ratio(job.ratio, KLING_IMAGE_RATIOS)
         n = job.outputs or 1
         if job.op == "frame" and n >= 2:
             body.update(result_type="series", series_amount=n)  # a consistent set of frames
         else:
             body.update(result_type="single", num_images=n)
+        return body
+
+    def _nano(self, job: ProviderJob) -> dict:
+        """Nano Banana edit: every ref is an image, named 'image n' by its place in image_urls."""
+        if not job.refs:
+            raise CapabilityMissing("nano banana edit needs at least one image ref")
+        body = {
+            "prompt": self._prompt(job.prompt, [r.name for r in job.refs], {}, "image_n"),
+            "image_urls": [self._url(r.sha256) for r in job.refs],
+            "num_images": job.outputs or 1,
+            "output_format": "png",
+            "resolution": "1K",
+        }
+        if job.ratio:
+            body["aspect_ratio"] = nearest_ratio(job.ratio, NANO_RATIOS)
+        if job.seed is not None:
+            body["seed"] = job.seed
         return body
 
     def _view(self, job: ProviderJob) -> dict:
@@ -262,10 +335,14 @@ class FalProvider:
         if (job.outputs or 1) > MAX_VIEW_OUTPUTS:
             raise CapabilityMissing(f"view returns at most {MAX_VIEW_OUTPUTS} outputs per call")
         ref = self._source(job)
+        try:
+            horizontal, vertical = float(job.angle["horizontal"]), float(job.angle.get("vertical", 0))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ProviderError("invalid_input", f"view angle {job.angle!r} is not a number of degrees", False) from exc
         body = {
             "image_urls": [self._url(ref.sha256)],
-            "horizontal_angle": float(job.angle["horizontal"]),
-            "vertical_angle": float(job.angle.get("vertical", 0)),
+            "horizontal_angle": horizontal,
+            "vertical_angle": vertical,
             "num_images": job.outputs or 1,
             "output_format": "png",
         }
@@ -283,7 +360,10 @@ class FalProvider:
         others = [r for r in job.refs if r is not source]
         if len(others) > 3:
             raise CapabilityMissing("ideogram takes at most 3 reference images with a mask")
-        size = Image.open(io.BytesIO(self._fetch(source.sha256))).size
+        try:
+            size = Image.open(io.BytesIO(self._fetch(source.sha256))).size
+        except (OSError, Image.DecompressionBombError) as exc:
+            raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
         body = {
             "prompt": self._prompt(job.prompt, [r.name for r in others], {}, "none"),
             "image_url": self._url(source.sha256),
@@ -313,7 +393,8 @@ class FalProvider:
             body["negative_prompt"] = job.negative
         shots = [self._prompt(s.strip(), [], tags) for s in SHOT_SPLIT.split(job.prompt) if s.strip()]
         if len(shots) < 2:
-            body["prompt"] = shots[0] if shots else ""
+            # fal needs a prompt or a multi_prompt; an empty one is refused.
+            body["prompt"] = shots[0] if shots else "Subtle, natural motion; the camera holds."
             if job.duration_s is not None:
                 body["duration"] = str(_seconds(job.duration_s))  # a string, "3".."15"
             return body
@@ -324,7 +405,28 @@ class FalProvider:
             raise ProviderError("invalid_input", f"{len(shots)} shots do not fit in {total} s", False)
         each, extra = divmod(total, len(shots))
         body["multi_prompt"] = [{"prompt": s, "duration": str(each + (i < extra))} for i, s in enumerate(shots)]
+        body["duration"] = str(total)  # the top-level duration defaults to "5": say the shots' sum
         body["shot_type"] = "customize"
+        return body
+
+    def _veo(self, job: ProviderJob) -> dict:
+        """Veo 3.1 image-to-video: the frame and words only (no refs or elements), 4s/6s/8s."""
+        if not job.first_frame:
+            raise CapabilityMissing("clip needs a first frame")
+        prompt = self._prompt(job.prompt, [], {}, "none") if job.prompt else ""
+        body = {
+            "image_url": self._url(job.first_frame),
+            "prompt": prompt or "Subtle, natural motion; the camera holds.",
+            "generate_audio": video_audio(job),
+            "aspect_ratio": "auto",  # the first frame sets the shape
+            "resolution": "720p",
+        }
+        if job.duration_s is not None:
+            body["duration"] = f"{_seconds(job.duration_s)}s"
+        if job.negative:
+            body["negative_prompt"] = job.negative
+        if job.seed is not None:
+            body["seed"] = job.seed
         return body
 
     def _clip_edit(self, job: ProviderJob) -> tuple[str, dict]:
@@ -346,30 +448,33 @@ class FalProvider:
     # --- the Provider interface ---
 
     def submit(self, job: ProviderJob) -> str:
-        check_capabilities(self._sheet, job)
-        endpoint = self._sheet["ops"][job.op]["endpoint"]
+        sheet = effective_sheet(self._sheet, job.op, job.model)  # an alternate the participant picked
+        check_capabilities(sheet, job)
+        endpoint = sheet["ops"][job.op]["endpoint"]
+        # The builder follows the endpoint the sheet chose, so the body always fits it
+        # (with Nano Banana as the default, a job naming no known model goes there too).
         if job.op in IMAGE_OPS:
-            body = self._kling_image(job)
+            body = self._nano(job) if "nano-banana" in endpoint else self._kling_image(job)
         elif job.op == "view":
             body = self._view(job)
         elif job.op == "region_edit":
             body = self._region_edit(job)
         elif job.op == "clip":
-            body = self._clip(job)
+            body = self._veo(job) if "/veo" in endpoint else self._clip(job)
         else:
             endpoint, body = self._clip_edit(job)
             if endpoint == SAM2:
                 request_id = self._enqueue(SAM2, body["sam"])
-                self._chains[request_id] = {"wan": body["wan"], "wan_id": None, "cancelled": False, "failed": None}
+                self._chains[request_id] = {"wan": body["wan"], "wan_req": None, "cancelled": False, "failed": None}
                 return request_id
         return self._enqueue(endpoint, body)
 
-    def _poll(self, endpoint: str, rid: str) -> Status:
+    def _poll(self, request_id: str) -> Status:
         """One fal call: the status, or, once that said COMPLETED, the result."""
-        key = f"{endpoint}:{rid}"
-        if key in self._completed:
-            return self._result(endpoint, rid)
-        resp = self._call("GET", f"{endpoint}/requests/{rid}/status")
+        endpoint, app, rid = self._split(request_id)
+        if request_id in self._completed:
+            return self._result(endpoint, app, rid)
+        resp = self._call("GET", f"{app}/requests/{rid}/status")
         if resp.status_code >= 400:
             return self._failed(resp)
         body = _json(resp)
@@ -378,11 +483,11 @@ class FalProvider:
             return Status("queued", queue_position=body.get("queue_position"))
         if state == "IN_PROGRESS":
             return Status("running", queue_position=0)
-        if state != "COMPLETED":
-            raise ProviderError("provider_failed", f"unknown fal status {state!r}", False)
+        if state != "COMPLETED":  # asking again cannot help: end the job now, not at the timeout
+            return Status("failed", error=ProviderError("provider_failed", f"unknown fal status {state!r}", False))
         if body.get("error"):
             return Status("failed", error=_status_error(body))
-        self._completed.add(key)
+        self._completed.add(request_id)
         return Status("running", queue_position=0)
 
     def _failed(self, resp: httpx.Response) -> Status:
@@ -392,8 +497,8 @@ class FalProvider:
             raise error
         return Status("failed", error=error)
 
-    def _result(self, endpoint: str, rid: str) -> Status:
-        resp = self._call("GET", f"{endpoint}/requests/{rid}")
+    def _result(self, endpoint: str, app: str, rid: str) -> Status:
+        resp = self._call("GET", f"{app}/requests/{rid}")
         if resp.status_code >= 400:
             return self._failed(resp)
         try:
@@ -405,14 +510,15 @@ class FalProvider:
         if not outputs:
             return Status("failed", error=ProviderError("provider_failed", "fal returned no media", False))
         images = [o for o in outputs if o.mime.startswith("image/")]
-        estimates = [op["estimateUsd"] for op in self._sheet["ops"].values() if op["endpoint"] == endpoint]
+        estimates = [m["estimateUsd"] for op in self._sheet["ops"].values() for m in [op, *op.get("alternates", [])]
+                     if m["endpoint"] == endpoint and m.get("estimateUsd") is not None]
         cost = estimates[0] * len(images) if images and estimates else None
         return Status("done", queue_position=0, outputs=outputs, cost_usd=cost)
 
     def status(self, request_id: str) -> Status:
-        endpoint, rid = self._split(request_id)
+        endpoint, _, _ = self._split(request_id)
         if endpoint != SAM2:
-            return self._poll(endpoint, rid)
+            return self._poll(request_id)
         chain = self._chains.get(request_id)
         if chain is None:
             return Status("failed", error=ProviderError(
@@ -421,10 +527,10 @@ class FalProvider:
             return Status("cancelled")
         if chain["failed"]:
             return Status("failed", error=chain["failed"])
-        if chain["wan_id"]:
-            return self._poll(WAN, chain["wan_id"])
+        if chain["wan_req"]:
+            return self._poll(chain["wan_req"])
         if "mask_video_url" not in chain["wan"]:
-            st = self._poll(SAM2, rid)
+            st = self._poll(request_id)
             if st.state == "failed":
                 chain["failed"] = st.error
             elif st.state == "done":
@@ -436,7 +542,7 @@ class FalProvider:
                 return Status("running", queue_position=0)
             return st
         try:
-            chain["wan_id"] = self._enqueue(WAN, chain["wan"]).rpartition(":")[2]
+            chain["wan_req"] = self._enqueue(WAN, chain["wan"])
         except ProviderError as error:
             if error.retryable and error.provider_code != "transport_error":
                 raise  # fal answered 429 or 5xx: it did not take the request, so the next poll may send it again
@@ -447,13 +553,11 @@ class FalProvider:
         return Status("running", queue_position=0)
 
     def cancel(self, request_id: str) -> None:
-        endpoint, rid = self._split(request_id)
         chain = self._chains.get(request_id)
         if chain:
             chain["cancelled"] = True
-            if chain["wan_id"]:
-                endpoint, rid = WAN, chain["wan_id"]
-        resp = self._call("PUT", f"{endpoint}/requests/{rid}/cancel")
+        _, app, rid = self._split(chain["wan_req"] if chain and chain["wan_req"] else request_id)
+        resp = self._call("PUT", f"{app}/requests/{rid}/cancel")
         if resp.status_code == 400:  # ALREADY_COMPLETED
             return
         if resp.status_code >= 400:

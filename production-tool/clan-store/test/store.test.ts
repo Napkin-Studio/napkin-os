@@ -28,11 +28,11 @@ function clanCli(args: string[]): string {
 
 async function filled(s: ClanDocumentStore): Promise<Doc> {
   await s.create(maya)
-  await s.patch({ stage: { current: 'character', next_action: 'Pick a front view.' } }, { action: 'set the next action' })
+  await s.patch({ stage: { current: 'character', next_action: 'Name your character.' } }, { action: 'set the next action' })
   await s.patch({ assets: [asset(1), asset(2)] }, { action: 'added two assets' })
   await s.patch(
-    { character: { views: { front: { asset: sha(1), job_id: id('job', 0), picked_at: AT } }, locked: true, locked_at: AT } },
-    { action: 'locked the character', rationale: 'front view picked' },
+    { keys: [{ key: 'hero', role: 'character' }], refs: [{ id: id('ref', 0), key: 'hero', variant: 'front', asset: sha(1), node: id('job', 0), named_at: AT }] },
+    { action: 'named @hero_front', rationale: 'its front' },
   )
   await s.patch({ shots: [shot(0), shot(1)], jobs: [job(0), job(1)] }, { action: 'planned shots' })
   return s.get()
@@ -93,15 +93,15 @@ describe('ClanDocumentStore against the real napkin-wasm', () => {
       `reject frame ${id('frame', 2)}`,
       `accept take ${id('take', 1)}`,
     ])
-    expect(actions).toContain('locked the character')
+    expect(actions).toContain('named @hero_front')
     expect(actions).toContain('started the document')
     const accept = chain[2]
     expect(accept.agent).toBe('maya')
     expect(accept.rationale).toBe('the light is right')
     expect(accept.fields_changed ?? []).toEqual([])
-    const locked = chain.find(d => d.action === 'locked the character')!
-    expect(locked.rationale).toBe('front view picked')
-    expect(locked.fields_changed).toEqual(['character'])
+    const named = chain.find(d => d.action === 'named @hero_front')!
+    expect(named.rationale).toBe('its front')
+    expect(named.fields_changed).toEqual(['keys', 'refs'])
     // A verdict changes no data.
     expect(s.get()).toEqual(before)
 

@@ -1,23 +1,32 @@
-// TypeScript mirror of production-tool/contracts/*.schema.json (contract v1,
-// locked at D1). Hand-written, field for field; `src/contracts/contracts.test.ts`
+// TypeScript mirror of production-tool/contracts/*.schema.json (contract v2,
+// 2026-10-07: keys and variants replace the character views). Hand-written, field for field; `src/contracts/contracts.test.ts`
 // validates the examples and a store round trip against the schemas with ajv,
 // so a drift between these types and the schemas shows up as a failing test.
 // Do not change a type here without the contract changing first.
 
 // ── common.schema.json ──────────────────────────────────────────────────────
 
-export type ContractVersion = '1'
+export type ContractVersion = '2'
 /** `sha256:<64 hex>` */
 export type Sha256 = string
-/** Prefixed ULID: job_…, ref_…, shot_…, frame_…, take_…, rev_…, combine_…, pin_… */
+/** Prefixed ULID: job_…, ref_…, node_…, shot_…, frame_…, take_…, rev_…, pin_… */
 export type Id = string
-/** `^[a-z][a-z0-9_]{2,15}$` */
-export type Tag = string
+/** A solid key: one character or object. `^[a-z][a-z0-9]{1,23}$` (no underscore). */
+export type Key = string
+/** Free text after the key: `^[a-z0-9][a-z0-9-]{0,31}$` (laughing, front, red-coat). */
+export type Variant = string
+/** key_variant, as written after @ (maya_laughing). */
+export type RefName = string
+/** What a script or shot names: a bare key (the whole character) or key_variant (one look). */
+export type Subject = string
+export const KEY_RE = /^[a-z][a-z0-9]{1,23}$/
+export const VARIANT_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
 
 export const REF_ROLES = ['character', 'shape', 'texture', 'colour', 'feel', 'pose', 'prop', 'other'] as const
 export type RefRole = (typeof REF_ROLES)[number]
 
-export const VIEWS = ['front', 'three_quarter', 'side', 'back', 'side_2'] as const
+/** op view: the turnaround view to make; also the variant its result is named by. */
+export const VIEWS = ['front', 'three-quarter', 'side', 'back'] as const
 export type View = (typeof VIEWS)[number]
 
 export interface Region { x: number; y: number; w: number; h: number }
@@ -25,7 +34,7 @@ export interface Region { x: number; y: number; w: number; h: number }
 export const PROVIDERS = ['mock', 'runway', 'fal', 'heygen'] as const
 export type Provider = (typeof PROVIDERS)[number]
 
-export const OPS = ['generate', 'combine', 'view', 'shot_list', 'frame', 'region_edit', 'clip', 'clip_edit', 'stitch'] as const
+export const OPS = ['generate', 'view', 'shot_list', 'frame', 'region_edit', 'clip', 'clip_edit', 'stitch'] as const
 export type Op = (typeof OPS)[number]
 
 export type QuotaClass = 'image' | 'video' | 'render' | 'text'
@@ -58,7 +67,7 @@ export interface Output {
 export type ErrorCode =
   | 'invalid_input' | 'unauthorised' | 'blocked' | 'flag_off' | 'quota_exhausted' | 'spend_stop'
   | 'queue_full' | 'capability_missing' | 'moderated' | 'provider_failed' | 'provider_unavailable'
-  | 'timeout' | 'uncertain' | 'internal'
+  | 'timeout' | 'uncertain' | 'conflict' | 'internal'
 
 export interface ContractError {
   code: ErrorCode
@@ -79,6 +88,30 @@ export interface OpSheet {
   durationsS?: number[]
   regionModel?: string
   regionEndpoint?: string
+  /** The model's name in the regenerate menu, and one line on what it is good for. */
+  label?: string
+  note?: string
+  /** Vetted models a participant may pick when they regenerate (features/model-choice.clan). */
+  alternates?: OpAlternate[]
+}
+
+/** One alternate model for an op: its fields replace the op's, its overrides the sheet's. */
+export interface OpAlternate {
+  model: string
+  endpoint: string
+  estimateUsd: number | null
+  label: string
+  note?: string
+  maxS?: number
+  minS?: number
+  durationsS?: number[]
+  seed?: boolean
+  outputs?: number[]
+  tagSyntax?: CapabilitySheet['tagSyntax']
+  refs?: CapabilitySheet['refs']
+  series?: number
+  outputsPerCall?: number
+  video?: CapabilitySheet['video']
 }
 
 export interface CapabilitySheet {
@@ -119,11 +152,15 @@ export interface Flags {
   feelEdit: boolean
   clickSelect: boolean
   moreOptions: boolean
+  /** Participants may send their own fal and HeyGen keys. Optional; absent means off. */
+  ownKeys?: boolean
 }
 
 export interface Config {
   contractVersion: ContractVersion
   routing: Partial<Record<Op, Provider[]>>
+  /** Never offered in the regenerate menu; a failed pick falls back to them. */
+  fallbackOnly?: Provider[]
   director: { promptVersion: string; perClickModel: string; shotListModel: string }
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
@@ -160,7 +197,8 @@ export interface Shot {
   composition: Composition
   action: string
   camera_move: CameraMove
-  lead_view?: View
+  /** What the shot shows: bare keys for whole characters (goremon), key_variant for a look (goremon_laughing). */
+  refs?: Subject[]
   dialogue?: string
   storyboard_frame?: Sha256
   selected_take?: Id
@@ -181,25 +219,23 @@ export interface DocAsset {
   thumb?: string
 }
 
-export interface ViewPick { asset: Sha256; job_id: Id; picked_at?: string }
-
-export interface CharacterRef {
-  id: Id
-  asset: Sha256
-  tag: Tag
+/** A solid reference: one character or object the participant named. */
+export interface KeyEntry {
+  key: Key
   role: RefRole
-  label?: string
-  kind: 'picture' | 'sketch'
+  /** The library version this document holds; a copy, never a live link. */
+  library?: { workspace: string; ver: number; by: string; at: string }
 }
 
-export interface Combine { id: Id; sources: Id[]; text: string; job_id?: Id }
-
-export interface Character {
-  refs: CharacterRef[]
-  combines?: Combine[]
-  views: Partial<Record<View, ViewPick>>
-  locked: boolean
-  locked_at?: string
+/** A named image: key_variant -> one asset. */
+export interface NamedRef {
+  id: Id
+  key: Key
+  variant: Variant
+  asset: Sha256
+  /** The canvas node the name sits on. */
+  node?: Id
+  named_at?: string
 }
 
 export interface ScriptRevision {
@@ -254,7 +290,7 @@ export interface DocJob {
   updated_at?: string
 }
 
-export interface Target { kind: 'view' | 'frame' | 'take' | 'shot'; id: string }
+export interface Target { kind: 'ref' | 'frame' | 'take' | 'shot'; id: string }
 
 export interface Review {
   id: Id
@@ -286,7 +322,8 @@ export interface ProductionDocument {
   participant: { id: string; handle: string }
   stage: { current: StageName; next_action?: string }
   assets: DocAsset[]
-  character: Character
+  keys: KeyEntry[]
+  refs: NamedRef[]
   script?: { current?: Id; revisions: ScriptRevision[] }
   shots?: Shot[]
   frames?: Frame[]
@@ -299,12 +336,13 @@ export interface ProductionDocument {
 
 // ── customdata.schema.json ──────────────────────────────────────────────────
 
-export type SketchTemplate = 'character-3x4' | 'ig-1x1' | 'ig-4x5' | 'story-9x16'
+export type GenOp = 'generate' | 'view' | 'region_edit'
 
 export type CustomData =
-  | { kind: 'ref'; id: Id; asset: Sha256; tag: Tag; role: RefRole; badge: string }
-  | { kind: 'sketch'; id: Id; template: SketchTemplate }
-  | { kind: 'gen'; id: Id; op: 'generate' | 'combine' | 'view' | 'region_edit'; parentIds: Id[]; state: JobState; asset?: Sha256; view?: View; pickedAs?: View; mock?: boolean }
+  | { kind: 'pic'; id: Id; asset: Sha256 }
+  | { kind: 'drawn'; id: Id; asset: Sha256 }
+  | { kind: 'note'; id: Id }
+  | { kind: 'gen'; id: Id; op: GenOp; parentIds: Id[]; state: JobState; asset?: Sha256; view?: View; mock?: boolean }
   | { kind: 'pin'; id: Id; genId: Id; region: Region; resolvedBy?: Id }
   | { kind: 'provenance'; from: Id; to: Id }
 
@@ -317,6 +355,8 @@ export interface SessionResponse {
   participantId: string
   handle: string
   role: 'participant' | 'organiser'
+  /** The team the event code belongs to; the library is shared within it. */
+  workspace: string
   expiresAt: string
   quotas: { image: number; video: number; render: number }
 }
@@ -324,7 +364,8 @@ export interface SessionResponse {
 export interface UploadRequest { sha256: Sha256; mime: InputMime; bytes: number }
 export interface UploadResponse { exists: boolean; putUrl?: string; url: string }
 
-export interface JobInputRef { id: Id; tag: Tag; role: RefRole; asset: AssetRef }
+/** An image input: a named ref (name = key_variant) or an unnamed canvas node. The relay makes the wire tags. */
+export interface JobInputRef { id: Id; name?: RefName; role: RefRole; kind: 'drawing' | 'picture' | 'generated'; asset: AssetRef }
 
 export type Strength = 'adhere' | 'flex' | 'reimagine'
 export type Ratio = '1:1' | '4:5' | '9:16' | '16:9' | '3:1'
@@ -332,9 +373,7 @@ export type Ratio = '1:1' | '4:5' | '9:16' | '16:9' | '3:1'
 export interface JobInput {
   text?: string
   chips?: string[]
-  sketch?: AssetRef
   refs?: JobInputRef[]
-  character?: { front: AssetRef } & Partial<Record<Exclude<View, 'front'>, AssetRef>>
   view?: View
   script?: string
   targetS?: number
@@ -359,6 +398,13 @@ export interface JobRequest {
   op: Op
   parentIds: Id[]
   input: JobInput
+  /** The model picked when regenerating; absent means the routing's default. */
+  modelChoice?: ModelChoice
+}
+
+export interface ModelChoice {
+  provider: Provider
+  model: string
 }
 
 export interface Job {
@@ -371,7 +417,11 @@ export interface Job {
   queuePosition?: number
   nextPollS?: number
   provider?: Provider
+  /** Whose key runs the job (the participant's X-Own-Keys, or the event's). */
+  keySource?: 'own' | 'event'
   model?: string
+  /** The pick this job was meant to run on, when it fell back to another provider. */
+  fallbackFrom?: ModelChoice
   requestId?: string
   inputHashes: Sha256[]
   director?: AgentBlock
@@ -396,6 +446,14 @@ export interface LogEntry {
 }
 
 export interface ErrorResponse { error: ContractError }
+
+export interface LibraryRef { variant: Variant; asset: AssetRef }
+export interface LibraryPublish { role: RefRole; baseVer: number; refs: LibraryRef[] }
+export interface LibraryEntry { workspace: string; key: Key; ver: number; role: RefRole; by: string; at: string; refs: LibraryRef[] }
+export interface LibraryIndex {
+  workspace: string
+  keys: { key: Key; ver: number; role: RefRole; by: string; at: string; variants: Variant[]; cover: AssetRef }[]
+}
 
 export const TERMINAL_STATES: readonly JobState[] = ['completed', 'failed', 'cancelled']
 

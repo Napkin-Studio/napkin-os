@@ -4,7 +4,6 @@
 // in; an entry is about it when its action or rationale names any of them.
 
 import type { ProductionDocument } from '../contracts/types'
-import { viewLabel } from '../doc/describe'
 
 export interface ChainLike {
   agent: string
@@ -38,14 +37,15 @@ function lineage(doc: ProductionDocument, jobIds: string[], out: Set<string>) {
   }
 }
 
-/** The items the panel can narrow to: each view, each shot's frame and clip, the ad. */
+/** The items the panel can narrow to: each named ref, each shot's frame and clip, the ad. */
 export function historyItems(doc: ProductionDocument): HistoryItem[] {
   const items: HistoryItem[] = []
-  for (const [view, pick] of Object.entries(doc.character.views)) {
-    if (!pick) continue
-    const t = new Set<string>([pick.asset, `as ${viewLabel(view)}`, `the ${viewLabel(view)} view`])
-    lineage(doc, [pick.job_id], t)
-    items.push({ key: `view:${view}`, label: `${viewLabel(view)} view`, tokens: [...t] })
+  for (const r of doc.refs) {
+    const name = `@${r.key}_${r.variant}`
+    const t = new Set<string>([r.id, r.asset, name])
+    // A generated image's node id is its job id: follow what it was made from.
+    if (r.node && doc.jobs.some((j) => j.id === r.node)) lineage(doc, [r.node], t)
+    items.push({ key: `ref:${r.id}`, label: name, tokens: [...t] })
   }
   for (const s of [...(doc.shots ?? [])].sort((a, b) => a.order - b.order)) {
     const frames = (doc.frames ?? []).filter((f) => f.shot_id === s.id)

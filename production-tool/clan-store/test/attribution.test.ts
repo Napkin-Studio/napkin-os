@@ -99,13 +99,13 @@ describe('attribution: participant, director, provider', () => {
   it('a patch can name its agent, and pins locks', async () => {
     const s = store()
     await s.create(maya)
-    await s.patch({ character: { locked: true, locked_at: '2026-10-07T10:41:00Z' } }, { action: 'locked the character', pinned: true })
+    await s.patch({ keys: [{ key: 'hero', role: 'character', library: { workspace: 'acme', ver: 1, by: 'maya', at: '2026-10-07T10:41:00Z' } }] }, { action: 'published hero', pinned: true })
     await s.patch({ stage: { current: 'storyboard' } }, { action: 'moved on', agent: 'director · m · director.v1' })
     const [moved, locked] = await s.chain()
     expect(moved.agent).toBe('director · m · director.v1')
     expect(locked.agent).toBe('maya')
     expect(locked.pinned).toBe(true)
-    expect(locked.fields_changed).toEqual(['character'])
+    expect(locked.fields_changed).toEqual(['keys'])
   })
 
   it('the real clan CLI reads all three authors from the exported bytes', async () => {

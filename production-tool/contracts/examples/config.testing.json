@@ -1,10 +1,10 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "routing": {
-    "generate": ["runway"], "combine": ["runway"], "view": ["runway"], "shot_list": [],
+    "generate": ["runway"], "view": ["runway"], "shot_list": [],
     "frame": ["runway"], "region_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "stitch": []
   },
-  "director": { "promptVersion": "director.v3", "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
+  "director": { "promptVersion": "director.v4", "perClickModel": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
   "quotas": { "image": 40, "video": 6, "render": 3 },
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },

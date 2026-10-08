@@ -107,12 +107,13 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
   if (line) ctx.fillText(line, x, y + n * lineH)
 }
 
-const VIEW_LABEL: Record<View, string> = { front: 'front', three_quarter: '3/4', side: 'side', back: 'back', side_2: 'side 2' }
+const VIEW_LABEL: Record<View, string> = { front: 'front', 'three-quarter': '3/4', side: 'side', back: 'back' }
 
 async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const inp = req.input
   const n = req.jobId.charCodeAt(req.jobId.length - 1)
-  if (req.op === 'combine') {
+  if (req.op === 'generate' && (inp.refs ?? []).length >= 2) {
+    // Several inputs: lay them over each other, the first on top.
     const { c, ctx } = canvas(768, 1024)
     paper(ctx, 768, 1024, n)
     const refs = inp.refs ?? []
@@ -122,7 +123,7 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
       contain(ctx, img, 40, 40, 688, 900, { scale: 1 - i * 0.12 })
     })
     ctx.globalAlpha = 1
-    stamp(ctx, 768, 1024, `combine · ${inp.text ?? ''}`)
+    stamp(ctx, 768, 1024, `${refs.length} inputs · ${inp.text ?? ''}`)
     return { blob: await toBlob(c), mime: 'image/png', w: 768, h: 1024 }
   }
   if (req.op === 'region_edit') {
@@ -149,8 +150,8 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     const { w, h } = sizeFor(inp.ratio ?? '9:16')
     const { c, ctx } = canvas(w, h)
     paper(ctx, w, h, (inp.shot?.order ?? 1) * 3 + n)
-    const lead = inp.shot?.lead_view ?? 'front'
-    const img = (await bitmap(input, inp.character?.[lead]?.sha256)) ?? (await bitmap(input, inp.character?.front.sha256))
+    // The shot's first named ref stands in for the character.
+    const img = await bitmap(input, inp.refs?.[0]?.asset.sha256)
     const scale = { wide: 0.45, medium: 0.7, close: 1.05, extreme_close: 1.6, over_shoulder: 0.8, insert: 0.6 }[inp.shot?.composition ?? 'medium'] ?? 0.7
     if (img) contain(ctx, img, 0, h * 0.08, w, h * 0.84, { scale })
     ctx.fillStyle = INK
@@ -164,23 +165,15 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
   // generate, view
   const { c, ctx } = canvas(768, 1024)
   paper(ctx, 768, 1024, n)
-  const source = req.op === 'view' ? inp.character?.front.sha256 : inp.sketch?.sha256 ?? inp.refs?.[0]?.asset.sha256
+  const source = req.op === 'view' ? inp.image?.sha256 : inp.refs?.[0]?.asset.sha256
   const img = await bitmap(input, source)
   const view = inp.view
   if (img) {
     if (view === 'back') ctx.filter = 'grayscale(1) brightness(0.8)'
-    contain(ctx, img, 60, 60, 648, 860, { mirror: view === 'side' || view === 'side_2', scale: view === 'three_quarter' ? 0.92 : 1 })
+    contain(ctx, img, 60, 60, 648, 860, { mirror: view === 'side', scale: view === 'three-quarter' ? 0.92 : 1 })
     ctx.filter = 'none'
   }
-  if (req.op === 'generate') {
-    const refs = (await Promise.all((inp.refs ?? []).slice(0, 4).map((r) => bitmap(input, r.asset.sha256)))).filter(Boolean) as ImageBitmap[]
-    refs.forEach((r, i) => {
-      ctx.fillStyle = '#fff'
-      ctx.fillRect(16 + i * 92, 16, 84, 84)
-      contain(ctx, r, 18 + i * 92, 18, 80, 80)
-    })
-  }
-  stamp(ctx, 768, 1024, req.op === 'view' ? `view · ${VIEW_LABEL[view ?? 'front']}` : `front view · ${inp.text ?? ''}`)
+  stamp(ctx, 768, 1024, req.op === 'view' ? `view · ${VIEW_LABEL[view ?? 'front']}` : `generated · ${inp.text ?? ''}`)
   return { blob: await toBlob(c), mime: 'image/png', w: 768, h: 1024 }
 }
 
@@ -289,7 +282,7 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
       return out
     }
   }
-  const img = (await bitmap(input, inp.image?.sha256)) ?? (await bitmap(input, inp.character?.front.sha256))
+  const img = (await bitmap(input, inp.image?.sha256)) ?? (await bitmap(input, inp.refs?.[0]?.asset.sha256))
   const move = inp.shot?.camera_move ?? 'push_in'
   return record(w, h, seconds, (ctx, t) => {
     const p = t / seconds

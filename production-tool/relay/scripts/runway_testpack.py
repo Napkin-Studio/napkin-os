@@ -21,8 +21,9 @@ Items (--only a,b,c picks some; the default is all):
 
 Inputs: --image-url (a character; items a, c, d, e), --input-url (item b). The image ops (a, c, d) fetch
 the --image-url once and send it to Runway as a data URI, so it may be a local http URL. Runway rejects a
-data URI as a clip's first frame and wants an https URL for the CloudFront test, so e and b are 'blocked'
-(zero cost, nothing submitted) unless their URL is https.
+data URI as a clip's first frame, so for a URL that is not https item e uploads the (shrunk) image to Runway's
+ephemeral store (free) and uses the runway:// uri; a dry run uploads nothing. Item b wants an https URL for
+the CloudFront test, so it is 'blocked' (zero cost, nothing submitted) unless its URL is https.
 Order: g first, then the cheap items together (b, a, d), then f alone so its latencies are clean,
 then the costly c and e together.
 
@@ -48,11 +49,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+import httpx
+
 from runway_common import (
-    CLIP_RATIO, DEFAULT_MAX_USD, FIRST_FRAME_NEEDS_HTTPS, GATE_NOTE, IMAGE_RATIO, KEY_ENV, KEY_HELP, RELAY, Assets,
-    Budget, BudgetExceeded, Runner, Tap, default_factory, estimate_usd, fetch_bytes, head_url, image_ref, is_https,
-    key_status, make_job, percentile, prepare_image, redact_url, region_edit, save_outputs, scrub, sheet_with_model,
-    write_file,
+    CLIP_RATIO, DEFAULT_MAX_USD, GATE_NOTE, IMAGE_RATIO, KEY_ENV, KEY_HELP, RELAY, UPLOAD_NOTE, Assets,
+    Budget, BudgetExceeded, Runner, Tap, default_factory, estimate_usd, fetch_bytes, first_frame_ref, head_url,
+    image_ref, is_https, key_status, make_client, make_job, percentile, prepare_image, redact_url, region_edit,
+    save_outputs, scrub, sheet_with_model, write_file,
 )
 from runway_report import build_report
 from providers import ProviderError, Ref, load_sheet
@@ -60,6 +63,7 @@ from region import DEFAULT_THRESHOLDS, evaluate_gate, paste_back
 
 RESULTS = RELAY / "results" / "runway-testpack.json"
 SAVE_DIR = RELAY / "results" / "outputs"
+FLASH = "gemini_image3.1_flash"
 STAGES = (("g",), ("b", "a", "d"), ("f",), ("c", "e"))
 ITEMS = tuple("abcdefg")
 NEEDS = {"a": "--image-url", "b": "--input-url", "c": "--image-url", "d": "--image-url", "e": "--image-url"}
@@ -107,8 +111,6 @@ def plan(sheet: dict, only: list[str]) -> list[dict]:
 
 def blocked_reason(item: str, image_url: Optional[str], input_url: Optional[str]) -> Optional[str]:
     """Why an item cannot run with these inputs, or None. A URL that is not given is the 'needs' check's business."""
-    if item == "e" and image_url and not is_https(image_url):
-        return FIRST_FRAME_NEEDS_HTTPS
     if item == "b" and input_url and not is_https(input_url):
         return INPUT_NEEDS_HTTPS
     return None
@@ -117,8 +119,9 @@ def blocked_reason(item: str, image_url: Optional[str], input_url: Optional[str]
 class Ctx:
     """What the items share: the runner, the inputs, and the injected I/O."""
 
-    def __init__(self, runner, assets, key, factory, args, fetch, head):
+    def __init__(self, runner, assets, key, factory, args, fetch, head, client=None):
         self.runner, self.assets, self.key, self.factory = runner, assets, key, factory
+        self.client = client or make_client()  # for the ephemeral upload
         self.image_url, self.input_url, self.fetch, self.head = args.image_url, args.input_url, fetch, head
         self.save_dir, self.base = args.save_dir, args.out.parent  # recorded paths are relative to the results folder
         self._image_sha, self._lock = None, threading.Lock()
@@ -230,7 +233,8 @@ def item_d(ctx: Ctx) -> dict:
 
 
 def item_e(ctx: Ctx) -> dict:
-    sha = ctx.assets.add_url(ctx.image_url, "image/png")  # https, or the item is blocked
+    # An https URL is used as is; any other is uploaded to Runway first. A failure here is the item's, before any job.
+    sha = first_frame_ref(ctx.assets, ctx.client, ctx.key, ctx.fetch, ctx.image_url)
     clip_sheet = ctx.runner.sheet
 
     def one(model: str) -> dict:
@@ -320,7 +324,7 @@ def write_report(res: dict, results_file: Path, out: Callable[[str], None]) -> N
 
 def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Callable[[str], None] = print,
          factory=default_factory, fetch: Callable[[str], bytes] = fetch_bytes,
-         head: Callable[[str], dict] = head_url, **runtime) -> int:
+         head: Callable[[str], dict] = head_url, transport: Optional[httpx.BaseTransport] = None, **runtime) -> int:
     args = parser().parse_args(argv)
     env = os.environ if env is None else env
     if args.report_only:
@@ -333,7 +337,10 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
     if bad := [i for i in only if i not in ITEMS]:
         out(f"unknown items: {', '.join(bad)}")
         return 2
+    # Items a, b, d and f measure Gemini 3.1 Flash, no longer Runway's default (features/default-models.clan).
     sheet = load_sheet("runway")
+    for op in ("generate", "view", "frame"):
+        sheet = sheet_with_model(sheet, op, FLASH)
     rows = plan(sheet, only)
     inputs = {"--image-url": args.image_url, "--input-url": args.input_url}
 
@@ -344,6 +351,8 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
         note = f"   needs {need}" if need and not inputs[need] else ""
         if reason := blocked_reason(r["item"], args.image_url, args.input_url):
             r["est_usd"], note = 0.0, f"   BLOCKED: {reason}"
+        elif r["item"] == "e" and args.image_url and not is_https(args.image_url):
+            note = f"   {UPLOAD_NOTE}"
         out(f"  {r['item']}  {r['title']:<44} {r['jobs']:>2} jobs  ~${r['est_usd']:.2f}{note}")
     total = sum(r["est_usd"] for r in rows)
     out(f"estimated cost: ${total:.2f}   cap: ${args.max_usd:.2f}   audio: off on every video")
@@ -360,8 +369,8 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
         return 2
 
     assets, tap = Assets(), Tap(runtime.get("clock", time.monotonic))
-    runner = Runner(factory(key, assets, tap), Budget(args.max_usd), tap=tap, **runtime)
-    ctx = Ctx(runner, assets, key, factory, args, fetch, head)
+    runner = Runner(factory(key, assets, tap, sheet), Budget(args.max_usd), tap=tap, **runtime)
+    ctx = Ctx(runner, assets, key, factory, args, fetch, head, make_client(transport=transport))
     items: dict[str, dict] = {}
     for stage in STAGES:
         names = [i for i in stage if i in only]

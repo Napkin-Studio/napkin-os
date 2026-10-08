@@ -12,6 +12,12 @@
       "propertyNames": { "$ref": "common.schema.json#/$defs/op" },
       "additionalProperties": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/provider" }, "uniqueItems": true }
     },
+    "fallbackOnly": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/provider" },
+      "uniqueItems": true,
+      "description": "Providers never offered in the regenerate menu. A job that names a model (JobRequest.modelChoice) falls back to the first of these routed for its op, with its default model, when the picked provider cannot take it. Absent: every routed provider is offered and a failed pick has no fallback. Added 2026-10-08 (additive; upload only to a relay that knows it)."
+    },
     "director": {
       "type": "object",
       "properties": {
@@ -61,7 +67,8 @@
         "videoRegionEdit": { "type": "boolean" },
         "feelEdit": { "type": "boolean" },
         "clickSelect": { "type": "boolean" },
-        "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." }
+        "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." },
+        "ownKeys": { "type": "boolean", "description": "Participants may send their own fal and HeyGen keys (X-Own-Keys on POST /jobs). Optional; absent means off." }
       },
       "required": ["storyboard", "video", "stitch", "regionEditFrames", "regionEditCanvas", "videoRegionEdit", "feelEdit", "clickSelect", "moreOptions"],
       "additionalProperties": false

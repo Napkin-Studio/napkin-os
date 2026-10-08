@@ -12,12 +12,13 @@ export type { DocumentStore } from './types'
 
 export function emptyDocument(participant = { id: 'p_local', handle: 'guest' }): ProductionDocument {
   return {
-    contract_version: '1',
+    contract_version: '2',
     app: 'production-tool',
     participant,
-    stage: { current: 'character', next_action: 'Drop pictures, draw your character, then generate.' },
+    stage: { current: 'character', next_action: 'Draw, write or drop pictures anywhere, select them, then Generate.' },
     assets: [],
-    character: { refs: [], combines: [], views: {}, locked: false },
+    keys: [],
+    refs: [],
     script: { revisions: [] },
     shots: [],
     frames: [],
@@ -181,7 +182,8 @@ export function subscribeDoc(store: DocumentStore) {
 export function normaliseDocument(d: ProductionDocument): ProductionDocument {
   return {
     ...d,
-    character: { combines: [], ...d.character },
+    keys: d.keys ?? [],
+    refs: d.refs ?? [],
     script: d.script ?? { revisions: [] },
     shots: d.shots ?? [],
     frames: d.frames ?? [],

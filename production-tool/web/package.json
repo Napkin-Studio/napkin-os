@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:relay": "VITE_RELAY_URL=http://localhost:8787 vite",
     "clan-store": "npm --prefix ../clan-store ci --no-audit --no-fund && npm --prefix ../clan-store run build",
     "lint": "eslint .",
     "test": "vitest run",

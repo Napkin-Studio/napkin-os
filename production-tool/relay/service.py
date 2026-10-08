@@ -22,18 +22,23 @@ import hashlib
 import json
 import logging
 import math
+import re
 import time
 from datetime import datetime, timezone
 
+import library
+import names
+import own_keys
 from contracts import Contracts, api
 from director.base import Director
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
+from providers.types import effective_sheet, op_models
 
 log = logging.getLogger("relay")
 
 QUOTA_CLASS = {
-    "generate": "image", "combine": "image", "view": "image", "frame": "image", "region_edit": "image",
+    "generate": "image", "view": "image", "frame": "image", "region_edit": "image",
     "clip": "video", "clip_edit": "video", "stitch": "render", "shot_list": "text",
 }
 INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
@@ -44,6 +49,14 @@ SESSION_TTL_S = 24 * 3600
 CLAN_MAX_BYTES = 5 * 1024 * 1024
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
+DEFAULT_WORKSPACE = "event"
+KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
+
+
+def workspace_of(codes: dict, code: str) -> str:
+    """The workspace an event code belongs to (EVENT_CODES "workspaces": {"CODE": "acme"})."""
+    mapped = {c.upper(): w for c, w in (codes.get("workspaces") or {}).items()}
+    return mapped.get(code, DEFAULT_WORKSPACE)
 SUBMITTING_STALE_S = 120       # a submit that never came back
 FETCH_LEASE_S = 90
 MAX_FETCH_ATTEMPTS = 3
@@ -51,8 +64,12 @@ STATUS_ERRORS = {
     "invalid_input": 400, "unauthorised": 401, "blocked": 403, "flag_off": 403,
     "quota_exhausted": 429, "queue_full": 429, "spend_stop": 503, "capability_missing": 422,
     "moderated": 422, "provider_failed": 502, "provider_unavailable": 503, "timeout": 504,
-    "uncertain": 409, "internal": 500,
+    "uncertain": 409, "conflict": 409, "internal": 500,
 }
+
+
+def own_keys_unreadable(provider: str) -> str:
+    return f"The relay can no longer read your {own_keys.NAMES.get(provider, provider)} key for this job. Try again."
 
 
 class ApiError(Exception):
@@ -102,11 +119,14 @@ def public(job: dict) -> dict:
 
 class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config, secrets,
-                 contracts: Contracts | None = None, clock=time.time, stitch=None):
+                 contracts: Contracts | None = None, clock=time.time, stitch=None,
+                 own_adapters: own_keys.OwnAdapters | None = None):
         """config: () -> config.json dict (cached by the caller).
         secrets: () -> {"event_codes": {"participant": [...], "organiser": [...]}, "token_secret": str}.
-        stitch: (payload dict) -> None, starts the stitch Lambda asynchronously."""
+        stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
+        own_adapters: adapters on a participant's own key (built on first use)."""
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
+        self._own_adapters = own_adapters
         self.config, self.secrets = config, secrets
         self.contracts = contracts or Contracts()
         self.clock = clock
@@ -161,7 +181,7 @@ class Relay:
             self._not_blocked(who)
             req = self._json(body, "JobRequest")
             ctx["jobId"], ctx["op"] = req["jobId"], req["op"]
-            return 200, public(self.create_job(who, req))
+            return 200, public(self.create_job(who, req, headers.get(own_keys.HEADER)))
         if path.startswith("/jobs/"):
             job_id = path[len("/jobs/"):]
             ctx["jobId"] = job_id
@@ -170,6 +190,8 @@ class Relay:
                 return 200, public(self.advance(job))
             if method == "DELETE":
                 return 200, public(self.cancel(job))
+        if path == "/library" or path.startswith("/library/"):
+            return 200, self.library_route(who, method, path, body, ctx)
         if method == "POST" and path == "/clan":
             self._not_blocked(who)
             ctx["clanBytes"] = self.mirror_clan(who, headers, body)
@@ -233,8 +255,9 @@ class Relay:
         pid = participant_id(handle)
         ctx["participant"] = pid
         exp = int(self.clock()) + SESSION_TTL_S
-        token = sign({"pid": pid, "h": handle, "r": role, "exp": exp}, secrets["token_secret"])
-        return {"token": token, "participantId": pid, "handle": handle, "role": role,
+        workspace = workspace_of(codes, code)
+        token = sign({"pid": pid, "h": handle, "r": role, "w": workspace, "exp": exp}, secrets["token_secret"])
+        return {"token": token, "participantId": pid, "handle": handle, "role": role, "workspace": workspace,
                 "expiresAt": iso(exp), "quotas": self.remaining(pid, role)}
 
     def _day(self) -> str:
@@ -268,9 +291,108 @@ class Relay:
             self.blobs.put(key, data, CLAN_MIME)
         return len(data)
 
+    # ── the workspace library ───────────────────────────────────────────────
+    def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
+        workspace = who.get("w") or DEFAULT_WORKSPACE
+        lib = library.Library(self.blobs, lambda: iso(self.clock()))
+        if method == "GET" and path == "/library":
+            return lib.index(workspace)
+        key, _, ver = path[len("/library/"):].partition("/")
+        if not KEY.match(key) or (ver and not ver.isdigit()):
+            raise ApiError("invalid_input", "A key is lowercase letters and digits, 2 to 24 of them.")
+        ctx["libraryKey"] = key
+        try:
+            if method == "GET":
+                return lib.entry(workspace, key, int(ver) if ver else None)
+            if method == "POST" and not ver:
+                self._not_blocked(who)
+                return lib.publish(workspace, key, self._json(body, "LibraryPublish"), who["h"])
+        except library.Conflict as e:
+            raise ApiError("conflict", str(e)) from None
+        except library.Missing as e:
+            raise ApiError("invalid_input", str(e), status=404) from None
+        except ValueError as e:
+            raise ApiError("invalid_input", str(e)) from None
+        raise ApiError("invalid_input", f"No route {method} {path}.", status=404)
+
     # ── admission ───────────────────────────────────────────────────────────
     def _candidates(self, cfg: dict, op: str) -> list[str]:
         return [p for p in cfg["routing"].get(op, []) if self.registry.supports(p, op)]
+
+    # ── a model the participant picked (features/model-choice.clan) ─────────
+    def _check_pick(self, cfg: dict, op: str, pick: dict | None) -> None:
+        """Refuse, before any spend or quota, a pick the routing or the sheet does not allow."""
+        if pick is None:
+            return
+        provider, model = pick["provider"], pick["model"]
+        sheet = self.registry.sheet(provider)
+        if (op in INTERNAL_OPS or provider not in cfg["routing"].get(op, [])
+                or provider in cfg.get("fallbackOnly", []) or not sheet or model not in op_models(sheet, op)):
+            raise ApiError("invalid_input", f"{model} on {provider} cannot make this step. Pick another model.")
+
+    def _pick_candidates(self, cfg: dict, op: str, pick: dict) -> list[str]:
+        """The picked provider, then the fallback-only providers routed for the op."""
+        fallback = [p for p in cfg["routing"].get(op, []) if p in cfg.get("fallbackOnly", []) and p != pick["provider"]]
+        return [p for p in [pick["provider"], *fallback] if self.registry.supports(p, op)]
+
+    # ── own keys ────────────────────────────────────────────────────────────
+    @property
+    def own_adapters(self) -> own_keys.OwnAdapters:
+        if self._own_adapters is None:
+            self._own_adapters = own_keys.OwnAdapters()
+        return self._own_adapters
+
+    def _sealer(self) -> own_keys.Sealer:
+        return own_keys.Sealer(self.secrets()["token_secret"])
+
+    def _own_candidates(self, cfg: dict, op: str, raw: str | None, pick: dict | None = None) -> dict[str, str]:
+        """The participant's keys for the providers that can do this op, in
+        preference order. Empty: the job runs on the event's routing."""
+        if op in INTERNAL_OPS or not cfg["flags"].get("ownKeys"):
+            return {}
+        try:
+            keys = own_keys.parse(raw)
+        except own_keys.BadKeys as e:
+            raise ApiError("invalid_input", str(e)) from None
+        own = {p: keys[p] for p in own_keys.PROVIDERS if p in keys and self.own_adapters.supports(p, op)}
+        if pick:  # a pick runs on the participant's key only for the picked provider
+            own = {p: k for p, k in own.items() if p == pick["provider"]}
+        if op in own_keys.BACKUP_ONLY.get("fal", ()) and "heygen" not in own:
+            own.pop("fal", None)
+        return own
+
+    @staticmethod
+    def _is_own(job: dict) -> bool:
+        return job.get("keySource") == "own"
+
+    def _job_candidates(self, cfg: dict, job: dict) -> list[str]:
+        if self._is_own(job):
+            return list(job["_own"])
+        pick = job["_req"].get("modelChoice")
+        if pick:
+            return self._pick_candidates(cfg, job["op"], pick)
+        return self._candidates(cfg, job["op"])
+
+    def _sheet(self, job: dict, provider: str | None = None) -> dict | None:
+        provider = provider or job.get("provider")
+        if self._is_own(job):
+            return self.own_adapters.sheet(provider)
+        return self.registry.sheet(provider)
+
+    def _adapter(self, job: dict, provider: str | None = None):
+        """The adapter for this job: the event's, or one on the participant's key.
+        None when an own key cannot be read (TOKEN_SECRET rotated)."""
+        provider = provider or job["provider"]
+        if not self._is_own(job):
+            return self.registry.get(provider)
+        key = self._sealer().open(job["_own"].get(provider, ""), job["jobId"], provider)
+        return self.own_adapters.get(provider, key) if key else None
+
+    def _slot_key(self, job: dict, provider: str, cls: str) -> str:
+        """Own-key jobs use the participant's own slots at that provider, never the event's."""
+        if self._is_own(job):
+            return f"slots#{provider}#own#{job['participantId']}#{cls}"
+        return f"slots#{provider}#{cls}"
 
     def _check_flags(self, cfg: dict, req: dict) -> None:
         op, inp, flags = req["op"], req["input"], cfg["flags"]
@@ -292,11 +414,14 @@ class Relay:
         if off:
             raise ApiError("flag_off", off)
 
-    def _estimate(self, op: str, provider: str) -> tuple[float, bool]:
-        price = ((self.registry.sheet(provider) or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
+    def _estimate(self, op: str, provider: str, model: str | None = None) -> tuple[float, bool]:
+        sheet = self.registry.sheet(provider)
+        if sheet and op in sheet.get("ops", {}):
+            sheet = effective_sheet(sheet, op, model)
+        price = ((sheet or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
 
-    def create_job(self, who: dict, req: dict) -> dict:
+    def create_job(self, who: dict, req: dict, own_header: str | None = None) -> dict:
         existing = self.store.get_job(req["jobId"])
         if existing:
             return self._existing(who, existing)
@@ -304,12 +429,19 @@ class Relay:
         op = req["op"]
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
+        pick = req.get("modelChoice")
+        self._check_pick(cfg, op, pick)
+        try:  # a misspelt @name is the participant's to fix: say so now, not as a failed job
+            names.to_wire(op, req["input"])
+        except (names.UnknownName, ValueError) as e:
+            raise ApiError("invalid_input", str(e)) from None
+        own = self._own_candidates(cfg, op, own_header, pick)
         estimate, unknown = 0.0, False
-        if op not in INTERNAL_OPS:
-            candidates = self._candidates(cfg, op)
+        if op not in INTERNAL_OPS and not own:
+            candidates = self._pick_candidates(cfg, op, pick) if pick else self._candidates(cfg, op)
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
-            prices = [self._estimate(op, p) for p in candidates]
+            prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
         if estimate > 0 and self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
@@ -320,7 +452,7 @@ class Relay:
             raise ApiError("queue_full", f"You have {cfg['inFlightPerParticipant']} jobs running; wait for one to finish.",
                            retryable=True, retry_after=10)
         day = self._day()
-        counted = qclass in cfg["quotas"]
+        counted = qclass in cfg["quotas"] and not own  # their own money: no daily quota
         if counted:
             limit = cfg["quotas"][qclass] * (ORGANISER_QUOTA_FACTOR if role == "organiser" else 1)
             if not self.store.incr(f"{pid}#{day}", qclass, 1, limit):
@@ -331,13 +463,18 @@ class Relay:
 
         now = self.clock()
         job = {
-            "contractVersion": "1", "jobId": req["jobId"], "participantId": pid, "op": op,
+            "contractVersion": "2", "jobId": req["jobId"], "participantId": pid, "op": op,
             "quotaClass": qclass, "state": "queued", "inputHashes": sorted({a["sha256"] for a in asset_refs(req["input"])}),
             "cost": {"estimate": estimate, "reserved": estimate, "currency": "USD", "unknown": unknown},
             "createdAt": iso(now), "updatedAt": iso(now),
             "_req": req, "_role": role, "_day": day, "_counted": counted, "_queue": "q",
             "_released": False, "_tried": [],
         }
+        if op not in INTERNAL_OPS:
+            job["keySource"] = "own" if own else "event"
+        if own:
+            sealer = self._sealer()
+            job["_own"] = {p: sealer.seal(k, req["jobId"], p) for p, k in own.items()}
         if not self.store.create_job(job):  # the same jobId raced in: undo, return theirs
             self.store.incr(f"inflight#{pid}", "n", -1)
             if counted:
@@ -377,6 +514,8 @@ class Relay:
             spend_delta = confirmed - cost.get("reserved", 0)
             cost["confirmed"] = confirmed
             cost["unknown"] = False
+        if self._is_own(job):
+            spend_delta = 0.0  # billed to the participant's account, not the event
         saved = self._save(job, state=state, error=error, cost=cost, _queue=None, _released=True,
                            queuePosition=None, **changes)
         if saved is None:
@@ -406,7 +545,7 @@ class Relay:
             return job
         min_poll = 2
         if job.get("provider"):
-            sheet = self.registry.sheet(job["provider"]) or {}
+            sheet = self._sheet(job) or {}
             min_poll = max(min_poll, math.ceil(sheet.get("results", {}).get("minPollS", 1)))
         if job["state"] == "queued":
             min_poll = max(min_poll, 3)
@@ -428,7 +567,7 @@ class Relay:
         the oldest job. Counted among queued jobs of the same slot class."""
         cls = self._slot_class(job["op"])
         queued = [j for j in self.store.list_active("q") if j["op"] not in INTERNAL_OPS
-                  and self._slot_class(j["op"]) == cls]
+                  and self._slot_class(j["op"]) == cls and self._same_lane(job, j)]
         running: dict[str, int] = {}
         for j in self.store.list_active("r"):
             running[j["participantId"]] = running.get(j["participantId"], 0) + 1
@@ -436,11 +575,18 @@ class Relay:
         ids = [j["jobId"] for j in queued]
         return ids.index(job["jobId"]) if job["jobId"] in ids else 0
 
-    def _free_slots(self, candidates: list[str], cls: str) -> int:
+    def _same_lane(self, job: dict, other: dict) -> bool:
+        """Event jobs queue together; own-key jobs queue only behind the same
+        participant's own-key jobs, since they use that participant's slots."""
+        if self._is_own(job):
+            return self._is_own(other) and other["participantId"] == job["participantId"]
+        return not self._is_own(other)
+
+    def _free_slots(self, job: dict, candidates: list[str], cls: str) -> int:
         free = 0
         for p in candidates:
-            limit = (self.registry.sheet(p) or {}).get("concurrency", {}).get(cls, 0)
-            free += max(0, int(limit - self.store.counters(f"slots#{p}#{cls}").get("n", 0)))
+            limit = (self._sheet(job, p) or {}).get("concurrency", {}).get(cls, 0)
+            free += max(0, int(limit - self.store.counters(self._slot_key(job, p, cls)).get("n", 0)))
         return free
 
     def _dispatch(self, job: dict, cfg: dict) -> dict:
@@ -452,37 +598,47 @@ class Relay:
         if op == "stitch":
             return self._run_stitch(job, cfg)
         cls = self._slot_class(op)
-        candidates = [p for p in self._candidates(cfg, op) if p not in job["_tried"]]
+        candidates = [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]
         if not candidates:
             return self._fail(job, "capability_missing", "No provider can do this step right now.",
                               paid=False, refund=True)
         position = self._queue_position(job)
-        if position >= self._free_slots(candidates, cls):
+        if position >= self._free_slots(job, candidates, cls):
             return self._with_poll({**job, "queuePosition": position})
         for provider in candidates:
-            limit = (self.registry.sheet(provider) or {}).get("concurrency", {}).get(cls, 0)
-            if limit <= 0 or not self.store.incr(f"slots#{provider}#{cls}", "n", 1, limit):
+            limit = (self._sheet(job, provider) or {}).get("concurrency", {}).get(cls, 0)
+            slot = self._slot_key(job, provider, cls)
+            if limit <= 0 or not self.store.incr(slot, "n", 1, limit):
                 continue
-            outcome = self._submit(job, cfg, provider, f"slots#{provider}#{cls}")
+            outcome = self._submit(job, cfg, provider, slot)
             if outcome is not None:
                 return outcome
             job = self.store.get_job(job["jobId"])  # refused before acceptance: try the next one
             if job["state"] != "queued":
                 return self._with_poll(job)
-        if not [p for p in self._candidates(cfg, op) if p not in job["_tried"]]:
-            return self._fail(job, "provider_unavailable", "No provider could take this job. Try again.",
-                              retryable=True, paid=False, refund=True)
+        if not [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]:
+            message = "No provider could take this job. Try again."
+            if self._is_own(job):
+                names = " or ".join(own_keys.NAMES[p] for p in job["_own"])
+                message = f"Your {names} account could not take this step. Try again, or remove your key to use the event's providers."
+                if job.get("_lastError"):
+                    message += f" ({job['_lastError']})"
+            return self._fail(job, "provider_unavailable", message, retryable=True, paid=False, refund=True)
         return self._with_poll({**job, "queuePosition": 0})
 
     def _submit(self, job: dict, cfg: dict, provider: str, slot: str) -> dict | None:
         """Director, then provider submit. None means the provider refused before
         accepting and the job is back in the queue for the next provider."""
-        sheet = self.registry.sheet(provider)
-        estimate, unknown = self._estimate(job["op"], provider)
+        # A picked model runs on its own provider; anywhere else (the fallback) the default runs.
+        pick = job["_req"].get("modelChoice")
+        picked = pick["model"] if pick and pick["provider"] == provider else None
+        sheet = effective_sheet(self._sheet(job, provider), job["op"], picked)
+        estimate, unknown = (0.0, False) if self._is_own(job) else self._estimate(job["op"], provider, picked)
         cost = {**job["cost"], "estimate": estimate, "reserved": estimate, "unknown": unknown}
         model = sheet["ops"][job["op"]]["model"]
+        moved = {"fallbackFrom": pick} if pick and not picked else {}
         saved = self._save(job, state="submitting", provider=provider, model=model, _slot=slot,
-                           _queue="r", cost=cost, queuePosition=None)
+                           _queue="r", cost=cost, queuePosition=None, **moved)
         if saved is None:
             self.store.incr(slot, "n", -1)
             return self._reload(job)
@@ -500,7 +656,10 @@ class Relay:
                                 outputs=[], paid=False, refund=True)
         pjob = directed["providerJob"]
         set_job_context(job["op"], asset_refs(job["_req"]["input"]))
-        adapter = self.registry.get(provider)
+        adapter = self._adapter(job, provider)
+        if adapter is None:
+            return self._fail(job, "provider_failed", own_keys_unreadable(provider), paid=False, refund=True,
+                              director=block)
         try:
             request_id = adapter.submit(pjob)
         except Moderated as e:
@@ -512,12 +671,15 @@ class Relay:
                                   provider_code=e.provider_code, director=block)
             if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
                 back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                  _tried=job["_tried"] + [provider])
+                                  _tried=job["_tried"] + [provider], _lastError=f"{provider}: {e.message}"[:300])
                 self.store.incr(slot, "n", -1)
                 if back is None:
                     log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
                 return None
-            return self._fail(job, e.code, e.message, retryable=e.retryable, provider_code=e.provider_code,
+            message = e.message
+            if self._is_own(job) and own_keys.refused(provider, e.code, e.message, e.provider_code):
+                message = f"Your {own_keys.NAMES[provider]} key was refused. Check it, or remove it to use the event's providers."
+            return self._fail(job, e.code, message, retryable=e.retryable, provider_code=e.provider_code,
                               paid=False, refund=True, director=block)
         except Exception as e:  # timeout, reset: it may have been accepted
             log.exception("submit to %s raised", provider)
@@ -539,7 +701,9 @@ class Relay:
             use_config = getattr(self.director, "use_config", None)
             if use_config:  # config.json's director block: the model ids and prompt version
                 use_config(self.config().get("director") or {})
-            out = dict(self.director.direct(job["_req"], sheet))
+            req = job["_req"]
+            # The director sees wire tags (names.py); the ledger keeps the participant's names.
+            out = dict(self.director.direct({**req, "input": names.to_wire(req["op"], req.get("input") or {})}, sheet))
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
@@ -615,16 +779,18 @@ class Relay:
             return self._advance_stitch(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
             try:
-                self.registry.get(job["provider"]).cancel(job["requestId"])
+                self._adapter(job).cancel(job["requestId"])
             except Exception:
                 log.exception("cancel after timeout failed")
             return self._fail(job, "timeout", "The provider took too long. Try again.", retryable=True)
         if state == "submitted" and now < job.get("_nextCheckAt", 0):
             return self._with_poll(job)
-        adapter = self.registry.get(job["provider"])
+        adapter = self._adapter(job)
         if adapter is None:
+            if self._is_own(job):
+                return self._fail(job, "provider_failed", own_keys_unreadable(job["provider"]))
             return self._with_poll(job)
-        sheet = self.registry.sheet(job["provider"]) or {}
+        sheet = self._sheet(job) or {}
         min_poll = (sheet.get("results") or {}).get("minPollS", 1)
         try:
             st = adapter.status(job["requestId"])
@@ -700,7 +866,7 @@ class Relay:
         if state == "submitted":
             if job["op"] != "stitch" and job.get("provider"):
                 try:
-                    self.registry.get(job["provider"]).cancel(job["requestId"])
+                    self._adapter(job).cancel(job["requestId"])
                 except Exception:
                     log.exception("provider cancel failed")
             return self._finish(job, "cancelled")

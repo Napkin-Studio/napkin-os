@@ -1,0 +1,481 @@
+{
+ "endpoint": "POST /v3/models/videos",
+ "fetched": "2026-10-08 (written by hand: HeyGen publishes no OpenAPI)",
+ "schema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+   {
+    "additionalProperties": false,
+    "properties": {
+     "aspect_ratio": {
+      "enum": [
+       "21:9",
+       "16:9",
+       "4:3",
+       "1:1",
+       "3:4",
+       "9:16"
+      ]
+     },
+     "callback_id": {
+      "maxLength": 256,
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "callback_url": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "duration": {
+      "maximum": 15,
+      "minimum": 5,
+      "type": "integer"
+     },
+     "mode": {
+      "const": "text_to_video"
+     },
+     "model": {
+      "const": "heygen-video-1"
+     },
+     "prompt": {
+      "maxLength": 16000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "prompt_enhancement": {
+      "enum": [
+       "turbo",
+       "quality",
+       "default",
+       "disabled"
+      ]
+     },
+     "resolution": {
+      "enum": [
+       "480p",
+       "768p",
+       "1080p",
+       "2k"
+      ]
+     },
+     "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": [
+       "integer",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "model",
+     "mode",
+     "prompt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "aspect_ratio": {
+      "enum": [
+       "21:9",
+       "16:9",
+       "4:3",
+       "1:1",
+       "3:4",
+       "9:16",
+       "adaptive",
+       null
+      ]
+     },
+     "callback_id": {
+      "maxLength": 256,
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "callback_url": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "duration": {
+      "maximum": 15,
+      "minimum": 5,
+      "type": "integer"
+     },
+     "image": {
+      "oneOf": [
+       {
+        "additionalProperties": false,
+        "properties": {
+         "type": {
+          "const": "url"
+         },
+         "url": {
+          "pattern": "^https://",
+          "type": "string"
+         }
+        },
+        "required": [
+         "type",
+         "url"
+        ],
+        "type": "object"
+       },
+       {
+        "additionalProperties": false,
+        "properties": {
+         "asset_id": {
+          "minLength": 1,
+          "type": "string"
+         },
+         "type": {
+          "const": "asset_id"
+         }
+        },
+        "required": [
+         "type",
+         "asset_id"
+        ],
+        "type": "object"
+       },
+       {
+        "additionalProperties": false,
+        "properties": {
+         "data": {
+          "type": "string"
+         },
+         "media_type": {
+          "type": "string"
+         },
+         "type": {
+          "const": "base64"
+         }
+        },
+        "required": [
+         "type",
+         "media_type",
+         "data"
+        ],
+        "type": "object"
+       }
+      ]
+     },
+     "mode": {
+      "const": "image_to_video"
+     },
+     "model": {
+      "const": "heygen-video-1"
+     },
+     "prompt": {
+      "maxLength": 16000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "prompt_enhancement": {
+      "enum": [
+       "turbo",
+       "quality",
+       "default",
+       "disabled"
+      ]
+     },
+     "resolution": {
+      "enum": [
+       "480p",
+       "768p",
+       "1080p",
+       "2k"
+      ]
+     },
+     "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": [
+       "integer",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "model",
+     "mode",
+     "prompt",
+     "image"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "aspect_ratio": {
+      "enum": [
+       "21:9",
+       "16:9",
+       "4:3",
+       "1:1",
+       "3:4",
+       "9:16",
+       "adaptive"
+      ]
+     },
+     "callback_id": {
+      "maxLength": 256,
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "callback_url": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "duration": {
+      "maximum": 15,
+      "minimum": 5,
+      "type": "integer"
+     },
+     "mode": {
+      "const": "reference_to_video"
+     },
+     "model": {
+      "const": "heygen-video-1"
+     },
+     "prompt": {
+      "maxLength": 16000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "prompt_enhancement": {
+      "enum": [
+       "turbo",
+       "quality",
+       "default",
+       "disabled"
+      ]
+     },
+     "reference_audio": {
+      "items": {
+       "oneOf": [
+        {
+         "additionalProperties": false,
+         "properties": {
+          "type": {
+           "const": "url"
+          },
+          "url": {
+           "pattern": "^https://",
+           "type": "string"
+          }
+         },
+         "required": [
+          "type",
+          "url"
+         ],
+         "type": "object"
+        },
+        {
+         "additionalProperties": false,
+         "properties": {
+          "asset_id": {
+           "minLength": 1,
+           "type": "string"
+          },
+          "type": {
+           "const": "asset_id"
+          }
+         },
+         "required": [
+          "type",
+          "asset_id"
+         ],
+         "type": "object"
+        },
+        {
+         "additionalProperties": false,
+         "properties": {
+          "data": {
+           "type": "string"
+          },
+          "media_type": {
+           "type": "string"
+          },
+          "type": {
+           "const": "base64"
+          }
+         },
+         "required": [
+          "type",
+          "media_type",
+          "data"
+         ],
+         "type": "object"
+        }
+       ]
+      },
+      "maxItems": 3,
+      "type": "array"
+     },
+     "reference_images": {
+      "items": {
+       "oneOf": [
+        {
+         "additionalProperties": false,
+         "properties": {
+          "type": {
+           "const": "url"
+          },
+          "url": {
+           "pattern": "^https://",
+           "type": "string"
+          }
+         },
+         "required": [
+          "type",
+          "url"
+         ],
+         "type": "object"
+        },
+        {
+         "additionalProperties": false,
+         "properties": {
+          "asset_id": {
+           "minLength": 1,
+           "type": "string"
+          },
+          "type": {
+           "const": "asset_id"
+          }
+         },
+         "required": [
+          "type",
+          "asset_id"
+         ],
+         "type": "object"
+        },
+        {
+         "additionalProperties": false,
+         "properties": {
+          "data": {
+           "type": "string"
+          },
+          "media_type": {
+           "type": "string"
+          },
+          "type": {
+           "const": "base64"
+          }
+         },
+         "required": [
+          "type",
+          "media_type",
+          "data"
+         ],
+         "type": "object"
+        }
+       ]
+      },
+      "maxItems": 9,
+      "type": "array"
+     },
+     "reference_videos": {
+      "items": {
+       "oneOf": [
+        {
+         "additionalProperties": false,
+         "properties": {
+          "type": {
+           "const": "url"
+          },
+          "url": {
+           "pattern": "^https://",
+           "type": "string"
+          }
+         },
+         "required": [
+          "type",
+          "url"
+         ],
+         "type": "object"
+        },
+        {
+         "additionalProperties": false,
+         "properties": {
+          "asset_id": {
+           "minLength": 1,
+           "type": "string"
+          },
+          "type": {
+           "const": "asset_id"
+          }
+         },
+         "required": [
+          "type",
+          "asset_id"
+         ],
+         "type": "object"
+        },
+        {
+         "additionalProperties": false,
+         "properties": {
+          "data": {
+           "type": "string"
+          },
+          "media_type": {
+           "type": "string"
+          },
+          "type": {
+           "const": "base64"
+          }
+         },
+         "required": [
+          "type",
+          "media_type",
+          "data"
+         ],
+         "type": "object"
+        }
+       ]
+      },
+      "maxItems": 3,
+      "type": "array"
+     },
+     "resolution": {
+      "enum": [
+       "480p",
+       "768p",
+       "1080p",
+       "2k"
+      ]
+     },
+     "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": [
+       "integer",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "model",
+     "mode",
+     "prompt"
+    ],
+    "type": "object"
+   }
+  ],
+  "title": "POST /v3/models/videos (heygen-video-1)"
+ },
+ "source": "https://developers.heygen.com/reference/create-heygen-video"
+}

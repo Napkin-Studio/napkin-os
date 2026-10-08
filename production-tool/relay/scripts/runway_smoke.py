@@ -14,9 +14,10 @@ Step 0 is GET /v1/organization (free): the tier and each model's concurrency. --
 does just that, without --live.
 
 Inputs, no redirects, with a Content-Type and Content-Length:
-  --image-url   combine, view, frame, region_edit (fetched once and sent as a data URI, so a local
-                http URL will do); clip (its first frame: Runway rejects a data URI there, so it
-                needs an https URL, else the op is 'blocked': nothing is submitted)
+  --image-url   view, frame, region_edit (fetched once and sent as a data URI, so a local
+                http URL will do); clip (its first frame: Runway rejects a data URI there, so a URL
+                that is not https is fetched, shrunk and uploaded to Runway's ephemeral store, free;
+                a dry run uploads nothing)
   --video-url   clip_edit (https mp4, 2-30 s; blocked if it is not https)
 Exit status is non-zero if any op failed or was not run.
 """
@@ -29,15 +30,17 @@ import sys
 import time
 from typing import Callable, Optional
 
+import httpx
+
 from runway_common import (
-    CLIP_RATIO, DEFAULT_MAX_USD, FIRST_FRAME_NEEDS_HTTPS, IMAGE_RATIO, KEY_ENV, KEY_HELP, Assets, Budget,
-    BudgetExceeded, Runner, Tap, default_factory, estimate_usd, fetch_bytes, image_ref, is_https, key_status,
-    make_job, prepare_image, region_edit,
+    CLIP_RATIO, DEFAULT_MAX_USD, IMAGE_RATIO, KEY_ENV, KEY_HELP, UPLOAD_NOTE, Assets, Budget, BudgetExceeded,
+    Runner, Tap, default_factory, estimate_usd, fetch_bytes, first_frame_ref, image_ref, is_https, key_status,
+    make_client, make_job, prepare_image, region_edit,
 )
 from providers import ProviderError, Ref, load_sheet
 
-OPS = ("generate", "combine", "view", "frame", "region_edit", "clip", "clip_edit")
-NEEDS = {"combine": "image", "view": "image", "frame": "image", "region_edit": "image",
+OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
+NEEDS = {"view": "image", "frame": "image", "region_edit": "image",
          "clip": "image", "clip_edit": "video"}
 FLAG = {"image": "--image-url", "video": "--video-url"}
 VIDEO_NEEDS_HTTPS = "needs an https video URL: Runway cannot fetch a local video for a clip edit"
@@ -57,8 +60,6 @@ def parser() -> argparse.ArgumentParser:
 
 def blocked_reason(op: str, urls: dict) -> Optional[str]:
     """Why an op cannot run with these URLs, or None. A URL that is not given is the 'needs' check's business."""
-    if op == "clip" and urls.get("image") and not is_https(urls["image"]):
-        return FIRST_FRAME_NEEDS_HTTPS
     if op == "clip_edit" and urls.get("video") and not is_https(urls["video"]):
         return VIDEO_NEEDS_HTTPS
     return None
@@ -73,12 +74,15 @@ def plan_lines(sheet: dict, ops: list[str], urls: dict) -> tuple[list[str], floa
             note = f"   needs {FLAG[need]}"
         if reason := blocked_reason(op, urls):
             est, note = 0.0, f"   BLOCKED: {reason}"
+        elif op == "clip" and urls.get("image") and not is_https(urls["image"]):
+            note = f"   {UPLOAD_NOTE}"
         total += est
         lines.append(f"  {op:<12} {sheet['ops'][op]['model']:<22} ~${est:.2f}{note}")
     return lines, total
 
 
-def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[[str], bytes]):
+def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[[str], bytes],
+              first_frame: Callable[[str], str]):
     """The request for one op. Returns the job, or None for region_edit (its own pipeline)."""
     if op == "generate":
         return make_job(sheet, op, "A red fox sitting in a snowy forest, photo.", ratio=IMAGE_RATIO)
@@ -86,13 +90,10 @@ def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[
         sha = assets.add_url(urls["video"], "video/mp4")
         return make_job(sheet, op, "Make the lighting warmer, keep everything else the same.",
                         refs=[Ref(sha, "source", "source")])
-    if op == "clip":  # an https URL, checked before this; a data URI is no first frame
-        sha = assets.add_url(urls["image"], "image/png")
+    if op == "clip":  # an https URL as is, else uploaded to Runway: a data URI is no first frame
+        sha = first_frame(urls["image"])
         return make_job(sheet, op, "She turns and smiles.", ratio=CLIP_RATIO, duration_s=4, first_frame=sha)
     sha = image_ref(assets, fetch, urls["image"])  # an image op takes the bytes inline
-    if op == "combine":
-        return make_job(sheet, op, "@hero and @prop together on a wooden table, photo.", ratio=IMAGE_RATIO,
-                        refs=[Ref(sha, "hero", "character"), Ref(sha, "prop", "object")])
     if op == "view":
         return make_job(sheet, op, "@hero seen from the side, full body, plain background.", ratio=IMAGE_RATIO,
                         refs=[Ref(sha, "hero", "character")])
@@ -102,12 +103,13 @@ def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[
     return None
 
 
-def run_op(op: str, runner: Runner, assets: Assets, urls: dict, fetch: Callable[[str], bytes]) -> dict:
+def run_op(op: str, runner: Runner, assets: Assets, urls: dict, fetch: Callable[[str], bytes],
+           first_frame: Callable[[str], str]) -> dict:
     sheet = runner.sheet
     if reason := blocked_reason(op, urls):
         return {"label": op, "op": op, "state": "blocked", "reason": reason}
     try:
-        job = build_job(sheet, op, assets, urls, fetch)
+        job = build_job(sheet, op, assets, urls, fetch, first_frame)
     except Exception as exc:  # an unreachable image is this op's failure, not the run's
         return {"label": op, "op": op, "state": "failed", "error": {"code": "input", "message": f"{type(exc).__name__}: {exc}"}}
     if job:
@@ -140,7 +142,8 @@ def show(rec: dict, out: Callable[[str], None]) -> None:
 
 
 def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Callable[[str], None] = print,
-         factory=default_factory, fetch: Callable[[str], bytes] = fetch_bytes, **runtime) -> int:
+         factory=default_factory, fetch: Callable[[str], bytes] = fetch_bytes,
+         transport: Optional[httpx.BaseTransport] = None, **runtime) -> int:
     args = parser().parse_args(argv)
     env = os.environ if env is None else env
     ops = [o for o in args.ops.split(",") if o]
@@ -184,9 +187,14 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
         return 0
 
     runner = Runner(provider, Budget(args.max_usd), tap=tap, **runtime)
+    client = make_client(transport=transport)  # for the ephemeral upload of a clip's first frame
+
+    def first_frame(url: str) -> str:
+        return first_frame_ref(assets, client, key, fetch, url)
+
     failed = 0
     for op in ops:
-        rec = run_op(op, runner, assets, urls, fetch)
+        rec = run_op(op, runner, assets, urls, fetch, first_frame)
         show(rec, out)
         failed += rec["state"] != "done"
         if rec["state"] == "skipped":

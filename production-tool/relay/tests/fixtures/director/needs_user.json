@@ -4,16 +4,22 @@
   "input": {
     "text": "use the colours from the other one",
     "chips": [],
-    "sketch": {
-      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "mime": "image/png"
-    },
     "refs": [
       {
+        "id": "node_01K6XA6Z0000000000000000AA",
+        "role": "character",
+        "kind": "drawing",
+        "asset": {
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "mime": "image/png"
+        }
+      },
+      {
         "id": "ref_01K6XA6Z0000000000000000AB",
-        "tag": "autumn",
+        "name": "maya_autumn",
         "role": "colour",
+        "kind": "picture",
         "asset": {
           "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -22,8 +28,9 @@
       },
       {
         "id": "ref_01K6XA6Z0000000000000000AC",
-        "tag": "palette",
+        "name": "maya_palette",
         "role": "colour",
+        "kind": "picture",
         "asset": {
           "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "url": "https://hack.napkin.ie/in/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

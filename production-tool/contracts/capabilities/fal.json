@@ -1,39 +1,190 @@
 {
-  "contractVersion": "1",
+  "contractVersion": "2",
   "provider": "fal",
-  "checked": "2026-10-06",
+  "checked": "2026-10-08",
   "ops": {
     "generate": {
-      "model": "kling-image-o3",
-      "endpoint": "fal-ai/kling-image/o3/image-to-image",
-      "estimateUsd": 0.028
-    },
-    "combine": {
-      "model": "kling-image-o3",
-      "endpoint": "fal-ai/kling-image/o3/image-to-image",
-      "estimateUsd": 0.028
+      "model": "nano-banana-pro-edit",
+      "endpoint": "fal-ai/nano-banana-pro/edit",
+      "estimateUsd": 0.15,
+      "label": "Nano Banana Pro",
+      "note": "Best at keeping characters exact",
+      "seed": true,
+      "outputs": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "tagSyntax": "image_n",
+      "refs": {
+        "max": 14,
+        "maxCharacter": 5,
+        "element": false
+      },
+      "series": 0,
+      "outputsPerCall": 4,
+      "alternates": [
+        {
+          "model": "kling-image-o3",
+          "endpoint": "fal-ai/kling-image/o3/image-to-image",
+          "estimateUsd": 0.028,
+          "label": "Kling O3",
+          "note": "Quick and cheap; characters go in as Kling elements"
+        },
+        {
+          "model": "nano-banana-2-edit",
+          "endpoint": "fal-ai/nano-banana-2/edit",
+          "estimateUsd": 0.08,
+          "label": "Nano Banana 2",
+          "note": "Holds faces and outfits; cheaper than Pro",
+          "seed": true,
+          "outputs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "tagSyntax": "image_n",
+          "refs": {
+            "max": 14,
+            "maxCharacter": 5,
+            "element": false
+          },
+          "series": 0,
+          "outputsPerCall": 4
+        }
+      ]
     },
     "view": {
       "model": "qwen-image-edit-2511-multiple-angles",
       "endpoint": "fal-ai/qwen-image-edit-2511-multiple-angles",
-      "estimateUsd": 0.035
+      "estimateUsd": 0.035,
+      "label": "Qwen multi-angle"
     },
     "frame": {
-      "model": "kling-image-o3",
-      "endpoint": "fal-ai/kling-image/o3/image-to-image",
-      "estimateUsd": 0.028
+      "model": "nano-banana-pro-edit",
+      "endpoint": "fal-ai/nano-banana-pro/edit",
+      "estimateUsd": 0.15,
+      "label": "Nano Banana Pro",
+      "note": "Best at keeping characters exact",
+      "seed": true,
+      "outputs": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "tagSyntax": "image_n",
+      "refs": {
+        "max": 14,
+        "maxCharacter": 5,
+        "element": false
+      },
+      "series": 0,
+      "outputsPerCall": 4,
+      "alternates": [
+        {
+          "model": "kling-image-o3",
+          "endpoint": "fal-ai/kling-image/o3/image-to-image",
+          "estimateUsd": 0.028,
+          "label": "Kling O3",
+          "note": "Quick and cheap; characters go in as Kling elements"
+        },
+        {
+          "model": "nano-banana-2-edit",
+          "endpoint": "fal-ai/nano-banana-2/edit",
+          "estimateUsd": 0.08,
+          "label": "Nano Banana 2",
+          "note": "Holds faces and outfits; cheaper than Pro",
+          "seed": true,
+          "outputs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "tagSyntax": "image_n",
+          "refs": {
+            "max": 14,
+            "maxCharacter": 5,
+            "element": false
+          },
+          "series": 0,
+          "outputsPerCall": 4
+        }
+      ]
     },
     "region_edit": {
       "model": "ideogram-v4.5-edit",
       "endpoint": "ideogram/v4.5/edit",
-      "estimateUsd": 0.06
+      "estimateUsd": 0.06,
+      "label": "Ideogram v4.5"
     },
     "clip": {
       "model": "kling-v3-pro-i2v",
       "endpoint": "fal-ai/kling-video/v3/pro/image-to-video",
       "estimateUsd": 0.56,
       "minS": 3,
-      "maxS": 15
+      "maxS": 15,
+      "label": "Kling v3 Pro",
+      "note": "Keeps named characters as elements",
+      "alternates": [
+        {
+          "model": "veo3.1-fast-i2v",
+          "endpoint": "fal-ai/veo3.1/fast/image-to-video",
+          "estimateUsd": 0.9,
+          "label": "Veo 3.1 Fast",
+          "note": "Natural motion; follows the frame, no character refs",
+          "durationsS": [
+            4,
+            6,
+            8
+          ],
+          "seed": true,
+          "refs": {
+            "max": 0,
+            "maxCharacter": 0,
+            "element": false
+          },
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "multiShot": false,
+            "regionEdit": "mask",
+            "feelEdit": "strength",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        },
+        {
+          "model": "veo3.1-i2v",
+          "endpoint": "fal-ai/veo3.1/image-to-video",
+          "estimateUsd": 2.4,
+          "label": "Veo 3.1",
+          "note": "Best motion and physics; follows the frame, no refs",
+          "durationsS": [
+            4,
+            6,
+            8
+          ],
+          "seed": true,
+          "refs": {
+            "max": 0,
+            "maxCharacter": 0,
+            "element": false
+          },
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "multiShot": false,
+            "regionEdit": "mask",
+            "feelEdit": "strength",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        }
+      ]
     },
     "clip_edit": {
       "model": "luma-ray-3.2-v2v",
@@ -44,7 +195,8 @@
         10
       ],
       "regionModel": "wan-vace-14b-inpainting",
-      "regionEndpoint": "fal-ai/wan-vace-14b/inpainting"
+      "regionEndpoint": "fal-ai/wan-vace-14b/inpainting",
+      "label": "Luma Ray 3.2"
     }
   },
   "tagSyntax": "at_image_n",

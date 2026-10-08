@@ -1,20 +1,21 @@
 // Storyboard frames, drawn one after another (decided 2026-10-07). Every frame
-// has up to three anchors: the character views (identity), the selected frame
-// of shot 1 (`anchorFrame`: setting, light, style) and the selected frame of
-// the shot before (`previousFrame`: continuity). Frame 1 has only the views.
+// has up to three anchors: the shot's named refs (identity: `shot.refs`, as
+// @maya_front, @lamp_on), the selected frame of shot 1 (`anchorFrame`: setting,
+// light, style) and the selected frame of the shot before (`previousFrame`:
+// continuity). Frame 1 has only the refs.
 //
 // "Draw the rest" is a flag in the UI state (snapshotted, so it survives a
 // reload): each time a frame lands, the runner's completion hook calls
 // `continueDrawing`, which starts the next shot that has no frame. Nothing here
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
-import type { AssetRef, Frame, JobInput, ProductionDocument, StaleMark } from '../contracts/types'
+import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument, StaleMark } from '../contracts/types'
 import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
 import type { JobPurpose, UiState } from '../doc/ui'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
-import { characterInput, jobShot } from './select'
+import { jobShot, refsFor } from './select'
 import { refreshClipStale } from './stale'
 
 export interface FrameDeps {
@@ -57,11 +58,11 @@ export function scriptText(d: ProductionDocument): string | undefined {
 export async function frameInput(relay: Relay, d: ProductionDocument, ui: UiState, index: number, text?: string, strict = true): Promise<JobInput> {
   const shot = (d.shots ?? [])[index]
   if (!shot) throw new Error('That shot is gone.')
-  const character = await characterInput(relay, d)
+  const refs = await refsFor(relay, d, shot, text)
   const script = scriptText(d)
   return {
     shot: jobShot(shot),
-    character,
+    ...(refs.length ? { refs } : {}),
     ratio: ui.ratio,
     ...(script ? { script } : {}),
     ...(text?.trim() ? { text: text.trim() } : {}),
@@ -70,13 +71,13 @@ export async function frameInput(relay: Relay, d: ProductionDocument, ui: UiStat
 }
 
 /** Draw the frame for the shot at `index`: a first version, or a new one of `parent`. */
-export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string } = {}): Promise<string> {
+export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice } = {}): Promise<string> {
   const d = deps.doc.get()
   const shot = (d.shots ?? [])[index]
   if (!shot) throw new Error('That shot is gone.')
   const input = await frameInput(deps.relay, d, deps.ui.get(), index, opts.text, !opts.parent)
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}), ...(opts.followRun ? { followRun: opts.followRun } : {}) }
-  return deps.runner.submit('frame', input, opts.parent ? [opts.parent.job_id] : [], purpose)
+  return deps.runner.submit('frame', input, opts.parent ? [opts.parent.job_id] : [], purpose, undefined, opts.modelChoice)
 }
 
 /** Any frame (or frame region edit) job still moving. */

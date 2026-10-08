@@ -23,6 +23,7 @@ from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, IMAGE_OPS
 from providers.tags import UnknownTag, rewrite_tags
 
+from .base import fit_duration, view_angle
 from .model import ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -67,17 +68,25 @@ def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
     camera `angle` for a Runway view, which has no angle control, and the whole job failed).
     Dropping it is safe: a view is said in words instead. Other stray fields still fail, by design."""
     spec = sheet["ops"].get(op, {})
-    if op == "clip" and "durationS" in job and spec.get("durationsS") and job["durationS"] not in spec["durationsS"]:
-        # A 5 s shot on a model that makes 4/6/8 s clips: make the next longer allowed clip;
-        # the stitch trims each clip to its shot's length (trimS).
-        longer = [d for d in sorted(spec["durationsS"]) if d >= job["durationS"]]
-        job["durationS"] = longer[0] if longer else max(spec["durationsS"])
+    if op == "clip" and "durationS" in job:
+        job["durationS"] = fit_duration(job["durationS"], spec)
     if "angle" in job and not sheet.get("angles"):
         angle = job.pop("angle")
         if op == "view":
             word = _VIEW_WORDS.get(int(round(angle.get("horizontal", 0))) % 360)
             if word and word.split("-")[0] not in job["prompt"].lower():
                 job["prompt"] = f"{job['prompt'].rstrip()} Show the {word} view."
+
+
+def _clip_edit_source(job: dict, op: str, payload: dict) -> None:
+    """A clip edit always carries the clip it changes, first, as `current`: the adapters find it
+    there (fal by role, Runway by its video type). The model sometimes leaves it out (recorded
+    reply for a masked fal edit: refs []), and every such job failed (pathway matrix, 2026-10-08)."""
+    video = payload.get("video")
+    if op != "clip_edit" or not video:
+        return
+    refs = [r for r in job.get("refs") or [] if r.get("sha256") != video["sha256"]]
+    job["refs"] = [{"sha256": video["sha256"], "name": "current", "role": "current"}, *refs]
 
 
 def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
@@ -90,6 +99,19 @@ def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
             words = "the character" if ref["role"] == "character" else ref["name"].replace("_", " ")
             job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
         job["refs"] = []
+
+
+def provider_ratio(provider: str, op: str, ratio: Optional[str], model: Optional[str] = None) -> Optional[str]:
+    """Our ratio ('9:16') in the provider's form: None where the endpoint takes none; Runway's
+    nearest allowed pixel pair for the model (Gemini 3 Pro and 3.1 Flash take different sizes);
+    W:H as it is for the others."""
+    if not ratio or (provider, op) in NO_RATIO:
+        return None
+    if provider != "runway":
+        return ratio
+    pro = model == "gemini_image3_pro" or (model is None and op == "region_edit")
+    allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if pro else FLASH_RATIOS
+    return ratio if ratio in allowed else _nearest_ratio(ratio, allowed)
 
 
 def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
@@ -176,7 +198,7 @@ def _without_dialogue(op: str, payload: dict) -> dict:
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
                  per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
-                 prompt_version: str = "director.v2", contracts: Path = CONTRACTS):
+                 prompt_version: str = "director.v4", contracts: Path = CONTRACTS):
         self.port = model_port
         self.sheets = sheets
         self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
@@ -247,12 +269,20 @@ class Director:
             # 2026-10-07: Haiku sometimes leaves out the ratio it was given ("frame needs a ratio").
             # Take it from the request; the nearest-size mapping below makes it fit the model.
             job["ratio"] = payload["ratio"]
+        if "angle" not in job:
+            # A model that leaves out a view's angle would fail the job on an angle-taking provider.
+            angle = view_angle(op, payload, sheet)
+            if angle:
+                job["angle"] = angle
         _drop_unusable(job, op, sheet)
+        _clip_edit_source(job, op, payload)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
         if job["model"] not in models:
-            raise DirectorError(f"model {job['model']!r} is not the sheet's model for {op}")
+            # The routing chose the model, not the director: a reply naming another one (an older
+            # default, a recorded answer) runs on the sheet's (features/default-models.clan).
+            job["model"] = sheet["ops"][op]["model"]
         stray = _hashes(job) - _hashes(payload) - extra
         if stray:
             raise DirectorError(f"the job names artifacts that are not in the input: {sorted(stray)[0]}")
@@ -310,15 +340,12 @@ class Director:
         if ratio and (provider, op) in NO_RATIO:
             raise DirectorError(f"{provider} {op} takes no ratio")
         if ratio and provider == "runway":
-            allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if op == "region_edit" else FLASH_RATIOS
-            if ratio not in allowed:
-                # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
-                # size this model takes rather than failing the job (2026-10-07: storyboard frames).
-                ratio = _nearest_ratio(ratio, allowed)
-                if ratio:
-                    job["ratio"] = ratio
-            if ratio not in allowed:
+            # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
+            # size this model takes rather than failing the job (2026-10-07: storyboard frames).
+            fitted = provider_ratio(provider, op, ratio, job.get("model"))
+            if not fitted:
                 raise DirectorError(f"runway {op} does not take ratio {ratio!r}")
+            job["ratio"] = fitted
         spec = sheet["ops"][op]
         if op == "clip" and "durationS" not in job and ("durationsS" in spec or "minS" in spec):
             raise DirectorError("a clip needs a durationS the sheet allows")
@@ -332,6 +359,13 @@ class Director:
             raise DirectorError("shot orders must run 1..n")
         if len({s["id"] for s in shots}) != len(shots):
             raise DirectorError("shot ids must be unique")
+        known = {r["name"] for r in payload.get("refs") or [] if r.get("name")}
+        # A bare key names the whole character, and only a key with a front can be named bare.
+        known |= {n.split("_", 1)[0] for n in known if n.endswith("_front")}
+        for s in shots:
+            unknown = [n for n in s.get("refs") or [] if n not in known]
+            if unknown:
+                raise DirectorError(f"shot {s['order']} names {unknown[0]!r}, which is not an input ref")
         target = payload.get("targetS")
         total = sum(s["duration_s"] for s in shots)
         if target is not None and total != target:

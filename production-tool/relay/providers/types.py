@@ -11,7 +11,9 @@ provider's error codes mapped onto ours (common.schema.json#/$defs/error).
 
 from __future__ import annotations
 
+import copy
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Literal, Optional, Protocol
@@ -21,7 +23,7 @@ from contracts_dir import contracts_dir
 # The bundled copy in the Lambda zip, else production-tool/contracts (contracts_dir.py).
 CONTRACTS = contracts_dir()
 
-IMAGE_OPS = ("generate", "combine", "view", "frame", "region_edit")
+IMAGE_OPS = ("generate", "view", "frame", "region_edit")
 VIDEO_OPS = ("clip", "clip_edit")
 
 StatusState = Literal["queued", "running", "done", "failed", "cancelled"]
@@ -32,17 +34,34 @@ class CapabilityMissing(Exception):
     """The sheet rules the job out. Raised by submit, never a provider call."""
 
 
+# Who has to act on a failure (features/harness-errors.clan): the provider (an outage, a limit,
+# its own failure), the network between us, Napkin (a bug, our own storage) or the participant
+# (their input or content). The relay and the UI read it to say whose problem it is.
+SOURCES = ("provider", "network", "napkin", "input")
+DEFAULT_SOURCE = {"invalid_input": "input", "moderated": "input", "internal": "napkin",
+                  "capability_missing": "napkin"}
+
+
 class ProviderError(Exception):
-    """A provider failure, already mapped onto our error codes."""
+    """A provider failure, already mapped onto our error codes.
+
+    source: who has to act (SOURCES); by default from the code, provider for the rest.
+    accepted: the provider may have taken the job (a 2xx we could not read, a 409 naming
+    an in-flight job), so the relay must never send it anywhere else."""
 
     def __init__(self, code: str, message: str, retryable: bool = False,
-                 retry_after_s: Optional[int] = None, provider_code: Optional[str] = None):
+                 retry_after_s: Optional[int] = None, provider_code: Optional[str] = None, *,
+                 source: Optional[str] = None, accepted: bool = False):
         super().__init__(message)
         self.code, self.message, self.retryable = code, message, retryable
         self.retry_after_s, self.provider_code = retry_after_s, provider_code
+        self.source = source or DEFAULT_SOURCE.get(code, "provider")
+        if self.source not in SOURCES:
+            raise ValueError(f"unknown error source {self.source!r}")
+        self.accepted = accepted
 
     def to_dict(self) -> dict:
-        out = {"code": self.code, "message": self.message, "retryable": self.retryable}
+        out = {"code": self.code, "message": self.message, "retryable": self.retryable, "source": self.source}
         if self.retry_after_s is not None:
             out["retryAfterS"] = self.retry_after_s
         if self.provider_code:
@@ -93,10 +112,14 @@ class ProviderJob:
 
     @classmethod
     def from_director(cls, op: str, job: dict) -> "ProviderJob":
-        """Build from the director's camelCase providerJob."""
+        """Build from the director's camelCase providerJob. A clip_edit's source clip may come as
+        `video` (director.schema.json) rather than a ref; adapters find it as the `current` ref."""
+        refs = [Ref(r["sha256"], r["name"], r["role"]) for r in job.get("refs", [])]
+        if job.get("video") and not any(r.sha256 == job["video"] for r in refs):
+            refs.insert(0, Ref(job["video"], "current", "current"))
         return cls(
             op=op, provider=job["provider"], model=job["model"], prompt=job["prompt"],
-            refs=[Ref(r["sha256"], r["name"], r["role"]) for r in job.get("refs", [])],
+            refs=refs,
             negative=job.get("negative"), first_frame=job.get("firstFrame"),
             last_frame=job.get("lastFrame"), mask=job.get("mask"), region=job.get("region"),
             keyframe=job.get("keyframe"), angle=job.get("angle"), ratio=job.get("ratio"),
@@ -148,6 +171,77 @@ class Provider(Protocol):
 
 def load_sheet(name: str, root: Path = CONTRACTS) -> dict:
     return json.loads((root / "capabilities" / f"{name}.json").read_text())
+
+
+# What an alternate may replace at the sheet level (capabilities.schema.json ops[op].alternates).
+SHEET_OVERRIDES = ("tagSyntax", "refs", "series", "outputsPerCall", "video")
+DURATION_FIELDS = ("durationsS", "minS", "maxS")
+
+
+def op_models(sheet: dict, op: str) -> list[str]:
+    """The models a participant may pick for `op` on this sheet: its own first, then its alternates."""
+    spec = sheet["ops"].get(op)
+    if spec is None:
+        return []
+    return [spec["model"]] + [a["model"] for a in spec.get("alternates", [])]
+
+
+def effective_sheet(sheet: dict, op: str, model: Optional[str]) -> dict:
+    """The sheet as `model` running `op` sees it (features/model-choice.clan).
+
+    For the op's own model (or its regionModel, or None) that is the sheet with the op's own
+    tagSyntax, refs, series, outputsPerCall and video where the op sets them. For one of
+    the op's alternates it is a copy whose ops[op] holds the alternate's fields (its durations
+    replace the op's when it gives any), and whose sheet-level tagSyntax, refs, series,
+    outputsPerCall, video and seed are the alternate's where it sets them. The director, the
+    capability check, the estimate and the adapter all read this one view. Any other model gets
+    the sheet itself."""
+    spec = sheet["ops"].get(op)
+    if spec is None:
+        return sheet
+    alt = None
+    if model is not None and model not in (spec["model"], spec.get("regionModel")):
+        # not a pick when unknown: the relay refuses unknown picks before this, the director checks models
+        alt = next((a for a in spec.get("alternates", []) if a["model"] == model), None)
+    if alt is None:
+        # The op's own model: its own settings over the sheet's (features/default-models.clan).
+        own = {k: spec[k] for k in SHEET_OVERRIDES if k in spec}
+        if not own:
+            return sheet
+        out = copy.deepcopy(sheet)
+        out["ops"][op] = {k: copy.deepcopy(v) for k, v in spec.items() if k not in SHEET_OVERRIDES}
+        out.update(copy.deepcopy(own))
+        if "seed" in spec:
+            out["seed"] = spec["seed"]
+        return out
+    out = copy.deepcopy(sheet)
+    merged = {k: copy.deepcopy(v) for k, v in alt.items() if k not in SHEET_OVERRIDES}
+    if not any(k in alt for k in DURATION_FIELDS):
+        merged.update({k: copy.deepcopy(spec[k]) for k in DURATION_FIELDS if k in spec})
+    out["ops"][op] = merged
+    for key in SHEET_OVERRIDES:
+        if key in alt:
+            out[key] = copy.deepcopy(alt[key])
+    if "seed" in alt:
+        out["seed"] = alt["seed"]
+    return out
+
+
+def nearest_ratio(ratio: str, allowed: tuple[str, ...]) -> str:
+    """The allowed W:H closest in shape to `ratio` (plain 4:5 or pixels 896:1152), for endpoints
+    that take a fixed list (fal Kling image has no 4:5; HeyGen reference_to_video)."""
+    if ratio in allowed:
+        return ratio
+    try:
+        w, h = (float(x) for x in ratio.split(":"))
+        target = math.log(w / h)
+    except (ValueError, ZeroDivisionError):
+        return allowed[0]
+
+    def shape(r: str) -> float:
+        a, b = (float(x) for x in r.split(":"))
+        return abs(math.log(a / b) - target)
+    return min(allowed, key=shape)
 
 
 def check_capabilities(sheet: dict, job: ProviderJob) -> None:
