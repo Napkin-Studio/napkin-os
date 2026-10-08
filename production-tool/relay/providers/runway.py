@@ -18,7 +18,7 @@ import httpx
 
 from .types import (
     VIDEO_OPS, AssetResolver, CapabilityMissing, ProviderError, ProviderJob,
-    ProviderOutput, Status, check_capabilities, load_sheet, video_audio,
+    ProviderOutput, Ref, Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import UnknownTag, rewrite_tags
 
@@ -138,14 +138,64 @@ class RunwayProvider:
         if job.op in VIDEO_OPS and job.seed is not None and not 0 <= job.seed <= MAX_SEED:
             raise CapabilityMissing(f"seed must be 0-{MAX_SEED}")
 
+    def _marked(self, current: Ref, region: dict) -> str:
+        """The current image with the box drawn on it, as a PNG data URI (Runway has no masks).
+        Nothing upstream makes this picture: the director sends the image and the box, so every
+        Runway region edit failed until the adapter drew it (pathway matrix, 2026-10-08)."""
+        import base64
+
+        from region.image_ops import draw_box
+        from region.pipeline import BOX_COLOUR, BOX_WIDTH_PX
+
+        url = self._assets(current.sha256).url
+        try:
+            if url.startswith("data:"):
+                data = base64.b64decode(url.split(",", 1)[1])
+            else:
+                resp = self._client.get(url)
+                resp.raise_for_status()
+                data = resp.content
+        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            raise ProviderError("internal", f"could not read the image to edit: {exc}", True, source="napkin") from exc
+        try:
+            png = draw_box(data, region, BOX_COLOUR, BOX_WIDTH_PX)
+        except Exception as exc:  # PIL: not an image we can read
+            raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
+        return "data:image/png;base64," + base64.b64encode(png).decode()
+
+    def _own_ratio(self, current: Ref) -> str:
+        """The Gemini 3 Pro size nearest the edited picture's own shape (Runway needs a ratio)."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        from director.director import PRO_RATIOS
+
+        url = self._assets(current.sha256).url
+        try:
+            data = base64.b64decode(url.split(",", 1)[1]) if url.startswith("data:") else self._client.get(url).content
+            w, h = Image.open(io.BytesIO(data)).size
+        except Exception as exc:
+            raise ProviderError("invalid_input", f"the image to edit is not one we can read: {exc}", False) from exc
+        return nearest_ratio(f"{w}:{h}", tuple(sorted(PRO_RATIOS)))
+
     def _image(self, job: ProviderJob) -> tuple[str, dict]:
         refs = list(job.refs)
         prompt = job.prompt
+        uris: dict[str, str] = {}  # pictures made here rather than uploaded (the marked copy)
         if job.op == "region_edit":
             by_role = {r.role: r for r in refs}
-            if "current" not in by_role or "marked" not in by_role:
-                raise CapabilityMissing("region_edit needs a 'current' and a 'marked' ref")
+            if "current" not in by_role:
+                raise CapabilityMissing("region_edit needs a 'current' ref")
+            if "marked" not in by_role:
+                if not job.region:
+                    raise CapabilityMissing("region_edit needs a 'marked' ref or a region to draw")
+                by_role["marked"] = Ref("marked:box", "marked", "marked")
+                uris["marked:box"] = self._marked(by_role["current"], job.region)
             current, marked = by_role["current"], by_role["marked"]
+            if not job.ratio:  # the web sends none for an edit: keep the picture's own shape
+                job = dataclasses.replace(job, ratio=self._own_ratio(current))
             refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
             prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
         self._check(job, "image", prompt)
@@ -163,7 +213,7 @@ class RunwayProvider:
         }
         if refs:
             body["referenceImages"] = [
-                {"uri": self._assets(r.sha256).url, "tag": r.name,
+                {"uri": uris.get(r.sha256) or self._assets(r.sha256).url, "tag": r.name,
                  "subject": "human" if r.role == "character" else "object"} for r in refs]
         return "/v1/text_to_image", body
 

@@ -78,6 +78,17 @@ def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
                 job["prompt"] = f"{job['prompt'].rstrip()} Show the {word} view."
 
 
+def _clip_edit_source(job: dict, op: str, payload: dict) -> None:
+    """A clip edit always carries the clip it changes, first, as `current`: the adapters find it
+    there (fal by role, Runway by its video type). The model sometimes leaves it out (recorded
+    reply for a masked fal edit: refs []), and every such job failed (pathway matrix, 2026-10-08)."""
+    video = payload.get("video")
+    if op != "clip_edit" or not video:
+        return
+    refs = [r for r in job.get("refs") or [] if r.get("sha256") != video["sha256"]]
+    job["refs"] = [{"sha256": video["sha256"], "name": "current", "role": "current"}, *refs]
+
+
 def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
     """Called after the artifact checks, so a ref that is not in the input still fails."""
     if op == "clip" and job.get("firstFrame") and job.get("refs") and not sheet["video"]["firstFrameWithRefs"]:
@@ -88,6 +99,17 @@ def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
             words = "the character" if ref["role"] == "character" else ref["name"].replace("_", " ")
             job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
         job["refs"] = []
+
+
+def provider_ratio(provider: str, op: str, ratio: Optional[str]) -> Optional[str]:
+    """Our ratio ('9:16') in the provider's form: None where the endpoint takes none; Runway's
+    nearest allowed pixel pair; W:H as it is for the others."""
+    if not ratio or (provider, op) in NO_RATIO:
+        return None
+    if provider != "runway":
+        return ratio
+    allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if op == "region_edit" else FLASH_RATIOS
+    return ratio if ratio in allowed else _nearest_ratio(ratio, allowed)
 
 
 def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
@@ -240,6 +262,7 @@ class Director:
             if angle:
                 job["angle"] = angle
         _drop_unusable(job, op, sheet)
+        _clip_edit_source(job, op, payload)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
@@ -302,15 +325,12 @@ class Director:
         if ratio and (provider, op) in NO_RATIO:
             raise DirectorError(f"{provider} {op} takes no ratio")
         if ratio and provider == "runway":
-            allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if op == "region_edit" else FLASH_RATIOS
-            if ratio not in allowed:
-                # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
-                # size this model takes rather than failing the job (2026-10-07: storyboard frames).
-                ratio = _nearest_ratio(ratio, allowed)
-                if ratio:
-                    job["ratio"] = ratio
-            if ratio not in allowed:
+            # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
+            # size this model takes rather than failing the job (2026-10-07: storyboard frames).
+            fitted = provider_ratio(provider, op, ratio)
+            if not fitted:
                 raise DirectorError(f"runway {op} does not take ratio {ratio!r}")
+            job["ratio"] = fitted
         spec = sheet["ops"][op]
         if op == "clip" and "durationS" not in job and ("durationsS" in spec or "minS" in spec):
             raise DirectorError("a clip needs a durationS the sheet allows")

@@ -131,6 +131,8 @@ class PassthroughDirector:
             # frame for setting and style (the same picture is sent once, as previous).
             add(inp.get("previousFrame"), "previous", "object")
             add(inp.get("anchorFrame"), "anchor", "object")
+        if op == "clip_edit":
+            add(inp.get("video"), "current", "current")  # the clip being changed
         prompt = inp.get("text") or ""
         shot = inp.get("shot")
         if shot:
@@ -143,12 +145,20 @@ class PassthroughDirector:
             job["angle"] = angle
         if op == "clip" and inp.get("image"):
             job["firstFrame"] = inp["image"]["sha256"]
-        if inp.get("mask"):
-            job["mask"] = inp["mask"]["sha256"]
+        if inp.get("mask") and (sheet or {}).get("mask", "none") != "none":
+            job["mask"] = inp["mask"]["sha256"]  # a provider without masks goes by the box
         if inp.get("region"):
             job["region"] = inp["region"]
-        if inp.get("feel"):
+        if inp.get("feel") and ((sheet or {}).get("video") or {}).get("feelEdit") == "strength":
             job["strength"] = inp["feel"].get("strength", "flex")
+        # As the director does (pathway matrix, 2026-10-08): the ratio in the provider's own form,
+        # and no refs beside a first frame where the provider cannot take both.
+        from .director import _clip_frame_only, provider_ratio
+        ratio = provider_ratio(provider, op, inp.get("ratio"))
+        if ratio:
+            job["ratio"] = ratio
+        if sheet:
+            _clip_frame_only(job, op, sheet)
         if op in _VIDEO_OPS:
             job["audio"] = False
             if shot:
