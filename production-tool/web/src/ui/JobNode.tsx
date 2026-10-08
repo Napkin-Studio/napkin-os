@@ -37,8 +37,8 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
     const cancelled = state === 'cancelled'
     const retryable = cancelled || (err?.retryable ?? true)
     return (
-      <div className="errnode" role="alert">
-        <div className="msg">{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
+      <div className={`errnode ${compact ? 'compact' : ''}`} role="alert">
+        <div className="msg" title={compact ? err?.message : undefined}>{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
         {!compact && err?.code && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
         <div className="row">
           {retryable && (

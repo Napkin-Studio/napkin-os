@@ -9,7 +9,7 @@ import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contr
 import { assetRef } from '../jobs/assets'
 import { isRunning, jobAt } from '../jobs/select'
 import { makeClip as submitClip, renderAd } from '../jobs/clips'
-import { fixInShot, fixProgress } from '../jobs/fix'
+import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip } from '../jobs/fix'
 import { adStatus, takeStale } from '../jobs/stale'
 import { UpdateFollows } from '../ui/Follow'
 import { rectToRegion } from '../lib/region'
@@ -150,7 +150,13 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobNode jobId={jobId} compact /></div>}
       </div>
       <div className="meta">
-        <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span><span className="spacer" />{stale && <span className="stale" title={stale.reason}>Out of date</span>}{open > 0 && <span className="mockbadge" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}</div>
+        <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
+        {(stale || open > 0) && (
+          <div className="badges">
+            {stale && <span className="stale" title={stale.reason}>Out of date</span>}
+            {open > 0 && <span className="mockbadge" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
+          </div>
+        )}
         <div className="row wrap" style={{ gap: 4 }}>
           {takes.map((t, i) => (
             <button key={t.id} className={`vchip ${t.selected ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
@@ -256,6 +262,8 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   // A note with a box is fixed in the shot (jobs/fix.ts): the storyboard frame first, then a new clip from it.
   const fixesInShot = boxedOpen.length > 0 && controls.fixInShot
   const progress = cur ? fixProgress(doc, (id) => ui.jobCtx[id], reviews.filter((r) => r.target.id === cur.take.id).map((r) => r.id)) : undefined
+  // The fix's frame already landed and only its clip failed: Fix makes only the clip, from the fixed frame.
+  const fixedFrame = cur && fixesInShot ? fixFrameLanded(doc, (id) => ui.jobCtx[id], openNotes.map((r) => r.id)) : undefined
 
   const fix = async () => {
     if (!cur || !openNotes.length) return
@@ -263,7 +271,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
     try {
       const one = openNotes.length === 1 ? openNotes[0] : undefined
       const ids = openNotes.map((r) => r.id)
-      if (fixesInShot) {
+      if (fixedFrame) {
+        await remakeFixClip(deps, fixedFrame, choiceToSend('clip', config, choice))
+      } else if (fixesInShot) {
         await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice))
       } else if (one?.region && controls.videoRegionEdit) {
         const v = await assetRef(relay, cur.take.asset)
@@ -434,8 +444,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
             <button className="btn" disabled={fixing} onClick={again} title="Make this shot again from its frame">New take</button>
           </div>
           {openNotes.length > 0 && (
-            <button className="btn primary" disabled={fixing} onClick={fix} title={fixesInShot ? 'Fix the box in the storyboard frame, then make the clip again from it' : undefined}>
-              {fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : `${fixesInShot ? 'Fix it in the shot' : 'Make a new version'} (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}
+            <button className="btn primary" disabled={fixing} onClick={fix}
+              title={fixedFrame ? 'The frame is already fixed: make the clip from it' : fixesInShot ? 'Fix the box in the storyboard frame, then make the clip again from it' : undefined}>
+              {fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : `${fixedFrame ? 'Make the clip from the fixed frame' : fixesInShot ? 'Fix it in the shot' : 'Make a new version'} (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}
             </button>
           )}
         </div>

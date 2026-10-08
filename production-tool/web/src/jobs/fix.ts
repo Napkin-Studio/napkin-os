@@ -72,10 +72,45 @@ export async function continueFix(deps: FrameDeps, jobId: string, ctx: JobCtx | 
   if (!(d.frames ?? []).some((f) => f.job_id === jobId)) return null // the frame has not landed
   const notes = (d.reviews ?? []).filter((r) => ctx.fixReviewIds!.includes(r.id) && !r.resolved)
   if (!notes.length || clipStarted(d, deps, ctx.fixReviewIds)) return null
-  const parentTake = (d.takes ?? []).find((t) => t.id === notes[0].target.id) ?? selectedTake(d, ctx.shotId)
+  return fixClip(deps, ctx.shotId, notes, ctx.fixModelChoice)
+}
+
+/**
+ * A fix whose frame landed (and is still the selected frame) but whose clip did not: the job id of that
+ * frame, so pressing Fix again makes only the clip instead of editing the fixed frame a second time.
+ */
+export function fixFrameLanded(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined, reviewIds: string[]): string | undefined {
+  for (let i = d.jobs.length - 1; i >= 0; i--) {
+    const j = d.jobs[i]
+    const c = ctxOf(j.id)
+    if (c?.for === 'clip' && (c.reviewIds ?? []).some((id) => reviewIds.includes(id))) {
+      if (isActive(j.state) || j.state === 'completed') return undefined // the clip is under way or made
+      continue // a failed or cancelled clip: look for its frame
+    }
+    if (c?.for === 'frame' && (c.fixReviewIds ?? []).some((id) => reviewIds.includes(id))) {
+      return (d.frames ?? []).some((f) => f.job_id === j.id && f.selected) ? j.id : undefined
+    }
+  }
+  return undefined
+}
+
+/** Make the fix's clip again from its landed frame (fixFrameLanded), on `modelChoice` or the fix's own pick. */
+export async function remakeFixClip(deps: FrameDeps, frameJobId: string, modelChoice?: ModelChoice): Promise<string> {
+  const ctx = ctxFor(deps, frameJobId)
+  if (ctx?.for !== 'frame' || !ctx.fixReviewIds?.length) throw new Error('That fix is gone.')
+  const d = deps.doc.get()
+  const notes = (d.reviews ?? []).filter((r) => ctx.fixReviewIds!.includes(r.id) && !r.resolved)
+  if (!notes.length) throw new Error('Those notes are already addressed.')
+  return fixClip(deps, ctx.shotId, notes, modelChoice ?? ctx.fixModelChoice)
+}
+
+/** Step 3's clip: from the shot's selected (fixed) frame, for these notes, as a new take of theirs. */
+function fixClip(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
+  const d = deps.doc.get()
+  const parentTake = (d.takes ?? []).find((t) => t.id === notes[0].target.id) ?? selectedTake(d, shotId)
   const boxed = notes.find((r) => r.region) ?? notes[0]
-  return makeClip(deps, ctx.shotId, {
-    text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice: ctx.fixModelChoice,
+  return makeClip(deps, shotId, {
+    text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice,
   })
 }
 

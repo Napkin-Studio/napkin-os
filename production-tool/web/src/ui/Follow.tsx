@@ -24,8 +24,9 @@ export function UpdateFollows({ size = 'sm', progress = true }: { size?: 'xs' | 
     if (!progress) return null
     return (
       <span className="follow row" role="status" onClick={(e) => e.stopPropagation()}>
-        <span className="faint" style={{ fontSize: 12 }}>
-          {run.cancel ? 'Stopping after this one…' : state.failed ? 'Updating what follows: a step failed. Retry it, or stop.' : `Updating what follows… step ${Math.max(1, state.done)}`}
+        <span className={`followchip ${state.failed ? 'failed' : ''}`}
+          title={run.cancel ? 'Stopping after the step running now' : state.failed ? 'Updating what follows: a step failed. Retry it where it failed, or stop.' : 'Updating what follows: frames, then clips, then the ad'}>
+          {run.cancel ? 'Stopping…' : state.failed ? 'Update paused' : `Updating · step ${Math.max(1, state.done)}`}
         </span>
         {!run.cancel && <button className={`btn ${size} ghost`} onClick={() => void cancelFollow(deps)}>Stop</button>}
       </span>

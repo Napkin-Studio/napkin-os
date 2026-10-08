@@ -10,7 +10,7 @@ import { newId } from '../lib/ulid'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
 import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
-import { fixInShot, fixProgress, resumeFixes } from './fix'
+import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes } from './fix'
 import { cancelFollow, continueFollow, planCost, planFollow, planSummary, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
@@ -197,6 +197,31 @@ describe('Fix it in the shot', () => {
       return c!
     }, { timeout: 2000, interval: 5 })
     expect(s.ui.get().jobCtx[clip.id].request.modelChoice).toEqual(pick)
+  })
+
+  it('once its frame landed and only its clip failed, Fix makes only the clip, not a second frame edit', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const note = await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } })
+    const ctxOf = (id: string) => s.ui.get().jobCtx[id]
+    const editId = await fixInShot(s.deps, s.shotId(1), [note])
+    expect(fixFrameLanded(s.doc.get(), ctxOf, [note.id])).toBeUndefined() // the frame is still being edited
+    await s.land()
+    const clip = await vi.waitFor(() => {
+      const c = s.all().find((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.reviewIds?.includes(note.id))
+      expect(c).toBeDefined()
+      return c!
+    }, { timeout: 2000, interval: 5 })
+    expect(fixFrameLanded(s.doc.get(), ctxOf, [note.id])).toBeUndefined() // the clip is under way
+    await s.runner.cancel(clip.id) // like HeyGen's 402: the clip step ends without a take
+    expect(fixFrameLanded(s.doc.get(), ctxOf, [note.id])).toBe(editId)
+
+    const pick = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const again = await remakeFixClip(s.deps, editId, pick)
+    expect(s.all().filter((j) => j.op === 'region_edit')).toHaveLength(1) // the fixed frame is not edited again
+    expect(ctxOf(again)).toMatchObject({ for: 'clip', reviewIds: [note.id] })
+    expect(ctxOf(again).request.modelChoice).toEqual(pick)
+    expect(ctxOf(again).request.input.image?.sha256).toBe(s.frameOf(1).asset) // from the fixed frame
   })
 
   it('goes by the box alone where the browser cannot read the frame\'s size', async () => {

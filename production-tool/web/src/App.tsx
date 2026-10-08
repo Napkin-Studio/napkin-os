@@ -117,30 +117,33 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
         {stage !== 'character' && <UpdateFollows />}
         <span className={`jobchip ${active.length ? 'busy' : ''}`} aria-live="polite">
           <span className="dot" />
-          {active.length ? `${running} running · ${queued} queued` : 'Nothing running'}
+          {!active.length ? 'Nothing running' : [running && `${running} running`, queued && `${queued} queued`].filter(Boolean).join(' · ')}
         </span>
         {config.flags.ownKeys && <OwnKeysButton />}
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
-        <button className="btn sm" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
-          setExporting(true)
-          try {
-            const { blob, name } = await exportBundle(docStore)
-            download(blob, name)
-          } finally {
-            setExporting(false)
-          }
-        }}>{exporting ? 'Packing…' : 'Export'}</button>
-        <span className="handle">@{ui.session?.handle ?? doc.participant.handle}</span>
-        {relay.kind === 'http' && ui.session && (
-          <button className="btn xs ghost" onClick={() => {
-            relay.useToken(null)
-            uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
-          }}>Sign out</button>
-        )}
+        {/* Export, the handle and Sign out live in the menu: the bar keeps the run's state, keys and History. */}
         <span className="topmenu">
           <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
           {menu && (
             <span className="menu" role="menu">
+              <span className="handle menu-head">@{ui.session?.handle ?? doc.participant.handle}</span>
+              <button className="btn sm ghost" role="menuitem" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
+                setExporting(true)
+                try {
+                  const { blob, name } = await exportBundle(docStore)
+                  download(blob, name)
+                } finally {
+                  setExporting(false)
+                  setMenu(false)
+                }
+              }}>{exporting ? 'Packing…' : 'Export'}</button>
+              {relay.kind === 'http' && ui.session && (
+                <button className="btn sm ghost" role="menuitem" onClick={() => {
+                  setMenu(false)
+                  relay.useToken(null)
+                  uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
+                }}>Sign out</button>
+              )}
               <button className="btn sm ghost" role="menuitem" style={{ color: 'var(--danger)' }} onClick={() => { setMenu(false); onStartOver() }}>Start over…</button>
             </span>
           )}
