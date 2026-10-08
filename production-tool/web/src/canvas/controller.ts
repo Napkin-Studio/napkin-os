@@ -14,7 +14,7 @@ import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
 import { mentions, nameOf, nameProblem, refByName } from '../lib/names'
 import { newId } from '../lib/ulid'
-import { updateDoc } from '../doc/store'
+import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
@@ -156,7 +156,7 @@ export class CanvasController {
   // ── pictures: downscale ≤1536 px, hash, keep as a node ──
 
   private addAsset(sha: string, blob: Blob, origin: 'uploaded' | 'drawn', size?: { w: number; h: number }) {
-    updateDoc(this.s.doc, (d) => {
+    systemUpdate(this.s.doc, (d) => {
       if (!d.assets.some((a) => a.sha256 === sha)) {
         d.assets.push({ sha256: sha, kind: 'image', mime: blob.type || 'image/png', bytes: blob.size, ...(size ?? {}), origin, locations: [idbLocation(sha)] })
       }
@@ -223,7 +223,7 @@ export class CanvasController {
       this.patchEl(f.id, (e) => newElementWith(e, { customData: { ...c, asset: sha } }))
       this.addAsset(sha, blob, 'drawn')
       // A name on the drawing follows its new picture.
-      updateDoc(this.s.doc, (d) => {
+      systemUpdate(this.s.doc, (d) => {
         for (const r of d.refs) if (r.node === c.id) r.asset = sha
       }, 'name')
     }
@@ -342,7 +342,7 @@ export class CanvasController {
     if (!img?.asset) throw new Error('Name a picture once it is finished.')
     const asset = img.asset
     const name = `${key}_${variant}`
-    updateDoc(this.s.doc, (d) => {
+    systemUpdate(this.s.doc, (d) => {
       const now = new Date().toISOString()
       const mine = d.refs.find((r) => r.node === nodeId)
       const other = d.refs.find((r) => nameOf(r) === name && r !== mine)
@@ -363,14 +363,14 @@ export class CanvasController {
 
   /** Take the name off a node. The key goes too when nothing else uses it and it was never published. */
   unname(nodeId: string) {
-    updateDoc(this.s.doc, (d) => {
+    systemUpdate(this.s.doc, (d) => {
       d.refs = d.refs.filter((r) => r.node !== nodeId)
       d.keys = d.keys.filter((k) => d.refs.some((r) => r.key === k.key) || k.library)
     }, 'name')
   }
 
   setRole(key: Key, role: RefRole) {
-    updateDoc(this.s.doc, (d) => {
+    systemUpdate(this.s.doc, (d) => {
       const k = d.keys.find((x) => x.key === key)
       if (k) k.role = role
     }, 'name')
@@ -425,7 +425,7 @@ export class CanvasController {
     const out = []
     for (const r of refs) out.push({ variant: r.variant, asset: await assetRef(this.s.relay, r.asset) })
     const entry = await this.s.relay.publish(key, { role: k.role, baseVer: k.library?.ver ?? 0, refs: out })
-    updateDoc(this.s.doc, (d) => {
+    systemUpdate(this.s.doc, (d) => {
       const kk = d.keys.find((x) => x.key === key)
       if (kk) kk.library = { workspace: entry.workspace, ver: entry.ver, by: entry.by, at: entry.at }
     }, 'publish')
@@ -465,7 +465,7 @@ export class CanvasController {
     })
     for (const el of added) this.processing.add(el.id)
     this.setEls([...this.els(), ...added])
-    updateDoc(this.s.doc, (d) => {
+    systemUpdate(this.s.doc, (d) => {
       const now = new Date().toISOString()
       for (const n of nodes) {
         const existing = d.refs.find((r) => r.key === entry.key && r.variant === n.variant)

@@ -8,6 +8,7 @@ import { CANVAS_KEY } from './canvas/controller'
 import { idbPersister, SnapshotStore } from './doc/store'
 import { initialUi, type UiState } from './doc/ui'
 import { openDocument } from './doc/open'
+import { keepUndo } from './doc/undo'
 import { postClanMirror } from './doc/clan'
 import { JobRunner } from './jobs/runner'
 import { resumeChains, wireJobs } from './jobs/wire'
@@ -24,6 +25,8 @@ async function boot() {
   const session = ui.get().session
   const participant = session ? { id: session.participantId, handle: session.handle } : { id: 'p_local', handle: 'guest' }
   const { doc, clan, storeNote } = await openDocument(participant, (jobId) => ui.get().jobCtx[jobId])
+  // Undo and redo steps live with the UI snapshot (doc/undo.ts), so they survive a reload.
+  keepUndo(doc, { get: () => ui.get().undo ?? { done: [], undone: [] }, set: (s) => ui.update((u) => { u.undo = s }) })
 
   const here = relayId()
   const saved = ui.get().session

@@ -15,7 +15,7 @@ import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot } from '.
 import { alive, bounds, cd, imageOf, isText, isUserDrawing, type El } from '../canvas/scene'
 import type { CustomData, KeyEntry, LibraryIndex, NamedRef, RefRole, View } from '../contracts/types'
 import { REF_ROLES } from '../contracts/types'
-import { updateDoc } from '../doc/store'
+import { systemUpdate } from '../doc/store'
 import { sweep, unused } from '../doc/gc'
 import { isActive } from '../jobs/runner'
 import { deleteBlob } from '../lib/blobs'
@@ -606,7 +606,7 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
   }
   const cleanUp = async (gone: string[]) => {
     setCleaning(null)
-    await updateDoc(docStore, (d) => sweep(d, gone), 'clean up')
+    await systemUpdate(docStore, (d) => sweep(d, gone), 'clean up')
     await Promise.all(gone.map((sha) => deleteBlob(sha)))
     setNote(`Removed ${gone.length} unused ${gone.length === 1 ? 'picture' : 'pictures'}.`)
   }
@@ -628,7 +628,7 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
         {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void cleanUp(cleaning)} onNo={() => setCleaning(null)} />}
         {note && <span className="faint" style={{ fontSize: 12 }}>{note}</span>}
         <button className="btn primary" disabled={!doc.refs.length} title={doc.refs.length ? undefined : 'Name at least one image first'}
-          onClick={() => updateDoc(docStore, (d) => { d.stage = { current: 'storyboard', next_action: 'Write a short script and plan the shots.' } }, 'stage')}>
+          onClick={() => systemUpdate(docStore, (d) => { d.stage = { current: 'storyboard', next_action: 'Write a short script and plan the shots.' } }, 'stage')}>
           Go to Storyboard →
         </button>
       </div>

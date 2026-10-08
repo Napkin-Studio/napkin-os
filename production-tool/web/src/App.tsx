@@ -3,7 +3,7 @@ import { useConfig, useDoc, useJobsTick, useServices, useUi } from './app/contex
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
 import type { StageName } from './contracts/types'
-import { updateDoc } from './doc/store'
+import { systemUpdate } from './doc/store'
 import { download, exportBundle } from './export'
 import { isActive } from './jobs/runner'
 import { Character } from './stages/Character'
@@ -18,6 +18,7 @@ import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
 import { UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
+import { UndoButtons } from './ui/UndoButtons'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -107,7 +108,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
               className={`rail-step ${s.id === stage ? 'current' : ''} ${i < order ? 'done' : ''}`}
               disabled={!reachable(s.id)}
               aria-current={s.id === stage ? 'step' : undefined}
-              onClick={() => updateDoc(docStore, (d) => { d.stage.current = s.id }, 'stage')}
+              onClick={() => systemUpdate(docStore, (d) => { d.stage.current = s.id }, 'stage')}
             >
               <span className="n">{i < order ? '✓' : s.n}</span>
               {s.label}
@@ -122,6 +123,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
           {!active.length ? 'Nothing running' : [running && `${running} running`, queued && `${queued} queued`].filter(Boolean).join(' · ')}
         </span>
         {config.flags.ownKeys && <OwnKeysButton />}
+        <UndoButtons />
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
         {/* Export, the handle and Sign out live in the menu: the bar keeps the run's state, keys and History. */}
         <span className="topmenu">
@@ -212,7 +214,7 @@ function SignIn() {
           const s = await relay.session({ eventCode: code.trim(), handle: handle.trim() })
           relay.useToken(s.token)
           uiStore.update((u) => { u.session = s; u.sessionFor = relayId() })
-          await updateDoc(doc, (d) => { d.participant = { id: s.participantId, handle: s.handle } }, 'sign in')
+          await systemUpdate(doc, (d) => { d.participant = { id: s.participantId, handle: s.handle } }, 'sign in')
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not sign in.')
         } finally {

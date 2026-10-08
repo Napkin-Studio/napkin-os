@@ -20,12 +20,11 @@ import { JobNode } from '../ui/JobNode'
 import { RegionImage, type MarkMode, type Stroke } from '../ui/RegionImage'
 import { maskPng } from '../lib/mask'
 import { updateDoc } from '../doc/store'
-import { deleteFrom, removeFrame, removeShot, restoreTo, shotDeleteText } from '../doc/remove'
-import { InlineConfirm, UndoChip } from '../ui/Undo'
+import { deleteFrom, removeFrame, removeShot, shotDeleteText } from '../doc/remove'
+import { InlineConfirm } from '../ui/Undo'
 import { ModelPick } from '../ui/ModelPick'
 import { choiceToSend, modelChoicesFor } from '../capabilities'
 import { madeWith, startingChoice } from '../ui/modelChoice'
-import { useUndo } from '../ui/useUndo'
 import { UpdateFollows } from '../ui/Follow'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
@@ -39,7 +38,6 @@ export function Storyboard() {
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   const [confirmShot, setConfirmShot] = useState<string | null>(null)
-  const [shotUndo, offerShotUndo, runShotUndo] = useUndo()
   const shots = doc.shots ?? []
   const check = checkDurations(shots, ui.targetS)
   const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list')
@@ -151,8 +149,7 @@ export function Storyboard() {
                     onNo={() => setConfirmShot(null)}
                     onYes={async () => {
                       setConfirmShot(null)
-                      const r = await deleteFrom(docStore, (d) => removeShot(d, s.id))
-                      offerShotUndo({ label: `Shot ${i + 1} deleted`, key: String(i), undo: () => restoreTo(docStore, r) })
+                      await deleteFrom(docStore, (d) => removeShot(d, s.id)) // Undo in the top bar puts it back
                     }}
                   />
                 </div>
@@ -179,8 +176,7 @@ export function Storyboard() {
                   <button className="btn icon sm ghost" aria-label="Delete shot" title={shots.length <= 2 ? 'A storyboard needs at least 2 shots' : 'Delete this shot'} disabled={shots.length <= 2}
                     onClick={() => setConfirmShot(s.id)}>✕</button>
                 </div>
-              )).flatMap((row, i) => (shotUndo && shotUndo.key === String(i) ? [<UndoRow key="undo" label={shotUndo.label} onUndo={runShotUndo} />, row] : [row]))}
-              {shotUndo && Number(shotUndo.key) >= shots.length && <UndoRow label={shotUndo.label} onUndo={runShotUndo} />}
+              ))}
             </div>
             {shots.length > 0 && (
               <div className="row">
@@ -227,10 +223,6 @@ export function Storyboard() {
   )
 }
 
-function UndoRow({ label, onUndo }: { label: string; onUndo: () => void }) {
-  return <div className="shotrow undo"><UndoChip label={label} onUndo={onUndo} /></div>
-}
-
 function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number; onDraw: () => void; onNext?: () => void }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
@@ -249,7 +241,6 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const [strokes, setStrokes] = useState<Stroke[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pick, setPick] = useState<ModelChoice | undefined>()
-  const [undo, offerUndo, runUndo] = useUndo()
   const region = current ? ui.frameRegions[current.id] : undefined
   const made = madeWith(doc, ui, current?.job_id)
   const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
@@ -341,7 +332,6 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             ))}
             {(region || strokes.length > 0) && <button className="btn xs ghost" onClick={() => { setRegion(null); setStrokes([]) }}>Clear</button>}
             <span className="spacer" />
-            {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
             <div className="versions">
               <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
               <span className="mono" title={made.label}>v{idx + 1}/{frames.length}</span>
@@ -351,8 +341,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
                 onClick={async () => {
                   setError(null)
                   try {
-                    const r = await deleteFrom(docStore, (d) => removeFrame(d, current.id))
-                    offerUndo({ label: `v${idx + 1} deleted`, undo: () => restoreTo(docStore, r) })
+                    await deleteFrom(docStore, (d) => removeFrame(d, current.id)) // Undo in the top bar puts it back
                   } catch (e) {
                     setError(e instanceof Error ? e.message : 'That did not work.')
                   }

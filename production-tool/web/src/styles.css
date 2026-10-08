@@ -409,3 +409,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .updatebox .ub-item img, .updatebox .ub-empty { width: 48px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--soft); flex-shrink: 0; }
 .updatebox .ub-job { height: 110px; border-radius: 12px; overflow: hidden; display: flex; }
 .updatebox .modelpick .select { max-width: 100%; }
+
+/* Undo / Redo (ui/UndoButtons.tsx): two icons beside History; what was undone shows under them for a moment. */
+.undobtns { position: relative; display: inline-flex; gap: 2px; }
+.undobtns .btn.icon { font-size: 15px; }
+.undonote { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; padding: 6px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 12px; white-space: nowrap; color: var(--ink2); }

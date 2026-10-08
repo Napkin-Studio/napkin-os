@@ -4,6 +4,7 @@
 
 import type { JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
+import type { UndoState } from './undo'
 import type { SessionResponse } from '../contracts/types'
 
 export type JobPurpose =
@@ -42,6 +43,8 @@ export interface UiState {
   drawingRest?: boolean
   /** "Update what follows" is under way (jobs/follow.ts). */
   following?: FollowRun
+  /** The person's undo and redo steps (doc/undo.ts), kept here so they survive a reload. */
+  undo?: UndoState
 }
 
 /** One run of "Update what follows": frames in order, then clips, then the ad. Snapshotted, so it resumes after a reload. */

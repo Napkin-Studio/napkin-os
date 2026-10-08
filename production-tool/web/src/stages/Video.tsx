@@ -16,10 +16,8 @@ import { rectToRegion } from '../lib/region'
 import { newId } from '../lib/ulid'
 import { fmtTime, useBlobUrl } from '../ui/hooks'
 import { JobNode } from '../ui/JobNode'
-import { updateDoc } from '../doc/store'
-import { deleteFrom, removeNote, removeTake, restoreTo } from '../doc/remove'
-import { UndoChip } from '../ui/Undo'
-import { useUndo } from '../ui/useUndo'
+import { systemUpdate, updateDoc } from '../doc/store'
+import { deleteFrom, removeNote, removeTake } from '../doc/remove'
 import { ModelPick } from '../ui/ModelPick'
 import { madeWith, startingChoice } from '../ui/modelChoice'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
@@ -85,7 +83,7 @@ export function Video() {
     return (
       <div className="panel"><div className="empty-state">
         <b>No shots yet.</b>Plan your shots and draw the frames first.
-        <div style={{ marginTop: 14 }}><button className="btn" onClick={() => updateDoc(docStore, (d) => { d.stage.current = 'storyboard' })}>← Back to Storyboard</button></div>
+        <div style={{ marginTop: 14 }}><button className="btn" onClick={() => systemUpdate(docStore, (d) => { d.stage.current = 'storyboard' })}>← Back to Storyboard</button></div>
       </div></div>
     )
   }
@@ -139,7 +137,6 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const thumb = useBlobUrl(shot.storyboard_frame)
   const showMock = useShowMock()
   const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
-  const [undo, offerUndo, runUndo] = useUndo()
   const selIdx = sel ? takes.indexOf(sel) : -1
   const ui = useUi()
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
@@ -175,11 +172,9 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
             <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete clip v${selIdx + 1}`} title={takes.length <= 1 ? 'Delete the only version: Update what follows makes it again' : `Delete v${selIdx + 1}`}
               onClick={async (e) => {
                 e.stopPropagation()
-                const r = await deleteFrom(docStore, (d) => removeTake(d, sel.id))
-                offerUndo({ label: `v${selIdx + 1} deleted`, undo: () => restoreTo(docStore, r) })
+                await deleteFrom(docStore, (d) => removeTake(d, sel.id)) // Undo in the top bar puts it back
               }}>🗑</button>
           )}
-          {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
           {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
         </div>
@@ -209,7 +204,6 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const [drag, setDrag] = useState<{ a: { x: number; y: number }; b: { x: number; y: number } } | null>(null)
   const [focusPin, setFocusPin] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [noteUndo, offerNoteUndo, runNoteUndo] = useUndo()
   const pendingSeek = useRef<number | null>(null)
 
   // New clip: reset the composer bits that belong to the old one.
@@ -418,7 +412,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           )}
           {fixJob && <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden', display: 'flex' }}><JobNode jobId={fixJob} /></div>}
           <div className="comments">
-            {reviews.flatMap((r, i) => {
+            {reviews.flatMap((r) => {
               const v = takesOf(doc.takes ?? [], cur.shot.id).findIndex((x) => x.id === r.target.id) + 1
               const row = (
                 <div key={r.id} className="comment" onClick={() => jump(r)} style={focusPin === r.id ? { borderColor: 'var(--create)' } : undefined}>
@@ -427,16 +421,14 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
                     <button className="btn xs icon ghost iconbtn-del del" aria-label="Delete note" title="Delete note" onClick={async (e) => {
                       e.stopPropagation()
                       if (focusPin === r.id) setFocusPin(null)
-                      const removal = await deleteFrom(docStore, (d) => removeNote(d, r.id))
-                      offerNoteUndo({ label: 'Note deleted', key: String(i), undo: () => restoreTo(docStore, removal) })
+                      await deleteFrom(docStore, (d) => removeNote(d, r.id)) // Undo in the top bar puts it back
                     }}>🗑</button>
                   </div>
                   <div>{r.comment}</div>
                 </div>
               )
-              return noteUndo?.key === String(i) ? [<UndoChip key="undo" label={noteUndo.label} onUndo={runNoteUndo} />, row] : [row]
+              return [row]
             })}
-            {noteUndo && Number(noteUndo.key) >= reviews.length && <UndoChip label={noteUndo.label} onUndo={runNoteUndo} />}
             {!reviews.length && <div className="faint" style={{ fontSize: 12.5 }}>Pause the clip and type. Your note sticks to that moment.</div>}
           </div>
           <div className="row" title={made.label}>
