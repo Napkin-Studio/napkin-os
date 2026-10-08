@@ -373,3 +373,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .topmenu .ownkeys { width: 320px; padding: 14px; gap: 10px; font-size: 12.5px; }
 .ownkeys-use { list-style: none; margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); display: flex; flex-direction: column; gap: 4px; }
 .ownkeys-use li { display: flex; justify-content: space-between; gap: 8px; }
+
+/* The regenerate menu (ui/ModelPick.tsx) */
+.modelpick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; flex-wrap: wrap; }
+.modelpick .select { max-width: 260px; }
+.modelpick .modelnote { flex-basis: 100%; font-size: 11.5px; }

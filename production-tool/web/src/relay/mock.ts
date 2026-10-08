@@ -314,7 +314,7 @@ export class MockRelay implements Relay {
       state,
       nextPollS: 1,
       provider: 'mock',
-      model: 'mock',
+      model: req.modelChoice?.model ?? 'mock',
       requestId: `mock-${hexOf(jobId).slice(-8).toLowerCase()}`,
       inputHashes: [...hashes],
       kind: 'mock',

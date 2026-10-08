@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { Composition, CameraMove, Ratio, Region, Shot } from '../contracts/types'
+import type { Composition, CameraMove, ModelChoice, Ratio, Region, Shot } from '../contracts/types'
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
 import { allNamed, isRunning, jobAt, ratioAspect } from '../jobs/select'
@@ -22,6 +22,9 @@ import { maskPng } from '../lib/mask'
 import { updateDoc } from '../doc/store'
 import { deleteFrom, removeFrame, removeShot, restoreTo, shotDeleteText } from '../doc/remove'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
+import { ModelPick } from '../ui/ModelPick'
+import { choiceToSend, modelChoicesFor } from '../capabilities'
+import { madeWith, startingChoice } from '../ui/modelChoice'
 import { useUndo } from '../ui/useUndo'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
@@ -231,7 +234,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { config, controls } = useConfig()
   const showMock = useShowMock()
   const frames = (doc.frames ?? []).filter((f) => f.shot_id === shot.id)
   const current = frames.find((f) => f.selected) ?? frames[frames.length - 1]
@@ -244,8 +247,11 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const [text, setText] = useState('')
   const [strokes, setStrokes] = useState<Stroke[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [pick, setPick] = useState<ModelChoice | undefined>()
   const [undo, offerUndo, runUndo] = useUndo()
   const region = current ? ui.frameRegions[current.id] : undefined
+  const made = madeWith(doc, ui, current?.job_id)
+  const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
   const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
   const prevShot = index > 0 ? (doc.shots ?? [])[index - 1] : undefined
   const prevDrawn = !prevShot || !!selectedFrame(doc, prevShot.id)
@@ -271,7 +277,9 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         const anchors = await continuity(relay, doc, index)
         await runner.submit('region_edit', { image, region, text: text.trim(), ...(mask ? { mask } : {}), ...anchors }, [current.job_id], { for: 'frame', shotId: shot.id, parentFrameId: current.id, how: 'again' })
       } else {
-        await drawFrame({ relay, doc: docStore, ui: uiStore, runner }, index, current ? 'again' : index === 0 ? 'first' : 'next', { text, ...(current ? { parent: current } : {}) })
+        // A pick only on a regenerate: the first draw runs the routed default.
+        const modelChoice = current ? choiceToSend('frame', config, choice) : undefined
+        await drawFrame({ relay, doc: docStore, ui: uiStore, runner }, index, current ? 'again' : index === 0 ? 'first' : 'next', { text, ...(current ? { parent: current } : {}), ...(modelChoice ? { modelChoice } : {}) })
       }
       setText('')
       setStrokes([])
@@ -331,7 +339,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
             <div className="versions">
               <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
-              <span className="mono">v{idx + 1}/{frames.length}</span>
+              <span className="mono" title={made.label}>v{idx + 1}/{frames.length}</span>
               <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
               <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={frames.length <= 1 || running}
                 title={frames.length <= 1 ? 'Regenerate instead' : `Delete v${idx + 1}`}
@@ -351,6 +359,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
               onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !running && (text.trim() || !region) && regenerate()} />
             <div className="row">
               {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
+              {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
               <span className="spacer" />
               {onNext && nextEmpty && !ui.drawingRest && (
                 <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>

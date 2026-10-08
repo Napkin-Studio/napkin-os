@@ -4,7 +4,7 @@
 // reload because the document and the job purposes are both snapshotted.
 
 import type {
-  ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, Op, Region, StageName,
+  ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
 } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
 import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
@@ -81,8 +81,9 @@ export class JobRunner {
 
   // ── submit / retry / cancel ──
 
-  async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job')): Promise<string> {
-    const request: JobRequest = { contractVersion: '2', jobId, op, parentIds, input }
+  /** `modelChoice`: the model picked in the regenerate menu (features/model-choice.clan). */
+  async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job'), modelChoice?: ModelChoice): Promise<string> {
+    const request: JobRequest = { contractVersion: '2', jobId, op, parentIds, input, ...(modelChoice ? { modelChoice } : {}) }
     const hashes = new Set<string>()
     collectHashes(input, hashes)
     const now = new Date().toISOString()
@@ -142,7 +143,7 @@ export class JobRunner {
         c.retriedAs = newJobId
       }
     })
-    await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId)
+    await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId, request.modelChoice)
     return newJobId
   }
 

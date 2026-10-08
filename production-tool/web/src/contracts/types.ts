@@ -88,6 +88,30 @@ export interface OpSheet {
   durationsS?: number[]
   regionModel?: string
   regionEndpoint?: string
+  /** The model's name in the regenerate menu, and one line on what it is good for. */
+  label?: string
+  note?: string
+  /** Vetted models a participant may pick when they regenerate (features/model-choice.clan). */
+  alternates?: OpAlternate[]
+}
+
+/** One alternate model for an op: its fields replace the op's, its overrides the sheet's. */
+export interface OpAlternate {
+  model: string
+  endpoint: string
+  estimateUsd: number | null
+  label: string
+  note?: string
+  maxS?: number
+  minS?: number
+  durationsS?: number[]
+  seed?: boolean
+  outputs?: number[]
+  tagSyntax?: CapabilitySheet['tagSyntax']
+  refs?: CapabilitySheet['refs']
+  series?: number
+  outputsPerCall?: number
+  video?: CapabilitySheet['video']
 }
 
 export interface CapabilitySheet {
@@ -135,6 +159,8 @@ export interface Flags {
 export interface Config {
   contractVersion: ContractVersion
   routing: Partial<Record<Op, Provider[]>>
+  /** Never offered in the regenerate menu; a failed pick falls back to them. */
+  fallbackOnly?: Provider[]
   director: { promptVersion: string; perClickModel: string; shotListModel: string }
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
@@ -372,6 +398,13 @@ export interface JobRequest {
   op: Op
   parentIds: Id[]
   input: JobInput
+  /** The model picked when regenerating; absent means the routing's default. */
+  modelChoice?: ModelChoice
+}
+
+export interface ModelChoice {
+  provider: Provider
+  model: string
 }
 
 export interface Job {
@@ -387,6 +420,8 @@ export interface Job {
   /** Whose key runs the job (the participant's X-Own-Keys, or the event's). */
   keySource?: 'own' | 'event'
   model?: string
+  /** The pick this job was meant to run on, when it fell back to another provider. */
+  fallbackFrom?: ModelChoice
   requestId?: string
   inputHashes: Sha256[]
   director?: AgentBlock
