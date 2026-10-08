@@ -214,6 +214,16 @@ def test_clip_body_sends_string_duration_and_audio_false(provider, fal):
     assert "multi_prompt" not in body
 
 
+def test_clip_leaves_out_a_picture_that_is_not_an_element(provider, fal):
+    """2026-10-08: a shot with @uberto (front and views) and @watchy (front only) was refused whole:
+    Kling video takes pictures only as elements. The start frame shows watchy; the clip goes."""
+    refs = element_refs() + [Ref(SIDE, "watchy_front", "character")]
+    provider.submit(job(op="clip", prompt="@hero meets @watchy_front", refs=refs, first_frame=FRAME))
+    body = fal.body()
+    assert body["prompt"] == "@Element1 meets watchy"
+    assert len(body["elements"]) == 1 and "image_urls" not in body
+
+
 def test_clip_sets_audio_false_even_when_the_job_does_not_say(provider, fal):
     provider.submit(job(op="clip", refs=[], first_frame=FRAME))
     assert fal.body()["generate_audio"] is False

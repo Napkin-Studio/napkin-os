@@ -55,8 +55,9 @@ def sheet_refusal(op: str, last_error: str) -> str:
     provider, _, reason = last_error.partition(": ")
     reason = reason or last_error
     for subject in (provider, op):  # "fal takes at most 5 character refs", "region_edit needs a mask"
-        if subject and reason.startswith(f"{subject} "):
-            reason = "it " + reason[len(subject) + 1:]
+        head, _, rest = reason.partition(" ")
+        if subject and head == subject and rest.split(" ", 1)[0] in ("takes", "needs", "cannot", "returns", "does"):
+            reason = "it " + rest
     hint = next((h for k, h in SHEET_HINTS if k in reason), "Change the step and send it again.")
     name = PROVIDER_NAMES.get(provider, provider or "The provider")
     return f"{name} cannot do this {op.replace('_', ' ')}: {reason}. {hint}"

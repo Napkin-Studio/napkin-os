@@ -59,6 +59,14 @@ def test_anchor_and_previous_frames_count_against_the_total():
     assert len(out["refs"]) == 3 and dropped == ["p5x_on", "p4x_on"]
 
 
+def test_on_a_sheet_with_elements_views_are_not_cut_for_the_character_limit():
+    # 2026-10-08: fal's 4 character refs were applied to Kling clip elements, which the check does
+    # not count; the cut left @watchy with only a front, and a front alone is not an element.
+    refs = whole("uberto", 1) + whole("watchy", 5)
+    out, dropped = fit_refs("clip", {"shot": SHOT, "refs": refs}, {"refs": {"max": 10, "maxCharacter": 4, "element": True}})
+    assert dropped == [] and len(out["refs"]) == 8
+
+
 def test_the_relay_sends_the_cut_refs_to_the_provider():
     h = Harness()
     token = h.sign_in()
@@ -107,6 +115,8 @@ def test_an_outage_on_any_hop_keeps_the_retryable_message():
      "fal cannot do this region edit: it needs a mask. Paint over the area with the brush, or remove the box."),
     ("view", "runway: takes no mask", "Runway cannot do this view: takes no mask. Remove the painted area and use a box."),
     ("clip", "heygen: something new", "HeyGen cannot do this clip: something new. Change the step and send it again."),
+    ("clip", "fal: clip needs a first frame", "fal cannot do this clip: it needs a first frame. Change the step and send it again."),
+    ("clip", "fal: clip refs must be named", "fal cannot do this clip: clip refs must be named. Name fewer pictures in this shot."),
 ])
 def test_the_message_names_the_limit_and_the_fix(op, last, want):
     assert sheet_refusal(op, last) == want

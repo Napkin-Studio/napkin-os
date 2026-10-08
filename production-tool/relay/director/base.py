@@ -19,6 +19,8 @@ import os
 import time
 from typing import Protocol
 
+from names import ELEMENT_OPS as _ELEMENT_OPS
+
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
@@ -41,7 +43,6 @@ class Director(Protocol):
 _VIDEO_OPS = {"clip", "clip_edit"}
 _COMPOSITIONS = ["wide", "medium", "close", "medium", "close", "wide", "insert", "medium"]
 _MOVES = ["static", "push_in", "pan", "static", "track", "pull_out", "static", "orbit"]
-_ELEMENT_OPS = {"generate", "frame", "clip"}
 # The camera angle of each turnaround view (director.v4: front 0, three-quarter 45, side 90, back 180).
 VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
 

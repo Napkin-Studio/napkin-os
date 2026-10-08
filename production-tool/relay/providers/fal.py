@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import re
 from typing import Optional
 from urllib.parse import urlparse
@@ -38,6 +39,7 @@ from .types import (
 )
 from .tags import TAG, UnknownTag, rewrite_tags
 
+log = logging.getLogger("relay.fal")
 QUEUE = "https://queue.fal.run"
 # fal-ai/kling-image/o3/image-to-image aspect_ratio enum (fal.ai/models/.../api, checked 2026-10-07).
 KLING_IMAGE_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9")
@@ -384,9 +386,13 @@ class FalProvider:
     def _clip(self, job: ProviderJob) -> dict:
         if not job.first_frame:
             raise CapabilityMissing("clip needs a first frame")
-        urls, _, elements, tags = self._split_refs(job)
+        urls, names, elements, tags = self._split_refs(job)
         if urls:
-            raise CapabilityMissing("clip refs must be element_front / element_angle")
+            # Kling video takes pictures only as elements (a front and 1-3 angles). A picture that is not
+            # one (a character with only its front, an object) is left out: the start frame already shows
+            # it, and its @tag reads as plain words (features/harness-refusals.clan).
+            log.info("fal clip: left out %s (not elements; the start frame carries them)", ", ".join(names))
+            tags = {**tags, **{n: n.split("_", 1)[0] for n in names}}
         if any(not e["reference_image_urls"] for e in elements):
             raise CapabilityMissing("kling video needs at least one angle ref per element")
         body = {"start_image_url": self._url(job.first_frame), "generate_audio": video_audio(job)}
