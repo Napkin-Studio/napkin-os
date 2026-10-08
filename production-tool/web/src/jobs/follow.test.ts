@@ -10,7 +10,7 @@ import { newId } from '../lib/ulid'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
 import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
-import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes } from './fix'
+import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
 import { cancelFollow, continueFollow, planCost, planFollow, planSummary, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
@@ -380,6 +380,34 @@ describe('Update what follows', () => {
     expect(planCost(plan, runway).usd).toBeCloseTo(2 * 0.2 + 3 * 1.2)
     expect(planSummary(plan, runway)).toBe('2 frames, 3 clips, 1 ad · about $4.00')
     expect(planSummary(plan, CONFIGS.testing)).toMatch(/^2 frames, 3 clips, 1 ad · /)
+  })
+
+  it('makes each clip again on the model that made it, so a fal clip never goes to HeyGen', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const veo = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    await updateDoc(s.doc, (d) => { Object.assign(d.takes!.find((t) => t.selected && t.shot_id === s.shotId(1))!, { ...veo, kind: 'video' }) })
+    await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
+    await s.land() // shot 2's frame changed: its clip is out of date
+    const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['heygen', 'fal'] as const } } as unknown as typeof CONFIGS.testing
+    await startFollow(s.deps, own)
+    expect(s.ui.get().following?.clipModels).toEqual({ [s.shotId(1)]: veo })
+    await s.settle()
+    const clip = s.all().find((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.followRun)!
+    expect(s.ui.get().jobCtx[clip.id].request.modelChoice).toEqual(veo)
+  })
+
+  it('leaves a shot that a fix is redoing alone: not out of date in the plan while the fix runs', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const note = await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.4, h: 0.4 } })
+    await fixInShot(s.deps, s.shotId(1), [note])
+    await s.land() // the fixed frame lands; the fix's clip is running and shot 2's old clip is marked
+    await vi.waitFor(() => expect(s.all().some((j) => j.op === 'clip' && j.state !== 'completed')).toBe(true), { timeout: 2000, interval: 5 })
+    const fixing = shotsBeingFixed(s.doc.get(), (id) => s.ui.get().jobCtx[id])
+    expect([...fixing]).toEqual([s.shotId(1)])
+    expect(takeStale(s.doc.get(), s.shotId(1))).toBeDefined()
+    expect(planFollow(s.doc.get(), fixing).clips).not.toContain(s.shotId(1))
   })
 
   it('runs frames one at a time in order, then the clips, then the ad, and writes one chain entry', async () => {

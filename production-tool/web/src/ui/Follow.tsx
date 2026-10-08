@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { shotsBeingFixed } from '../jobs/fix'
 import { cancelFollow, followState, planFollow, planSize, planSummary, startFollow } from '../jobs/follow'
 import { InlineConfirm } from './Undo'
 
@@ -33,7 +34,7 @@ export function UpdateFollows({ size = 'sm', progress = true }: { size?: 'xs' | 
     )
   }
 
-  const plan = planFollow(doc)
+  const plan = planFollow(doc, shotsBeingFixed(doc, (id) => ui.jobCtx[id]))
   const n = planSize(plan)
   if (!n) return null
   if (asking) {
@@ -45,7 +46,7 @@ export function UpdateFollows({ size = 'sm', progress = true }: { size?: 'xs' | 
             setAsking(false)
             setError(null)
             try {
-              await startFollow(deps)
+              await startFollow(deps, config)
             } catch (e) {
               setError(e instanceof Error ? e.message : 'That did not work.')
             }

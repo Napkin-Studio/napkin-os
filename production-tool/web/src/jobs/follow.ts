@@ -12,12 +12,13 @@
 // boot, like Draw the rest, so it resumes after a reload. Cancel stops it after
 // the job running now. A failed step waits: Retry on that job moves the run on.
 
-import type { Config, Op, ProductionDocument } from '../contracts/types'
+import type { Config, ModelChoice, Op, ProductionDocument } from '../contracts/types'
 import type { FollowRun, JobCtx } from '../doc/ui'
 import { describeFollow } from '../doc/describe'
-import { routedSheet, type Sheets } from '../capabilities'
+import { choiceToSend, modelChoicesFor, routedSheet, type Sheets } from '../capabilities'
 import { newId } from '../lib/ulid'
 import { makeClip, renderAd, selectedTake } from './clips'
+import { shotsBeingFixed } from './fix'
 import { drawFrame, selectedFrame, type FrameDeps } from './frames'
 import { isActive } from './runner'
 import { adStatus, anythingStale, frameStale, takeStale } from './stale'
@@ -37,7 +38,8 @@ export const planSize = (p: FollowPlan) => p.frames.length + p.clips.length + (p
  * every frame after it follows it, so the frames run from the first one that needs
  * drawing to the last shot. Empty when nothing is out of date.
  */
-export function planFollow(d: ProductionDocument): FollowPlan {
+/** `fixing`: shots a fix is redoing now (shotsBeingFixed); their clip is left to the fix. */
+export function planFollow(d: ProductionDocument, fixing: ReadonlySet<string> = new Set()): FollowPlan {
   const none: FollowPlan = { frames: [], clips: [], ad: false }
   if (!anythingStale(d)) return none
   const shots = d.shots ?? []
@@ -45,7 +47,7 @@ export function planFollow(d: ProductionDocument): FollowPlan {
   const hasTakes = (d.takes ?? []).some((t) => shots.some((s) => s.id === t.shot_id))
   const first = shots.findIndex((s) => !!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id)))
   const frames = first >= 0 ? shots.slice(first).map((s) => s.id) : []
-  const clips = hasTakes ? shots.filter((s) => frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id)).map((s) => s.id) : []
+  const clips = hasTakes ? shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id))).map((s) => s.id) : []
   const ad = adStatus(d)
   return { frames, clips, ad: !!ad.ad && (clips.length > 0 || ad.stale) }
 }
@@ -108,12 +110,33 @@ export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx |
 }
 
 /** Start a run of the plan as it stands now. */
-export async function startFollow(deps: FrameDeps): Promise<FollowPlan> {
+/** The model to make each planned clip again on: the one that made the selected clip, where the menu
+ *  offers it and it is not the routed default (which runs anyway). A clip made on fal stays on fal. */
+export function clipModelsFor(d: ProductionDocument, shotIds: string[], config: Config): Record<string, ModelChoice> {
+  const offered = modelChoicesFor('clip', config)
+  const out: Record<string, ModelChoice> = {}
+  for (const id of shotIds) {
+    const t = selectedTake(d, id)
+    if (!t?.provider || !t.model || t.kind === 'mock') continue
+    const pick = { provider: t.provider, model: t.model }
+    if (!offered.some((o) => o.provider === pick.provider && o.model === pick.model)) continue
+    const send = choiceToSend('clip', config, pick)
+    if (send) out[id] = send
+  }
+  return out
+}
+
+/** `config`: the routing as this participant sees it, to keep each clip on the model that made it. */
+export async function startFollow(deps: FrameDeps, config?: Config): Promise<FollowPlan> {
   const d = deps.doc.get()
-  const plan = planFollow(d)
+  const plan = planFollow(d, shotsBeingFixed(d, (id) => ctxOf(deps, id)))
   if (!planSize(plan) || deps.ui.get().following) return plan
+  const clipModels = config ? clipModelsFor(d, d.shots?.map((s) => s.id) ?? [], config) : {}
   deps.ui.update((u) => {
-    u.following = { id: newId('follow'), startedAt: new Date().toISOString(), ad: plan.ad, clipShots: plan.clips, framesDone: [], clipsDone: [], adDone: false }
+    u.following = {
+      id: newId('follow'), startedAt: new Date().toISOString(), ad: plan.ad, clipShots: plan.clips, framesDone: [], clipsDone: [], adDone: false,
+      ...(Object.keys(clipModels).length ? { clipModels } : {}),
+    }
   })
   await continueFollow(deps)
   return plan
@@ -188,13 +211,15 @@ async function step(deps: FrameDeps): Promise<void> {
 
     // 2. Clips, in order, for every shot whose frame changed, whose clip is out of date, or (once there are clips) that has none.
     const hasTakes = (d.takes ?? []).some((t) => shots.some((s) => s.id === t.shot_id))
-    const next = shots.find((s) => !run.clipsDone.includes(s.id) && (run.clipShots.includes(s.id) || !!takeStale(d, s.id) || (hasTakes && !selectedTake(d, s.id))))
+    const fixing = shotsBeingFixed(d, (id) => ctxOf(deps, id))
+    const next = shots.find((s) => !run.clipsDone.includes(s.id) && !fixing.has(s.id) && (run.clipShots.includes(s.id) || !!takeStale(d, s.id) || (hasTakes && !selectedTake(d, s.id))))
     if (next) {
       const parentTake = selectedTake(d, next.id)
       const made = parentTake ? d.jobs.find((j) => j.id === parentTake.job_id) : undefined
       const text = made?.op === 'clip' ? made.text : undefined
       note((r) => r.clipsDone.push(next.id))
-      await makeClip(deps, next.id, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), purpose: { followRun: run.id } })
+      const modelChoice = run.clipModels?.[next.id]
+      await makeClip(deps, next.id, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), purpose: { followRun: run.id }, ...(modelChoice ? { modelChoice } : {}) })
       return
     }
 

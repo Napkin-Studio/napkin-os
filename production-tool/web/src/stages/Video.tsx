@@ -9,7 +9,7 @@ import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contr
 import { assetRef } from '../jobs/assets'
 import { isRunning, jobAt } from '../jobs/select'
 import { makeClip as submitClip, renderAd } from '../jobs/clips'
-import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip } from '../jobs/fix'
+import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { adStatus, takeStale } from '../jobs/stale'
 import { UpdateFollows } from '../ui/Follow'
 import { rectToRegion } from '../lib/region'
@@ -141,7 +141,9 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
   const [undo, offerUndo, runUndo] = useUndo()
   const selIdx = sel ? takes.indexOf(sel) : -1
-  const stale = takeStale(doc, shot.id)
+  const ui = useUi()
+  // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
+  const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
   const adNeeds = adStatus(doc).shotId === shot.id
   return (
     <div className={`shotcard ${selected ? 'sel' : ''}`} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
@@ -388,7 +390,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
             <h2>Notes</h2>
             <span className="faint" style={{ fontSize: 12 }}>Shot {cur.shot.order} · v{takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1}</span>
             {(() => {
-              const st = takeStale(doc, cur.shot.id)
+              const st = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(cur.shot.id) ? undefined : takeStale(doc, cur.shot.id)
               return st && st.target.id === cur.take.id ? <span className="stale" title={st.reason}>Out of date · {st.reason}</span> : null
             })()}
           </div>

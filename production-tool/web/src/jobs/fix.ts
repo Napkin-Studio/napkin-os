@@ -122,6 +122,18 @@ export async function resumeFixes(deps: FrameDeps): Promise<void> {
   }
 }
 
+/** Shots a fix is working on now (its frame edit or its clip is running): the fix will replace their clip,
+ *  so they are not "out of date" and "Update what follows" leaves them alone. */
+export function shotsBeingFixed(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined): Set<string> {
+  const out = new Set<string>()
+  for (const j of d.jobs) {
+    if (!isActive(j.state)) continue
+    const c = ctxOf(j.id)
+    if ((c?.for === 'frame' && c.fixReviewIds?.length) || (c?.for === 'clip' && c.reviewIds?.length)) out.add(c.shotId)
+  }
+  return out
+}
+
 export type FixStep = { step: 'frame' | 'clip'; jobId: string; running: boolean }
 
 /** Where a fix for these notes is: its newest job, and whether it is the frame or the clip. */

@@ -57,6 +57,9 @@ export interface FollowRun {
   adDone: boolean
   /** Stop after the job running now. */
   cancel?: boolean
+  /** The model each shot's clip is made again on: the one that made the clip it replaces, where the
+   *  menu offers it (features/production-tool-ui.clan). Absent: the routed default. */
+  clipModels?: Record<string, ModelChoice>
 }
 
 export function initialUi(): UiState {
