@@ -18,7 +18,7 @@ import httpx
 
 from .types import (
     VIDEO_OPS, AssetResolver, CapabilityMissing, ProviderError, ProviderJob,
-    ProviderOutput, Ref, Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
+    ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
 from .tags import UnknownTag, rewrite_tags
 
@@ -87,8 +87,10 @@ def _http_error(resp: httpx.Response) -> ProviderError:
     return ProviderError("invalid_input", message, False)
 
 
-# No alternates: this provider runs only its sheet's own model per op (features/model-choice.clan).
-ALTERNATES: dict[str, set[str]] = {}
+# The previous defaults, kept as alternates (features/default-models.clan). Runway is fallback-only,
+# so the menu never offers them; scripts and a config without fallbackOnly can still pick them.
+ALTERNATES = {"generate": {"gemini_image3.1_flash"}, "view": {"gemini_image3.1_flash"},
+              "frame": {"gemini_image3.1_flash"}, "clip": {"veo3.1_fast"}}
 
 
 class RunwayProvider:
@@ -123,6 +125,10 @@ class RunwayProvider:
         return body
 
     # Building the request
+
+    def _model(self, job: ProviderJob) -> str:
+        """The model the job names when the sheet lists it for the op, else the op's own."""
+        return effective_sheet(self._sheet, job.op, job.model)["ops"][job.op]["model"]
 
     def _tagged(self, names: list[str], prompt: str) -> str:
         try:
@@ -206,7 +212,7 @@ class RunwayProvider:
         if not job.ratio:
             raise ProviderError("invalid_input", f"{job.op} needs a ratio", False)
         body = {
-            "model": self._sheet["ops"][job.op]["model"],
+            "model": self._model(job),
             "promptText": self._tagged([r.name for r in refs], prompt),
             "ratio": job.ratio,
             "outputCount": job.outputs or 1,
@@ -227,7 +233,7 @@ class RunwayProvider:
         if job.last_frame:
             frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
         body = {
-            "model": self._sheet["ops"]["clip"]["model"],
+            "model": self._model(job),
             "promptImage": frames,
             "promptText": self._tagged([r.name for r in job.refs], job.prompt),
             "ratio": job.ratio,
@@ -247,7 +253,7 @@ class RunwayProvider:
         if not videos:
             raise CapabilityMissing("clip_edit needs the source video (video/mp4) among its refs")
         body = {
-            "model": self._sheet["ops"]["clip_edit"]["model"],
+            "model": self._model(job),
             "videoUri": videos[0].url,
             "promptText": self._tagged([r.name for r in job.refs], job.prompt),
         }  # aleph2 has no audio parameter, so unlike clip this body cannot set it

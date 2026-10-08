@@ -72,7 +72,7 @@ def test_image_ops_build_the_exact_body(runway, server, op):
     runway.submit(job(op, refs=[Ref(SHA, "hero", "character"), Ref(SHB, "prop_one", "object")],
                       prompt="@hero holds @prop_one", outputs=4))
     assert server.body == {
-        "model": "gemini_image3.1_flash",
+        "model": "gemini_image3_pro",
         "promptText": "@hero holds @prop_one",
         "ratio": "1024:1024",
         "outputCount": 4,
@@ -85,7 +85,7 @@ def test_image_ops_build_the_exact_body(runway, server, op):
 
 def test_no_refs_sends_no_reference_images_and_one_output(runway, server):
     runway.submit(job(refs=[], prompt="a red fox"))
-    assert server.body == {"model": "gemini_image3.1_flash", "promptText": "a red fox",
+    assert server.body == {"model": "gemini_image3_pro", "promptText": "a red fox",
                            "ratio": "1024:1024", "outputCount": 1}
 
 
@@ -111,7 +111,7 @@ def test_clip_builds_the_exact_body_with_audio_off(runway, server):
                       prompt="she walks away", negative="blur", seed=42))
     assert server.requests[0].url.path == "/v1/image_to_video"
     assert server.body == {
-        "model": "veo3.1_fast",
+        "model": "veo3.1",
         "promptImage": [{"uri": URL[SHA], "position": "first"}, {"uri": URL[SHB], "position": "last"}],
         "promptText": "she walks away",
         "ratio": "1280:720",

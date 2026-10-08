@@ -104,7 +104,7 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     assert post.url.path == "/v1/text_to_image"
     assert post.headers["Authorization"] == "Bearer rw-key"
     body = json.loads(post.content)
-    assert body["model"] == "gemini_image3.1_flash" and body["ratio"] == "896:1152" and body["outputCount"] == 1
+    assert body["model"] == "gemini_image3_pro" and body["ratio"] == "896:1152" and body["outputCount"] == 1
     assert [(r["uri"], r["tag"], r["subject"]) for r in body["referenceImages"]] == [
         (f"{CDN}/in/{A}", "in_1", "human"), (f"{CDN}/in/{B}", "maya_eyes", "object"), (f"{CDN}/in/{C}", "in_2", "object")]
     # the director ran on config.json's model, and saw the routed sheet

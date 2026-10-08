@@ -154,7 +154,7 @@ class PassthroughDirector:
         # As the director does (pathway matrix, 2026-10-08): the ratio in the provider's own form,
         # and no refs beside a first frame where the provider cannot take both.
         from .director import _clip_frame_only, provider_ratio
-        ratio = provider_ratio(provider, op, inp.get("ratio"))
+        ratio = provider_ratio(provider, op, inp.get("ratio"), model)
         if ratio:
             job["ratio"] = ratio
         if sheet:

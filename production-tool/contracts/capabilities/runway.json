@@ -1,37 +1,81 @@
 {
   "contractVersion": "2",
   "provider": "runway",
-  "checked": "2026-10-06",
+  "checked": "2026-10-08",
   "ops": {
     "generate": {
-      "model": "gemini_image3.1_flash",
+      "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.07,
+      "estimateUsd": 0.2,
       "seed": false,
       "outputs": [
         1,
         4
+      ],
+      "label": "Gemini 3 Pro",
+      "alternates": [
+        {
+          "model": "gemini_image3.1_flash",
+          "endpoint": "POST /v1/text_to_image",
+          "estimateUsd": 0.07,
+          "label": "Gemini 3.1 Flash",
+          "note": "Faster and cheaper; the previous default",
+          "seed": false,
+          "outputs": [
+            1,
+            4
+          ]
+        }
       ]
     },
     "view": {
-      "model": "gemini_image3.1_flash",
+      "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.07,
+      "estimateUsd": 0.2,
       "seed": false,
       "outputs": [
         1,
         4
+      ],
+      "label": "Gemini 3 Pro",
+      "alternates": [
+        {
+          "model": "gemini_image3.1_flash",
+          "endpoint": "POST /v1/text_to_image",
+          "estimateUsd": 0.07,
+          "label": "Gemini 3.1 Flash",
+          "note": "Faster and cheaper; the previous default",
+          "seed": false,
+          "outputs": [
+            1,
+            4
+          ]
+        }
       ]
     },
     "frame": {
-      "model": "gemini_image3.1_flash",
+      "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.07,
-      "label": "Gemini 3.1 Flash",
+      "estimateUsd": 0.2,
+      "label": "Gemini 3 Pro",
       "seed": false,
       "outputs": [
         1,
         4
+      ],
+      "alternates": [
+        {
+          "model": "gemini_image3.1_flash",
+          "endpoint": "POST /v1/text_to_image",
+          "estimateUsd": 0.07,
+          "label": "Gemini 3.1 Flash",
+          "note": "Faster and cheaper; the previous default",
+          "seed": false,
+          "outputs": [
+            1,
+            4
+          ]
+        }
       ]
     },
     "region_edit": {
@@ -45,16 +89,31 @@
       ]
     },
     "clip": {
-      "model": "veo3.1_fast",
+      "model": "veo3.1",
       "endpoint": "POST /v1/image_to_video",
-      "estimateUsd": 0.6,
-      "label": "Veo 3.1 Fast",
+      "estimateUsd": 1.2,
+      "label": "Veo 3.1",
       "durationsS": [
         4,
         6,
         8
       ],
-      "seed": true
+      "seed": true,
+      "alternates": [
+        {
+          "model": "veo3.1_fast",
+          "endpoint": "POST /v1/image_to_video",
+          "estimateUsd": 0.6,
+          "label": "Veo 3.1 Fast",
+          "note": "Faster and cheaper; the previous default",
+          "durationsS": [
+            4,
+            6,
+            8
+          ],
+          "seed": true
+        }
+      ]
     },
     "clip_edit": {
       "model": "aleph2",

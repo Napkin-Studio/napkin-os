@@ -122,7 +122,7 @@ def test_submit_that_raises_becomes_uncertain_and_is_never_resent(h):
     assert h.store.counters(f"inflight#{out['participantId']}")["n"] == 0
     assert h.store.counters("slots#fal#image")["n"] == 0
     # the reserved spend stays counted: it may have been paid
-    assert h.store.counters("spend")["usd"] == pytest.approx(0.028)
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.15)
 
 
 def test_completed_job_copies_outputs_to_s3_and_hashes_them(h):
@@ -184,10 +184,10 @@ def test_quota_exhaustion():
 def test_spend_stop():
     h = Harness(base_config(spend={"capUsd": 0.02, "warnUsd": 0.01}))
     token = h.sign_in()
-    h.post_job(token, expect=200)            # 0 spent: admitted, reserves fal's 0.028
-    _, out = h.post_job(token, expect=503)   # 0.028 reserved >= 0.02
+    h.post_job(token, expect=200)            # 0 spent: admitted, reserves fal's 0.15 (Nano Banana Pro)
+    _, out = h.post_job(token, expect=503)   # 0.15 reserved >= 0.02
     assert out["error"]["code"] == "spend_stop"
-    assert h.store.counters("spend")["usd"] == pytest.approx(0.028)
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.15)
 
 
 def test_in_flight_limit():
@@ -239,7 +239,7 @@ def test_routing_falls_back_when_the_first_provider_is_full():
     tokens = [h.sign_in(n) for n in ("ann", "ben", "cat")]
     jobs = [h.post_job(t, expect=200)[1] for t in tokens]
     assert [j["provider"] for j in jobs] == ["fal", "fal", "runway"]
-    assert jobs[2]["cost"]["reserved"] == 0.07   # re-reserved at runway's price
+    assert jobs[2]["cost"]["reserved"] == 0.2   # re-reserved at runway's price (Gemini 3 Pro)
 
 
 def test_routing_falls_back_when_the_first_provider_refuses():

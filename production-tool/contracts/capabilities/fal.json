@@ -4,9 +4,57 @@
   "checked": "2026-10-08",
   "ops": {
     "generate": {
-      "model": "kling-image-o3",
-      "endpoint": "fal-ai/kling-image/o3/image-to-image",
-      "estimateUsd": 0.028
+      "model": "nano-banana-pro-edit",
+      "endpoint": "fal-ai/nano-banana-pro/edit",
+      "estimateUsd": 0.15,
+      "label": "Nano Banana Pro",
+      "note": "Best at keeping characters exact",
+      "seed": true,
+      "outputs": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "tagSyntax": "image_n",
+      "refs": {
+        "max": 14,
+        "maxCharacter": 5,
+        "element": false
+      },
+      "series": 0,
+      "outputsPerCall": 4,
+      "alternates": [
+        {
+          "model": "kling-image-o3",
+          "endpoint": "fal-ai/kling-image/o3/image-to-image",
+          "estimateUsd": 0.028,
+          "label": "Kling O3",
+          "note": "Quick and cheap; characters go in as Kling elements"
+        },
+        {
+          "model": "nano-banana-2-edit",
+          "endpoint": "fal-ai/nano-banana-2/edit",
+          "estimateUsd": 0.08,
+          "label": "Nano Banana 2",
+          "note": "Holds faces and outfits; cheaper than Pro",
+          "seed": true,
+          "outputs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "tagSyntax": "image_n",
+          "refs": {
+            "max": 14,
+            "maxCharacter": 5,
+            "element": false
+          },
+          "series": 0,
+          "outputsPerCall": 4
+        }
+      ]
     },
     "view": {
       "model": "qwen-image-edit-2511-multiple-angles",
@@ -14,35 +62,53 @@
       "estimateUsd": 0.035
     },
     "frame": {
-      "model": "kling-image-o3",
-      "endpoint": "fal-ai/kling-image/o3/image-to-image",
-      "estimateUsd": 0.028,
-      "label": "Kling O3",
-      "note": "Quick and cheap; characters go in as Kling elements",
+      "model": "nano-banana-pro-edit",
+      "endpoint": "fal-ai/nano-banana-pro/edit",
+      "estimateUsd": 0.15,
+      "label": "Nano Banana Pro",
+      "note": "Best at keeping characters exact",
+      "seed": true,
+      "outputs": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "tagSyntax": "image_n",
+      "refs": {
+        "max": 14,
+        "maxCharacter": 5,
+        "element": false
+      },
+      "series": 0,
+      "outputsPerCall": 4,
       "alternates": [
+        {
+          "model": "kling-image-o3",
+          "endpoint": "fal-ai/kling-image/o3/image-to-image",
+          "estimateUsd": 0.028,
+          "label": "Kling O3",
+          "note": "Quick and cheap; characters go in as Kling elements"
+        },
         {
           "model": "nano-banana-2-edit",
           "endpoint": "fal-ai/nano-banana-2/edit",
           "estimateUsd": 0.08,
           "label": "Nano Banana 2",
-          "note": "Holds faces and outfits across many refs",
+          "note": "Holds faces and outfits; cheaper than Pro",
           "seed": true,
-          "outputs": [1, 2, 3, 4],
+          "outputs": [
+            1,
+            2,
+            3,
+            4
+          ],
           "tagSyntax": "image_n",
-          "refs": { "max": 14, "maxCharacter": 5, "element": false },
-          "series": 0,
-          "outputsPerCall": 4
-        },
-        {
-          "model": "nano-banana-pro-edit",
-          "endpoint": "fal-ai/nano-banana-pro/edit",
-          "estimateUsd": 0.15,
-          "label": "Nano Banana Pro",
-          "note": "Best at keeping characters exact; slower",
-          "seed": true,
-          "outputs": [1, 2, 3, 4],
-          "tagSyntax": "image_n",
-          "refs": { "max": 14, "maxCharacter": 5, "element": false },
+          "refs": {
+            "max": 14,
+            "maxCharacter": 5,
+            "element": false
+          },
           "series": 0,
           "outputsPerCall": 4
         }
@@ -68,10 +134,26 @@
           "estimateUsd": 0.9,
           "label": "Veo 3.1 Fast",
           "note": "Natural motion; follows the frame, no character refs",
-          "durationsS": [4, 6, 8],
+          "durationsS": [
+            4,
+            6,
+            8
+          ],
           "seed": true,
-          "refs": { "max": 0, "maxCharacter": 0, "element": false },
-          "video": { "firstFrameWithRefs": false, "lastFrame": false, "multiShot": false, "regionEdit": "mask", "feelEdit": "strength", "audioDefault": true, "audioControl": true }
+          "refs": {
+            "max": 0,
+            "maxCharacter": 0,
+            "element": false
+          },
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "multiShot": false,
+            "regionEdit": "mask",
+            "feelEdit": "strength",
+            "audioDefault": true,
+            "audioControl": true
+          }
         },
         {
           "model": "veo3.1-i2v",
@@ -79,10 +161,26 @@
           "estimateUsd": 2.4,
           "label": "Veo 3.1",
           "note": "Best motion and physics; follows the frame, no refs",
-          "durationsS": [4, 6, 8],
+          "durationsS": [
+            4,
+            6,
+            8
+          ],
           "seed": true,
-          "refs": { "max": 0, "maxCharacter": 0, "element": false },
-          "video": { "firstFrameWithRefs": false, "lastFrame": false, "multiShot": false, "regionEdit": "mask", "feelEdit": "strength", "audioDefault": true, "audioControl": true }
+          "refs": {
+            "max": 0,
+            "maxCharacter": 0,
+            "element": false
+          },
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "multiShot": false,
+            "regionEdit": "mask",
+            "feelEdit": "strength",
+            "audioDefault": true,
+            "audioControl": true
+          }
         }
       ]
     },

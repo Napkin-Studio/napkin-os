@@ -94,7 +94,9 @@ def provider(fal):
 
 
 def job(op="generate", **kw):
-    return ProviderJob(op=op, provider="fal", model="m", prompt=kw.pop("prompt", "a fox"),
+    # Image steps default to Nano Banana Pro (features/default-models.clan); these tests are Kling's.
+    model = kw.pop("model", "kling-image-o3" if op in ("generate", "frame") else "m")
+    return ProviderJob(op=op, provider="fal", model=model, prompt=kw.pop("prompt", "a fox"),
                        refs=kw.pop("refs", [Ref(HERO, "hero", "character")]), **kw)
 
 
@@ -682,8 +684,13 @@ def test_seed_and_unsupported_ops_are_refused_before_any_call(provider, fal):
     assert fal.requests == []
 
 
-def test_nano_banana_is_not_used():
-    assert not any("nano-banana" in op["endpoint"] for op in load_sheet("fal")["ops"].values())
+def test_characters_and_frames_default_to_nano_banana_pro_with_kling_beside_it():
+    """features/default-models.clan: a good model always, chosen for keeping characters."""
+    sheet = load_sheet("fal")
+    for op in ("generate", "frame"):
+        assert sheet["ops"][op]["endpoint"] == "fal-ai/nano-banana-pro/edit"
+        assert "kling-image-o3" in [a["model"] for a in sheet["ops"][op]["alternates"]]
+    assert sheet["ops"]["clip"]["model"] == "kling-v3-pro-i2v"  # the clip model that keeps named characters
 
 
 # --- cancel ---

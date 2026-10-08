@@ -33,6 +33,7 @@ if str(RELAY) not in sys.path:
 from providers import (  # noqa: E402
     AssetRef, CapabilityMissing, ProviderError, ProviderJob, Status, load_sheet, video_audio,
 )
+from providers.types import effective_sheet  # noqa: E402
 from providers.runway import RunwayProvider, min_poll_s  # noqa: E402
 
 KEY_ENV = "RUNWAYML_API_SECRET"
@@ -98,7 +99,10 @@ def estimate_usd(sheet: dict, op: str) -> float:
 
 
 def sheet_with_model(sheet: dict, op: str, model: str) -> dict:
-    """A copy of the sheet that sends `model` for `op` (the sheet lists one model per op)."""
+    """A copy of the sheet that sends `model` for `op`. A model the sheet lists as an alternate
+    brings its own price and settings (effective_sheet); any other only replaces the name."""
+    if any(a["model"] == model for a in sheet["ops"][op].get("alternates", [])):
+        return effective_sheet(sheet, op, model)
     ops = {**sheet["ops"], op: {**sheet["ops"][op], "model": model}}
     return {**sheet, "ops": ops}
 

@@ -189,18 +189,31 @@ def op_models(sheet: dict, op: str) -> list[str]:
 def effective_sheet(sheet: dict, op: str, model: Optional[str]) -> dict:
     """The sheet as `model` running `op` sees it (features/model-choice.clan).
 
-    For the op's own model (or its regionModel, or None) that is the sheet itself. For one of
+    For the op's own model (or its regionModel, or None) that is the sheet with the op's own
+    tagSyntax, refs, series, outputsPerCall and video where the op sets them. For one of
     the op's alternates it is a copy whose ops[op] holds the alternate's fields (its durations
     replace the op's when it gives any), and whose sheet-level tagSyntax, refs, series,
     outputsPerCall, video and seed are the alternate's where it sets them. The director, the
     capability check, the estimate and the adapter all read this one view. Any other model gets
     the sheet itself."""
     spec = sheet["ops"].get(op)
-    if spec is None or model is None or model in (spec["model"], spec.get("regionModel")):
+    if spec is None:
         return sheet
-    alt = next((a for a in spec.get("alternates", []) if a["model"] == model), None)
-    if alt is None:  # not a pick: the relay refuses unknown picks before this, the director checks models
-        return sheet
+    alt = None
+    if model is not None and model not in (spec["model"], spec.get("regionModel")):
+        # not a pick when unknown: the relay refuses unknown picks before this, the director checks models
+        alt = next((a for a in spec.get("alternates", []) if a["model"] == model), None)
+    if alt is None:
+        # The op's own model: its own settings over the sheet's (features/default-models.clan).
+        own = {k: spec[k] for k in SHEET_OVERRIDES if k in spec}
+        if not own:
+            return sheet
+        out = copy.deepcopy(sheet)
+        out["ops"][op] = {k: copy.deepcopy(v) for k, v in spec.items() if k not in SHEET_OVERRIDES}
+        out.update(copy.deepcopy(own))
+        if "seed" in spec:
+            out["seed"] = spec["seed"]
+        return out
     out = copy.deepcopy(sheet)
     merged = {k: copy.deepcopy(v) for k, v in alt.items() if k not in SHEET_OVERRIDES}
     if not any(k in alt for k in DURATION_FIELDS):
