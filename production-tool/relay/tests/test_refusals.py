@@ -120,3 +120,19 @@ def test_an_outage_on_any_hop_keeps_the_retryable_message():
 ])
 def test_the_message_names_the_limit_and_the_fix(op, last, want):
     assert sheet_refusal(op, last) == want
+
+
+# ── a masked edit sends only its image (2026-10-08) ─────────────────────────
+def test_a_masked_edit_carries_no_anchor_or_previous_frame():
+    # Ideogram copied the reference pictures into the box: a second guinea pig from shot 1's frame,
+    # then the whole frame turned into shot 2's. Only the image, the mask and the words go.
+    from director.base import PassthroughDirector
+    from providers import load_sheet
+    image, mask, anchor, previous = asset(1), asset(2), asset(3), asset(4)
+    inp = {"image": image, "mask": mask, "region": {"x": 0, "y": 0.5, "w": 1, "h": 0.4}, "text": "remove the fire",
+           "anchorFrame": anchor, "previousFrame": previous}
+    job = PassthroughDirector().direct({"op": "region_edit", "input": inp}, load_sheet("fal"))["providerJob"]
+    assert [r["sha256"] for r in job["refs"]] == [image["sha256"]] and job["mask"] == mask["sha256"]
+    # Runway has no masks: a reference-based redraw, which keeps the continuity frames.
+    job = PassthroughDirector().direct({"op": "region_edit", "input": inp}, load_sheet("runway"))["providerJob"]
+    assert {anchor["sha256"], previous["sha256"]} <= {r["sha256"] for r in job["refs"]} and "mask" not in job

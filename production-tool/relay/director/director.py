@@ -328,6 +328,14 @@ class Director:
             raise DirectorError("a region with a mask on a sheet that takes masks is a masked inpaint: send the mask")
         if not masked and job.get("mask"):
             raise DirectorError("this region is a reference-based regenerate (no mask, or the sheet takes none): send no mask")
+        if masked:
+            # Only the image goes with a mask (director.v4): an edit model copies other pictures into
+            # the mask, so the anchor and previous frames are dropped if the model sent them.
+            anchors = {a["sha256"] for a in (payload.get("anchorFrame"), payload.get("previousFrame")) if a}
+            dropped = {r["name"] for r in job["refs"] if r["role"] != "current" and r["sha256"] in anchors}
+            job["refs"] = [r for r in job["refs"] if r["role"] == "current" or r["sha256"] not in anchors]
+            for name in dropped:  # their @tags would name a picture the job no longer carries
+                job["prompt"] = re.sub(rf"@{re.escape(name)}\b", f"the {name} frame", job["prompt"])
 
     @staticmethod
     def _check_provider_limits(op: str, sheet: dict, job: dict) -> None:

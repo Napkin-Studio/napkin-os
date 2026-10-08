@@ -126,12 +126,16 @@ class PassthroughDirector:
             add(inp.get("image"), "current", "current")
         for ref, role in ref_roles(inp, op, sheet):
             add(ref["asset"], ref["tag"], role)
+        masked = op == "region_edit" and bool(inp.get("mask")) and (sheet or {}).get("mask", "none") != "none"
         if op in ("frame", "region_edit"):
             add(inp.get("image"), "current", "current")
             # The storyboard's continuity anchors (director.v3 on): the frame before, then shot 1's
-            # frame for setting and style (the same picture is sent once, as previous).
-            add(inp.get("previousFrame"), "previous", "object")
-            add(inp.get("anchorFrame"), "anchor", "object")
+            # frame for setting and style (the same picture is sent once, as previous). Not on a masked
+            # edit (director.v4): an edit model copies a reference into the mask, so the fix painted
+            # shot 1's character into the box, or turned the frame into shot 2 (2026-10-08).
+            if not masked:
+                add(inp.get("previousFrame"), "previous", "object")
+                add(inp.get("anchorFrame"), "anchor", "object")
         if op == "clip_edit":
             add(inp.get("video"), "current", "current")  # the clip being changed
         prompt = inp.get("text") or ""
