@@ -11,7 +11,7 @@ import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
 import type { JobCtx, JobPurpose, UiState } from '../doc/ui'
 import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId } from '../lib/ulid'
-import { asContractError, type Relay } from '../relay'
+import { asContractError, RelayError, type Relay } from '../relay'
 
 export interface LiveInfo {
   state: JobState
@@ -223,6 +223,13 @@ export class JobRunner {
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
+      // The relay never recorded this job: it was refused as queue_full and waits to be sent
+      // again, and a reload (resume) polled it first (2026-10-08, Make views on a 2-job limit).
+      // Send the request we hold again; the same jobId never pays twice.
+      const request = this.ui.get().jobCtx[jobId]?.request
+      if (e instanceof RelayError && e.status === 404 && request && this.live.get(jobId)?.state === 'queued') {
+        return void this.send(request)
+      }
       if (err.code === 'invalid_input') this.fail(jobId, err)
       else if (err.code === 'unauthorised') this.schedule(jobId, 10) // signed out: resume once signed in again
       else this.schedule(jobId, 5) // network blip: keep trying, the ledger has the job
