@@ -1,5 +1,11 @@
 # Production Tool: what each provider can do
 
+> **For the current models, prices and what each provider accepts, read
+> [provider-reference.md](provider-reference.md).** It is generated from the capability sheets and
+> the providers' own schemas, so it stays in step with the code. This page is the research behind
+> it, as of 2026-10-06: the "Combine" step has since been folded into Generate, and the defaults
+> changed on 2026-10-08 (features/default-models.clan).
+
 Checked against each provider's docs on 2026-10-06. Runway is the backend we
 test on. fal and HeyGen run the hackathon. After the hackathon, Runway becomes
 the main backend, with other labs added (ElevenLabs and others). The design is

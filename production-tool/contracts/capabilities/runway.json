@@ -86,7 +86,8 @@
       "outputs": [
         1,
         4
-      ]
+      ],
+      "label": "Gemini 3 Pro"
     },
     "clip": {
       "model": "veo3.1",
@@ -121,7 +122,8 @@
       "estimateUsd": 1.4,
       "minS": 2,
       "maxS": 30,
-      "seed": true
+      "seed": true,
+      "label": "Aleph 2"
     }
   },
   "tagSyntax": "at_tag",

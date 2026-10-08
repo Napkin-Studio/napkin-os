@@ -59,7 +59,8 @@
     "view": {
       "model": "qwen-image-edit-2511-multiple-angles",
       "endpoint": "fal-ai/qwen-image-edit-2511-multiple-angles",
-      "estimateUsd": 0.035
+      "estimateUsd": 0.035,
+      "label": "Qwen multi-angle"
     },
     "frame": {
       "model": "nano-banana-pro-edit",
@@ -117,7 +118,8 @@
     "region_edit": {
       "model": "ideogram-v4.5-edit",
       "endpoint": "ideogram/v4.5/edit",
-      "estimateUsd": 0.06
+      "estimateUsd": 0.06,
+      "label": "Ideogram v4.5"
     },
     "clip": {
       "model": "kling-v3-pro-i2v",
@@ -193,7 +195,8 @@
         10
       ],
       "regionModel": "wan-vace-14b-inpainting",
-      "regionEndpoint": "fal-ai/wan-vace-14b/inpainting"
+      "regionEndpoint": "fal-ai/wan-vace-14b/inpainting",
+      "label": "Luma Ray 3.2"
     }
   },
   "tagSyntax": "at_image_n",
