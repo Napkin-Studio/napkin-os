@@ -270,6 +270,20 @@ def test_ideogram_mask_is_inverted_black_edit(provider, fal):
     assert (body["quality"], body["edit_precision"]) == ("medium", "regular")
 
 
+def test_region_edit_reads_inline_inputs_on_the_local_relay(fal):
+    """2026-10-08: the local relay sends inputs as data URIs; reading the source's size did an HTTP GET on
+    one, httpx raised InvalidURL, and the job sat in 'uncertain' although nothing reached fal."""
+    inline = {HERO: _png(), MASK: _png()}
+
+    def local(sha: str) -> AssetRef:
+        return AssetRef(sha, "data:image/png;base64," + base64.b64encode(inline[sha]).decode(), "image/png")
+
+    provider = FalProvider(KEY, local, client=httpx.Client(transport=httpx.MockTransport(fal)))
+    provider.submit(job(op="region_edit", prompt="a red scarf", mask=MASK, refs=[Ref(HERO, "marked", "current")]))
+    assert _decode(fal.body()["mask_url"]).size == (64, 48)
+    assert not [r for r in fal.requests if r.url.host == "cdn.test"]
+
+
 def test_mask_must_match_the_source_size(provider, fal):
     fal.files["/7777"] = _png((32, 32))
     other = "sha256:" + "7" * 64

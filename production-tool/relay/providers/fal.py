@@ -199,10 +199,15 @@ class FalProvider:
 
     def _fetch(self, sha: str) -> bytes:
         url = self._assets(sha).url
+        if url.startswith("data:"):  # the local relay sends inputs inline (fal cannot fetch localhost)
+            try:
+                return base64.b64decode(url.split(",", 1)[1])
+            except (IndexError, ValueError) as exc:
+                raise ProviderError("internal", f"could not read the inline {sha[:19]}: {exc}", False, source="napkin") from exc
         try:
             resp = self._client.get(url)
-        except httpx.TransportError as exc:  # our own asset, not a call to fal: never "maybe sent"
-            raise ProviderError("internal", f"could not read {url}: {exc}", True, source="napkin") from exc
+        except (httpx.TransportError, httpx.InvalidURL) as exc:  # our own asset, not a call to fal: never "maybe sent"
+            raise ProviderError("internal", f"could not read {url[:80]}: {exc}", True, source="napkin") from exc
         if resp.status_code >= 400:
             raise ProviderError("internal", f"could not read {url}: HTTP {resp.status_code}", True, source="napkin")
         return resp.content
