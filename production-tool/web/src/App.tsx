@@ -94,9 +94,9 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
   return (
     <header className="topbar">
       <div className="brand">
-        <StudioMark size={24} />
-        <span>Napkin</span>
-        <small>Production Tool</small>
+        <StudioMark size={22} />
+        <span className="brand-studio">Napkin Studio</span>
+        <span className="brand-tool">Production</span>
         {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
       </div>
       <nav className="rail" aria-label="Stages">
@@ -219,7 +219,7 @@ function SignIn() {
           setBusy(false)
         }
       }}>
-        <div className="row" style={{ gap: 10 }}><StudioMark size={28} /><b style={{ fontSize: 18, letterSpacing: '-0.02em' }}>Napkin Production Tool</b></div>
+        <div className="row" style={{ gap: 10 }}><StudioMark size={28} /><b className="brand" style={{ fontSize: 18 }}>Napkin Studio <span className="brand-tool">Production</span></b></div>
         <p className="muted" style={{ margin: 0 }}>Make your characters on a free canvas, storyboard them, and turn it into an ad.</p>
         <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Event code</span><input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus /></label>
         <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Your name</span><input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[A-Za-z0-9_.\-]{2,24}" title="2-24 letters, numbers, . _ or -" /></label>

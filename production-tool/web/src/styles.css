@@ -39,7 +39,15 @@
   --blur: saturate(1.4) blur(14px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 0.35s;
-  --topbar-h: 56px;
+  --topbar-h: 48px;
+  /* The tool's own colour, the way the OS bar shows Brief Maker in amber
+     (app/src/components/chrome.css .ch-brand-tool). Blue is identity only:
+     the name, the current stage, the selected item, Dex. Actions stay --create. */
+  --tool: #2F64F5;
+  --tool-ink: color-mix(in oklab, var(--tool) 78%, var(--ink));
+  --tool-soft: color-mix(in oklab, var(--tool) 10%, transparent);
+  --plan-eye: #FFFFFF;
+  --warn: #b45309;
   color-scheme: light;
 }
 
@@ -67,6 +75,10 @@
     --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
     --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
     --canvas-bg: #121417;
+    --tool-ink: color-mix(in oklab, var(--tool) 70%, white);
+    --tool-soft: color-mix(in oklab, var(--tool) 22%, transparent);
+    --plan-eye: #14161B;
+    --warn: #fbbf24;
     color-scheme: dark;
   }
 }
@@ -144,20 +156,24 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* ── Top bar ─────────────────────────────────────────────────────────────── */
 .topbar {
   height: var(--topbar-h); flex-shrink: 0; display: grid; grid-template-columns: auto minmax(max-content, 1fr) minmax(0, auto);
-  align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--line-soft);
+  align-items: center; gap: 16px; padding: 0 14px; border-bottom: 1px solid var(--line-soft);
   background: var(--frost); backdrop-filter: var(--blur); position: relative; z-index: 20;
 }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.03em; font-size: 16px; white-space: nowrap; min-width: 0; overflow: hidden; }
-.brand small { font-weight: 500; color: var(--ink3); letter-spacing: 0; font-size: 13px; }
-.rail { justify-self: center; display: flex; align-items: center; gap: 4px; background: var(--soft-2); border-radius: var(--r-pill); padding: 4px; }
+.brand { display: flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: -0.03em; font-size: 15px; line-height: 1; white-space: nowrap; min-width: 0; overflow: hidden; }
+/* The tool's name, set like the OS bar's .ch-brand-tool. */
+.brand .brand-tool { color: var(--tool-ink); }
+.brand .mockbadge { margin-left: 6px; }
+/* A short stripe of the tool colour under the brand, the way an app's accent shows in the OS bar. */
+.topbar::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 160px; height: 2px; background: var(--tool); }
+.rail { justify-self: center; display: flex; align-items: center; gap: 2px; background: var(--soft-2); border-radius: var(--r-pill); padding: 3px; }
 .rail-step {
-  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px 0 6px; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px 0 5px; border-radius: var(--r-pill);
   border: 0; background: transparent; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink2);
 }
-.rail-step .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--line-soft); color: var(--ink2); font-size: 11.5px; font-family: var(--f-mono); }
+.rail-step .n { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--line-soft); color: var(--ink2); font-size: 11.5px; font-family: var(--f-mono); }
 .rail-step.done .n { background: var(--plan); color: var(--paper); }
 .rail-step.current { background: var(--card); color: var(--ink); box-shadow: var(--shadow-pill); }
-.rail-step.current .n { background: var(--create); color: #fff; }
+.rail-step.current .n { background: var(--tool); color: #fff; }
 .rail-step:disabled { cursor: not-allowed; opacity: 0.5; }
 .rail-sep { color: var(--ink3); font-size: 12px; }
 /* One line, always: the bar is a fixed height, so anything that wraps pushes the brand and the rail out of it. */
@@ -167,7 +183,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .topbar-right > .follow { flex-shrink: 1; min-width: 0; flex-wrap: nowrap; }
 .followchip { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 30px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
 .followchip.failed { background: var(--danger-bg); color: var(--danger); }
-@media (max-width: 1440px) { .brand small { display: none; } }
+/* On a narrow bar the studio's name gives way; the tool's name stays. */
+@media (max-width: 1100px) { .brand .brand-studio { display: none; } }
 .topmenu .menu .menu-head { padding: 6px 10px 4px; }
 .jobchip { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
 .jobchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-green); }
@@ -330,7 +347,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 @media (max-width: 1180px) { .video-layout { grid-template-columns: 1fr; } }
 .strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
 .shotcard { flex: 0 0 168px; border-radius: 14px; border: 2px solid transparent; background: var(--card); box-shadow: var(--shadow-soft); overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
-.shotcard.sel { border-color: var(--create); }
+.shotcard.sel { border-color: var(--tool); }
 .shotcard .thumb { position: relative; height: 120px; background: var(--soft); }
 .shotcard .thumb img, .shotcard .thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shotcard .meta { padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -391,7 +408,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .follow { gap: 6px; display: inline-flex; align-items: center; flex-wrap: wrap; }
 .follow .confirm { max-width: 340px; }
 .follow .confirm { border-color: var(--line, var(--create)); }
-.topbar-right .follow .confirm { position: absolute; right: 16px; top: 52px; z-index: 30; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.topbar-right .follow .confirm { position: absolute; right: 16px; top: calc(var(--topbar-h) - 4px); z-index: 30; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
 
 /* ── Your own provider keys (keys/OwnKeysPanel.tsx) ── */
 .topmenu .ownkeys { width: 320px; padding: 14px; gap: 10px; font-size: 12.5px; }
