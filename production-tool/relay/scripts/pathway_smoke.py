@@ -92,6 +92,8 @@ def inputs(args) -> dict[str, dict | None]:
 def plan(args, env: dict) -> list[dict]:
     sheets, inp, rows = _sheets(), inputs(args), []
     steps = IMAGE_STEPS + (VIDEO_STEPS if args.video else ())
+    if args.steps:  # only these, so a small cap goes to the steps that matter
+        steps = tuple(s for s in steps if s in args.steps)
     for name in args.pathways:
         cfg = _config(name)
         for op in steps:
@@ -174,12 +176,14 @@ def main(argv=None, env=None) -> int:
     ap.add_argument("--max-usd", type=float, default=2.0)
     ap.add_argument("--pathways", default=",".join(PATHWAYS))
     ap.add_argument("--video", action="store_true", help="add clips and clip edits")
+    ap.add_argument("--steps", default="", help="only these steps, e.g. generate,frame,clip (clips still need --video)")
     ap.add_argument("--image-url")
     ap.add_argument("--mask-url")
     ap.add_argument("--video-url")
     ap.add_argument("--out", default=str(RELAY / "results" / f"pathway-smoke-{dt.date.today().isoformat()}.json"))
     args = ap.parse_args(argv)
     args.pathways = [p for p in args.pathways.split(",") if p]
+    args.steps = [s for s in args.steps.split(",") if s]
     env = os.environ if env is None else env
     for provider, var in KEYS.items():
         print(f"{var}: {'set' if var in env else 'missing'}")

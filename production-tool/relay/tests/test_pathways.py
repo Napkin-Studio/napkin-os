@@ -430,3 +430,9 @@ def test_the_smoke_script_sends_nothing_without_live(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "dry run: nothing sent" in out and "FAL_KEY: set" in out and "x" not in out.split("FAL_KEY: set")[0]
     assert "no RUNWAY_API_KEY" in out and "needs --mask-url" in out
+
+
+def test_the_smoke_script_runs_only_the_steps_asked_for(capsys):
+    _script("pathway_smoke").main(["--video", "--steps", "frame,clip", "--pathways", "runway"], env={})
+    out = capsys.readouterr().out
+    assert "runway  frame" in out and "runway  clip " in out and "generate" not in out and "view" not in out
