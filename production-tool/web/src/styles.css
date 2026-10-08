@@ -232,11 +232,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* In a small card: a few lines of the message, the rest on hover. */
 .errnode.compact { padding: 8px; gap: 4px; font-size: 11.5px; overflow: hidden; }
 .errnode.compact .msg { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.errnode.compact .row { gap: 4px; flex-wrap: wrap; justify-content: center; }
-.errnode .othermodel { gap: 6px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
-.errnode .othermodel .select { max-width: 200px; }
-.errnode.compact .othermodel .select { max-width: 110px; font-size: 11px; }
-.errnode.compact:has(.othermodel) .msg { -webkit-line-clamp: 2; }
 .errnode .code { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 
 /* ── Character stage ─────────────────────────────────────────────────────── */
@@ -411,10 +406,32 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .ownkeys-use { list-style: none; margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); display: flex; flex-direction: column; gap: 4px; }
 .ownkeys-use li { display: flex; justify-content: space-between; gap: 8px; }
 
-/* The regenerate menu (ui/ModelPick.tsx) */
-.modelpick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; flex-wrap: wrap; }
-.modelpick .select { max-width: 260px; }
-.modelpick .modelnote { flex-basis: 100%; font-size: 11.5px; }
+/* The model menu (ui/ModelPick.tsx): a chip that opens a floating list. */
+.modelpick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.modelchip { display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 6px; border-radius: var(--r-pill); border: 1px solid transparent; background: var(--soft); font: inherit; font-size: 12px; font-weight: 600; color: var(--ink2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modelchip:hover { border-color: var(--line); }
+.modelchip.open { border-color: var(--tool); background: var(--tool-soft); color: var(--tool-ink); }
+.modelprice { font-size: 11.5px; white-space: nowrap; }
+.caret { font-size: 9px; color: var(--ink3); }
+.pmark { width: 16px; height: 16px; border-radius: 5px; display: inline-grid; place-items: center; flex-shrink: 0; font: 700 9px var(--f-mono); color: #fff; background: var(--produce); }
+.pmark-fal { background: #7c3aed; }
+.pmark-runway { background: #14161B; }
+.pmark-heygen { background: #2563eb; }
+.pmark-mock { background: var(--produce); }
+.modelmenu { width: 340px; }
+.mmi { align-items: flex-start; padding: 8px 10px; }
+.mmi .pmark { width: 18px; height: 18px; margin-top: 1px; }
+.mmi b { font-weight: 600; font-size: 13px; }
+.mmi small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink3); line-height: 1.35; }
+.mmi.on { background: var(--tool-soft); }
+.mmi.on .fmi-hint { color: var(--tool-ink); }
+.mmi-tag { margin-left: 6px; padding: 1px 5px; border-radius: 5px; background: var(--tool-soft); color: var(--tool-ink); font: 600 9.5px var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; vertical-align: 1px; }
+.fnote { padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line-soft); font-size: 11.5px; color: var(--ink3); }
+
+/* A failed job's options: one floating bar under its message. */
+.optbar { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); max-width: 100%; flex-wrap: wrap; justify-content: center; }
+.errnode.compact .optbar { gap: 0; padding: 2px; border-radius: 10px; box-shadow: var(--shadow-pill); }
+.errnode.compact .optbar .btn { padding: 0 6px; }
 
 /* The update box (ui/UpdateBox.tsx): floats above every stage while a steered update runs. */
 .updatebox { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 360px; max-width: calc(100vw - 40px); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-pop); font-size: 13px; }
