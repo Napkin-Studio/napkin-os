@@ -205,6 +205,8 @@ class Relay:
             self._not_blocked(who)
             req = self._json(body, "JobRequest")
             ctx["jobId"], ctx["op"] = req["jobId"], req["op"]
+            if req.get("modelChoice"):  # what the participant picked, beside where it ran
+                ctx["pick"] = f'{req["modelChoice"]["provider"]}:{req["modelChoice"]["model"]}'
             return 200, public(self.create_job(who, req, headers.get(own_keys.HEADER)))
         if path.startswith("/jobs/"):
             job_id = path[len("/jobs/"):]
