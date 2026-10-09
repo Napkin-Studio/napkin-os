@@ -92,6 +92,10 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(card.passthrough).toBe('No director: your words went to the model as written.')
     expect(card.who).toBe('Dex · the mock (no model)')
     expect(card.cost).toBeUndefined()
+    doc.jobs[0].cost = { confirmed: 0, currency: 'USD', unknown: false }
+    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }).cost).toBeUndefined()
+    doc.jobs[0].cost = { estimate: 0.04, currency: 'USD', unknown: false }
+    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }).cost).toBe('about $0.040')
   })
 
   it('a step still running, or with no record, says so', () => {

@@ -94,8 +94,9 @@ function costWords(job: DocJob | undefined): string | undefined {
   const c = job?.cost
   if (!c || c.unknown) return undefined
   const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
-  if (c.confirmed != null) return fmt(c.confirmed)
-  if (c.estimate != null) return `about ${fmt(c.estimate)}`
+  // Nothing charged (the mock) says nothing.
+  if (c.confirmed != null) return c.confirmed > 0 ? fmt(c.confirmed) : undefined
+  if (c.estimate) return `about ${fmt(c.estimate)}`
   return undefined
 }
 
