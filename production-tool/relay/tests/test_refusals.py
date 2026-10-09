@@ -59,6 +59,14 @@ def test_anchor_and_previous_frames_count_against_the_total():
     assert len(out["refs"]) == 3 and dropped == ["p5x_on", "p4x_on"]
 
 
+def test_on_a_sheet_with_elements_views_are_not_cut_for_the_character_limit():
+    # 2026-10-08: fal's 4 character refs were applied to Kling clip elements, which the check does
+    # not count; the cut left @watchy with only a front, and a front alone is not an element.
+    refs = whole("uberto", 1) + whole("watchy", 5)
+    out, dropped = fit_refs("clip", {"shot": SHOT, "refs": refs}, {"refs": {"max": 10, "maxCharacter": 4, "element": True}})
+    assert dropped == [] and len(out["refs"]) == 8
+
+
 def test_the_relay_sends_the_cut_refs_to_the_provider():
     h = Harness()
     token = h.sign_in()
@@ -89,8 +97,10 @@ def test_a_sheet_refusal_everywhere_fails_for_good_and_says_what_to_change():
     job = post_clip(h)
     err = job["error"]
     assert job["state"] == "failed" and err["code"] == "capability_missing" and err["retryable"] is False
-    assert err["message"] == ("Runway cannot do this clip: it takes at most 5 character refs. Name fewer "
-                              "characters in this shot, or a single view (@maya_front) instead of a whole character (@maya).")
+    # Since 2026-10-09 (features/runway-fallback.clan) it names the first provider's reason, then Runway's.
+    assert err["message"] == ("fal could not make it: fal takes at most 4 character refs. Runway cannot do this "
+                              "step either: it takes at most 5 character refs. Name fewer characters in this shot, "
+                              "or a single view (@maya_front) instead of a whole character (@maya).")
     assert "account" not in err["message"] and "Try again" not in err["message"]
 
 
@@ -107,6 +117,38 @@ def test_an_outage_on_any_hop_keeps_the_retryable_message():
      "fal cannot do this region edit: it needs a mask. Paint over the area with the brush, or remove the box."),
     ("view", "runway: takes no mask", "Runway cannot do this view: takes no mask. Remove the painted area and use a box."),
     ("clip", "heygen: something new", "HeyGen cannot do this clip: something new. Change the step and send it again."),
+    ("clip", "fal: clip needs a first frame", "fal cannot do this clip: it needs a first frame. Change the step and send it again."),
+    ("clip", "fal: clip refs must be named", "fal cannot do this clip: clip refs must be named. Name fewer pictures in this shot."),
 ])
 def test_the_message_names_the_limit_and_the_fix(op, last, want):
     assert sheet_refusal(op, last) == want
+
+
+# ── a masked edit sends only its image (2026-10-08) ─────────────────────────
+def test_a_masked_edit_carries_no_anchor_or_previous_frame():
+    # Ideogram copied the reference pictures into the box: a second guinea pig from shot 1's frame,
+    # then the whole frame turned into shot 2's. Only the image, the mask and the words go.
+    from director.base import PassthroughDirector
+    from providers import load_sheet
+    image, mask, anchor, previous = asset(1), asset(2), asset(3), asset(4)
+    inp = {"image": image, "mask": mask, "region": {"x": 0, "y": 0.5, "w": 1, "h": 0.4}, "text": "remove the fire",
+           "anchorFrame": anchor, "previousFrame": previous}
+    job = PassthroughDirector().direct({"op": "region_edit", "input": inp}, load_sheet("fal"))["providerJob"]
+    assert [r["sha256"] for r in job["refs"]] == [image["sha256"]] and job["mask"] == mask["sha256"]
+    # Runway has no masks: a reference-based redraw, which keeps the continuity frames.
+    job = PassthroughDirector().direct({"op": "region_edit", "input": inp}, load_sheet("runway"))["providerJob"]
+    assert {anchor["sha256"], previous["sha256"]} <= {r["sha256"] for r in job["refs"]} and "mask" not in job
+
+
+def test_an_uncertain_job_can_be_stopped():
+    # 2026-10-09: a 30 s upload timed out, the job was "uncertain" (fal may have it), and Cancel
+    # did nothing. Stopping it ends it as cancelled; it is never sent again. Uncertain on fal now
+    # falls back to Runway (features/runway-fallback.clan), so this is Runway, the floor, uncertain.
+    h = Harness(base_config())
+    h.providers["runway"].submit_effect = ProviderError("provider_unavailable", "timed out", retryable=True, accepted=True)
+    token = h.sign_in()
+    job = h.call("POST", "/jobs", job_request("clip", new_id("job")), token, expect=200)[1]
+    assert job["state"] == "uncertain"
+    out = h.call("DELETE", f"/jobs/{job['jobId']}", None, token, expect=200)[1]
+    assert out["state"] == "cancelled"
+    assert len(h.providers["runway"].submits) == 1 and not h.providers["fal"].submits

@@ -1,18 +1,32 @@
 import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
 import { controlsFor, effectiveConfig, type Controls } from '../capabilities'
 import type { Config, ProductionDocument } from '../contracts/types'
-import { subscribeDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
+import { subscribeDoc, type DocumentStore } from '../doc/store'
 import type { UiState } from '../doc/ui'
+import type { UiStore } from '../projects/uiStore'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
 import type { ClanBackedStore } from '../doc/clan'
 import { withOwnKeys, type OwnKeys, type OwnKeysStore } from '../keys/ownKeys'
 import { SHEETS } from '../contracts/load'
+import type { Shell } from '../projects/shell'
+
+/** The open project (features/project-home.clan). */
+export interface ProjectHandle {
+  id: string
+  /** Where its canvas is kept in the kv store. */
+  canvasKey: string
+  /** Run before the project closes (the canvas saves what it has now). */
+  beforeClose: Set<() => Promise<void> | void>
+  /** A picture another project also uses: Clean up takes it out of this one but keeps its bytes. */
+  usedElsewhere(sha: string): boolean
+}
 
 export interface Services {
+  project: ProjectHandle
   relay: Relay
   doc: DocumentStore
-  ui: SnapshotStore<UiState>
+  ui: UiStore
   runner: JobRunner
   /** The config the relay served (GET /config), when there is one. */
   remoteConfig: Config | null
@@ -25,6 +39,26 @@ export interface Services {
 }
 
 export const ServicesContext = createContext<Services | null>(null)
+
+/** Home and the projects (projects/shell.ts): what the Napkin mark and New project call. */
+export const ShellContext = createContext<Shell | null>(null)
+
+export function useShell(): Shell {
+  const s = useContext(ShellContext)
+  if (!s) throw new Error('ShellContext missing')
+  return s
+}
+
+/** The own-keys store outside a project (Home); inside one, the project's services carry it. */
+export const OwnKeysContext = createContext<OwnKeysStore | null>(null)
+
+export function useOwnKeysStore(): OwnKeysStore {
+  const outside = useContext(OwnKeysContext)
+  const services = useContext(ServicesContext)
+  const store = outside ?? services?.ownKeys
+  if (!store) throw new Error('no own-keys store')
+  return store
+}
 
 export function useServices(): Services {
   const s = useContext(ServicesContext)
@@ -55,7 +89,7 @@ export function useShowMock(): boolean {
 }
 
 export function useOwnKeys(): OwnKeys {
-  const { ownKeys } = useServices()
+  const ownKeys = useOwnKeysStore()
   return useSyncExternalStore(ownKeys.subscribe, ownKeys.get)
 }
 

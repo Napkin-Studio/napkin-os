@@ -25,6 +25,8 @@ import copy
 import re
 
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
+# Ops where a sheet with elements sends a character's pictures as one Kling element (director/base.py).
+ELEMENT_OPS = {"generate", "frame", "clip"}
 # A mention: @ then key_variant (refName) or a bare key, not inside a word or an address.
 MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
 MAX = 16
@@ -118,7 +120,10 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
         return payload, []
     # anchorFrame, previousFrame and a region edit's image go as refs too (director.v4).
     reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op == "region_edit")
-    max_char = limits.get("maxCharacter", len(refs))
+    # On a sheet with elements, a character's pictures go as one element, which refs.maxCharacter does
+    # not count (check_capabilities counts role "character"): cutting views there only breaks elements.
+    elements = bool(limits.get("element")) and op in ELEMENT_OPS
+    max_char = len(refs) if elements else limits.get("maxCharacter", len(refs))
     max_all = max(limits.get("max", len(refs) + reserved) - reserved, 0)
     named = _named(payload)
     kept = list(refs)

@@ -154,9 +154,10 @@ def test_prompt_carries_the_rules():
         assert rule in text
 
 
-def test_only_the_v4_prompt_is_bundled():
-    """Contract v2 has no sketch or character views: the older prompts would name inputs that no longer exist."""
-    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v4.md"]
+def test_only_the_v4_and_v5_prompts_are_bundled():
+    """Contract v2 has no sketch or character views: the older prompts would name inputs that no longer exist.
+    v5 directs each click; v4 stays for the shot list (features/director-v5.clan)."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v4.md", "director.v5.md"]
 
 
 def test_v4_names_refs_and_limits_each_ref_to_what_it_names():
@@ -307,11 +308,11 @@ def test_clip_edit_on_runway_needs_the_keyframe_the_relay_made():
     refuses("not in the input", "clip_edit_runway")  # providerJob has no keyframe source of its own
 
 
-def test_clip_edit_on_fal_is_a_masked_region_job_without_duration_or_ratio():
+def test_clip_edit_on_fal_is_a_masked_region_job_without_duration_and_drops_a_ratio():
     job = attempt("clip_edit_fal_mask").output["providerJob"]
     assert job["model"] == "wan-vace-14b-inpainting" and job["mask"] == fixture("clip_edit_fal_mask")["input"]["mask"]["sha256"]
     refuses("takes no duration", "clip_edit_fal_mask", job_edit(durationS=5))
-    refuses("takes no ratio", "clip_edit_fal_mask", job_edit(ratio="9:16"))
+    assert "ratio" not in attempt("clip_edit_fal_mask", job_edit(ratio="9:16")).output["providerJob"]
 
 
 KEYFRAME = fixture("clip_edit_runway")["extraHashes"][0]
@@ -331,9 +332,10 @@ def test_keyframe_range_is_all_or_none_and_holds_the_time(keyframe, why):
     refuses(why, "clip_edit_runway", edit, extra_hashes=(KEYFRAME,))
 
 
-def test_clip_edit_on_runway_takes_no_duration_or_ratio():
+def test_clip_edit_on_runway_takes_no_duration_and_drops_a_ratio():
     refuses("takes no duration", "clip_edit_runway", job_edit(durationS=5), extra_hashes=(KEYFRAME,))
-    refuses("takes no ratio", "clip_edit_runway", job_edit(ratio="1280:720"), extra_hashes=(KEYFRAME,))
+    edited = attempt("clip_edit_runway", job_edit(ratio="1280:720"), extra_hashes=(KEYFRAME,))
+    assert "ratio" not in edited.output["providerJob"]
 
 
 def area(w, h):
@@ -378,7 +380,9 @@ def test_recorded_ratios_are_in_the_providers_lists():
 
 
 @pytest.mark.parametrize("name, edit, why", [
-    ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(role="element_front"), "has no elements"),
+    # A front with an angle after it is an element (a lone front now goes as a character, 2026-10-09).
+    ("generate_runway", lambda r: (r["providerJob"]["refs"][1].update(role="element_front"),
+                                   r["providerJob"]["refs"][2].update(role="element_angle")), "has no elements"),
     ("clip_edit_fal_mask", job_edit(keyframe={"sha256": "sha256:" + "2" * 64, "atS": 1}), "takes no keyframe"),
     ("clip_edit_runway", job_edit(strength="flex"), "takes no edit strength"),
     ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="Ab"), "canonical tags"),
@@ -464,3 +468,30 @@ def test_a_reply_naming_another_model_runs_on_the_sheets():
     d, _ = make(reply)
     out = run("generate_runway", d)
     assert out.output["providerJob"]["model"] == load_sheet("runway")["ops"]["generate"]["model"]
+
+
+# --- character cards (features/character-cards.clan) --------------------------
+
+def test_v4_uses_cards_and_keeps_them_off_screen():
+    text = (PROMPTS / "director.v4.md").read_text()
+    for rule in (
+        "A ref may carry `card`",                     # what its picture shows, from one look
+        "describe characters and objects in words",   # identity holds where refs are dropped
+        "where a provider drops some refs",
+        "Never contradict a card",
+        "never put its text on screen",               # a card is for the director only
+    ):
+        assert rule in text, rule
+
+
+def test_the_ask_carries_each_refs_card():
+    """The relay adds refs[].card before names.to_wire; the director's ask carries it to the model."""
+    f = fixture("generate_runway")
+    d, wire = make(f["reply"])
+    wired = to_wire(f["op"], f["input"])
+    card = "A stick figure with a diamond head\nBlack pencil lines on white\nFront view, arms out"
+    wired["refs"][0]["card"] = card
+    d.run(f["op"], wired, f["provider"])
+    asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
+    assert asked["input"]["refs"][0]["card"] == card
+    assert all("card" not in r for r in asked["input"]["refs"][1:])

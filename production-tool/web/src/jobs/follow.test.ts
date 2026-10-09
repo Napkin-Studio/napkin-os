@@ -9,9 +9,9 @@ import { putBlob } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
-import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
-import { fixInShot, fixProgress, resumeFixes } from './fix'
-import { cancelFollow, continueFollow, planCost, planFollow, planSummary, startFollow } from './follow'
+import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
+import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
+import { cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planCost, planFollow, planSummary, restAsTheyAre, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { applyFrame } from './handlers'
@@ -199,6 +199,31 @@ describe('Fix it in the shot', () => {
     expect(s.ui.get().jobCtx[clip.id].request.modelChoice).toEqual(pick)
   })
 
+  it('once its frame landed and only its clip failed, Fix makes only the clip, not a second frame edit', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const note = await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } })
+    const ctxOf = (id: string) => s.ui.get().jobCtx[id]
+    const editId = await fixInShot(s.deps, s.shotId(1), [note])
+    expect(fixFrameLanded(s.doc.get(), ctxOf, [note.id])).toBeUndefined() // the frame is still being edited
+    await s.land()
+    const clip = await vi.waitFor(() => {
+      const c = s.all().find((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.reviewIds?.includes(note.id))
+      expect(c).toBeDefined()
+      return c!
+    }, { timeout: 2000, interval: 5 })
+    expect(fixFrameLanded(s.doc.get(), ctxOf, [note.id])).toBeUndefined() // the clip is under way
+    await s.runner.cancel(clip.id) // like HeyGen's 402: the clip step ends without a take
+    expect(fixFrameLanded(s.doc.get(), ctxOf, [note.id])).toBe(editId)
+
+    const pick = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const again = await remakeFixClip(s.deps, editId, pick)
+    expect(s.all().filter((j) => j.op === 'region_edit')).toHaveLength(1) // the fixed frame is not edited again
+    expect(ctxOf(again)).toMatchObject({ for: 'clip', reviewIds: [note.id] })
+    expect(ctxOf(again).request.modelChoice).toEqual(pick)
+    expect(ctxOf(again).request.input.image?.sha256).toBe(s.frameOf(1).asset) // from the fixed frame
+  })
+
   it('goes by the box alone where the browser cannot read the frame\'s size', async () => {
     const s = await setup(2)
     await s.makeAll(false)
@@ -277,9 +302,10 @@ describe('the ad is trimmed to the shots', () => {
     expect(s.inputOf(id).clips!.map((c) => c.trimS)).toEqual([3, 2, 4, 4, 2])
   })
 
-  it('ad length = the sum of the shots + the 1 s end card (the FACET ad: 15 s of shots is 16 s, not 21)', () => {
-    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(16)
-    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(7.5)
+  it('ad length = the sum of the shots + the 2.5 s end card (the FACET ad: 15 s of shots is 17.5 s, not 21)', () => {
+    expect(END_CARD_S).toBe(2.5)
+    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(17.5)
+    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(9)
   })
 })
 
@@ -357,6 +383,132 @@ describe('Update what follows', () => {
     expect(planSummary(plan, CONFIGS.testing)).toMatch(/^2 frames, 3 clips, 1 ad · /)
   })
 
+  it('steered: each item waits in the box; Make it sends its words and model, and the new one replaces the old once it lands', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
+    await s.land() // shot 1's frame changed: shot 2's frame and both clips are behind
+    const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['heygen', 'fal'] as const } } as unknown as typeof CONFIGS.testing
+    const before = s.all().length
+    await startFollow(s.deps, own, { steer: true })
+    expect(s.all()).toHaveLength(before) // nothing is sent until the user says so
+    expect(s.ui.get().following?.awaiting).toEqual({ kind: 'frame', shotId: s.shotId(1) })
+    const oldFrame = s.frameOf(1)
+
+    const veo = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const id = (await makeAwaited(s.deps, { text: 'no flames', modelChoice: null }))!
+    expect(s.inputOf(id).text).toBe('no flames') // the words go to this request only
+    expect((s.doc.get().shots ?? [])[1].action).not.toContain('no flames') // never into the script
+    expect(s.frameOf(1).id).toBe(oldFrame.id) // the old frame stays until the new one lands
+    await s.land()
+    await vi.waitFor(() => expect(s.ui.get().following?.awaiting).toEqual({ kind: 'clip', shotId: s.shotId(0) }), { timeout: 2000, interval: 5 })
+    expect(s.frameOf(1).id).not.toBe(oldFrame.id)
+    expect(s.doc.get().frames!.some((f) => f.id === oldFrame.id)).toBe(false) // replaced, not stacked
+
+    const clipId = (await makeAwaited(s.deps, { modelChoice: veo }))!
+    expect(s.ui.get().jobCtx[clipId].request.modelChoice).toEqual(veo)
+    expect(s.ui.get().following?.models?.clip).toEqual(veo) // the box's pick is kept for the rest
+  })
+
+  it('steered: a failed item keeps its old version and waits, to be made again on another model', async () => {
+    const s = await setup(1)
+    await s.makeAll(false)
+    await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
+    await s.land()
+    await startFollow(s.deps, CONFIGS.testing, { steer: true })
+    expect(s.ui.get().following?.awaiting).toEqual({ kind: 'clip', shotId: s.shotId(0) })
+    const oldTake = s.takeOf(0)
+    const first = (await makeAwaited(s.deps))!
+    await s.runner.cancel(first) // like HeyGen out of credit
+    await continueFollow(s.deps)
+    expect(s.ui.get().following?.awaiting).toEqual({ kind: 'clip', shotId: s.shotId(0) }) // back in the box
+    expect(s.takeOf(0).id).toBe(oldTake.id) // the old clip is still there
+    const veo = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const second = (await makeAwaited(s.deps, { modelChoice: veo }))!
+    expect(s.ui.get().jobCtx[first].dismissed).toBe(true)
+    expect(s.ui.get().jobCtx[second].request.modelChoice).toEqual(veo)
+  })
+
+  it('"Do the rest as they are" makes this and every later item on the box\'s models, then renders the ad by itself', async () => {
+    const s = await setup(2)
+    await s.makeAll()
+    await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
+    await s.land()
+    await startFollow(s.deps, CONFIGS.testing, { steer: true })
+    await restAsTheyAre(s.deps)
+    await s.settle()
+    expect(s.ui.get().following).toBeUndefined()
+    expect(anythingStale(s.doc.get())).toBe(false)
+    const ran = s.all().filter((j) => j.ctx && 'followRun' in j.ctx && j.ctx.followRun)
+    expect(ran.map((j) => j.op)).toEqual(['frame', 'clip', 'clip', 'stitch'])
+    expect(s.doc.get().frames!.filter((f) => f.shot_id === s.shotId(1))).toHaveLength(1) // each old one replaced
+  })
+
+  it('the box starts on the last model that worked for the step, not on one that just failed', async () => {
+    const s = await setup(1)
+    await s.makeAll(false)
+    const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['heygen', 'fal'] as const } } as unknown as typeof CONFIGS.testing
+    await updateDoc(s.doc, (d) => {
+      const clips = d.jobs.filter((j) => j.op === 'clip')
+      Object.assign(clips.at(-1)!, { provider: 'fal', model: 'veo3.1-fast-i2v', state: 'completed' })
+      d.jobs.push({ ...clips.at(-1)!, id: newId('job'), provider: 'heygen', model: 'heygen-video-1', state: 'failed' })
+    })
+    expect(lastWorkedModel(s.doc.get(), 'clip', own)).toEqual({ provider: 'fal', model: 'veo3.1-fast-i2v' })
+  })
+
+  it('leaves out a clip that is being made now: it is not behind', async () => {
+    // 2026-10-09: four first clips in the making showed as "4 behind your changes".
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => { d.takes = d.takes!.filter((t) => t.shot_id === s.shotId(0)) })
+    const owed = planFollow(s.doc.get())
+    expect(owed.clips).toEqual([s.shotId(1), s.shotId(2)])
+    const making = shotsInTheMaking(s.doc.get(), () => undefined)
+    expect(making.clips.size).toBe(0)
+    expect(planFollow(s.doc.get(), new Set([s.shotId(1), s.shotId(2)])).clips).toEqual([])
+  })
+
+  it('starts on a real provider, not on mock, when one is offered', async () => {
+    // 2026-10-09: mock stills were the last clips that "worked", so an update run sent clips to mock again.
+    const s = await setup(1)
+    await s.makeAll(false)
+    const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['fal', 'mock'] as const } } as unknown as typeof CONFIGS.testing
+    await updateDoc(s.doc, (d) => {
+      for (const j of d.jobs) if (j.op === 'clip') Object.assign(j, { provider: 'mock', model: 'mock', state: 'completed' })
+    })
+    expect(lastWorkedModel(s.doc.get(), 'clip', own)?.provider).toBe('fal')
+    const mockOnly = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['mock'] as const } } as unknown as typeof CONFIGS.testing
+    expect(lastWorkedModel(s.doc.get(), 'clip', mockOnly)?.provider).toBe('mock') // nothing real offered: mock still answers
+  })
+
+  it('leaves a shot that a fix is redoing alone: not out of date in the plan while the fix runs', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    const note = await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.4, h: 0.4 } })
+    await fixInShot(s.deps, s.shotId(1), [note])
+    await s.land() // the fixed frame lands; the fix's clip is running and shot 2's old clip is marked
+    await vi.waitFor(() => expect(s.all().some((j) => j.op === 'clip' && j.state !== 'completed')).toBe(true), { timeout: 2000, interval: 5 })
+    const fixing = shotsBeingFixed(s.doc.get(), (id) => s.ui.get().jobCtx[id])
+    expect([...fixing]).toEqual([s.shotId(1)])
+    expect(takeStale(s.doc.get(), s.shotId(1))).toBeDefined()
+    expect(planFollow(s.doc.get(), fixing).clips).not.toContain(s.shotId(1))
+  })
+
+  it('a failed job can be sent again on another model (the error card\'s "Try another model")', async () => {
+    const s = await setup(1)
+    await s.makeAll(false)
+    const id = await makeClip(s.deps, s.shotId(0), { parentTake: s.takeOf(0) })
+    await s.runner.cancel(id) // like HeyGen out of credit: the step ended without a clip
+    const veo = { provider: 'fal' as const, model: 'veo3.1-fast-i2v' }
+    const again = (await s.runner.retry(id, veo))!
+    expect(s.ui.get().jobCtx[again].request.modelChoice).toEqual(veo)
+    expect(s.ui.get().jobCtx[again]).toMatchObject({ for: 'clip', parentTakeId: s.takeOf(0).id })
+    expect(s.ui.get().jobCtx[id]).toMatchObject({ dismissed: true, retriedAs: again })
+    await s.runner.cancel(again)
+    const routed = (await s.runner.retry(again, null))! // the routed default this time
+    expect(s.ui.get().jobCtx[routed].request.modelChoice).toBeUndefined()
+  })
+
   it('runs frames one at a time in order, then the clips, then the ad, and writes one chain entry', async () => {
     const s = await setup(4)
     await s.makeAll()
@@ -383,7 +535,7 @@ describe('Update what follows', () => {
     }
     expect(order).toEqual(['frame:3', 'frame:4', 'clip:2', 'clip:3', 'clip:4', 'stitch:'])
     expect(s.doc.get().jobs.length).toBe(before + 6)
-    expect((s.doc.get().frames ?? []).length).toBe(framesBefore + 2) // earlier versions kept
+    expect((s.doc.get().frames ?? []).length).toBe(framesBefore) // each new frame replaced the one it updated (2026-10-09)
     expect(anythingStale(s.doc.get())).toBe(false)
     expect(adStatus(s.doc.get()).stale).toBe(false)
     expect(s.ui.get().following).toBeUndefined()

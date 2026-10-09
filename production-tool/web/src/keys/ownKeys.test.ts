@@ -29,18 +29,21 @@ describe('routing with own keys (the relay rule)', () => {
     expect(withOwnKeys(CONFIGS.testing, { fal: FAL }, SHEETS)).toBe(CONFIGS.testing)
   })
 
-  it('a fal key takes pictures and clip edits; clips stay on the event', () => {
-    expect(route({ fal: FAL })).toEqual({ image: 'fal', clip: 'runway', clipEdit: 'fal' })
+  it('a fal key takes pictures, clips and clip edits', () => {
+    expect(route({ fal: FAL })).toEqual({ image: 'fal', clip: 'fal', clipEdit: 'fal' })
   })
 
   it('a HeyGen key takes clips only', () => {
     expect(route({ heygen: HEYGEN })).toEqual({ image: 'runway', clip: 'heygen', clipEdit: 'runway' })
   })
 
-  it('both keys: HeyGen first for clips, fal behind it', () => {
+  it('both keys: HeyGen first for clips, fal behind it, Runway always last', () => {
+    // Runway, the event's routing, stays behind the keys: it makes the step when they cannot
+    // (features/runway-fallback.clan, 2026-10-09).
     const c = withOwnKeys(on(), { fal: FAL, heygen: HEYGEN }, SHEETS)
-    expect(c.routing.clip).toEqual(['heygen', 'fal'])
-    expect(c.routing.generate).toEqual(['fal'])
+    expect(c.routing.clip).toEqual(['heygen', 'fal', 'runway'])
+    expect(c.routing.generate).toEqual(['fal', 'runway'])
+    expect(withOwnKeys(on(CONFIGS.event), {}, SHEETS).routing.clip).toEqual(['runway'])
   })
 
   it('leaves an op the organisers switched off switched off', () => {
@@ -54,8 +57,10 @@ describe('routing with own keys (the relay rule)', () => {
   })
 
   it('tells the participant where each step runs', () => {
-    expect(keyUse({ fal: FAL }, SHEETS).map((u) => u.on)).toEqual(['your fal key', "the event's account", 'your fal key'])
-    expect(keyUse({}, SHEETS).every((u) => u.on === "the event's account")).toBe(true)
+    expect(keyUse({ fal: FAL }, SHEETS).map((u) => u.on)).toEqual(
+      ['your fal key, then Runway', 'your fal key, then Runway', 'your fal key, then Runway'])
+    expect(keyUse({ fal: FAL, heygen: HEYGEN }, SHEETS)[1].on).toBe('your HeyGen, then fal key, then Runway')
+    expect(keyUse({}, SHEETS).every((u) => u.on === "Runway, on the event's account")).toBe(true)
   })
 })
 
