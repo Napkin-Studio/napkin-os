@@ -37,7 +37,7 @@ from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
     Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
-from .tags import TAG, UnknownTag, rewrite_tags
+from .tags import TAG, UnknownTag, rewrite_tags, unsent_in_words
 
 log = logging.getLogger("relay.fal")
 QUEUE = "https://queue.fal.run"
@@ -245,6 +245,10 @@ class FalProvider:
         """@hero becomes @Element1 for an element ref, else @ImageN by its place in image_urls.
         Only the Kling endpoints name refs that way: the others pass syntax="none" (the bare name)."""
         prompt = TAG.sub(lambda m: element_tags.get(m.group(1), m.group(0)), prompt)
+        # A name this request does not send (the edited image itself, a picture the endpoint cannot take,
+        # the whole character beside its front) is said in words: it must never fail the job
+        # (2026-10-09: "@current is not one of the refs" on region edits, the same on views).
+        prompt = unsent_in_words(prompt, image_names)
         try:
             return rewrite_tags(prompt, image_names, syntax or self._sheet["tagSyntax"])
         except UnknownTag as exc:
@@ -355,10 +359,7 @@ class FalProvider:
             "output_format": "png",
         }
         if job.prompt:
-            # Only the source picture goes, so a name for another picture or the whole character
-            # (@maya beside @maya_front) is said in words rather than refusing the view (2026-10-09).
-            words = TAG.sub(lambda m: m.group(0) if m.group(1) == ref.name else m.group(1).replace("_", " "), job.prompt)
-            body["additional_prompt"] = self._prompt(words, [ref.name], {}, "none")
+            body["additional_prompt"] = self._prompt(job.prompt, [ref.name], {}, "none")
         return body
 
     def _region_edit(self, job: ProviderJob) -> dict:

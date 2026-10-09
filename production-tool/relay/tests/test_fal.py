@@ -153,10 +153,19 @@ def test_frame_with_several_outputs_is_a_series(provider, fal):
     assert "num_images" not in body
 
 
-def test_unknown_tag_is_invalid_input(provider):
-    with pytest.raises(ProviderError) as e:
-        provider.submit(job(prompt="@ghost walks"))
-    assert e.value.code == "invalid_input" and not e.value.retryable
+def test_a_name_the_request_does_not_send_goes_as_words(provider, fal):
+    # Was: an unknown tag failed the job as invalid_input. The director's check still refuses a name
+    # that is in none of the job's refs (and falls back to the passthrough); here at the endpoint, a
+    # name it cannot send is said in words instead (2026-10-09).
+    provider.submit(job(prompt="@ghost walks"))
+    assert "ghost walks" in fal.body()["prompt"] and "@ghost" not in fal.body()["prompt"]
+
+
+def test_a_region_edit_says_the_edited_image_in_words(provider, fal):
+    # 2026-10-09: "@current is not one of the refs [...]": the edited image goes as image_url, not a ref.
+    provider.submit(job(op="region_edit", prompt="the samurai in @current holds @style", mask=MASK,
+                        refs=[Ref(HERO, "current", "current"), Ref(FRAME, "style", "object")]))
+    assert fal.body()["prompt"] == "the samurai in the image holds style"
 
 
 def test_image_op_without_an_image_ref_is_refused(provider, fal):

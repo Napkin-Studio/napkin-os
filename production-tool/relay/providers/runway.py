@@ -20,7 +20,7 @@ from .types import (
     VIDEO_OPS, AssetResolver, CapabilityMissing, ProviderError, ProviderJob,
     ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
-from .tags import UnknownTag, rewrite_tags
+from .tags import UnknownTag, rewrite_tags, unsent_in_words
 
 BASE_URL = "https://api.dev.runwayml.com"
 VERSION = "2024-11-06"
@@ -132,7 +132,7 @@ class RunwayProvider:
 
     def _tagged(self, names: list[str], prompt: str) -> str:
         try:
-            return rewrite_tags(prompt, names, self._sheet["tagSyntax"])
+            return rewrite_tags(unsent_in_words(prompt, names), names, self._sheet["tagSyntax"])
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc), False) from exc
 

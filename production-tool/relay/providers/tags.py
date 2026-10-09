@@ -22,6 +22,16 @@ class UnknownTag(ValueError):
     """The prompt names a @tag that is not among the refs sent with the job."""
 
 
+def unsent_in_words(prompt: str, names: Sequence[str]) -> str:
+    """Say in plain words each @tag that is not among `names`, the refs this request sends: the edited
+    image itself ('current' is 'the image'), a picture the endpoint cannot take, the whole character
+    beside its front. An adapter calls this before rewrite_tags, so a name never fails a job there
+    (2026-10-09); the director's own check still refuses a name that is in none of the job's refs."""
+    known = set(names)
+    return TAG.sub(lambda m: m.group(0) if m.group(1) in known
+                   else "the image" if m.group(1) == "current" else m.group(1).replace("_", " "), prompt)
+
+
 def _render(syntax: str, name: str, n: int) -> str:
     if syntax == "at_tag":
         return f"@{name}"
