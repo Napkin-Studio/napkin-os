@@ -18,6 +18,15 @@ export function HistoryPanel({ store, onClose }: { store: ClanBackedStore | null
   const items = useMemo(() => historyItems(doc), [doc])
   const item = items.find((i) => i.key === itemKey)
 
+  // Escape closes it (it did not, 2026-10-09). An open menu takes Escape first (ui/Float.tsx stops it).
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
+    }
+    document.addEventListener('keydown', key)
+    return () => document.removeEventListener('keydown', key)
+  }, [onClose])
+
   useEffect(() => {
     if (!store) return
     let alive = true
