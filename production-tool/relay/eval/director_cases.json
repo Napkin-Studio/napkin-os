@@ -1,0 +1,626 @@
+{
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words.",
+  "assets": {
+    "A1": "sha256:73bddd0044e9399c0799c403ced62cf1d108b4cd1d3d69394e577d3566d85381",
+    "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
+    "A3": "sha256:53204dd7a93da45ef82bc362dfe05b6608aad58ea245ca414d68c9207cab2d80",
+    "A4": "sha256:4db7c3a9ba5999a69a673068807328eb63470a0d2dabe713b5a571653c98d9ab",
+    "A5": "sha256:95f28e69c67b8c0378c46028c803b34ec8fa8dc62a36d057f1ee95cba0431913",
+    "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
+    "A7": "sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e",
+    "A8": "sha256:75ff3b65a77d507a9154f8df9240c1fee716b4a668d57368ce9db15598947d44",
+    "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5"
+  },
+  "cards": {
+    "samurai_props": "Full-body figure in dark lacquered Japanese-style armour: gold crescent helmet crest, dark face mask, gold circular crest on the chest plate, brown and cream patterned skirt. Holds a straw broom in the left hand and a blue cleaning-spray bottle in the right; a grey bucket with a feather duster stands at the feet. Detailed digital illustration on a cream background.",
+    "samurai_dress": "Armoured samurai warrior in full lacquered armour, standing front-facing with arms slightly out, with a katana and a second blade at the sides. Dark navy-black armour plates with tan and cream trim; cream roundel crest on the chest; ornate horned helmet with a face mask; tan sash; skirt panels with a red and cream floral pattern; dark greaves. Flat illustration with ink-like shading.",
+    "handyman_front": "Full-body figure in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, standing front-on with feet together. Wears a short-sleeved royal-blue polo shirt with a small round white emblem on the chest. Carries a grey mop and bucket. Photoreal, plain light background.",
+    "handyman_side": "Armored samurai figure, full body, standing in side profile facing left, on a plain cream background. Black lacquered armour with brown-gold trim; helmet with a gold crest and a dark face mask; red-and-cream floral patterned skirt; blue polo shirt. A long dark pole with a feather duster at the end.",
+    "handyman_back": "Armoured figure in black lacquered samurai-style armour and dark helmet with gold crescent horns, seen from behind, full length, on a cream background. Beige hakama with a red floral pattern; dark tabi-style footwear. Carries a mop over the shoulder.",
+    "handyman_tq": "Armoured figure in a dark lacquered samurai-style helmet with gold crescent crest and full dark plate armour, wearing a bright blue polo shirt with a small white emblem; patterned beige hakama-style skirt with red floral motif; holds a blue spray bottle.",
+    "stick": "A simple black stick figure drawn on white: round head, straight body, arms out, legs apart. No details.",
+    "marky": "A large orange-and-white guinea pig standing in a narrow brick city alley, filling the gap between buildings. Chunky rounded body, short legs with pale feet, small dark eye and pink nose; orange patches on head and back, white face.",
+    "layout": "A rough line drawing: two tall rectangles for buildings with a big round shape squeezed between them, labelled marky, building, building.",
+    "bathroom_frame": "Photoreal frame: a bright tiled bathroom; the armoured samurai in a blue polo kneels at the toilet scrubbing the bowl with a brush; a mop and bucket by the wall.",
+    "hall_frame": "Photoreal frame: a lived-in family hallway with coats on hooks and school bags; the armoured samurai in a blue polo walks in through the front door carrying a toolbox."
+  },
+  "cases": [
+    {
+      "id": "shirt_donor",
+      "why": "'like @handyman_front' was sent as a second character, and the character's card props were restated",
+      "op": "generate",
+      "provider": "fal",
+      "input": {
+        "text": "make it wear the tshirt like @handyman_front",
+        "chips": [],
+        "ratio": "4:5",
+        "refs": [
+          {
+            "id": "node_01K6XA6Z0000000000000000A1",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A1",
+            "card": "samurai_props"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "picture",
+            "asset": "A2",
+            "card": "handyman_front"
+          }
+        ]
+      },
+      "must": [
+        [
+          "shirt",
+          "polo"
+        ]
+      ],
+      "forbid": [
+        "broom",
+        "spray",
+        "bucket",
+        "duster",
+        "mop",
+        "lacquered",
+        "crescent"
+      ],
+      "roles": {
+        "handyman_front": "object"
+      },
+      "budget": 400
+    },
+    {
+      "id": "costume_donor",
+      "why": "the costume picture was sent as the character, and its card was pasted in full",
+      "op": "generate",
+      "provider": "fal",
+      "input": {
+        "text": "Use the @handyman_dress as reference for the samurai dress\nbroom\ntoilet cleaner\nThe idea is there is a samurai who can do all the chores of the house",
+        "chips": [],
+        "ratio": "4:5",
+        "refs": [
+          {
+            "id": "node_01K6XA6Z0000000000000000A3",
+            "role": "character",
+            "kind": "drawing",
+            "asset": "A3",
+            "card": "stick"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A4",
+            "name": "handyman_dress",
+            "role": "other",
+            "kind": "picture",
+            "asset": "A4",
+            "card": "samurai_dress"
+          }
+        ]
+      },
+      "must": [
+        [
+          "samurai"
+        ],
+        [
+          "broom"
+        ],
+        [
+          "toilet"
+        ]
+      ],
+      "forbid": [
+        "roundel",
+        "greaves",
+        "navy-black",
+        "katana"
+      ],
+      "roles": {
+        "handyman_dress": "object"
+      },
+      "budget": 450
+    },
+    {
+      "id": "realistic_change",
+      "why": "the user asked for real life; the old style must not come back",
+      "op": "generate",
+      "provider": "fal",
+      "input": {
+        "text": "make it real life, attach more weapons that cleans houses and should be wearing a company uniform.",
+        "chips": [],
+        "ratio": "4:5",
+        "refs": [
+          {
+            "id": "node_01K6XA6Z0000000000000000A5",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A5",
+            "card": "samurai_dress"
+          }
+        ]
+      },
+      "must": [
+        [
+          "real life",
+          "realistic",
+          "photoreal"
+        ],
+        [
+          "uniform"
+        ]
+      ],
+      "forbid": [
+        "flat",
+        "illustration",
+        "ink-like",
+        "roundel",
+        "greaves"
+      ],
+      "budget": 400
+    },
+    {
+      "id": "marky_durag",
+      "why": "words-as-written baseline case: placement from the drawing, a realistic style and one costume change",
+      "op": "generate",
+      "provider": "fal",
+      "input": {
+        "text": "put @marky_body between two buildings like new drawing. Realistic. and make @marky_body with purple durag",
+        "chips": [],
+        "ratio": "9:16",
+        "refs": [
+          {
+            "id": "node_01K6XA6Z0000000000000000A6",
+            "role": "other",
+            "kind": "drawing",
+            "asset": "A6",
+            "card": "layout"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A7",
+            "name": "marky_body",
+            "role": "character",
+            "kind": "picture",
+            "asset": "A7",
+            "card": "marky"
+          }
+        ]
+      },
+      "must": [
+        [
+          "durag"
+        ],
+        [
+          "purple"
+        ],
+        [
+          "building"
+        ],
+        [
+          "realistic",
+          "photoreal"
+        ]
+      ],
+      "forbid": [
+        "flat",
+        "illustration"
+      ],
+      "roles": {
+        "marky_body": "character"
+      },
+      "budget": 400
+    },
+    {
+      "id": "view_fal_three_quarter",
+      "why": "fal's view takes one picture; the others were sent and named, and the card pasted",
+      "op": "view",
+      "provider": "fal",
+      "input": {
+        "view": "three-quarter",
+        "ratio": "4:5",
+        "image": "A2",
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A8",
+            "name": "handyman_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A8",
+            "card": "handyman_side"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A9",
+            "name": "handyman_back",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A9",
+            "card": "handyman_back"
+          }
+        ]
+      },
+      "image_card": "handyman_front",
+      "must": [
+        [
+          "three-quarter",
+          "three quarter",
+          "45"
+        ]
+      ],
+      "forbid": [
+        "lacquered",
+        "crescent",
+        "hakama",
+        "mop",
+        "duster",
+        "spray"
+      ],
+      "only_refs": [
+        "current"
+      ],
+      "budget": 300
+    },
+    {
+      "id": "view_runway_side",
+      "why": "Runway has no angle control: the view must be said in words, without restating cards",
+      "op": "view",
+      "provider": "runway",
+      "input": {
+        "view": "side",
+        "ratio": "4:5",
+        "image": "A2",
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A9",
+            "name": "handyman_back",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A9",
+            "card": "handyman_back"
+          }
+        ]
+      },
+      "image_card": "handyman_front",
+      "must": [
+        [
+          "side",
+          "profile"
+        ]
+      ],
+      "forbid": [
+        "lacquered",
+        "crescent",
+        "hakama",
+        "mop",
+        "duster",
+        "spray"
+      ],
+      "budget": 300
+    },
+    {
+      "id": "frame_first_props",
+      "why": "card props (mop, bucket, duster, spray) leaked into every frame",
+      "op": "frame",
+      "provider": "fal",
+      "input": {
+        "ratio": "9:16",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000001",
+          "order": 1,
+          "duration_s": 2,
+          "composition": "wide",
+          "camera_move": "push_in",
+          "action": "Wide view of a busy family house, @handyman walks in carrying his toolbox, ready for a long day of odd jobs.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A5",
+            "name": "handyman_tq",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A5",
+            "card": "handyman_tq"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A8",
+            "name": "handyman_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A8",
+            "card": "handyman_side"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A9",
+            "name": "handyman_back",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A9",
+            "card": "handyman_back"
+          }
+        ]
+      },
+      "must": [
+        [
+          "toolbox"
+        ],
+        [
+          "house",
+          "hallway",
+          "home"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "bucket",
+        "duster",
+        "spray",
+        "broom"
+      ],
+      "budget": 700
+    },
+    {
+      "id": "frame_realistic_text",
+      "why": "'make it realistic style' was followed by 'style follows the illustrated views'",
+      "op": "frame",
+      "provider": "fal",
+      "input": {
+        "ratio": "9:16",
+        "text": "make it realistic style",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000002",
+          "order": 2,
+          "duration_s": 2,
+          "composition": "medium",
+          "camera_move": "static",
+          "action": "@handyman scrubs the toilet bowl with a brush in the bathroom.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "anchorFrame": "A6",
+        "previousFrame": "A6",
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          },
+          {
+            "id": "ref_01K6XA6Z0000000000000000A8",
+            "name": "handyman_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A8",
+            "card": "handyman_side"
+          }
+        ]
+      },
+      "anchor_card": "hall_frame",
+      "must": [
+        [
+          "realistic",
+          "photoreal"
+        ],
+        [
+          "toilet"
+        ],
+        [
+          "brush"
+        ]
+      ],
+      "forbid": [
+        "illustrat",
+        "flat",
+        "mop",
+        "duster",
+        "spray"
+      ],
+      "budget": 700
+    },
+    {
+      "id": "frame_follows_anchor",
+      "why": "a later frame keeps the anchor's setting and style and only the shot's own props",
+      "op": "frame",
+      "provider": "fal",
+      "input": {
+        "ratio": "9:16",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000006",
+          "order": 6,
+          "duration_s": 4,
+          "composition": "medium",
+          "camera_move": "push_in",
+          "action": "Tired at the end of the day, @handyman sits on the sofa, drinks a glass of lemonade, relaxes and gives a thumbs up to the camera.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "anchorFrame": "A6",
+        "previousFrame": "A7",
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          }
+        ]
+      },
+      "anchor_card": "hall_frame",
+      "previous_card": "bathroom_frame",
+      "must": [
+        [
+          "sofa"
+        ],
+        [
+          "lemonade"
+        ],
+        [
+          "thumbs"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "bucket",
+        "duster",
+        "spray",
+        "broom",
+        "toilet"
+      ],
+      "budget": 700
+    },
+    {
+      "id": "region_remove_bucket",
+      "why": "a masked edit: only the edited image goes, the prompt says what fills the box",
+      "op": "region_edit",
+      "provider": "fal",
+      "input": {
+        "ratio": "9:16",
+        "text": "remove the bucket",
+        "image": "A7",
+        "mask": "A8",
+        "region": {
+          "x": 0.05,
+          "y": 0.7,
+          "w": 0.25,
+          "h": 0.25
+        },
+        "anchorFrame": "A6",
+        "previousFrame": "A6"
+      },
+      "image_card": "bathroom_frame",
+      "must": [
+        [
+          "floor",
+          "wall",
+          "tile",
+          "behind",
+          "continu"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "duster",
+        "lacquered"
+      ],
+      "only_refs": [
+        "current"
+      ],
+      "budget": 400
+    },
+    {
+      "id": "clip_fal_kling",
+      "why": "a clip describes motion and camera from the shot, not the still, and sends no ratio",
+      "op": "clip",
+      "provider": "fal",
+      "input": {
+        "ratio": "9:16",
+        "image": "A7",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000002",
+          "order": 2,
+          "duration_s": 2,
+          "composition": "medium",
+          "camera_move": "static",
+          "action": "@handyman scrubs the toilet bowl with a brush in the bathroom.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          }
+        ]
+      },
+      "must": [
+        [
+          "scrub"
+        ],
+        [
+          "static",
+          "still camera",
+          "locked",
+          "steady",
+          "holds still"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "duster",
+        "lacquered",
+        "crescent"
+      ],
+      "budget": 500
+    },
+    {
+      "id": "clip_runway_push",
+      "why": "Runway takes the first frame alone: the character is named in words, briefly",
+      "op": "clip",
+      "provider": "runway",
+      "input": {
+        "ratio": "9:16",
+        "image": "A6",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000001",
+          "order": 1,
+          "duration_s": 2,
+          "composition": "wide",
+          "camera_move": "push_in",
+          "action": "Wide view of a busy family house, @handyman walks in carrying his toolbox, ready for a long day of odd jobs.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          }
+        ]
+      },
+      "must": [
+        [
+          "walks",
+          "walking"
+        ],
+        [
+          "push",
+          "moves in",
+          "dolly"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "bucket",
+        "duster",
+        "lacquered"
+      ],
+      "budget": 500
+    }
+  ]
+}

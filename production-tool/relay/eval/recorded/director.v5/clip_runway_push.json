@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip\", \"needsUser\": null, \"providerJob\": {\"provider\": \"runway\", \"model\": \"veo3.1\", \"prompt\": \"The handyman walks in carrying his toolbox. The camera pushes in slowly. No text, captions, subtitles or speech bubbles.\", \"refs\": [], \"firstFrame\": \"sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228\", \"durationS\": 4, \"audio\": false, \"ratio\": \"720:1280\"}, \"rationale\": \"Runway sends no refs with a first frame, so the handyman ref is dropped and the @tag is written plainly. The 2s shot rounds up to 4s.\", \"confidence\": 0.8}"
+}

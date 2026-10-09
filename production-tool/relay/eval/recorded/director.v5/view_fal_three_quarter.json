@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"view\", \"needsUser\": null, \"rationale\": \"Sheet has angles, so set horizontal 45 and vertical 0 and send the source as current. The sheet lists no seed for view and no ratio form for this op beyond 4:5, so ratio is given as W:H for fal.\", \"confidence\": 0.9, \"providerJob\": {\"provider\": \"fal\", \"model\": \"qwen-image-edit-2511-multiple-angles\", \"prompt\": \"three-quarter view of @current, the same character, full body, plain background.\", \"refs\": [{\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"current\", \"role\": \"current\"}], \"angle\": {\"horizontal\": 45, \"vertical\": 0}, \"ratio\": \"4:5\"}}"
+}

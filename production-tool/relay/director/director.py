@@ -54,6 +54,17 @@ NO_RATIO = {("runway", "clip_edit"), ("fal", "clip_edit"), ("fal", "clip"), ("he
 PROMPT_MAX = {("runway", "clip"): 1000, ("runway", "clip_edit"): 1000, ("runway", "image"): 5500,
               ("fal", "clip"): 2500, ("fal", "clip_edit"): 2500, ("fal", "image"): 2500}
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
+# director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
+# per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
+ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250}
+# Providers whose view sends its source picture alone: other refs are left out before the model sees them.
+VIEW_SOURCE_ONLY = {"fal"}
+# A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
+SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
+# The ops a sectioned prompt has no section for (shot_list) run on this whole prompt.
+FALLBACK_PROMPT = "director.v4"
+# Words that take one thing from a picture: "like @x", "@x's", "the dress of @x", "from @x", "as in @x".
+DONOR = re.compile(r"(?:\blike|\bfrom|\bas in|\bof)\s+@([a-z][a-z0-9_]{2,15})\b|@([a-z][a-z0-9_]{2,15})'s\b")
 
 
 
@@ -137,6 +148,36 @@ def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
     return min((r for r in allowed if shape(r) <= best + 0.04), key=area)
 
 
+def _lone_fronts_are_characters(job: dict) -> None:
+    """An element is a front and 1 to 3 angles: a front with no angle after it goes as a character
+    (2026-10-09: the eval's Kling clip; fal refuses an element without an angle at submit)."""
+    refs = job.get("refs") or []
+    for i, r in enumerate(refs):
+        if r["role"] == "element_front" and not (i + 1 < len(refs) and refs[i + 1]["role"] == "element_angle"):
+            r["role"] = "character"
+
+
+def _donors_are_objects(job: dict, payload: dict) -> None:
+    """A picture the words take one thing from ("like @x", "@x's shirt") is an object, never a second
+    character (2026-10-09: 'like @handyman_front' merged two people). Only while another character stays."""
+    donors = {a or b for a, b in DONOR.findall(payload.get("text") or "")}
+    refs = job.get("refs") or []
+    for r in refs:
+        if r["name"] in donors and r["role"] == "character" and any(
+                o is not r and o["role"] in ("character", "element_front") for o in refs):
+            r["role"] = "object"
+
+
+def _within_budget(job: dict, op: str, payload: dict) -> None:
+    """What the director added beyond the participant's words stays near the op's budget."""
+    budget = ADD_BUDGET.get(op)
+    if budget is None:
+        return
+    added = len(job.get("prompt") or "") - len(payload.get("text") or "")
+    if added > budget * 1.5:
+        raise DirectorError(f"the director added {added} characters to the words; {op} allows about {budget}")
+
+
 class DirectorError(Exception):
     """The director's answer cannot be used: it breaks the routed sheet or the job's own facts."""
 
@@ -201,13 +242,33 @@ class Director:
         self.port = model_port
         self.sheets = sheets
         self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
+        self.prompt_dir = Path(prompt_dir)
         self.prompt_version = prompt_version
-        self.system = (Path(prompt_dir) / f"{prompt_version}.md").read_text()
+        self.system = (self.prompt_dir / f"{prompt_version}.md").read_text()
         schemas = load_schemas(contracts)
         self.schema = bundle(schemas)
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())
         self._validate = lambda name, pointer="": Draft202012Validator(
             {"$ref": BASE + name + pointer}, registry=registry, format_checker=FormatChecker())
+
+    @property
+    def sectioned(self) -> bool:
+        return bool(SECTION.search(self.system))
+
+    def system_for(self, op: str) -> str:
+        """The prompt for one op: all of an unsectioned file; else the shared part and this op's section,
+        or the fallback prompt for an op the file has no section for."""
+        parts = SECTION.split(self.system)
+        if len(parts) == 1:
+            return self.system
+        common, sections = parts[0], {}
+        for ops, body in zip(parts[1::2], parts[2::2]):
+            for o in ops.split():
+                sections[o] = body
+        if op not in sections:
+            return (self.prompt_dir / f"{FALLBACK_PROMPT}.md").read_text()
+        tail = "\n\nAnswer with the JSON only.\n"
+        return common.rstrip() + "\n\n" + sections[op].replace("Answer with the JSON only.", "").strip() + tail
 
     def run(self, op: str, payload: dict, provider_name: Optional[str] = None, job_id: str = "",
             extra_hashes: tuple = ()) -> DirectorResult:
@@ -223,6 +284,8 @@ class Director:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
         payload = _without_dialogue(op, payload)
+        if self.sectioned and op == "view" and provider_name in VIEW_SOURCE_ONLY and payload.get("refs"):
+            payload = {**payload, "refs": []}  # the view sends its source alone: nothing else to write about
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
@@ -230,7 +293,7 @@ class Director:
 
         usage = Usage()
         t0 = time.monotonic()
-        output = self.port.call(PURPOSE, self.system, ask, self.schema, usage=usage,
+        output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
                                 attribution=job_id or op, model=model,
                                 max_tokens=6000 if op == "shot_list" else 3000)
         latency_ms = round((time.monotonic() - t0) * 1000)
@@ -272,6 +335,7 @@ class Director:
                 job["angle"] = angle
         _drop_unusable(job, op, sheet)
         _clip_edit_source(job, op, payload)
+        _lone_fronts_are_characters(job)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
@@ -294,6 +358,9 @@ class Director:
             self._check_keyframe(job["keyframe"])
         if "strength" in job and sheet["video"]["feelEdit"] != "strength":
             raise DirectorError(f"{provider_name} takes no edit strength")
+        if self.sectioned:
+            _donors_are_objects(job, payload)
+            _within_budget(job, op, payload)
         self._check_provider_limits(op, sheet, job)
         try:
             rewrite_tags(job["prompt"], names, sheet["tagSyntax"])

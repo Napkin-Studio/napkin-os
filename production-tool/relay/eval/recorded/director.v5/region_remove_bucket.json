@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"region_edit\", \"needsUser\": null, \"rationale\": \"Masked inpaint on Ideogram v4.5: sent the mask and the current image only. Since the words remove something, the prompt says the surrounding scene continues with nothing there. I assumed the background is unknown, so it is described generically.\", \"confidence\": 0.8, \"providerJob\": {\"provider\": \"fal\", \"model\": \"ideogram-v4.5-edit\", \"prompt\": \"the surrounding floor and background continue, nothing there\", \"refs\": [{\"sha256\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\", \"name\": \"current\", \"role\": \"current\"}], \"mask\": \"sha256:75ff3b65a77d507a9154f8df9240c1fee716b4a668d57368ce9db15598947d44\", \"region\": {\"x\": 0.05, \"y\": 0.7, \"w\": 0.25, \"h\": 0.25}}}"
+}

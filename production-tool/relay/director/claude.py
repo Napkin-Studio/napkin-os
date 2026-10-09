@@ -29,9 +29,9 @@ log = logging.getLogger(__name__)
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 # config.testing.json's director block; config.json overrides it per call.
-PER_CLICK = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+PER_CLICK = "eu.anthropic.claude-sonnet-5-5"  # director.v5: Sonnet per click (features/director-v5.clan)
 SHOT_LIST = "eu.anthropic.claude-sonnet-5-5"
-PROMPT_VERSION = "director.v4"
+PROMPT_VERSION = "director.v5"
 # Lambda runs 60 s and the HTTP API answers within 30 s: one model call (and its
 # one retry) must leave room for the provider submit.
 TIMEOUT_S = float(os.environ.get("DIRECTOR_TIMEOUT_S", "20"))

@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip\", \"needsUser\": null, \"providerJob\": {\"provider\": \"fal\", \"model\": \"kling-v3-pro-i2v\", \"prompt\": \"@handyman_front scrubs the toilet bowl with a brush in the bathroom. The camera holds still. No text, captions, subtitles or speech bubbles.\", \"firstFrame\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\", \"refs\": [{\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"handyman_front\", \"role\": \"element_front\"}], \"durationS\": 3, \"audio\": false}, \"rationale\": \"Shot action plus static camera as the prompt. Duration 2s rounded up to Kling's 3s minimum. The handyman is sent as an element with first frame, which the sheet allows.\", \"confidence\": 0.85}"
+}

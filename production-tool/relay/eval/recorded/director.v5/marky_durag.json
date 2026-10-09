@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"generate\", \"needsUser\": null, \"providerJob\": {\"provider\": \"fal\", \"model\": \"nano-banana-pro-edit\", \"prompt\": \"put @marky_body between two buildings like new drawing. Realistic. and make @marky_body with purple durag. The character in @marky_body, kept as it is; the layout of @in_1 only.\", \"refs\": [{\"sha256\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\", \"name\": \"marky_body\", \"role\": \"character\"}, {\"sha256\": \"sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228\", \"name\": \"in_1\", \"role\": \"object\"}], \"ratio\": \"9:16\"}, \"rationale\": \"The drawing @in_1 gives the layout only; @marky_body is the character to keep, with the purple durag from the words. I left out the plain-background ending because the words place it between buildings.\", \"confidence\": 0.85}"
+}
