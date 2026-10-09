@@ -233,7 +233,8 @@ export class ClanBackedStore implements DocumentStore {
     for (const j of (this.clan.get().jobs ?? []) as unknown as JobEntry[]) {
       if (!TERMINAL.has(j.state) || this.outcomes.has(j.id)) continue
       try {
-        if (await recordJobOutcome(this.clan, j)) wrote = true
+        // The cards the director was given ride in the job's context, not the document (jobs/runner.ts).
+        if (await recordJobOutcome(this.clan, j, this.ctxOf(j.id)?.cards)) wrote = true
         this.outcomes.add(j.id)
       } catch (e) {
         console.warn('could not record the job in the decision chain', j.id, e)
