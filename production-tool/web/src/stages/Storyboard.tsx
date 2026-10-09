@@ -34,6 +34,9 @@ import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown } from '../dogfood/recorder'
+import { DownloadButton } from '../ui/Download'
+import { useProjectName } from '../ui/useDownload'
+import { mediaItem } from '../media/names'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -282,6 +285,8 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const nextEmpty = !!nextShot && !(doc.frames ?? []).some((f) => f.shot_id === nextShot.id)
   const nextBusy = !!nextShot && isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === nextShot.id))
   const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ui.ratio)
+  const project = useProjectName()
+  const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
 
   const setRegion = (r: Region | null) => current && uiStore.update((u) => { u.frameRegions[current.id] = r ?? undefined })
   const select = (frameId: string) => selectFrame(docStore, shot.id, frameId)
@@ -405,6 +410,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             <span className="mono vlabel" title={made.label}>v{idx + 1}/{frames.length}</span>
             <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
             <span className="sep" />
+            {shown && <DownloadButton items={[shown]} className="btn xs icon ghost" iconOnly title={`Download v${idx + 1} (${shown.name})`} />}
             <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={running}
               title={frames.length <= 1 ? 'Delete the only version: Update what follows draws it again' : `Delete v${idx + 1}`}
               onClick={deleteVersion}>🗑</button>

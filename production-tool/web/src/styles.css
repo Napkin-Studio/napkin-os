@@ -601,3 +601,11 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .gotyou-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ok-bg, var(--soft)); color: var(--ok, var(--ink)); font-weight: 700; flex-shrink: 0; }
 .gotyou span:nth-child(2) { flex: 1; }
 .madeon { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink2); font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+/* ── Download (ui/Download.tsx, features/media-download.clan) ── */
+.dlbtn > span[aria-hidden] { font-weight: 700; }
+.dlbtn.icon:disabled, .dlbtn.icon.missing { width: auto; padding: 0 8px; }
+.dlbtn.missing { color: var(--danger); }
+.player .player-dl { position: absolute; top: 10px; right: 10px; z-index: 3; opacity: 0; pointer-events: none; transition: opacity 0.15s var(--ease); }
+.player:hover .player-dl, .player:focus-within .player-dl, .player-dl:has(.missing) { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .player .player-dl { opacity: 1; pointer-events: auto; } }

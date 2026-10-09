@@ -23,6 +23,9 @@ import { Float, MenuItem } from './ui/Float'
 import { JobTray } from './ui/JobTray'
 import { BetaTag } from './dogfood/Dogfood'
 import { errorShown, setScreen } from './dogfood/recorder'
+import { downloadAllMedia } from './media/download'
+import { viewsOnCanvas } from './media/names'
+import { idbGet } from './lib/idb'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -75,9 +78,11 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
   const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
+  const [packing, setPacking] = useState<{ done: number; total: number } | null>(null)
+  const [packNote, setPackNote] = useState<string | null>(null)
   const menuRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const closeMenu = useCallback(() => setMenuOpen(false), [])
+  const closeMenu = useCallback(() => { setMenuOpen(false); setPackNote(null) }, [])
   const stage = doc.stage.current
   const reachable = (s: StageName) =>
     s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
@@ -132,6 +137,24 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
               closeMenu()
             }
           }}>{exporting ? 'Packing…' : 'Export'}</MenuItem>
+          {/* The media alone, named (features/media-download.clan): pictures/, storyboard/, clips/, ad/. */}
+          <MenuItem icon="⇩" disabled={!!packing} hint={packing ? undefined : 'zip'} onSelect={async () => {
+            setPacking({ done: 0, total: 0 })
+            setPackNote(null)
+            try {
+              const canvas = await idbGet<CanvasSnapshot>('kv', project.canvasKey).catch(() => undefined)
+              const name = shell.index.get(project.id)?.name
+              const { packed, missing } = await downloadAllMedia(docStore.get(), name, viewsOnCanvas(docStore.get(), canvas?.elements ?? []),
+                (done, total) => setPacking({ done, total }))
+              if (!packed) setPackNote('Nothing to save in this browser')
+              else if (missing) setPackNote(`Saved ${packed} · ${missing} not in this browser`)
+              else closeMenu()
+            } catch {
+              setPackNote('That did not work. Try again.')
+            } finally {
+              setPacking(null)
+            }
+          }}>{packing ? (packing.total ? `Packing ${packing.done} of ${packing.total}…` : 'Packing…') : packNote ?? 'Download all media'}</MenuItem>
           {relay.kind === 'http' && ui.session && (
             <MenuItem icon="⎋" onSelect={() => {
               closeMenu()
