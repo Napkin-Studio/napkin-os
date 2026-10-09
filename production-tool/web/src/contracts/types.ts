@@ -366,11 +366,27 @@ export interface SessionResponse {
   participantId: string
   handle: string
   role: 'participant' | 'organiser'
-  /** The team the event code belongs to; the library is shared within it. */
+  /** The participant's own workspace (its participantId): the library and saved projects are kept in it. */
   workspace: string
   expiresAt: string
   quotas: { image: number; video: number; render: number }
+  /** How many projects this name has saved on the relay ("Welcome back, Maya: 3 projects"). */
+  projects: number
 }
+
+/** One of the person's saved projects (GET /projects, POST /clan with X-Project-Id). */
+export interface SavedProject {
+  id: Id
+  name?: string
+  savedAt: string
+  bytes: number
+  /** SHA-256 (hex) of the saved .clan: If-Match on the next save. */
+  etag: string
+}
+export interface ProjectList { projects: SavedProject[] }
+export interface ClanSaved { project: SavedProject }
+/** The canvas that goes with a saved project (elements only; pictures come back from the assets). */
+export interface ProjectCanvas { elements: unknown[]; savedAt?: string }
 
 export interface UploadRequest { sha256: Sha256; mime: InputMime; bytes: number }
 export interface UploadResponse { exists: boolean; putUrl?: string; url: string }

@@ -136,6 +136,7 @@ export class MockRelay implements Relay {
       workspace: 'mock',
       expiresAt: new Date(this.opts.now() + 24 * 3600 * 1000).toISOString(),
       quotas: { image: 40, video: 6, render: 3 },
+      projects: 0, // nothing is saved to a server without the relay
     }
   }
 

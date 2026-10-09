@@ -6,8 +6,10 @@ import { useState, useSyncExternalStore } from 'react'
 import { App } from './App'
 import { OwnKeysContext, ServicesContext, ShellContext } from './app/context'
 import { relayId } from './relay'
+import { welcomeBack } from './projects/homeList'
 import type { Shell } from './projects/shell'
 import { Home } from './ui/Home'
+import { displayName } from './ui/homeWords'
 import { StudioMark } from './ui/Mark'
 
 export function Root({ shell }: { shell: Shell }) {
@@ -48,6 +50,8 @@ function SignIn({ shell }: { shell: Shell }) {
           app.update((u) => { u.session = s; u.sessionFor = relayId() })
           // Signing in opens on Home. The project you open next becomes yours (projects/session.ts).
           await shell.goHome()
+          // A name that already has saved work says so, so a second person who picks it notices.
+          shell.say(welcomeBack(displayName(s.handle), s.projects ?? 0))
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not sign in.')
         } finally {

@@ -10,6 +10,7 @@ import type { ClanBackedStore } from '../doc/clan'
 import { withOwnKeys, type OwnKeys, type OwnKeysStore } from '../keys/ownKeys'
 import { SHEETS } from '../contracts/load'
 import type { Shell } from '../projects/shell'
+import type { ServerCopy } from '../projects/serverCopy'
 
 /** The open project (features/project-home.clan). */
 export interface ProjectHandle {
@@ -36,6 +37,8 @@ export interface Services {
   storeNote: string | null
   /** The participant's own provider keys (this tab only). */
   ownKeys: OwnKeysStore
+  /** The project's copy on the relay, and a save conflict waiting for the person's choice; null on the mock. */
+  serverCopy: ServerCopy | null
 }
 
 export const ServicesContext = createContext<Services | null>(null)

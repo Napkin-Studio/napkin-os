@@ -17,6 +17,7 @@ import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { UndoButtons } from './ui/UndoButtons'
 import { SaveButton } from './ui/SaveButton'
+import { SaveConflictBox } from './ui/SaveConflict'
 import { Float, MenuItem } from './ui/Float'
 import { JobTray } from './ui/JobTray'
 
@@ -41,6 +42,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       {config.banner && <div className="banner">{config.banner}</div>}
       {storeNote && <div className="storenote" role="status">{storeNote}</div>}
       {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
+      <SaveConflictBox />
       <div className="stage">
         {history && <HistoryPanel store={clan} onClose={() => setHistory(false)} />}
         {/* The canvas stays mounted so its jobs keep landing while you're on another stage. */}

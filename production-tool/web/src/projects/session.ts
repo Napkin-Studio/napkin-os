@@ -8,7 +8,7 @@ import type { Persistence } from '../../../clan-store/src'
 import type { ProjectHandle, Services } from '../app/context'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { Config } from '../contracts/types'
-import { ClanBackedStore, postClanMirror } from '../doc/clan'
+import { ClanBackedStore } from '../doc/clan'
 import type { JobCtxOf } from '../doc/describe'
 import { openDocument } from '../doc/open'
 import { SnapshotStore, systemUpdate } from '../doc/store'
@@ -19,6 +19,8 @@ import { resumeChains, wireJobs } from '../jobs/wire'
 import type { OwnKeysStore } from '../keys/ownKeys'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
+import type { ProjectServer } from './server'
+import { ServerCopy } from './serverCopy'
 import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storage'
 import { autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
@@ -36,8 +38,8 @@ export interface SessionDeps {
   remoteConfig: Config | null
   ownKeys: OwnKeysStore
   makeClan: MakeClan
-  /** The relay's address, when the project's .clan is to be copied to the server (POST /clan). */
-  relayUrl?: string
+  /** The person's projects on the relay (projects/server.ts); absent on the in-browser mock. */
+  server?: ProjectServer
   /** How long the summary waits after a change before it goes into the index. */
   summaryDelayMs?: number
 }
@@ -87,18 +89,20 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   runner.resume()
   void resumeChains(frameDeps)
 
-  // The organisers' copy of this project's .clan (POST /clan with X-Project-Id): every 5 minutes when
-  // something changed, on each lock, on export and on Save. Not on the in-browser mock relay.
-  if (clan && relay.kind === 'http' && deps.relayUrl) {
-    clan.clan.startMirror(postClanMirror({
-      relay: deps.relayUrl,
-      token: () => app.get().session?.token ?? null,
-      projectId: id,
-      onPosted: (at) => app.update((a) => { a.savedAt = at.toISOString() }),
-    }), { everyMs: 300_000 })
-  }
-
   const canvasKey = canvasKeyFor(id)
+
+  // The project's copy on the relay (POST /clan with X-Project-Id), which the same name opens from
+  // any browser: every 5 minutes when something changed, on each lock, on export and on Save, each
+  // checked against the copy this browser last saved or opened (serverCopy.ts). Not on the mock.
+  let serverCopy: ServerCopy | null = null
+  if (clan && relay.kind === 'http' && deps.server) {
+    serverCopy = new ServerCopy({
+      id, server: deps.server, index, storage, canvasKey, doc: () => doc.get(),
+      upload: (blob, mime) => relay.upload(blob, mime),
+      onPosted: (at) => app.update((a) => { a.savedAt = at.toISOString() }),
+    })
+    clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: 300_000 })
+  }
   const initialCanvas = (await storage.get<CanvasSnapshot>(canvasKey)) ?? null
 
   // Home's card follows the project: its stage, counts, picture and (until renamed) its name.
@@ -123,7 +127,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     beforeClose: new Set(),
     usedElsewhere: (sha) => index.usedElsewhere(sha, id),
   }
-  const services: Services = { project, relay, doc, ui, runner, remoteConfig: deps.remoteConfig, clan, storeNote, ownKeys: deps.ownKeys }
+  const services: Services = { project, relay, doc, ui, runner, remoteConfig: deps.remoteConfig, clan, storeNote, ownKeys: deps.ownKeys, serverCopy }
 
   let closing: Promise<void> | null = null
   const close = () => (closing ??= (async () => {
@@ -142,7 +146,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     await doc.flush()
     await record(pending)
     // The server's copy, once more, as it is now (when it changed, and only when it is being copied at all).
-    if (changedSinceOpen && clan && relay.kind === 'http' && deps.relayUrl) void clan.clan.mirrorNow('manual').catch(() => {})
+    if (changedSinceOpen && clan && serverCopy) void clan.clan.mirrorNow('manual').catch(() => {})
     if (clan) await clan.close()
     await ui.close()
   })())
