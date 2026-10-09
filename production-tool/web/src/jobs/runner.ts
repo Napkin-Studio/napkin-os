@@ -4,11 +4,12 @@
 // reload because the document and the job purposes are both snapshotted.
 
 import type {
-  ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
+  AgentBlock, ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
 } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { systemUpdate, type DocumentStore, type SnapshotStore } from '../doc/store'
-import type { JobCtx, JobPurpose, UiState } from '../doc/ui'
+import { systemUpdate, type DocumentStore } from '../doc/store'
+import type { JobCtx, JobPurpose } from '../doc/ui'
+import type { UiStore } from '../projects/uiStore'
 import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { asContractError, RelayError, type Relay } from '../relay'
@@ -41,11 +42,13 @@ export class JobRunner {
   private version = 0
   private readonly relay: Relay
   private readonly doc: DocumentStore
-  private readonly ui: SnapshotStore<UiState>
+  private readonly ui: UiStore
+  /** Set by stop(): the project was closed. Its jobs carry on at the relay and land when it is opened again. */
+  private stopped = false
   /** The stage the user is on, for log entries. */
   stage: () => StageName = () => 'character'
 
-  constructor(relay: Relay, doc: DocumentStore, ui: SnapshotStore<UiState>) {
+  constructor(relay: Relay, doc: DocumentStore, ui: UiStore) {
     this.relay = relay
     this.doc = doc
     this.ui = ui
@@ -79,10 +82,21 @@ export class JobRunner {
     }
   }
 
+  /** The project is closing (features/project-home.clan): stop asking about its jobs and start no more.
+   *  Whatever is still being made stays in its document as queued, running or fetching, so resume()
+   *  picks it up the next time the project is opened, in that project and no other. */
+  stop() {
+    this.stopped = true
+    for (const t of this.timers.values()) clearTimeout(t)
+    this.timers.clear()
+    this.listeners.clear()
+  }
+
   // ── submit / retry / cancel ──
 
   /** `modelChoice`: the model picked in the regenerate menu (features/model-choice.clan). */
   async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job'), modelChoice?: ModelChoice): Promise<string> {
+    if (this.stopped) throw new Error('the project was closed')
     const request: JobRequest = { contractVersion: '2', jobId, op, parentIds, input, ...(modelChoice ? { modelChoice } : {}) }
     const hashes = new Set<string>()
     collectHashes(input, hashes)
@@ -113,6 +127,7 @@ export class JobRunner {
   private async send(request: JobRequest) {
     try {
       const job = await this.relay.createJob(request)
+      if (this.stopped) return
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
@@ -200,6 +215,7 @@ export class JobRunner {
 
   private schedule(jobId: string, seconds: number) {
     this.stopPolling(jobId)
+    if (this.stopped) return
     this.timers.set(jobId, setTimeout(() => void this.poll(jobId), Math.max(0.2, seconds) * 1000))
   }
 
@@ -220,8 +236,10 @@ export class JobRunner {
 
   private async poll(jobId: string) {
     this.timers.delete(jobId)
+    if (this.stopped) return
     try {
       const job = await this.relay.getJob(jobId)
+      if (this.stopped) return
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
@@ -254,6 +272,20 @@ export class JobRunner {
     })
   }
 
+  /** Keep where the relay meant to run the job, when it made it elsewhere (Runway, after HeyGen or
+   *  fal could not), beside the job's purpose: the card says "Made on Runway: HeyGen could not". */
+  private noteFallback(job: Job) {
+    const ctx = this.ui.get().jobCtx[job.jobId]
+    if (!ctx || !job.fallbackFrom) return
+    if (ctx.fallbackFrom?.provider === job.fallbackFrom.provider && ctx.fallbackReason === job.fallbackReason) return
+    this.ui.update((u) => {
+      const c = u.jobCtx[job.jobId]
+      if (!c) return
+      c.fallbackFrom = { provider: job.fallbackFrom!.provider, model: job.fallbackFrom!.model }
+      if (job.fallbackReason) c.fallbackReason = job.fallbackReason
+    })
+  }
+
   private apply(job: Job) {
     normalisePromptVersion(job)
     const done = job.state === 'completed'
@@ -264,9 +296,16 @@ export class JobRunner {
     if (job.provider) patch.provider = job.provider
     if (job.model) patch.model = job.model
     if (job.requestId) patch.remote_id = job.requestId
-    if (job.director) patch.agent = job.director
+    if (job.director) {
+      patch.agent = agentForDocument(job.director)
+      const cards = job.director.cards
+      if (cards?.length && !this.ui.get().jobCtx[job.jobId]?.cards) {
+        this.ui.update((u) => { const c = u.jobCtx[job.jobId]; if (c) c.cards = cards })
+      }
+    }
     if (job.error) patch.error = job.error
     this.patchDocJob(job.jobId, patch)
+    this.noteFallback(job)
     this.emit()
     if (done) void this.complete(job)
     else if (isActive(job.state)) this.schedule(job.jobId, job.nextPollS ?? 2)
@@ -292,6 +331,9 @@ export class JobRunner {
         if (o.durationS) a.duration_s = o.durationS
         assets.push(a)
       }
+      // Closed while its outputs came in: the bytes are kept (shared blobs), the job stays "fetching"
+      // in its own document and lands when that project is opened again.
+      if (this.stopped) return
       systemUpdate(this.doc, (d) => {
         for (const a of assets) if (!d.assets.some((x) => x.sha256 === a.sha256)) d.assets.push(a)
         const j = d.jobs.find((x) => x.id === job.jobId)
@@ -324,6 +366,15 @@ export function outputLocations(sha256: string, url: string): string[] {
  *  pattern was loosened refuses dotted names, and a job directed under the old name would be
  *  refused on every save (2026-10-07: "director.v2.1" looped as "1 queued"). Same prompt, new name. */
 const PROMPT_RENAMES: Record<string, string> = { 'director.v2.1': 'director.v3' }
+
+/** The director block as the document keeps it: without `cards`. A .clan keeps the contract it was
+ *  made with, and one made before character cards refuses the field on every save (the trap above);
+ *  the cards go to the director's History entry instead (jobCtx, then doc/clan.ts). */
+export function agentForDocument(block: AgentBlock): AgentBlock {
+  if (!('cards' in block)) return block
+  const { cards: _cards, ...rest } = block
+  return rest
+}
 
 export function normalisePromptVersion(job: Job): void {
   const v = job.director?.promptVersion

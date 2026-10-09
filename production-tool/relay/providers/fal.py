@@ -37,7 +37,7 @@ from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
     Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
-from .tags import TAG, UnknownTag, rewrite_tags
+from .tags import TAG, UnknownTag, rewrite_tags, unsent_in_words
 
 log = logging.getLogger("relay.fal")
 QUEUE = "https://queue.fal.run"
@@ -63,10 +63,12 @@ IMAGE_OPS = {"generate", "frame"}
 NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
 VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
 KLING_IMAGE = "kling-image-o3"
+KLING_CLIP = "kling-v3-pro-i2v"
 # Nano Banana Pro is the default for generate and frame (features/default-models.clan); Kling O3
-# and Nano Banana 2 are offered beside it.
+# and Nano Banana 2 are offered beside it. Veo 3.1 Fast is the default clip (2026-10-09: steadier
+# and quicker than Kling on fal's queue); Kling v3 Pro and Veo 3.1 are offered beside it.
 ALTERNATES = {"generate": {KLING_IMAGE, "nano-banana-2-edit"}, "frame": {KLING_IMAGE, "nano-banana-2-edit"},
-              "clip": VEO}
+              "clip": {KLING_CLIP, "veo3.1-i2v"}}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
 # 422 types that say the input is wrong: pydantic's, and fal's own (fal.ai/docs/documentation/
 # model-apis/errors, read 2026-10-08). Any other 422 type is fal's failure.
@@ -245,6 +247,10 @@ class FalProvider:
         """@hero becomes @Element1 for an element ref, else @ImageN by its place in image_urls.
         Only the Kling endpoints name refs that way: the others pass syntax="none" (the bare name)."""
         prompt = TAG.sub(lambda m: element_tags.get(m.group(1), m.group(0)), prompt)
+        # A name this request does not send (the edited image itself, a picture the endpoint cannot take,
+        # the whole character beside its front) is said in words: it must never fail the job
+        # (2026-10-09: "@current is not one of the refs" on region edits, the same on views).
+        prompt = unsent_in_words(prompt, image_names)
         try:
             return rewrite_tags(prompt, image_names, syntax or self._sheet["tagSyntax"])
         except UnknownTag as exc:

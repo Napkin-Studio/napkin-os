@@ -8,6 +8,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { createPortal } from 'react-dom'
 import { placeMenu } from '../lib/place'
 
+/** The floats open now, in the order they opened: a float opened from inside another (the model menu
+ *  in Make clip's box) is above it, so a click in it is not "outside" the one below, and Escape closes
+ *  only the top one (2026-10-09: picking a model closed the box). */
+const openFloats: RefObject<HTMLDivElement | null>[] = []
+
 export function Float({ anchor, open, onClose, align = 'start', side = 'below', role = 'menu', label, className = '', children }: {
   anchor: RefObject<HTMLElement | null>
   open: boolean
@@ -47,13 +52,16 @@ export function Float({ anchor, open, onClose, align = 'start', side = 'below', 
 
   useEffect(() => {
     if (!open) return
+    openFloats.push(panel)
+    const above = () => openFloats.slice(openFloats.indexOf(panel) + 1)
     const down = (e: PointerEvent) => {
       const t = e.target as Node
       if (panel.current?.contains(t) || anchor.current?.contains(t)) return
+      if (above().some((f) => f.current?.contains(t))) return
       onClose()
     }
     const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || above().length) return
       e.stopPropagation()
       onClose()
       anchor.current?.focus()
@@ -61,6 +69,7 @@ export function Float({ anchor, open, onClose, align = 'start', side = 'below', 
     document.addEventListener('pointerdown', down, true)
     document.addEventListener('keydown', key, true)
     return () => {
+      openFloats.splice(openFloats.indexOf(panel), 1)
       document.removeEventListener('pointerdown', down, true)
       document.removeEventListener('keydown', key, true)
     }

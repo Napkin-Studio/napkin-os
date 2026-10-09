@@ -5,8 +5,7 @@
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import { shotsBeingFixed } from '../jobs/fix'
-import { cancelFollow, followState, planFollow, planSize, planWords, startFollow } from '../jobs/follow'
+import { cancelFollow, followState, planFollow, planSize, planWords, shotsInTheMaking, startFollow } from '../jobs/follow'
 import { behindCount } from './behind'
 
 /** The run's state and Stop, in the top bar; nothing when no run is on. */
@@ -32,7 +31,8 @@ export function UpdateFollows() {
 }
 
 /** The one place to start an update: a bar floating at the bottom of the stage while anything is behind. */
-export function RemakeBar() {
+/** `dock`: top on the Video stage, where the bottom of the stage is the player's controls. */
+export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {}) {
   const services = useServices()
   const { doc: docStore, ui: uiStore, runner, relay } = services
   const doc = useDoc()
@@ -41,12 +41,13 @@ export function RemakeBar() {
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   if (ui.following) return null
-  const plan = planFollow(doc, shotsBeingFixed(doc, (id) => ui.jobCtx[id]))
+  const busy = shotsInTheMaking(doc, (id) => ui.jobCtx[id])
+  const plan = planFollow(doc, busy.clips, busy.frames)
   const n = planSize(plan)
   if (!n) return null
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   return (
-    <div className="remakebar" role="region" aria-label="Update what follows" onClick={(e) => e.stopPropagation()}>
+    <div className={`remakebar ${dock === 'top' ? 'top' : ''}`} role="region" aria-label="Update what follows" onClick={(e) => e.stopPropagation()}>
       <span className="dot" aria-hidden="true" />
       <b>{behindCount(n)}</b>
       <span className="remake-what">{planWords(plan)}</span>

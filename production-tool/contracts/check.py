@@ -63,12 +63,16 @@ for f in sorted(HERE.glob("examples/config.*.json")):
             if op not in sheets.get(p, {}).get("ops", {}):
                 failures += 1
                 print(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
-    config = json.loads(f.read_text())
-    routed = {p for providers in config["routing"].values() for p in providers}
-    for p in config.get("fallbackOnly", []):
-        if p not in routed:
-            failures += 1
-            print(f"✗ {f.relative_to(HERE)}: fallbackOnly names {p}, which no op routes to")
+    if "fallbackOnly" in json.loads(f.read_text()):  # no longer read (features/runway-fallback.clan)
+        failures += 1
+        print(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
+
+# The event pays only for Runway: fal and HeyGen come from participants' own keys (features/runway-fallback.clan).
+event = json.loads((HERE / "examples" / "config.event.json").read_text())
+for op, providers in event["routing"].items():
+    if providers not in ([], ["runway"]):
+        failures += 1
+        print(f"✗ examples/config.event.json: routes {op} to {providers}; the event routes every op to ['runway']")
 
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():

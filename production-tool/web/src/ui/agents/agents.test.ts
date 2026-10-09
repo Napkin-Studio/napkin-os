@@ -47,4 +47,13 @@ describe('who is shown for a job', () => {
     expect(whoIsWorking({ op: 'shot_list' }, 'submitted', { for: 'shot_list', revId: 'r' }).line).toBe('Dex is planning the shots')
     expect(whoIsWorking({ op: 'stitch' }, 'submitted', { for: 'stitch' }).line).toBe('Dex is putting together the ad')
   })
+  it('says when a job was made on Runway because HeyGen or fal could not (features/runway-fallback.clan)', () => {
+    const ctx = { for: 'clip' as const, shotId: 's3', fallbackFrom: { provider: 'heygen' as const, model: 'heygen-video-1' } }
+    expect(whoIsWorking({ op: 'clip', provider: 'runway' }, 'submitted', ctx, 3).line)
+      .toBe('Dex is making the clip for shot 3 · Made on Runway: HeyGen could not')
+    expect(whoIsWorking({ op: 'clip', provider: 'runway' }, 'completed', ctx, 3).line)
+      .toBe('Dex made the clip for shot 3 · Made on Runway: HeyGen could not')
+    expect(whoIsWorking({ op: 'clip', provider: 'heygen' }, 'submitted', ctx, 3).line).toBe('Dex is making the clip for shot 3')
+    expect(whoIsWorking({ op: 'clip', provider: 'runway' }, 'failed', ctx, 3).line).toBe('The clip for shot 3 did not come back')
+  })
 })

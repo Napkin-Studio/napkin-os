@@ -45,8 +45,22 @@ export const planSize = (p: FollowPlan) => p.frames.length + p.clips.length + (p
  * every frame after it follows it, so the frames run from the first one that needs
  * drawing to the last shot. Empty when nothing is out of date.
  */
-/** `fixing`: shots a fix is redoing now (shotsBeingFixed); their clip is left to the fix. */
-export function planFollow(d: ProductionDocument, fixing: ReadonlySet<string> = new Set()): FollowPlan {
+/** Shots whose clip is being made now (a fix, Make clip, a run) or whose frame is being drawn now: not
+ *  behind, so the plan leaves them out (2026-10-09: four first clips in the making showed as "4 behind"). */
+export function shotsInTheMaking(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined): { clips: Set<string>; frames: Set<string> } {
+  const clips = shotsBeingFixed(d, ctxOf)
+  const frames = new Set<string>()
+  for (const j of d.jobs) {
+    if (!isActive(j.state)) continue
+    const c = ctxOf(j.id)
+    if (c?.for === 'clip') clips.add(c.shotId)
+    if (c?.for === 'frame') frames.add(c.shotId)
+  }
+  return { clips, frames }
+}
+
+/** `fixing`: shots whose clip is being made now (a fix, or shotsInTheMaking); `drawing`: shots whose frame is. */
+export function planFollow(d: ProductionDocument, fixing: ReadonlySet<string> = new Set(), drawing: ReadonlySet<string> = new Set()): FollowPlan {
   const none: FollowPlan = { frames: [], clips: [], ad: false }
   const shots = d.shots ?? []
   const hasFrames = (d.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
@@ -54,7 +68,7 @@ export function planFollow(d: ProductionDocument, fixing: ReadonlySet<string> = 
   // A shot whose last frame or clip was deleted is owed one, like an out-of-date one.
   const missing = shots.some((s) => (hasFrames && !selectedFrame(d, s.id)) || (hasTakes && !selectedTake(d, s.id)))
   if (!anythingStale(d) && !missing) return none
-  const first = shots.findIndex((s) => !!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id)))
+  const first = shots.findIndex((s) => !drawing.has(s.id) && (!!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id))))
   const frames = first >= 0 ? shots.slice(first).map((s) => s.id) : []
   const clips = hasTakes ? shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id))).map((s) => s.id) : []
   const ad = adStatus(d)
@@ -123,15 +137,19 @@ export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx |
 
 /** The last model that made a `op` job that worked, where the menu offers it: where the update box
  *  starts, so a provider that just failed (out of credit) is not tried again by default. */
-export function lastWorkedModel(d: ProductionDocument, op: 'frame' | 'clip', config: Config, sheets?: Sheets): ModelChoice | undefined {
+export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, sheets?: Sheets): ModelChoice | undefined {
   const offered = modelChoicesFor(op, config, sheets)
+  // A mock result "worked" only as a stand-in: a real provider on offer goes first (2026-10-09:
+  // an update run sent clips to mock again after mock stills, with a fal key there).
+  const real = offered.some((o) => o.provider !== 'mock')
   for (let i = d.jobs.length - 1; i >= 0; i--) {
     const j = d.jobs[i]
-    if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model) continue
+    if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model || (real && j.provider === 'mock')) continue
     const o = offered.find((x) => x.provider === j.provider && x.model === j.model)
     if (o) return { provider: o.provider, model: o.model }
   }
-  return offered[0] && { provider: offered[0].provider, model: offered[0].model }
+  const first = offered.find((o) => !real || o.provider !== 'mock')
+  return first && { provider: first.provider, model: first.model }
 }
 
 /** What a run sends per step at the start: the last model that worked (none: the routed default). */
@@ -148,7 +166,8 @@ export function startModels(d: ProductionDocument, config: Config, sheets?: Shee
  *  to start on). `steer`: wait for the update box on each frame and clip (the Update button). */
 export async function startFollow(deps: FrameDeps, config?: Config, opts: { steer?: boolean } = {}): Promise<FollowPlan> {
   const d = deps.doc.get()
-  const plan = planFollow(d, shotsBeingFixed(d, (id) => ctxOf(deps, id)))
+  const busy = shotsInTheMaking(d, (id) => ctxOf(deps, id))
+  const plan = planFollow(d, busy.clips, busy.frames)
   if (!planSize(plan) || deps.ui.get().following) return plan
   const models = config ? startModels(d, config) : {}
   deps.ui.update((u) => {

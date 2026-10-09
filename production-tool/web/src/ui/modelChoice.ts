@@ -3,26 +3,36 @@
 // record; a job picked for one provider that ran on another (the relay's fallback) says so.
 
 import { modelLabel, type ModelOption } from '../capabilities'
-import type { DocJob, ModelChoice, ProductionDocument } from '../contracts/types'
+import type { DocJob, ModelChoice, Provider, ProductionDocument } from '../contracts/types'
 import type { UiState } from '../doc/ui'
+
+export const PROVIDER_NAMES: Record<Provider, string> = { fal: 'fal', runway: 'Runway', heygen: 'HeyGen', mock: 'Mock' }
+
+/** "Made on Runway: HeyGen could not", when the relay made a job on another provider than the
+ *  one it was meant for (Job.fallbackFrom; features/runway-fallback.clan). */
+export function fellBack(from: ModelChoice | undefined, made: Provider | undefined): string | undefined {
+  if (!from || !made || from.provider === made) return undefined
+  return `Made on ${PROVIDER_NAMES[made]}: ${PROVIDER_NAMES[from.provider]} could not`
+}
 
 export interface MadeWith {
   /** The provider and model the job ran on, when the record has them. */
   made?: ModelChoice
-  /** "Veo 3.1 Fast (fal)", or "Veo 3.1 Fast (runway), because fal could not take Veo 3.1". */
+  /** "Veo 3.1 Fast (fal)", or "Veo 3 (runway) · Made on Runway: HeyGen could not". */
   label?: string
+  /** "Made on Runway: HeyGen could not", when it fell back. */
+  fallback?: string
 }
 
 export function madeWith(doc: ProductionDocument, ui: UiState, jobId: string | undefined): MadeWith {
   const job = jobId ? doc.jobs.find((j) => j.id === jobId) : undefined
   if (!job?.provider || !job.model) return {}
   const made = { provider: job.provider, model: job.model }
-  let label = `${modelLabel(made.provider, made.model)} (${made.provider})`
-  const picked = jobId ? ui.jobCtx[jobId]?.request.modelChoice : undefined
-  if (picked && picked.provider !== made.provider) {
-    label += `, because ${picked.provider} could not take ${modelLabel(picked.provider, picked.model)}`
-  }
-  return { made, label }
+  const ctx = jobId ? ui.jobCtx[jobId] : undefined
+  // The relay's record of it, else the pick it was sent with (jobs from before fallbackFrom was kept).
+  const fallback = fellBack(ctx?.fallbackFrom ?? ctx?.request.modelChoice, made.provider)
+  const label = `${modelLabel(made.provider, made.model)} (${made.provider})${fallback ? ` · ${fallback}` : ''}`
+  return fallback ? { made, label, fallback } : { made, label }
 }
 
 /** An estimate as the menu shows it. */

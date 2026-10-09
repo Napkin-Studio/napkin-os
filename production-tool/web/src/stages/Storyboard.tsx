@@ -11,7 +11,7 @@ import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
 import { assetRef, boxMaskRef } from '../jobs/assets'
 import { allNamed, isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { nameOf, subjectRefs, wholeKeys } from '../lib/names'
-import { continuity, drawFrame, drawTheRest, firstUndrawn, selectFrame, selectedFrame } from '../jobs/frames'
+import { continuity, drawFrame, drawTheRest, firstUndrawn, SCRIPT_MAX, selectFrame, selectedFrame } from '../jobs/frames'
 import { putBlob } from '../lib/blobs'
 import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
 import { newId } from '../lib/ulid'
@@ -57,12 +57,12 @@ export function Storyboard() {
     updateDoc(docStore, (d) => {
       d.script ??= { revisions: [] }
       for (const r of d.script.revisions) if (r.status !== 'superseded') r.status = 'superseded'
-      d.script.revisions.push({ id: revId, created_at: new Date().toISOString(), imported_text: text.slice(0, 600), target_s: ui.targetS, status: 'draft', ...(d.script.current ? { parent: d.script.current } : {}) })
+      d.script.revisions.push({ id: revId, created_at: new Date().toISOString(), imported_text: text.slice(0, SCRIPT_MAX), target_s: ui.targetS, status: 'draft', ...(d.script.current ? { parent: d.script.current } : {}) })
       d.script.current = revId
     }, 'script revision')
     // The named refs go along, so each shot can name the ones it shows (@maya_front, @lamp_on).
     const refs = await allNamed(relay, docStore.get())
-    await runner.submit('shot_list', { script: text.slice(0, 600), targetS: ui.targetS, ...(refs.length ? { refs } : {}) }, [], { for: 'shot_list', revId })
+    await runner.submit('shot_list', { script: text.slice(0, SCRIPT_MAX), targetS: ui.targetS, ...(refs.length ? { refs } : {}) }, [], { for: 'shot_list', revId })
   }
 
   const attempt = async (fn: () => Promise<unknown>) => {
@@ -101,11 +101,11 @@ export function Storyboard() {
         <p className="lede">Write what happens in your ad. We plan the shots, then draw a frame for each one.</p>
         <div className="split">
           <div className="card section stack">
-            <div className="row"><h2>Script</h2><span className="spacer" /><span className="counter">{ui.scriptDraft.length}/600</span></div>
+            <div className="row"><h2>Script</h2><span className="spacer" /><span className="counter">{ui.scriptDraft.length}/{SCRIPT_MAX}</span></div>
             <textarea
               className="textarea"
               rows={6}
-              maxLength={600}
+              maxLength={SCRIPT_MAX}
               placeholder="e.g. It starts to rain. Our hero opens a bright umbrella and grins. The logo appears."
               value={ui.scriptDraft}
               onChange={(e) => uiStore.update((u) => { u.scriptDraft = e.target.value })}
@@ -123,7 +123,7 @@ export function Storyboard() {
               ))}
             </div>
             <div className="row">
-              <button className="btn primary" disabled={planning || !ui.scriptDraft.trim()} onClick={plan}>{planning ? 'Planning…' : shots.length ? 'Plan again' : 'Plan shots'}</button>
+              <button className="btn primary" disabled={planning || !ui.scriptDraft.trim()} onClick={() => void attempt(plan)}>{planning ? 'Planning…' : shots.length ? 'Plan again' : 'Plan shots'}</button>
               {!doc.refs.length && <span className="faint" style={{ fontSize: 12 }}>Name an image on the canvas first, like @maya_front.</span>}
             </div>
             {planJob && <div style={{ height: 120, borderRadius: 12, overflow: 'hidden' }}><JobNode jobId={planJob} /></div>}
@@ -318,7 +318,10 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         <b>{label(shot.composition)}</b>
         <span className="faint">· {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
-        {staleMark && <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>}
+        {/* The mark is on the version on show; while its replacement is drawn, say so instead. */}
+        {staleMark && (running
+          ? <span className="behind updating" title={staleMark.reason}>Updating…</span>
+          : <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>)}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
       <div className="framepic">

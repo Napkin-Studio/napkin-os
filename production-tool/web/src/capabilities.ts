@@ -108,12 +108,12 @@ export interface ModelOption extends ModelChoice {
   estimateUsd: number | null
 }
 
-/** What the menu offers for an op: each routed provider that is not fallback-only, in routing
- *  order, its own model first and then its alternates. The relay checks every pick again. */
+/** What the menu offers for an op: each routed provider in the order its jobs run (with own keys,
+ *  withOwnKeys puts the key providers first; Runway, the floor, is always there), its own model
+ *  first and then its alternates (features/runway-fallback.clan). The relay checks every pick again. */
 export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS): ModelOption[] {
   const out: ModelOption[] = []
   for (const provider of config.routing[op] ?? []) {
-    if (config.fallbackOnly?.includes(provider)) continue
     const spec = sheets[provider]?.ops[op]
     if (!spec) continue
     out.push({ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note, estimateUsd: spec.estimateUsd ?? null })

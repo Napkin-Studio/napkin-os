@@ -33,6 +33,22 @@ export interface JobEntry {
   updated_at?: string
 }
 
+/** One character card the director was given (the relay's agent block `cards`,
+ * director.schema.json#/$defs/agentBlock): what one vision call saw in a ref picture. */
+export interface DirectorCard {
+  tag: string
+  sha256: string
+  kind: 'character' | 'object' | 'setting' | 'style' | 'other'
+  card: string
+}
+
+/** A card as read back from a director entry. */
+export interface SeenCard {
+  tag: string
+  kind: string
+  lines: string[]
+}
+
 export interface ChainRecord {
   agent: string
   action: string
@@ -68,9 +84,36 @@ function money(n: number): string {
   return `$${n < 1 ? n.toFixed(3).replace(/0$/, '') : n.toFixed(2)}`
 }
 
-/** The director's entry: its rationale, which refs it used for what, and the
- * prompt it wrote (abbreviated). Null when the job had no director. */
-export function directorRecord(job: JobEntry): ChainRecord | null {
+/** What the director's entry puts before the cards it was given (always its last part). */
+export const SAW = ' · saw: '
+const CARD_SEP = ' ¦ '
+const LINE_SEP = ' / '
+
+/** The cards as the last part of the director's entry: ` · saw: @tag (kind): line / line ¦ @tag …`.
+ * The separators are taken out of the card text, so cardsFromRationale() can read them back. */
+export function sawPart(cards: DirectorCard[]): string {
+  const clean = (t: string) => t.replace(/[·¦]/g, ',').split('\n').map((l) => l.replace(/ \/ /g, ', ').trim()).filter(Boolean).join(LINE_SEP)
+  return SAW + cards.map((c) => `@${c.tag} (${c.kind}): ${clean(c.card)}`).join(CARD_SEP)
+}
+
+/** The cards a director entry's rationale carries (sawPart's inverse), and the rationale before them. */
+export function cardsFromRationale(rationale: string): { rest: string; cards: SeenCard[] } {
+  const at = rationale.lastIndexOf(SAW)
+  if (at < 0) return { rest: rationale, cards: [] }
+  const cards: SeenCard[] = []
+  for (const part of rationale.slice(at + SAW.length).split(CARD_SEP)) {
+    const m = /^@([a-z0-9_]+) \(([a-z]+)\): (.+)$/s.exec(part.trim())
+    if (m) cards.push({ tag: m[1], kind: m[2], lines: m[3].split(LINE_SEP).filter(Boolean) })
+  }
+  return cards.length ? { rest: rationale.slice(0, at), cards } : { rest: rationale, cards: [] }
+}
+
+/** The director's entry: its rationale, which refs it used for what, the
+ * prompt it wrote (abbreviated), and last the character cards it was given.
+ * Null when the job had no director. `cards` come from the relay's agent
+ * block; the document keeps them out of `jobs[].agent`, since a .clan made
+ * before them carries an agent block that refuses the field. */
+export function directorRecord(job: JobEntry, cards?: DirectorCard[]): ChainRecord | null {
   const a = job.agent
   if (!a) return null
   const out = (a.output ?? {}) as {
@@ -90,7 +133,7 @@ export function directorRecord(job: JobEntry): ChainRecord | null {
   return {
     agent: `${AGENT_DIRECTOR} · ${a.model} · ${a.promptVersion}`,
     action: `directed ${job.op} ${job.id}`,
-    rationale: parts.join(' · '),
+    rationale: parts.join(' · ') + (cards?.length ? sawPart(cards) : ''),
   }
 }
 
@@ -126,13 +169,14 @@ export interface Recorder {
 
 /**
  * Write the director and provider entries for a job that has reached a
- * terminal state, at most once each. Resolves the number written (0 when the
+ * terminal state, at most once each (`cards`: the director's, from the relay's
+ * agent block). Resolves the number written (0 when the
  * job is still moving, or was recorded before).
  */
-export async function recordJobOutcome(store: Recorder, job: JobEntry): Promise<number> {
+export async function recordJobOutcome(store: Recorder, job: JobEntry, cards?: DirectorCard[]): Promise<number> {
   if (!TERMINAL.has(job.state)) return 0
   let n = 0
-  const d = directorRecord(job)
+  const d = directorRecord(job, cards)
   if (d && (await store.record(d, { once: true }))) n++
   const p = providerRecord(job)
   if (p && (await store.record(p, { once: true }))) n++
