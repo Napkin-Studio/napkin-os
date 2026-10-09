@@ -21,9 +21,15 @@ cd production-tool/relay
 uv run python -m local            # http://localhost:8787
 ```
 
-- Event codes: `LOCAL` (participant), `ORGLOCAL` (organiser).
+- Event codes: `LOCAL` (participant), `ORGLOCAL` (organiser), in any case. Set
+  `EVENT_CODES` to use others (on AWS it is the Secrets Manager entry:
+  `{"participant": ["napkin-studio"], "organiser": ["…"]}`). Each name is its own
+  workspace: the same name on any browser finds its projects and library.
+- `--port` and `--data <dir>` (default `.local-data/`) choose where it listens and keeps files.
 - Routes answer both bare (`/jobs`) and under `/api` (`/api/jobs`). CORS is open.
-- `POST /clan` takes the participant's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, max 5 MiB) and keeps `clan/<participantId>/latest.clan` plus a timestamped copy; with `X-Project-Id: <project id>` (optional) it keeps them under `clan/<participantId>/<projectId>/` instead, one copy per project. It answers 204.
+- `POST /clan` takes the participant's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, max 5 MiB). With `X-Project-Id: <project id>` it is a saved project (`projects.py`): kept under `clan/<participantId>/<projectId>/` (every save, plus `latest.clan`) and listed in `clan/<participantId>/projects.json`; it answers the save's ETag, and with `If-Match` a save someone else got in before is a 409. Without the header it keeps `clan/<participantId>/latest.clan` plus a timestamped copy and answers 204.
+- `GET /projects` lists the caller's saved projects; `GET /clan/<projectId>` answers the newest `.clan` with its `ETag`; `PUT`/`GET /clan/<projectId>/canvas` keep the canvas that goes with it.
+- Pruning, after the event's data has been studied: `scripts/prune_workspaces.py` (dry run unless `--yes`; see its docstring).
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.
 - Config: `contracts/examples/config.testing.json` with every step routed to

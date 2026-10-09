@@ -32,3 +32,8 @@
 .history-error { padding: 8px 14px; color: var(--danger); font-size: 12px; }
 .history-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line-soft); font-size: 11.5px; }
 .storenote { background: var(--warn-bg); color: var(--ink); text-align: center; padding: 6px 16px; font-size: 12.5px; font-weight: 600; flex-shrink: 0; }
+/* A save the relay refused because someone saved the project since (features/personal-workspaces.clan). */
+.storenote.conflict { display: flex; align-items: center; justify-content: center; gap: 14px; text-align: left; font-weight: 500; padding: 8px 16px; }
+.storenote.conflict b { font-weight: 700; }
+.storenote.conflict .row { flex-shrink: 0; }
+.conflict-error { color: var(--danger); font-weight: 600; }

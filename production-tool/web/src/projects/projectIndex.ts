@@ -15,6 +15,14 @@ export interface ProjectEntry {
   created: string
   updated: string
   summary: ProjectSummary
+  /** The relay's copy this browser last saved or opened (features/personal-workspaces.clan): its ETag
+   *  goes as If-Match on the next save, so a save from somewhere else since is never overwritten. */
+  server?: ServerMark
+}
+
+export interface ServerMark {
+  etag: string
+  savedAt: string
 }
 
 interface Stored {
@@ -76,7 +84,7 @@ export class ProjectIndex {
     return () => this.listeners.delete(fn)
   }
 
-  async create(init: { id?: string; name?: string; naming?: ProjectEntry['naming']; summary?: ProjectSummary; at?: string } = {}): Promise<ProjectEntry> {
+  async create(init: { id?: string; name?: string; naming?: ProjectEntry['naming']; summary?: ProjectSummary; at?: string; server?: ServerMark } = {}): Promise<ProjectEntry> {
     const at = init.at ?? this.now().toISOString()
     const entry: ProjectEntry = {
       id: init.id ?? newProjectId(),
@@ -85,6 +93,7 @@ export class ProjectIndex {
       created: at,
       updated: at,
       summary: init.summary ?? emptySummary(),
+      ...(init.server ? { server: init.server } : {}),
     }
     this.list = [...this.list.filter((p) => p.id !== entry.id), entry]
     await this.save()
@@ -105,6 +114,14 @@ export class ProjectIndex {
       ...(p.naming === 'auto' ? { name: opts.name || UNTITLED } : {}),
       ...(opts.changed === false ? {} : { updated: this.now().toISOString() }),
     }))
+  }
+
+  /** The relay's copy as this browser last saved or opened it (undefined: none). Not an edit: `updated` stays. */
+  async setServer(id: string, server: ServerMark | undefined): Promise<void> {
+    await this.change(id, (p) => {
+      const { server: _old, ...rest } = p
+      return server ? { ...rest, server } : rest
+    })
   }
 
   async remove(id: string): Promise<void> {

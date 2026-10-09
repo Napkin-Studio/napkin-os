@@ -6,6 +6,7 @@ import { initialAppUi, splitUi, type AppUi } from './doc/ui'
 import { OwnKeysStore } from './keys/ownKeys'
 import { migrateSingleProject } from './projects/migrate'
 import { ProjectIndex } from './projects/projectIndex'
+import { ProjectServer } from './projects/server'
 import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
 import { browserStorage } from './projects/storage'
@@ -44,16 +45,18 @@ async function boot() {
   }
   if (app.get().session) relay.useToken(app.get().session!.token)
   if (relay.kind === 'mock' && !app.get().session) {
-    const session = await relay.session({ eventCode: 'MOCK', handle: 'guest' })
+    const session = await relay.session({ eventCode: 'MOCK', team: 'mock', handle: 'guest' })
     app.update((u) => { u.session = session; u.sessionFor = here })
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null
   const ownKeys = new OwnKeysStore()
   relay.ownKeys = () => ownKeys.header()
 
-  // The organisers' copy of each project's .clan (POST /clan): not on the in-browser mock relay.
+  // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
+  // on Home and opened from any browser under the same name. Not on the in-browser mock relay.
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
-  const shell = new Shell({ relay, app, index, storage, remoteConfig, ownKeys, makeClan: browserClan, relayUrl: relay.kind === 'http' ? relayUrl : undefined })
+  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, token: () => app.get().session?.token ?? null }) : undefined
+  const shell = new Shell({ relay, app, index, storage, remoteConfig, ownKeys, makeClan: browserClan, server })
   if (app.get().session) await shell.start().catch((e) => console.error('could not open the last project', e))
 
   window.addEventListener('pagehide', () => {

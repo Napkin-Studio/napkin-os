@@ -1,0 +1,17 @@
+{
+  "projects": [
+    {
+      "id": "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8",
+      "name": "Maya finds the lamp",
+      "savedAt": "2026-10-10T14:05:12Z",
+      "bytes": 48213,
+      "etag": "9f2c1b7e4a3d5f6081726354a9b8c7d6e5f40312a1b2c3d4e5f60718293a4b5c"
+    },
+    {
+      "id": "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N9",
+      "savedAt": "2026-10-10T11:40:03Z",
+      "bytes": 20977,
+      "etag": "0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9"
+    }
+  ]
+}

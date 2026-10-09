@@ -30,11 +30,13 @@ import logging
 import math
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 import library
 import names
 import own_keys
+import projects
 from contracts import Contracts, api
 from director.base import Director
 from providers import Registry
@@ -93,14 +95,11 @@ CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
 # X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
 PROJECT_ID = re.compile(r"^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$")
-DEFAULT_WORKSPACE = "event"
 KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
-
-
-def workspace_of(codes: dict, code: str) -> str:
-    """The workspace an event code belongs to (EVENT_CODES "workspaces": {"CODE": "acme"})."""
-    mapped = {c.upper(): w for c, w in (codes.get("workspaces") or {}).items()}
-    return mapped.get(code, DEFAULT_WORKSPACE)
+# GET /clan/{project} answers with the bytes. A Lambda response is at most 6 MB once base64-encoded,
+# so a larger project is opened from an Export instead (features/personal-workspaces.clan).
+OPEN_MAX_BYTES = 4_300_000
+CANVAS_MAX_BYTES = 4_000_000
 SUBMITTING_STALE_S = 120       # a submit that never came back
 STITCH_BAD_CLIP = "bad_clip"   # stitch.py: a clip it could not read (the result names which)
 FETCH_LEASE_S = 90
@@ -117,6 +116,13 @@ def own_keys_unreadable(provider: str) -> str:
     return f"The relay can no longer read your {own_keys.NAMES.get(provider, provider)} key for this job. Try again."
 
 
+class Raw:
+    """A response that is not JSON (GET /clan/{project}: the .clan bytes), with its own headers."""
+
+    def __init__(self, data: bytes, mime: str, headers: dict | None = None):
+        self.data, self.mime, self.headers = data, mime, headers or {}
+
+
 class ApiError(Exception):
     def __init__(self, code: str, message: str, *, retryable: bool = False,
                  retry_after: int | None = None, status: int | None = None):
@@ -131,6 +137,19 @@ class ApiError(Exception):
         return {"error": err}
 
 
+def project_name(raw: str | None) -> str | None:
+    """X-Project-Name: the name Home shows, percent-encoded UTF-8. None when absent or unreadable."""
+    if not raw:
+        return None
+    from urllib.parse import unquote
+
+    try:
+        name = " ".join(unquote(raw, errors="strict").split())[:80]
+    except UnicodeDecodeError:
+        return None
+    return name or None
+
+
 def iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -139,8 +158,41 @@ def parse_iso(s: str) -> float:
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
 
 
-def participant_id(handle: str) -> str:
-    return "p_" + hashlib.sha256(handle.lower().encode()).hexdigest()[:10]
+def same_text(s: str) -> str:
+    """One spelling for a team or a name: Unicode NFKC, case folded, runs of spaces as one, trimmed.
+    'Blue Herons', 'blue  herons' and 'BLUE HERONS' are one team; 'ｔｅａｍ' is 'team'."""
+    return " ".join(unicodedata.normalize("NFKC", s).casefold().split())
+
+
+TEAM_MAX = 40
+
+
+def team_problem(team: str) -> str | None:
+    """Why a team name can't be used, or None. Anything a person might call their team is fine
+    (spaces, accents, any script, emoji, '&'), except '/' (it joins team and name in the workspace
+    key, so 'a/b' + 'c' would be 'a' + 'b/c') and control characters."""
+    t = same_text(team)
+    if len(t) < 2 or len(t) > TEAM_MAX:
+        return f"A team name is 2 to {TEAM_MAX} characters."
+    if "/" in t or any(unicodedata.category(c) in ("Cc", "Cf", "Cs") and c not in "\u200d\ufe0f" for c in t):
+        return "A team name can't have / or hidden characters in it."
+    return None
+
+
+def participant_id(team: str, handle: str) -> str:
+    """The team name and the name together, in one spelling (features/personal-workspaces.clan): two
+    Mayas in different teams are two workspaces. The team only makes the workspace unique; nothing is shared."""
+    return "p_" + hashlib.sha256(f"{same_text(team)}/{same_text(handle)}".encode()).hexdigest()[:10]
+
+
+def blocked_keys(team: str | None, handle: str) -> list[str]:
+    """What a block can name: the person (team/name), or a name in every team."""
+    return [handle] + ([f"{same_text(team)}/{same_text(handle)}"] if team else [])
+
+
+# The same team and name signed in from another browser this recently: probably two people who picked
+# the same name in one team (the one clash team names can't prevent). Sign-in says so; it never refuses.
+ELSEWHERE_S = 2 * 3600
 
 
 def asset_refs(node) -> list[dict]:
@@ -180,8 +232,8 @@ class Relay:
         self.cards = cards
 
     # ── HTTP ────────────────────────────────────────────────────────────────
-    def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | None, dict]:
-        """Returns (status, JSON body or None, log fields). Never raises."""
+    def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | Raw | None, dict]:
+        """Returns (status, body, log fields); the body is a JSON dict, Raw bytes, or None. Never raises."""
         start = self.clock()
         ctx: dict = {"method": method, "route": path}
         try:
@@ -195,7 +247,7 @@ class Relay:
             ctx["error"] = "internal"
         ctx["status"] = status
         ctx["latencyMs"] = int((self.clock() - start) * 1000)
-        if out and "state" in out:
+        if isinstance(out, dict) and "state" in out:
             ctx["state"] = out["state"]
             ctx.setdefault("jobId", out.get("jobId"))
             ctx.setdefault("op", out.get("op"))
@@ -243,8 +295,12 @@ class Relay:
             return 200, self.library_route(who, method, path, body, ctx)
         if method == "POST" and path == "/clan":
             self._not_blocked(who)
-            ctx["clanBytes"] = self.mirror_clan(who, headers, body)
-            return 204, None
+            saved = self.mirror_clan(who, headers, body, ctx)
+            return (200, saved) if saved else (204, None)
+        if method == "GET" and path == "/projects":
+            return 200, {"projects": [projects.public_row(r) for r in self._projects().list(who["pid"])]}
+        if path.startswith("/clan/"):
+            return self.project_route(who, method, path[len("/clan/"):], body, ctx)
         if method == "POST" and path == "/log":
             entry = self._json(body, "LogEntry")
             ctx.update({"clientLevel": entry["level"], "clientMessage": entry["message"][:500],
@@ -281,7 +337,7 @@ class Relay:
         return payload
 
     def _not_blocked(self, who: dict) -> None:
-        if self.store.is_blocked(who["h"]):
+        if any(self.store.is_blocked(k) for k in blocked_keys(who.get("t"), who["h"])):
             raise ApiError("blocked", "This handle has been blocked by the organisers.")
 
     def _own_job(self, who: dict, job_id: str) -> dict:
@@ -303,16 +359,37 @@ class Relay:
             role = "participant"
         else:
             raise ApiError("unauthorised", "That event code is not right.")
-        handle = req["handle"]
-        if self.store.is_blocked(handle):
+        handle, team = req["handle"], " ".join(req["team"].split())
+        problem = team_problem(team)
+        if problem:
+            raise ApiError("invalid_input", problem)
+        if any(self.store.is_blocked(k) for k in blocked_keys(team, handle)):
             raise ApiError("blocked", "This handle has been blocked by the organisers.")
-        pid = participant_id(handle)
+        pid = participant_id(team, handle)
         ctx["participant"] = pid
         exp = int(self.clock()) + SESSION_TTL_S
-        workspace = workspace_of(codes, code)
-        token = sign({"pid": pid, "h": handle, "r": role, "w": workspace, "exp": exp}, secrets["token_secret"])
-        return {"token": token, "participantId": pid, "handle": handle, "role": role, "workspace": workspace,
-                "expiresAt": iso(exp), "quotas": self.remaining(pid, role)}
+        # Each name is its own workspace (features/personal-workspaces.clan): the library and the
+        # saved projects are the participant's, whatever code they signed in with.
+        token = sign({"pid": pid, "h": handle, "t": team, "r": role, "exp": exp}, secrets["token_secret"])
+        out = {"token": token, "participantId": pid, "handle": handle, "team": team, "role": role, "workspace": pid,
+               "expiresAt": iso(exp), "quotas": self.remaining(pid, role), "projects": self._projects().count(pid)}
+        elsewhere = self._seen(pid, req.get("device"))
+        if elsewhere:
+            out["elsewhere"] = {"at": elsewhere}
+        return out
+
+    def _seen(self, pid: str, device: str | None) -> str | None:
+        """Note this browser as the workspace's latest; return when another browser signed in to it, if
+        that was within ELSEWHERE_S. A browser that sends no device id is neither noted nor warned."""
+        if not device:
+            return None
+        key = f"clan/{pid}/seen.json"
+        last = self.blobs.get_json(key) or {}
+        now = self.clock()
+        self.blobs.put(key, json.dumps({"device": device, "at": now}).encode(), "application/json")
+        if last.get("device") and last["device"] != device and now - float(last.get("at", 0)) < ELSEWHERE_S:
+            return iso(int(last["at"]))
+        return None
 
     def _day(self) -> str:
         return iso(self.clock())[:10]
@@ -333,8 +410,13 @@ class Relay:
             return {"exists": True, "url": self.blobs.public_url(made)}
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
 
-    def mirror_clan(self, who: dict, headers: dict, body: bytes | None) -> int:
-        """POST /clan: keep the participant's latest .clan (per project with X-Project-Id), plus a timestamped copy, for the organisers."""
+    def _projects(self) -> projects.Projects:
+        return projects.Projects(self.blobs, lambda: iso(self.clock()))
+
+    def mirror_clan(self, who: dict, headers: dict, body: bytes | None, ctx: dict) -> dict | None:
+        """POST /clan: keep the participant's .clan. With X-Project-Id it is a saved project
+        (projects.py): checked against If-Match, listed by GET /projects; answers ClanSaved.
+        Without it, the participant's own latest copy and a timestamped one, as before (None: 204)."""
         data = body or b""
         if len(data) > CLAN_MAX_BYTES:
             raise ApiError("invalid_input", "The document is larger than 5 MB.", status=413)
@@ -347,15 +429,54 @@ class Relay:
         project = headers.get("x-project-id")
         if project is not None and not PROJECT_ID.match(project):
             raise ApiError("invalid_input", "X-Project-Id is not a project id.")
-        base = f"clan/{who['pid']}/{project}" if project else f"clan/{who['pid']}"
-        stamp = iso(self.clock()).replace(":", "")
-        for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
-            self.blobs.put(key, data, CLAN_MIME)
-        return len(data)
+        ctx["clanBytes"] = len(data)
+        if not project:
+            base = f"clan/{who['pid']}"
+            stamp = iso(self.clock()).replace(":", "")
+            for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
+                self.blobs.put(key, data, CLAN_MIME)
+            return None
+        ctx["project"] = project
+        try:
+            row = self._projects().save(who["pid"], project, data, reason,
+                                        if_match=projects.parse_if_match(headers.get("if-match")),
+                                        name=project_name(headers.get("x-project-name")))
+        except projects.Stale as e:
+            raise ApiError("conflict", str(e)) from None
+        except projects.Busy as e:
+            raise ApiError("conflict", str(e), retryable=True) from None
+        return {"project": projects.public_row(row)}
+
+    def project_route(self, who: dict, method: str, rest: str, body: bytes | None, ctx: dict):
+        """GET /clan/{project}: the saved bytes (Raw, with their ETag). GET|PUT /clan/{project}/canvas."""
+        project, _, sub = rest.partition("/")
+        if not PROJECT_ID.match(project) or sub not in ("", "canvas"):
+            raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
+        ctx["project"] = project
+        store = self._projects()
+        try:
+            if method == "GET" and not sub:
+                data, row = store.read(who["pid"], project)
+                if len(data) > OPEN_MAX_BYTES:
+                    raise ApiError("invalid_input", "This project is too large to open from the server. "
+                                   "Export it in the browser that made it, and open the file here.", status=413)
+                return 200, Raw(data, CLAN_MIME, {"ETag": f'"{row["etag"]}"', "X-Saved-At": row["savedAt"]})
+            if method == "GET":
+                return 200, store.canvas(who["pid"], project)
+            if method == "PUT" and sub:
+                self._not_blocked(who)
+                if len(body or b"") > CANVAS_MAX_BYTES:
+                    raise ApiError("invalid_input", "The canvas is larger than 4 MB.", status=413)
+                canvas = self._json(body, "ProjectCanvas")
+                store.put_canvas(who["pid"], project, {**canvas, "savedAt": iso(self.clock())})
+                return 204, None
+        except projects.Missing as e:
+            raise ApiError("invalid_input", str(e), status=404) from None
+        raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
 
     # ── the workspace library ───────────────────────────────────────────────
     def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
-        workspace = who.get("w") or DEFAULT_WORKSPACE
+        workspace = who["pid"]  # each name is its own workspace
         lib = library.Library(self.blobs, lambda: iso(self.clock()))
         if method == "GET" and path == "/library":
             return lib.index(workspace)

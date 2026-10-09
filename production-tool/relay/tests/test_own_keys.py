@@ -135,7 +135,7 @@ def test_own_jobs_take_no_event_spend_quota_or_slot():
     assert job["cost"]["reserved"] == 0
     assert h.store.counters("spend").get("usd", 0) == 0
     assert h.store.counters("slots#fal#image").get("n", 0) == 0
-    assert h.call("POST", "/session", {"eventCode": "HACK", "handle": "alice"})[1]["quotas"]["image"] == 40
+    assert h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"})[1]["quotas"]["image"] == 40
     fakes.one("fal", FAL_KEY).succeed(job["requestId"], cost=0.5)
     h.clock.tick(5)
     done = h.poll(token, job["jobId"])

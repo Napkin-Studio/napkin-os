@@ -76,6 +76,23 @@ class MemoryStore:
     def is_blocked(self, handle: str) -> bool:
         return handle.lower() in self.blocked
 
+    # ── for scripts/prune_workspaces.py ──
+    def all_jobs(self) -> list[dict]:
+        with self._lock:
+            return [copy.deepcopy(j) for j in self._jobs.values()]
+
+    def delete_job(self, job_id: str) -> None:
+        with self._lock:
+            self._jobs.pop(job_id, None)
+
+    def counter_keys(self) -> list[str]:
+        with self._lock:
+            return sorted(self._counters)
+
+    def delete_counter(self, key: str) -> None:
+        with self._lock:
+            self._counters.pop(key, None)
+
 
 class DynamoStore:
     def __init__(self, jobs_table: str, quotas_table: str, blocked_table: str, client=None):
@@ -164,3 +181,27 @@ class DynamoStore:
     def is_blocked(self, handle: str) -> bool:
         r = self.ddb.get_item(TableName=self.blocked_table, Key={"handle": {"S": handle.lower()}})
         return "Item" in r
+
+    # ── for scripts/prune_workspaces.py (a person's credentials, not the relay's role) ──
+    def _scan(self, table: str, **kw) -> list[dict]:
+        out, start = [], None
+        while True:
+            if start:
+                kw["ExclusiveStartKey"] = start
+            r = self.ddb.scan(TableName=table, ConsistentRead=True, **kw)
+            out += r.get("Items", [])
+            start = r.get("LastEvaluatedKey")
+            if not start:
+                return out
+
+    def all_jobs(self) -> list[dict]:
+        return [json.loads(i["body"]["S"]) for i in self._scan(self.jobs_table)]
+
+    def delete_job(self, job_id: str) -> None:
+        self.ddb.delete_item(TableName=self.jobs_table, Key={"jobId": {"S": job_id}})
+
+    def counter_keys(self) -> list[str]:
+        return sorted(i["pk"]["S"] for i in self._scan(self.quotas_table, ProjectionExpression="pk"))
+
+    def delete_counter(self, key: str) -> None:
+        self.ddb.delete_item(TableName=self.quotas_table, Key={"pk": {"S": key}})

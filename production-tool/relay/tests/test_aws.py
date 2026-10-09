@@ -1,5 +1,6 @@
 """DynamoStore and S3Blobs against moto (no network), and the Lambda handler end to end."""
 
+import base64
 import json
 
 import boto3
@@ -135,7 +136,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
         r = handler.handler(event, None)
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
-    status, sess = http("POST", "/api/session", {"eventCode": "HACK", "handle": "alice"})
+    status, sess = http("POST", "/api/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"})
     assert status == 200
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5}, sess["token"])
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
@@ -145,3 +146,34 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     status, out = http("POST", "/api/jobs", req, sess["token"])
     assert status == 422 and out["error"]["code"] == "capability_missing"
     assert handler.handler({"source": "aws.events"}, None) == {"advanced": 0}
+
+    # A saved project comes back as its bytes (base64, as a Function URL wants them) with its ETag.
+    project, data = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", b"PK\x03\x04" + bytes(range(256))
+    headers = {"authorization": f"Bearer {sess['token']}", "x-project-id": project}
+    r = handler.handler({"rawPath": "/api/clan", "requestContext": {"http": {"method": "POST"}}, "headers": headers,
+                         "body": base64.b64encode(data).decode(), "isBase64Encoded": True}, None)
+    assert r["statusCode"] == 200
+    etag = json.loads(r["body"])["project"]["etag"]
+    status, listed = http("GET", "/api/projects", token=sess["token"])
+    assert status == 200 and [p["id"] for p in listed["projects"]] == [project]
+    r = handler.handler({"rawPath": f"/api/clan/{project}", "requestContext": {"http": {"method": "GET"}},
+                         "headers": headers}, None)
+    assert r["statusCode"] == 200 and r["isBase64Encoded"] is True
+    assert base64.b64decode(r["body"]) == data
+    assert r["headers"]["Content-Type"] == "application/vnd.clan+zip" and r["headers"]["ETag"] == f'"{etag}"'
+    status, again = http("POST", "/api/session", {"eventCode": "hack", "team": "blue", "handle": "Alice"})
+    assert again["projects"] == 1
+
+
+def test_s3_blobs_get_list_and_delete(aws):
+    _, s3 = aws
+    b = S3Blobs("napkin-test", "https://cdn.test", client=s3)
+    assert b.get("clan/p_x/none") is None
+    for k in ("clan/p_x/a.clan", "clan/p_x/b.clan", "clan/p_y/c.clan"):
+        b.put(k, b"data", "application/vnd.clan+zip")
+    rows = b.list_keys("clan/p_x/")
+    assert [r["key"] for r in rows] == ["clan/p_x/a.clan", "clan/p_x/b.clan"] and rows[0]["bytes"] == 4
+    assert rows[0]["modified"].endswith("Z")
+    assert b.get("clan/p_x/a.clan") == b"data"
+    b.delete(["clan/p_x/a.clan", "clan/p_x/b.clan"])
+    assert [r["key"] for r in b.list_keys("clan/")] == ["clan/p_y/c.clan"]

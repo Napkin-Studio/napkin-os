@@ -23,7 +23,7 @@ describe('HttpRelay and a refused session', () => {
     const relay = new HttpRelay('http://relay.test')
     const onUnauthorised = vi.fn()
     relay.onUnauthorised = onUnauthorised
-    await expect(relay.session({ eventCode: 'NOPE', handle: 'maya' })).rejects.toThrow()
+    await expect(relay.session({ eventCode: 'NOPE', team: 'blue', handle: 'maya' })).rejects.toThrow()
     expect(onUnauthorised).not.toHaveBeenCalled()
   })
 })

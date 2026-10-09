@@ -31,6 +31,8 @@ CASES = [
     ("examples/config.*.json", "config.schema.json", ""),
     ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest"),
     ("examples/job.response.json", "relay-api.schema.json", "#/$defs/Job"),
+    ("examples/session.response.json", "relay-api.schema.json", "#/$defs/SessionResponse"),
+    ("examples/projects.response.json", "relay-api.schema.json", "#/$defs/ProjectList"),
     ("examples/director.*.json", "director.schema.json", ""),
     ("examples/customdata.*.json", "customdata.schema.json", ""),
     ("examples/document.json", "document.schema.json", ""),

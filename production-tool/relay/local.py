@@ -36,13 +36,15 @@ from director import load_director
 from providers import load_registry
 from providers.base import Status, asset_url
 from runtime import CachedConfig, EnvSecrets
-from service import Relay
+from service import Raw, Relay
 from store import MemoryStore
 
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser (2026-10-07: X-Own-Keys on POST /jobs).
-CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys, X-Project-Id"
+CORS_ALLOW_HEADERS = "Authorization, Content-Type, If-Match, X-Clan-Reason, X-Own-Keys, X-Project-Id, X-Project-Name"
+# Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
+CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
 log = logging.getLogger("relay.local")
 
 
@@ -144,10 +146,13 @@ def serve(port: int, data_dir: Path) -> None:
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", CORS_ALLOW_HEADERS)
+            self.send_header("Access-Control-Expose-Headers", CORS_EXPOSE_HEADERS)
 
-        def _send(self, status: int, body: bytes = b"", ctype: str = "application/json", head=False):
+        def _send(self, status: int, body: bytes = b"", ctype: str = "application/json", head=False, headers=None):
             self.send_response(status)
             self._cors()
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
             if status != 204:
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(body)))
@@ -173,7 +178,7 @@ def serve(port: int, data_dir: Path) -> None:
 
         def do_PUT(self):
             if not self.path.startswith("/_upload/"):
-                return self._send(404)
+                return self._relay()  # PUT /clan/{project}/canvas
             key = self.path[len("/_upload/"):].split("?", 1)[0]
             data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
             blobs.put(key, data, self.headers.get("Content-Type", "application/octet-stream"))
@@ -189,6 +194,8 @@ def serve(port: int, data_dir: Path) -> None:
             body = self.rfile.read(n) if n else None
             status, out, ctx = relay.http(self.command, path, dict(self.headers), body)
             print(json.dumps({k: v for k, v in ctx.items() if v is not None}, default=str), flush=True)
+            if isinstance(out, Raw):
+                return self._send(status, out.data, out.mime, headers=out.headers)
             self._send(status, json.dumps(out).encode() if out is not None else b"")
 
         do_GET = do_POST = do_DELETE = _relay
@@ -206,7 +213,9 @@ def serve(port: int, data_dir: Path) -> None:
 
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"relay (local) on http://localhost:{port}  event codes: LOCAL, ORGLOCAL  data: {data_dir}", flush=True)
+    codes = relay.secrets()["event_codes"]
+    print(f"relay (local) on http://localhost:{port}  event codes: {', '.join(codes['participant'] + codes['organiser'])}"
+          f" (any case)  data: {data_dir}", flush=True)
     server.serve_forever()
 
 
