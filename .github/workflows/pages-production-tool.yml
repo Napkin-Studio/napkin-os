@@ -1,13 +1,12 @@
-# Unused example. To publish site/production-tool with GitHub Pages, copy this
-# file to .github/workflows/pages.yml and set Settings → Pages → Source to
-# "GitHub Actions". See site/production-tool/README.md first: on a private repo
-# Pages needs a paid plan, and the published site is public.
-name: Pages
+# The Production Tool's intro site (site/production-tool), published to GitHub Pages.
+# Static files only: no build. A repository has one Pages site, so pages.yml (the
+# serverless build, run by hand) would replace this one if it ran.
+name: "Pages: Production Tool site"
 
 on:
   push:
-    branches: [main]
-    paths: ['site/production-tool/**']
+    branches: [develop]
+    paths: ['site/production-tool/**', '.github/workflows/pages-production-tool.yml']
   workflow_dispatch:
 
 permissions:
