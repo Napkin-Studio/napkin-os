@@ -28,6 +28,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import cards
 from blobs import LocalBlobs
 from contracts import Contracts
 from contracts_dir import contracts_dir
@@ -128,9 +129,10 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         sheet = json.loads((contracts_dir() / "capabilities" / "mock.json").read_text())
         registry.register(StubMock(sheet), sheet)
         log.warning("providers/mock.py not found: using the local stub")
-    relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=load_director(),
+    director = load_director()
+    relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), secrets=EnvSecrets(), contracts=contracts,
-                  stitch=local_stitch(blobs))
+                  stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
     return relay, blobs
 
 
