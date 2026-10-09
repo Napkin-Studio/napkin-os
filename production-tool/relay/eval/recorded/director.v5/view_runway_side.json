@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"view\", \"needsUser\": null, \"rationale\": \"Runway has no angles, so the side view is asked in words. The source image is sent as current, and the character's back-view ref follows as a character ref.\", \"confidence\": 0.85, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"Side view of @current, the same character, full body, plain background.\", \"refs\": [{\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"current\", \"role\": \"current\"}, {\"sha256\": \"sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5\", \"name\": \"handyman_back\", \"role\": \"character\"}], \"ratio\": \"896:1152\", \"outputs\": 1}}"
+}

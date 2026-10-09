@@ -11,6 +11,9 @@ import type { DocJob, ProductionDocument, StaleMark, Target } from '../contracts
 import { describeRemoval } from './describe'
 import { createMergePatch, deepEqual } from './mergePatch'
 import type { DocumentStore } from './types'
+import { noteStep } from './undo'
+import { markNextStale, selectedFrame } from '../jobs/frames'
+import { refreshClipStale } from '../jobs/stale'
 
 type Doc = ProductionDocument
 export type ListName = 'shots' | 'frames' | 'takes' | 'reviews' | 'stale'
@@ -31,13 +34,6 @@ export interface Removal {
   modified: { list: ListName; id: string; before: unknown }[]
   /** Out-of-date marks this delete added. */
   staleAdded: StaleMark[]
-}
-
-/** Thrown when the last version of a frame or clip would go. */
-export class LastVersionError extends Error {
-  constructor(what: 'frame' | 'clip') {
-    super(`That is the only ${what} version left. Regenerate instead.`)
-  }
 }
 
 function blank(kind: RemovalKind, id: string, what: string): Removal {
@@ -82,11 +78,23 @@ function takeOutAbout(d: Doc, r: Removal, kind: Target['kind'], ids: Set<string>
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
+/** Re-check out-of-date marks after a delete (jobs/stale.ts), remembering what changed so Undo puts it back. */
+function restale(d: Doc, r: Removal, check: (d: Doc) => void) {
+  const before = structuredClone(d.stale ?? [])
+  check(d)
+  const after = d.stale ?? []
+  before.forEach((m, index) => {
+    if (!after.some((x) => deepEqual(x, m))) r.removed.push({ list: 'stale', index, value: m })
+  })
+  for (const m of after) if (!before.some((x) => deepEqual(x, m))) r.staleAdded.push(m)
+}
+
 /** A shot, with its frames, clips and the notes on them. The rest renumber. */
 export function removeShot(d: Doc, shotId: string): Removal {
   const shot = (d.shots ?? []).find((s) => s.id === shotId)
   if (!shot) throw new Error('That shot is already gone.')
   const r = blank('shot', shotId, `shot ${shot.order}`)
+  const at = (d.shots ?? []).indexOf(shot)
   const frameIds = new Set((d.frames ?? []).filter((f) => f.shot_id === shotId).map((f) => f.id))
   const takeIds = new Set((d.takes ?? []).filter((t) => t.shot_id === shotId).map((t) => t.id))
   takeOut(d, r, 'shots', (x: { id: string }) => x.id === shotId)
@@ -98,17 +106,26 @@ export function removeShot(d: Doc, shotId: string): Removal {
   ;(d.shots ?? []).forEach((s, i) => {
     if (s.order !== i + 1) modify(r, 'shots', s, (x) => { x.order = i + 1 })
   })
+  // The shot after it now follows another frame (the shot before it, or, when shot 1 went, a new
+  // shot 1 that sets the scene), so its frame is out of date. Drawn again, the mark goes with the old version.
+  const follower = (d.shots ?? [])[Math.max(at, 1)]
+  const followerFrame = follower && frameIds.size ? selectedFrame(d, follower.id) : undefined
+  if (followerFrame) {
+    const mark: StaleMark = { target: { kind: 'frame', id: followerFrame.id }, caused_by: { kind: 'shot', id: shotId }, reason: `Shot ${shot.order} was deleted`, marked_at: new Date().toISOString() }
+    d.stale = [...(d.stale ?? []), mark]
+    r.staleAdded.push(mark)
+  }
   r.note = `with ${plural(frameIds.size, 'frame')} and ${plural(takeIds.size, 'clip')}`
   r.ids = [shotId, ...frameIds, ...takeIds]
   return r
 }
 
-/** One frame version. Its shot moves to the version it came from (or the newest left). */
+/** One frame version. Its shot moves to the version it came from (or the newest left). The last one may go
+ *  too: the shot then has no frame, and "Update what follows" draws it again, then its clip. */
 export function removeFrame(d: Doc, frameId: string): Removal {
   const frame = (d.frames ?? []).find((f) => f.id === frameId)
   if (!frame) throw new Error('That frame is already gone.')
   const siblings = (d.frames ?? []).filter((f) => f.shot_id === frame.shot_id)
-  if (siblings.length <= 1) throw new LastVersionError('frame')
   const v = siblings.indexOf(frame) + 1
   const r = blank('frame', frameId, `frame ${frameId} (${shotNo(d, frame.shot_id)}, v${v})`)
   takeOut(d, r, 'frames', (x: { id: string }) => x.id === frameId)
@@ -119,21 +136,22 @@ export function removeFrame(d: Doc, frameId: string): Removal {
   if (frame.selected) {
     const left = (d.frames ?? []).filter((f) => f.shot_id === frame.shot_id)
     const next = left.find((f) => f.id === frame.parent) ?? left[left.length - 1]
-    modify(r, 'frames', next, (x) => { x.selected = true })
+    if (next) modify(r, 'frames', next, (x) => { x.selected = true })
     const shot = (d.shots ?? []).find((s) => s.id === frame.shot_id)
-    if (shot) modify(r, 'shots', shot, (x) => { x.storyboard_frame = next.asset })
+    if (shot) modify(r, 'shots', shot, (x) => { if (next) x.storyboard_frame = next.asset; else delete x.storyboard_frame })
   }
   takeOutAbout(d, r, 'frame', new Set([frameId]))
+  if (frame.selected) restale(d, r, (x) => { markNextStale(x, frame.shot_id); refreshClipStale(x, frame.shot_id) })
   r.ids = [frame.shot_id, frameId, frame.job_id]
   return r
 }
 
-/** One clip version, with the notes on it. Its shot moves to the clip it came from (or the newest left). */
+/** One clip version, with the notes on it. Its shot moves to the clip it came from (or the newest left). The last
+ *  one may go too: the shot then has no clip, and "Update what follows" makes it again. */
 export function removeTake(d: Doc, takeId: string): Removal {
   const take = (d.takes ?? []).find((t) => t.id === takeId)
   if (!take) throw new Error('That clip is already gone.')
   const siblings = (d.takes ?? []).filter((t) => t.shot_id === take.shot_id)
-  if (siblings.length <= 1) throw new LastVersionError('clip')
   const v = siblings.indexOf(take) + 1
   const r = blank('take', takeId, `clip ${takeId} (${shotNo(d, take.shot_id)}, v${v})`)
   takeOut(d, r, 'takes', (x: { id: string }) => x.id === takeId)
@@ -143,11 +161,12 @@ export function removeTake(d: Doc, takeId: string): Removal {
   if (take.selected) {
     const left = (d.takes ?? []).filter((t) => t.shot_id === take.shot_id)
     const next = left.find((t) => t.id === take.parent) ?? left[left.length - 1]
-    modify(r, 'takes', next, (x) => { x.selected = true })
+    if (next) modify(r, 'takes', next, (x) => { x.selected = true })
     const shot = (d.shots ?? []).find((s) => s.id === take.shot_id)
-    if (shot) modify(r, 'shots', shot, (x) => { x.selected_take = next.id })
+    if (shot) modify(r, 'shots', shot, (x) => { if (next) x.selected_take = next.id; else delete x.selected_take })
   }
   takeOutAbout(d, r, 'take', new Set([takeId]))
+  if (take.selected) restale(d, r, (x) => refreshClipStale(x, take.shot_id))
   r.ids = [take.shot_id, takeId, take.job_id]
   return r
 }
@@ -227,22 +246,24 @@ export function restore(d: Doc, r: Removal) {
 
 /** A delete or restore written to the store: one patch and one chain entry
  * (a record when the data does not change, e.g. an unpicked image). */
-async function commit(store: DocumentStore, change: (d: Doc) => void, r: Removal, restoring: boolean) {
+async function commit(store: DocumentStore, change: (d: Doc) => void, r: Removal, restoring: boolean, system = restoring) {
   const before = store.get()
   const draft = structuredClone(before)
   change(draft)
   const said = describeRemoval(r, restoring)
   const mp = createMergePatch(before, draft)
+  if (!system) noteStep(store, before, draft, said.action) // the canvas's deletes and restores are its own undo
   if (mp !== undefined) await store.patch(mp as object, { action: said.action, ...(said.rationale ? { rationale: said.rationale } : {}) })
   else await store.record?.(said.action, said.rationale)
 }
 
-/** Delete with `remove`, write it, and hand back the Removal for Undo. */
-export async function deleteFrom(store: DocumentStore, remove: (d: Doc) => Removal): Promise<Removal> {
+/** Delete with `remove`, write it, and hand back the Removal. A person's delete is an undo step
+ *  (doc/undo.ts); `system` (the canvas, whose Excalidraw undo puts it back) is not. */
+export async function deleteFrom(store: DocumentStore, remove: (d: Doc) => Removal, opts: { system?: boolean } = {}): Promise<Removal> {
   let r: Removal | undefined
-  // Run once against a copy first, so an error (the last version) leaves the store untouched.
+  // Run once against a copy first, so an error leaves the store untouched.
   r = remove(structuredClone(store.get()))
-  await commit(store, (d) => { r = remove(d) }, r, false)
+  await commit(store, (d) => { r = remove(d) }, r, false, !!opts.system)
   return r
 }
 

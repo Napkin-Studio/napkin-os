@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { boxPixels } from './mask'
 import { rectToRegion, regionAround, regionToRect } from './region'
 import { checkDurations, splitTarget, totalSeconds } from './shots'
 import { ID_PATTERN, newId } from './ulid'
@@ -54,5 +55,13 @@ describe('shot durations', () => {
 describe('ids', () => {
   it('are prefixed ULIDs per common.schema.json', () => {
     for (const p of ['job', 'ref', 'node', 'shot', 'frame', 'take', 'rev', 'pin'] as const) expect(newId(p)).toMatch(ID_PATTERN)
+  })
+})
+
+describe('box masks', () => {
+  it('covers the box in whole pixels, inside the image', () => {
+    expect(boxPixels({ x: 0.1, y: 0.25, w: 0.5, h: 0.5 }, 720, 1280)).toEqual({ x: 72, y: 320, w: 360, h: 640 })
+    expect(boxPixels({ x: 0.9, y: 0.9, w: 0.5, h: 0.5 }, 100, 100)).toEqual({ x: 90, y: 90, w: 10, h: 10 })
+    expect(boxPixels({ x: 0.5, y: 0.5, w: 0, h: 0 }, 100, 100)).toEqual({ x: 50, y: 50, w: 1, h: 1 })
   })
 })

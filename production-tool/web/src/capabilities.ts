@@ -35,6 +35,9 @@ export interface Controls {
   video: boolean
   /** Comments that change a region of a clip (sheet.video.regionEdit on clip_edit). */
   videoRegionEdit: boolean
+  /** A box on the paused clip, fixed in the shot's storyboard frame and the clip made again
+   *  (jobs/fix.ts). Needs frame region edits only, not video region support. */
+  fixInShot: boolean
   /** The "change the feel" box (sheet.video.feelEdit on clip_edit). */
   feelEdit: boolean
   /** The Adhere / Flex / Reimagine control (feelEdit === 'strength'). */
@@ -85,6 +88,7 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
     clickSelect: regionEditFrames && f.clickSelect && regionEdit!.segment,
     video,
     videoRegionEdit: video && f.videoRegionEdit && !!clipEdit && clipEdit.video.regionEdit !== 'none',
+    fixInShot: video && regionEditFrames,
     feelEdit,
     feelStrength: feelEdit && clipEdit!.video.feelEdit === 'strength',
     // stitch and shot_list run inside the relay (ffmpeg Lambda, director), not at a
@@ -104,12 +108,12 @@ export interface ModelOption extends ModelChoice {
   estimateUsd: number | null
 }
 
-/** What the menu offers for an op: each routed provider that is not fallback-only, in routing
- *  order, its own model first and then its alternates. The relay checks every pick again. */
+/** What the menu offers for an op: each routed provider in the order its jobs run (with own keys,
+ *  withOwnKeys puts the key providers first; Runway, the floor, is always there), its own model
+ *  first and then its alternates (features/runway-fallback.clan). The relay checks every pick again. */
 export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS): ModelOption[] {
   const out: ModelOption[] = []
   for (const provider of config.routing[op] ?? []) {
-    if (config.fallbackOnly?.includes(provider)) continue
     const spec = sheets[provider]?.ops[op]
     if (!spec) continue
     out.push({ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note, estimateUsd: spec.estimateUsd ?? null })

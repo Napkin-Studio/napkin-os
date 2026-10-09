@@ -2,6 +2,7 @@
 // output carries a big "MOCK" stamp so it can never pass for a real result.
 
 import type { JobRequest, Ratio, View } from '../contracts/types'
+import { END_CARD_S } from '../jobs/clips'
 import type { MockRenderer, RenderedOutput } from './mock'
 
 const ACCENT = '#FF4F2E'
@@ -307,6 +308,42 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
   })
 }
 
+/** The roll-up end card at rest: the studio mark beside "Napkin Studio", "Made with" above. */
+function endCard(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const s = Math.min(w, h)
+  const m = s * 0.096
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, w, h)
+  ctx.font = `600 ${s * 0.076}px Geist, sans-serif`
+  const word = ctx.measureText('Napkin Studio').width
+  const x = (w - (m + s * 0.026 + word)) / 2
+  const cy = h * 0.47 - (s * 0.15) / 2 + m / 2
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(x + m / 2, cy, m / 2, 0, Math.PI * 2)
+  ctx.clip()
+  ctx.translate(x + m / 2, cy)
+  ctx.rotate(-Math.PI / 4)
+  const quarters: [number, number, string][] = [[-1, -1, INK], [0, -1, ACCENT], [-1, 0, '#DADDE3'], [0, 0, '#8B919E']]
+  for (const [qx, qy, fill] of quarters) {
+    ctx.fillStyle = fill
+    ctx.fillRect(qx * m, qy * m, m, m)
+  }
+  ctx.restore()
+  ctx.fillStyle = INK
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  const tx = x + m + s * 0.026
+  ctx.fillText('Napkin Studio', tx, cy)
+  ctx.fillStyle = '#737987'
+  ctx.font = `500 ${s * 0.026}px Geist, sans-serif`
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('Made with', tx, cy - s * 0.049)
+  ctx.textAlign = 'center'
+  ctx.font = `500 ${Math.max(11, s * 0.024)}px Geist, sans-serif`
+  ctx.fillText('MOCK render', w / 2, h * 0.62)
+}
+
 async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const { w, h } = sizeFor(req.input.ratio ?? '9:16', 640)
   const clips: { v: HTMLVideoElement; dur: number }[] = []
@@ -314,9 +351,11 @@ async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutp
     const blob = await input(c.asset.sha256)
     if (!blob) continue
     const v = await loadVideo(blob)
-    clips.push({ v, dur: Number.isFinite(v.duration) && v.duration > 0 ? v.duration : CLIP_MAX_S })
+    const full = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : CLIP_MAX_S
+    // Like the real stitch (stitch.py): each clip is cut to its shot's length (trimS).
+    clips.push({ v, dur: c.trimS ? Math.min(full, c.trimS) : full })
   }
-  const total = clips.reduce((s, c) => s + c.dur, 0) + 1
+  const total = clips.reduce((s, c) => s + c.dur, 0) + END_CARD_S
   let current = -1
   const out = await record(w, h, total, async (ctx, t) => {
     let acc = 0
@@ -335,20 +374,8 @@ async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutp
       contain(ctx, clips[idx].v, 0, 0, w, h)
     } else {
       clips[current]?.v.pause()
-      // The end card.
-      ctx.fillStyle = '#14161B'
-      ctx.fillRect(0, 0, w, h)
-      ctx.fillStyle = ACCENT
-      ctx.beginPath()
-      ctx.arc(w / 2, h / 2 - 40, 26, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.fillStyle = '#fff'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.font = '700 22px Geist, sans-serif'
-      ctx.fillText('Made with Napkin Studio OS', w / 2, h / 2 + 16)
-      ctx.font = '500 15px Geist, sans-serif'
-      ctx.fillText('MOCK render', w / 2, h / 2 + 46)
+      // The end card, as its last frame (the real one is stitch.py's roll-up card).
+      endCard(ctx, w, h)
     }
   })
   clips.forEach((c) => URL.revokeObjectURL(c.v.src))

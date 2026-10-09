@@ -13,8 +13,10 @@ export function UndoChip({ label, onUndo, style, className = '' }: { label: stri
   )
 }
 
-export function InlineConfirm({ text, yes, no = 'Keep', onYes, onNo, busy = false, children }: {
+export function InlineConfirm({ text, yes, no = 'Keep', onYes, onNo, busy = false, tone = 'danger', children }: {
   text: ReactNode
+  /** danger for deletes; primary for a yes that makes things (Update what follows). */
+  tone?: 'danger' | 'primary'
   yes: string
   no?: string
   onYes: () => void
@@ -29,7 +31,7 @@ export function InlineConfirm({ text, yes, no = 'Keep', onYes, onNo, busy = fals
       <div className="row">
         <span className="spacer" />
         <button className="btn xs ghost" onClick={onNo} disabled={busy}>{no}</button>
-        <button className="btn xs danger" onClick={onYes} disabled={busy} autoFocus>{yes}</button>
+        <button className={`btn xs ${tone}`} onClick={onYes} disabled={busy} autoFocus>{yes}</button>
       </div>
     </div>
   )

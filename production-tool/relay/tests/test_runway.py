@@ -193,11 +193,10 @@ def test_tags_are_rewritten_in_ref_order(runway, server):
     assert [r["tag"] for r in server.body["referenceImages"]] == ["hero", "villain"]
 
 
-def test_a_tag_not_among_the_refs_is_invalid_input(runway, server):
-    with pytest.raises(ProviderError) as e:
-        runway.submit(job(prompt="@ghost walks"))
-    assert e.value.code == "invalid_input" and not e.value.retryable
-    assert server.requests == []
+def test_a_tag_not_among_the_refs_goes_as_words(runway, server):
+    # Was invalid_input; the director's check still refuses a name in none of the job's refs (2026-10-09).
+    runway.submit(job(prompt="@ghost walks"))
+    assert server.body["promptText"].startswith("ghost walks")
 
 
 def test_tag_syntax_comes_from_the_sheet(server):

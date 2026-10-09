@@ -1,0 +1,91 @@
+{
+  "op": "frame",
+  "provider": "runway",
+  "input": {
+    "shot": {
+      "id": "shot_01K6D6J0T5Q1AN7G2V8X3E4ZFH",
+      "order": 4,
+      "duration_s": 4,
+      "composition": "medium",
+      "action": "The mask rotates slowly on a pedestal. Smooth facets shine while rough, grainy ones swallow the light.",
+      "camera_move": "orbit",
+      "dialogue": "Smooth where it shines.",
+      "status": "locked",
+      "refs": [
+        "mask"
+      ]
+    },
+    "ratio": "9:16",
+    "script": "FACET. A walnut mask carved facet by facet. Every diamond starts as pressure. This one started as a tree. Smooth where it shines.",
+    "anchorFrame": {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png"
+    },
+    "previousFrame": {
+      "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mime": "image/png"
+    },
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000020VW",
+        "name": "mask_front",
+        "role": "prop",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "url": "https://hack.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "mime": "image/png"
+        }
+      },
+      {
+        "id": "ref_01K6XA6Z0000000000000021VW",
+        "name": "mask_angle",
+        "role": "prop",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "url": "https://hack.napkin.ie/in/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "mime": "image/png"
+        }
+      }
+    ]
+  },
+  "reply": {
+    "op": "frame",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3.1_flash",
+      "prompt": "A medium shot in the same dark workshop: the faceted walnut mask from @mask_angle and @mask_front, identical to the views, rotates slowly on a pedestal; smooth facets shine while rough, grainy ones swallow the light. Keep the setting, lighting, palette and style of @anchor. Continue from @previous: positions, props and light carry over; now the camera orbits the mask. Photoreal macro product lighting. Full-bleed cinematic image; no text, captions, subtitles, speech bubbles, borders or panels.",
+      "refs": [
+        {
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "name": "mask_angle",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "name": "mask_front",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "anchor",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "previous",
+          "role": "object"
+        }
+      ],
+      "ratio": "768:1344",
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "Three-quarter view for the lead view, front for identity, @anchor for the workshop, @previous for continuity; full-bleed, no text.",
+    "confidence": 0.8
+  },
+  "recorded": "Written to the director.v4 (ported from v3, 2026-10-08) no-text rules (not a live reply), 2026-10-07: the FACET ad's shot 4, whose frame came back as a storyboard panel with a 'Dialogue - Smooth where it shines.' box"
+}

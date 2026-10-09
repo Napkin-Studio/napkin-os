@@ -23,6 +23,7 @@ adapter builds.
 from __future__ import annotations
 
 import base64
+import io
 import os
 
 import httpx
@@ -57,10 +58,36 @@ class Resolver:
         if LOCAL_READER is not None and url.startswith("http://"):
             # Local dev only (relay/local.py): providers can't reach http://localhost,
             # so send the bytes inline. Runway takes images up to 5 MB as data URIs.
-            url = f"data:{mime};base64," + base64.b64encode(LOCAL_READER(url)).decode()
+            data, mime = inline_bytes(LOCAL_READER(url), mime)
+            url = f"data:{mime};base64," + base64.b64encode(data).decode()
         ref = types.AssetRef(sha256=sha256, url=url, mime=mime)
         self._seen[sha256] = ref
         return ref
+
+
+# A picture inline above this goes as a JPEG: nine 1.5 MB PNGs made a 19 MB request that
+# did not reach fal within its timeout (2026-10-09). Masks are small and stay exact PNGs.
+INLINE_MAX = 400_000
+
+
+def inline_bytes(data: bytes, mime: str) -> tuple[bytes, str]:
+    """The bytes to send inline: a large PNG or WebP as a JPEG (quality 90, on white where it is
+    transparent), anything else as it is."""
+    if len(data) <= INLINE_MAX or mime not in ("image/png", "image/webp"):
+        return data, mime
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(data))
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            flat = Image.new("RGB", img.size, (255, 255, 255))
+            flat.paste(img, mask=img.split()[-1])
+            img = flat
+        out = io.BytesIO()
+        img.convert("RGB").save(out, format="JPEG", quality=90)
+        return (out.getvalue(), "image/jpeg") if out.tell() < len(data) else (data, mime)
+    except Exception:  # not a picture PIL reads: send it as it is
+        return data, mime
 
 
 def _guess_mime(url: str) -> str:

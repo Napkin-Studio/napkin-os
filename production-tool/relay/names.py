@@ -25,6 +25,8 @@ import copy
 import re
 
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
+# Ops where a sheet with elements sends a character's pictures as one Kling element (director/base.py).
+ELEMENT_OPS = {"generate", "frame", "clip"}
 # A mention: @ then key_variant (refName) or a bare key, not inside a word or an address.
 MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
 MAX = 16
@@ -92,6 +94,57 @@ def _rewrite(text: str, by_name: dict[str, str]) -> str:
             raise UnknownName(f"@{m.group(1)} is not one of the images this step was given.")
         return "@" + by_name[name] + m.group(1)[len(name):]
     return MENTION.sub(sub, text)
+
+
+def _named(payload: dict) -> set[str]:
+    """Every key_variant the job names outright: in the shot's refs, its words or the instruction."""
+    shot = payload.get("shot") or {}
+    words = [payload.get("text") or "", shot.get("action") or "", shot.get("dialogue") or ""]
+    named = {n for n in shot.get("refs") or [] if "_" in n}
+    named |= {m for w in words for m in MENTION.findall(w) if "_" in m}
+    return named
+
+
+def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str]]:
+    """The job input with its character refs cut to what `sheet` takes (refs.maxCharacter, refs.max),
+    and the names it dropped (features/harness-refusals.clan).
+
+    A bare key (`@uberto`) brings its front and up to 3 more views, so two whole characters can be 8
+    character refs where fal and Runway take 5. Only views the job does not name outright are dropped,
+    last first: a front stays (a bare key stands for it), and so does any picture named in the shot's
+    refs or its words. When that is not enough the input goes as it is and the sheet check refuses it.
+    """
+    limits = (sheet or {}).get("refs") or {}
+    refs = payload.get("refs") or []
+    if op == "shot_list" or not refs or not limits:
+        return payload, []
+    # anchorFrame, previousFrame and a region edit's image go as refs too (director.v4).
+    reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op == "region_edit")
+    # On a sheet with elements, a character's pictures go as one element, which refs.maxCharacter does
+    # not count (check_capabilities counts role "character"): cutting views there only breaks elements.
+    elements = bool(limits.get("element")) and op in ELEMENT_OPS
+    max_char = len(refs) if elements else limits.get("maxCharacter", len(refs))
+    max_all = max(limits.get("max", len(refs) + reserved) - reserved, 0)
+    named = _named(payload)
+    kept = list(refs)
+    dropped: list[str] = []
+
+    def over() -> bool:
+        return sum(r.get("role") == "character" for r in kept) > max_char or len(kept) > max_all
+
+    for r in reversed(refs):
+        if not over():
+            break
+        name = r.get("name") or ""
+        if "_" not in name or name.endswith("_front") or name in named:
+            continue
+        if r.get("role") != "character" and len(kept) <= max_all:
+            continue
+        kept.remove(r)
+        dropped.append(name)
+    if not dropped:
+        return payload, []
+    return {**payload, "refs": kept}, dropped
 
 
 def to_wire(op: str, payload: dict) -> dict:

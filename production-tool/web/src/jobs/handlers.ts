@@ -6,6 +6,7 @@ import type { Job, ProductionDocument } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { newId } from '../lib/ulid'
 import { markNextStale } from './frames'
+import { refreshClipStale } from './stale'
 
 export function applyShotList(d: ProductionDocument, job: Job, ctx: Extract<JobCtx, { for: 'shot_list' }>) {
   const shots = (job.shots ?? []).map((s, i) => ({ ...s, order: i + 1, status: 'planned' as const }))
@@ -38,6 +39,7 @@ export function applyFrame(d: ProductionDocument, job: Job, ctx: Extract<JobCtx,
     if (shot.status === 'locked') shot.status = 'needs_review'
   }
   markNextStale(d, ctx.shotId)
+  refreshClipStale(d, ctx.shotId)
 }
 
 export function applyTake(d: ProductionDocument, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>) {
@@ -60,6 +62,8 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: Extract<JobCtx, 
   d.takes.push(take)
   const shot = d.shots?.find((s) => s.id === ctx.shotId)
   if (shot) shot.selected_take = take.id
+  // A clip made from a frame that has since changed lands out of date; one from the frame selected now lifts the mark.
+  refreshClipStale(d, ctx.shotId)
   for (const r of d.reviews ?? []) {
     if (ctx.reviewIds?.includes(r.id)) {
       r.resolved = true

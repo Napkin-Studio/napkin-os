@@ -53,8 +53,8 @@ describe('capability gating', () => {
     expect(controlsFor(cfg).video).toBe(false)
     const c = controlsFor(CONFIGS.event)
     expect(c.stitch).toBe(true) // relay-internal: gated by the flag only
-    expect(c.generate).toBe(true) // fal first
-    expect(c.clickSelect).toBe(true) // fal segments and the event flag is on
+    expect(c.generate).toBe(true) // Runway, the event's only provider since 2026-10-09 (features/runway-fallback.clan)
+    expect(c.clickSelect).toBe(false) // Runway does not segment; a fal key brings it back (keys/ownKeys.test.ts)
   })
 
   it('the Wednesday cuts (D9) do not render with the event flags', () => {
@@ -65,6 +65,18 @@ describe('capability gating', () => {
     expect(c.regionEditCanvas).toBe(false)
     expect(c.moreOptions).toBe(false)
     expect(c.generate && c.generateMax > 0 && c.views && c.storyboard && c.video && c.stitch).toBe(true)
+  })
+
+  it('Fix it in the shot shows with the event flags on every provider, whatever its video region support', () => {
+    // Decided 2026-10-07: the box on the paused clip edits the storyboard frame, not the video,
+    // so it is gated on frame region edits (regionEditFrames), not on videoRegionEdit.
+    for (const p of ['mock', 'runway', 'fal', 'heygen'] as const) {
+      const c = controlsFor(effectiveConfig('event', p))
+      expect(c.videoRegionEdit).toBe(false)
+      expect(c.fixInShot, p).toBe(true)
+    }
+    const off = { ...CONFIGS.event, flags: { ...CONFIGS.event.flags, regionEditFrames: false } }
+    expect(controlsFor(off).fixInShot).toBe(false)
   })
 
   it('reads only the first routed provider', () => {

@@ -84,6 +84,7 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
       const again = ctx && 'parentFrameId' in ctx && ctx.parentFrameId
       const how = ctx && ctx.for === 'frame' ? ctx.how : undefined
       const from = words(input.anchorFrame && 'kept the setting of frame 1', input.previousFrame && 'continued from the frame before')
+      if (how === 'update') return { action: `drew ${shotNo(after, shotId)}'s frame again`, rationale: words('updating what follows', from, ids) }
       if (again) return { action: `made a new version of ${shotNo(after, shotId)}'s frame`, rationale: words(clip(input.text), `from ${ctx.parentFrameId}`, from, ids) }
       if (how === 'first') return { action: 'drew frame 1', rationale: words((input.refs ?? []).map((r) => r.name && `@${r.name}`).filter(Boolean).join(', '), ids) }
       if (how === 'next') return { action: `drew the next frame (${shotNo(after, shotId)})`, rationale: words(clip(input.text), from, ids) }
@@ -92,15 +93,17 @@ function describeSubmit(before: ProductionDocument, after: ProductionDocument, c
       return { action: `drew the frame for ${shotNo(after, shotId)}`, rationale: words(clip(input.text), from, ids) }
     }
     case 'region_edit':
+      if (ctx?.for === 'frame' && ctx.fixReviewIds?.length) return { action: `fixed ${shotNo(after, shotId)}'s frame for a note on its clip`, rationale: words(clip(input.text), 'then a new clip from it', ids) }
       return { action: `edited part of ${shotNo(after, shotId)}'s frame`, rationale: words(clip(input.text), ids) }
     case 'clip': {
       const again = ctx && 'parentTakeId' in ctx && ctx.parentTakeId
+      if (ctx?.for === 'clip' && ctx.followRun) return { action: `made ${shotNo(after, shotId)}'s clip again`, rationale: words('updating what follows', again ? `from ${ctx.parentTakeId}` : undefined, ids) }
       return { action: again ? `made a new version of ${shotNo(after, shotId)}'s clip` : `made the clip for ${shotNo(after, shotId)}`, rationale: words(clip(input.text), again ? `from ${ctx.parentTakeId}` : undefined, ids) }
     }
     case 'clip_edit':
       return { action: `edited ${shotNo(after, shotId)}'s clip`, rationale: words(clip(input.text), input.feel?.strength ? `feel ${input.feel.strength}` : undefined, ctx && 'parentTakeId' in ctx ? ctx.parentTakeId : undefined, ids) }
     case 'stitch':
-      return { action: 'rendered the ad', rationale: words(`${(input.clips ?? []).length} clips`, ids) }
+      return { action: 'rendered the ad', rationale: words(`${(input.clips ?? []).length} clips`, ctx?.for === 'stitch' && ctx.followRun ? 'updating what follows' : undefined, ids) }
     default:
       return { action: `started ${job.op}`, rationale: words(ids) }
   }
@@ -135,6 +138,13 @@ function describeNames(before: ProductionDocument, after: ProductionDocument): D
   }
   if (!said.length) return null
   return { action: said.join('; '), rationale: words(tail(...ids)) }
+}
+
+/** The entry when a run of "Update what follows" ends: "updated what follows: 2 frames, 2 clips, ad". */
+export function describeFollow(run: { id: string; framesDone: string[]; clipsDone: string[]; adDone: boolean }, stopped = false): Described {
+  const n = (k: number, one: string) => k && `${k} ${one}${k === 1 ? '' : 's'}`
+  const what = [n(run.framesDone.length, 'frame'), n(run.clipsDone.length, 'clip'), run.adDone && 'ad'].filter(Boolean).join(', ') || 'nothing'
+  return { action: `${stopped ? 'stopped updating what follows after' : 'updated what follows:'} ${what}`, rationale: words(tail(...run.framesDone, ...run.clipsDone, run.id)) }
 }
 
 /** The entry for a delete ("deleted frame frame_… (shot 2, v1)") or its undo ("restored …"). */

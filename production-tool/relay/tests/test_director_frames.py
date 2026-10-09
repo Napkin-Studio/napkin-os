@@ -49,10 +49,13 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
     return res, asked, wire
 
 
-def test_v4_is_the_default_and_the_configs_name_it():
-    assert PROMPT_VERSION == "director.v4"
+def test_v5_is_the_default_and_the_configs_name_it():
+    # director.v5 per click on Sonnet (features/director-v5.clan); the shot list still runs on v4's prompt.
+    assert PROMPT_VERSION == "director.v5"
     for name in ("config.testing.json", "config.event.json"):
-        assert json.loads((EXAMPLES / name).read_text())["director"]["promptVersion"] == "director.v4"
+        director = json.loads((EXAMPLES / name).read_text())["director"]
+        assert director["promptVersion"] == "director.v5"
+        assert director["perClickModel"] == "eu.anthropic.claude-sonnet-5-5"
 
 
 def test_v4_carries_the_frame_rules():
@@ -68,7 +71,7 @@ def test_v4_carries_the_frame_rules():
         "A character must be identical to its refs",
         "`anchor` and `previous` are `object`",
         "neutral standing pose", "plain light background", "Never add a background scene",
-        "Keep the seed", "0.25", "role `current`", "`audio` to false", "input.answer",
+        "Keep the seed", "whatever the region's size", "role `current`", "`audio` to false", "input.answer",
     ):
         assert rule in v4, rule
 
@@ -121,3 +124,81 @@ def test_passthrough_sends_previous_then_anchor_and_one_picture_once():
     out = PassthroughDirector().direct({"jobId": "job_x", "op": "frame", "input": same}, load_sheet("runway"))
     assert [r["name"] for r in out["providerJob"]["refs"]].count("previous") == 1
     assert "anchor" not in [r["name"] for r in out["providerJob"]["refs"]]
+
+
+# ── No text in frames (decided 2026-10-07, the FACET ad) ────────────────────────────────────
+# Shot 4's frame came back as a storyboard-sheet panel with a "Dialogue - Smooth where it shines."
+# caption box, and every clip made from it kept the card. Dialogue is voice-over: it never reaches
+# the model for a frame or a clip, and the prompt asks for a full-bleed image with no text.
+
+def test_v4_draws_only_the_scripts_on_screen_text_and_never_a_storyboard_sheet():
+    # Owner decision 2026-10-07: text only when the script asks for it on screen (carried in the
+    # shot's action as On screen: "..."), drawn exactly; spoken lines never; storyboard layout never.
+    v4 = (PROMPTS / "director.v4.md").read_text()
+    for rule in (
+        "one full-bleed cinematic image",
+        "Never, in any case, a storyboard sheet or a panel on a page",
+        "no caption boxes, no \"Dialogue:\"",
+        "no panel borders or frames-within-frames",
+        "On-screen text only when asked",
+        "Draw exactly that text, spelled and cased exactly as quoted",
+        "When neither asks for text, there is none",
+        "Full-bleed cinematic image; no text, captions, subtitles, speech bubbles, borders or panels.",
+        "Dialogue is never drawn",
+        "Lines in `input.script` that are spoken are not on-screen text either",
+        "No text, captions, subtitles or speech bubbles.",  # clips
+        "the region is filled with the scene continuing behind it",  # "remove this card"
+        "write it into that shot's `action` in quotes, exactly as the script spells it: `On screen: \"FACET\"`",
+        "never invent on-screen text",
+    ):
+        assert rule in v4, rule
+
+
+def test_on_screen_text_in_the_action_is_asked_for_exactly():
+    f = fixture("frame_runway_on_screen")
+    assert f["input"]["shot"]["action"].endswith('On screen: "FACET"')
+    res, asked, _ = direct("frame_runway_on_screen")
+    assert asked["input"]["shot"]["action"] == f["input"]["shot"]["action"]  # the action reaches the model whole
+    prompt = res.output["providerJob"]["prompt"]
+    assert 'The text "FACET" appears exactly as written' in prompt
+    assert prompt.endswith("no other text, no captions, speech bubbles, borders or panels.")
+
+
+def test_the_shot_list_moves_script_supers_into_the_action_and_keeps_spoken_lines_as_dialogue():
+    f = fixture("shot_list_on_screen")
+    wire = FakeWire(f["reply"])
+    d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
+                 prompt_version="director.v4")
+    res = d.run("shot_list", copy.deepcopy(f["input"]))
+    shots = res.output["shots"]
+    assert shots[-1]["action"].endswith('On screen: "FACET"')
+    assert shots[0]["dialogue"] == "Every diamond starts as pressure."
+    assert not any("On screen" in s["action"] for s in shots[:-1])  # nothing invented, spoken lines not on screen
+
+
+def test_a_shot_with_dialogue_never_shows_the_model_its_words():
+    f = fixture("frame_runway_dialogue")
+    assert f["input"]["shot"]["dialogue"] == "Smooth where it shines."  # an older page still sends it
+    res, asked, wire = direct("frame_runway_dialogue")
+    assert "dialogue" not in asked["input"]["shot"]
+    assert '"dialogue"' not in wire.calls[0]["turns"][0]["text"]  # (the script may still hold the words; the prompt rules cover it)
+    assert asked["input"]["shot"]["action"] == f["input"]["shot"]["action"]  # the rest of the shot goes
+    job = res.output["providerJob"]
+    # Only dialogue, no On screen text: the prompt forbids all text.
+    assert job["prompt"].endswith("Full-bleed cinematic image; no text, captions, subtitles, speech bubbles, borders or panels.")
+    assert "Smooth where it shines" not in job["prompt"]
+
+
+def test_clip_requests_lose_the_dialogue_too_but_shot_lists_keep_it():
+    f = fixture("clip_runway")
+    payload = copy.deepcopy(f["input"])
+    payload["shot"]["dialogue"] = "Every diamond starts as pressure."
+    wire = FakeWire(f["reply"])
+    d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), PROMPTS, {"runway": load_sheet("runway")},
+                 prompt_version="director.v4")
+    d.run("clip", payload, "runway")
+    assert "Every diamond" not in wire.calls[0]["turns"][0]["text"]
+    assert payload["shot"]["dialogue"] == "Every diamond starts as pressure."  # the caller's copy is untouched
+    from director.director import _without_dialogue
+    shot_list = {"script": "x", "targetS": 10, "shot": {"dialogue": "kept"}}
+    assert _without_dialogue("shot_list", shot_list) is shot_list

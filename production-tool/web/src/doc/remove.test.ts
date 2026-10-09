@@ -17,7 +17,8 @@ import { HttpRelay } from '../relay/http'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { cancelText, mayStillCharge } from '../ui/cancel'
 import { ClanBackedStore } from './clan'
-import { deleteFrom, LastVersionError, markStale, removeFrame, removeNote, removeShot, removeTake, restoreTo, shotDeleteText } from './remove'
+import { planFollow } from '../jobs/follow'
+import { deleteFrom, markStale, removeFrame, removeNote, removeShot, removeTake, restoreTo, shotDeleteText } from './remove'
 import { emptyDocument, SnapshotStore, updateDoc } from './store'
 import { initialUi, type UiState } from './ui'
 
@@ -107,13 +108,17 @@ describe('delete and undo, in the .clan', () => {
     expect(e.map((x) => x.action)).toEqual([`deleted frame ${f2.id} (shot 1, v2)`, `restored frame ${f2.id} (shot 1, v2)`])
   })
 
-  it('the last version cannot be deleted', async () => {
+  it('the last version may go: the shot has no frame, Update what follows draws it again, Undo puts it back', async () => {
     const { d, f3 } = fixture()
     const s = await store(d)
     const before = plain(s.get())
-    await expect(deleteFrom(s, (doc) => removeFrame(doc, f3.id))).rejects.toBeInstanceOf(LastVersionError)
+    const r = await deleteFrom(s, (doc) => removeFrame(doc, f3.id))
+    const after = s.get()
+    expect(after.frames!.some((f) => f.id === f3.id)).toBe(false)
+    expect(after.shots!.find((x) => x.id === f3.shot_id)!.storyboard_frame).toBeUndefined()
+    expect(planFollow(after).frames).toContain(f3.shot_id)
+    await restoreTo(s, r)
     expect(plain(s.get())).toEqual(before)
-    expect(await entries(s)).toHaveLength(0)
   })
 
   it('a shot takes its frames, clips and their notes with it; the rest renumber; Undo restores', async () => {
@@ -140,7 +145,7 @@ describe('delete and undo, in the .clan', () => {
     expect((await entries(s)).map((x) => x.action)).toEqual(['deleted shot 1', 'restored shot 1'])
   })
 
-  it('a clip version: its notes go, the shot falls back to its parent clip; the last one stays', async () => {
+  it('a clip version: its notes go, the shot falls back to its parent clip; the last one may go too', async () => {
     const { d, s1, t1, t2, note } = fixture()
     const s = await store(d)
     const before = plain(s.get())
@@ -150,10 +155,14 @@ describe('delete and undo, in the .clan', () => {
     expect(after.takes![0].selected).toBe(true)
     expect(after.shots!.find((x) => x.id === s1.id)!.selected_take).toBe(t1.id)
     expect(after.reviews!.find((x) => x.id === note.id)).toBeUndefined()
-    await expect(deleteFrom(s, (doc) => removeTake(doc, t1.id))).rejects.toBeInstanceOf(LastVersionError)
+    const last = await deleteFrom(s, (doc) => removeTake(doc, t1.id)) // the last clip may go too
+    expect(s.get().takes).toEqual([])
+    expect(s.get().shots!.find((x) => x.id === s1.id)!.selected_take).toBeUndefined()
+    await restoreTo(s, last)
     await restoreTo(s, r)
     expect(plain(s.get())).toEqual(before)
-    expect((await entries(s)).map((x) => x.action)).toEqual([`deleted clip ${t2.id} (shot 1, v2)`, `restored clip ${t2.id} (shot 1, v2)`])
+    expect((await entries(s)).map((x) => x.action)).toEqual([
+      `deleted clip ${t2.id} (shot 1, v2)`, `deleted clip ${t1.id} (shot 1, v1)`, `restored clip ${t1.id} (shot 1, v1)`, `restored clip ${t2.id} (shot 1, v2)`])
   })
 
   it('a note (and with it, its timeline marker)', async () => {

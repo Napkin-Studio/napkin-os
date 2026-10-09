@@ -54,6 +54,8 @@ try {
     '// production-tool/contracts/document.schema.json (bundled) and app/index.html.',
     `export const APP_ID = 'production-tool'`,
     `export const APP_TEMPLATE_BASE64 =\n  '${bytes.toString('base64')}'`,
+    '// The bundled schema on its own: an older document is moved to it when it opens (store.ts).',
+    `export const APP_SCHEMA = ${JSON.stringify(bundle())}`,
     '',
   ].join('\n'))
   console.log(`wrote ${out} (${bytes.length} bytes of .clan)`)

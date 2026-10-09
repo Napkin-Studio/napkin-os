@@ -21,7 +21,7 @@ from referencing import Registry, Resource
 
 from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, IMAGE_OPS
-from providers.tags import UnknownTag, rewrite_tags
+from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
 from .base import fit_duration, view_angle
 from .model import ModelPort, Usage
@@ -31,7 +31,6 @@ PURPOSE = "director"
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
 SHA = re.compile(r"sha256:[0-9a-f]{64}")
 VIDEO_OPS = ("clip", "clip_edit")
-MASK_BELOW = 0.25  # a region under this share of the image is a masked inpaint where the sheet and input allow
 
 # What the provider's endpoint accepts that a schema or sheet cannot say (provider docs, checked 2026-10-06).
 # Runway's image ratios are pixel pairs, a different list per model (openapi: text_to_image).
@@ -55,6 +54,17 @@ NO_RATIO = {("runway", "clip_edit"), ("fal", "clip_edit"), ("fal", "clip"), ("he
 PROMPT_MAX = {("runway", "clip"): 1000, ("runway", "clip_edit"): 1000, ("runway", "image"): 5500,
               ("fal", "clip"): 2500, ("fal", "clip_edit"): 2500, ("fal", "image"): 2500}
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
+# director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
+# per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
+ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250}
+# Providers whose view sends its source picture alone: other refs are left out before the model sees them.
+VIEW_SOURCE_ONLY = {"fal"}
+# A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
+SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
+# The ops a sectioned prompt has no section for (shot_list) run on this whole prompt.
+FALLBACK_PROMPT = "director.v4"
+# Words that take one thing from a picture: "like @x", "@x's", "the dress of @x", "from @x", "as in @x".
+DONOR = re.compile(r"(?:\blike|\bfrom|\bas in|\bof)\s+@([a-z][a-z0-9_]{2,15})\b|@([a-z][a-z0-9_]{2,15})'s\b")
 
 
 
@@ -138,6 +148,65 @@ def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
     return min((r for r in allowed if shape(r) <= best + 0.04), key=area)
 
 
+def _lone_fronts_are_characters(job: dict) -> None:
+    """An element is a front and 1 to 3 angles: a front with no angle after it goes as a character
+    (2026-10-09: the eval's Kling clip; fal refuses an element without an angle at submit)."""
+    refs = job.get("refs") or []
+    for i, r in enumerate(refs):
+        if r["role"] == "element_front" and not (i + 1 < len(refs) and refs[i + 1]["role"] == "element_angle"):
+            r["role"] = "character"
+
+
+# "of anchor", "from the previous frame": the anchor and previous frames named without their @ (v5, 2026-10-09).
+_BARE_ANCHOR = re.compile(r"\b(of|from|in|as|with|like|match|matches|keep) (?:the )?(anchor|previous)(?: frame)?\b(?!-)")
+_CHARACTER_LINE = re.compile(r"The character is @([a-z][a-z0-9_]{2,15}), exactly as in that picture\.\s*")
+
+
+def _tag_anchors(job: dict) -> None:
+    """The anchor and previous frames, when sent, are named by their tags, so the model ties the words to them."""
+    sent = {r["name"] for r in job.get("refs") or []} & {"anchor", "previous"}
+    if sent:
+        job["prompt"] = _BARE_ANCHOR.sub(lambda m: f"{m.group(1)} @{m.group(2)}" if m.group(2) in sent else m.group(0), job["prompt"])
+
+
+def _one_character_line(job: dict) -> None:
+    """One line names every picture of the character, not one line per picture."""
+    names = _CHARACTER_LINE.findall(job["prompt"])
+    if len(names) < 2:
+        return
+    tags = ", ".join(f"@{n}" for n in names[:-1]) + f" and @{names[-1]}"
+    first = True
+
+    def once(m):
+        nonlocal first
+        if not first:
+            return ""
+        first = False
+        return f"The character is {tags}, exactly as in those pictures. "
+    job["prompt"] = _CHARACTER_LINE.sub(once, job["prompt"]).strip()
+
+
+def _donors_are_objects(job: dict, payload: dict) -> None:
+    """A picture the words take one thing from ("like @x", "@x's shirt") is an object, never a second
+    character (2026-10-09: 'like @handyman_front' merged two people). Only while another character stays."""
+    donors = {a or b for a, b in DONOR.findall(payload.get("text") or "")}
+    refs = job.get("refs") or []
+    for r in refs:
+        if r["name"] in donors and r["role"] == "character" and any(
+                o is not r and o["role"] in ("character", "element_front") for o in refs):
+            r["role"] = "object"
+
+
+def _within_budget(job: dict, op: str, payload: dict) -> None:
+    """What the director added beyond the participant's words stays near the op's budget."""
+    budget = ADD_BUDGET.get(op)
+    if budget is None:
+        return
+    added = len(job.get("prompt") or "") - len(payload.get("text") or "")
+    if added > budget * 1.5:
+        raise DirectorError(f"the director added {added} characters to the words; {op} allows about {budget}")
+
+
 class DirectorError(Exception):
     """The director's answer cannot be used: it breaks the routed sheet or the job's own facts."""
 
@@ -185,6 +254,16 @@ def _hashes(node) -> set:
     return set(SHA.findall(json.dumps(node)))
 
 
+def _without_dialogue(op: str, payload: dict) -> dict:
+    """A shot's dialogue is voice-over: a model told the words draws them (a "Dialogue - ..."
+    caption box in a frame, then in every clip made from it; decided 2026-10-07). The web app no
+    longer sends it for frames and clips; this keeps it from an older page or another client too."""
+    shot = payload.get("shot")
+    if op == "shot_list" or not isinstance(shot, dict) or "dialogue" not in shot:
+        return payload
+    return {**payload, "shot": {k: v for k, v in shot.items() if k != "dialogue"}}
+
+
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
                  per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
@@ -192,13 +271,33 @@ class Director:
         self.port = model_port
         self.sheets = sheets
         self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
+        self.prompt_dir = Path(prompt_dir)
         self.prompt_version = prompt_version
-        self.system = (Path(prompt_dir) / f"{prompt_version}.md").read_text()
+        self.system = (self.prompt_dir / f"{prompt_version}.md").read_text()
         schemas = load_schemas(contracts)
         self.schema = bundle(schemas)
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())
         self._validate = lambda name, pointer="": Draft202012Validator(
             {"$ref": BASE + name + pointer}, registry=registry, format_checker=FormatChecker())
+
+    @property
+    def sectioned(self) -> bool:
+        return bool(SECTION.search(self.system))
+
+    def system_for(self, op: str) -> str:
+        """The prompt for one op: all of an unsectioned file; else the shared part and this op's section,
+        or the fallback prompt for an op the file has no section for."""
+        parts = SECTION.split(self.system)
+        if len(parts) == 1:
+            return self.system
+        common, sections = parts[0], {}
+        for ops, body in zip(parts[1::2], parts[2::2]):
+            for o in ops.split():
+                sections[o] = body
+        if op not in sections:
+            return (self.prompt_dir / f"{FALLBACK_PROMPT}.md").read_text()
+        tail = "\n\nAnswer with the JSON only.\n"
+        return common.rstrip() + "\n\n" + sections[op].replace("Answer with the JSON only.", "").strip() + tail
 
     def run(self, op: str, payload: dict, provider_name: Optional[str] = None, job_id: str = "",
             extra_hashes: tuple = ()) -> DirectorResult:
@@ -213,17 +312,17 @@ class Director:
             if op not in sheet["ops"]:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
+        payload = _without_dialogue(op, payload)
+        if self.sectioned and op == "view" and provider_name in VIEW_SOURCE_ONLY and payload.get("refs"):
+            payload = {**payload, "refs": []}  # the view sends its source alone: nothing else to write about
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
             ask["sheet"] = sheet
-        if payload.get("region"):
-            r = payload["region"]
-            ask["regionAreaFraction"] = round(r["w"] * r["h"], 4)  # the 25% rule is arithmetic; not left to the model
 
         usage = Usage()
         t0 = time.monotonic()
-        output = self.port.call(PURPOSE, self.system, ask, self.schema, usage=usage,
+        output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
                                 attribution=job_id or op, model=model,
                                 max_tokens=6000 if op == "shot_list" else 3000)
         latency_ms = round((time.monotonic() - t0) * 1000)
@@ -265,6 +364,7 @@ class Director:
                 job["angle"] = angle
         _drop_unusable(job, op, sheet)
         _clip_edit_source(job, op, payload)
+        _lone_fronts_are_characters(job)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
@@ -287,7 +387,19 @@ class Director:
             self._check_keyframe(job["keyframe"])
         if "strength" in job and sheet["video"]["feelEdit"] != "strength":
             raise DirectorError(f"{provider_name} takes no edit strength")
+        if self.sectioned:
+            _tag_anchors(job)
+            _one_character_line(job)
+            _donors_are_objects(job, payload)
+            _within_budget(job, op, payload)
         self._check_provider_limits(op, sheet, job)
+        # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said
+        # in words. A name in none of the input, or @current/@anchor/@previous without their picture (the
+        # frame would lose its continuity), is still refused, and the relay makes the job as written.
+        given = {r.get("tag") for r in payload.get("refs") or [] if r.get("tag")}
+        job["prompt"] = TAG_IN_TEXT.sub(
+            lambda m: m.group(0) if m.group(1) in names or m.group(1) not in given else unsent_in_words(m.group(0), []),
+            job["prompt"])
         try:
             rewrite_tags(job["prompt"], names, sheet["tagSyntax"])
             check_capabilities(sheet, ProviderJob.from_director(op, job))
@@ -313,11 +425,22 @@ class Director:
         if not any(r["role"] == "current" and r["sha256"] == image for r in job["refs"]):
             raise DirectorError("a region edit needs the edited image as a ref with role current")
         region, mask = payload.get("region"), payload.get("mask")
-        masked = bool(region and mask and sheet["mask"] != "none" and region["w"] * region["h"] < MASK_BELOW)
+        # Masked wherever the sheet takes masks, whatever the box's size: fal's edit model cannot
+        # regenerate from a reference, so a large box sent without its mask could never run there
+        # (features/harness-refusals.clan; the 25% rule is gone).
+        masked = bool(region and mask and sheet["mask"] != "none")
         if masked and job.get("mask") != mask["sha256"]:
-            raise DirectorError(f"a region under {MASK_BELOW:.0%} of the image is a masked inpaint: send the mask")
+            raise DirectorError("a region with a mask on a sheet that takes masks is a masked inpaint: send the mask")
         if not masked and job.get("mask"):
-            raise DirectorError(f"this region is a reference-based regenerate (over {MASK_BELOW:.0%}, no mask or no mask support): send no mask")
+            raise DirectorError("this region is a reference-based regenerate (no mask, or the sheet takes none): send no mask")
+        if masked:
+            # Only the image goes with a mask (director.v4): an edit model copies other pictures into
+            # the mask, so the anchor and previous frames are dropped if the model sent them.
+            anchors = {a["sha256"] for a in (payload.get("anchorFrame"), payload.get("previousFrame")) if a}
+            dropped = {r["name"] for r in job["refs"] if r["role"] != "current" and r["sha256"] in anchors}
+            job["refs"] = [r for r in job["refs"] if r["role"] == "current" or r["sha256"] not in anchors]
+            for name in dropped:  # their @tags would name a picture the job no longer carries
+                job["prompt"] = re.sub(rf"@{re.escape(name)}\b", f"the {name} frame", job["prompt"])
 
     @staticmethod
     def _check_provider_limits(op: str, sheet: dict, job: dict) -> None:
@@ -327,8 +450,10 @@ class Director:
             raise DirectorError(f"{provider} {op} prompt is {len(job['prompt'])} characters, over its {limit}")
         ratio = job.get("ratio")
         if ratio and (provider, op) in NO_RATIO:
-            raise DirectorError(f"{provider} {op} takes no ratio")
-        if ratio and provider == "runway":
+            # The model often copies the ratio it was given; the frame or clip sets the shape here,
+            # so it is dropped rather than failing the job (2026-10-09: fal clips on Kling).
+            del job["ratio"]
+        elif ratio and provider == "runway":
             # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
             # size this model takes rather than failing the job (2026-10-07: storyboard frames).
             fitted = provider_ratio(provider, op, ratio, job.get("model"))

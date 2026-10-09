@@ -1,81 +1,79 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { App } from './App'
-import { ServicesContext, type Services } from './app/context'
-import type { CanvasSnapshot } from './canvas/controller'
-import { CANVAS_KEY } from './canvas/controller'
-import { idbPersister, SnapshotStore, updateDoc } from './doc/store'
-import { initialUi, type UiState } from './doc/ui'
-import { openDocument } from './doc/open'
-import { postClanMirror } from './doc/clan'
-import { applyFrame, applyShotList, applyStitch, applyTake } from './jobs/handlers'
-import { JobRunner } from './jobs/runner'
+import { idbPersister, SnapshotStore } from './doc/store'
+import { initialAppUi, splitUi, type AppUi } from './doc/ui'
 import { OwnKeysStore } from './keys/ownKeys'
-import { continueDrawing } from './jobs/frames'
-import { idbGet } from './lib/idb'
+import { migrateSingleProject } from './projects/migrate'
+import { ProjectIndex } from './projects/projectIndex'
+import { browserClan } from './projects/session'
+import { Shell } from './projects/shell'
+import { browserStorage } from './projects/storage'
 import { createRelay, relayId } from './relay'
+import { Root } from './Root'
 
 async function boot() {
   const relay = createRelay()
-  const ui = new SnapshotStore<UiState>(initialUi(), idbPersister<UiState>('ui'))
-  const hadUi = await ui.restore((v) => ({ ...initialUi(), ...v }))
-  if (!hadUi && relay.kind === 'http') ui.update((u) => { u.configChoice = 'remote'; u.providerChoice = 'config' })
+  const storage = browserStorage
 
-  const session = ui.get().session
-  const participant = session ? { id: session.participantId, handle: session.handle } : { id: 'p_local', handle: 'guest' }
-  const { doc, clan, storeNote } = await openDocument(participant, (jobId) => ui.get().jobCtx[jobId])
+  // The projects this browser holds (features/project-home.clan). The first load with projects
+  // makes the one project of before the first in the list; nothing of it is lost.
+  const index = new ProjectIndex(storage)
+  if (!(await index.load())) {
+    try {
+      await migrateSingleProject(storage, index, browserClan)
+    } catch (e) {
+      // Left where it was (only a finished copy clears the old place): the next load tries again.
+      console.error('could not carry the project over into the list', e)
+    }
+  }
+
+  // The app's part of the UI: who is signed in, the dev switch, which view. Each project keeps its own part.
+  const app = new SnapshotStore<AppUi>(initialAppUi(), idbPersister<AppUi>('ui'))
+  const hadUi = await app.restore((v) => ({ ...initialAppUi(), ...splitUi(v).app }))
+  if (!hadUi && relay.kind === 'http') app.update((u) => { u.configChoice = 'remote'; u.providerChoice = 'config' })
 
   const here = relayId()
-  const saved = ui.get().session
-  if (saved && (ui.get().sessionFor !== here || Date.parse(saved.expiresAt) <= Date.now())) {
-    ui.update((u) => { u.session = undefined; u.sessionFor = undefined })
+  const saved = app.get().session
+  if (saved && (app.get().sessionFor !== here || Date.parse(saved.expiresAt) <= Date.now())) {
+    app.update((u) => { u.session = undefined; u.sessionFor = undefined })
   }
   relay.onUnauthorised = () => {
     relay.useToken(null)
-    ui.update((u) => { u.session = undefined; u.sessionFor = undefined })
+    app.update((u) => { u.session = undefined; u.sessionFor = undefined })
   }
-  if (ui.get().session) relay.useToken(ui.get().session!.token)
-  if (relay.kind === 'mock' && !ui.get().session) {
+  if (app.get().session) relay.useToken(app.get().session!.token)
+  if (relay.kind === 'mock' && !app.get().session) {
     const session = await relay.session({ eventCode: 'MOCK', handle: 'guest' })
-    ui.update((u) => { u.session = session; u.sessionFor = here })
+    app.update((u) => { u.session = session; u.sessionFor = here })
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null
   const ownKeys = new OwnKeysStore()
   relay.ownKeys = () => ownKeys.header()
-  const runner = new JobRunner(relay, doc, ui)
-  runner.stage = () => doc.get().stage.current
-  runner.onComplete('shot_list', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'shot_list' && applyShotList(d, job, ctx), 'shot list'))
-  // A landed frame moves "Draw the rest" on to the next shot (jobs/frames.ts).
-  const frameDeps = { relay, doc, ui, runner }
-  runner.onComplete('frame', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'frame' && applyFrame(d, job, ctx), 'frame')
-    .then(() => continueDrawing(frameDeps)).catch((e) => console.warn('draw the rest stopped', e)))
-  runner.onComplete('clip', (job, ctx) => void updateDoc(doc, (d) => ctx.for === 'clip' && applyTake(d, job, ctx), 'take'))
-  runner.onComplete('stitch', (job) => void updateDoc(doc, (d) => applyStitch(d, job), 'ad'))
-  runner.resume()
-  void continueDrawing(frameDeps).catch((e) => console.warn('draw the rest stopped', e))
 
-  // The organisers' copy of the .clan: every 5 minutes when something changed,
-  // on each lock, and on export (POST /clan). Not on the in-browser mock relay.
+  // The organisers' copy of each project's .clan (POST /clan): not on the in-browser mock relay.
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
-  if (clan && relay.kind === 'http' && relayUrl) {
-    clan.clan.startMirror(postClanMirror({ relay: relayUrl, token: () => ui.get().session?.token ?? null }), { everyMs: 300_000 })
-  }
+  const shell = new Shell({ relay, app, index, storage, remoteConfig, ownKeys, makeClan: browserClan, relayUrl: relay.kind === 'http' ? relayUrl : undefined })
+  if (app.get().session) await shell.start().catch((e) => console.error('could not open the last project', e))
 
-  const canvas = (await idbGet<CanvasSnapshot>('kv', CANVAS_KEY)) ?? null
   window.addEventListener('pagehide', () => {
-    void doc.flush()
-    void ui.flush()
+    const s = shell.get().session?.services
+    if (s) {
+      for (const fn of s.project.beforeClose) void fn()
+      void (s.doc as { flush?: () => Promise<void> }).flush?.()
+      void s.ui.flush()
+    }
+    void app.flush()
   })
 
-  const services: Services = { relay, doc, ui, runner, remoteConfig, clan, storeNote, ownKeys }
   // For poking at in the dev server's console (and the e2e checks); not in a build.
-  if (import.meta.env.DEV) (window as unknown as { __pt: Services }).__pt = services
+  if (import.meta.env.DEV) {
+    (window as unknown as { __shell: Shell }).__shell = shell
+    Object.defineProperty(window, '__pt', { get: () => shell.get().session?.services, configurable: true })
+  }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <ServicesContext.Provider value={services}>
-        <App initialCanvas={canvas} />
-      </ServicesContext.Provider>
+      <Root shell={shell} />
     </StrictMode>,
   )
 }

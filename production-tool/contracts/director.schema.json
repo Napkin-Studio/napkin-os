@@ -310,6 +310,44 @@
         },
         "latencyMs": {
           "type": "integer"
+        },
+        "cards": {
+          "type": "array",
+          "maxItems": 14,
+          "description": "The character cards the director was given (features/character-cards.clan): for each ref it was told about, what one vision call saw in the picture. Absent when no ref had a card.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "type": "string",
+                "description": "The ref's wire tag in this job (relay/names.py)."
+              },
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "kind": {
+                "enum": [
+                  "character",
+                  "object",
+                  "setting",
+                  "style",
+                  "other"
+                ]
+              },
+              "card": {
+                "type": "string",
+                "maxLength": 800,
+                "description": "2-4 short factual lines: who or what, shape, colours, clothing or markings, style, pose or view."
+              }
+            },
+            "required": [
+              "tag",
+              "sha256",
+              "kind",
+              "card"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [

@@ -1,0 +1,74 @@
+{
+  "op": "frame",
+  "provider": "runway",
+  "input": {
+    "shot": {
+      "id": "shot_01K6E7K1V6R2BP8H3W9Y4F5AGJ",
+      "order": 5,
+      "duration_s": 4,
+      "composition": "close",
+      "action": "The mask comes to rest facing the viewer, light sliding across its facets. On screen: \"FACET\"",
+      "camera_move": "push_in",
+      "status": "locked",
+      "refs": [
+        "mask"
+      ]
+    },
+    "ratio": "9:16",
+    "script": "FACET. A walnut mask carved facet by facet. Every diamond starts as pressure. This one started as a tree. Smooth where it shines.",
+    "anchorFrame": {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png"
+    },
+    "previousFrame": {
+      "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mime": "image/png"
+    },
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000020VW",
+        "name": "mask_front",
+        "role": "prop",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "url": "https://hack.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "mime": "image/png"
+        }
+      }
+    ]
+  },
+  "reply": {
+    "op": "frame",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3.1_flash",
+      "prompt": "A close shot in the same dark workshop: the faceted walnut mask from @mask_front, identical to the view, comes to rest facing the viewer as light slides across its facets. The text \"FACET\" appears exactly as written, in clean capitals centred below the mask. Keep the setting, lighting, palette and style of @anchor. Continue from @previous: positions, props and light carry over; the camera pushes in. Photoreal product lighting. Full-bleed cinematic image; no other text, no captions, speech bubbles, borders or panels.",
+      "refs": [
+        {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "name": "mask_front",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "anchor",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "previous",
+          "role": "object"
+        }
+      ],
+      "ratio": "768:1344",
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "Front view for identity, @anchor for the workshop, @previous for continuity; the script's title card FACET is drawn exactly, nothing else written.",
+    "confidence": 0.8
+  },
+  "recorded": "Written to the director.v4 (ported from v3, 2026-10-08) on-screen text rules (not a live reply), 2026-10-07: the FACET ad's last shot with the script's title card"
+}

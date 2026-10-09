@@ -55,7 +55,7 @@ def costs(name: str, all_sheets: dict[str, dict] | None = None) -> dict:
         if provider is None or count == 0:
             continue
         spec = all_sheets[provider]["ops"][op]
-        best = spec if provider in cfg.get("fallbackOnly", []) else _best(spec)
+        best = _best(spec)  # every routed provider's models are offered, Runway's too
         each, best_each = spec.get("estimateUsd"), best.get("estimateUsd")
         if each is None:
             unknown.append(f"{op} on {provider}")

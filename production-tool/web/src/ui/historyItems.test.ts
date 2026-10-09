@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../doc/store'
 import { aboutItem, historyItems, kindOf, readable, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
+import { directorRecord, type DirectorCard } from '../../../clan-store/src/attribution'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
 const J1 = 'job_01K6XA7Q3M9V2D4R8T0B000001'
@@ -71,6 +72,29 @@ describe('History', () => {
     expect(html).toContain('pinned')
     expect(html).toContain('history-field')
     expect(html).toContain(readable(`cost $0.07 confirmed · 41 s · out ${SHA('b')}`))
+  })
+
+  it('shows what the director saw under its entry: the cards it was given', () => {
+    const job = {
+      id: J1, op: 'generate', state: 'completed', created_at: T(40), outputs: [SHA('b')],
+      agent: { model: 'claude-haiku-4-5', promptVersion: 'director.v4', rationale: 'The drawing sets the pose', output: {}, latencyMs: 2100 },
+    }
+    const cards: DirectorCard[] = [
+      { tag: 'hero_eyes', sha256: SHA('a'), kind: 'character', card: 'A round blue robot with one eye\nFlat 2D, thick outlines\nFront view' },
+      { tag: 'in_1', sha256: SHA('c'), kind: 'other', card: 'Grey feathers, close up' },
+    ]
+    const d = directorRecord(job, cards)!
+    const html = renderToStaticMarkup(createElement(HistoryList, { entries: [{ ...d, timestamp: T(41) }], handle: 'maya' }))
+    expect(html).toContain('<details class="history-saw"><summary>What the director saw</summary>')
+    expect(html).toContain('@hero_eyes')
+    expect(html).toContain('>A round blue robot with one eye<')
+    expect(html).toContain('>Flat 2D, thick outlines<')
+    expect(html).toContain('>Grey feathers, close up<')
+    // The cards are in the disclosure, not in the rationale line above it.
+    expect(html).toContain('>The drawing sets the pose · 2.1 s<')
+    // An entry with no cards has no disclosure.
+    const plain = renderToStaticMarkup(createElement(HistoryList, { entries: [{ ...directorRecord(job)!, timestamp: T(41) }], handle: 'maya' }))
+    expect(plain).not.toContain('What the director saw')
   })
 
   it('says so when nothing is about the item', () => {
