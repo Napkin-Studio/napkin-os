@@ -1,0 +1,35 @@
+# Unused example. To publish site/production-tool with GitHub Pages, copy this
+# file to .github/workflows/pages.yml and set Settings → Pages → Source to
+# "GitHub Actions". See site/production-tool/README.md first: on a private repo
+# Pages needs a paid plan, and the published site is public.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/production-tool/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/production-tool
+      - id: deployment
+        uses: actions/deploy-pages@v4
