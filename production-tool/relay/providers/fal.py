@@ -180,7 +180,8 @@ class FalProvider:
     def __init__(self, api_key: str, assets: AssetResolver, client: Optional[httpx.Client] = None,
                  sheet: Optional[dict] = None):
         self._key, self._assets = api_key, assets
-        self._client = client or httpx.Client(timeout=30)
+        # A long write: a frame with many refs is a large upload (inline on the local relay).
+        self._client = client or httpx.Client(timeout=httpx.Timeout(30, write=120))
         self._sheet = sheet or load_sheet("fal")
         self._chains: dict[str, dict] = {}
         self._completed: set[str] = set()  # requests whose status said COMPLETED: the next poll fetches the result

@@ -253,3 +253,25 @@ def test_deployed_urls_are_left_alone(monkeypatch):
     monkeypatch.setattr(_seam, "LOCAL_READER", None)
     base.set_job_context("generate", [{"sha256": sha, "url": url, "mime": "image/png"}])
     assert _seam.Resolver()(sha).url == url
+
+
+def test_a_large_inline_picture_goes_as_a_jpeg_and_a_mask_stays_exact():
+    # 2026-10-09: nine 1.5 MB PNGs inline made a 19 MB request that did not reach fal in time.
+    import io
+    import random
+    from PIL import Image
+    from providers._seam import INLINE_MAX, inline_bytes
+    rnd = random.Random(1)
+    noisy = Image.new("RGB", (900, 900))
+    noisy.putdata([(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256)) for _ in range(900 * 900)])
+    buf = io.BytesIO()
+    noisy.save(buf, format="PNG")
+    big = buf.getvalue()
+    assert len(big) > INLINE_MAX
+    data, mime = inline_bytes(big, "image/png")
+    assert mime == "image/jpeg" and len(data) < len(big)
+    assert Image.open(io.BytesIO(data)).size == (900, 900)  # same size: masks still match the source
+    mask = Image.new("L", (900, 900), 0)
+    buf = io.BytesIO()
+    mask.save(buf, format="PNG")
+    assert inline_bytes(buf.getvalue(), "image/png") == (buf.getvalue(), "image/png")
