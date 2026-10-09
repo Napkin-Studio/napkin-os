@@ -32,10 +32,10 @@ export interface MediaItem {
 /** A turnaround view on the canvas: its picture, and the key and view it was made for. */
 export interface ViewOf { key: Key; view: View }
 
-const UNSAFE = /[/\\:*?"<>|]/g
+const UNSAFE = /[/\\:*?"<>|.]/g
 const MAX_PROJECT = 40
 
-/** A project's name as the start of a file name: no / \ : * ? " < > | or control characters, spaces as one hyphen, at most 40 characters. */
+/** A project's name as the start of a file name: no / \ : * ? " < > | . or control characters (dots: the owner, 2026-10-09), spaces as one hyphen, at most 40 characters. */
 export function fileSafe(project: string | undefined): string {
   const printable = [...(project ?? '')].map((ch) => (ch.charCodeAt(0) > 0x1f && ch.charCodeAt(0) !== 0x7f ? ch : ' ')).join('')
   const s = printable.replace(UNSAFE, '').trim().replace(/\s+/g, '-').replace(/-{2,}/g, '-')

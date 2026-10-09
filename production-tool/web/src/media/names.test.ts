@@ -54,6 +54,8 @@ describe('media names (features/media-download.clan)', () => {
     expect(fileSafe('  a\\b*c<d>e|f\u0007g  ')).toBe('abcdef-g')
     expect(fileSafe('many    spaces\tand\nlines')).toBe('many-spaces-and-lines')
     expect(fileSafe('x'.repeat(80))).toHaveLength(40)
+    // A name taken from the script keeps no full stops (the extension is added after it).
+    expect(fileSafe('A razor on a marble sink. A hand picks it up...')).toBe('A-razor-on-a-marble-sink-A-hand-picks-it')
     expect(fileSafe(`${'y'.repeat(39)} z`)).toBe('y'.repeat(39))
     expect(fileSafe('..hidden..')).toBe('hidden')
     expect(fileSafe('???')).toBe('napkin')
