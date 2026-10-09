@@ -464,3 +464,30 @@ def test_a_reply_naming_another_model_runs_on_the_sheets():
     d, _ = make(reply)
     out = run("generate_runway", d)
     assert out.output["providerJob"]["model"] == load_sheet("runway")["ops"]["generate"]["model"]
+
+
+# --- character cards (features/character-cards.clan) --------------------------
+
+def test_v4_uses_cards_and_keeps_them_off_screen():
+    text = (PROMPTS / "director.v4.md").read_text()
+    for rule in (
+        "A ref may carry `card`",                     # what its picture shows, from one look
+        "describe characters and objects in words",   # identity holds where refs are dropped
+        "where a provider drops some refs",
+        "Never contradict a card",
+        "never put its text on screen",               # a card is for the director only
+    ):
+        assert rule in text, rule
+
+
+def test_the_ask_carries_each_refs_card():
+    """The relay adds refs[].card before names.to_wire; the director's ask carries it to the model."""
+    f = fixture("generate_runway")
+    d, wire = make(f["reply"])
+    wired = to_wire(f["op"], f["input"])
+    card = "A stick figure with a diamond head\nBlack pencil lines on white\nFront view, arms out"
+    wired["refs"][0]["card"] = card
+    d.run(f["op"], wired, f["provider"])
+    asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
+    assert asked["input"]["refs"][0]["card"] == card
+    assert all("card" not in r for r in asked["input"]["refs"][1:])
