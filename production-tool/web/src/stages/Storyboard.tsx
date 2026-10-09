@@ -26,7 +26,7 @@ import { ModelPick } from '../ui/ModelPick'
 import { choiceToSend, modelChoicesFor } from '../capabilities'
 import { madeWith, startingChoice } from '../ui/modelChoice'
 import { useUndo } from '../ui/useUndo'
-import { UpdateFollows } from '../ui/Follow'
+import { behindLabel } from '../ui/behind'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -255,7 +255,6 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
   const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
   // This frame made something after it out of date (the next frame, or this shot's clip).
-  const madeStale = !!current && (doc.stale ?? []).some((s) => s.caused_by.kind === 'frame' && s.caused_by.id === current.id)
   const prevShot = index > 0 ? (doc.shots ?? [])[index - 1] : undefined
   const prevDrawn = !prevShot || !!selectedFrame(doc, prevShot.id)
   const nextShot = (doc.shots ?? [])[index + 1]
@@ -308,7 +307,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         <b>Shot {index + 1}</b>
         <span className="faint">{label(shot.composition)} · {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
-        {staleMark && <span className="stale" title={staleMark.reason}>Out of date</span>}
+        {staleMark && <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
       <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
@@ -363,12 +362,11 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             <input className="input" placeholder={region ? 'Change what is in the box…' : 'Change this frame…'} maxLength={1000} value={text}
               onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !running && (text.trim() || !region) && regenerate()} />
             {/* Two rows on a narrow card: what else you can do, then the actions, so the main button is never cut off. */}
-            {(parent || !region || madeStale) && (
+            {(parent || !region) && (
               <div className="row wrap">
                 {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
                 {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
                 <span className="spacer" />
-                {madeStale && <UpdateFollows size="xs" progress={false} />}
               </div>
             )}
             <div className="row wrap" style={{ justifyContent: 'flex-end' }}>

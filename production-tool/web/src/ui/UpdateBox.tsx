@@ -12,10 +12,11 @@ import type { FollowItem } from '../doc/ui'
 import { cancelFollow, followState, makeAwaited, restAsTheyAre } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { frameStale, takeStale } from '../jobs/stale'
+import { AgentFigure } from './agents/AgentFigure'
+import { behindLabel } from './behind'
 import { useBlobUrl } from './hooks'
 import { JobNode } from './JobNode'
 import { ModelPick } from './ModelPick'
-import { price } from './modelChoice'
 
 const keyOf = (c: ModelChoice) => `${c.provider}:${c.model}`
 
@@ -52,9 +53,8 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
   const options = modelChoicesFor(item.kind, config)
   const sent = run.models?.[item.kind]
   const choice = pick ?? (sent && options.find((o) => keyOf(o) === keyOf(sent))) ?? options[0]
-  const cost = options.find((o) => choice && keyOf(o) === keyOf(choice))?.estimateUsd ?? null
   const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : takeStale(doc, shot.id)
-  const why = mark?.reason ?? (item.kind === 'frame' ? 'It has no frame' : 'It has no clip')
+  const why = mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'
   const job = jobId ? doc.jobs.find((j) => j.id === jobId) : undefined
   const making = !!job && !['completed', 'failed', 'cancelled'].includes(job.state)
   const n = Math.min(run.framesDone.length + run.clipsDone.length + (run.awaiting ? 1 : 0), run.total ?? 99)
@@ -73,8 +73,9 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
   }
 
   return (
-    <aside className="updatebox card" role="dialog" aria-label="Update what follows" onClick={(e) => e.stopPropagation()}>
+    <aside className="updatebox" role="dialog" aria-label="Update what follows" onClick={(e) => e.stopPropagation()}>
       <div className="row">
+        <AgentFigure agent="dex" state={making ? 'working' : 'idle'} size={30} decorative />
         <b>Update what follows</b>
         <span className="faint">{n} of {run.total ?? '…'}</span>
         <span className="spacer" />
@@ -84,7 +85,7 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
         {thumb ? <img src={thumb} alt="" /> : <span className="ub-empty" />}
         <div className="stack" style={{ gap: 2 }}>
           <b>Shot {shot.order} · {item.kind === 'frame' ? 'frame' : 'clip'}</b>
-          <span className="faint">{why}</span>
+          <span className="behind" title={mark?.reason}>{why}</span>
         </div>
       </div>
       {job && <div className="ub-job"><JobNode jobId={job.id} /></div>}
@@ -93,7 +94,7 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
           <textarea className="textarea" rows={2} maxLength={1000} value={words} onChange={(e) => setWords(e.target.value)}
             placeholder={`Add words for this ${item.kind} only (optional)`} />
           <ModelPick op={item.kind} value={choice} onChange={setPick} />
-          <div className="faint" style={{ fontSize: 12 }}>{price(cost)}{item.kind === 'frame' ? ' · the old frame is replaced once the new one lands' : ' · the old clip is replaced once the new one lands'}</div>
+          <div className="faint" style={{ fontSize: 12 }}>{item.kind === 'frame' ? 'The old frame is replaced once the new one lands.' : 'The old clip is replaced once the new one lands.'}</div>
           {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
           <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
             <button className="btn sm" disabled={busy} onClick={() => act(() => restAsTheyAre(deps, toSend()))}

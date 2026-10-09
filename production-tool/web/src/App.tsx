@@ -15,7 +15,7 @@ import { relayId } from './relay'
 import { startOver, START_OVER_TEXT } from './app/startOver'
 import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
-import { UpdateFollows } from './ui/Follow'
+import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { Float, MenuItem } from './ui/Float'
 import { JobTray } from './ui/JobTray'
@@ -69,6 +69,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>
         {stage === 'storyboard' && <div className="stage-pane"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane"><Video /></div>}
+        {stage !== 'character' && <RemakeBar />}
       </div>
       <UpdateBox />
       {!import.meta.env.PROD && <DevSwitch />}

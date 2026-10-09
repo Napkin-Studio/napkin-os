@@ -11,7 +11,7 @@ import { isRunning, jobAt } from '../jobs/select'
 import { makeClip as submitClip, renderAd } from '../jobs/clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { adStatus, takeStale } from '../jobs/stale'
-import { UpdateFollows } from '../ui/Follow'
+import { adBehindLabel, behindLabel } from '../ui/behind'
 import { rectToRegion } from '../lib/region'
 import { newId } from '../lib/ulid'
 import { fmtTime, useBlobUrl } from '../ui/hooks'
@@ -144,7 +144,6 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const ui = useUi()
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
   const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
-  const adNeeds = adStatus(doc).shotId === shot.id
   return (
     <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
       <div className="thumb">
@@ -155,7 +154,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         {(stale || open > 0) && (
           <div className="badges">
-            {stale && <span className="stale" title={stale.reason}>Out of date</span>}
+            {stale && <span className="behind" title={stale.reason}>{behindLabel(doc, stale)}</span>}
             {open > 0 && <span className="mockbadge" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
           </div>
         )}
@@ -183,7 +182,6 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
           {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
         </div>
-        {(stale || adNeeds) && <UpdateFollows size="xs" progress={false} />}
       </div>
     </div>
   )
@@ -390,7 +388,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
             <span className="faint" style={{ fontSize: 12 }}>Shot {cur.shot.order} · v{takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1}</span>
             {(() => {
               const st = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(cur.shot.id) ? undefined : takeStale(doc, cur.shot.id)
-              return st && st.target.id === cur.take.id ? <span className="stale" title={st.reason}>Out of date · {st.reason}</span> : null
+              return st && st.target.id === cur.take.id ? <span className="behind" title={st.reason}>{behindLabel(doc, st)}</span> : null
             })()}
           </div>
           <textarea className="textarea" rows={2} placeholder="Leave a note at this moment…" maxLength={1000} value={note}
@@ -512,15 +510,10 @@ function AdResult({ sha }: { sha: string }) {
         <h2>Your ad</h2>
         {len ? <span className="faint" style={{ fontSize: 12 }}>{Math.round(len * 10) / 10} s</span> : null}
         <span className="spacer" />
-        {status.stale && <span className="stale" title={status.reason}>Out of date</span>}
+        {status.stale && <span className="behind" title={status.reason}>{adBehindLabel(status.reason)}</span>}
         {showMock && asset?.origin === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
-      {status.stale && (
-        <div className="row wrap" style={{ gap: 8 }}>
-          <span className="faint" style={{ fontSize: 12 }}>{status.reason}.</span>
-          <UpdateFollows size="xs" progress={false} />
-        </div>
-      )}
+      {status.stale && <span className="faint" style={{ fontSize: 12 }}>{status.reason}. Remake it from the bar below.</span>}
       {url && <video src={url} controls playsInline style={{ width: '100%', borderRadius: 12, background: '#000', maxHeight: 360 }} />}
       {url && <a className="btn sm" href={url} download={`napkin-${doc.participant.handle}-${sha.slice(7, 15)}.${ext}`}>Download</a>}
     </div>
