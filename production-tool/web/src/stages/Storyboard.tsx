@@ -27,6 +27,7 @@ import { choiceToSend, modelChoicesFor } from '../capabilities'
 import { madeWith, startingChoice } from '../ui/modelChoice'
 import { useUndo } from '../ui/useUndo'
 import { behindLabel } from '../ui/behind'
+import { AgentFigure } from '../ui/agents/AgentFigure'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -295,91 +296,116 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   }
 
   const parent = current?.parent ? frames.find((f) => f.id === current.parent) : undefined
-  const tools: { id: MarkMode; label: string; show: boolean; title: string }[] = [
-    { id: 'box', label: '▭ Box', show: controls.regionEditFrames, title: 'Draw a box around what to change' },
-    { id: 'brush', label: '✎ Brush', show: controls.maskBrush, title: 'Paint over what to change' },
-    { id: 'click', label: '◎ Click', show: controls.clickSelect, title: 'Click the thing to change' },
+  const tools: { id: MarkMode; icon: string; label: string; show: boolean; title: string }[] = [
+    { id: 'box', icon: '▭', label: 'Box', show: controls.regionEditFrames, title: 'Box: draw a box around what to change' },
+    { id: 'brush', icon: '✎', label: 'Brush', show: controls.maskBrush, title: 'Brush: paint over what to change' },
+    { id: 'click', icon: '◎', label: 'Click', show: controls.clickSelect, title: 'Click: click the thing to change' },
   ]
+
+  const deleteVersion = async () => {
+    if (!current) return
+    setError(null)
+    try {
+      const r = await deleteFrom(docStore, (d) => removeFrame(d, current.id))
+      offerUndo({ label: `v${idx + 1} deleted`, undo: () => restoreTo(docStore, r) })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
 
   return (
     <div className="framecard" data-shot-card={shot.id}>
       <div className="head">
-        <b>Shot {index + 1}</b>
-        <span className="faint">{label(shot.composition)} · {label(shot.camera_move)} · {shot.duration_s}s</span>
+        <span className="num">{index + 1}</span>
+        <b>{label(shot.composition)}</b>
+        <span className="faint">· {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
         {staleMark && <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
-      <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
-        onRegion={setRegion} onStrokes={setStrokes}>
-        {jobId && (
-          <div style={{ position: 'absolute', inset: 0 }}>
-            <JobNode jobId={jobId} />
-          </div>
-        )}
-        {!current && !jobId && (
-          <div className="pending" style={{ animation: 'none', position: 'absolute', inset: 0 }}>
-            {ui.drawingRest && !prevDrawn ? (
-              <div className="faint">Waiting for shot {index}</div>
-            ) : prevDrawn ? (
-              <>
-                <div className="faint">No frame yet</div>
-                <button className="btn xs" onClick={onDraw} disabled={!doc.refs.length}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
-              </>
-            ) : (
-              <div className="faint">Draw shot {index} first</div>
-            )}
-          </div>
-        )}
-      </RegionImage>
-      {current && (
-        <>
-          <div className="tools">
+      <div className="framepic">
+        <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
+          onRegion={setRegion} onStrokes={setStrokes}>
+          {jobId && (
+            <div style={{ position: 'absolute', inset: 0 }}>
+              <JobNode jobId={jobId} />
+            </div>
+          )}
+          {!current && !jobId && (
+            <div className="pending idle" style={{ position: 'absolute', inset: 0 }}>
+              {ui.drawingRest && !prevDrawn ? (
+                <div className="faint">Waiting for shot {index}</div>
+              ) : prevDrawn ? (
+                <>
+                  <AgentFigure agent="dex" size={44} decorative />
+                  <div className="faint">No frame yet</div>
+                  <button className="btn xs" onClick={onDraw} disabled={!doc.refs.length}>{index === 0 ? 'Draw frame 1' : 'Draw this one'}</button>
+                </>
+              ) : (
+                <div className="faint">Draw shot {index} first</div>
+              )}
+            </div>
+          )}
+        </RegionImage>
+        {/* The picture's tools float on it: shown on hover and focus, and kept while marking. */}
+        {current && (
+          <div className={`hoverbar ${mode !== 'none' || region || strokes.length ? 'pinned' : ''}`} role="toolbar" aria-label={`Shot ${index + 1} frame tools`}>
             {tools.filter((t) => t.show).map((t) => (
-              <button key={t.id} className={`btn xs ${mode === t.id ? 'on' : ''}`} title={t.title} disabled={running} onClick={() => setMode(mode === t.id ? 'none' : t.id)}>{t.label}</button>
+              <button key={t.id} className={`btn xs ${mode === t.id ? 'on' : 'ghost'}`} title={t.title} aria-label={t.label} aria-pressed={mode === t.id} disabled={running} onClick={() => setMode(mode === t.id ? 'none' : t.id)}>{t.icon}<span className="hb-label">{t.label}</span></button>
             ))}
             {(region || strokes.length > 0) && <button className="btn xs ghost" onClick={() => { setRegion(null); setStrokes([]) }}>Clear</button>}
-            <span className="spacer" />
-            {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
-            <div className="versions">
-              <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
-              <span className="mono" title={made.label}>v{idx + 1}/{frames.length}</span>
-              <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
-              <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={running}
-                title={frames.length <= 1 ? 'Delete the only version: Update what follows draws it again' : `Delete v${idx + 1}`}
-                onClick={async () => {
-                  setError(null)
-                  try {
-                    const r = await deleteFrom(docStore, (d) => removeFrame(d, current.id))
-                    offerUndo({ label: `v${idx + 1} deleted`, undo: () => restoreTo(docStore, r) })
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : 'That did not work.')
-                  }
-                }}>🗑</button>
-            </div>
+            <span className="sep" />
+            <button className="btn xs icon ghost" aria-label="Previous version" disabled={idx <= 0} onClick={() => select(frames[idx - 1].id)}>‹</button>
+            <span className="mono vlabel" title={made.label}>v{idx + 1}/{frames.length}</span>
+            <button className="btn xs icon ghost" aria-label="Next version" disabled={idx >= frames.length - 1} onClick={() => select(frames[idx + 1].id)}>›</button>
+            <span className="sep" />
+            <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete version ${idx + 1}`} disabled={running}
+              title={frames.length <= 1 ? 'Delete the only version: Update what follows draws it again' : `Delete v${idx + 1}`}
+              onClick={deleteVersion}>🗑</button>
           </div>
-          <div className="foot">
-            <input className="input" placeholder={region ? 'Change what is in the box…' : 'Change this frame…'} maxLength={1000} value={text}
+        )}
+      </div>
+      {current && (
+        <>
+          {(frames.length > 1 || undo) && (
+            <div className="vstrip" role="group" aria-label="Versions">
+              {frames.map((f, i) => <VersionThumb key={f.id} sha={f.asset} n={i + 1} on={f.id === current.id} onPick={() => select(f.id)} />)}
+              <span className="spacer" />
+              {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
+            </div>
+          )}
+          <div className="promptbar">
+            <input className="promptbar-input" aria-label={region ? 'Change what is in the box' : 'Change this frame'} placeholder={region ? 'Change what is in the box…' : 'Change this frame…'} maxLength={1000} value={text}
               onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !running && (text.trim() || !region) && regenerate()} />
-            {/* Two rows on a narrow card: what else you can do, then the actions, so the main button is never cut off. */}
-            {(parent || !region) && (
-              <div className="row wrap">
-                {parent && <button className="btn xs ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
-                {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
-                <span className="spacer" />
-              </div>
-            )}
-            <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
-              {onNext && nextEmpty && !ui.drawingRest && (
-                <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>
-              )}
+            <div className="row wrap">
+              {!region && <ModelPick op="frame" value={choice} onChange={setPick} />}
+              <span className="spacer" />
+              {parent && <button className="btn sm ghost" onClick={() => select(parent.id)} title="Go back to the version this came from">↶ Revert</button>}
               <button className="btn sm primary" disabled={running || (!!region && !text.trim())} onClick={regenerate}>{region ? 'Change the box' : 'Regenerate'}</button>
             </div>
-            {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>{error}</div>}
           </div>
+          <div className="framecard-foot">
+            <span className="faint" title={made.label}>{made.made ? `Made by Dex · ${made.label}` : ''}</span>
+            <span className="spacer" />
+            {onNext && nextEmpty && !ui.drawingRest && (
+              <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>
+            )}
+          </div>
+          {error && <div role="alert" className="framecard-error">{error}</div>}
         </>
       )}
     </div>
+  )
+}
+
+/** One version in the strip under a frame: its picture, its number; a click selects it. */
+function VersionThumb({ sha, n, on, onPick }: { sha: string; n: number; on: boolean; onPick: () => void }) {
+  const url = useBlobUrl(sha)
+  return (
+    <button className={`vthumb ${on ? 'on' : ''}`} aria-label={`Version ${n}`} aria-pressed={on} onClick={onPick}>
+      {url && <img src={url} alt="" />}
+      <span className="vthumb-n">v{n}</span>
+    </button>
   )
 }
 
