@@ -1,6 +1,7 @@
 // The relay API (relay-api.schema.json) as one interface. Two implementations:
 // HttpRelay (VITE_RELAY_URL) and MockRelay (in the browser, no backend).
 
+import type { ShellEvent } from '../dogfood/recorder'
 import type {
   AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
   SessionRequest, SessionResponse,
@@ -41,6 +42,10 @@ export interface Relay {
   libraryEntry(key: Key, ver?: number): Promise<LibraryEntry>
   /** POST /library/{key}: publish the next version (409 conflict when baseVer is not the latest). */
   publish(key: Key, req: LibraryPublish): Promise<LibraryEntry>
+  /** POST /dogfood/consent: this participant read the beta notice. Only the real relay records. */
+  dogfoodConsent?(): Promise<void>
+  /** POST /dogfood/events: a batch of the beta's events. Never awaited; failures are dropped. */
+  dogfoodEvents?(events: ShellEvent[], leaving: boolean): void
 }
 
 /** A non-2xx relay answer, carrying the contract error. */

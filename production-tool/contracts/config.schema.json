@@ -69,7 +69,8 @@
         "feelEdit": { "type": "boolean" },
         "clickSelect": { "type": "boolean" },
         "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." },
-        "ownKeys": { "type": "boolean", "description": "Participants may send their own fal and HeyGen keys (X-Own-Keys on POST /jobs). Optional; absent means off." }
+        "ownKeys": { "type": "boolean", "description": "Participants may send their own fal and HeyGen keys (X-Own-Keys on POST /jobs). Optional; absent means off." },
+        "dogfood": { "type": "boolean", "description": "The beta's record (features/production-tool-dogfood.clan): the notice, the Beta tag and the thumbs in the web app, and POST /dogfood/* on the relay. Optional; absent means off." }
       },
       "required": ["storyboard", "video", "stitch", "regionEditFrames", "regionEditCanvas", "videoRegionEdit", "feelEdit", "clickSelect", "moreOptions"],
       "additionalProperties": false

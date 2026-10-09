@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/relay-api.schema.json",
   "title": "Relay HTTP API: request and response bodies",
-  "description": "Every route but POST /session and GET /config needs 'Authorization: Bearer <token>' from POST /session. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: POST /session, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET|POST /library…, GET /config (served by CloudFront as config.json).",
+  "description": "Every route but POST /session and GET /config needs 'Authorization: Bearer <token>' from POST /session. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: POST /session, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET|POST /library…, POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
   "$defs": {
     "SessionRequest": {
       "type": "object",
@@ -107,6 +107,19 @@
           ],
           "additionalProperties": false,
           "description": "Another browser signed in with this team and name within the last 2 hours: probably two people who picked the same name in one team."
+        },
+        "dogfood": {
+          "type": "object",
+          "description": "Only while config.json's flags.dogfood is on (features/production-tool-dogfood.clan): whether this participant has acknowledged the beta notice. Added 2026-10-09 (additive).",
+          "properties": {
+            "consented": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "consented"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -816,6 +829,65 @@
       },
       "required": [
         "elements"
+      ],
+      "additionalProperties": false
+    },
+    "DogfoodShellEvent": {
+      "type": "object",
+      "description": "One thing the web app saw a participant do (features/production-tool-dogfood.clan). Never a hover, pointer move, scroll, wheel, timeupdate or keystroke; a run of identical events is sent as its first plus one kind 'repeat' {of, count, first, last}.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z-]{1,31}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "project": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "stage": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "data": {
+          "type": "object"
+        },
+        "at": {
+          "type": "string",
+          "description": "When the browser saw it (ISO 8601)."
+        },
+        "tab": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "DogfoodBatch": {
+      "type": "object",
+      "description": "POST /dogfood/events: a batch of the web app's events (at most 500, 256 KiB). 404 when flags.dogfood is off, 403 before POST /dogfood/consent.",
+      "properties": {
+        "events": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/DogfoodShellEvent"
+          }
+        }
+      },
+      "required": [
+        "events"
       ],
       "additionalProperties": false
     }

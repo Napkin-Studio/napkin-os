@@ -4,6 +4,7 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { App } from './App'
+import { DogfoodGate } from './dogfood/Dogfood'
 import { OwnKeysContext, ServicesContext, ShellContext } from './app/context'
 import { relayId } from './relay'
 import { welcomeBack } from './projects/homeList'
@@ -29,6 +30,8 @@ export function Root({ shell }: { shell: Shell }) {
   return (
     <ShellContext.Provider value={shell}>
       <OwnKeysContext.Provider value={shell.deps.ownKeys}>{body}</OwnKeysContext.Provider>
+      {/* The beta's notice, once after sign-in (features/production-tool-dogfood.clan). */}
+      <DogfoodGate shell={shell} />
     </ShellContext.Provider>
   )
 }

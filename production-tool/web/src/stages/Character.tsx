@@ -31,6 +31,8 @@ import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
 import { RelayError } from '../relay'
+import { Thumbs } from '../dogfood/Dogfood'
+import { errorShown } from '../dogfood/recorder'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -394,6 +396,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
       await fn()
     } catch (e) {
       setError(errText(e))
+      errorShown('canvas', errText(e))
     } finally {
       setBusy(null)
     }
@@ -438,6 +441,15 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
         {named && <button className="btn xs ghost" onClick={() => ctrl.unname(singleImage.id)}>Remove name</button>}
       </span>,
     )
+  }
+  // The beta's thumbs on a picture the tool made (features/production-tool-dogfood.clan).
+  const made = singleImage?.kind === 'gen' ? cd(meaningful[0]) : undefined
+  if (made?.kind === 'gen' && singleImage?.asset) {
+    const job = doc.jobs.find((j) => j.id === made.id)
+    groups.push(<Thumbs key={`thumbs-${made.id}`} compact target={{
+      kind: made.op === 'view' ? 'view' : 'picture', id: singleImage.asset, jobId: made.id, op: made.op, view: made.view,
+      provider: job?.provider, model: job?.model,
+    }} />)
   }
   if (ctrl.deletable(meaningful).length) {
     groups.push(<button key="del" className="btn sm icon ghost iconbtn-del" aria-label="Delete" title="Delete (Undo for a few seconds, or Ctrl+Z)" onClick={() => onDelete(meaningful)}>🗑</button>)

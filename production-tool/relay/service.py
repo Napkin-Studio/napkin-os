@@ -33,6 +33,7 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 
+import dogfood
 import library
 import names
 import own_keys
@@ -230,6 +231,7 @@ class Relay:
         self.clock = clock
         self.stitch = stitch
         self.cards = cards
+        self.dogfood = dogfood.Dogfood(blobs, clock)
 
     # ── HTTP ────────────────────────────────────────────────────────────────
     def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | Raw | None, dict]:
@@ -259,6 +261,9 @@ class Relay:
                 ctx["error"] = out["error"]["code"]
             if out["state"] in TERMINAL and out.get("updatedAt"):
                 ctx["jobS"] = parse_iso(out["updatedAt"]) - parse_iso(out["createdAt"])
+        who = ctx.pop("_who", None)
+        if who:
+            self._dog_request(who, method.upper(), path, headers, body, status, out, ctx)
         return status, out, ctx
 
     def _route(self, method, path, headers, body, ctx):
@@ -273,6 +278,9 @@ class Relay:
             return 200, {"ok": True}
         who = self._auth(headers)
         ctx["participant"] = who["pid"]
+        ctx["_who"] = who
+        if path.startswith("/dogfood/"):
+            return self.dogfood_route(who, method, path, body)
         if method == "POST" and path == "/uploads":
             self._not_blocked(who)
             return 200, self.upload(self._json(body, "UploadRequest"))
@@ -346,6 +354,106 @@ class Relay:
             raise ApiError("invalid_input", "No such job.", status=404)
         return job
 
+    # ── the beta's record (dogfood.py, features/production-tool-dogfood.clan) ──
+    def _dog_on(self) -> bool:
+        try:
+            return bool((self.config().get("flags") or {}).get("dogfood"))
+        except Exception:
+            return False
+
+    def _dog(self, write) -> None:
+        """Run one write to the record; recording never fails or slows what the person asked."""
+        try:
+            write()
+        except Exception:
+            log.exception("dogfood: write failed")
+
+    def dogfood_route(self, who: dict, method: str, path: str, body: bytes | None) -> tuple[int, dict | None]:
+        if not self._dog_on():
+            raise ApiError("invalid_input", "This build does not record.", status=404)
+        if method == "POST" and path == "/dogfood/consent":
+            self._not_blocked(who)
+            self.dogfood.consent(who)
+            return 204, None
+        if method == "POST" and path == "/dogfood/events":
+            if not self.dogfood.consented(who["pid"]):
+                raise ApiError("unauthorised", "Read the beta notice first.", status=403)
+            if len(body or b"") > dogfood.BATCH_BYTES:
+                raise ApiError("invalid_input", "The batch is too large.", status=413)
+            batch = self._json(body, "DogfoodBatch")
+            self.dogfood.write_batch(who["pid"], batch["events"])
+            return 204, None
+        raise ApiError("invalid_input", f"No route {method} {path}.", status=404)
+
+    def _dog_request(self, who: dict, method: str, path: str, headers: dict, body: bytes | None,
+                     status: int, out: dict | None, ctx: dict) -> None:
+        """What the person sent: every write and every refusal, never a read that worked (polls,
+        config, the library index) and never a header (the token, X-Own-Keys)."""
+        route = (path[4:] if path.startswith("/api/") else path).rstrip("/") or "/"
+        if route.startswith("/dogfood/") or (method == "GET" and status < 400):
+            return
+        if not self._dog_on() or not self.dogfood.consented(who["pid"]):
+            return
+        pid = who["pid"]
+        heads = {k.lower(): v for k, v in headers.items()}
+        if route == "/log" and status < 400:
+            try:
+                entry = json.loads(body or b"{}")
+            except ValueError:
+                entry = {}
+            self._dog(lambda: self.dogfood.record(pid, "report", str(entry.get("level", "report")), entry))
+            return
+        if route == "/jobs" and method == "POST" and ((out or {}).get("error") or {}).get("code") == "queue_full":
+            # The runner sends it again until a place frees: one 'queued' change, folded after that.
+            self._dog(lambda: self.dogfood.record(pid, "job", "queued", {
+                "jobId": ctx.get("jobId"), "op": ctx.get("op"), "waiting": "queue_full", "status": status}))
+            return
+        name = route
+        project = heads.get("x-project-id")
+        if route.startswith("/clan/"):  # a saved project's routes (personal workspaces): one name each
+            project = project or route.split("/")[2]
+            name = "/clan/{project}/canvas" if route.endswith("/canvas") else "/clan/{project}"
+        for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{key}")):
+            if route.startswith(prefix):
+                name = label
+        data = {"status": status, "latencyMs": ctx.get("latencyMs")}
+        for k in ("error", "jobId", "op", "pick", "libraryKey"):
+            if ctx.get(k) is not None:
+                data[k] = ctx[k]
+        if route == "/jobs" or route.startswith("/library/"):
+            data["body"] = dogfood.body_value(body or b"")
+        elif body:
+            data["bytes"] = len(body)
+        if route == "/clan":
+            data["reason"] = heads.get("x-clan-reason")
+        self._dog(lambda: self.dogfood.record(pid, "request", f"{method} {name}", data, project=project))
+
+    def _dog_job(self, job: dict, before: str | None) -> None:
+        """A job changed state: one event with where it ran, why it moved, and what it cost."""
+        if not self._dog_on():
+            return
+        pid = job["participantId"]
+        if not self.dogfood.consented(pid):
+            return
+        data: dict = {"jobId": job["jobId"], "op": job["op"], "from": before}
+        pick = (job.get("_req") or {}).get("modelChoice")
+        if pick:
+            data["pick"] = f'{pick["provider"]}:{pick["model"]}'
+        for k in ("provider", "model", "keySource", "fallbackFrom", "fallbackReason", "error"):
+            if job.get(k) is not None:
+                data[k] = job[k]
+        cost = job.get("cost") or {}
+        if cost.get("confirmed") is not None or cost.get("reserved"):
+            data["costUsd"] = cost.get("confirmed", cost.get("reserved"))
+        block = job.get("director")
+        if block:
+            data["director"] = {"model": block.get("model"), "promptVersion": block.get("promptVersion"),
+                                "latencyMs": block.get("latencyMs"), "rationale": (block.get("rationale") or "")[:2000],
+                                "cards": len(block.get("cards") or [])}
+        if job["state"] in TERMINAL and job.get("createdAt") and job.get("updatedAt"):
+            data["jobS"] = round(parse_iso(job["updatedAt"]) - parse_iso(job["createdAt"]), 1)
+        self._dog(lambda: self.dogfood.record(pid, "job", job["state"], data))
+
     # ── session and uploads ─────────────────────────────────────────────────
     def session(self, req: dict, ctx: dict) -> dict:
         from tokens import sign
@@ -376,6 +484,11 @@ class Relay:
         elsewhere = self._seen(pid, req.get("device"))
         if elsewhere:
             out["elsewhere"] = {"at": elsewhere}
+        if self._dog_on():
+            consented = self.dogfood.consented(pid)
+            out["dogfood"] = {"consented": consented}
+            if consented:
+                self._dog(lambda: self.dogfood.record(pid, "sign-in", role, {"team": team}))
         return out
 
     def _seen(self, pid: str, device: str | None) -> str | None:
@@ -704,6 +817,7 @@ class Relay:
             if estimate > 0:
                 self.store.incr("spend", "usd", -estimate)
             return self._existing(who, self.store.get_job(req["jobId"]))
+        self._dog_job(job, None)
         return self._dispatch(job, cfg)
 
     def _existing(self, who: dict, job: dict) -> dict:
@@ -717,7 +831,11 @@ class Relay:
         trial = dict(job)
         trial.update(changes)
         trial["updatedAt"] = iso(self.clock())
-        return trial if self.store.save_job(trial) else None
+        if not self.store.save_job(trial):
+            return None
+        if trial["state"] != job["state"]:
+            self._dog_job(trial, job["state"])
+        return trial
 
     def _reload(self, job: dict) -> dict:
         return self._with_poll(self.store.get_job(job["jobId"]))

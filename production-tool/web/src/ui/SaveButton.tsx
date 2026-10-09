@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useServices } from '../app/context'
+import { errorShown, record } from '../dogfood/recorder'
 
 type State = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; at: Date } | { kind: 'failed'; why: string }
 
@@ -19,12 +20,17 @@ export function SaveButton() {
     if (!clan || busy.current) return
     busy.current = true
     setState({ kind: 'saving' })
+    const start = Date.now()
     try {
       await clan.flush() // what was just changed goes too
       await clan.clan.mirrorNow('manual')
       setState({ kind: 'saved', at: new Date() })
+      record('save', 'manual', { ok: true, ms: Date.now() - start })
     } catch (e) {
-      setState({ kind: 'failed', why: e instanceof Error ? e.message : 'the server did not answer' })
+      const why = e instanceof Error ? e.message : 'the server did not answer'
+      setState({ kind: 'failed', why })
+      record('save', 'manual', { ok: false, ms: Date.now() - start })
+      errorShown('save', why)
     } finally {
       busy.current = false
     }

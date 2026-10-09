@@ -1,0 +1,59 @@
+/* The beta's notice, Beta tag and thumbs (Dogfood.tsx), after Napkin OS's app/src/dogfood/Dogfood.css.
+   The tag takes the tool's colour (--tool), as the brand name does. */
+
+.df-bar { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; letter-spacing: 0; }
+
+.df-badge {
+  font: 600 11px/1 var(--f-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--tool);
+  color: var(--tool-ink);
+  background: transparent;
+  cursor: pointer;
+}
+.df-badge:hover { background: var(--tool-soft); }
+.df-badge-static { cursor: default; display: inline-block; margin-bottom: 10px; }
+
+.df-veil {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  padding: 16px;
+}
+.df-card {
+  max-width: 440px; width: 100%;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow-pop);
+  font-weight: 400; letter-spacing: 0; white-space: normal;
+}
+.df-card h2 { margin: 0 0 10px; font-size: 19px; letter-spacing: -0.02em; }
+.df-card p { margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: var(--ink2); }
+.df-card a { color: var(--tool-ink); }
+.df-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.df-thumbs { display: inline-flex; align-items: center; gap: 2px; font-weight: 400; letter-spacing: 0; }
+.df-thumb {
+  border: 1px solid transparent; background: transparent; border-radius: 6px;
+  padding: 2px 4px; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0.7;
+}
+.df-thumb:hover, .df-thumb[aria-pressed='true'] { opacity: 1; border-color: var(--line); background: var(--card); }
+.df-thumbs-compact .df-thumb { font-size: 12px; }
+.df-note { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
+.df-note input {
+  font: inherit; font-size: 12px; width: 170px;
+  padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--card); color: var(--ink);
+}
+.df-thanks { font-size: 12px; color: var(--ink2); font-weight: 400; }
+/* On a picture, frame or clip: a small frosted bar in a corner. */
+.df-on-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--frost); backdrop-filter: var(--blur);
+  border: 1px solid var(--line-soft); border-radius: var(--r-pill);
+  padding: 2px 6px; box-shadow: var(--shadow-pill);
+}

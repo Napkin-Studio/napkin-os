@@ -29,6 +29,7 @@ import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { madeWith, startingChoice } from '../ui/modelChoice'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
+import { Thumbs } from '../dogfood/Dogfood'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -562,6 +563,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           <div className="row">
             <h2>Notes</h2>
             <span className="faint" style={{ fontSize: 12 }}>Shot {cur.shot.order} · v{takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1}</span>
+            <Thumbs key={cur.take.id} compact target={{
+              kind: 'clip', id: cur.take.id, jobId: cur.take.job_id, shot: cur.shot.order, provider: cur.take.provider, model: cur.take.model,
+            }} />
             {(() => {
               const st = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(cur.shot.id) ? undefined : takeStale(doc, cur.shot.id)
               return st && st.target.id === cur.take.id ? <span className="behind" title={st.reason}>{behindLabel(doc, st)}</span> : null
@@ -699,6 +703,7 @@ function AdResult({ sha }: { sha: string }) {
       <div className="row">
         <h2>Your ad</h2>
         {len ? <span className="faint" style={{ fontSize: 12 }}>{Math.round(len * 10) / 10} s</span> : null}
+        <Thumbs key={sha} compact target={{ kind: 'ad', id: sha, asset: sha, jobId: (doc.exports ?? []).find((e) => e.asset === sha)?.job_id }} />
         <span className="spacer" />
         {status.stale && <span className="behind" title={status.reason}>{adBehindLabel(status.reason)}</span>}
         {showMock && asset?.origin === 'mock' && <span className="mockbadge">MOCK</span>}
