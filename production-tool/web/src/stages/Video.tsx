@@ -30,6 +30,9 @@ import { sayer } from '../ui/agents/cast'
 import { madeWith, startingChoice } from '../ui/modelChoice'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import { Thumbs } from '../dogfood/Dogfood'
+import { DownloadButton } from '../ui/Download'
+import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
+import { mediaItem } from '../media/names'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -294,6 +297,9 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
   const options = modelChoicesFor('clip', config)
   const start = startingChoice(options, madeWith(doc, ui, take.job_id).made)
   const [sending, send] = useSending()
+  const project = useProjectName()
+  const clip = mediaItem(doc, project, take.asset, 'clip')
+  const [saving, save] = useDownload()
   // Its error shows under the card, like Make clip's (it failed silently before, 2026-10-09).
   const newTake = (choice: ModelChoice | undefined) => {
     close()
@@ -321,6 +327,10 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
             <div className="fhead">Shot {shot.order} · clip v{n}</div>
             <MenuItem icon="▶" disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : 'New take'}</MenuItem>
             {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
+            {clip && (
+              <MenuItem icon="↓" disabled={saving === 'busy'} hint={saving === 'idle' ? clip.name.split('.').pop() : undefined}
+                onSelect={() => void save([clip]).then((ok) => ok && close())}>{downloadLabel(saving, `Download v${n}`)}</MenuItem>
+            )}
             <div className="fsep" />
             {/* A shot needs one clip: remaking the only one costs a video job (2026-10-09). */}
             <MenuItem icon="🗑" danger disabled={busy || only} hint={only ? 'a shot needs one clip' : undefined} onSelect={() => { close(); onDelete() }}>Delete v{n}</MenuItem>
@@ -386,6 +396,8 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const [sending, send] = useSending()
   const made = madeWith(doc, ui, cur?.take.job_id)
   const choice = pick ?? startingChoice(modelChoicesFor('clip', config), made.made)
+  const project = useProjectName()
+  const playing = cur ? mediaItem(doc, project, cur.take.asset, 'clip') : undefined
 
   const services = useServices()
   const deps = { relay, doc: docStore, ui: services.ui, runner }
@@ -534,6 +546,12 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
         ) : (
           <div className="empty">
             {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobNode jobId={(fixJob ?? firstJob)!} /></div> : 'No clip for this shot yet. Press Make clip.'}
+          </div>
+        )}
+        {/* The clip on show, as one file (in All shots: the one playing). */}
+        {cur && url && playing && !drawing && (
+          <div className="player-dl">
+            <DownloadButton items={[playing]} className="btn xs" title={`Download shot ${cur.shot.order}, v${takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1} (${playing.name})`} />
           </div>
         )}
       </div>
@@ -695,7 +713,8 @@ function AdResult({ sha }: { sha: string }) {
   const url = useBlobUrl(sha) ?? remoteUrl(doc, sha)
   const showMock = useShowMock()
   const asset = doc.assets.find((a) => a.sha256 === sha)
-  const ext = asset?.mime.includes('webm') ? 'webm' : 'mp4'
+  // Named like every other download (media/names.ts): <project>-ad.mp4.
+  const ad = mediaItem(doc, useProjectName(), sha, 'ad')
   const status = adStatus(doc)
   const len = asset?.duration_s
   return (
@@ -710,7 +729,7 @@ function AdResult({ sha }: { sha: string }) {
       </div>
       {status.stale && <span className="faint" style={{ fontSize: 12 }}>{status.reason}. Remake it from the bar at the top.</span>}
       {url && <video src={url} controls playsInline style={{ width: '100%', borderRadius: 12, background: '#000', maxHeight: 360 }} />}
-      {url && <a className="btn sm" href={url} download={`napkin-${doc.participant.handle}-${sha.slice(7, 15)}.${ext}`}>Download</a>}
+      {ad && <DownloadButton items={[ad]} className="btn sm" />}
     </div>
   )
 }

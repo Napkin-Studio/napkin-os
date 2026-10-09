@@ -33,6 +33,9 @@ import { useUndo } from '../ui/useUndo'
 import { RelayError } from '../relay'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown } from '../dogfood/recorder'
+import { DownloadButton } from '../ui/Download'
+import { useProjectName } from '../ui/useDownload'
+import { mediaItem, viewsOnCanvas, type MediaItem } from '../media/names'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -365,6 +368,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
   limits: { max: number; characters: number }
 }) {
   const doc = useDoc()
+  const project = useProjectName()
   const { controls, config } = useConfig()
   // The model for Make the other views: the last that worked for views, or the one picked here.
   const [viewPick, setViewPick] = useState<ModelChoice | undefined>()
@@ -450,6 +454,13 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
       kind: made.op === 'view' ? 'view' : 'picture', id: singleImage.asset, jobId: made.id, op: made.op, view: made.view,
       provider: job?.provider, model: job?.model,
     }} />)
+  }
+  // Download: each selected picture or result, named as in Download all media.
+  const pictures = meaningful.map((e) => imageOf(e)?.asset).filter((a): a is string => !!a)
+  if (pictures.length) {
+    const views = viewsOnCanvas(doc, ctrl.api.getSceneElements())
+    const items = pictures.map((a) => mediaItem(doc, project, a, undefined, views)).filter((m): m is MediaItem => !!m)
+    if (items.length) groups.push(<DownloadButton key="dl" items={items} className="btn sm ghost" iconOnly={items.length === 1} />)
   }
   if (ctrl.deletable(meaningful).length) {
     groups.push(<button key="del" className="btn sm icon ghost iconbtn-del" aria-label="Delete" title="Delete (Undo for a few seconds, or Ctrl+Z)" onClick={() => onDelete(meaningful)}>🗑</button>)
