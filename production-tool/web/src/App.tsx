@@ -5,7 +5,6 @@ import type { CanvasSnapshot } from './canvas/controller'
 import type { StageName } from './contracts/types'
 import { updateDoc } from './doc/store'
 import { download, exportBundle } from './export'
-import { isActive } from './jobs/runner'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
@@ -19,6 +18,7 @@ import { InlineConfirm } from './ui/Undo'
 import { UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { Float, MenuItem } from './ui/Float'
+import { JobTray } from './ui/JobTray'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -90,9 +90,6 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
   const reachable = (s: StageName) =>
     s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
   const order = STAGES.findIndex((s) => s.id === stage)
-  const active = doc.jobs.filter((j) => isActive(j.state))
-  const queued = active.filter((j) => j.state === 'queued').length
-  const running = active.length - queued
 
   return (
     <header className="topbar">
@@ -120,10 +117,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
       </nav>
       <div className="topbar-right">
         {stage !== 'character' && <UpdateFollows />}
-        <span className={`jobchip ${active.length ? 'busy' : ''}`} aria-live="polite">
-          <span className="dot" />
-          {!active.length ? 'Nothing running' : [running && `${running} running`, queued && `${queued} queued`].filter(Boolean).join(' · ')}
-        </span>
+        <JobTray />
         {config.flags.ownKeys && <OwnKeysButton />}
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
         {/* Export, the handle, Sign out and Start over live in the menu: the bar keeps the run's state, keys and History.

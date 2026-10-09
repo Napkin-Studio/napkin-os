@@ -146,7 +146,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
   const adNeeds = adStatus(doc).shotId === shot.id
   return (
-    <div className={`shotcard ${selected ? 'sel' : ''}`} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
+    <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
       <div className="thumb">
         {thumb && <img src={thumb} alt="" />}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobNode jobId={jobId} compact /></div>}

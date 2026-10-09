@@ -303,7 +303,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   ]
 
   return (
-    <div className="framecard">
+    <div className="framecard" data-shot-card={shot.id}>
       <div className="head">
         <b>Shot {index + 1}</b>
         <span className="faint">{label(shot.composition)} · {label(shot.camera_move)} · {shot.duration_s}s</span>
