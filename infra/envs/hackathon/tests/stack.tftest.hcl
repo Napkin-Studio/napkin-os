@@ -92,6 +92,16 @@ run "plans_the_hackathon_stack" {
     error_message = "the relay may write and check the beta's record under dogfood/ (features/production-tool-dogfood.clan)"
   }
   assert {
+    # Every prefix the relay reads must also be listable, or S3 answers a missing object with 403, not 404:
+    # 2026-10-09, sign-in failed for every new workspace (clan/<pid>/projects.json absent, AccessDenied).
+    condition     = alltrue([for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*"] : anytrue([for s in data.aws_iam_policy_document.relay.statement : contains(one(s.condition).values, p) if s.sid == "ListForExists"])])
+    error_message = "the relay may list every prefix it reads, so a missing object is a 404"
+  }
+  assert {
+    condition     = anytrue([for s in data.aws_iam_policy_document.relay.statement : anytrue([for r in s.resources : endswith(r, "/cards/*")]) if s.sid == "Objects"])
+    error_message = "the relay may read and write character cards under cards/ (features/character-cards.clan)"
+  }
+  assert {
     condition     = aws_lambda_function_url.relay.qualifier == "live" && aws_cloudwatch_event_rule.sweep.schedule_expression == "rate(1 minute)"
     error_message = "the Function URL and the sweep both use the live alias"
   }
