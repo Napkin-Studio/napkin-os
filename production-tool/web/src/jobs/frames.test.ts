@@ -9,6 +9,7 @@ import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { continueDrawing, drawFrame, drawTheRest, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { applyFrame } from './handlers'
+import { frameDrift, frameStale } from './stale'
 import { JobRunner } from './runner'
 
 // Sequential storyboard frames (decided 2026-10-07): frame 1 from the shot's named refs; every
@@ -138,7 +139,7 @@ describe('sequential storyboard frames', () => {
     expect(s.running()).toHaveLength(1)
   })
 
-  it('a new version of frame k marks frame k+1 out of date, never redraws it, and going back lifts the mark', async () => {
+  it('a new version of frame k never marks frame k+1 or redraws it: frame k+1 is only "drawn from an older frame k", and going back clears that', async () => {
     const s = await setup(3)
     await drawFrame(s.deps, 0, 'first')
     await s.land()
@@ -158,15 +159,31 @@ describe('sequential storyboard frames', () => {
     await s.land()
     const newF2 = s.frameOf(1)
     expect(newF2.id).not.toBe(oldF2.id)
-    expect(s.doc.get().stale).toEqual([expect.objectContaining({
-      target: { kind: 'frame', id: f3.id }, caused_by: { kind: 'frame', id: newF2.id }, reason: 'Shot 2 changed',
-    })])
+    expect(s.doc.get().stale).toEqual([]) // one to one: frame 3's own shot did not change
+    expect(frameStale(s.doc.get(), s.shotId(2))).toBeUndefined()
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBe(2) // the quiet note: drawn from an older frame 2
+    expect(frameDrift(s.doc.get(), s.shotId(1))).toBeUndefined() // frame 2 itself was drawn from frame 1 as it is
     expect(s.doc.get().jobs.length).toBe(jobsBefore + 1) // only the regenerate: shot 3 is not redrawn
+    expect(f3.id).toBe(s.frameOf(2).id)
 
     await selectFrame(s.doc, s.shotId(1), oldF2.id) // back to the version shot 3 was drawn from
-    expect(s.doc.get().stale).toEqual([])
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBeUndefined()
     await selectFrame(s.doc, s.shotId(1), newF2.id)
-    expect(s.doc.get().stale!.map((m) => m.target.id)).toEqual([f3.id])
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBe(2)
+    expect(s.doc.get().stale).toEqual([])
+  })
+
+  it('a new frame 1 leaves the later frames up to date: each says it was drawn from an older frame', async () => {
+    const s = await setup(3)
+    for (let i = 0; i < 3; i++) {
+      await drawFrame(s.deps, i, i === 0 ? 'first' : 'next')
+      await s.land()
+    }
+    await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
+    await s.land()
+    expect(s.doc.get().stale).toEqual([])
+    expect(frameDrift(s.doc.get(), s.shotId(1))).toBe(1) // the frame before it
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBe(1) // frame 2 is as it was; frame 1, its anchor, is not
   })
 
   it('the decision chain names the frame steps', async () => {

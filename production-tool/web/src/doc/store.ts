@@ -191,7 +191,9 @@ export function subscribeDoc(store: DocumentStore) {
   return (fn: () => void) => store.onChange(() => fn())
 }
 
-/** Fill in optional lists an older snapshot may lack, so panels can rely on them. */
+/** Fill in optional lists an older snapshot may lack, so panels can rely on them. Frame → next frame
+ *  marks (the chain before 2026-10-09) no longer mean out of date, so they are dropped on open
+ *  (features/one-to-one-updates.clan). */
 export function normaliseDocument(d: ProductionDocument): ProductionDocument {
   return {
     ...d,
@@ -202,7 +204,7 @@ export function normaliseDocument(d: ProductionDocument): ProductionDocument {
     frames: d.frames ?? [],
     takes: d.takes ?? [],
     reviews: d.reviews ?? [],
-    stale: d.stale ?? [],
+    stale: (d.stale ?? []).filter((s) => !(s.target.kind === 'frame' && s.caused_by.kind === 'frame')),
     exports: d.exports ?? [],
   }
 }

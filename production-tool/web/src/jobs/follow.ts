@@ -1,12 +1,22 @@
-// "Update what follows" (decided 2026-10-07, "Change anything later; update what
-// follows on request"; steered since 2026-10-09). Never automatic. In order:
+// Updates (decided 2026-10-07, "Change anything later; update what follows on request";
+// steered since 2026-10-09; one to one since 2026-10-09, features/one-to-one-updates.clan).
+// Never automatic. A run makes the items of one plan, in order:
 //
-//   1. out-of-date frames, one at a time, each from shot 1's frame and the one
-//      before (the Draw the rest machinery in frames.ts);
-//   2. a clip for every shot whose selected frame changed (or that has none);
+//   1. frames, one at a time, each from shot 1's frame and the one before (the Draw
+//      the rest machinery in frames.ts);
+//   2. clips;
 //   3. the ad, when there was one (free, nothing to steer: it just runs).
 //
-// Steered (the Update button), each frame and clip waits in the update box
+// The plan comes from a scope (FollowScope), picked at the moment of acting:
+//   direct   only what is out of date now, one to one (the bar's "Update 2");
+//   carry    the old chain: from a frame (the first one out of date or drawn from an
+//            older frame, or the one whose "Carry the look forward" was clicked) every
+//            frame after it, their clips, the ad (the bar's "Update 2 and carry forward");
+//   missing  what is not made yet ("3 clips not made yet · Make them");
+//   one      a card's Redraw / Remake;  after  "this and the frames (clips) after".
+//
+// Steered (the cards and the bar), a plan of more than one item is shown first in
+// the update box (items in order, cost); then each frame and clip waits in the box
 // (ui/UpdateBox.tsx) for the user's words for that request, a model (starting on
 // the last that worked for that step) and "Make it". "Do the rest as they are"
 // turns steering off and the run goes on with the box's models. A new version
@@ -28,7 +38,7 @@ import { makeClip, renderAd, selectedTake } from './clips'
 import { shotsBeingFixed } from './fix'
 import { drawFrame, selectedFrame, type FrameDeps } from './frames'
 import { isActive } from './runner'
-import { adStatus, anythingStale, frameStale, takeStale } from './stale'
+import { adStatus, frameDrift, frameStale, takeStale } from './stale'
 
 export interface FollowPlan {
   /** Shot ids whose frame will be drawn again (or for the first time), in order. */
@@ -40,11 +50,13 @@ export interface FollowPlan {
 
 export const planSize = (p: FollowPlan) => p.frames.length + p.clips.length + (p.ad ? 1 : 0)
 
-/**
- * The work, worked out from what is out of date now. Once a frame is drawn again,
- * every frame after it follows it, so the frames run from the first one that needs
- * drawing to the last shot. Empty when nothing is out of date.
- */
+/** Which items a run makes (see the top of this file). */
+export type FollowScope =
+  | { kind: 'direct' }
+  | { kind: 'carry'; from?: string }
+  | { kind: 'missing' }
+  | { kind: 'one' | 'after'; item: FollowItem }
+
 /** Shots whose clip is being made now (a fix, Make clip, a run) or whose frame is being drawn now: not
  *  behind, so the plan leaves them out (2026-10-09: four first clips in the making showed as "4 behind"). */
 export function shotsInTheMaking(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined): { clips: Set<string>; frames: Set<string> } {
@@ -59,20 +71,59 @@ export function shotsInTheMaking(d: ProductionDocument, ctxOf: (id: string) => J
   return { clips, frames }
 }
 
-/** `fixing`: shots whose clip is being made now (a fix, or shotsInTheMaking); `drawing`: shots whose frame is. */
+/** What is out of date now, one to one: each frame and clip marked out of date itself, in shot order,
+ *  then the ad (it follows new clips, or is out of date itself). Not-made items are planMissing's.
+ *  `fixing`: shots whose clip is being made now (a fix, or shotsInTheMaking); `drawing`: shots whose frame is. */
 export function planFollow(d: ProductionDocument, fixing: ReadonlySet<string> = new Set(), drawing: ReadonlySet<string> = new Set()): FollowPlan {
-  const none: FollowPlan = { frames: [], clips: [], ad: false }
+  return planFor(d, { kind: 'direct' }, fixing, drawing)
+}
+
+/** What is not made yet: a shot with no frame once there are frames, or with no clip once there are clips
+ *  (a new shot, or one whose last version was deleted). The ad is left to the bar, once the clips land. */
+export function planMissing(d: ProductionDocument, fixing: ReadonlySet<string> = new Set(), drawing: ReadonlySet<string> = new Set()): FollowPlan {
+  return planFor(d, { kind: 'missing' }, fixing, drawing)
+}
+
+/** The plan for a scope (see the top of this file). Empty when there is nothing to make. */
+export function planFor(d: ProductionDocument, scope: FollowScope, fixing: ReadonlySet<string> = new Set(), drawing: ReadonlySet<string> = new Set()): FollowPlan {
   const shots = d.shots ?? []
+  const ids = (list: typeof shots) => list.map((s) => s.id)
   const hasFrames = (d.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
   const hasTakes = (d.takes ?? []).some((t) => shots.some((s) => s.id === t.shot_id))
-  // A shot whose last frame or clip was deleted is owed one, like an out-of-date one.
-  const missing = shots.some((s) => (hasFrames && !selectedFrame(d, s.id)) || (hasTakes && !selectedTake(d, s.id)))
-  if (!anythingStale(d) && !missing) return none
-  const first = shots.findIndex((s) => !drawing.has(s.id) && (!!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id))))
-  const frames = first >= 0 ? shots.slice(first).map((s) => s.id) : []
-  const clips = hasTakes ? shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id))).map((s) => s.id) : []
   const ad = adStatus(d)
-  return { frames, clips, ad: !!ad.ad && (clips.length > 0 || ad.stale) }
+  const from = (shotId: string | undefined) => Math.max(0, shots.findIndex((s) => s.id === shotId))
+  switch (scope.kind) {
+    case 'direct': {
+      const clips = ids(shots.filter((s) => !fixing.has(s.id) && !!takeStale(d, s.id)))
+      return { frames: ids(shots.filter((s) => !drawing.has(s.id) && !!frameStale(d, s.id))), clips, ad: !!ad.ad && (clips.length > 0 || ad.stale) }
+    }
+    case 'missing':
+      return {
+        frames: hasFrames ? ids(shots.filter((s) => !drawing.has(s.id) && !selectedFrame(d, s.id))) : [],
+        clips: hasTakes ? ids(shots.filter((s) => !fixing.has(s.id) && !selectedTake(d, s.id))) : [],
+        ad: false,
+      }
+    case 'carry': {
+      // The old chain: once a frame is drawn again every frame after it follows it, then their clips and
+      // every clip out of date or missing, then the ad. From the bar: from the first frame that is out of
+      // date or drawn from an older frame.
+      const first = scope.from ? from(scope.from) : shots.findIndex((s) => !drawing.has(s.id) && (!!frameStale(d, s.id) || frameDrift(d, s.id) !== undefined))
+      const frames = first >= 0 ? ids(shots.slice(first).filter((s) => !drawing.has(s.id))) : []
+      const clips = hasTakes ? ids(shots.filter((s) => !fixing.has(s.id) && (frames.includes(s.id) || !!takeStale(d, s.id) || !selectedTake(d, s.id)))) : []
+      return { frames, clips, ad: !!ad.ad && (clips.length > 0 || ad.stale) }
+    }
+    case 'one':
+      return scope.item.kind === 'frame'
+        ? { frames: drawing.has(scope.item.shotId) ? [] : [scope.item.shotId], clips: [], ad: false }
+        : { frames: [], clips: fixing.has(scope.item.shotId) ? [] : [scope.item.shotId], ad: false }
+    case 'after': {
+      const rest = shots.slice(from(scope.item.shotId))
+      if (scope.item.kind === 'frame') return { frames: ids(rest.filter((s) => !drawing.has(s.id))), clips: [], ad: false }
+      // A clip is made from its shot's frame: a shot with none is left out.
+      const clips = ids(rest.filter((s) => !fixing.has(s.id) && !!selectedFrame(d, s.id)))
+      return { frames: [], clips, ad: !!ad.ad && clips.length > 0 }
+    }
+  }
 }
 
 /** What one job of `op` costs on the provider routed for it (null when it does not say). */
@@ -99,6 +150,12 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 export function planWords(p: FollowPlan): string {
   return [p.frames.length && plural(p.frames.length, 'frame'), p.clips.length && plural(p.clips.length, 'clip'), p.ad && '1 ad']
     .filter(Boolean).join(', ')
+}
+
+/** A plan's cost, short, for a menu item's hint: "~$0.60". */
+export function planCostShort(p: FollowPlan, config: Config, sheets?: Sheets, models?: FollowRun['models']): string {
+  const c = planCost(p, config, sheets, models)
+  return `${c.known ? '~' : '≥ '}$${c.usd.toFixed(2)}`
 }
 
 /** "3 frames, 3 clips, 1 ad · about $2.01". */
@@ -162,22 +219,31 @@ export function startModels(d: ProductionDocument, config: Config, sheets?: Shee
   return out
 }
 
-/** Start a run of the plan as it stands now. `config`: the routing this participant sees (the models
- *  to start on). `steer`: wait for the update box on each frame and clip (the Update button). */
-export async function startFollow(deps: FrameDeps, config?: Config, opts: { steer?: boolean } = {}): Promise<FollowPlan> {
+/** Start a run of a scope's plan as it stands now (default: what is out of date, one to one). `config`:
+ *  the routing this participant sees (the models to start on). `steer`: wait for the update box on each
+ *  frame and clip; a plan of more than one item is shown in the box first, until beginFollow. */
+export async function startFollow(deps: FrameDeps, config?: Config, opts: { steer?: boolean; scope?: FollowScope } = {}): Promise<FollowPlan> {
   const d = deps.doc.get()
   const busy = shotsInTheMaking(d, (id) => ctxOf(deps, id))
-  const plan = planFollow(d, busy.clips, busy.frames)
+  const plan = planFor(d, opts.scope ?? { kind: 'direct' }, busy.clips, busy.frames)
   if (!planSize(plan) || deps.ui.get().following) return plan
   const models = config ? startModels(d, config) : {}
   deps.ui.update((u) => {
     u.following = {
-      id: newId('follow'), startedAt: new Date().toISOString(), ad: plan.ad, clipShots: plan.clips, framesDone: [], clipsDone: [], adDone: false,
-      total: planSize(plan), ...(opts.steer ? { steer: true } : {}), ...(Object.keys(models).length ? { models } : {}),
+      id: newId('follow'), startedAt: new Date().toISOString(), ad: plan.ad, frameShots: plan.frames, clipShots: plan.clips, framesDone: [], clipsDone: [], adDone: false,
+      total: planSize(plan), ...(opts.steer ? { steer: true } : {}), ...(opts.steer && planSize(plan) > 1 ? { reviewing: true } : {}),
+      ...(Object.keys(models).length ? { models } : {}),
     }
   })
   await continueFollow(deps)
   return plan
+}
+
+/** The update box's "Start" on a plan shown first: the run goes on to its first item. */
+export async function beginFollow(deps: FrameDeps) {
+  if (!deps.ui.get().following?.reviewing) return
+  deps.ui.update((u) => { if (u.following) u.following.reviewing = false })
+  await continueFollow(deps)
 }
 
 /** The update box's "Make it": the awaited item, with the user's words for this request only (never the
@@ -202,15 +268,19 @@ export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelC
       else delete r.models[item.kind]
     }
     if (item.kind === 'frame' && !r.framesDone.includes(item.shotId)) r.framesDone.push(item.shotId)
-    if (item.kind === 'frame' && !r.clipShots.includes(item.shotId)) r.clipShots.push(item.shotId)
     if (item.kind === 'clip' && !r.clipsDone.includes(item.shotId)) r.clipsDone.push(item.shotId)
   })
   return send(deps, deps.ui.get().following ?? run, item, opts.text?.trim() || undefined)
 }
 
-/** The update box's "Do the rest as they are": this item and every one after it on the box's models, no words. */
+/** The update box's "Do the rest as they are" (on a plan shown first: "Do them as they are"): this item and
+ *  every one after it on the box's models, no words. */
 export async function restAsTheyAre(deps: FrameDeps, modelChoice?: ModelChoice | null) {
-  deps.ui.update((u) => { if (u.following) u.following.steer = false })
+  deps.ui.update((u) => {
+    if (!u.following) return
+    u.following.steer = false
+    u.following.reviewing = false
+  })
   if (deps.ui.get().following?.awaiting) await makeAwaited(deps, { modelChoice })
   else await continueFollow(deps)
 }
@@ -264,7 +334,10 @@ async function replaceLanded(deps: FrameDeps, run: FollowRun) {
 
 /** Stop after the job running now (or at once, when nothing is running). */
 export async function cancelFollow(deps: FrameDeps) {
-  if (!deps.ui.get().following) return
+  const run = deps.ui.get().following
+  if (!run) return
+  // A plan shown first and never started: nothing was made, so nothing goes in the chain.
+  if (run.reviewing && !runJobs(deps, run).length) return void deps.ui.update((u) => { u.following = undefined })
   deps.ui.update((u) => { if (u.following) u.following.cancel = true })
   await continueFollow(deps)
 }
@@ -317,29 +390,24 @@ async function step(deps: FrameDeps): Promise<void> {
       }
       return
     }
-    if (run.awaiting) return // the box is waiting for the user
+    if (run.awaiting || run.reviewing) return // the box is waiting for the user
     const d = deps.doc.get()
     const shots = d.shots ?? []
     const note = (fn: (r: FollowRun) => void) => deps.ui.update((u) => { if (u.following) fn(u.following) })
 
-    // 1. Frames, in order. A frame drawn in this run marks the next one (applyFrame), so the run walks the chain.
-    const hasFrames = (d.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
-    const i = shots.findIndex((s) => !run.framesDone.includes(s.id) && (!!frameStale(d, s.id) || (hasFrames && !selectedFrame(d, s.id))))
-    if (i >= 0) {
-      const shot = shots[i]
+    // 1. The plan's frames, in shot order.
+    const frameShots = run.frameShots ?? []
+    const shot = shots.find((s) => frameShots.includes(s.id) && !run.framesDone.includes(s.id))
+    if (shot) {
       if (run.steer) return void note((r) => { r.awaiting = { kind: 'frame', shotId: shot.id } })
-      note((r) => {
-        r.framesDone.push(shot.id)
-        if (!r.clipShots.includes(shot.id)) r.clipShots.push(shot.id)
-      })
+      note((r) => { r.framesDone.push(shot.id) })
       await send(deps, run, { kind: 'frame', shotId: shot.id })
       return
     }
 
-    // 2. Clips, in order, for every shot whose frame changed, whose clip is out of date, or (once there are clips) that has none.
-    const hasTakes = (d.takes ?? []).some((t) => shots.some((s) => s.id === t.shot_id))
+    // 2. The plan's clips, in shot order (one a fix is making now is left to the fix).
     const fixing = shotsBeingFixed(d, (id) => ctxOf(deps, id))
-    const next = shots.find((s) => !run.clipsDone.includes(s.id) && !fixing.has(s.id) && (run.clipShots.includes(s.id) || !!takeStale(d, s.id) || (hasTakes && !selectedTake(d, s.id))))
+    const next = shots.find((s) => run.clipShots.includes(s.id) && !run.clipsDone.includes(s.id) && !fixing.has(s.id))
     if (next) {
       if (run.steer) return void note((r) => { r.awaiting = { kind: 'clip', shotId: next.id } })
       note((r) => r.clipsDone.push(next.id))

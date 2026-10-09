@@ -162,7 +162,7 @@ export function memoryKeeper(): UndoKeeper {
   return { get: () => s, set: (n) => { s = n } }
 }
 
-const pathKey = (ops: Op[]) => JSON.stringify(ops.map((o) => o.path))
+const pathOf = (o: Op) => JSON.stringify(o.path)
 
 /** A person's write: keep its step (merged with the last when it is the same edit moments later). */
 export function noteStep(store: DocumentStore, before: unknown, after: unknown, label: string, now = Date.now()) {
@@ -172,9 +172,15 @@ export function noteStep(store: DocumentStore, before: unknown, after: unknown, 
   if (!ops.length) return
   const s = keeper.get()
   const last = s.done.at(-1)
-  if (last && last.label === label && now - last.at < MERGE_MS && pathKey(last.ops) === pathKey(ops) && ops.every((o) => o.op === 'set')) {
-    // The same field again: keep the first "before", take the new "after".
-    const merged = last.ops.map((o, i) => ({ ...o, after: (ops[i] as Extract<Op, { op: 'set' }>).after })) as Op[]
+  // Only fields the last step set: the first keystroke in a shot's action also adds its frame's
+  // out-of-date mark (jobs/stale.ts markShotEdit); the keystrokes after it set the action alone.
+  const again = (o: Op) => o.op === 'set' && !!last?.ops.some((l) => l.op === 'set' && pathOf(l) === pathOf(o))
+  if (last && last.label === label && now - last.at < MERGE_MS && ops.every(again)) {
+    // The same fields again: keep the first "before", take the new "after".
+    const merged = last.ops.map((l) => {
+      const n = ops.find((o) => pathOf(o) === pathOf(l))
+      return n && l.op === 'set' ? { ...l, after: (n as Extract<Op, { op: 'set' }>).after } : l
+    }) as Op[]
     keeper.set({ done: [...s.done.slice(0, -1), { ...last, ops: merged, at: now }], undone: [] })
     return
   }

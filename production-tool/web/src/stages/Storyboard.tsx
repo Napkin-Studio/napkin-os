@@ -25,7 +25,11 @@ import { InlineConfirm } from '../ui/Undo'
 import { ModelPick } from '../ui/ModelPick'
 import { choiceToSend, modelChoicesFor } from '../capabilities'
 import { madeWith, startingChoice } from '../ui/modelChoice'
-import { behindLabel } from '../ui/behind'
+import { behindLabel, driftLabel, oldWordsLine } from '../ui/behind'
+import { editShot, frameDrift, frameStale, takeStale } from '../jobs/stale'
+import { useUpdate } from '../ui/useUpdate'
+import type { FollowScope } from '../jobs/follow'
+import { SplitButton } from '../ui/SplitButton'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 
@@ -77,10 +81,8 @@ export function Storyboard() {
   const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next'))
   const drawRest = () => attempt(() => drawTheRest(deps))
 
-  const updateShot = (id: string, patch: Partial<Shot>) => updateDoc(docStore, (d) => {
-    const s = d.shots?.find((x) => x.id === id)
-    if (s) Object.assign(s, patch)
-  }, 'edit shot')
+  // The shot's own frame (words) or clip (camera, length) is marked in the same write, so undo takes both back.
+  const updateShot = (id: string, patch: Partial<Shot>) => updateDoc(docStore, (d) => editShot(d, id, patch), 'edit shot')
 
   const lock = () => updateDoc(docStore, (d) => {
     for (const s of d.shots ?? []) s.status = 'locked'
@@ -184,6 +186,7 @@ export function Storyboard() {
                   </div>
                   <button className="btn icon sm ghost" aria-label="Delete shot" title={shots.length <= 2 ? 'A storyboard needs at least 2 shots' : 'Delete this shot'} disabled={shots.length <= 2}
                     onClick={() => setConfirmShot(s.id)}>✕</button>
+                  <OldWords shot={s} index={i} />
                 </div>
               ))}
             </div>
@@ -254,7 +257,19 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const made = madeWith(doc, ui, current?.job_id)
   const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
   const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
-  // This frame made something after it out of date (the next frame, or this shot's clip).
+  const drift = current ? frameDrift(doc, shot.id) : undefined
+  const update = useUpdate()
+  const afterScope = { kind: 'after', item: { kind: 'frame', shotId: shot.id } } as const
+  const carryScope = { kind: 'carry', from: shot.id } as const
+  const after = update.size(afterScope)
+  const start = async (scope: FollowScope) => {
+    setError(null)
+    try {
+      await update.start(scope)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
   const prevShot = index > 0 ? (doc.shots ?? [])[index - 1] : undefined
   const prevDrawn = !prevShot || !!selectedFrame(doc, prevShot.id)
   const nextShot = (doc.shots ?? [])[index + 1]
@@ -319,11 +334,34 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         <span className="faint">· {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
         {/* The mark is on the version on show; while its replacement is drawn, say so instead. */}
-        {staleMark && (running
-          ? <span className="behind updating" title={staleMark.reason}>Updating…</span>
-          : <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>)}
+        {staleMark && running && <span className="behind updating" title={staleMark.reason}>Updating…</span>}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
+      {/* Out of date: what changed, and Redraw (this one) with ▾ for this and the frames after. */}
+      {staleMark && !running && (
+        <div className="cardstate">
+          <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>
+          <span className="spacer" />
+          <SplitButton kind="dark" size="xs" menuLabel={`More ways to redraw frame ${index + 1}`} disabled={update.running}
+            title={`Redraw frame ${index + 1} only, from what shot ${index + 1} says now`}
+            onClick={() => void start({ kind: 'one', item: { kind: 'frame', shotId: shot.id } })}
+            items={after > 1 ? [{
+              label: `Redraw this and the frames after (${after})`, hint: update.cost(afterScope), icon: '⇥',
+              onSelect: () => void start(afterScope),
+            }] : []}>
+            Redraw
+          </SplitButton>
+        </div>
+      )}
+      {/* Continuity only: quiet, never "out of date"; the old chain is one click away. */}
+      {!staleMark && !running && drift !== undefined && (
+        <div className="cardstate drift">
+          <span>{driftLabel(drift)}</span><span aria-hidden="true">·</span>
+          <button className="linkbtn" disabled={update.running}
+            title={`Redraw this frame and every one after it, then their clips and the ad (${update.size(carryScope)} · ${update.cost(carryScope)})`}
+            onClick={() => void start(carryScope)}>Carry the look forward</button>
+        </div>
+      )}
       <div className="framepic">
         <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes}
           onRegion={setRegion} onStrokes={setStrokes}>
@@ -393,6 +431,39 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
           {error && <div role="alert" className="framecard-error">{error}</div>}
         </>
       )}
+    </div>
+  )
+}
+
+/** Under a shot whose own frame or clip still uses what the shot said before an edit: "Frame 3 uses the
+ *  old words · Redraw frame 3" (features/one-to-one-updates.clan). Nothing while it is being made again. */
+function OldWords({ shot, index }: { shot: Shot; index: number }) {
+  const doc = useDoc()
+  const ui = useUi()
+  const update = useUpdate()
+  const [error, setError] = useState<string | null>(null)
+  const making = (kind: 'frame' | 'clip') => isRunning(doc, jobAt(doc, ui, (c) => c.for === kind && c.shotId === shot.id))
+  const own = (m: ReturnType<typeof frameStale>) => (m?.caused_by.kind === 'shot' && m.caused_by.id === shot.id ? m : undefined)
+  const frame = making('frame') ? undefined : own(frameStale(doc, shot.id))
+  const clip = making('clip') ? undefined : own(takeStale(doc, shot.id))
+  if (!frame && !clip) return null
+  const go = async (kind: 'frame' | 'clip') => {
+    setError(null)
+    try {
+      await update.start({ kind: 'one', item: { kind, shotId: shot.id } })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
+  return (
+    <div className="oldwords">
+      {frame && (
+        <span>{oldWordsLine('frame', index + 1, frame)} · <button className="linkbtn" disabled={update.running} onClick={() => void go('frame')}>Redraw frame {index + 1}</button></span>
+      )}
+      {clip && (
+        <span>{oldWordsLine('take', index + 1, clip)} · <button className="linkbtn" disabled={update.running} onClick={() => void go('clip')}>Remake clip {index + 1}</button></span>
+      )}
+      {error && <span role="alert" className="framecard-error">{error}</span>}
     </div>
   )
 }

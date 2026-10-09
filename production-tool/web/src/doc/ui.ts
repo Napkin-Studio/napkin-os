@@ -77,13 +77,16 @@ export interface ProjectUi {
 /** What the panels see: the open project's UI with the app's. */
 export type UiState = ProjectUi & AppUi
 
-/** One run of "Update what follows": frames in order, then clips, then the ad. Snapshotted, so it resumes after a reload. */
+/** One run of an update (jobs/follow.ts): the plan's frames in order, then its clips, then the ad. Snapshotted,
+ *  so it resumes after a reload. */
 export interface FollowRun {
   id: string
   startedAt: string
   /** Render the ad at the end (there was one, and it will be out of date). */
   ad: boolean
-  /** Shots whose clip must be made again (their frame is redrawn in this run). */
+  /** Shots whose frame this run draws (the plan's frames). */
+  frameShots?: string[]
+  /** Shots whose clip this run makes (the plan's clips). */
   clipShots: string[]
   framesDone: string[]
   clipsDone: string[]
@@ -93,6 +96,8 @@ export interface FollowRun {
   /** Steered (the Update button): each item waits in the update box for the user's words, model and
    *  "Make it". Off: the run goes on by itself ("Do the rest as they are"). */
   steer?: boolean
+  /** The update box shows the plan (items in order, cost) and nothing is sent until "Start". */
+  reviewing?: boolean
   /** The item the update box shows now. */
   awaiting?: FollowItem
   /** The model to send per step (absent: the routed default): the last that worked, then the box's pick. */

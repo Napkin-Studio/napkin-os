@@ -514,6 +514,26 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .remakebar b { font-size: 13px; }
 .remakebar .remake-what { font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .remakebar .remake-error { color: var(--danger); font-weight: 600; font-size: 12px; }
+.remakebar .remake-sep { width: 1px; height: 18px; background: var(--line); }
+.remakebar .remake-what.notmade { color: var(--ink2); }
+
+/* One to one updates (features/one-to-one-updates.clan): a split button (ui/SplitButton.tsx), the quiet
+   continuity note, the shot row's "Frame 3 uses the old words", and the plan in the update box. */
+.splitbtn { display: inline-flex; align-items: stretch; flex-shrink: 0; }
+.splitbtn:not(.single) > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 8px; }
+.splitbtn > .btn.caret { border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 7px; margin-left: 1px; font-size: 10px; }
+.linkbtn { border: 0; padding: 0; background: none; font: inherit; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.linkbtn:hover:not(:disabled) { color: var(--create); }
+.linkbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+.cardstate { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 36px; padding: 0 12px 8px; font-size: 11.5px; }
+.cardstate.drift { color: var(--ink3); }
+.cardstate.drift .linkbtn { color: var(--ink2); font-weight: 500; }
+.oldwords { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--warn); }
+.oldwords .linkbtn { color: var(--warn); }
+.ub-plan { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.ub-plan li { padding-left: 2px; }
+.ub-plan li b { margin-right: 6px; font-size: 12.5px; }
+.ub-plan li .faint { font-size: 12px; }
 
 /* ── Frame cards (stages/Storyboard.tsx FrameCard) ── */
 .framecard .head .num { width: 22px; height: 22px; border-radius: 7px; background: var(--plan); color: var(--paper); display: grid; place-items: center; font: 700 11.5px var(--f-mono); flex-shrink: 0; }

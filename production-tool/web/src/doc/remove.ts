@@ -12,7 +12,6 @@ import { describeRemoval } from './describe'
 import { createMergePatch, deepEqual } from './mergePatch'
 import type { DocumentStore } from './types'
 import { noteStep } from './undo'
-import { markNextStale, selectedFrame } from '../jobs/frames'
 import { refreshClipStale } from '../jobs/stale'
 
 type Doc = ProductionDocument
@@ -94,7 +93,6 @@ export function removeShot(d: Doc, shotId: string): Removal {
   const shot = (d.shots ?? []).find((s) => s.id === shotId)
   if (!shot) throw new Error('That shot is already gone.')
   const r = blank('shot', shotId, `shot ${shot.order}`)
-  const at = (d.shots ?? []).indexOf(shot)
   const frameIds = new Set((d.frames ?? []).filter((f) => f.shot_id === shotId).map((f) => f.id))
   const takeIds = new Set((d.takes ?? []).filter((t) => t.shot_id === shotId).map((t) => t.id))
   takeOut(d, r, 'shots', (x: { id: string }) => x.id === shotId)
@@ -106,15 +104,8 @@ export function removeShot(d: Doc, shotId: string): Removal {
   ;(d.shots ?? []).forEach((s, i) => {
     if (s.order !== i + 1) modify(r, 'shots', s, (x) => { x.order = i + 1 })
   })
-  // The shot after it now follows another frame (the shot before it, or, when shot 1 went, a new
-  // shot 1 that sets the scene), so its frame is out of date. Drawn again, the mark goes with the old version.
-  const follower = (d.shots ?? [])[Math.max(at, 1)]
-  const followerFrame = follower && frameIds.size ? selectedFrame(d, follower.id) : undefined
-  if (followerFrame) {
-    const mark: StaleMark = { target: { kind: 'frame', id: followerFrame.id }, caused_by: { kind: 'shot', id: shotId }, reason: `Shot ${shot.order} was deleted`, marked_at: new Date().toISOString() }
-    d.stale = [...(d.stale ?? []), mark]
-    r.staleAdded.push(mark)
-  }
+  // The shot after it now follows another frame, but its own shot did not change: not out of date
+  // (features/one-to-one-updates.clan). Its card says "drawn from an older frame" (jobs/stale.ts frameDrift).
   r.note = `with ${plural(frameIds.size, 'frame')} and ${plural(takeIds.size, 'clip')}`
   r.ids = [shotId, ...frameIds, ...takeIds]
   return r
@@ -141,7 +132,7 @@ export function removeFrame(d: Doc, frameId: string): Removal {
     if (shot) modify(r, 'shots', shot, (x) => { if (next) x.storyboard_frame = next.asset; else delete x.storyboard_frame })
   }
   takeOutAbout(d, r, 'frame', new Set([frameId]))
-  if (frame.selected) restale(d, r, (x) => { markNextStale(x, frame.shot_id); refreshClipStale(x, frame.shot_id) })
+  if (frame.selected) restale(d, r, (x) => refreshClipStale(x, frame.shot_id))
   r.ids = [frame.shot_id, frameId, frame.job_id]
   return r
 }
