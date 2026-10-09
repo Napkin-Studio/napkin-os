@@ -35,7 +35,7 @@ function OwnKeysPanel({ onClose }: { onClose: () => void }) {
       {(['fal', 'heygen'] as OwnProvider[]).map((p) => (
         <label key={p} className="stack" style={{ gap: 4 }}>
           <span className="eyebrow">{NAMES[p]} key {saved[p] && <span className="faint">· in use</span>}</span>
-          <input className="input" type="password" autoComplete="off" spellCheck={false} placeholder={p === 'fal' ? 'For pictures, frames and clip edits' : 'For clips'}
+          <input className="input" type="password" autoComplete="off" spellCheck={false} placeholder={p === 'fal' ? 'For pictures, frames, clips and clip edits' : 'For clips'}
             value={draft[p] ?? ''} onChange={(e) => setDraft({ ...draft, [p]: e.target.value })} />
         </label>
       ))}
