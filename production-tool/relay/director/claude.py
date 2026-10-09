@@ -6,7 +6,8 @@ the model port (director/model.py), behind the relay's hook (director/base.py).
 
 The wire comes from the environment (NAPKIN_MODEL_API: bedrock on Lambda, with
 the relay role; anthropic with ANTHROPIC_API_KEY; openai for a self-hosted
-endpoint). The model ids and prompt version come from config.json's
+endpoint; claude-cli for local development on the developer's own Claude Code
+login, `claude -p`, never on Lambda). The model ids and prompt version come from config.json's
 `director` block, which the relay hands over with use_config() before every
 call. With no model configured at all, make() returns the passthrough, so the
 local dev server and the relay tests still run offline.
@@ -88,6 +89,11 @@ def make(wire=None):
     if wire is None and not api and not os.environ.get("ANTHROPIC_API_KEY"):
         log.warning("no model configured (NAPKIN_MODEL_API, ANTHROPIC_API_KEY): the passthrough director runs")
         return PassthroughDirector()
+    if api == "claude-cli" and os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        raise RuntimeError("NAPKIN_MODEL_API=claude-cli is for the local relay only: Lambda has no claude CLI or login")
+    if wire is None and api == "claude-cli":
+        from director.cli_wire import ClaudeCliWire
+        wire = ClaudeCliWire(os.environ.get("NAPKIN_CLAUDE_CLI", "claude"))
     wire = wire or build_wire(settings_from_env())
     port = ModelPort(wire, PER_CLICK, timeout=TIMEOUT_S)
     return ClaudeDirector(Director(port, PROMPTS, load_sheets(), per_click_model=PER_CLICK,
