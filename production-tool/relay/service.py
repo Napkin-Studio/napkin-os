@@ -91,6 +91,8 @@ NO_FALLBACK = {"moderated", "invalid_input"}  # the floor would refuse the same
 UNKNOWN_PRICE_USD = 1.0      # reserved for an op whose sheet has no price (HeyGen)
 ORGANISER_QUOTA_FACTOR = 10
 SESSION_TTL_S = 24 * 3600
+# How long a queued job may wait for a free provider slot, per class, when config.json sets no queueTimeoutS.
+QUEUE_TIMEOUT_S = {"image": 900, "video": 1800}
 CLAN_MAX_BYTES = 5 * 1024 * 1024
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
@@ -898,6 +900,14 @@ class Relay:
         t = cfg["jobTimeoutS"]
         return t["image"] if job["quotaClass"] in ("image", "text") else t["video"]
 
+    def _queue_timeout_s(self, cfg: dict, job: dict) -> int:
+        """How long a job may wait for a free slot (config queueTimeoutS, else QUEUE_TIMEOUT_S), never less
+        than its running limit. Separate from jobTimeoutS: in a busy room a clip waits its turn instead of
+        failing after 10 minutes of queue (2026-10-09, sized for 100 people)."""
+        t = cfg.get("queueTimeoutS") or QUEUE_TIMEOUT_S
+        wait = t["image"] if job["quotaClass"] in ("image", "text") else t["video"]
+        return max(wait, self._timeout_s(cfg, job))
+
     # ── the queue ───────────────────────────────────────────────────────────
     def _slot_class(self, op: str) -> str:
         return "video" if QUOTA_CLASS[op] == "video" else "image"
@@ -1236,7 +1246,7 @@ class Relay:
         if state in TERMINAL:
             return self._with_poll(job)
         if state == "queued":  # waiting since it was made, or since it fell back to the floor
-            if now - job.get("_queuedAt", parse_iso(job["createdAt"])) > self._timeout_s(cfg, job):
+            if now - job.get("_queuedAt", parse_iso(job["createdAt"])) > self._queue_timeout_s(cfg, job):
                 message = "Waited too long for a free slot. Try again."
                 if job.get("_notBefore") and job.get("_lastError"):  # waiting on a busy provider: say which, and why
                     busy, _, detail = job["_lastError"].partition(": ")

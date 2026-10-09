@@ -10,7 +10,7 @@ import pytest
 from conftest import CDN, Harness, asset, base_config, job_request
 from director import new_id
 from providers.base import CapabilityMissing, ProviderError, Status
-from service import participant_id
+from service import QUEUE_TIMEOUT_S, participant_id
 
 
 def left(h, job, cls):
@@ -92,7 +92,8 @@ def test_a_runway_429_that_never_clears_fails_at_the_queue_timeout_saying_why():
     token = h.sign_in()
     h.providers["runway"].submit_effect = ProviderError("provider_unavailable", "Runway answered 429", retryable=True, retry_after_s=30)
     job = clip(h, token)
-    for _ in range(25):
+    # Waits on the busy provider up to the queue limit (QUEUE_TIMEOUT_S, 2026-10-09), then fails saying why.
+    for _ in range(QUEUE_TIMEOUT_S["video"] // 30 + 2):
         h.clock.tick(30)
         out = h.poll(token, job["jobId"])
     assert out["state"] == "failed" and out["error"]["code"] == "timeout" and out["error"]["retryable"]

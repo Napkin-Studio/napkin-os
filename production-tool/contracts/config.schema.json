@@ -47,6 +47,13 @@
       "required": ["image", "video"],
       "additionalProperties": false
     },
+    "queueTimeoutS": {
+      "type": "object",
+      "description": "How long a job may wait in the queue for a free provider slot before it fails, per class (seconds). Optional: absent, the relay uses 900 for image and 1800 for video. jobTimeoutS still bounds a job once it runs.",
+      "properties": { "image": { "type": "integer", "minimum": 60 }, "video": { "type": "integer", "minimum": 60 } },
+      "required": ["image", "video"],
+      "additionalProperties": false
+    },
     "spend": {
       "type": "object",
       "properties": {

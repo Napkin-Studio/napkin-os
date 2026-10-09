@@ -168,6 +168,8 @@ export interface Config {
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
   jobTimeoutS: { image: number; video: number }
+  /** How long a job may wait for a free slot (the relay's default when absent: 900 / 1800 s). */
+  queueTimeoutS?: { image: number; video: number }
   spend: { capUsd: number; warnUsd: number }
   flags: Flags
   banner: string
