@@ -5,7 +5,6 @@
 import type { Job, ProductionDocument } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { newId } from '../lib/ulid'
-import { markNextStale } from './frames'
 import { refreshClipStale } from './stale'
 
 export function applyShotList(d: ProductionDocument, job: Job, ctx: Extract<JobCtx, { for: 'shot_list' }>) {
@@ -38,7 +37,7 @@ export function applyFrame(d: ProductionDocument, job: Job, ctx: Extract<JobCtx,
     shot.storyboard_frame = out.sha256
     if (shot.status === 'locked') shot.status = 'needs_review'
   }
-  markNextStale(d, ctx.shotId)
+  // A new frame puts its own clip out of date, never the next frame (features/one-to-one-updates.clan).
   refreshClipStale(d, ctx.shotId)
 }
 

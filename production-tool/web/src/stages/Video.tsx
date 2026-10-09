@@ -21,6 +21,9 @@ import { systemUpdate, updateDoc } from '../doc/store'
 import { deleteFrom, removeNote, removeTake } from '../doc/remove'
 import { ModelItems, ModelPick } from '../ui/ModelPick'
 import { Float, MenuItem } from '../ui/Float'
+import { useUpdate } from '../ui/useUpdate'
+import { SplitButton } from '../ui/SplitButton'
+import type { FollowScope } from '../jobs/follow'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { madeWith, startingChoice } from '../ui/modelChoice'
@@ -187,6 +190,19 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
   const ui = useUi()
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
   const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
+  // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
+  const update = useUpdate()
+  const [error, setError] = useState<string | null>(null)
+  const afterScope = { kind: 'after', item: { kind: 'clip', shotId: shot.id } } as const
+  const after = update.size(afterScope)
+  const start = async (scope: FollowScope) => {
+    setError(null)
+    try {
+      await update.start(scope)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  }
   const remove = async () => {
     if (!sel) return
     await deleteFrom(docStore, (d) => removeTake(d, sel.id)) // Undo in the top bar puts it back
@@ -224,6 +240,20 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
             {open > 0 && <span className="notechip" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
           </div>
         )}
+        {stale && !isRunning(doc, jobId) && (
+          <div className="row" style={{ gap: 4 }}>
+            <SplitButton kind="dark" size="xs" menuLabel={`More ways to remake clip ${index + 1}`} disabled={update.running}
+              title={`Remake clip ${index + 1} only, from its frame and shot as they are now`}
+              onClick={() => void start({ kind: 'one', item: { kind: 'clip', shotId: shot.id } })}
+              items={after > 1 ? [{
+                label: `Remake this and the clips after (${after})`, hint: update.cost(afterScope), icon: '⇥',
+                onSelect: () => void start(afterScope),
+              }] : []}>
+              Remake
+            </SplitButton>
+          </div>
+        )}
+        {error && <div role="alert" className="framecard-error" style={{ padding: 0 }}>{error}</div>}
       </div>
     </div>
   )

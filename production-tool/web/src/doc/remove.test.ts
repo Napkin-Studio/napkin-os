@@ -17,7 +17,7 @@ import { HttpRelay } from '../relay/http'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { cancelText, mayStillCharge } from '../ui/cancel'
 import { ClanBackedStore } from './clan'
-import { planFollow } from '../jobs/follow'
+import { planFollow, planMissing } from '../jobs/follow'
 import { deleteFrom, markStale, removeFrame, removeNote, removeShot, removeTake, restoreTo, shotDeleteText } from './remove'
 import { emptyDocument, SnapshotStore, updateDoc } from './store'
 import { initialUi, type UiState } from './ui'
@@ -108,7 +108,7 @@ describe('delete and undo, in the .clan', () => {
     expect(e.map((x) => x.action)).toEqual([`deleted frame ${f2.id} (shot 1, v2)`, `restored frame ${f2.id} (shot 1, v2)`])
   })
 
-  it('the last version may go: the shot has no frame, Update what follows draws it again, Undo puts it back', async () => {
+  it('the last version may go: the shot has no frame, "Make them" draws it again (not out of date), Undo puts it back', async () => {
     const { d, f3 } = fixture()
     const s = await store(d)
     const before = plain(s.get())
@@ -116,7 +116,8 @@ describe('delete and undo, in the .clan', () => {
     const after = s.get()
     expect(after.frames!.some((f) => f.id === f3.id)).toBe(false)
     expect(after.shots!.find((x) => x.id === f3.shot_id)!.storyboard_frame).toBeUndefined()
-    expect(planFollow(after).frames).toContain(f3.shot_id)
+    expect(planMissing(after).frames).toContain(f3.shot_id)
+    expect(planFollow(after).frames).not.toContain(f3.shot_id) // not made yet is not out of date
     await restoreTo(s, r)
     expect(plain(s.get())).toEqual(before)
   })

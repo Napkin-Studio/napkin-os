@@ -3,7 +3,8 @@ import type { JobInput, Review } from '../contracts/types'
 import { CONFIGS } from '../contracts/load'
 import { describeWrite } from '../doc/describe'
 import { deleteFrom, removeShot, restoreTo } from '../doc/remove'
-import { emptyDocument, SnapshotDocumentStore, SnapshotStore, updateDoc } from '../doc/store'
+import { emptyDocument, normaliseDocument, SnapshotDocumentStore, SnapshotStore, updateDoc } from '../doc/store'
+import { keepUndo, memoryKeeper, redo, undo, undoState } from '../doc/undo'
 import { initialUi, type UiState } from '../doc/ui'
 import { putBlob } from '../lib/blobs'
 import { newId } from '../lib/ulid'
@@ -11,11 +12,11 @@ import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
 import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
-import { cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planCost, planFollow, planSummary, restAsTheyAre, startFollow } from './follow'
+import { beginFollow, cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planCost, planFollow, planFor, planMissing, planSummary, restAsTheyAre, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { applyFrame } from './handlers'
-import { adStatus, anythingStale, frameStale, takeStale } from './stale'
+import { adStatus, anythingStale, editShot, frameDrift, frameStale, takeStale } from './stale'
 import { wireJobs } from './wire'
 import { boxMaskPng } from '../lib/mask'
 
@@ -126,8 +127,9 @@ describe('no text in frames: the dialogue is voice-over', () => {
     await s.makeAll(false)
     await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
     await s.land()
-    await startFollow(s.deps)
+    await startFollow(s.deps, undefined, { scope: { kind: 'carry' } }) // the old chain: frames 2 and 3 drawn again
     await s.settle()
+    expect(s.all().filter((j) => j.op === 'frame' && j.ctx.for === 'frame' && j.ctx.followRun)).toHaveLength(2)
     const note = await addNote(s, 1, { region: { x: 0.1, y: 0.7, w: 0.8, h: 0.25 } })
     await fixInShot(s.deps, s.shotId(1), [note])
     await s.land()
@@ -271,7 +273,8 @@ describe('Fix it in the shot', () => {
     expect(r.resolved).toBe(true)
     expect(r.resolved_by_job).toBe(clipJob.id)
     expect(takeStale(s.doc.get(), s.shotId(1))).toBeUndefined() // made from the fixed frame
-    expect(frameStale(s.doc.get(), s.shotId(2))?.reason).toBe('Shot 2 changed') // the next frame follows it
+    expect(frameStale(s.doc.get(), s.shotId(2))).toBeUndefined() // one to one: the next frame is not out of date
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBe(2) // only drawn from an older frame 2
   })
 
   it('makes the clip after a reload when the fixed frame landed while the page was closed', async () => {
@@ -309,18 +312,89 @@ describe('the ad is trimmed to the shots', () => {
   })
 })
 
-describe('the out-of-date chain', () => {
-  it('frame → its shot\'s clip, and going back to the frame the clip was made from lifts the mark', async () => {
+describe('out of date, one to one (features/one-to-one-updates.clan)', () => {
+  it('frame → its shot\'s clip only, and going back to the frame the clip was made from lifts the mark', async () => {
     const s = await setup(2)
     await s.makeAll(false)
     const old = s.frameOf(0)
     await drawFrame(s.deps, 0, 'again', { parent: old })
     await s.land()
     expect(takeStale(s.doc.get(), s.shotId(0))).toMatchObject({ caused_by: { kind: 'frame', id: s.frameOf(0).id }, reason: "Shot 1's frame changed" })
-    expect(frameStale(s.doc.get(), s.shotId(1))).toBeDefined() // and frame 2, as before
+    expect(frameStale(s.doc.get(), s.shotId(1))).toBeUndefined() // never the next frame
+    expect(takeStale(s.doc.get(), s.shotId(1))).toBeUndefined() // nor its clip
+    expect(frameDrift(s.doc.get(), s.shotId(1))).toBe(1) // a quiet note instead
     await selectFrame(s.doc, s.shotId(0), old.id)
     expect(takeStale(s.doc.get(), s.shotId(0))).toBeUndefined()
+    expect(frameDrift(s.doc.get(), s.shotId(1))).toBeUndefined()
+  })
+
+  it('a shot\'s action, composition or refs mark only its own frame; one mark however many edits', async () => {
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(1), { action: 'Beat 2, closer.' }), 'edit shot')
+    expect(s.doc.get().stale).toEqual([expect.objectContaining({
+      target: { kind: 'frame', id: s.frameOf(1).id }, caused_by: { kind: 'shot', id: s.shotId(1) }, reason: "Shot 2's words changed",
+    })])
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(1), { action: 'Beat 2, closer still.' }), 'edit shot')
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(1), { composition: 'over_shoulder' }), 'edit shot')
+    expect(s.doc.get().stale).toHaveLength(1) // replaced, not appended
+    expect(frameStale(s.doc.get(), s.shotId(1))?.reason).toBe("Shot 2's composition changed")
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(2), { refs: ['hero'] }), 'edit shot')
+    expect(frameStale(s.doc.get(), s.shotId(2))?.reason).toBe("Shot 3's refs changed")
+    expect(takeStale(s.doc.get(), s.shotId(1))).toBeUndefined() // the clip waits for its frame
+    expect(frameStale(s.doc.get(), s.shotId(0))).toBeUndefined()
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(0), { action: 'Beat 1.' }), 'edit shot') // the same words: nothing changed
+    expect(frameStale(s.doc.get(), s.shotId(0))).toBeUndefined()
+  })
+
+  it('a camera move or length marks only its own clip', async () => {
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(0), { camera_move: 'orbit' }), 'edit shot')
+    expect(s.doc.get().stale).toEqual([expect.objectContaining({ target: { kind: 'take', id: s.takeOf(0).id }, caused_by: { kind: 'shot', id: s.shotId(0) }, reason: "Shot 1's camera move changed" })])
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(2), { duration_s: 3 }), 'edit shot')
+    expect(takeStale(s.doc.get(), s.shotId(2))?.reason).toBe("Shot 3's length changed")
+    expect(frameStale(s.doc.get(), s.shotId(0))).toBeUndefined()
+    expect(frameStale(s.doc.get(), s.shotId(2))).toBeUndefined()
+    expect(s.doc.get().stale).toHaveLength(2)
+  })
+
+  it('a frame redrawn from the current words lifts its mark and marks only its own clip', async () => {
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(1), { action: 'Beat 2, closer.' }), 'edit shot')
+    const id = await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
+    expect(s.inputOf(id).shot?.action).toBe('Beat 2, closer.')
+    await s.land()
     expect(frameStale(s.doc.get(), s.shotId(1))).toBeUndefined()
+    expect(takeStale(s.doc.get(), s.shotId(1))?.reason).toBe("Shot 2's frame changed")
+    expect(frameStale(s.doc.get(), s.shotId(2))).toBeUndefined()
+    expect(takeStale(s.doc.get(), s.shotId(2))).toBeUndefined()
+  })
+
+  it('undoing a shot edit takes its mark back with it; typing is one step', async () => {
+    const s = await setup(2)
+    await s.makeAll(false)
+    keepUndo(s.doc, memoryKeeper())
+    for (const text of ['B', 'Be', 'Bea']) await updateDoc(s.doc, (d) => editShot(d, s.shotId(1), { action: text }), 'edit shot')
+    expect(frameStale(s.doc.get(), s.shotId(1))).toBeDefined()
+    expect(undoState(s.doc).done).toHaveLength(1)
+    await undo(s.doc)
+    expect(s.doc.get().shots![1].action).toBe('Beat 2.')
+    expect(s.doc.get().stale).toEqual([])
+    await redo(s.doc)
+    expect(s.doc.get().shots![1].action).toBe('Bea')
+    expect(frameStale(s.doc.get(), s.shotId(1))?.reason).toBe("Shot 2's words changed")
+  })
+
+  it('an older project\'s frame → next frame marks are dropped when it opens; other marks stay', () => {
+    const d = emptyDocument({ id: 'p_test01', handle: 'maya' })
+    d.stale = [
+      { target: { kind: 'frame', id: 'frame_b' }, caused_by: { kind: 'frame', id: 'frame_a' }, reason: 'Shot 1 changed' },
+      { target: { kind: 'take', id: 'take_a' }, caused_by: { kind: 'frame', id: 'frame_a' }, reason: "Shot 1's frame changed" },
+      { target: { kind: 'frame', id: 'frame_c' }, caused_by: { kind: 'shot', id: 'shot_c' }, reason: "Shot 3's words changed" },
+    ]
+    expect(normaliseDocument(d).stale!.map((m) => m.target.id)).toEqual(['take_a', 'frame_c'])
   })
 
   it('a new clip made from the current frame is not out of date', async () => {
@@ -346,7 +420,7 @@ describe('the out-of-date chain', () => {
     expect(adStatus(s.doc.get()).stale).toBe(false)
   })
 
-  it('adding a shot puts the ad out of date; deleting one marks the next shot\'s frame and the ad, and Undo puts it back', async () => {
+  it('adding a shot puts the ad out of date; deleting one puts the ad out of date but not the next shot\'s frame, and Undo puts it back', async () => {
     const s = await setup(3)
     await s.makeAll()
     await updateDoc(s.doc, (d) => { d.shots!.push({ id: newId('shot'), order: 4, duration_s: 2, composition: 'medium', action: 'The logo.', camera_move: 'static', status: 'planned' }) }, 'add shot')
@@ -357,7 +431,8 @@ describe('the out-of-date chain', () => {
 
     const third = s.frameOf(2)
     const r = await deleteFrom(s.doc, (d) => removeShot(d, s.shotId(1)))
-    expect(s.doc.get().stale).toEqual([expect.objectContaining({ target: { kind: 'frame', id: third.id }, caused_by: { kind: 'shot', id: expect.stringMatching(/^shot_/) }, reason: 'Shot 2 was deleted' })])
+    expect(s.frameOf(1).id).toBe(third.id)
+    expect(s.doc.get().stale).toEqual([]) // its own shot did not change (features/one-to-one-updates.clan)
     expect(adStatus(s.doc.get())).toMatchObject({ stale: true, reason: 'A shot was deleted' })
     await restoreTo(s.doc, r)
     expect(s.doc.get().stale).toEqual([])
@@ -368,29 +443,107 @@ describe('the out-of-date chain', () => {
 describe('Update what follows', () => {
   const runway = effectiveConfig('event', 'runway')
 
-  it('plans and prices the work: the changed frame\'s followers, their clips, the ad', async () => {
+  it('plans only what is out of date itself, in shot order, then the ad; carrying forward plans the old chain', async () => {
     const s = await setup(4)
     await s.makeAll()
     expect(planFollow(s.doc.get())).toEqual({ frames: [], clips: [], ad: false })
     await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
     await s.land()
+    // One to one: only shot 2's clip (its frame changed), then the ad it feeds.
     const plan = planFollow(s.doc.get())
-    // Frames 3 and 4 follow frame 2; clips for shots 2-4 (2's frame changed); then the ad.
-    expect(plan).toEqual({ frames: [s.shotId(2), s.shotId(3)], clips: [s.shotId(1), s.shotId(2), s.shotId(3)], ad: true })
+    expect(plan).toEqual({ frames: [], clips: [s.shotId(1)], ad: true })
+    expect(planSummary(plan, runway)).toBe('1 clip, 1 ad · about $1.20')
+    // Carry forward: frames 3 and 4 follow frame 2; clips for shots 2-4 (2's frame changed); then the ad.
+    const carry = planFor(s.doc.get(), { kind: 'carry' })
+    expect(carry).toEqual({ frames: [s.shotId(2), s.shotId(3)], clips: [s.shotId(1), s.shotId(2), s.shotId(3)], ad: true })
     // Runway: frame $0.20 (Gemini 3 Pro), clip $1.20 (Veo 3.1) (contracts/capabilities/runway.json); the ad is ffmpeg.
-    expect(planCost(plan, runway).usd).toBeCloseTo(2 * 0.2 + 3 * 1.2)
-    expect(planSummary(plan, runway)).toBe('2 frames, 3 clips, 1 ad · about $4.00')
-    expect(planSummary(plan, CONFIGS.testing)).toMatch(/^2 frames, 3 clips, 1 ad · /)
+    expect(planCost(carry, runway).usd).toBeCloseTo(2 * 0.2 + 3 * 1.2)
+    expect(planSummary(carry, runway)).toBe('2 frames, 3 clips, 1 ad · about $4.00')
+    expect(planSummary(carry, CONFIGS.testing)).toMatch(/^2 frames, 3 clips, 1 ad · /)
+  })
+
+  it('edits plan their own items in shot order, the ad after the clips; not made yet is a plan of its own', async () => {
+    const s = await setup(4)
+    await s.makeAll()
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(2), { action: 'Beat 3, slower.' }), 'edit shot')
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(0), { camera_move: 'orbit' }), 'edit shot')
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(3), { action: 'Beat 4, the logo.' }), 'edit shot')
+    expect(planFollow(s.doc.get())).toEqual({ frames: [s.shotId(2), s.shotId(3)], clips: [s.shotId(0)], ad: true })
+    expect(planMissing(s.doc.get())).toEqual({ frames: [], clips: [], ad: false })
+    // Carry forward from the first out-of-date frame: frames 3-4, their clips and clip 1, the ad.
+    expect(planFor(s.doc.get(), { kind: 'carry' })).toEqual({ frames: [s.shotId(2), s.shotId(3)], clips: [s.shotId(0), s.shotId(2), s.shotId(3)], ad: true })
+    // A card: this one, or this and those after.
+    expect(planFor(s.doc.get(), { kind: 'one', item: { kind: 'frame', shotId: s.shotId(2) } })).toEqual({ frames: [s.shotId(2)], clips: [], ad: false })
+    expect(planFor(s.doc.get(), { kind: 'after', item: { kind: 'frame', shotId: s.shotId(1) } })).toEqual({ frames: [s.shotId(1), s.shotId(2), s.shotId(3)], clips: [], ad: false })
+    expect(planFor(s.doc.get(), { kind: 'after', item: { kind: 'clip', shotId: s.shotId(2) } })).toEqual({ frames: [], clips: [s.shotId(2), s.shotId(3)], ad: true })
+  })
+
+  it('a run of what is out of date makes only those items: the frame, then the clip, then the ad', async () => {
+    const s = await setup(4)
+    await s.makeAll()
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(2), { action: 'Beat 3, slower.' }), 'edit shot')
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(0), { duration_s: 2 }), 'edit shot')
+    await startFollow(s.deps)
+    await s.settle()
+    const ran = s.all().filter((j) => j.ctx && 'followRun' in j.ctx && j.ctx.followRun)
+    const where = (j: (typeof ran)[number]) => `${j.op}:${'shotId' in j.ctx ? s.doc.get().shots!.findIndex((x) => x.id === (j.ctx as { shotId: string }).shotId) + 1 : ''}`
+    expect(ran.map(where)).toEqual(['frame:3', 'clip:1', 'stitch:'])
+    expect(frameStale(s.doc.get(), s.shotId(2))).toBeUndefined() // drawn from the current words
+    expect(frameStale(s.doc.get(), s.shotId(3))).toBeUndefined() // frame 4 was never touched
+    expect(frameDrift(s.doc.get(), s.shotId(3))).toBe(3) // only the quiet note
+    // Clip 3 is now behind its new frame: asked for next, not made behind the user's back.
+    expect(planFollow(s.doc.get())).toEqual({ frames: [], clips: [s.shotId(2)], ad: true })
+  })
+
+  it('a steered plan of more than one item is shown first; nothing is sent until Start, and Cancel makes nothing', async () => {
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(1), { action: 'Beat 2, slower.' }), 'edit shot')
+    await updateDoc(s.doc, (d) => editShot(d, s.shotId(2), { action: 'Beat 3, slower.' }), 'edit shot')
+    const before = s.all().length
+    await startFollow(s.deps, CONFIGS.testing, { steer: true })
+    expect(s.ui.get().following).toMatchObject({ reviewing: true, frameShots: [s.shotId(1), s.shotId(2)], total: 2 })
+    expect(s.ui.get().following?.awaiting).toBeUndefined()
+    expect(s.all()).toHaveLength(before)
+    await cancelFollow(s.deps)
+    expect(s.ui.get().following).toBeUndefined()
+    expect(s.recorded).toEqual([]) // nothing made, nothing in the chain
+    await startFollow(s.deps, CONFIGS.testing, { steer: true })
+    await beginFollow(s.deps)
+    expect(s.ui.get().following?.awaiting).toEqual({ kind: 'frame', shotId: s.shotId(1) })
+    // One item goes straight to the box: there is no plan to check.
+    await cancelFollow(s.deps)
+    await s.settle()
+    await startFollow(s.deps, CONFIGS.testing, { steer: true, scope: { kind: 'one', item: { kind: 'frame', shotId: s.shotId(2) } } })
+    expect(s.ui.get().following).toMatchObject({ awaiting: { kind: 'frame', shotId: s.shotId(2) }, total: 1 })
+    expect(s.ui.get().following?.reviewing).toBeUndefined()
+  })
+
+  it('"Carry the look forward" from a frame runs the old chain from it: that frame and every one after, their clips, the ad', async () => {
+    const s = await setup(4)
+    await s.makeAll()
+    await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
+    await s.land()
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBe(2)
+    await startFollow(s.deps, undefined, { scope: { kind: 'carry', from: s.shotId(2) } })
+    await s.settle()
+    const ran = s.all().filter((j) => j.ctx && 'followRun' in j.ctx && j.ctx.followRun)
+    expect(ran.map((j) => j.op)).toEqual(['frame', 'frame', 'clip', 'clip', 'clip', 'stitch'])
+    expect(frameDrift(s.doc.get(), s.shotId(2))).toBeUndefined()
+    expect(frameDrift(s.doc.get(), s.shotId(3))).toBeUndefined()
+    expect(anythingStale(s.doc.get())).toBe(false)
   })
 
   it('steered: each item waits in the box; Make it sends its words and model, and the new one replaces the old once it lands', async () => {
     const s = await setup(2)
     await s.makeAll(false)
     await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
-    await s.land() // shot 1's frame changed: shot 2's frame and both clips are behind
+    await s.land() // shot 1's frame changed: carrying the look forward redraws frame 2, then both clips
     const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['heygen', 'fal'] as const } } as unknown as typeof CONFIGS.testing
     const before = s.all().length
-    await startFollow(s.deps, own, { steer: true })
+    await startFollow(s.deps, own, { steer: true, scope: { kind: 'carry' } })
+    expect(s.ui.get().following?.reviewing).toBe(true) // the plan first
+    await beginFollow(s.deps)
     expect(s.all()).toHaveLength(before) // nothing is sent until the user says so
     expect(s.ui.get().following?.awaiting).toEqual({ kind: 'frame', shotId: s.shotId(1) })
     const oldFrame = s.frameOf(1)
@@ -434,7 +587,9 @@ describe('Update what follows', () => {
     await s.makeAll()
     await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
     await s.land()
-    await startFollow(s.deps, CONFIGS.testing, { steer: true })
+    await startFollow(s.deps, CONFIGS.testing, { steer: true, scope: { kind: 'carry' } })
+    await beginFollow(s.deps)
+    expect(s.ui.get().following?.awaiting).toEqual({ kind: 'frame', shotId: s.shotId(1) })
     await restAsTheyAre(s.deps)
     await s.settle()
     expect(s.ui.get().following).toBeUndefined()
@@ -442,6 +597,22 @@ describe('Update what follows', () => {
     const ran = s.all().filter((j) => j.ctx && 'followRun' in j.ctx && j.ctx.followRun)
     expect(ran.map((j) => j.op)).toEqual(['frame', 'clip', 'clip', 'stitch'])
     expect(s.doc.get().frames!.filter((f) => f.shot_id === s.shotId(1))).toHaveLength(1) // each old one replaced
+  })
+
+  it('"Do them as they are" on a plan shown first makes the plan\'s items: one to one, only the clip and the ad', async () => {
+    const s = await setup(2)
+    await s.makeAll()
+    await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
+    await s.land()
+    await startFollow(s.deps, CONFIGS.testing, { steer: true })
+    expect(s.ui.get().following).toMatchObject({ reviewing: true, clipShots: [s.shotId(0)], ad: true })
+    await restAsTheyAre(s.deps)
+    await s.settle()
+    expect(s.ui.get().following).toBeUndefined()
+    expect(anythingStale(s.doc.get())).toBe(false)
+    const ran = s.all().filter((j) => j.ctx && 'followRun' in j.ctx && j.ctx.followRun)
+    expect(ran.map((j) => j.op)).toEqual(['clip', 'stitch'])
+    expect(frameDrift(s.doc.get(), s.shotId(1))).toBe(1) // frame 2 is left as it is: a quiet note
   })
 
   it('the box starts on the last model that worked for the step, not on one that just failed', async () => {
@@ -461,11 +632,12 @@ describe('Update what follows', () => {
     const s = await setup(3)
     await s.makeAll(false)
     await updateDoc(s.doc, (d) => { d.takes = d.takes!.filter((t) => t.shot_id === s.shotId(0)) })
-    const owed = planFollow(s.doc.get())
+    const owed = planMissing(s.doc.get())
     expect(owed.clips).toEqual([s.shotId(1), s.shotId(2)])
+    expect(planFollow(s.doc.get()).clips).toEqual([]) // not made yet is never counted as out of date
     const making = shotsInTheMaking(s.doc.get(), () => undefined)
     expect(making.clips.size).toBe(0)
-    expect(planFollow(s.doc.get(), new Set([s.shotId(1), s.shotId(2)])).clips).toEqual([])
+    expect(planMissing(s.doc.get(), new Set([s.shotId(1), s.shotId(2)])).clips).toEqual([])
   })
 
   it('starts on a real provider, not on mock, when one is offered', async () => {
@@ -509,7 +681,7 @@ describe('Update what follows', () => {
     expect(s.ui.get().jobCtx[routed].request.modelChoice).toBeUndefined()
   })
 
-  it('runs frames one at a time in order, then the clips, then the ad, and writes one chain entry', async () => {
+  it('carrying forward runs frames one at a time in order, then the clips, then the ad, and writes one chain entry', async () => {
     const s = await setup(4)
     await s.makeAll()
     await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
@@ -517,7 +689,7 @@ describe('Update what follows', () => {
     const before = s.doc.get().jobs.length
     const framesBefore = (s.doc.get().frames ?? []).length
 
-    await startFollow(s.deps)
+    await startFollow(s.deps, undefined, { scope: { kind: 'carry' } })
     const order: string[] = []
     for (let i = 0; i < 10; i++) {
       // The next step is sent from a completion hook: wait for it, or for the run to end.
@@ -542,7 +714,7 @@ describe('Update what follows', () => {
     expect(s.recorded.at(-1)!.action).toBe('updated what follows: 2 frames, 3 clips, ad')
   })
 
-  it('the chain names each step', async () => {
+  it('the chain names each step of a carried-forward run', async () => {
     const s = await setup(3)
     await s.makeAll()
     await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
@@ -554,7 +726,7 @@ describe('Update what follows', () => {
       if (d && s.doc.get().jobs.length > prev.jobs.length) said.push(d.action)
       prev = s.doc.get()
     })
-    await startFollow(s.deps)
+    await startFollow(s.deps, undefined, { scope: { kind: 'carry' } })
     await s.settle()
     expect(said).toEqual(["drew shot 3's frame again", "made shot 2's clip again", "made shot 3's clip again", 'rendered the ad'])
   })
@@ -564,7 +736,7 @@ describe('Update what follows', () => {
     await s.makeAll()
     await drawFrame(s.deps, 1, 'again', { parent: s.frameOf(1) })
     await s.land()
-    await startFollow(s.deps)
+    await startFollow(s.deps, undefined, { scope: { kind: 'carry' } })
     expect(s.running()).toHaveLength(1)
     await cancelFollow(s.deps)
     expect(s.ui.get().following?.cancel).toBe(true)
@@ -574,7 +746,8 @@ describe('Update what follows', () => {
     await vi.waitFor(() => expect(s.ui.get().following).toBeUndefined(), { timeout: 2000, interval: 5 })
     expect(s.doc.get().jobs.length).toBe(jobs) // nothing new started
     expect(s.recorded.at(-1)!.action).toBe('stopped updating what follows after 1 frame')
-    expect(frameStale(s.doc.get(), s.shotId(3))).toBeDefined() // what is left stays out of date
+    expect(frameDrift(s.doc.get(), s.shotId(3))).toBe(3) // what is left stays as it was: frame 4 is still drawn from the older frame 3
+    expect(takeStale(s.doc.get(), s.shotId(2))).toBeDefined() // and clip 3 is behind its new frame
   })
 
   it('resumes after a reload, and waits on a failed step until it is retried', async () => {
@@ -582,7 +755,7 @@ describe('Update what follows', () => {
     await s.makeAll()
     await drawFrame(s.deps, 0, 'again', { parent: s.frameOf(0) })
     await s.land()
-    await startFollow(s.deps)
+    await startFollow(s.deps, undefined, { scope: { kind: 'carry' } })
     // The page reloads while frame 2 is drawing: the run is in the UI snapshot; boot calls continueFollow.
     await continueFollow(s.deps)
     expect(s.running()).toHaveLength(1) // nothing doubled

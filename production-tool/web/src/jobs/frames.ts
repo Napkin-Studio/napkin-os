@@ -9,7 +9,7 @@
 // `continueDrawing`, which starts the next shot that has no frame. Nothing here
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
-import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument, StaleMark } from '../contracts/types'
+import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument } from '../contracts/types'
 import { updateDoc, type DocumentStore } from '../doc/store'
 import type { JobPurpose, UiState } from '../doc/ui'
 import type { UiStore } from '../projects/uiStore'
@@ -126,28 +126,8 @@ export async function continueDrawing(deps: FrameDeps, how: FrameHow = 'chain'):
   }
 }
 
-/**
- * Shot `shotId`'s selected frame changed: the next shot's selected frame is out
- * of date unless it was drawn from this very picture (then any earlier mark from
- * this shot is lifted). Never regenerates anything.
- */
-export function markNextStale(d: ProductionDocument, shotId: string, now = new Date().toISOString()) {
-  const shots = d.shots ?? []
-  const i = shots.findIndex((s) => s.id === shotId)
-  const next = shots[i + 1]
-  if (i < 0 || !next) return
-  const sel = selectedFrame(d, shotId)
-  const target = selectedFrame(d, next.id)
-  if (!sel || !target) return
-  const fromHere = new Set((d.frames ?? []).filter((f) => f.shot_id === shotId).map((f) => f.id))
-  const job = d.jobs.find((j) => j.id === target.job_id)
-  d.stale = (d.stale ?? []).filter((s) => !(s.target.kind === 'frame' && s.target.id === target.id && s.caused_by.kind === 'frame' && fromHere.has(s.caused_by.id)))
-  if (job?.input_hashes?.includes(sel.asset)) return
-  const mark: StaleMark = { target: { kind: 'frame', id: target.id }, caused_by: { kind: 'frame', id: sel.id }, reason: `Shot ${i + 1} changed`, marked_at: now }
-  d.stale.push(mark)
-}
-
-/** Select a version of a shot's frame and mark the next shot's frame and this shot's clip if that changes them. */
+/** Select a version of a shot's frame and mark this shot's clip if that changes it. The next shot's
+ *  frame is never marked (features/one-to-one-updates.clan): at most it shows "drawn from an older frame". */
 export function selectFrame(store: DocumentStore, shotId: string, frameId: string) {
   return updateDoc(store, (d) => {
     let sha: string | undefined
@@ -157,7 +137,6 @@ export function selectFrame(store: DocumentStore, shotId: string, frameId: strin
     }
     const s = d.shots?.find((x) => x.id === shotId)
     if (s && sha) s.storyboard_frame = sha
-    markNextStale(d, shotId)
     refreshClipStale(d, shotId)
   }, 'select frame')
 }
