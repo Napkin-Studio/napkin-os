@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/relay-api.schema.json",
   "title": "Relay HTTP API: request and response bodies",
-  "description": "Every route but POST /session and GET /config needs 'Authorization: Bearer <token>' from POST /session. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: POST /session, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /config (served by CloudFront as config.json).",
+  "description": "Every route but POST /session and GET /config needs 'Authorization: Bearer <token>' from POST /session. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: POST /session, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET|POST /library…, GET /config (served by CloudFront as config.json).",
   "$defs": {
     "SessionRequest": {
       "type": "object",
@@ -28,7 +28,7 @@
       "properties": {
         "token": {
           "type": "string",
-          "description": "Signed, 24 h. Carries participantId, role and workspace."
+          "description": "Signed, 24 h. Carries participantId and role."
         },
         "participantId": {
           "type": "string",
@@ -39,8 +39,8 @@
         },
         "workspace": {
           "type": "string",
-          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-          "description": "The team the event code belongs to (EVENT_CODES workspaces map; \"event\" when the code is not mapped). The library is shared within it."
+          "pattern": "^p_[a-z0-9]{6,}$",
+          "description": "The participant's own workspace: the participantId (features/personal-workspaces.clan, 2026-10-09; before, the team an event code belonged to). The library and the saved projects are kept in it. Each name is its own workspace, whatever event code it signed in with."
         },
         "role": {
           "enum": [
@@ -72,6 +72,11 @@
             "render"
           ],
           "additionalProperties": false
+        },
+        "projects": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many projects this name has saved on the relay (GET /projects), so sign-in can say 'Welcome back, <name>: N projects' when the workspace already exists. Added 2026-10-09."
         }
       },
       "required": [
@@ -81,7 +86,8 @@
         "workspace",
         "role",
         "expiresAt",
-        "quotas"
+        "quotas",
+        "projects"
       ],
       "additionalProperties": false
     },
@@ -520,7 +526,7 @@
     },
     "ClanMirror": {
       "type": "object",
-      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan, mirrored for the organisers. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual, and optionally X-Project-Id (a project id, the common id pattern; added 2026-10-09, additive, features/project-home.clan). Responses: 204; 401 without a valid token; 400 when the body is not a ZIP or X-Project-Id is not an id; 413 above 5 MiB. With X-Project-Id, stored at s3 clan/<participantId>/<projectId>/latest.clan and clan/<participantId>/<projectId>/<UTC time>-<reason>.clan; without it, at clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. This object documents the headers only.",
+      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual, and optionally X-Project-Id (a project id, the common id pattern; added 2026-10-09, features/project-home.clan). With X-Project-Id the save is one of the person's projects (features/personal-workspaces.clan, 2026-10-09): optional X-Project-Name (the name Home shows, percent-encoded UTF-8, at most 80 characters) and optional If-Match (the project's ETag this save started from). With If-Match, 409 conflict when someone saved the project since (nothing is overwritten); without it the save is taken as before. It answers 200 ClanSaved, stored at s3 clan/<participantId>/<projectId>/<UTC time>-<etag8>-<reason>.clan (every save, kept) and clan/<participantId>/<projectId>/latest.clan, listed in clan/<participantId>/projects.json. Without X-Project-Id it answers 204, stored at clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. 401 without a valid token; 400 when the body is not a ZIP or X-Project-Id is not an id; 413 above 5 MiB. This object documents the headers only.",
       "properties": {
         "contentType": {
           "const": "application/vnd.clan+zip"
@@ -584,7 +590,7 @@
     },
     "LibraryEntry": {
       "type": "object",
-      "description": "GET /library/{key} (latest) or /library/{key}/{ver}, and the response of a publish: one immutable version of a key. Stored at s3 library/<workspace>/<key>/<ver>.json.",
+      "description": "GET /library/{key} (latest) or /library/{key}/{ver}, and the response of a publish: one immutable version of a key. Stored at s3 library/<participantId>/<key>/<ver>.json.",
       "properties": {
         "workspace": {
           "type": "string"
@@ -626,7 +632,7 @@
     },
     "LibraryIndex": {
       "type": "object",
-      "description": "GET /library: the workspace's keys, latest version each. Stored at s3 library/<workspace>/index.json, written with If-Match on its ETag.",
+      "description": "GET /library: the workspace's keys, latest version each. Stored at s3 library/<participantId>/index.json, written with If-Match on its ETag.",
       "properties": {
         "workspace": {
           "type": "string"
@@ -680,6 +686,105 @@
       "required": [
         "workspace",
         "keys"
+      ],
+      "additionalProperties": false
+    },
+    "SavedProject": {
+      "type": "object",
+      "description": "One saved project of the person's (GET /projects, ClanSaved). Added 2026-10-09 (features/personal-workspaces.clan).",
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "X-Project-Name of the newest save that sent one; absent when none did."
+        },
+        "savedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Size of the saved .clan."
+        },
+        "etag": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 (hex) of the saved .clan bytes: send it as If-Match on the next save."
+        }
+      },
+      "required": [
+        "id",
+        "savedAt",
+        "bytes",
+        "etag"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectList": {
+      "type": "object",
+      "description": "GET /projects: the caller's saved projects (any browser), newest save first. Only the caller's own.",
+      "properties": {
+        "projects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SavedProject"
+          }
+        }
+      },
+      "required": [
+        "projects"
+      ],
+      "additionalProperties": false
+    },
+    "ClanSaved": {
+      "type": "object",
+      "description": "POST /clan with X-Project-Id: the save the relay kept. Its etag goes in If-Match on the next save.",
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/SavedProject"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectOpen": {
+      "type": "object",
+      "description": "GET /clan/{projectId}: the newest saved .clan of the caller's project. Not JSON: the body is the .clan bytes (application/vnd.clan+zip), with headers ETag (the quoted SavedProject.etag) and X-Saved-At. 404 when the caller has no such project; 413 when it is over 4.3 MB (a Lambda answer is at most 6 MB base64-encoded: export it instead). This object documents the headers only.",
+      "properties": {
+        "etag": {
+          "type": "string"
+        },
+        "savedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectCanvas": {
+      "type": "object",
+      "description": "PUT /clan/{projectId}/canvas (body, 204) and GET /clan/{projectId}/canvas (answer): the canvas that goes with the project's saved .clan, so it opens in another browser as it was. The Excalidraw elements only; pictures are rebuilt from the project's assets by hash (customdata.schema.json). At most 4 MB. 404 when the project is not saved, or (GET) has no canvas. Added 2026-10-09 (features/personal-workspaces.clan).",
+      "properties": {
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "savedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Set by the relay; ignored on PUT."
+        }
+      },
+      "required": [
+        "elements"
       ],
       "additionalProperties": false
     }

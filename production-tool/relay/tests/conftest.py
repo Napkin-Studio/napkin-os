@@ -72,6 +72,17 @@ class FakeBlobs:
         key = self.key_for_url(url)
         return self.objects[key][0] if key in self.objects else self.remote[url]
 
+    def get(self, key):
+        return self.objects[key][0] if key in self.objects else None
+
+    def list_keys(self, prefix):
+        return [{"key": k, "bytes": len(v[0]), "modified": "2026-10-07T00:00:00Z"}
+                for k, v in sorted(self.objects.items()) if k.startswith(prefix)]
+
+    def delete(self, keys):
+        for k in keys:
+            self.objects.pop(k, None)
+
 
 class FakeProvider:
     """Submit and status do whatever the test queued up; every call is recorded."""
@@ -143,8 +154,7 @@ class Harness:
         self.contracts = Contracts()
         self.relay = Relay(store=self.store, blobs=self.blobs, registry=reg, director=PassthroughDirector(),
                            config=lambda: self.cfg,
-                           secrets=lambda: {"event_codes": {"participant": ["HACK", "ACME", "ACME2"], "organiser": ["ORGS"],
-                                                            "workspaces": {"ACME": "acme", "ACME2": "acme"}},
+                           secrets=lambda: {"event_codes": {"participant": ["HACK", "napkin-studio"], "organiser": ["ORGS"]},
                                             "token_secret": SECRET},
                            clock=self.clock, stitch=self.stitched.append, contracts=self.contracts)
 
@@ -158,9 +168,12 @@ class Harness:
         elif status == 204:
             assert out is None
         else:
-            name = {"/session": "SessionResponse", "/uploads": "UploadResponse", "/library": "LibraryIndex"}.get(path, "Job")
+            name = {"/session": "SessionResponse", "/uploads": "UploadResponse", "/library": "LibraryIndex",
+                    "/projects": "ProjectList"}.get(path, "Job")
             if path.startswith("/library/"):
                 name = "LibraryEntry"
+            if path.startswith("/clan/"):
+                name = "ProjectCanvas" if path.endswith("/canvas") else None  # GET /clan/{project} is the bytes
             if path == "/config":
                 name = None
             if name:

@@ -1,0 +1,10 @@
+{
+  "token": "eyJleHAiOjE3OTE0NDY0MDAsImgiOiJNYXlhIiwicGlkIjoicF8xYTJiM2M0ZDVlIiwiciI6InBhcnRpY2lwYW50In0.c2lnbmF0dXJl",
+  "participantId": "p_1a2b3c4d5e",
+  "handle": "Maya",
+  "workspace": "p_1a2b3c4d5e",
+  "role": "participant",
+  "expiresAt": "2026-10-11T09:00:00Z",
+  "quotas": { "image": 40, "video": 6, "render": 3 },
+  "projects": 3
+}

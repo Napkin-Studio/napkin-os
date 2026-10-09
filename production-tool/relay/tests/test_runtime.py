@@ -21,9 +21,11 @@ def test_tokens_round_trip_and_reject_tampering():
 
 
 def test_event_codes_parse():
-    assert parse_event_codes('{"participant": ["A"], "organiser": ["B"]}') == {"participant": ["A"], "organiser": ["B"], "workspaces": {}}
-    assert parse_event_codes('{"participant": ["A"], "workspaces": {"A": "acme"}}')["workspaces"] == {"A": "acme"}
-    assert parse_event_codes("A, B") == {"participant": ["A", "B"], "organiser": [], "workspaces": {}}
+    assert parse_event_codes('{"participant": ["A"], "organiser": ["B"]}') == {"participant": ["A"], "organiser": ["B"]}
+    # Rewritten for features/personal-workspaces.clan: a code no longer maps to a shared workspace
+    # (each name is its own), so an old "workspaces" map in the secret is ignored, not an error.
+    assert parse_event_codes('{"participant": ["A"], "workspaces": {"A": "acme"}}') == {"participant": ["A"], "organiser": []}
+    assert parse_event_codes("A, B") == {"participant": ["A", "B"], "organiser": []}
 
 
 def test_config_cache_keeps_the_last_good_config():
