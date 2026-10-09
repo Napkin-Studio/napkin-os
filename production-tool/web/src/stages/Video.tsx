@@ -188,6 +188,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
   const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
   const selIdx = sel ? takes.indexOf(sel) : -1
   const ui = useUi()
+  const selMade = madeWith(doc, ui, sel?.job_id)
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
   const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
   // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
@@ -233,6 +234,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
             {making && <MakeClipBox index={index} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
           </Float>
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
+          {selMade.fallback && <span className="madeon" title={`${selMade.fallback}. ${ui.jobCtx[sel?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
         </div>
         {(stale || open > 0) && (
           <div className="badges">

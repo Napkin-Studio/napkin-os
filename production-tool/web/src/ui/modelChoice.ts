@@ -15,6 +15,13 @@ export function fellBack(from: ModelChoice | undefined, made: Provider | undefin
   return `Made on ${PROVIDER_NAMES[made]}: ${PROVIDER_NAMES[from.provider]} could not`
 }
 
+/** The notice when the relay made a job on Runway because the participant's own provider could not:
+ *  "fal couldn't make frame 3, so we made it on Runway. Napkin's got you." */
+export function fallbackNotice(from: ModelChoice | undefined, made: Provider | undefined, what: string): string | undefined {
+  if (!from || !made || from.provider === made) return undefined
+  return `${PROVIDER_NAMES[from.provider]} couldn't make ${what}, so we made it on ${PROVIDER_NAMES[made]}. Napkin's got you.`
+}
+
 export interface MadeWith {
   /** The provider and model the job ran on, when the record has them. */
   made?: ModelChoice

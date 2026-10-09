@@ -336,6 +336,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         {/* The mark is on the version on show; while its replacement is drawn, say so instead. */}
         {staleMark && running && <span className="behind updating" title={staleMark.reason}>Updating…</span>}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
+        {made.fallback && <span className="madeon" title={`${made.fallback}. ${ui.jobCtx[current?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
       </div>
       {/* Out of date: what changed, and Redraw (this one) with ▾ for this and the frames after. */}
       {staleMark && !running && (
