@@ -17,7 +17,26 @@ import { asContractError, RelayError, type Relay } from '../relay'
 export interface LiveInfo {
   state: JobState
   queuePosition?: number
+  /** A line for the card while it is still trying something (a result that would not download). */
+  note?: string
 }
+
+/** Times a job whose POST /jobs answer was lost is sent again when the relay says it never got it. */
+export const LOST_RESENDS = 4
+/** Waits (s) between tries to download a finished job's outputs; after the last, every FETCH_AGAIN_S. */
+export const FETCH_BACKOFF_S = [2, 5, 15, 30]
+export const FETCH_AGAIN_S = 60
+
+/** POST /jobs never answered, or answered with no verdict (a network error, a gateway 502/504, the
+ *  relay's own 500): the relay may have taken the job. A refusal (quota, spend stop, invalid input)
+ *  names its code and is final. */
+function answerLost(e: unknown): boolean {
+  if (!(e instanceof RelayError)) return false
+  if (e.status === 0) return e.error.code === 'provider_unavailable'
+  return e.status >= 500 && e.error.code === 'internal'
+}
+
+const sleep = (s: number) => new Promise<void>((r) => setTimeout(r, s * 1000))
 
 export type CompletionHandler = (job: Job, ctx: JobCtx) => void
 export type Purpose = JobPurpose['for']
@@ -45,6 +64,10 @@ export class JobRunner {
   private readonly ui: UiStore
   /** Set by stop(): the project was closed. Its jobs carry on at the relay and land when it is opened again. */
   private stopped = false
+  /** Jobs sent again after a lost answer, by how many times (LOST_RESENDS). */
+  private readonly resent = new Map<string, number>()
+  /** Jobs whose outputs are being downloaded: nothing else may land them (a cancel landed one twice). */
+  private readonly completing = new Set<string>()
   /** The stage the user is on, for log entries. */
   stage: () => StageName = () => 'character'
 
@@ -141,6 +164,15 @@ export class JobRunner {
         this.timers.set(request.jobId, t)
         return
       }
+      // The answer was lost, not refused (features/video-stage-findings.clan): the relay may be making
+      // it already, so failing it here let Retry pay twice. Stay queued and ask; a 404 sends the same
+      // request again (poll), and the same jobId never pays twice.
+      if (answerLost(e) && this.live.get(request.jobId)?.state !== 'cancelled') {
+        this.live.set(request.jobId, { state: 'queued' })
+        this.emit()
+        this.schedule(request.jobId, 3)
+        return
+      }
       this.fail(request.jobId, err)
     }
   }
@@ -165,6 +197,8 @@ export class JobRunner {
   }
 
   async cancel(jobId: string) {
+    // Its result is already downloading: it lands as it is (a cancel then landed it twice, 2026-10-09).
+    if (this.completing.has(jobId)) return
     this.stopPolling(jobId)
     try {
       const job = await this.relay.cancelJob(jobId)
@@ -205,7 +239,7 @@ export class JobRunner {
     for (const j of this.doc.get().jobs) {
       if (isActive(j.state)) {
         this.live.set(j.id, { state: j.state })
-        this.schedule(j.id, 0.2)
+        if (j.state !== 'uncertain') this.schedule(j.id, 0.2) // the relay never moves an uncertain job
       }
     }
     this.emit()
@@ -248,7 +282,16 @@ export class JobRunner {
       // Send the request we hold again; the same jobId never pays twice.
       const request = this.ui.get().jobCtx[jobId]?.request
       if (e instanceof RelayError && e.status === 404 && request && this.live.get(jobId)?.state === 'queued') {
-        return void this.send(request)
+        // A lost answer whose request never got there either: bounded, for a relay that always errors.
+        const n = (this.resent.get(jobId) ?? 0) + 1
+        this.resent.set(jobId, n)
+        if (n <= LOST_RESENDS) return void this.send(request)
+        return this.fail(jobId, { code: 'provider_unavailable', message: 'The server did not take this job. Try again.', retryable: true })
+      }
+      if (e instanceof RelayError && e.status === 404) {
+        // The relay had it and no longer does (a local relay restarted): "No such job." with no Retry
+        // left it stuck (2026-10-09). Making it again is a new job.
+        return this.fail(jobId, { code: 'internal', message: 'The server lost track of this job. Retry makes it again.', retryable: true })
       }
       if (err.code === 'invalid_input') this.fail(jobId, err)
       else if (err.code === 'unauthorised') this.schedule(jobId, 10) // signed out: resume once signed in again
@@ -287,6 +330,7 @@ export class JobRunner {
   }
 
   private apply(job: Job) {
+    if (this.completing.has(job.jobId)) return // its outputs are downloading: that lands it
     normalisePromptVersion(job)
     const done = job.state === 'completed'
     const prev = this.doc.get().jobs.find((x) => x.id === job.jobId)
@@ -308,29 +352,63 @@ export class JobRunner {
     this.noteFallback(job)
     this.emit()
     if (done) void this.complete(job)
-    else if (isActive(job.state)) this.schedule(job.jobId, job.nextPollS ?? 2)
+    // Uncertain is final at the relay (it never sends it again): asking every 2 s for ever changed
+    // nothing (2026-10-09). The card waits for the participant: Stop waiting, or Try again.
+    else if (isActive(job.state) && job.state !== 'uncertain') this.schedule(job.jobId, job.nextPollS ?? 2)
+  }
+
+  /** Download a finished job's outputs into the blob store. A blip does not fail the job (Retry then paid
+   *  for a new clip, 2026-10-09): it is tried again after FETCH_BACKOFF_S, then the job stays "fetching" and
+   *  is asked about every FETCH_AGAIN_S, which downloads it again; a reload does the same (resume). */
+  private async download(job: Job): Promise<DocAsset[] | null> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const assets: DocAsset[] = []
+        for (const o of job.outputs ?? []) {
+          const blob = await this.relay.fetchOutput(o)
+          await putBlobAs(o.sha256, blob)
+          const a: DocAsset = {
+            sha256: o.sha256,
+            kind: o.mime.startsWith('video/') ? 'video' : 'image',
+            mime: o.mime,
+            origin: job.kind === 'mock' ? 'mock' : 'generated',
+            job_id: job.jobId,
+            locations: outputLocations(o.sha256, o.url),
+          }
+          if (o.bytes) a.bytes = o.bytes
+          if (o.w) a.w = o.w
+          if (o.h) a.h = o.h
+          if (o.durationS) a.duration_s = o.durationS
+          assets.push(a)
+        }
+        return assets
+      } catch {
+        if (this.stopped) return null
+        if (attempt >= FETCH_BACKOFF_S.length) {
+          this.live.set(job.jobId, { state: 'fetching', note: 'Could not download it yet; trying again.' })
+          this.emit()
+          return null
+        }
+        await sleep(FETCH_BACKOFF_S[attempt])
+        if (this.stopped) return null
+      }
+    }
   }
 
   private async complete(job: Job) {
+    if (this.completing.has(job.jobId)) return
+    this.completing.add(job.jobId)
+    let assets: DocAsset[] | null
     try {
-      const assets: DocAsset[] = []
-      for (const o of job.outputs ?? []) {
-        const blob = await this.relay.fetchOutput(o)
-        await putBlobAs(o.sha256, blob)
-        const a: DocAsset = {
-          sha256: o.sha256,
-          kind: o.mime.startsWith('video/') ? 'video' : 'image',
-          mime: o.mime,
-          origin: job.kind === 'mock' ? 'mock' : 'generated',
-          job_id: job.jobId,
-          locations: outputLocations(o.sha256, o.url),
-        }
-        if (o.bytes) a.bytes = o.bytes
-        if (o.w) a.w = o.w
-        if (o.h) a.h = o.h
-        if (o.durationS) a.duration_s = o.durationS
-        assets.push(a)
-      }
+      assets = await this.download(job)
+    } finally {
+      this.completing.delete(job.jobId)
+    }
+    if (!assets) {
+      if (!this.stopped) this.schedule(job.jobId, FETCH_AGAIN_S) // still "fetching": the next poll downloads it again
+      return
+    }
+    try {
       // Closed while its outputs came in: the bytes are kept (shared blobs), the job stays "fetching"
       // in its own document and lands when that project is opened again.
       if (this.stopped) return

@@ -9,6 +9,7 @@
 // - a generated image still being made can't be used yet.
 
 import type { CustomData, Sha256 } from '../contracts/types'
+import { clipText } from '../lib/guard'
 
 export interface PlainEl {
   id: string
@@ -82,5 +83,5 @@ export function planSelection(all: readonly PlainEl[], selectedIds: readonly str
 
 /** The instruction: what was typed, then the selected notes' words. At most 1000 characters (the contract). */
 export function instruction(typed: string, notes: readonly { text: string }[]): string {
-  return [typed.trim(), ...notes.map((n) => n.text)].filter(Boolean).join('\n').slice(0, 1000)
+  return clipText([typed.trim(), ...notes.map((n) => n.text)].filter(Boolean).join('\n'), 1000)
 }

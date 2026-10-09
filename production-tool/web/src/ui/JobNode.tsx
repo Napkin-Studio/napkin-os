@@ -15,6 +15,7 @@ import { otherModels } from './modelChoice'
 import { ModelItems } from './ModelPick'
 import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
+import { failedActions } from './jobActions'
 
 const STATE_LABEL: Record<string, string> = {
   queued: 'In the queue',
@@ -49,6 +50,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
     const err = job.error
     const cancelled = state === 'cancelled'
     const retryable = cancelled || (err?.retryable ?? true)
+    const offer = failedActions(err)
     const report = async () => {
       setReported('sending')
       const ok = await runner.report(jobId, `${job.op} ${err?.code ?? ''}: ${err?.message ?? ''}`)
@@ -59,6 +61,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
       <div className={`errnode ${compact ? 'compact' : ''}`} role="alert">
         {!compact && <AgentFigure agent={who.agent} state={who.state} size={46} decorative />}
         <div className="msg" title={compact ? err?.message : undefined}>{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
+        {!compact && !cancelled && offer.note && <div className="faint" style={{ fontSize: 12, maxWidth: 260 }}>{offer.note}</div>}
         {!compact && err?.code && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
         {/* One floating bar of what to do next: Retry, another model, Report, Clear. */}
         <div className="optbar" role="group" aria-label="What to do with this job">
@@ -68,8 +71,8 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
               if (id) onRetried?.(id)
             }}>↻ Retry</button>
           )}
-          {!cancelled && <OtherModel job={job} compact={compact} onRetried={onRetried} />}
-          {!cancelled && (
+          {!cancelled && offer.otherModel && <OtherModel job={job} compact={compact} onRetried={onRetried} />}
+          {!cancelled && offer.report && (
             <button className={`btn ${compact ? 'xs icon' : 'sm'} ghost`} disabled={reported === 'sending' || reported === 'yes'}
               aria-label={reportLabel} title={compact ? reportLabel : 'Tell the organisers this failed'} onClick={report}>
               {compact ? '⚑' : reportLabel}
@@ -111,7 +114,9 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
       <div className="meta" title={compact ? who.line : undefined}>
         {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
-      {!compact && (confirming
+      {!compact && live?.note && <div className="meta" role="status">{live.note}</div>}
+      {/* Downloading the result: it lands as it is, so there is nothing to cancel. */}
+      {!compact && state !== 'fetching' && (confirming
         ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
         : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)}
     </div>

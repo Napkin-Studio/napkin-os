@@ -106,7 +106,8 @@ def _error(e: types.ProviderError, *, accepted: bool = False) -> base.ProviderEr
         out.source = e.source
         return out
     return base.ProviderError(code, e.message, provider_code=e.provider_code, retryable=e.retryable,
-                              accepted=accepted or e.accepted, source=e.source)
+                              accepted=accepted or e.accepted, source=e.source,
+                              retry_after_s=getattr(e, "retry_after_s", None))
 
 
 def _output(o: types.ProviderOutput) -> dict:

@@ -144,6 +144,11 @@ export function adStatus(d: ProductionDocument): AdStatus {
     if (!job.input_hashes.includes(t.asset)) return { ad, stale: true, reason: `Shot ${i + 1}'s clip changed`, shotId: s.id }
   }
   if (job.input_hashes.length > shots.length) return { ad, stale: true, reason: 'A shot was deleted' }
+  // The same clips in another order are another ad: the job's input_hashes keep the clips' order
+  // (the stitch request lists them shot by shot). It stayed "up to date" after a reorder (2026-10-09).
+  const now = shots.map((s) => takeOf(d, s.id)!.asset).filter((h, i, all) => all.indexOf(h) === i)
+  const sent = job.input_hashes.filter((h) => now.includes(h))
+  if (sent.join() !== now.join()) return { ad, stale: true, reason: 'The shots were reordered' }
   return { ad, stale: false }
 }
 

@@ -24,6 +24,14 @@ export function isRunning(doc: ProductionDocument, jobId: string | undefined): b
   return !!j && isActive(j.state)
 }
 
+/** Still being made by the relay: running, and not "uncertain". An uncertain job waits on the
+ *  participant (Stop waiting / Try again on its card), so it holds no lock on Make clips or
+ *  Render ad (it held them for ever, 2026-10-09). */
+export function isMoving(doc: ProductionDocument, jobId: string | undefined): boolean {
+  if (!isRunning(doc, jobId)) return false
+  return doc.jobs.find((x) => x.id === jobId)?.state !== 'uncertain'
+}
+
 /** A named ref as a job input. The role is its key's; the relay makes the wire tag. */
 export async function namedInput(relay: Relay, doc: ProductionDocument, r: NamedRef): Promise<JobInputRef> {
   const role = doc.keys.find((k) => k.key === r.key)?.role ?? 'other'
