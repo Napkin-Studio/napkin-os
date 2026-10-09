@@ -6,6 +6,7 @@
 import type { ProductionDocument } from '../contracts/types'
 import { idbGet, idbPut } from '../lib/idb'
 import { applyMergePatch, createMergePatch } from './mergePatch'
+import { noteStep } from './undo'
 import type { Doc, DocumentStore, Verdict } from './types'
 
 export type { DocumentStore } from './types'
@@ -164,12 +165,24 @@ export class SnapshotDocumentStore extends SnapshotStore<ProductionDocument> imp
  * Edit the document with a draft function; the change goes to the store as an
  * RFC 7396 merge patch, so this works the same on the CLAN store.
  */
+/** A person's change: written, and kept as an undo step (doc/undo.ts). */
 export function updateDoc(store: DocumentStore, fn: (draft: Doc) => void, action = 'edit', rationale?: string): Promise<Doc> {
+  return write(store, fn, action, rationale, false)
+}
+
+/** The app's own change (job bookkeeping, a result landing, sign in, the stage, the canvas sync): written,
+ *  but never an undo step, so undo does not fight with jobs or Excalidraw's own undo. */
+export function systemUpdate(store: DocumentStore, fn: (draft: Doc) => void, action = 'edit', rationale?: string): Promise<Doc> {
+  return write(store, fn, action, rationale, true)
+}
+
+function write(store: DocumentStore, fn: (draft: Doc) => void, action: string, rationale: string | undefined, system: boolean): Promise<Doc> {
   const before = store.get()
   const draft = structuredClone(before)
   fn(draft)
   const mp = createMergePatch(before, draft)
   if (mp === undefined) return Promise.resolve(before)
+  if (!system) noteStep(store, before, draft, action)
   return store.patch(mp as object, rationale ? { action, rationale } : { action })
 }
 

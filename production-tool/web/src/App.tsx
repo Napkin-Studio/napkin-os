@@ -3,7 +3,7 @@ import { useConfig, useDoc, useJobsTick, useServices, useUi } from './app/contex
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
 import type { StageName } from './contracts/types'
-import { updateDoc } from './doc/store'
+import { systemUpdate } from './doc/store'
 import { download, exportBundle } from './export'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
@@ -17,6 +17,8 @@ import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
 import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
+import { UndoButtons } from './ui/UndoButtons'
+import { SaveButton } from './ui/SaveButton'
 import { Float, MenuItem } from './ui/Float'
 import { JobTray } from './ui/JobTray'
 
@@ -108,7 +110,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
               className={`rail-step ${s.id === stage ? 'current' : ''} ${i < order ? 'done' : ''}`}
               disabled={!reachable(s.id)}
               aria-current={s.id === stage ? 'step' : undefined}
-              onClick={() => updateDoc(docStore, (d) => { d.stage.current = s.id }, 'stage')}
+              onClick={() => systemUpdate(docStore, (d) => { d.stage.current = s.id }, 'stage')}
             >
               <span className="n">{i < order ? '✓' : s.n}</span>
               {s.label}
@@ -120,9 +122,11 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
         {stage !== 'character' && <UpdateFollows />}
         <JobTray />
         {config.flags.ownKeys && <OwnKeysButton />}
+        <UndoButtons />
+        <SaveButton />
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
         {/* Export, the handle, Sign out and Start over live in the menu: the bar keeps the run's state, keys and History.
-            Undo and Redo (features/system-undo.clan) will sit just left of History. */}
+            Undo, Redo and Save sit just left of History. */}
         <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
         <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
           <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}</div>
@@ -208,7 +212,7 @@ function SignIn() {
           const s = await relay.session({ eventCode: code.trim(), handle: handle.trim() })
           relay.useToken(s.token)
           uiStore.update((u) => { u.session = s; u.sessionFor = relayId() })
-          await updateDoc(doc, (d) => { d.participant = { id: s.participantId, handle: s.handle } }, 'sign in')
+          await systemUpdate(doc, (d) => { d.participant = { id: s.participantId, handle: s.handle } }, 'sign in')
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not sign in.')
         } finally {

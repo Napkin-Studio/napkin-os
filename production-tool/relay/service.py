@@ -909,8 +909,11 @@ class Relay:
         state = job["state"]
         if state == "queued":
             return self._finish(job, "cancelled", paid=False, refund=True)
-        if state == "submitted":
-            if job["op"] != "stitch" and job.get("provider"):
+        if state in ("submitted", "uncertain"):
+            # Uncertain: no answer in time, so the provider may have it. Stop waiting: cancel it there
+            # if we know its id, and never send it again (2026-10-09: a 30 s upload left a job
+            # "Checking…" with no way out).
+            if job["op"] != "stitch" and job.get("provider") and job.get("requestId"):
                 try:
                     self._adapter(job).cancel(job["requestId"])
                 except Exception:

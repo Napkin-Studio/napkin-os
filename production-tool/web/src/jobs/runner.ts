@@ -7,7 +7,7 @@ import type {
   ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
 } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
+import { systemUpdate, type DocumentStore, type SnapshotStore } from '../doc/store'
 import type { JobCtx, JobPurpose, UiState } from '../doc/ui'
 import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId } from '../lib/ulid'
@@ -101,7 +101,7 @@ export class JobRunner {
     this.ui.update((u) => {
       u.jobCtx[jobId] = { ...purpose, request }
     })
-    updateDoc(this.doc, (d) => {
+    systemUpdate(this.doc, (d) => {
       d.jobs.push(entry)
     }, `submit ${op}`)
     this.live.set(jobId, { state: 'queued' })
@@ -246,7 +246,7 @@ export class JobRunner {
   }
 
   private patchDocJob(jobId: string, patch: Partial<DocJob>) {
-    updateDoc(this.doc, (d) => {
+    systemUpdate(this.doc, (d) => {
       const j = d.jobs.find((x) => x.id === jobId)
       // Only a real change moves updated_at: a poll that learns nothing writes nothing.
       const changed = j && Object.entries(patch).some(([k, v]) => JSON.stringify((j as unknown as Record<string, unknown>)[k]) !== JSON.stringify(v))
@@ -292,7 +292,7 @@ export class JobRunner {
         if (o.durationS) a.duration_s = o.durationS
         assets.push(a)
       }
-      updateDoc(this.doc, (d) => {
+      systemUpdate(this.doc, (d) => {
         for (const a of assets) if (!d.assets.some((x) => x.sha256 === a.sha256)) d.assets.push(a)
         const j = d.jobs.find((x) => x.id === job.jobId)
         if (j) {

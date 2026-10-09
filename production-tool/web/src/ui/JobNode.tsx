@@ -83,6 +83,25 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
 
   if (!running) return null
 
+  if (state === 'uncertain') {
+    // No answer in time: the provider may have it, so it is never sent again by itself. The person
+    // decides: stop waiting, or send it again knowing it may be charged twice (2026-10-09).
+    return (
+      <div className={`errnode ${compact ? 'compact' : ''}`} role="alert">
+        <div className="msg">No answer from {job.provider ?? 'the provider'} in time. It may still make this, or it may not.</div>
+        {!compact && <div className="code">uncertain{job.error?.providerCode ? ` · ${job.error.providerCode}` : ''}</div>}
+        <div className="row">
+          <button className="btn xs" onClick={() => void runner.cancel(jobId)} title="Stop waiting for it. If the provider did take it, it may still be charged.">Stop waiting</button>
+          <button className="btn xs primary" title="Send it again. If the provider did take the first one, both may be charged." onClick={async () => {
+            await runner.cancel(jobId)
+            const id = await runner.retry(jobId)
+            if (id) onRetried?.(id)
+          }}>Try again</button>
+        </div>
+      </div>
+    )
+  }
+
   const q = live?.queuePosition
   const model = job.model ? modelLabel(job.provider, job.model) : undefined
   return (
