@@ -11,7 +11,7 @@ import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
 import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
-import { cancelFollow, continueFollow, lastWorkedModel, makeAwaited, planCost, planFollow, planSummary, restAsTheyAre, startFollow } from './follow'
+import { cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planCost, planFollow, planSummary, restAsTheyAre, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { applyFrame } from './handlers'
@@ -454,6 +454,18 @@ describe('Update what follows', () => {
       d.jobs.push({ ...clips.at(-1)!, id: newId('job'), provider: 'heygen', model: 'heygen-video-1', state: 'failed' })
     })
     expect(lastWorkedModel(s.doc.get(), 'clip', own)).toEqual({ provider: 'fal', model: 'veo3.1-fast-i2v' })
+  })
+
+  it('leaves out a clip that is being made now: it is not behind', async () => {
+    // 2026-10-09: four first clips in the making showed as "4 behind your changes".
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => { d.takes = d.takes!.filter((t) => t.shot_id === s.shotId(0)) })
+    const owed = planFollow(s.doc.get())
+    expect(owed.clips).toEqual([s.shotId(1), s.shotId(2)])
+    const making = shotsInTheMaking(s.doc.get(), () => undefined)
+    expect(making.clips.size).toBe(0)
+    expect(planFollow(s.doc.get(), new Set([s.shotId(1), s.shotId(2)])).clips).toEqual([])
   })
 
   it('starts on a real provider, not on mock, when one is offered', async () => {

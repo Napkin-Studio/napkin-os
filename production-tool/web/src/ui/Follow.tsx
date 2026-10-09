@@ -5,8 +5,7 @@
 
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import { shotsBeingFixed } from '../jobs/fix'
-import { cancelFollow, followState, planFollow, planSize, planWords, startFollow } from '../jobs/follow'
+import { cancelFollow, followState, planFollow, planSize, planWords, shotsInTheMaking, startFollow } from '../jobs/follow'
 import { behindCount } from './behind'
 
 /** The run's state and Stop, in the top bar; nothing when no run is on. */
@@ -41,7 +40,8 @@ export function RemakeBar() {
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   if (ui.following) return null
-  const plan = planFollow(doc, shotsBeingFixed(doc, (id) => ui.jobCtx[id]))
+  const busy = shotsInTheMaking(doc, (id) => ui.jobCtx[id])
+  const plan = planFollow(doc, busy.clips, busy.frames)
   const n = planSize(plan)
   if (!n) return null
   const deps = { relay, doc: docStore, ui: uiStore, runner }
