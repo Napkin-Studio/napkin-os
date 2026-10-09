@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { unzipSync } from 'fflate'
 import { parse as parseYaml } from 'yaml'
 import {
-  ClanDocumentStore, InvalidDocument, buildExportZip, memoryPersistence, problems, sha256Hex,
+  ClanDocumentStore, InvalidDocument, buildExportZip, memoryPersistence, postClanMirror, problems, sha256Hex,
   indexedDbPersistence, type Doc, type DocAsset,
 } from '../src/index'
 import { appTemplate } from '../src/host'
@@ -280,5 +280,30 @@ describe('timing and size, 8 shots + 30 jobs', () => {
     console.log(`\n[clan-store timing]\n  ${rows.join('\n  ')}\n`)
     expect(s.get().jobs).toHaveLength(30)
     expect(problems(s.get())).toEqual([])
+  })
+})
+
+describe('postClanMirror', () => {
+  const capture = () => {
+    const sent: { url: string; headers: Record<string, string> }[] = []
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      sent.push({ url, headers: init.headers as Record<string, string> })
+      return new Response(null, { status: 204 })
+    }) as unknown as typeof fetch
+    return { sent, fetchFn }
+  }
+  it('names the project in X-Project-Id, and says when the relay took it', async () => {
+    const { sent, fetchFn } = capture()
+    const posted: Date[] = []
+    const post = postClanMirror({ relay: 'https://relay.test/api/', token: () => 't', projectId: 'prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8', onPosted: (at) => posted.push(at), fetchFn })
+    await post(new Uint8Array([80, 75, 3, 4]), { handle: 'maya', reason: 'manual' })
+    expect(sent[0].url).toBe('https://relay.test/api/clan')
+    expect(sent[0].headers['X-Project-Id']).toBe('prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8')
+    expect(posted).toHaveLength(1)
+  })
+  it('sends no X-Project-Id without a project', async () => {
+    const { sent, fetchFn } = capture()
+    await postClanMirror({ relay: 'https://relay.test', token: () => 't', fetchFn })(new Uint8Array([80, 75, 3, 4]), { handle: 'maya', reason: 'interval' })
+    expect('X-Project-Id' in sent[0].headers).toBe(false)
   })
 })
