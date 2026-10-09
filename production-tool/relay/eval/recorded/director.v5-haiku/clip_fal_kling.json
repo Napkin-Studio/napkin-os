@@ -1,0 +1,5 @@
+{
+ "version": "director.v5",
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"clip\", \"needsUser\": null, \"rationale\": \"Kling v3 Pro on fal, first frame is the shot still. Duration 2s rounds up to the 3s minimum. The character goes in as an element front so it stays consistent. Prompt is the action plus static camera and the no-text line.\", \"confidence\": 0.85, \"providerJob\": {\"provider\": \"fal\", \"model\": \"kling-v3-pro-i2v\", \"op\": \"clip\", \"prompt\": \"@handyman_front scrubs the toilet bowl with a brush in the bathroom. The camera holds still. No text, captions, subtitles or speech bubbles.\", \"refs\": [{\"name\": \"handyman_front\", \"role\": \"element_front\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\"}], \"firstFrame\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\", \"durationS\": 3, \"audio\": false, \"ratio\": \"9:16\"}}"
+}

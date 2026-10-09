@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"clip\", \"needsUser\": null, \"rationale\": \"Shot is 2s, so Veo 3.1 takes the nearest allowed length rounding up, 4s. The still is the first frame, so the prompt carries only the motion and the push-in. No refs, since firstFrame with refs is unsupported. Ratio 9:16 maps to 720:1280.\", \"confidence\": 0.8, \"providerJob\": {\"provider\": \"runway\", \"model\": \"veo3.1\", \"op\": \"clip\", \"prompt\": \"The man walks in carrying his toolbox. The camera pushes in slowly. No text, captions, subtitles or speech bubbles.\", \"refs\": [], \"firstFrame\": \"sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228\", \"durationS\": 4, \"audio\": false, \"ratio\": \"720:1280\"}}",
+ "version": "director.v5"
+}

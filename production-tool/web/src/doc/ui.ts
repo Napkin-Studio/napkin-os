@@ -1,8 +1,14 @@
 // UI state that is not part of the document but must survive a reload: what
 // each pending job is for (so its result lands in the right place after a
 // reload), the dev switch, drafts. Snapshotted next to the document.
+//
+// Two parts (features/project-home.clan): the app's (AppUi: who is signed in,
+// the dev switch, which view and project are open) is kept once, under 'ui';
+// the rest (ProjectUi: job purposes, drafts, frame regions, undo steps, update
+// runs) is kept per project, under 'ui:<projectId>'. The panels see both as
+// one UiState (projects/uiStore.ts).
 
-import type { JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
+import type { DirectorCard, JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { UndoState } from './undo'
 import type { SessionResponse } from '../contracts/types'
@@ -24,21 +30,42 @@ export type JobCtx = JobPurpose & {
   /** Set when the user cleared a failed job, or it was retried as another job. */
   dismissed?: boolean
   retriedAs?: string
+  /** The relay made it elsewhere: Job.fallbackFrom and fallbackReason (features/runway-fallback.clan). */
+  fallbackFrom?: ModelChoice
+  fallbackReason?: string
+  /** The character cards the director was given (the relay's agent block), held here for the
+   *  director's History entry: the document's jobs[].agent leaves them out. */
+  cards?: DirectorCard[]
 }
 
-export interface UiState {
-  jobCtx: Record<string, JobCtx>
+/** Kept once for the app, whichever project is open. */
+export interface AppUi {
   configChoice: ConfigChoice
   providerChoice: ProviderChoice
+  session?: SessionResponse
+  /** relayId() of the server that issued `session`. */
+  sessionFor?: string
+  hintDismissed?: boolean
+  /** Home, or the project `project` (features/project-home.clan). */
+  view: 'home' | 'project'
+  project?: string
+  /** How Home orders the projects. */
+  homeSort: 'recent' | 'name'
+  /** When the server last took a project (POST /clan), for Home's footer. */
+  savedAt?: string
+}
+
+/** The UiState fields that are the app's, not the project's. */
+export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'session', 'sessionFor', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt'] as const satisfies readonly (keyof AppUi)[]
+
+/** Kept per project. */
+export interface ProjectUi {
+  jobCtx: Record<string, JobCtx>
   ratio: Ratio
   scriptDraft: string
   targetS: 10 | 15 | 20
   /** Region drawn on each frame (by frame id) before Regenerate. */
   frameRegions: Record<string, Region | undefined>
-  session?: SessionResponse
-  /** relayId() of the server that issued `session`. */
-  sessionFor?: string
-  hintDismissed?: boolean
   /** "Draw the rest" is under way: each finished frame starts the next shot (jobs/frames.ts). */
   drawingRest?: boolean
   /** "Update what follows" is under way (jobs/follow.ts). */
@@ -46,6 +73,9 @@ export interface UiState {
   /** The person's undo and redo steps (doc/undo.ts), kept here so they survive a reload. */
   undo?: UndoState
 }
+
+/** What the panels see: the open project's UI with the app's. */
+export type UiState = ProjectUi & AppUi
 
 /** One run of "Update what follows": frames in order, then clips, then the ad. Snapshotted, so it resumes after a reload. */
 export interface FollowRun {
@@ -75,14 +105,25 @@ export interface FollowRun {
 
 export interface FollowItem { kind: 'frame' | 'clip'; shotId: string }
 
+export function initialAppUi(): AppUi {
+  return { configChoice: 'event', providerChoice: 'mock', view: 'home', homeSort: 'recent' }
+}
+
+export function initialProjectUi(): ProjectUi {
+  return { jobCtx: {}, ratio: '9:16', scriptDraft: '', targetS: 15, frameRegions: {} }
+}
+
 export function initialUi(): UiState {
-  return {
-    jobCtx: {},
-    configChoice: 'event',
-    providerChoice: 'mock',
-    ratio: '9:16',
-    scriptDraft: '',
-    targetS: 15,
-    frameRegions: {},
+  return { ...initialProjectUi(), ...initialAppUi() }
+}
+
+/** A UiState (or an older single snapshot) split into the app's part and the project's. */
+export function splitUi(v: Partial<UiState>): { app: Partial<AppUi>; project: Partial<ProjectUi> } {
+  const app: Record<string, unknown> = {}
+  const project: Record<string, unknown> = {}
+  for (const [k, x] of Object.entries(v)) {
+    if ((APP_UI_KEYS as readonly string[]).includes(k)) app[k] = x
+    else project[k] = x
   }
+  return { app: app as Partial<AppUi>, project: project as Partial<ProjectUi> }
 }

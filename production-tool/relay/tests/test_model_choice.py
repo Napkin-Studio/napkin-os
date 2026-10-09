@@ -1,6 +1,6 @@
 """A model the participant picks when regenerating (features/model-choice.clan): the relay runs
-it on its provider, falls back to the fallback-only provider's default when that provider cannot
-take it, and refuses a pick the routing or the sheet does not allow before any spend."""
+it on its provider, falls back to Runway's default (the floor, features/runway-fallback.clan) when that
+provider cannot take it, and refuses a pick the routing or the sheet does not allow before any spend."""
 
 import importlib
 
@@ -22,7 +22,6 @@ def config(**over):
     cfg = base_config(**over)
     cfg["routing"]["clip"] = ["fal", "heygen", "runway"]
     cfg["routing"]["frame"] = ["fal", "runway"]
-    cfg.setdefault("fallbackOnly", ["runway"])
     return cfg
 
 
@@ -50,8 +49,8 @@ def test_a_pick_runs_on_its_provider_and_model_at_its_price():
 def test_no_pick_routes_as_before():
     h = harness()
     job = post(h, h.sign_in())
-    assert (job["provider"], job["model"]) == ("fal", "kling-v3-pro-i2v")
-    assert job["cost"]["reserved"] == 0.56
+    assert (job["provider"], job["model"]) == ("fal", "veo3.1-fast-i2v")  # the default clip since 2026-10-09
+    assert job["cost"]["reserved"] == 0.9
 
 
 def test_a_pick_its_provider_cannot_take_falls_back_to_runway_default():
@@ -64,16 +63,24 @@ def test_a_pick_its_provider_cannot_take_falls_back_to_runway_default():
     assert h.providers["heygen"].submits == []  # another picked-from provider is never tried
 
 
-def test_a_failed_pick_without_fallback_only_providers_fails_and_tries_nothing_else():
-    h = harness(fallbackOnly=[])
+def test_a_failed_pick_where_runway_is_not_routed_fails_and_tries_nothing_else():
+    # 2026-10-09: fallbackOnly is no longer read; the floor is Runway when the op routes to it (here it does not).
+    h = harness()
+    h.cfg["routing"]["clip"] = ["fal", "heygen"]
     h.providers["fal"].submit_effect = ProviderError("provider_unavailable", "503 from fal")
     job = post(h, h.sign_in(), VEO)
     assert job["state"] == "failed" and job["error"]["code"] == "provider_unavailable"
     assert h.providers["heygen"].submits == [] and h.providers["runway"].submits == []
 
 
+def test_runway_models_are_always_pickable():
+    # 2026-10-09 (features/runway-fallback.clan): Runway is no longer fallback-only.
+    h = harness()
+    job = post(h, h.sign_in(), {"provider": "runway", "model": "veo3.1_fast"})
+    assert (job["provider"], job["model"]) == ("runway", "veo3.1_fast") and "fallbackFrom" not in job
+
+
 @pytest.mark.parametrize("pick", [
-    {"provider": "runway", "model": "veo3.1_fast"},     # fallback-only: never offered
     {"provider": "fal", "model": "seedance-2.0"},       # not on the sheet
     {"provider": "fal", "model": "nano-banana-pro-edit"},  # a frame model, not a clip one
 ])
@@ -110,8 +117,15 @@ def test_effective_sheet_puts_the_alternate_over_the_op_and_the_sheet():
     kling = effective_sheet(fal, "frame", "kling-image-o3")  # an alternate keeps the sheet's Kling settings
     assert kling["tagSyntax"] == "at_image_n" and kling["refs"]["element"] is True
     assert kling["ops"]["frame"]["endpoint"] == "fal-ai/kling-image/o3/image-to-image"
-    assert effective_sheet(fal, "clip", "kling-v3-pro-i2v") is fal
-    assert effective_sheet(fal, "clip", None) is fal
+    # Kling, an alternate since 2026-10-09, keeps the sheet's element settings and its own lengths;
+    # the default clip (Veo 3.1 Fast) carries its own over the sheet's.
+    kling_clip = effective_sheet(fal, "clip", "kling-v3-pro-i2v")
+    assert kling_clip["refs"]["element"] is True and kling_clip["video"]["firstFrameWithRefs"] is True
+    assert (kling_clip["ops"]["clip"]["minS"], kling_clip["ops"]["clip"]["maxS"]) == (3, 15)
+    assert "durationsS" not in kling_clip["ops"]["clip"]
+    own = effective_sheet(fal, "clip", None)
+    assert own["ops"]["clip"]["model"] == "veo3.1-fast-i2v" and own["refs"]["max"] == 0
+    assert effective_sheet(fal, "view", None) is fal  # an op whose model sets nothing of its own
 
 
 def test_every_alternate_on_a_sheet_is_one_its_adapter_builds():

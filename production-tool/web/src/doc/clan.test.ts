@@ -15,6 +15,7 @@ import { makeAjv, SCHEMA } from '../test/schemas'
 import { ClanBackedStore } from './clan'
 import { describeWrite } from './describe'
 import { NO_HISTORY, openDocument } from './open'
+import { memoryStorage } from '../projects/storage'
 import { emptyDocument, updateDoc } from './store'
 import type { JobCtx } from './ui'
 
@@ -150,7 +151,7 @@ describe('the UI on the CLAN store', () => {
   })
 
   it('falls back to the JSON store, with a visible note, when the wasm does not load', async () => {
-    const opened = await openDocument(maya, () => undefined, () => { throw new Error('no wasm') })
+    const opened = await openDocument({ project: 'prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8', participant: maya, ctxOf: () => undefined, make: () => { throw new Error('no wasm') }, storage: memoryStorage() })
     expect(opened.clan).toBeNull()
     expect(opened.storeNote).toBe(NO_HISTORY)
     expect(opened.storeNote).toMatch(/^Saving without history/)
@@ -158,7 +159,7 @@ describe('the UI on the CLAN store', () => {
   })
 
   it('opens the CLAN store when it loads', async () => {
-    const opened = await openDocument(maya, () => undefined, () => make())
+    const opened = await openDocument({ project: 'prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8', participant: maya, ctxOf: () => undefined, make: () => make(), storage: memoryStorage() })
     expect(opened.clan).not.toBeNull()
     expect(opened.storeNote).toBeNull()
     expect((await opened.clan!.chain()).map((e) => e.action)).toContain('started the document')

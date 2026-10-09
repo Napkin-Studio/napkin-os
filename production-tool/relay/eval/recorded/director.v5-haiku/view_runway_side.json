@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"view\", \"needsUser\": null, \"rationale\": \"Side view of the source image as the only ref, with the standard view prompt. The handyman_back ref is left out because the view needs only the source. Ratio 4:5 mapped to Runway's 896:1152.\", \"confidence\": 0.8, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"op\": \"view\", \"prompt\": \"side view of @current, the same character, full body, plain background.\", \"ratio\": \"896:1152\", \"refs\": [{\"name\": \"current\", \"role\": \"current\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\"}]}}",
+ "version": "director.v5"
+}

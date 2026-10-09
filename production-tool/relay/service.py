@@ -10,7 +10,13 @@ Job life (states from common.schema.json#/$defs/jobState):
   submitted   the provider has it (requestId saved)
   fetching    outputs are being copied to S3 and hashed
   completed | failed | cancelled   final
-  uncertain   the provider may have taken it with no id saved: never resubmitted
+  uncertain   the provider may have taken it with no id saved: never resubmitted there
+
+Runway is the floor of every job (features/runway-fallback.clan). A job's chain is the
+participant's own-key providers for the op (or a pick, or the event's routing), then Runway on
+the event's key, always last. A provider in front of Runway that fails for a provider or account
+reason, before or after submit, sends the job to Runway's default model for the op, once
+(Job.fallbackFrom and fallbackReason say so). Moderation and invalid input never move.
 
 Each request only ever advances its own job, and the scheduled sweep advances
 jobs nobody is polling, so no worker is needed.
@@ -49,9 +55,10 @@ SHEET_HINTS = (
 )
 
 
-def sheet_refusal(op: str, last_error: str) -> str:
+def sheet_refusal(op: str, last_error: str, either: bool = False) -> str:
     """The message for a step every provider ruled out on its sheet: what the limit is and what to change.
-    Not a Napkin problem and not the participant's account; sending it again cannot work."""
+    Not a Napkin problem and not the participant's account; sending it again cannot work.
+    either: the floor ruled it out after another provider could not make it."""
     provider, _, reason = last_error.partition(": ")
     reason = reason or last_error
     for subject in (provider, op):  # "fal takes at most 5 character refs", "region_edit needs a mask"
@@ -60,7 +67,14 @@ def sheet_refusal(op: str, last_error: str) -> str:
             reason = "it " + rest
     hint = next((h for k, h in SHEET_HINTS if k in reason), "Change the step and send it again.")
     name = PROVIDER_NAMES.get(provider, provider or "The provider")
+    if either:
+        return f"{name} cannot do this step either: {reason}. {hint}"
     return f"{name} cannot do this {op.replace('_', ' ')}: {reason}. {hint}"
+
+
+def could_not(provider: str, message: str) -> str:
+    """Why a job left a provider for the next one in its chain (Job.fallbackReason)."""
+    return f"{PROVIDER_NAMES.get(provider, provider)} could not make it: {message.rstrip('.')}."
 
 QUOTA_CLASS = {
     "generate": "image", "view": "image", "frame": "image", "region_edit": "image",
@@ -68,12 +82,17 @@ QUOTA_CLASS = {
 }
 INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
-UNKNOWN_PRICE_USD = 1.0       # reserved for an op whose sheet has no price (HeyGen)
+# The event's provider every job falls back to, once, when the op routes to it (features/runway-fallback.clan).
+FLOOR = "runway"
+NO_FALLBACK = {"moderated", "invalid_input"}  # the floor would refuse the same
+UNKNOWN_PRICE_USD = 1.0      # reserved for an op whose sheet has no price (HeyGen)
 ORGANISER_QUOTA_FACTOR = 10
 SESSION_TTL_S = 24 * 3600
 CLAN_MAX_BYTES = 5 * 1024 * 1024
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
+# X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
+PROJECT_ID = re.compile(r"^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$")
 DEFAULT_WORKSPACE = "event"
 KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
 
@@ -145,17 +164,19 @@ def public(job: dict) -> dict:
 class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config, secrets,
                  contracts: Contracts | None = None, clock=time.time, stitch=None,
-                 own_adapters: own_keys.OwnAdapters | None = None):
+                 own_adapters: own_keys.OwnAdapters | None = None, cards=None):
         """config: () -> config.json dict (cached by the caller).
         secrets: () -> {"event_codes": {"participant": [...], "organiser": [...]}, "token_secret": str}.
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
-        own_adapters: adapters on a participant's own key (built on first use)."""
+        own_adapters: adapters on a participant's own key (built on first use).
+        cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards)."""
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
         self._own_adapters = own_adapters
         self.config, self.secrets = config, secrets
         self.contracts = contracts or Contracts()
         self.clock = clock
         self.stitch = stitch
+        self.cards = cards
 
     # ── HTTP ────────────────────────────────────────────────────────────────
     def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | None, dict]:
@@ -304,7 +325,7 @@ class Relay:
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
 
     def mirror_clan(self, who: dict, headers: dict, body: bytes | None) -> int:
-        """POST /clan: keep the participant's latest .clan, plus a timestamped copy, for the organisers."""
+        """POST /clan: keep the participant's latest .clan (per project with X-Project-Id), plus a timestamped copy, for the organisers."""
         data = body or b""
         if len(data) > CLAN_MAX_BYTES:
             raise ApiError("invalid_input", "The document is larger than 5 MB.", status=413)
@@ -313,8 +334,13 @@ class Relay:
         reason = headers.get("x-clan-reason", "manual")
         if reason not in CLAN_REASONS:
             reason = "manual"
+        # One copy per project when the app says which (features/project-home.clan); the participant's own path without it.
+        project = headers.get("x-project-id")
+        if project is not None and not PROJECT_ID.match(project):
+            raise ApiError("invalid_input", "X-Project-Id is not a project id.")
+        base = f"clan/{who['pid']}/{project}" if project else f"clan/{who['pid']}"
         stamp = iso(self.clock()).replace(":", "")
-        for key in (f"clan/{who['pid']}/latest.clan", f"clan/{who['pid']}/{stamp}-{reason}.clan"):
+        for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
             self.blobs.put(key, data, CLAN_MIME)
         return len(data)
 
@@ -346,27 +372,41 @@ class Relay:
     def _candidates(self, cfg: dict, op: str) -> list[str]:
         return [p for p in cfg["routing"].get(op, []) if self.registry.supports(p, op)]
 
+    def _floor(self, cfg: dict, op: str) -> str | None:
+        """Runway, when the event routes the op to it: the last provider of every job's chain.
+        A config that does not route the op to Runway (a single-provider pathway) has no floor."""
+        if op in INTERNAL_OPS or FLOOR not in cfg["routing"].get(op, []) or not self.registry.supports(FLOOR, op):
+            return None
+        return FLOOR
+
+    def _chain(self, cfg: dict, op: str, pick: dict | None, own: dict | None) -> list[str]:
+        """Where a job runs, in order: the own-key providers (or a pick, or the event's routing),
+        then the floor on the event's key."""
+        if own:
+            front = list(own)
+        elif pick:
+            front = [pick["provider"]] if self.registry.supports(pick["provider"], op) else []
+        else:
+            front = self._candidates(cfg, op)
+        floor = self._floor(cfg, op)
+        return front + ([floor] if floor and floor not in front else [])
+
     # ── a model the participant picked (features/model-choice.clan) ─────────
     def _check_pick(self, cfg: dict, op: str, pick: dict | None, own: dict | None = None) -> None:
         """Refuse, before any spend or quota, a pick the routing or the sheet does not allow.
-        A pick on the participant's own key answers to that key's sheet, not the event's routing."""
+        A pick on the participant's own key answers to that key's sheet; any other pick to the
+        event's routing, which names only Runway for the event (fal and HeyGen come from own keys)."""
         if pick is None:
             return
         provider, model = pick["provider"], pick["model"]
         if own and provider in own:
             sheet = self.own_adapters.sheet(provider)
-            if op in INTERNAL_OPS or not sheet or model not in op_models(sheet, op):
-                raise ApiError("invalid_input", f"{model} on {provider} cannot make this step. Pick another model.")
-            return
-        sheet = self.registry.sheet(provider)
-        if (op in INTERNAL_OPS or provider not in cfg["routing"].get(op, [])
-                or provider in cfg.get("fallbackOnly", []) or not sheet or model not in op_models(sheet, op)):
+        elif provider in cfg["routing"].get(op, []):
+            sheet = self.registry.sheet(provider)
+        else:
+            sheet = None
+        if op in INTERNAL_OPS or not sheet or model not in op_models(sheet, op):
             raise ApiError("invalid_input", f"{model} on {provider} cannot make this step. Pick another model.")
-
-    def _pick_candidates(self, cfg: dict, op: str, pick: dict) -> list[str]:
-        """The picked provider, then the fallback-only providers routed for the op."""
-        fallback = [p for p in cfg["routing"].get(op, []) if p in cfg.get("fallbackOnly", []) and p != pick["provider"]]
-        return [p for p in [pick["provider"], *fallback] if self.registry.supports(p, op)]
 
     # ── own keys ────────────────────────────────────────────────────────────
     @property
@@ -389,28 +429,26 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         own = {p: keys[p] for p in own_keys.PROVIDERS if p in keys and self.own_adapters.supports(p, op)}
         if pick:
-            # A pick runs on the participant's key for the picked provider, and only there. Picking it is
-            # their choice, so fal's backup-only rule for clips does not apply (features/harness-refusals.clan).
+            # A pick runs on the participant's key for the picked provider, then on the floor.
             return {p: k for p, k in own.items() if p == pick["provider"]}
-        if op in own_keys.BACKUP_ONLY.get("fal", ()) and "heygen" not in own:
-            own.pop("fal", None)
         return own
 
     @staticmethod
     def _is_own(job: dict) -> bool:
+        """The job runs, or waits to run, on the participant's own key."""
         return job.get("keySource") == "own"
 
+    @staticmethod
+    def _on_own(job: dict, provider: str | None) -> bool:
+        """This provider runs the job on the participant's key (the floor never does)."""
+        return bool(provider) and provider in (job.get("_own") or {})
+
     def _job_candidates(self, cfg: dict, job: dict) -> list[str]:
-        if self._is_own(job):
-            return list(job["_own"])
-        pick = job["_req"].get("modelChoice")
-        if pick:
-            return self._pick_candidates(cfg, job["op"], pick)
-        return self._candidates(cfg, job["op"])
+        return self._chain(cfg, job["op"], job["_req"].get("modelChoice"), job.get("_own"))
 
     def _sheet(self, job: dict, provider: str | None = None) -> dict | None:
         provider = provider or job.get("provider")
-        if self._is_own(job):
+        if self._on_own(job, provider):
             return self.own_adapters.sheet(provider)
         return self.registry.sheet(provider)
 
@@ -418,14 +456,14 @@ class Relay:
         """The adapter for this job: the event's, or one on the participant's key.
         None when an own key cannot be read (TOKEN_SECRET rotated)."""
         provider = provider or job["provider"]
-        if not self._is_own(job):
+        if not self._on_own(job, provider):
             return self.registry.get(provider)
         key = self._sealer().open(job["_own"].get(provider, ""), job["jobId"], provider)
         return self.own_adapters.get(provider, key) if key else None
 
     def _slot_key(self, job: dict, provider: str, cls: str) -> str:
-        """Own-key jobs use the participant's own slots at that provider, never the event's."""
-        if self._is_own(job):
+        """Own-key runs use the participant's own slots at that provider, never the event's."""
+        if self._on_own(job, provider):
             return f"slots#{provider}#own#{job['participantId']}#{cls}"
         return f"slots#{provider}#{cls}"
 
@@ -473,7 +511,9 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         estimate, unknown = 0.0, False
         if op not in INTERNAL_OPS and not own:
-            candidates = self._pick_candidates(cfg, op, pick) if pick else self._candidates(cfg, op)
+            # Reserved at the dearest provider it may run on. An own-key job reserves nothing
+            # until it falls back to the floor (_submit reserves and counts it then).
+            candidates = self._chain(cfg, op, pick, None)
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
             prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
@@ -505,6 +545,8 @@ class Relay:
             "_req": req, "_role": role, "_day": day, "_counted": counted, "_queue": "q",
             "_released": False, "_tried": [],
         }
+        if pick:  # where the job meant to run, for fallbackFrom
+            job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
         if op not in INTERNAL_OPS:
             job["keySource"] = "own" if own else "event"
         if own:
@@ -652,34 +694,114 @@ class Relay:
             if job["state"] != "queued":
                 return self._with_poll(job)
         if not [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]:
-            if job["_tried"] and job.get("_sheetOnly") and job.get("_lastError"):
-                # Every provider ruled the request out on its sheet: sending it again cannot work.
-                return self._fail(job, "capability_missing", sheet_refusal(job["op"], job["_lastError"]),
-                                  paid=False, refund=True)
-            message = "No provider could take this job. Try again."
-            if self._is_own(job):
-                names = " or ".join(own_keys.NAMES[p] for p in job["_own"])
-                message = f"Your {names} account could not take this step. Try again, or remove your key to use the event's providers."
-                if job.get("_lastError"):
-                    message += f" ({job['_lastError']})"
-            return self._fail(job, "provider_unavailable", message, retryable=True, paid=False, refund=True)
+            return self._exhausted(job, cfg)
         return self._with_poll({**job, "queuePosition": 0})
+
+    def _exhausted(self, job: dict, cfg: dict) -> dict:
+        """Every provider in the job's chain refused it before accepting it."""
+        last = job.get("_lastError") or ""
+        first = job.get("fallbackReason")
+        if first and last.startswith(f"{FLOOR}: "):
+            # The floor refused too, after the first provider could not make it: say both.
+            if job.get("_floorSheet"):  # Runway's sheet cannot do it (a masked clip_edit): sending it again cannot work
+                return self._fail(job, "capability_missing", f"{first} {sheet_refusal(job['op'], last, either=True)}",
+                                  paid=False, refund=True)
+            return self._fail(job, "provider_unavailable",
+                              f"{first} {PROVIDER_NAMES[FLOOR]} could not take it either ({last.partition(': ')[2]}). Try again.",
+                              retryable=True, paid=False, refund=True)
+        if job["_tried"] and job.get("_sheetOnly") and last:
+            # Every provider ruled the request out on its sheet: sending it again cannot work.
+            return self._fail(job, "capability_missing", sheet_refusal(job["op"], last), paid=False, refund=True)
+        message = "No provider could take this job. Try again."
+        if job.get("_own"):
+            names = " or ".join(own_keys.NAMES[p] for p in job["_own"])
+            message = f"Your {names} account could not take this step. Try again, or remove your key to use the event's providers."
+            if last:
+                message += f" ({last})"
+        return self._fail(job, "provider_unavailable", message, retryable=True, paid=False, refund=True)
+
+    def _event_admission(self, job: dict, cfg: dict, estimate: float) -> dict | None:
+        """A job about to run on the event's key that was not admitted as one (an own-key job
+        falling back, or a job whose first provider failed after submit): the daily quota and the
+        spend stop apply to it now. The failed job, or None when it may run."""
+        first = job.get("fallbackReason") or ""
+        name = PROVIDER_NAMES.get(FLOOR, FLOOR)
+        if estimate > 0 and job["cost"].get("reserved", 0) == 0:
+            if self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
+                return self._fail(job, "spend_stop", f"{first} {name} could not make it instead: the event's "
+                                  "generation budget is used up.".strip(), paid=False, refund=True)
+        cls = job["quotaClass"]
+        if not job.get("_counted") and cls in cfg["quotas"]:
+            limit = cfg["quotas"][cls] * (ORGANISER_QUOTA_FACTOR if job.get("_role") == "organiser" else 1)
+            if not self.store.incr(f"{job['participantId']}#{job['_day']}", cls, 1, limit):
+                return self._fail(job, "quota_exhausted", f"{first} {name} could not make it instead: you have used "
+                                  f"today's {cls} quota.".strip(), paid=False)
+        return None
+
+    def _fall_back(self, job: dict, cfg: dict, code: str, message: str, *, paid: bool = True,
+                   refund: bool = False, retryable: bool = False, provider_code: str | None = None,
+                   may_charge: bool = False, **kw) -> dict:
+        """A provider in front of the floor failed for a provider or account reason, before or after
+        submit: make the job again on the floor's default model, once. Otherwise fail as before.
+        paid: the first provider may have charged the event, so its reservation stays spent.
+        may_charge: it may have the job (uncertain), so the job says it may still charge."""
+        provider = job.get("provider")
+        floor = self._floor(cfg, job["op"])
+        if code in NO_FALLBACK or not floor or provider == floor or floor in job["_tried"]:
+            return self._fail(job, code, message, retryable=retryable, provider_code=provider_code,
+                              paid=paid, refund=refund, **kw)
+        if self._on_own(job, provider):
+            who = f"{own_keys.NAMES.get(provider, provider)} may still charge your account for its attempt."
+        else:
+            who = f"{PROVIDER_NAMES.get(provider, provider)} may still charge for its attempt."
+        reason = could_not(provider, message) + (f" {who}" if may_charge else "")
+        cost = dict(job["cost"])
+        spend_back = 0.0 if self._on_own(job, provider) or paid else -cost.get("reserved", 0)
+        cost.update(estimate=0.0, reserved=0.0)  # _submit reserves the floor's price
+        front = [p for p in self._job_candidates(cfg, job) if p != floor]
+        tried = job["_tried"] + [p for p in front if p not in job["_tried"]]
+        log.info("job %s: %s failed (%s); making it on %s", job["jobId"], provider, code, floor)
+        saved = self._save(job, state="queued", provider=None, model=None, requestId=None, _slot=None, _queue="q",
+                           queuePosition=None, keySource="event", cost=cost, _tried=tried,
+                           _first=job.get("_first") or {"provider": provider, "model": job.get("model")},
+                           fallbackReason=reason, _lastError=f"{provider}: {message}"[:300], _sheetOnly=False,
+                           _queuedAt=self.clock(), _submittedAt=None, _nextCheckAt=None, _leaseUntil=None,
+                           _fetchErrors=None, director=None)
+        if saved is None:
+            return self._reload(job)
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        if spend_back:
+            self.store.incr("spend", "usd", spend_back)
+        return self._dispatch(saved, cfg)
 
     def _submit(self, job: dict, cfg: dict, provider: str, slot: str) -> dict | None:
         """Director, then provider submit. None means the provider refused before
         accepting and the job is back in the queue for the next provider."""
-        # A picked model runs on its own provider; anywhere else (the fallback) the default runs.
+        # A picked model runs on its own provider; anywhere else (the floor) the default runs.
         pick = job["_req"].get("modelChoice")
         picked = pick["model"] if pick and pick["provider"] == provider else None
+        own = self._on_own(job, provider)
         sheet = effective_sheet(self._sheet(job, provider), job["op"], picked)
-        estimate, unknown = (0.0, False) if self._is_own(job) else self._estimate(job["op"], provider, picked)
+        estimate, unknown = (0.0, False) if own else self._estimate(job["op"], provider, picked)
+        counted = job.get("_counted", False)
+        if not own:  # on the event's key: an own-key job that fell back is counted now
+            refused = self._event_admission(job, cfg, estimate)
+            if refused is not None:
+                self.store.incr(slot, "n", -1)
+                return refused
+            counted = counted or job["quotaClass"] in cfg["quotas"]
         cost = {**job["cost"], "estimate": estimate, "reserved": estimate, "unknown": unknown}
         model = sheet["ops"][job["op"]]["model"]
-        moved = {"fallbackFrom": pick} if pick and not picked else {}
+        first = job.get("_first") or {"provider": provider, "model": model}
+        moved = {"fallbackFrom": first} if first["provider"] != provider else {}
         saved = self._save(job, state="submitting", provider=provider, model=model, _slot=slot,
-                           _queue="r", cost=cost, queuePosition=None, **moved)
+                           _queue="r", cost=cost, queuePosition=None, keySource="own" if own else "event",
+                           _first=first, _counted=counted, **moved)
         if saved is None:
             self.store.incr(slot, "n", -1)
+            if counted and not job.get("_counted"):
+                self.store.incr(f"{job['participantId']}#{job['_day']}", job["quotaClass"], -1)
             return self._reload(job)
         delta = estimate - job["cost"].get("reserved", 0)
         if delta:
@@ -697,8 +819,8 @@ class Relay:
         set_job_context(job["op"], asset_refs(job["_req"]["input"]))
         adapter = self._adapter(job, provider)
         if adapter is None:
-            return self._fail(job, "provider_failed", own_keys_unreadable(provider), paid=False, refund=True,
-                              director=block)
+            return self._fall_back(job, cfg, "provider_failed", own_keys_unreadable(provider), paid=False,
+                                   refund=True, director=block)
         try:
             request_id = adapter.submit(pjob)
         except Moderated as e:
@@ -706,27 +828,33 @@ class Relay:
                               director=block)
         except ProviderError as e:
             if e.accepted:
-                return self._fail(job, "uncertain", "The provider may have this job; it will not be sent again.",
-                                  provider_code=e.provider_code, director=block)
+                return self._fall_back(job, cfg, "uncertain", "The provider may have this job; it will not be sent again.",
+                                       provider_code=e.provider_code, director=block, may_charge=True)
             if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
                 # A sheet refusal is about the request; an outage or a full queue is about the provider.
-                sheet_only = job.get("_sheetOnly", True) and (isinstance(e, CapabilityMissing) or e.code == "capability_missing")
+                sheet = isinstance(e, CapabilityMissing) or e.code == "capability_missing"
+                sheet_only = job.get("_sheetOnly", True) and sheet
+                tried = job["_tried"] + [provider]
+                rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
                 back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                  _tried=job["_tried"] + [provider], _lastError=f"{provider}: {e.message}"[:300],
-                                  _sheetOnly=sheet_only)
+                                  _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
+                                  _sheetOnly=sheet_only, _floorSheet=sheet,
+                                  fallbackReason=job.get("fallbackReason") or could_not(provider, e.message),
+                                  keySource="own" if rest and self._on_own(job, rest[0]) else "event")
                 self.store.incr(slot, "n", -1)
                 if back is None:
                     log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
                 return None
             message = e.message
-            if self._is_own(job) and own_keys.refused(provider, e.code, e.message, e.provider_code):
-                message = f"Your {own_keys.NAMES[provider]} key was refused. Check it, or remove it to use the event's providers."
-            return self._fail(job, e.code, message, retryable=e.retryable, provider_code=e.provider_code,
-                              paid=False, refund=True, director=block)
+            if own and own_keys.refused(provider, e.code, e.message, e.provider_code):
+                message = f"Your {own_keys.NAMES[provider]} key was refused. Check it, or remove it."
+            return self._fall_back(job, cfg, e.code, message, retryable=e.retryable, provider_code=e.provider_code,
+                                   paid=False, refund=True, director=block)
         except Exception as e:  # timeout, reset: it may have been accepted
             log.exception("submit to %s raised", provider)
-            return self._fail(job, "uncertain", f"The provider may have this job; it will not be sent again ({type(e).__name__}).",
-                              director=block)
+            return self._fall_back(job, cfg, "uncertain",
+                                   f"The provider may have this job; it will not be sent again ({type(e).__name__}).",
+                                   director=block, may_charge=True)
         now = self.clock()
         min_poll = (sheet.get("results") or {}).get("minPollS", 1)
         saved = self._save(job, state="submitted", requestId=str(request_id), director=block,
@@ -748,8 +876,10 @@ class Relay:
             inp, dropped = names.fit_refs(req["op"], req.get("input") or {}, sheet)
             if dropped:
                 log.info("job %s: left out %s for %s's ref limits", job["jobId"], ", ".join(dropped), job.get("provider"))
+            inp, kinds = self._with_cards(job, inp)
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
-            out = dict(self.director.direct({**req, "input": names.to_wire(req["op"], inp)}, sheet))
+            wired = names.to_wire(req["op"], inp)
+            out = dict(self.director.direct({**req, "input": wired}, sheet))
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
@@ -760,7 +890,25 @@ class Relay:
             raise ApiError("internal", f"The director's answer did not match its schema: {errors[0]}")
         block = {"model": model, "promptVersion": version, "output": out,
                  "rationale": out.get("rationale", ""), "latencyMs": int((self.clock() - start) * 1000)}
+        # What the director was told each picture shows (the History's "What the director saw").
+        used = [{"tag": r["tag"], "sha256": r["asset"]["sha256"], "kind": kinds.get(r["asset"]["sha256"], "other"), "card": r["card"]}
+                for r in wired.get("refs") or [] if r.get("card") and r.get("tag")]
+        if used:
+            block["cards"] = used
         return out, block
+
+    def _with_cards(self, job: dict, inp: dict) -> tuple[dict, dict[str, str]]:
+        """The refs the job sends, each with its character card where one is ready (cards.py), and
+        each carded picture's kind. Never fails the job: without a card the director works from
+        names, as before."""
+        if self.cards is None or job["op"] == "shot_list" or not inp.get("refs"):
+            return inp, {}
+        try:
+            got = self.cards.attach(inp["refs"], job["jobId"])
+        except Exception:
+            log.exception("job %s: cards failed; the director goes on without them", job["jobId"])
+            return inp, {}
+        return {**inp, "refs": got.refs}, {c["sha256"]: c["kind"] for c in got.cards}
 
     def _run_shot_list(self, job: dict, cfg: dict) -> dict:
         saved = self._save(job, state="submitting", _queue="r")
@@ -808,15 +956,15 @@ class Relay:
         state = job["state"]
         if state in TERMINAL:
             return self._with_poll(job)
-        age = now - parse_iso(job["createdAt"])
-        if state == "queued":
-            if age > self._timeout_s(cfg, job):
+        if state == "queued":  # waiting since it was made, or since it fell back to the floor
+            if now - job.get("_queuedAt", parse_iso(job["createdAt"])) > self._timeout_s(cfg, job):
                 return self._fail(job, "timeout", "Waited too long for a free slot. Try again.",
                                   retryable=True, paid=False, refund=True)
             return self._dispatch(job, cfg)
         if state == "submitting":
             if now - parse_iso(job["updatedAt"]) > SUBMITTING_STALE_S:
-                return self._fail(job, "uncertain", "The submit never came back; it will not be sent again.")
+                return self._fall_back(job, cfg, "uncertain", "The submit never came back; it will not be sent again.",
+                                       may_charge=True)
             return self._with_poll(job)
         if state == "fetching" and job.get("_leaseUntil", 0) > now:
             return self._with_poll(job)
@@ -828,13 +976,13 @@ class Relay:
                 self._adapter(job).cancel(job["requestId"])
             except Exception:
                 log.exception("cancel after timeout failed")
-            return self._fail(job, "timeout", "The provider took too long. Try again.", retryable=True)
+            return self._fall_back(job, cfg, "timeout", "The provider took too long. Try again.", retryable=True)
         if state == "submitted" and now < job.get("_nextCheckAt", 0):
             return self._with_poll(job)
         adapter = self._adapter(job)
         if adapter is None:
-            if self._is_own(job):
-                return self._fail(job, "provider_failed", own_keys_unreadable(job["provider"]))
+            if self._on_own(job, job["provider"]):
+                return self._fall_back(job, cfg, "provider_failed", own_keys_unreadable(job["provider"]))
             return self._with_poll(job)
         sheet = self._sheet(job) or {}
         min_poll = (sheet.get("results") or {}).get("minPollS", 1)
@@ -854,8 +1002,8 @@ class Relay:
             return self._finish(job, "cancelled")
         if st.state == "failed":
             code = st.error_code if st.error_code in STATUS_ERRORS else "provider_failed"
-            return self._fail(job, code, st.error_message or "The provider could not make this.",
-                              retryable=code != "moderated", provider_code=st.provider_code)
+            return self._fall_back(job, cfg, code, st.error_message or "The provider could not make this.",
+                                   retryable=code != "moderated", provider_code=st.provider_code)
         return self._fetch(job, st, now)
 
     def _fetch(self, job: dict, st, now: float) -> dict:

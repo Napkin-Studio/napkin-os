@@ -1,25 +1,24 @@
-import { useEffect, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useUi } from './app/context'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfig, useDoc, useJobsTick, useServices, useShell, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
 import type { StageName } from './contracts/types'
 import { systemUpdate } from './doc/store'
 import { download, exportBundle } from './export'
-import { isActive } from './jobs/runner'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
 import { StudioMark } from './ui/Mark'
 import { HistoryPanel } from './ui/History'
 import { CLAN_DB } from './doc/clan'
-import { relayId } from './relay'
-import { startOver, START_OVER_TEXT } from './app/startOver'
+import { clanDbFor, INDEX_KEY } from './projects/storage'
 import { OwnKeysButton } from './keys/OwnKeysPanel'
-import { InlineConfirm } from './ui/Undo'
-import { UpdateFollows } from './ui/Follow'
+import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { UndoButtons } from './ui/UndoButtons'
 import { SaveButton } from './ui/SaveButton'
+import { Float, MenuItem } from './ui/Float'
+import { JobTray } from './ui/JobTray'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -28,37 +27,17 @@ const STAGES: { id: StageName; n: number; label: string }[] = [
 ]
 
 export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null }) {
-  const { relay, clan, storeNote } = useServices()
+  const { clan, storeNote } = useServices()
   const doc = useDoc()
-  const ui = useUi()
   const { config } = useConfig()
   const stage = doc.stage.current
   const [history, setHistory] = useState(false)
   const [trouble, setTrouble] = useState<string | null>(null)
-  const [restart, setRestart] = useState<'no' | 'asking' | 'busy'>('no')
-  const services = useServices()
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
-
-  if (relay.kind === 'http' && !ui.session) return <SignIn />
 
   return (
     <>
-      <TopBar history={history} onHistory={() => setHistory((h) => !h)} onStartOver={() => setRestart('asking')} />
-      {restart !== 'no' && (
-        <div className="startover">
-          <InlineConfirm text={START_OVER_TEXT} yes={restart === 'busy' ? 'Starting over…' : 'Start over'} no="Keep working" busy={restart === 'busy'}
-            onNo={() => setRestart('no')}
-            onYes={async () => {
-              setRestart('busy')
-              try {
-                await startOver(services)
-              } catch (e) {
-                console.error('could not start over', e)
-                setRestart('no')
-              }
-            }} />
-        </div>
-      )}
+      <TopBar history={history} onHistory={() => setHistory((h) => !h)} />
       {config.banner && <div className="banner">{config.banner}</div>}
       {storeNote && <div className="storenote" role="status">{storeNote}</div>}
       {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
@@ -70,6 +49,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>
         {stage === 'storyboard' && <div className="stage-pane"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane"><Video /></div>}
+        {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
       </div>
       <UpdateBox />
       {!import.meta.env.PROD && <DevSwitch />}
@@ -77,28 +57,30 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   )
 }
 
-function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHistory: () => void; onStartOver: () => void }) {
-  const { doc: docStore, relay, ui: uiStore } = useServices()
+function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
+  const { doc: docStore, relay, ui: uiStore, project } = useServices()
+  const shell = useShell()
   const doc = useDoc()
   const ui = useUi()
   const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
-  const [menu, setMenu] = useState(false)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
   const stage = doc.stage.current
   const reachable = (s: StageName) =>
     s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
   const order = STAGES.findIndex((s) => s.id === stage)
-  const active = doc.jobs.filter((j) => isActive(j.state))
-  const queued = active.filter((j) => j.state === 'queued').length
-  const running = active.length - queued
 
   return (
     <header className="topbar">
+      {/* The Napkin mark goes back to Home (features/project-home.clan); this project is saved on the way. */}
       <div className="brand">
-        <StudioMark size={24} />
-        <span>Napkin</span>
-        <small>Production Tool</small>
+        <button className="brand-home" title="Home: your projects" aria-label="Home" onClick={() => void shell.goHome()}><StudioMark size={22} /></button>
+        <span className="brand-studio">Napkin Studio</span>
+        <span className="brand-tool">Production</span>
+        <small className="brand-project" title={shell.index.get(project.id)?.name}>{shell.index.get(project.id)?.name ?? ''}</small>
         {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
       </div>
       <nav className="rail" aria-label="Stages">
@@ -119,41 +101,39 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
       </nav>
       <div className="topbar-right">
         {stage !== 'character' && <UpdateFollows />}
-        <span className={`jobchip ${active.length ? 'busy' : ''}`} aria-live="polite">
-          <span className="dot" />
-          {!active.length ? 'Nothing running' : [running && `${running} running`, queued && `${queued} queued`].filter(Boolean).join(' · ')}
-        </span>
+        <JobTray />
         {config.flags.ownKeys && <OwnKeysButton />}
         <UndoButtons />
         <SaveButton />
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
-        {/* Export, the handle and Sign out live in the menu: the bar keeps the run's state, keys and History. */}
-        <span className="topmenu">
-          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-          {menu && (
-            <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.session?.handle ?? doc.participant.handle}</span>
-              <button className="btn sm ghost" role="menuitem" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
-                setExporting(true)
-                try {
-                  const { blob, name } = await exportBundle(docStore)
-                  download(blob, name)
-                } finally {
-                  setExporting(false)
-                  setMenu(false)
-                }
-              }}>{exporting ? 'Packing…' : 'Export'}</button>
-              {relay.kind === 'http' && ui.session && (
-                <button className="btn sm ghost" role="menuitem" onClick={() => {
-                  setMenu(false)
-                  relay.useToken(null)
-                  uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
-                }}>Sign out</button>
-              )}
-              <button className="btn sm ghost" role="menuitem" style={{ color: 'var(--danger)' }} onClick={() => { setMenu(false); onStartOver() }}>Start over…</button>
-            </span>
+        {/* Export, the handle, Sign out, New project and All projects live in the menu: the bar keeps the run's state,
+            keys and History. Undo, Redo and Save sit just left of History. */}
+        <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
+        <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
+          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}</div>
+          <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
+            setExporting(true)
+            try {
+              const { blob, name } = await exportBundle(docStore, project.canvasKey, shell.index.get(project.id)?.name)
+              download(blob, name)
+            } finally {
+              setExporting(false)
+              closeMenu()
+            }
+          }}>{exporting ? 'Packing…' : 'Export'}</MenuItem>
+          {relay.kind === 'http' && ui.session && (
+            <MenuItem icon="⎋" onSelect={() => {
+              closeMenu()
+              relay.useToken(null)
+              uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
+              void shell.goHome()
+            }}>Sign out</MenuItem>
           )}
-        </span>
+          <div className="fsep" />
+          {/* New project replaces Start over: this one is saved and stays on Home; nothing is overwritten. */}
+          <MenuItem icon="＋" onSelect={() => { closeMenu(); void shell.newProject() }}>New project</MenuItem>
+          <MenuItem icon="⌂" onSelect={() => { closeMenu(); void shell.goHome() }}>All projects</MenuItem>
+        </Float>
       </div>
     </header>
   )
@@ -161,6 +141,7 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
 
 function DevSwitch() {
   const { ui: uiStore } = useServices()
+  const shell = useShell()
   const ui = useUi()
   const { config, controls } = useConfig()
   const [open, setOpen] = useState(false)
@@ -187,8 +168,9 @@ function DevSwitch() {
         </div>
         <div className="faint" style={{ fontSize: 11 }}>Results always come from the mock relay unless VITE_RELAY_URL is set. Type #fail or #moderate in a text box to see errors.</div>
         <button className="btn xs ghost" style={{ color: 'var(--danger)' }} onClick={() => {
-          if (!confirm('Start over? This clears your work in this browser.')) return
+          if (!confirm(`Reset everything? This clears every project in this browser (${INDEX_KEY}: ${shell.index.all().length}).`)) return
           try {
+            for (const p of shell.index.all()) indexedDB.deleteDatabase(clanDbFor(p.id))
             indexedDB.deleteDatabase('napkin-production-tool')
             indexedDB.deleteDatabase(CLAN_DB)
             localStorage.removeItem('napkin-pt.mock-ledger')
@@ -196,40 +178,6 @@ function DevSwitch() {
           location.reload()
         }}>Reset everything</button>
       </div>
-    </div>
-  )
-}
-
-function SignIn() {
-  const { relay, ui: uiStore, doc } = useServices()
-  const [code, setCode] = useState('')
-  const [handle, setHandle] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  return (
-    <div style={{ display: 'flex', flex: 1, background: 'var(--soft)' }}>
-      <form className="card signin stack" onSubmit={async (e) => {
-        e.preventDefault()
-        setBusy(true)
-        setError(null)
-        try {
-          const s = await relay.session({ eventCode: code.trim(), handle: handle.trim() })
-          relay.useToken(s.token)
-          uiStore.update((u) => { u.session = s; u.sessionFor = relayId() })
-          await systemUpdate(doc, (d) => { d.participant = { id: s.participantId, handle: s.handle } }, 'sign in')
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Could not sign in.')
-        } finally {
-          setBusy(false)
-        }
-      }}>
-        <div className="row" style={{ gap: 10 }}><StudioMark size={28} /><b style={{ fontSize: 18, letterSpacing: '-0.02em' }}>Napkin Production Tool</b></div>
-        <p className="muted" style={{ margin: 0 }}>Make your characters on a free canvas, storyboard them, and turn it into an ad.</p>
-        <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Event code</span><input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus /></label>
-        <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Your name</span><input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[A-Za-z0-9_.\-]{2,24}" title="2-24 letters, numbers, . _ or -" /></label>
-        {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600 }}>{error}</div>}
-        <button className="btn primary" disabled={busy || code.trim().length < 4 || handle.trim().length < 2}>{busy ? 'Signing in…' : 'Start'}</button>
-      </form>
     </div>
   )
 }

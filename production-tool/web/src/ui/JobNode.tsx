@@ -1,12 +1,18 @@
 // A job in place: where its output will land, it shows the queue position and
-// elapsed time; when it fails, the error with Retry, another model to try, and Report. Never a toast.
+// elapsed time; when it fails, the error and one floating bar: Retry, Try another model (a menu),
+// Report, Clear. Never a toast.
 
-import { useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices } from '../app/context'
-import { choiceToSend, modelChoicesFor } from '../capabilities'
+import { useCallback, useRef, useState } from 'react'
+import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import type { DocJob } from '../contracts/types'
 import { isActive } from '../jobs/runner'
 import { cancelText, mayStillCharge } from './cancel'
+import { AgentFigure } from './agents/AgentFigure'
+import { whoIsWorking } from './agents/cast'
+import { Float } from './Float'
+import { otherModels } from './modelChoice'
+import { ModelItems } from './ModelPick'
 import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
 
@@ -25,6 +31,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   useJobsTick()
   const job = doc.jobs.find((j) => j.id === jobId)
   const live = runner.liveInfo(jobId)
+  const ui = useUi()
   const state = live?.state ?? job?.state ?? 'queued'
   const running = isActive(state)
   const elapsed = useElapsed(job?.created_at, running)
@@ -33,32 +40,43 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   const { config } = useConfig()
 
   if (!job) return null
+  const ctx = ui.jobCtx[jobId]
+  const shotId = ctx && 'shotId' in ctx ? ctx.shotId : undefined
+  const order = shotId ? (doc.shots ?? []).find((x) => x.id === shotId)?.order : undefined
+  const who = whoIsWorking(job, state, ctx, order)
 
   if (state === 'failed' || state === 'cancelled') {
     const err = job.error
     const cancelled = state === 'cancelled'
     const retryable = cancelled || (err?.retryable ?? true)
+    const report = async () => {
+      setReported('sending')
+      const ok = await runner.report(jobId, `${job.op} ${err?.code ?? ''}: ${err?.message ?? ''}`)
+      setReported(ok ? 'yes' : 'failed')
+    }
+    const reportLabel = reported === 'yes' ? 'Reported' : reported === 'failed' ? 'Report again' : 'Report'
     return (
       <div className={`errnode ${compact ? 'compact' : ''}`} role="alert">
+        {!compact && <AgentFigure agent={who.agent} state={who.state} size={46} decorative />}
         <div className="msg" title={compact ? err?.message : undefined}>{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
         {!compact && err?.code && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
-        <div className="row">
+        {/* One floating bar of what to do next: Retry, another model, Report, Clear. */}
+        <div className="optbar" role="group" aria-label="What to do with this job">
           {retryable && (
-            <button className="btn xs primary" onClick={async () => {
+            <button className={`btn ${compact ? 'xs' : 'sm'} ghost`} title="Send it again as it was" onClick={async () => {
               const id = await runner.retry(jobId)
               if (id) onRetried?.(id)
-            }}>Retry</button>
+            }}>↻ Retry</button>
           )}
+          {!cancelled && <OtherModel job={job} compact={compact} onRetried={onRetried} />}
           {!cancelled && (
-            <button className="btn xs" disabled={reported === 'sending' || reported === 'yes'} onClick={async () => {
-              setReported('sending')
-              const ok = await runner.report(jobId, `${job.op} ${err?.code ?? ''}: ${err?.message ?? ''}`)
-              setReported(ok ? 'yes' : 'failed')
-            }}>{reported === 'yes' ? 'Reported' : reported === 'failed' ? 'Report again' : 'Report'}</button>
+            <button className={`btn ${compact ? 'xs icon' : 'sm'} ghost`} disabled={reported === 'sending' || reported === 'yes'}
+              aria-label={reportLabel} title={compact ? reportLabel : 'Tell the organisers this failed'} onClick={report}>
+              {compact ? '⚑' : reportLabel}
+            </button>
           )}
-          <button className="btn xs ghost" onClick={() => runner.dismiss(jobId)}>Clear</button>
+          <button className={`btn ${compact ? 'xs' : 'sm'} icon ghost`} aria-label="Clear" title="Clear" onClick={() => runner.dismiss(jobId)}>✕</button>
         </div>
-        {!cancelled && <OtherModel job={job} compact={compact} onRetried={onRetried} />}
       </div>
     )
   }
@@ -85,12 +103,13 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   }
 
   const q = live?.queuePosition
+  const model = job.model ? modelLabel(job.provider, job.model) : undefined
   return (
-    <div className="pending" aria-live="polite">
-      <div className="spinner" />
-      <div className="state">{STATE_LABEL[state] ?? 'Working…'}</div>
-      <div className="meta">
-        {q ? `#${q} in queue · ` : ''}{fmtElapsed(elapsed)}
+    <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+      {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
+      <div className="meta" title={compact ? who.line : undefined}>
+        {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
       {!compact && (confirming
         ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
@@ -99,28 +118,32 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   )
 }
 
-const keyOf = (c: { provider: string; model: string }) => `${c.provider}:${c.model}`
-
 /** A failed job, sent again on another model: whatever made it fail (an account out of credit, a model
- *  that cannot take the step) may not hold on the next one. Starts on a model from another provider. */
+ *  that cannot take the step) may not hold on the next one. A button that opens the model menu, models
+ *  from another provider first; picking one sends the job again on it. */
 function OtherModel({ job, compact, onRetried }: { job: DocJob; compact: boolean; onRetried?: (newId: string) => void }) {
   const { runner } = useServices()
   const { config } = useConfig()
-  const options = modelChoicesFor(job.op, config).filter((o) => !(o.provider === job.provider && o.model === job.model))
-  const [chosen, setChosen] = useState<string | undefined>()
+  const ref = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const options = otherModels(modelChoicesFor(job.op, config), job)
   if (!options.length) return null
-  const start = options.find((o) => o.provider !== job.provider) ?? options[0]
-  const pick = options.find((o) => keyOf(o) === chosen) ?? start
   return (
-    <div className="row othermodel" onClick={(e) => e.stopPropagation()}>
-      {!compact && <span className="faint">Try another model</span>}
-      <select className="select xs" aria-label="Another model to try" value={keyOf(pick)} onChange={(e) => setChosen(e.target.value)}>
-        {options.map((o) => <option key={keyOf(o)} value={keyOf(o)}>{o.label} · {o.provider}</option>)}
-      </select>
-      <button className="btn xs primary" onClick={async () => {
-        const id = await runner.retry(job.id, choiceToSend(job.op, config, pick) ?? null)
-        if (id) onRetried?.(id)
-      }}>{compact ? 'Try' : 'Try it'}</button>
-    </div>
+    <>
+      <button ref={ref} className={`btn ${compact ? 'xs' : 'sm'} ${open ? 'on' : 'ghost'}`} aria-haspopup="menu" aria-expanded={open}
+        title="Send it again on another model" onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
+        ⇄ {compact ? 'Model' : 'Try another model'} <span className="caret" aria-hidden="true">▾</span>
+      </button>
+      <Float anchor={ref} open={open} onClose={close} align="center" label="Another model to try" className="modelmenu">
+        <div className="fhead">Make it again with</div>
+        <ModelItems options={options} tagOther={job.provider} onPick={async (o) => {
+          close()
+          const id = await runner.retry(job.id, choiceToSend(job.op, config, o) ?? null)
+          if (id) onRetried?.(id)
+        }} />
+        <div className="fnote">Same request, same references: only the model changes.</div>
+      </Float>
+    </>
   )
 }

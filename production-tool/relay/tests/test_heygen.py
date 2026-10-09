@@ -113,11 +113,11 @@ def test_no_first_frame_and_no_refs_is_refused():
     assert p.sent == []
 
 
-def test_unknown_tag_is_invalid_input():
+def test_a_name_the_request_does_not_send_goes_as_words():
+    # Was invalid_input; the director's check still refuses a name in none of the job's refs (2026-10-09).
     p = make(reply(202, "create_202"))
-    with pytest.raises(ProviderError) as e:
-        p.submit(refs_job(prompt="@ghost waves"))
-    assert e.value.code == "invalid_input"
+    p.submit(refs_job(prompt="@ghost waves"))
+    assert body_of(p.sent[0])["prompt"].startswith("ghost waves")
 
 
 def test_prompt_over_5000_chars_is_invalid_input():

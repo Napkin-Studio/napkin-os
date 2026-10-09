@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
-  ClanDocumentStore, agentKind, directorRecord, memoryPersistence, providerRecord, recordJobOutcome, type JobEntry,
+  ClanDocumentStore, agentKind, cardsFromRationale, directorRecord, memoryPersistence, providerRecord, recordJobOutcome, type JobEntry,
 } from '../src/index'
 import { id, job, sha, wasmBytes } from './fixtures'
 
@@ -69,6 +69,24 @@ describe('attribution: participant, director, provider', () => {
     expect(pf.action).toBe(`failed generate ${j.id}`)
     expect(pf.rationale).toMatch(/^moderated \(SAFETY.INPUT.IMAGE\): The provider refused/)
     expect(providerRecord({ ...j, state: 'running' })).toBeNull()
+  })
+
+  it('puts the cards the director was given last in its entry, and reads them back', () => {
+    const j = realJob()
+    const cards = [
+      { tag: 'hero', sha256: `sha256:${'a'.repeat(64)}`, kind: 'character' as const, card: 'A girl in a yellow raincoat\nFlat 2D · thick outlines\nFront view' },
+      { tag: 'in_1', sha256: `sha256:${'b'.repeat(64)}`, kind: 'other' as const, card: 'Grey feathers ¦ close up' },
+    ]
+    const d = directorRecord(j, cards)!
+    expect(d.rationale).toContain('The sketch sets the pose')
+    expect(d.rationale).toContain(' · saw: @hero (character): A girl in a yellow raincoat / Flat 2D , thick outlines / Front view')
+    const back = cardsFromRationale(d.rationale)
+    expect(back.rest).toBe(directorRecord(j)!.rationale)
+    expect(back.cards).toEqual([
+      { tag: 'hero', kind: 'character', lines: ['A girl in a yellow raincoat', 'Flat 2D , thick outlines', 'Front view'] },
+      { tag: 'in_1', kind: 'other', lines: ['Grey feathers , close up'] },
+    ])
+    expect(cardsFromRationale(directorRecord(j)!.rationale).cards).toEqual([])
   })
 
   it('writes the job entries once, across repeats and a reload', async () => {

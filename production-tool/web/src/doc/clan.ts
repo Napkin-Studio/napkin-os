@@ -17,7 +17,7 @@
 
 import {
   ClanDocumentStore, buildExportZip, indexedDbPersistence, postClanMirror, recordJobOutcome, TERMINAL,
-  type ChainEntry, type JobEntry,
+  type ChainEntry, type JobEntry, type Persistence,
 } from '../../../clan-store/src'
 import type { ProductionDocument } from '../contracts/types'
 import { describeWrite, type Described, type JobCtxOf } from './describe'
@@ -28,7 +28,8 @@ import type { Doc, DocumentStore, Verdict } from './types'
 export type { ChainEntry } from '../../../clan-store/src'
 export { buildExportZip, postClanMirror }
 
-/** The IndexedDB database the .clan bytes live in (apart from the app's kv/blobs one). */
+/** The IndexedDB database the .clan bytes live in (apart from the app's kv/blobs one). Each project
+ *  has its own: CLAN_DB + ':' + its id (projects/storage.ts); this name alone held the one project of before. */
 export const CLAN_DB = 'napkin-production-tool-clan'
 
 interface Pending {
@@ -58,9 +59,21 @@ export class ClanBackedStore implements DocumentStore {
     this.delay = opts.debounceMs ?? 250
   }
 
-  /** The browser default: IndexedDB, napkin-wasm beside the bundle. */
-  static inBrowser(opts: { ctxOf?: JobCtxOf } = {}): ClanBackedStore {
-    return new ClanBackedStore(new ClanDocumentStore({ persistence: indexedDbPersistence(CLAN_DB) }), opts)
+  /** The browser default: IndexedDB (a project's own database), napkin-wasm beside the bundle. */
+  static inBrowser(opts: { ctxOf?: JobCtxOf; persistence?: Persistence } = {}): ClanBackedStore {
+    return new ClanBackedStore(new ClanDocumentStore({ persistence: opts.persistence ?? indexedDbPersistence(CLAN_DB) }), opts)
+  }
+
+  private closed = false
+
+  /** The project was closed (another one opened, or Home): write what is pending, then take no more
+   *  writes, so a job's late landing cannot reach a store a newer one of this project has replaced. */
+  async close(): Promise<void> {
+    await this.flush()
+    this.closed = true
+    this.clan.dispose()
+    this.listeners.clear()
+    this.chainListeners.clear()
   }
 
   // ── DocumentStore ──
@@ -105,6 +118,10 @@ export class ClanBackedStore implements DocumentStore {
   }
 
   patch(mergePatch: object, why: { action: string; rationale?: string }): Promise<Doc> {
+    if (this.closed) {
+      console.warn('a write to a closed project was dropped', why.action)
+      return Promise.resolve(this.value as Doc)
+    }
     const before = this.get()
     const after = applyMergePatch(before, mergePatch)
     const described = describeWrite(why.action, before, after, this.ctxOf)
@@ -233,7 +250,8 @@ export class ClanBackedStore implements DocumentStore {
     for (const j of (this.clan.get().jobs ?? []) as unknown as JobEntry[]) {
       if (!TERMINAL.has(j.state) || this.outcomes.has(j.id)) continue
       try {
-        if (await recordJobOutcome(this.clan, j)) wrote = true
+        // The cards the director was given ride in the job's context, not the document (jobs/runner.ts).
+        if (await recordJobOutcome(this.clan, j, this.ctxOf(j.id)?.cards)) wrote = true
         this.outcomes.add(j.id)
       } catch (e) {
         console.warn('could not record the job in the decision chain', j.id, e)

@@ -17,6 +17,7 @@ import os
 
 import boto3
 
+import cards
 from blobs import S3Blobs, s3_client
 from contracts import Contracts
 from director import load_director
@@ -49,11 +50,15 @@ def _build() -> Relay:
 
     secrets = EnvSecrets()
     secrets()  # keys into the environment before the adapters start
+    blobs = S3Blobs(bucket, public_base, client=s3)
+    director = load_director()
     return Relay(
         store=DynamoStore(os.environ["JOBS_TABLE"], os.environ["QUOTAS_TABLE"], os.environ["BLOCKED_TABLE"]),
-        blobs=S3Blobs(bucket, public_base, client=s3),
+        blobs=blobs,
         registry=load_registry(),
-        director=load_director(),
+        director=director,
+        # A Lambda freezes after it answers: a card late for one job is made on the next.
+        cards=cards.make(director, blobs, background=False),
         config=CachedConfig(lambda: json.loads(s3.get_object(Bucket=bucket, Key=config_key)["Body"].read()), contracts),
         secrets=secrets,
         contracts=contracts,
