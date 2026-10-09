@@ -77,7 +77,7 @@
               "id": { "$ref": "common.schema.json#/$defs/id" },
               "parent": { "$ref": "common.schema.json#/$defs/id" },
               "created_at": { "type": "string", "format": "date-time" },
-              "imported_text": { "type": "string", "maxLength": 600, "description": "The user's own words, kept verbatim." },
+              "imported_text": { "type": "string", "maxLength": 1500, "description": "The user's own words, kept verbatim. Up to 1500 characters since 2026-10-09 (was 600)." },
               "target_s": { "type": "integer", "minimum": 10, "maximum": 20 },
               "status": { "enum": ["draft", "approved", "superseded"] }
             },

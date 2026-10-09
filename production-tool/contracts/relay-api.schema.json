@@ -252,8 +252,8 @@
         },
         "script": {
           "type": "string",
-          "maxLength": 600,
-          "description": "shot_list: the 10-20 s script. frame: the same script, for the setting."
+          "maxLength": 1500,
+          "description": "shot_list: the script, up to 1500 characters (since 2026-10-09; was 600). frame: the same script for the setting, cut to its first 600 characters by the web."
         },
         "targetS": {
           "type": "integer",
