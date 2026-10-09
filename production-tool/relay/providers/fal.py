@@ -355,7 +355,10 @@ class FalProvider:
             "output_format": "png",
         }
         if job.prompt:
-            body["additional_prompt"] = self._prompt(job.prompt, [ref.name], {}, "none")
+            # Only the source picture goes, so a name for another picture or the whole character
+            # (@maya beside @maya_front) is said in words rather than refusing the view (2026-10-09).
+            words = TAG.sub(lambda m: m.group(0) if m.group(1) == ref.name else m.group(1).replace("_", " "), job.prompt)
+            body["additional_prompt"] = self._prompt(words, [ref.name], {}, "none")
         return body
 
     def _region_edit(self, job: ProviderJob) -> dict:

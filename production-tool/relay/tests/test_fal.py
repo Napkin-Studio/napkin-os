@@ -184,6 +184,13 @@ def test_view_and_region_edit_name_refs_by_their_bare_name(provider, fal):
     assert fal.body()["prompt"] == "style on the coat"
 
 
+def test_a_view_says_a_name_it_does_not_send_in_words(provider, fal):
+    # 2026-10-09: the director's words named the whole character (@hero_key) and another picture;
+    # only the source goes to the view, so each failed the job as an unknown tag.
+    provider.submit(job(op="view", angle={"horizontal": 90}, prompt="@hero from the side, coat like @style_coat"))
+    assert fal.body()["additional_prompt"] == "hero from the side, coat like style coat"
+
+
 def test_per_endpoint_output_limits_are_refused_before_any_call(provider, fal):
     with pytest.raises(CapabilityMissing):
         provider.submit(job(op="view", angle={"horizontal": 90}, outputs=5))
