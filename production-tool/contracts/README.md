@@ -91,7 +91,7 @@ The adapter owns the exact request:
 2. **Job states** are pipeline.yaml's nine, in the relay and the document alike.
 3. **Views:** front, three_quarter, side, back, plus an optional side_2. Replaced in v2: views are variants of a key (`front`, `three-quarter`, `side`, `back`).
 4. **`blocked` and per-handle overrides** moved out of `config.json`, because it is public.
-5. **Director models:** Claude on Amazon Bedrock (eu-west-1, IAM, no API key): `eu.anthropic.claude-haiku-4-5-20251001-v1:0` per click, `eu.anthropic.claude-sonnet-5-5` for the shot list (`config.director`). Both inference profiles checked ACTIVE on 2026-10-06.
+5. **Director models:** Claude on Amazon Bedrock (eu-west-1, IAM, no API key): `eu.anthropic.claude-sonnet-5-5` per click and for the shot list (`config.director`), checked ACTIVE on 2026-10-06. Per-click direction runs `director.v5` (one section per op; the shot list keeps `director.v4`); it was Haiku 4.5 on v4 until 2026-10-09 (features/director-v5.clan). Locally, `NAPKIN_MODEL_API=claude-cli` runs the same models on the developer's Claude Code login.
 6. **Spend caps:** $200 in `config.testing.json`, $1,300 in `config.event.json` (D2, 2026-10-06: Runway's org has 20 concurrent per model and about $3.2k of credits, so no tier purchase). This is the relay's own stop, not a limit at Runway.
 7. **Example `routing` for the event:**
    - fal first for images, with Runway as fallback

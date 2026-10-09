@@ -154,9 +154,10 @@ def test_prompt_carries_the_rules():
         assert rule in text
 
 
-def test_only_the_v4_prompt_is_bundled():
-    """Contract v2 has no sketch or character views: the older prompts would name inputs that no longer exist."""
-    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v4.md"]
+def test_only_the_v4_and_v5_prompts_are_bundled():
+    """Contract v2 has no sketch or character views: the older prompts would name inputs that no longer exist.
+    v5 directs each click; v4 stays for the shot list (features/director-v5.clan)."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v4.md", "director.v5.md"]
 
 
 def test_v4_names_refs_and_limits_each_ref_to_what_it_names():
@@ -379,7 +380,9 @@ def test_recorded_ratios_are_in_the_providers_lists():
 
 
 @pytest.mark.parametrize("name, edit, why", [
-    ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(role="element_front"), "has no elements"),
+    # A front with an angle after it is an element (a lone front now goes as a character, 2026-10-09).
+    ("generate_runway", lambda r: (r["providerJob"]["refs"][1].update(role="element_front"),
+                                   r["providerJob"]["refs"][2].update(role="element_angle")), "has no elements"),
     ("clip_edit_fal_mask", job_edit(keyframe={"sha256": "sha256:" + "2" * 64, "atS": 1}), "takes no keyframe"),
     ("clip_edit_runway", job_edit(strength="flex"), "takes no edit strength"),
     ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="Ab"), "canonical tags"),

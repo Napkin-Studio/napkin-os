@@ -95,7 +95,8 @@ def provider(fal):
 
 def job(op="generate", **kw):
     # Image steps default to Nano Banana Pro (features/default-models.clan); these tests are Kling's.
-    model = kw.pop("model", "kling-image-o3" if op in ("generate", "frame") else "m")
+    # Clips default to Veo 3.1 Fast (2026-10-09); the clip tests here are Kling's, so they name it.
+    model = kw.pop("model", "kling-image-o3" if op in ("generate", "frame") else "kling-v3-pro-i2v" if op == "clip" else "m")
     return ProviderJob(op=op, provider="fal", model=model, prompt=kw.pop("prompt", "a fox"),
                        refs=kw.pop("refs", [Ref(HERO, "hero", "character")]), **kw)
 
@@ -730,7 +731,10 @@ def test_characters_and_frames_default_to_nano_banana_pro_with_kling_beside_it()
     for op in ("generate", "frame"):
         assert sheet["ops"][op]["endpoint"] == "fal-ai/nano-banana-pro/edit"
         assert "kling-image-o3" in [a["model"] for a in sheet["ops"][op]["alternates"]]
-    assert sheet["ops"]["clip"]["model"] == "kling-v3-pro-i2v"  # the clip model that keeps named characters
+    # Veo 3.1 Fast is the default clip (2026-10-09: steadier and quicker); Kling, which keeps named
+    # characters as elements, is offered beside it.
+    assert sheet["ops"]["clip"]["model"] == "veo3.1-fast-i2v"
+    assert "kling-v3-pro-i2v" in [a["model"] for a in sheet["ops"]["clip"]["alternates"]]
 
 
 # --- cancel ---

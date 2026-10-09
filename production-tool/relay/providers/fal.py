@@ -63,10 +63,12 @@ IMAGE_OPS = {"generate", "frame"}
 NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
 VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
 KLING_IMAGE = "kling-image-o3"
+KLING_CLIP = "kling-v3-pro-i2v"
 # Nano Banana Pro is the default for generate and frame (features/default-models.clan); Kling O3
-# and Nano Banana 2 are offered beside it.
+# and Nano Banana 2 are offered beside it. Veo 3.1 Fast is the default clip (2026-10-09: steadier
+# and quicker than Kling on fal's queue); Kling v3 Pro and Veo 3.1 are offered beside it.
 ALTERNATES = {"generate": {KLING_IMAGE, "nano-banana-2-edit"}, "frame": {KLING_IMAGE, "nano-banana-2-edit"},
-              "clip": VEO}
+              "clip": {KLING_CLIP, "veo3.1-i2v"}}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
 # 422 types that say the input is wrong: pydantic's, and fal's own (fal.ai/docs/documentation/
 # model-apis/errors, read 2026-10-08). Any other 422 type is fal's failure.

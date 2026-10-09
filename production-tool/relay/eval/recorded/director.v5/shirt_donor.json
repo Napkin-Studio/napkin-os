@@ -1,0 +1,4 @@
+{
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"generate\", \"needsUser\": null, \"providerJob\": {\"provider\": \"fal\", \"model\": \"nano-banana-pro-edit\", \"prompt\": \"make it wear the tshirt like @handyman_front. The character in @in_1, kept as it is; the t-shirt of @handyman_front only. Full body, facing the viewer, centred on a plain light background.\", \"refs\": [{\"sha256\": \"sha256:73bddd0044e9399c0799c403ced62cf1d108b4cd1d3d69394e577d3566d85381\", \"name\": \"in_1\", \"role\": \"character\"}, {\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"handyman_front\", \"role\": \"object\"}], \"ratio\": \"4:5\"}, \"rationale\": \"The character in @in_1 is kept; @handyman_front is a donor for the t-shirt only, so it is sent as an object. Default full-body ending added since the words don't say otherwise.\", \"confidence\": 0.88}"
+}

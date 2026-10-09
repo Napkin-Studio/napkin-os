@@ -427,9 +427,9 @@ def test_the_cost_of_a_reference_production_per_pathway_is_pinned():
              (_script("pathway_costs").costs(n) for n in PATHWAYS)}
     assert costs == {  # features/default-models.clan: a good model always
         "runway": (11.0, 11.0, []),
-        "fal": (5.535, 16.575, []),
+        "fal": (7.575, 16.575, []),
         "heygen": (2.175, 2.175, ["clip on heygen"]),
-        "mix": (5.535, 16.575, []),
+        "mix": (7.575, 16.575, []),
     }
 
 
