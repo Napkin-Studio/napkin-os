@@ -4,12 +4,14 @@ Invoked asynchronously by the relay with
   {"jobId", "clips": [{"key": "out/sha256:…", "trimS": 4.5?}, …], "eventName",
    "outKey": "ads/<jobId>.mp4", "resultKey": "ads/<jobId>.json"}
 It writes outKey, then resultKey = {"ok": true, "sha256", "bytes", "w", "h",
-"durationS", "endCard"} or {"ok": false, "error", "endCard"}; the relay polls
+"durationS", "endCard"} or {"ok": false, "error", "endCard"}, with "code":
+"bad_clip" and "clip" (its index) when one clip cannot be read; the relay polls
 for resultKey. eventName is no longer drawn (the owner dropped it, 2026-10-09).
 
 Every clip is scaled and padded to one size (the first clip's, even, at most
-1280 on the long side), one fps (24), trimmed to trimS seconds when given,
-audio dropped (no audio on Wednesday), then the 2.5 s end card
+1280 on the long side), one fps (24), trimmed to trimS seconds when given and
+held on its last frame up to trimS when shorter, audio dropped (no audio on
+Wednesday), then the 2.5 s end card
 (features/ad-end-card.clan): "Roll Up Reveals Crew". The studio mark rolls in
 from the right along the wordmark's line, two turns, uncovering "Napkin
 Studio" and resting beside it; below, a hairline draws in its wake and six
@@ -33,6 +35,28 @@ from pathlib import Path
 FPS = 24
 MAX_SIDE = 1280
 CARD_S = 2.5  # web: production-tool/web/src/jobs/clips.ts END_CARD_S
+STILL_S = 5.0  # a still with no trimS (the mock's PNG clips) is held this long
+
+# Pictures among the clips: the mock makes a still for a clip (2026-10-09).
+STILL_MAGIC = ((b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"))
+
+
+class BadClip(Exception):
+    """One clip ffprobe cannot read: the result names it (code bad_clip) so the participant knows
+    which shot to make again, instead of ffmpeg's text with temp paths."""
+
+    def __init__(self, index: int):
+        super().__init__(f"Shot {index + 1}'s clip could not be read. Make it again, then render.")
+        self.index = index
+
+
+def still_ext(path: str) -> str | None:
+    """'.png' or '.jpg' when the file is a picture, not a video."""
+    with open(path, "rb") as f:
+        head = f.read(16)
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    return next((ext for magic, ext in STILL_MAGIC if head.startswith(magic)), None)
 
 ENDCARD_DIR = Path(__file__).resolve().parent / "endcard"
 VERSIONS = ("roll-up", "roll-up-ink")
@@ -233,11 +257,14 @@ def card_graph(first: int, version: str, layout: dict, fps: int = FPS) -> tuple[
 
 def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version: str, assets: dict,
                   out: str, fps: int = FPS) -> list[str]:
-    """clips: [{"path", "trimS"?}]; assets: load_assets(version)."""
+    """clips: [{"path", "trimS"?, "still"?}]; assets: load_assets(version). A still is looped for its
+    trimS (or STILL_S): one frame made the mock's ads only the end card (2026-10-09)."""
     w, h = size
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     for c in clips:
-        if c.get("trimS"):
+        if c.get("still"):
+            cmd += ["-loop", "1", "-framerate", str(fps), "-t", f"{float(c.get('trimS') or STILL_S):g}"]
+        elif c.get("trimS"):
             cmd += ["-t", f"{float(c['trimS']):g}"]
         cmd += ["-i", c["path"]]
     layout = card_layout(w, h, assets)
@@ -246,9 +273,13 @@ def build_command(ffmpeg: str, clips: list[dict], size: tuple[int, int], version
     card_inputs, card_parts = card_graph(n, version, layout, fps)
     cmd += card_inputs
     parts, labels = [], []
-    for i in range(n):
+    for i, c in enumerate(clips):
+        # A clip shorter than its shot (Veo stops at 8 s, a feel edit at 5) holds its last frame up to
+        # trimS, so the ad is as long as planned (2026-10-09).
+        hold = "" if c.get("still") or not c.get("trimS") else (
+            f",tpad=stop_mode=clone:stop_duration={float(c['trimS']):g},trim=duration={float(c['trimS']):g},setpts=PTS-STARTPTS")
         parts.append(f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,"
-                     f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps},format=yuv420p[v{i}]")
+                     f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps={fps},format=yuv420p{hold}[v{i}]")
         labels.append(f"[v{i}]")
     parts += card_parts
     labels.append("[card]")
@@ -265,7 +296,11 @@ def probe(ffprobe: str, path: str) -> dict:
                        capture_output=True, text=True, check=True, timeout=30)
     data = json.loads(r.stdout)
     s = data["streams"][0]
-    return {"w": int(s["width"]), "h": int(s["height"]), "durationS": float(data.get("format", {}).get("duration", 0) or 0)}
+    try:  # a still has no duration ("N/A")
+        duration = float(data.get("format", {}).get("duration", 0) or 0)
+    except ValueError:
+        duration = 0.0
+    return {"w": int(s["width"]), "h": int(s["height"]), "durationS": duration}
 
 
 def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
@@ -273,25 +308,38 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
     version = card_version(event.get("jobId", ""))
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            clips = []
+            clips, probes = [], []
             for i, c in enumerate(event["clips"]):
                 dest = os.path.join(tmp, f"clip{i}.mp4")
                 get(c["key"], dest)
-                clips.append({"path": dest, **({"trimS": c["trimS"]} if c.get("trimS") else {})})
-            first = probe(ffprobe, clips[0]["path"])
-            size = target_size(first["w"], first["h"])
+                ext = still_ext(dest)
+                if ext:  # ffmpeg loops a picture only when it reads it as one
+                    named = os.path.join(tmp, f"clip{i}{ext}")
+                    os.rename(dest, named)
+                    dest = named
+                try:  # every clip first, so a broken one is named, not ffmpeg's text
+                    probes.append(probe(ffprobe, dest))
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError) as e:
+                    print(json.dumps({"kind": "stitch_probe", "jobId": event.get("jobId"), "clip": i, "error": str(e)[:500]}))
+                    raise BadClip(i) from e
+                clips.append({"path": dest, **({"trimS": c["trimS"]} if c.get("trimS") else {}), **({"still": True} if ext else {})})
+            size = target_size(probes[0]["w"], probes[0]["h"])
             out = os.path.join(tmp, "ad.mp4")
             cmd = build_command(ffmpeg, clips, size, version, load_assets(version), out)
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-            if r.returncode != 0:
-                raise RuntimeError(f"ffmpeg failed: {r.stderr.strip()[:400]}")
+            if r.returncode != 0:  # ffmpeg's own words (temp paths) go to the log, not to the participant
+                print(json.dumps({"kind": "stitch_ffmpeg", "jobId": event.get("jobId"), "stderr": r.stderr.strip()[-2000:]}))
+                raise RuntimeError("The ad could not be rendered. Try again.")
             data = Path(out).read_bytes()
             meta = probe(ffprobe, out)
             put(event["outKey"], out, "video/mp4")
             result = {"ok": True, "sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "bytes": len(data),
                       "w": meta["w"], "h": meta["h"], "durationS": round(meta["durationS"], 2), "endCard": version}
+    except BadClip as e:  # the relay shows this as invalid_input, not retried
+        result = {"ok": False, "code": "bad_clip", "clip": e.index, "error": str(e), "endCard": version}
     except Exception as e:  # the relay shows this as provider_failed
-        result = {"ok": False, "error": f"{type(e).__name__}: {e}"[:500], "endCard": version}
+        message = str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}"
+        result = {"ok": False, "error": message[:500], "endCard": version}
     put_json(event["resultKey"], result)
     print(json.dumps({"kind": "stitch", "jobId": event.get("jobId"), **result}))
     return result
