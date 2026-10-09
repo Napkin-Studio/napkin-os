@@ -57,6 +57,30 @@ describe('ClanDocumentStore against the real napkin-wasm', () => {
     again.dispose()
   })
 
+  it('a document made under an older schema moves to the app\'s when it opens (scripts to 1500)', async () => {
+    const s = store()
+    await filled(s)
+    // An "older" document: the same, but with the 600-character script limit it was made with.
+    const older = bundle() as Record<string, unknown>
+    const text = JSON.stringify(older).replace(/("imported_text":\{[^}]*"maxLength":)1500/, '$1600')
+    expect(text).toContain('"maxLength":600')
+    const file = join(tmp, 'older.clan')
+    writeFileSync(file, await s.exportClan())
+    const schemaFile = join(tmp, 'older-schema.json')
+    writeFileSync(schemaFile, text)
+    clanCli(['patch-schema', file, schemaFile])
+    const olderBytes = new Uint8Array(execFileSync('cat', [file]))
+
+    const again = store()
+    await again.open(olderBytes)
+    const rev = id('rev', 0)
+    const script = { current: rev, revisions: [{ id: rev, created_at: AT, imported_text: 'a'.repeat(1000), target_s: 15, status: 'draft' }] }
+    await again.patch({ script }, { action: 'a longer script' }) // refused before the move to the app's schema
+    expect((again.get().script?.revisions[0] as { imported_text: string }).imported_text).toHaveLength(1000)
+    s.dispose()
+    again.dispose()
+  })
+
   it('a patch that breaks the schema is refused and leaves the document unchanged', async () => {
     const s = store()
     await filled(s)
