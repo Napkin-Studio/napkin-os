@@ -92,7 +92,7 @@ UNKNOWN_PRICE_USD = 1.0      # reserved for an op whose sheet has no price (HeyG
 ORGANISER_QUOTA_FACTOR = 10
 SESSION_TTL_S = 24 * 3600
 # How long a queued job may wait for a free provider slot, per class, when config.json sets no queueTimeoutS.
-QUEUE_TIMEOUT_S = {"image": 900, "video": 1800}
+QUEUE_TIMEOUT_S = {"image": 1800, "video": 1800}
 CLAN_MAX_BYTES = 5 * 1024 * 1024
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
