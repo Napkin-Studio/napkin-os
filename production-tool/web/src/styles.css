@@ -592,3 +592,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .shots-empty .faint { font-size: 12.5px; max-width: 340px; line-height: 1.45; }
 /* Make clip's box (stages/Video.tsx MakeClipBox). */
 .float.clipbox .clipbox-body { gap: 8px; padding: 10px; width: min(320px, calc(100vw - 32px)); }
+
+/* "Napkin's got you" (ui/FallbackNotices.tsx): a job made on Runway because fal or HeyGen could not. */
+.gotyou-stack { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 45; display: flex; flex-direction: column; gap: 8px; max-width: min(560px, calc(100vw - 32px)); }
+.gotyou { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 13px; }
+.gotyou-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ok-bg, var(--soft)); color: var(--ok, var(--ink)); font-weight: 700; flex-shrink: 0; }
+.gotyou span:nth-child(2) { flex: 1; }
+.madeon { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink2); font-size: 11px; font-weight: 600; white-space: nowrap; }
