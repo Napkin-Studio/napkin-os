@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
+import { oneAtATime } from '../lib/guard'
 import { placeFloating, type Anchor } from '../lib/place'
 
 /** An object URL for a content hash from the local blob store. */
@@ -14,6 +15,25 @@ export function useBlobUrl(sha: string | undefined): string | undefined {
     }
   }, [sha])
   return sha ? url ?? cachedBlobUrl(sha) : undefined
+}
+
+/** A button's send, one at a time (lib/guard.ts): `sending` for its label and disabled state, and
+ *  `send(fn)`, which drops a second click made while the first is still going (a double click paid twice). */
+export function useSending(): [boolean, <T>(fn: () => Promise<T>) => Promise<T | undefined>] {
+  const guard = useRef<ReturnType<typeof oneAtATime> | null>(null)
+  const [sending, setSending] = useState(false)
+  const send = useCallback(<T,>(fn: () => Promise<T>) => {
+    guard.current ??= oneAtATime()
+    return guard.current.run(async () => {
+      setSending(true)
+      try {
+        return await fn()
+      } finally {
+        setSending(false)
+      }
+    })
+  }, [])
+  return [sending, send]
 }
 
 /** Seconds since an ISO time, ticking once a second. */

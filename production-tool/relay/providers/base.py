@@ -37,7 +37,8 @@ class ProviderError(Exception):
     """
 
     def __init__(self, code: str, message: str, *, provider_code: str | None = None,
-                 retryable: bool = False, accepted: bool = False, source: str | None = None):
+                 retryable: bool = False, accepted: bool = False, source: str | None = None,
+                 retry_after_s: int | None = None):
         if code not in ERROR_CODES:
             raise ValueError(f"unknown error code {code!r}")
         super().__init__(message)
@@ -47,6 +48,7 @@ class ProviderError(Exception):
         self.retryable = retryable
         self.accepted = accepted
         self.source = source  # provider | network | napkin | input (providers/types.py SOURCES)
+        self.retry_after_s = retry_after_s  # the provider's Retry-After on a 429, when it sent one
 
 
 class CapabilityMissing(ProviderError):

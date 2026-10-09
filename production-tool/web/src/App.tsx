@@ -15,6 +15,7 @@ import { clanDbFor, INDEX_KEY } from './projects/storage'
 import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
+import { FallbackNotices } from './ui/FallbackNotices'
 import { UndoButtons } from './ui/UndoButtons'
 import { SaveButton } from './ui/SaveButton'
 import { SaveConflictBox } from './ui/SaveConflict'
@@ -54,6 +55,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
       </div>
       <UpdateBox />
+      <FallbackNotices />
       {!import.meta.env.PROD && <DevSwitch />}
     </>
   )

@@ -6,8 +6,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
-import { assetRef } from '../jobs/assets'
-import { isRunning, jobAt } from '../jobs/select'
+import { assetRef, remoteUrl } from '../jobs/assets'
+import { isMoving, isRunning, jobAt } from '../jobs/select'
 import { makeClip as submitClip, renderAd } from '../jobs/clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
@@ -15,7 +15,8 @@ import { adStatus, takeStale } from '../jobs/stale'
 import { adBehindLabel, behindLabel } from '../ui/behind'
 import { rectToRegion } from '../lib/region'
 import { newId } from '../lib/ulid'
-import { fmtTime, useBlobUrl } from '../ui/hooks'
+import { fmtTime, useBlobUrl, useSending } from '../ui/hooks'
+import { clipText } from '../lib/guard'
 import { JobNode } from '../ui/JobNode'
 import { systemUpdate, updateDoc } from '../doc/store'
 import { deleteFrom, removeNote, removeTake } from '../doc/remove'
@@ -54,26 +55,36 @@ export function Video() {
   const shot = shots.find((s) => s.id === shotId) ?? shots[0]
   const take = shot ? takesOf(takes, shot.id).find((t) => t.selected) : undefined
   const clipJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id)
-  const anyRunning = shots.some((s) => isRunning(doc, clipJob(s.id)))
-  const allTaken = shots.length > 0 && shots.every((s) => takesOf(takes, s.id).some((t) => t.selected))
+  // An "uncertain" job is waiting on the participant (Stop waiting / Try again on its card), not on
+  // the relay: it locks nothing (features/video-stage-findings.clan).
+  const anyRunning = shots.some((s) => isMoving(doc, clipJob(s.id)))
+  const taken = shots.filter((s) => takesOf(takes, s.id).some((t) => t.selected)).length
+  const allTaken = shots.length > 0 && taken === shots.length
   const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch')
   const latestAd = (doc.exports ?? []).filter((e) => e.kind === 'ad_mp4').at(-1)
+  // One send per click burst: a double click paid twice (2026-10-09).
+  const [makingAll, sendAll] = useSending()
+  const [rendering, sendRender] = useSending()
 
   const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, opts)
 
-  const makeAll = async () => {
+  /** A clip for every shot without one. A shot that cannot be made (no frame yet) does not stop the
+   *  others; each one that failed is named. */
+  const makeAll = () => sendAll(async () => {
     setError(null)
-    try {
-      for (const s of shots) {
-        if (takesOf(takes, s.id).length || isRunning(doc, clipJob(s.id))) continue
+    const failed: string[] = []
+    for (const [i, s] of shots.entries()) {
+      if (takesOf(takes, s.id).length || isRunning(doc, clipJob(s.id))) continue
+      try {
         await makeClip(s, { modelChoice: choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)) })
+      } catch (e) {
+        failed.push(`Shot ${i + 1}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That did not work.')
     }
-  }
+    if (failed.length) setError(failed.join(' '))
+  })
 
-  const render = async () => {
+  const render = () => sendRender(async () => {
     setError(null)
     try {
       // Each clip is cut to its shot's length (trimS): the ad is the shots plus the 2.5 s end card.
@@ -81,7 +92,11 @@ export function Video() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
-  }
+  })
+
+  // Why Render ad is off, said on the button (a disabled button never said why).
+  const renderBlocked = !allTaken ? `Make a clip for every shot first (${taken} of ${shots.length} done)`
+    : anyRunning ? 'Wait for the clips being made' : isMoving(doc, stitchJob) ? 'The ad is rendering' : undefined
 
   if (!controls.video) {
     return <div className="panel"><div className="empty-state"><b>Video is off right now.</b>The organisers will switch it on soon.</div></div>
@@ -104,10 +119,10 @@ export function Video() {
         <div className="row">
           <h1>Video</h1>
           <span className="spacer" />
-          <button className="btn dark" disabled={anyRunning || allTaken} onClick={makeAll}>{anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
+          <button className="btn dark" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
           {controls.stitch && (
-            <button className="btn primary" disabled={!allTaken || anyRunning || isRunning(doc, stitchJob)} onClick={render} title="Join the clips into one ad with the end card">
-              {isRunning(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
+            <button className="btn primary" disabled={rendering || !!renderBlocked} onClick={() => void render()} title={renderBlocked ?? 'Join the clips into one ad with the end card'}>
+              {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
             </button>
           )}
         </div>
@@ -120,7 +135,8 @@ export function Video() {
               onSelect={() => { setShotId(s.id); setMode('shot') }}
               onMake={(opts) => makeClip(s, opts)} />
           ))}
-          <button className={`shotcard ${mode === 'all' ? 'sel' : ''}`} style={{ flexBasis: 140 }} disabled={!allTaken} onClick={() => setMode('all')}>
+          <button className={`shotcard ${mode === 'all' ? 'sel' : ''}`} style={{ flexBasis: 140 }} disabled={!allTaken} onClick={() => setMode('all')}
+            title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>
             <div className="thumb" style={{ display: 'grid', placeItems: 'center', fontWeight: 700, color: 'var(--ink2)' }}>▶ All shots</div>
             <div className="meta"><span className="faint">Stitched preview</span></div>
           </button>
@@ -144,20 +160,17 @@ function MakeClipBox({ index, onMake }: { index: number; onMake: (opts: { text?:
   const { config } = useConfig()
   const [text, setText] = useState('')
   const [pick, setPick] = useState<ModelChoice | undefined>()
-  const [busy, setBusy] = useState(false)
+  const [busy, send] = useSending()
   const [error, setError] = useState<string | null>(null)
   const choice = pick ?? lastWorkedModel(doc, 'clip', config)
-  const make = async () => {
-    setBusy(true)
+  const make = () => send(async () => {
     setError(null)
     try {
       await onMake({ ...(text.trim() ? { text: text.trim() } : {}), modelChoice: choiceToSend('clip', config, choice) })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
-    } finally {
-      setBusy(false)
     }
-  }
+  })
   return (
     <div className="stack clipbox-body" onClick={(e) => e.stopPropagation()}>
       <div className="fhead">Shot {index + 1} · clip</div>
@@ -188,6 +201,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
   const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
   const selIdx = sel ? takes.indexOf(sel) : -1
   const ui = useUi()
+  const selMade = madeWith(doc, ui, sel?.job_id)
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
   const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
   // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
@@ -208,12 +222,17 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
     await deleteFrom(docStore, (d) => removeTake(d, sel.id)) // Undo in the top bar puts it back
   }
   return (
-    <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onSelect()}>
+    <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+        e.preventDefault() // Space would scroll the page
+        onSelect()
+      }
+    }}>
       <div className="thumb">
         {thumb && <img src={thumb} alt="" />}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobNode jobId={jobId} compact /></div>}
       </div>
-      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} />}
+      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} />}
       <div className="meta">
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         <div className="row wrap" style={{ gap: 4 }}>
@@ -233,6 +252,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
             {making && <MakeClipBox index={index} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
           </Float>
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
+          {selMade.fallback && <span className="madeon" title={`${selMade.fallback}. ${ui.jobCtx[sel?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
         </div>
         {(stale || open > 0) && (
           <div className="badges">
@@ -260,7 +280,9 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
 }
 
 /** A shot card's ⋯ menu: a new take (on the model that made this one, or another), and delete. */
-function ShotMenu({ shot, take, n, only, busy, onDelete }: { shot: Shot; take: Take; n: number; only: boolean; busy: boolean; onDelete: () => void }) {
+function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
+  shot: Shot; take: Take; n: number; only: boolean; busy: boolean; onDelete: () => void; onError: (message: string | null) => void
+}) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -270,9 +292,18 @@ function ShotMenu({ shot, take, n, only, busy, onDelete }: { shot: Shot; take: T
   const close = useCallback(() => setOpen(false), [])
   const options = modelChoicesFor('clip', config)
   const start = startingChoice(options, madeWith(doc, ui, take.job_id).made)
+  const [sending, send] = useSending()
+  // Its error shows under the card, like Make clip's (it failed silently before, 2026-10-09).
   const newTake = (choice: ModelChoice | undefined) => {
     close()
-    void submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice) })
+    void send(async () => {
+      onError(null)
+      try {
+        await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice) })
+      } catch (e) {
+        onError(e instanceof Error ? e.message : 'That did not work.')
+      }
+    })
   }
   return (
     <>
@@ -287,10 +318,11 @@ function ShotMenu({ shot, take, n, only, busy, onDelete }: { shot: Shot; take: T
         ) : (
           <>
             <div className="fhead">Shot {shot.order} · clip v{n}</div>
-            <MenuItem icon="▶" disabled={busy} onSelect={() => newTake(start)}>New take</MenuItem>
-            {options.length > 1 && <MenuItem icon="⇄" disabled={busy} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
+            <MenuItem icon="▶" disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : 'New take'}</MenuItem>
+            {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
             <div className="fsep" />
-            <MenuItem icon="🗑" danger disabled={busy} hint={only ? 'the only one' : undefined} onSelect={() => { close(); onDelete() }}>Delete v{n}</MenuItem>
+            {/* A shot needs one clip: remaking the only one costs a video job (2026-10-09). */}
+            <MenuItem icon="🗑" danger disabled={busy || only} hint={only ? 'a shot needs one clip' : undefined} onSelect={() => { close(); onDelete() }}>Delete v{n}</MenuItem>
           </>
         )}
       </Float>
@@ -309,7 +341,8 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: (doc.takes ?? []).find((t) => t.shot_id === s.id && t.selected) })).filter((x) => x.take) as { shot: Shot; take: Take }[], [shots, doc.takes])
   const [idx, setIdx] = useState(0)
   const cur = mode === 'all' ? playlist[idx] : take && shot ? { shot, take } : undefined
-  const url = useBlobUrl(cur?.take.asset)
+  // Not in this browser (another device, cleared storage): the relay's copy (2026-10-09).
+  const url = useBlobUrl(cur?.take.asset) ?? remoteUrl(doc, cur?.take.asset)
   // The relay's mock makes a still for a clip, not a video: it shows as the picture it is.
   const still = !!doc.assets.find((a) => a.sha256 === cur?.take.asset)?.mime.startsWith('image/')
   const stillS = cur ? cur.take.duration_s ?? cur.shot.duration_s : 0
@@ -328,12 +361,18 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const [error, setError] = useState<string | null>(null)
   const pendingSeek = useRef<number | null>(null)
 
-  // New clip: reset the composer bits that belong to the old one.
+  // The regenerate menu (features/model-choice.clan): starts on the model that made this take.
+  const [pick, setPick] = useState<ModelChoice | undefined>()
+
+  // New clip: reset the composer bits that belong to the old one, and the model picked and the
+  // error left from it (another shot's pick and error stayed on screen, 2026-10-09).
   const [forTake, setForTake] = useState(cur?.take.id)
   if (forTake !== cur?.take.id) {
     setForTake(cur?.take.id)
     setRegion(null)
     setDrawing(false)
+    setPick(undefined)
+    setError(null)
   }
 
   const reviews = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && cur && takesOf(doc.takes ?? [], cur.shot.id).some((x) => x.id === r.target.id))
@@ -341,8 +380,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const openNotes = reviews.filter((r) => !r.resolved && r.target.id === cur?.take.id)
   const fixJob = cur ? jobAt(doc, ui, (c) => (c.for === 'clip' || (c.for === 'frame' && !!c.fixReviewIds?.length)) && c.shotId === cur.shot.id) : undefined
   const fixing = isRunning(doc, fixJob)
-  // The regenerate menu (features/model-choice.clan): starts on the model that made this take.
-  const [pick, setPick] = useState<ModelChoice | undefined>()
+  // A shot's first clip, being made or failed: its card (Cancel, Retry, Model) in the empty player.
+  const firstJob = !cur && mode === 'shot' && shot ? jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id) : undefined
+  const [sending, send] = useSending()
   const made = madeWith(doc, ui, cur?.take.job_id)
   const choice = pick ?? startingChoice(modelChoicesFor('clip', config), made.made)
 
@@ -350,7 +390,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const deps = { relay, doc: docStore, ui: services.ui, runner }
 
   /** Make the shot again from its frame, as a new take of this one. */
-  const again = async () => {
+  const again = () => send(async () => {
     if (!cur) return
     setError(null)
     try {
@@ -358,7 +398,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
-  }
+  })
 
   const pause = () => video.current && !video.current.paused && video.current.pause()
 
@@ -375,7 +415,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
 
   const addNote = () => {
     if (!cur || !note.trim()) return
-    const r: Review = { id: newId('pin'), target: { kind: 'take', id: cur.take.id }, comment: note.trim().slice(0, 1000), at_s: Math.round((video.current?.currentTime ?? t) * 100) / 100, resolved: false, created_at: new Date().toISOString() }
+    const r: Review = { id: newId('pin'), target: { kind: 'take', id: cur.take.id }, comment: clipText(note.trim(), 1000), at_s: Math.round((video.current?.currentTime ?? t) * 100) / 100, resolved: false, created_at: new Date().toISOString() }
     if (region) r.region = region
     updateDoc(docStore, (d) => {
       d.reviews ??= []
@@ -393,7 +433,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   // The fix's frame already landed and only its clip failed: Fix makes only the clip, from the fixed frame.
   const fixedFrame = cur && fixesInShot ? fixFrameLanded(doc, (id) => ui.jobCtx[id], openNotes.map((r) => r.id)) : undefined
 
-  const fix = async () => {
+  const fix = () => send(async () => {
     if (!cur || !openNotes.length) return
     setError(null)
     try {
@@ -404,16 +444,16 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
       } else if (fixesInShot) {
         await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice))
       } else if (one?.region && controls.videoRegionEdit) {
-        const v = await assetRef(relay, cur.take.asset)
+        const v = await assetRef(relay, cur.take.asset, docStore.get())
         await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.comment }, [cur.take.job_id], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
       } else {
-        const text = openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.comment}`).join('\n').slice(0, 1000)
+        const text = clipText(openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.comment}`).join('\n'), 1000)
         await submitClip(deps, cur.shot.id, { text, reviewIds: ids, parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice) })
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
-  }
+  })
 
   const jump = (r: Review) => {
     const target = (doc.takes ?? []).find((x) => x.id === r.target.id)
@@ -492,7 +532,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           </div>
         ) : (
           <div className="empty">
-            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : fixJob ? <div style={{ width: 260, height: 160 }}><JobNode jobId={fixJob} /></div> : 'No clip for this shot yet. Press Make clip.'}
+            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobNode jobId={(fixJob ?? firstJob)!} /></div> : 'No clip for this shot yet. Press Make clip.'}
           </div>
         )}
       </div>
@@ -586,15 +626,15 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           )}
           <div className="notes-actions">
           {openNotes.length > 0 && (
-            <button className="btn primary" disabled={fixing} onClick={fix}
+            <button className="btn primary" disabled={fixing || sending} onClick={() => void fix()}
               title={fixedFrame ? 'The frame is already fixed: make the clip from it' : fixesInShot ? 'Fix the box in the storyboard frame, then make the clip again from it' : undefined}>
-              {fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : `${fixedFrame ? 'Make the clip from the fixed frame' : fixesInShot ? 'Fix it in the shot' : 'Make a new version'} (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}
+              {sending ? 'Sending…' : fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : `${fixedFrame ? 'Make the clip from the fixed frame' : fixesInShot ? 'Fix it in the shot' : 'Make a new version'} (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}
             </button>
           )}
           <div className="row" title={made.label}>
             <ModelPick op="clip" value={choice} onChange={setPick} />
             <span className="spacer" />
-            <button className="btn sm" disabled={fixing} onClick={again} title="Make this shot again from its frame">New take</button>
+            <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title="Make this shot again from its frame">{sending ? 'Sending…' : 'New take'}</button>
           </div>
           </div>
         </div>
@@ -614,16 +654,17 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
   const [strength, setStrength] = useState<Strength>('flex')
   const [error, setError] = useState<string | null>(null)
   const running = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id))
-  const apply = async () => {
+  const [sending, send] = useSending()
+  const apply = () => send(async () => {
     setError(null)
     try {
-      const video = await assetRef(relay, take.asset)
+      const video = await assetRef(relay, take.asset, doc)
       await runner.submit('clip_edit', { video, text: text.trim(), ...(controls.feelStrength ? { feel: { strength } } : { feel: {} }) }, [take.job_id], { for: 'clip', shotId: shot.id, parentTakeId: take.id })
       setText('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
-  }
+  })
   return (
     <div className="card section stack">
       <h2>Change the feel</h2>
@@ -638,7 +679,7 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
       )}
       <div className="row">
         <span className="spacer" />
-        <button className="btn sm primary" disabled={!text.trim() || running} onClick={apply}>{running ? 'Working…' : 'Apply'}</button>
+        <button className="btn sm primary" disabled={!text.trim() || running || sending} onClick={() => void apply()}>{sending ? 'Sending…' : running ? 'Working…' : 'Apply'}</button>
       </div>
       {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
     </div>
@@ -646,8 +687,8 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
 }
 
 function AdResult({ sha }: { sha: string }) {
-  const url = useBlobUrl(sha)
   const doc = useDoc()
+  const url = useBlobUrl(sha) ?? remoteUrl(doc, sha)
   const showMock = useShowMock()
   const asset = doc.assets.find((a) => a.sha256 === sha)
   const ext = asset?.mime.includes('webm') ? 'webm' : 'mp4'

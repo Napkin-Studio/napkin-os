@@ -101,6 +101,7 @@ KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
 OPEN_MAX_BYTES = 4_300_000
 CANVAS_MAX_BYTES = 4_000_000
 SUBMITTING_STALE_S = 120       # a submit that never came back
+STITCH_BAD_CLIP = "bad_clip"   # stitch.py: a clip it could not read (the result names which)
 FETCH_LEASE_S = 90
 MAX_FETCH_ATTEMPTS = 3
 STATUS_ERRORS = {
@@ -314,6 +315,11 @@ class Relay:
             data = json.loads(body or b"null")
         except (ValueError, UnicodeDecodeError):
             raise ApiError("invalid_input", "The body is not JSON.") from None
+        try:  # half an emoji (a lone surrogate) is valid JSON but not UTF-8: it broke the job later, as "uncertain"
+            json.dumps(data, ensure_ascii=False).encode("utf-8")
+        except UnicodeEncodeError:
+            raise ApiError("invalid_input", "The text has a broken character in it (half an emoji). "
+                           "Delete the last character and type it again.") from None
         errors = self.contracts.errors(api(schema), data)
         if errors:
             raise ApiError("invalid_input", f"Invalid {schema}: {errors[0]}")
@@ -399,6 +405,9 @@ class Relay:
         url = self.blobs.public_url(key)
         if self.blobs.exists(key):
             return {"exists": True, "url": url}
+        made = f"out/{req['sha256']}"  # the relay made it: the browser need not send it back
+        if self.blobs.exists(made):
+            return {"exists": True, "url": self.blobs.public_url(made)}
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
 
     def _projects(self) -> projects.Projects:
@@ -601,7 +610,8 @@ class Relay:
             off = "Region edits are switched off for now."
         elif op == "clip_edit" and (inp.get("region") or inp.get("mask")) and not flags["videoRegionEdit"]:
             off = "Region edits on video are switched off for now."
-        elif op == "clip_edit" and inp.get("feel") and not flags["feelEdit"]:
+        elif op == "clip_edit" and not (inp.get("region") or inp.get("mask")) and not flags["feelEdit"]:
+            # A clip_edit with no region and no mask is a feel edit, with or without a feel block.
             off = "Feel edits are switched off for now."
         elif op not in INTERNAL_OPS and not cfg["routing"].get(op):
             off = "This step is switched off for now."
@@ -615,6 +625,18 @@ class Relay:
         price = ((sheet or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
 
+    @staticmethod
+    def _check_frame(req: dict) -> None:
+        """A clip starts from a picture (its shot's frame), or a HeyGen clip from refs alone. Refused here,
+        before quota or spend, not later by the provider (a video as the frame reached Runway)."""
+        if req["op"] != "clip":
+            return
+        image = req["input"].get("image")
+        if image and not str(image.get("mime", "")).startswith("image/"):
+            raise ApiError("invalid_input", "A clip starts from a picture, and this shot's frame is not one. Draw the frame again.")
+        if not image and not req["input"].get("refs"):
+            raise ApiError("invalid_input", "This shot has no frame yet. Draw its frame first.")
+
     def create_job(self, who: dict, req: dict, own_header: str | None = None) -> dict:
         existing = self.store.get_job(req["jobId"])
         if existing:
@@ -626,6 +648,7 @@ class Relay:
         pick = req.get("modelChoice")
         own = self._own_candidates(cfg, op, own_header, pick)
         self._check_pick(cfg, op, pick, own)
+        self._check_frame(req)
         try:  # a misspelt @name is the participant's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
@@ -640,7 +663,8 @@ class Relay:
             prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
-        if estimate > 0 and self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
+        # Admitted only when this job fits under the cap: "spent < cap" let the last jobs pass it.
+        if estimate > 0 and self.store.counters("spend").get("usd", 0) + estimate > cfg["spend"]["capUsd"]:
             raise ApiError("spend_stop", "The event's generation budget is used up.")
 
         pid, role = who["pid"], who.get("r", "participant")
@@ -795,6 +819,8 @@ class Relay:
             return self._run_shot_list(job, cfg)
         if op == "stitch":
             return self._run_stitch(job, cfg)
+        if job.get("_notBefore", 0) > self.clock():  # its provider asked us to wait (a 429's Retry-After)
+            return self._with_poll(job)
         cls = self._slot_class(op)
         candidates = [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]
         if not candidates:
@@ -848,7 +874,7 @@ class Relay:
         first = job.get("fallbackReason") or ""
         name = PROVIDER_NAMES.get(FLOOR, FLOOR)
         if estimate > 0 and job["cost"].get("reserved", 0) == 0:
-            if self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
+            if self.store.counters("spend").get("usd", 0) + estimate > cfg["spend"]["capUsd"]:
                 return self._fail(job, "spend_stop", f"{first} {name} could not make it instead: the event's "
                                   "generation budget is used up.".strip(), paid=False, refund=True)
         cls = job["quotaClass"]
@@ -957,10 +983,24 @@ class Relay:
                 sheet_only = job.get("_sheetOnly", True) and sheet
                 tried = job["_tried"] + [provider]
                 rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
+                retry_after = getattr(e, "retry_after_s", None)
+                if provider == FLOOR and not rest and not sheet and e.retryable and retry_after is not None:
+                    # Runway, the last of the chain, asked us to wait (a 429 with Retry-After; its adapter reads
+                    # the header only there): wait in the queue and send it there again then. It failed at once
+                    # before (2026-10-09); the queue timeout still bounds the wait. An outage still fails at once.
+                    wait = max(1, int(retry_after))
+                    back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
+                                      _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
+                    self.store.incr(slot, "n", -1)
+                    if back is None:
+                        return self._reload(job)
+                    return self._with_poll(back)
+                # Why the job left this provider, for the next one. The floor is the last: no "Runway could not
+                # make it" in front of "Runway cannot do this step either" (it said Runway twice, 2026-10-09).
+                reason = job.get("fallbackReason") or (could_not(provider, e.message) if rest else None)
                 back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
                                   _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
-                                  _sheetOnly=sheet_only, _floorSheet=sheet,
-                                  fallbackReason=job.get("fallbackReason") or could_not(provider, e.message),
+                                  _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason,
                                   keySource="own" if rest and self._on_own(job, rest[0]) else "event")
                 self.store.incr(slot, "n", -1)
                 if back is None:
@@ -1079,8 +1119,13 @@ class Relay:
             return self._with_poll(job)
         if state == "queued":  # waiting since it was made, or since it fell back to the floor
             if now - job.get("_queuedAt", parse_iso(job["createdAt"])) > self._timeout_s(cfg, job):
-                return self._fail(job, "timeout", "Waited too long for a free slot. Try again.",
-                                  retryable=True, paid=False, refund=True)
+                message = "Waited too long for a free slot. Try again."
+                if job.get("_notBefore") and job.get("_lastError"):  # waiting on a busy provider: say which, and why
+                    busy, _, detail = job["_lastError"].partition(": ")
+                    message = f"{PROVIDER_NAMES.get(busy, busy)} could not take it in time ({detail}). Try again."
+                    if job.get("fallbackReason"):
+                        message = f"{job['fallbackReason']} {message}"
+                return self._fail(job, "timeout", message, retryable=True, paid=False, refund=True)
             return self._dispatch(job, cfg)
         if state == "submitting":
             if now - parse_iso(job["updatedAt"]) > SUBMITTING_STALE_S:
@@ -1097,7 +1142,11 @@ class Relay:
                 self._adapter(job).cancel(job["requestId"])
             except Exception:
                 log.exception("cancel after timeout failed")
-            return self._fall_back(job, cfg, "timeout", "The provider took too long. Try again.", retryable=True)
+            # Never seen running (it sat in the provider's queue, THROTTLED at Runway): nothing was made, so
+            # neither the event's spend nor the participant's quota is kept for it (2026-10-09).
+            never_ran = {} if job.get("_ran") else {"paid": False, "refund": True}
+            return self._fall_back(job, cfg, "timeout", "The provider took too long. Try again.", retryable=True,
+                                   **never_ran)
         if state == "submitted" and now < job.get("_nextCheckAt", 0):
             return self._with_poll(job)
         adapter = self._adapter(job)
@@ -1114,7 +1163,8 @@ class Relay:
             saved = self._save(job, _nextCheckAt=now + min_poll)
             return self._with_poll(saved or job)
         if st.state in ("queued", "running"):
-            saved = self._save(job, state="submitted", queuePosition=st.queue_position, _nextCheckAt=now + min_poll)
+            saved = self._save(job, state="submitted", queuePosition=st.queue_position, _nextCheckAt=now + min_poll,
+                               _ran=bool(job.get("_ran")) or st.state == "running")
             return self._with_poll(saved or job)
         if st.state == "moderated":
             return self._fail(job, "moderated", st.error_message or "The provider refused this content.",
@@ -1123,8 +1173,13 @@ class Relay:
             return self._finish(job, "cancelled")
         if st.state == "failed":
             code = st.error_code if st.error_code in STATUS_ERRORS else "provider_failed"
+            # The adapter knows whether trying again can help (INTERNAL.BAD_OUTPUT cannot); it said
+            # "retryable" regardless before. The provider's or our failure gives the quota back; the
+            # event's spend stays reserved, since the provider may have billed it (2026-10-09).
+            retryable = st.retryable if st.retryable is not None else code != "moderated"
+            theirs = st.source != "input" and code not in ("moderated", "invalid_input")
             return self._fall_back(job, cfg, code, st.error_message or "The provider could not make this.",
-                                   retryable=code != "moderated", provider_code=st.provider_code)
+                                   retryable=retryable, provider_code=st.provider_code, refund=theirs)
         return self._fetch(job, st, now)
 
     def _fetch(self, job: dict, st, now: float) -> dict:
@@ -1160,13 +1215,18 @@ class Relay:
 
     def _advance_stitch(self, job: dict, cfg: dict, now: float) -> dict:
         result = self.blobs.get_json(f"ads/{job['jobId']}.json")
+        # A render that failed, timed out or was cancelled made no ad: the day's render comes back (refund).
         if result is None:
             if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
-                return self._fail(job, "timeout", "Stitching took too long. Try again.", retryable=True, paid=False)
+                return self._fail(job, "timeout", "Stitching took too long. Try again.", retryable=True, paid=False,
+                                  refund=True)
             return self._with_poll(job)
         if not result.get("ok"):
+            if result.get("code") == STITCH_BAD_CLIP:  # a clip it cannot read: render again fails the same way
+                return self._fail(job, "invalid_input", result.get("error", "A clip could not be read.")[:300],
+                                  paid=False, refund=True)
             return self._fail(job, "provider_failed", result.get("error", "Stitching failed.")[:300],
-                              retryable=True, paid=False)
+                              retryable=True, paid=False, refund=True)
         out = {"sha256": result["sha256"], "url": self.blobs.public_url(f"ads/{job['jobId']}.mp4"),
                "mime": "video/mp4", "bytes": result["bytes"]}
         for k in ("w", "h", "durationS"):
@@ -1179,10 +1239,12 @@ class Relay:
         if state == "queued":
             return self._finish(job, "cancelled", paid=False, refund=True)
         if state in ("submitted", "uncertain"):
+            if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back
+                return self._finish(job, "cancelled", paid=False, refund=True)
             # Uncertain: no answer in time, so the provider may have it. Stop waiting: cancel it there
             # if we know its id, and never send it again (2026-10-09: a 30 s upload left a job
             # "Checking…" with no way out).
-            if job["op"] != "stitch" and job.get("provider") and job.get("requestId"):
+            if job.get("provider") and job.get("requestId"):
                 try:
                     self._adapter(job).cancel(job["requestId"])
                 except Exception:
