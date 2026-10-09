@@ -74,13 +74,33 @@ class ClaudeDirector:
         provider = sheet["provider"] if sheet else None
         if sheet:
             self.director.sheets[provider] = sheet  # the relay's copy is the one routing used
-        result = self.director.run(op, job_request.get("input") or {}, provider_name=provider,
-                                   job_id=job_request.get("jobId", ""))
+        try:
+            result = self.director.run(op, job_request.get("input") or {}, provider_name=provider,
+                                       job_id=job_request.get("jobId", ""))
+        except Exception as e:
+            if op == "shot_list":  # a plan split by sentences would stand in for a real one unseen
+                raise
+            return self._fall_back(job_request, sheet, e)
         out = dict(result.output)
         out["_model"] = result.agent_block["model"]
         out["_promptVersion"] = result.agent_block["promptVersion"]
         log.info("director %s %s: %s in %s ms, %s", job_request.get("jobId"), op, out["_model"],
                  result.agent_block["latencyMs"], result.usage)
+        return out
+
+
+    @staticmethod
+    def _fall_back(job_request: dict, sheet: dict | None, error: Exception) -> dict:
+        """The director's answer failed a check, or the model did not answer: the job is made from
+        the input as written (the passthrough), so a director fault never fails it. The rationale says
+        so, for the History."""
+        log.warning("director %s %s failed (%s: %s); the passthrough makes the job",
+                    job_request.get("jobId"), job_request["op"], type(error).__name__, error)
+        out = dict(PassthroughDirector().direct(job_request, sheet))
+        why = str(error).splitlines()[0][:160] if str(error) else type(error).__name__
+        out["rationale"] = f"The director's answer could not be used ({why}), so your words went to the model as written."
+        out["_model"] = PassthroughDirector.model
+        out["_promptVersion"] = PassthroughDirector.prompt_version
         return out
 
 

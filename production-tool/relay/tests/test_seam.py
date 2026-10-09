@@ -13,6 +13,7 @@ import pytest
 
 from conftest import CDN, Harness, base_config
 from contracts import Contracts
+import names
 from director import PassthroughDirector, load_director
 from director.claude import ClaudeDirector, make as make_director
 from director.model import ModelPort, Reply  # noqa: F401
@@ -130,6 +131,35 @@ def test_director_wrapper_output_validates_against_the_contract():
     assert out.pop("_model") == d.director.per_click_model
     assert out.pop("_promptVersion") == "director.v4"
     assert Contracts().errors("director.schema.json", out) == []
+
+
+def test_a_director_answer_that_fails_its_checks_falls_back_to_the_passthrough():
+    # 2026-10-09: one stray field (a ratio on a fal clip) failed the whole job as internal.
+    bad = {**REPLY, "providerJob": {**REPLY["providerJob"], "provider": "fal"}}
+    d = make_director(wire=FakeWire(bad, bad))
+    sheet = types.load_sheet("runway")
+    req = {"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": names.to_wire("generate", generate_input())}
+    out = d.direct(req, sheet)
+    assert out.pop("_model") == "passthrough" and out.pop("_promptVersion") == PassthroughDirector.prompt_version
+    assert out["providerJob"]["provider"] == "runway"
+    assert out["rationale"].startswith("The director's answer could not be used (")
+    assert Contracts().errors("director.schema.json", out) == []
+
+
+def test_a_director_model_that_does_not_answer_falls_back_to_the_passthrough():
+    class Down(FakeWire):
+        def send(self, **kw):
+            raise TimeoutError("the model took too long")
+    out = make_director(wire=Down()).direct(
+        {"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": names.to_wire("generate", generate_input())},
+        types.load_sheet("runway"))
+    assert out["_model"] == "passthrough"
+
+
+def test_a_shot_list_the_director_cannot_make_still_fails():
+    d = make_director(wire=FakeWire({"op": "shot_list"}, {"op": "shot_list"}))
+    with pytest.raises(Exception):
+        d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "shot_list", "input": {"script": "A pig.", "targetS": 10}}, None)
 
 
 def test_director_takes_model_ids_from_config():
