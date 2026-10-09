@@ -229,12 +229,22 @@ def test_quota_exhaustion():
 
 
 def test_spend_stop():
-    h = Harness(base_config(spend={"capUsd": 0.02, "warnUsd": 0.01}))
+    # Was a cap of 0.02 with the first 0.15 job admitted ("spent < cap"): that let the last jobs pass the
+    # cap. A job is admitted only when its estimate fits under it (features/video-stage-findings.clan).
+    h = Harness(base_config(spend={"capUsd": 0.2, "warnUsd": 0.1}))
     token = h.sign_in()
-    h.post_job(token, expect=200)            # 0 spent: admitted, reserves fal's 0.15 (Nano Banana Pro)
-    _, out = h.post_job(token, expect=503)   # 0.15 reserved >= 0.02
+    h.post_job(token, expect=200)            # 0 + 0.15 (fal's Nano Banana Pro) <= 0.2: admitted
+    _, out = h.post_job(token, expect=503)   # 0.15 + 0.15 > 0.2
     assert out["error"]["code"] == "spend_stop"
     assert h.store.counters("spend")["usd"] == pytest.approx(0.15)
+
+
+def test_spend_stop_refuses_a_job_that_would_pass_the_cap():
+    h = Harness(base_config(spend={"capUsd": 0.1, "warnUsd": 0.05}))
+    token = h.sign_in()
+    _, out = h.post_job(token, expect=503)   # nothing spent, but 0.15 > 0.1
+    assert out["error"]["code"] == "spend_stop"
+    assert h.store.counters("spend").get("usd", 0) == 0
 
 
 def test_in_flight_limit():
