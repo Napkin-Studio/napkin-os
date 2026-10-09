@@ -26,6 +26,7 @@ import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } fro
 import { useBlobUrl, useColorScheme, useFloating } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
+import { ArrowCards } from '../ui/ArrowCard'
 import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
@@ -242,6 +243,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
               </Floating>
             )
           })()}
+          {api && !confirming && !placing && <ArrowCards api={api} wrap={wrap} selected={selected} toView={toView} />}
           {undo?.at && (() => {
             const p = toView(undo.at)
             return <UndoChip className="oncanvas" label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
