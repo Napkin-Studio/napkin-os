@@ -108,7 +108,7 @@ def local_stitch(blobs: LocalBlobs):
             stitch.run(payload, get=lambda key, dest: shutil.copy(blobs.path(key), dest),
                        put=lambda key, src, mime: blobs.put(key, Path(src).read_bytes(), mime),
                        put_json=lambda key, data: blobs.put(key, json.dumps(data).encode(), "application/json"),
-                       ffmpeg="ffmpeg", ffprobe="ffprobe", font=os.environ.get("FONT_FILE"))
+                       ffmpeg="ffmpeg", ffprobe="ffprobe")
         threading.Thread(target=work, daemon=True).start()
 
     return run
