@@ -438,6 +438,16 @@ describe('out of date, one to one (features/one-to-one-updates.clan)', () => {
     expect(s.doc.get().stale).toEqual([])
     expect(adStatus(s.doc.get()).stale).toBe(false)
   })
+
+  it('reordering the shots puts the ad out of date; putting them back clears it (features/video-stage-findings.clan)', async () => {
+    const s = await setup(3)
+    await s.makeAll()
+    expect(adStatus(s.doc.get()).stale).toBe(false)
+    await updateDoc(s.doc, (d) => { d.shots = [d.shots![1], d.shots![0], d.shots![2]] }, 'reorder shots')
+    expect(adStatus(s.doc.get())).toMatchObject({ stale: true, reason: 'The shots were reordered' })
+    await updateDoc(s.doc, (d) => { d.shots = [d.shots![1], d.shots![0], d.shots![2]] }, 'reorder shots')
+    expect(adStatus(s.doc.get()).stale).toBe(false)
+  })
 })
 
 describe('Update what follows', () => {
