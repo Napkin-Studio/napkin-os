@@ -59,10 +59,10 @@
         </picture>
       </figure>
       <div class="phone">
-        <video class="only-light" autoplay muted loop playsinline preload="metadata" poster="assets/endcard-roll-up-9x16.webp" aria-label="The end card: 'Made with Napkin Studio' rolls in with the studio mark and the agent crew.">
+        <video class="only-light" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-9x16.webp" aria-label="The end card: 'Made with Napkin Studio' rolls in with the studio mark and the agent crew.">
           <source src="assets/endcard-roll-up-9x16.mp4" type="video/mp4">
         </video>
-        <video class="only-dark" autoplay muted loop playsinline preload="metadata" poster="assets/endcard-roll-up-ink-9x16.webp" aria-label="The end card on ink: 'Made with Napkin Studio' rolls in with the studio mark and the agent crew.">
+        <video class="only-dark" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-ink-9x16.webp" aria-label="The end card on ink: 'Made with Napkin Studio' rolls in with the studio mark and the agent crew.">
           <source src="assets/endcard-roll-up-ink-9x16.mp4" type="video/mp4">
         </video>
       </div>
@@ -163,10 +163,10 @@
         <p class="muted" style="margin-top:12px">2.5 seconds: the studio mark rolls along the line, uncovering “Napkin Studio”, and the crew pops up as it passes. Each render gets the white or the ink version, at your ad’s shape.</p>
       </div>
       <figure class="window">
-        <video class="only-light" autoplay muted loop playsinline preload="metadata" poster="assets/endcard-roll-up-16x9.webp" aria-label="The white end card, 16:9: the studio mark rolls in and 'Made with Napkin Studio' appears above six small agent figures.">
+        <video class="only-light" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-16x9.webp" aria-label="The white end card, 16:9: the studio mark rolls in and 'Made with Napkin Studio' appears above six small agent figures.">
           <source src="assets/endcard-roll-up-16x9.mp4" type="video/mp4">
         </video>
-        <video class="only-dark" autoplay muted loop playsinline preload="metadata" poster="assets/endcard-roll-up-ink-16x9.webp" aria-label="The ink end card, 16:9: the studio mark rolls in and 'Made with Napkin Studio' appears above six small agent figures.">
+        <video class="only-dark" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-ink-16x9.webp" aria-label="The ink end card, 16:9: the studio mark rolls in and 'Made with Napkin Studio' appears above six small agent figures.">
           <source src="assets/endcard-roll-up-ink-16x9.mp4" type="video/mp4">
         </video>
       </figure>
@@ -224,35 +224,36 @@
   <div class="wrap">
     <div class="head">
       <p class="eyebrow">Models</p>
-      <h2>Runway does the work. The extras can’t break it.</h2>
-      <p>Each step goes to an image or video model. You don’t have to choose: every first draw and first clip uses the step’s default.</p>
+      <h2>Runway by default. Your own key if you bring one.</h2>
+      <p>Runway runs everything unless you add your own key. You don’t have to choose a model: every first draw and first clip uses the step’s default.</p>
     </div>
     <div class="models">
       <div class="panel main">
-        <h3>Runway <span class="tag tool">Main path · always there</span></h3>
-        <p style="margin-top:10px">Runway runs every step by default: characters, views, frames, box edits and clips. It needs nothing from you.</p>
+        <h3>No keys: Runway <span class="tag tool">The event’s key</span></h3>
+        <p style="margin-top:10px">With no keys of your own, every step runs on Runway, on the event’s key: characters, views, frames, box edits and clips. It needs nothing from you.</p>
         <ul>
           <li>Frames and pictures: Gemini 3 Pro (or Gemini 3.1 Flash)</li>
           <li>Clips: Veo 3.1 (or Veo 3.1 Fast); clip edits: Aleph 2</li>
         </ul>
       </div>
       <div class="panel">
-        <h3>fal and HeyGen <span class="tag">Optional extras</span></h3>
-        <p style="margin-top:10px">For the event you can bring your own fal or HeyGen key under <b>Your keys</b>. Their models then join the model menu as extras.</p>
+        <h3>Your key: fal or HeyGen <span class="tag">Optional</span></h3>
+        <p style="margin-top:10px">Add a fal or HeyGen key under <b>Your keys</b> and that provider runs the steps it takes, on your account:</p>
         <ul>
-          <li>If an extra can’t take a job, Runway makes it instead, once, by itself. The card says “Made on Runway: fal could not”.</li>
-          <li>A refused prompt or a problem with your input doesn’t move to Runway: Runway would refuse it too.</li>
+          <li>fal for pictures and frames.</li>
+          <li>For clips, HeyGen first, then fal.</li>
+          <li>Their models join Runway’s in the model menu.</li>
         </ul>
       </div>
     </div>
-    <p class="status"><span class="tag soon">Rolling out</span> &nbsp;Runway as the main path, with the extras falling back to it, is the agreed design and is being built now. Until it lands, which provider runs each step is set by the organisers.</p>
+    <p class="status"><span class="tag soon">Rolling out</span> &nbsp;<b>Runway catches every job.</b> If your provider can’t make one (out of credit, key refused, a timeout, no answer in time), the tool makes it again on Runway by itself, and the card says “Made on Runway: HeyGen could not”. So your key can never make a job fail. A refused prompt or a problem with your input isn’t retried on Runway: Runway would refuse it too. This is being built now.</p>
 
     <div class="split">
       <div>
         <h3>Pick a model per version.</h3>
-        <p class="muted" style="margin-top:12px">Once a frame or clip exists, the model chip beside Regenerate or New take opens the model menu. It lists each model with its provider, a short note and its price per job, and starts on the model that made the version you’re replacing.</p>
+        <p class="muted" style="margin-top:12px">Once a frame or clip exists, the model chip beside Regenerate or New take opens the model menu. It lists Runway’s models, plus those of any provider you gave a key for, each with a short note and its price per job, and starts on the model that made the version you’re replacing.</p>
         <p class="muted">When a job fails, <b>Try another model</b> sends the same request and the same references; only the model changes.</p>
-        <p class="faint">Veo works from the frame only and names characters in words; where exact characters matter, keep the default.</p>
+        <p class="faint">Most clip models work from the storyboard frame, so a frame drawn from the right named pictures is what keeps a character the same from shot to shot.</p>
       </div>
       <figure class="window">
         <picture>
@@ -372,7 +373,7 @@
           <p>Estimates per job, from the providers’ price lists in the tool’s capability sheets (checked 2026-10-08). On the event’s account you don’t pay; on your own key, your provider bills you.</p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th scope="col">Step</th><th scope="col">Runway (main)</th><th scope="col">fal (extra)</th></tr></thead>
+              <thead><tr><th scope="col">Step</th><th scope="col">Runway (default)</th><th scope="col">fal (your key)</th></tr></thead>
               <tbody>
                 <tr><td>Character (Generate)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.15<small>Nano Banana Pro</small></td></tr>
                 <tr><td>View (turnaround)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.035<small>Qwen multi-angle</small></td></tr>

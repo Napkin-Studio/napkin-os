@@ -19,7 +19,7 @@ All links are relative, so it works from any sub-path (for example
 | `styles.css` | Layout and the studio tokens (from `app/src/index.css`), light and dark through `prefers-color-scheme`. |
 | `agents.css` | The figures' colours and motion, copied from `production-tool/web/src/ui/agents/AgentFigure.css`. |
 | `site.js` | Sets the Try it link (see below) and stops the demo loops under `prefers-reduced-motion`. |
-| `assets/` | Screenshots from a mock-relay test run (WebP, light and `-dark`), the coming Home page mockup, and the end card (versions 8 `roll-up` and 9 `roll-up-ink`) as short MP4 loops with WebP posters. |
+| `assets/` | Screenshots from a mock-relay test run (WebP, light and `-dark`), the coming Home page mockup, and the end card (versions 8 `roll-up` and 9 `roll-up-ink`) as short MP4 loops that open on the finished card, with WebP posters. |
 | `pages.yml.example` | An unused GitHub Pages workflow. |
 
 ## Before publishing
@@ -28,9 +28,10 @@ All links are relative, so it works from any sub-path (for example
    every Try it button scrolls to "Get started", which asks people to get the
    link from the organisers.
 2. **Check the "Rolling out" and "Coming soon" notes** still match what's live:
-   - Models: Runway as the main path with fal and HeyGen as extras that fall
-     back to it is `features/runway-first.clan` (status `exploring` when this
-     page was written).
+   - Models: Runway runs every step unless a participant adds a fal or HeyGen
+     key; a job that fails on their key is made again on Runway. The automatic
+     fallback is `features/runway-fallback.clan` (status `building` when this
+     page was written), so the page marks it "Rolling out".
    - Home and projects: `features/project-home.clan`.
 
 ## Publishing with GitHub Pages

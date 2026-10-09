@@ -165,7 +165,7 @@ section + section { border-top: 1px solid var(--line-soft); }
 .window .chrome { height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); background: var(--soft); }
 .window .chrome i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
 .phone {
-  position: absolute; right: clamp(8px, 4vw, 48px); bottom: 0;
+  position: absolute; right: clamp(8px, 4vw, 48px); bottom: clamp(48px, 10vw, 140px);
   width: clamp(132px, 19vw, 220px);
   border-radius: 22px; overflow: hidden;
   border: 6px solid var(--ink);
@@ -173,14 +173,20 @@ section + section { border-top: 1px solid var(--line-soft); }
   box-shadow: var(--shadow-lift);
 }
 .phone video, .phone img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; }
+/* The finished card shows behind the video until it has a frame to paint
+   (paths are relative to this file, so they hold on any sub-path or file://). */
+.phone { background: #FFFFFF url("assets/endcard-roll-up-9x16.webp") center / cover no-repeat; }
+@media (prefers-color-scheme: dark) {
+  .phone { background: #0F1114 url("assets/endcard-roll-up-ink-9x16.webp") center / cover no-repeat; }
+}
 .phone-cap {
-  position: absolute; right: clamp(8px, 4vw, 48px); bottom: -34px;
+  position: absolute; right: clamp(8px, 4vw, 48px); bottom: calc(clamp(48px, 10vw, 140px) - 28px);
   width: clamp(132px, 19vw, 220px);
   text-align: center; font-size: 12.5px; color: var(--ink3);
 }
 @media (max-width: 600px) {
   .stagehero { padding-bottom: 72px; }
-  .phone { width: 112px; right: 8px; border-width: 4px; border-radius: 16px; }
+  .phone { width: 112px; right: 8px; bottom: 0; border-width: 4px; border-radius: 16px; }
   .phone-cap { left: 0; right: auto; bottom: 8px; width: auto; max-width: calc(100% - 140px); text-align: left; }
 }
 
