@@ -213,7 +213,9 @@ def serve(port: int, data_dir: Path) -> None:
 
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"relay (local) on http://localhost:{port}  event codes: LOCAL, ORGLOCAL  data: {data_dir}", flush=True)
+    codes = relay.secrets()["event_codes"]
+    print(f"relay (local) on http://localhost:{port}  event codes: {', '.join(codes['participant'] + codes['organiser'])}"
+          f" (any case)  data: {data_dir}", flush=True)
     server.serve_forever()
 
 
