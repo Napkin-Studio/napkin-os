@@ -31,7 +31,8 @@ export function UpdateFollows() {
 }
 
 /** The one place to start an update: a bar floating at the bottom of the stage while anything is behind. */
-export function RemakeBar() {
+/** `dock`: top on the Video stage, where the bottom of the stage is the player's controls. */
+export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {}) {
   const services = useServices()
   const { doc: docStore, ui: uiStore, runner, relay } = services
   const doc = useDoc()
@@ -46,7 +47,7 @@ export function RemakeBar() {
   if (!n) return null
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   return (
-    <div className="remakebar" role="region" aria-label="Update what follows" onClick={(e) => e.stopPropagation()}>
+    <div className={`remakebar ${dock === 'top' ? 'top' : ''}`} role="region" aria-label="Update what follows" onClick={(e) => e.stopPropagation()}>
       <span className="dot" aria-hidden="true" />
       <b>{behindCount(n)}</b>
       <span className="remake-what">{planWords(plan)}</span>

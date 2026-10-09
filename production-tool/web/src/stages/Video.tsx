@@ -332,6 +332,17 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
 
   const pause = () => video.current && !video.current.paused && video.current.pause()
 
+  /** A first play could stall with no data until the play mark was moved (2026-10-09). Moving it makes the
+   *  browser read the file again at that point, so the player does the same: still playing but with no
+   *  frame to show a moment later, it seeks to where it is. */
+  const unstick = (v: HTMLVideoElement) => {
+    window.setTimeout(() => {
+      if (v.paused || v.ended || v.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return
+      const at = v.currentTime
+      v.currentTime = at
+    }, 700)
+  }
+
   const addNote = () => {
     if (!cur || !note.trim()) return
     const r: Review = { id: newId('pin'), target: { kind: 'take', id: cur.take.id }, comment: note.trim().slice(0, 1000), at_s: Math.round((video.current?.currentTime ?? t) * 100) / 100, resolved: false, created_at: new Date().toISOString() }
@@ -425,6 +436,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
               src={url}
               controls={!drawing}
               playsInline
+              preload="auto"
               autoPlay={mode === 'all' && idx > 0}
               style={{ height: '100%' }}
               onLoadedMetadata={(e) => {
@@ -436,7 +448,8 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
                 }
               }}
               onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
-              onPlay={() => setFocusPin(null)}
+              onPlay={(e) => { setFocusPin(null); unstick(e.currentTarget) }}
+              onWaiting={(e) => unstick(e.currentTarget)}
               onEnded={() => mode === 'all' && setIdx((i) => (i + 1 < playlist.length ? i + 1 : 0))}
             />
             {drawing && (
@@ -619,7 +632,7 @@ function AdResult({ sha }: { sha: string }) {
         {status.stale && <span className="behind" title={status.reason}>{adBehindLabel(status.reason)}</span>}
         {showMock && asset?.origin === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
-      {status.stale && <span className="faint" style={{ fontSize: 12 }}>{status.reason}. Remake it from the bar below.</span>}
+      {status.stale && <span className="faint" style={{ fontSize: 12 }}>{status.reason}. Remake it from the bar at the top.</span>}
       {url && <video src={url} controls playsInline style={{ width: '100%', borderRadius: 12, background: '#000', maxHeight: 360 }} />}
       {url && <a className="btn sm" href={url} download={`napkin-${doc.participant.handle}-${sha.slice(7, 15)}.${ext}`}>Download</a>}
     </div>
