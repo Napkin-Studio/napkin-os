@@ -429,11 +429,8 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         own = {p: keys[p] for p in own_keys.PROVIDERS if p in keys and self.own_adapters.supports(p, op)}
         if pick:
-            # A pick runs on the participant's key for the picked provider, then on the floor. Picking it is
-            # their choice, so fal's backup-only rule for clips does not apply (features/harness-refusals.clan).
+            # A pick runs on the participant's key for the picked provider, then on the floor.
             return {p: k for p, k in own.items() if p == pick["provider"]}
-        if op in own_keys.BACKUP_ONLY.get("fal", ()) and "heygen" not in own:
-            own.pop("fal", None)
         return own
 
     @staticmethod

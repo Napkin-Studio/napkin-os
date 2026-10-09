@@ -70,7 +70,7 @@ def test_fal_key_runs_image_steps_on_their_key():
 
 
 @pytest.mark.parametrize("given,op,want", [
-    ({"fal": FAL_KEY}, "clip", ("event", "runway")),          # a fal key alone leaves clips on Runway
+    ({"fal": FAL_KEY}, "clip", ("own", "fal")),               # a key they gave wins, clips too
     ({"heygen": HEYGEN_KEY}, "clip", ("own", "heygen")),
     ({"heygen": HEYGEN_KEY}, "view", ("event", "runway")),    # HeyGen does clips only
     ({"fal": FAL_KEY, "heygen": HEYGEN_KEY}, "clip", ("own", "heygen")),
@@ -315,8 +315,10 @@ def test_a_fal_pick_runs_on_their_fal_key_for_clips(given, event_clip):
     assert len(fakes.one("fal", FAL_KEY).submits) == 1 and not h.providers["fal"].submits
 
 
-def test_without_a_pick_a_fal_key_alone_still_leaves_clips_to_the_event():
+def test_without_a_pick_a_fal_key_alone_makes_clips_on_fal():
+    # 2026-10-09: fal made clips only behind a HeyGen key, so a fal key alone left them to the
+    # event's routing (mock locally: a still, no video). A key they gave wins (features/runway-fallback.clan).
     h, _ = harness()
     token = h.sign_in()
     job = post(h, token, "clip", headers=keys(fal=FAL_KEY))
-    assert job["keySource"] == "event"
+    assert job["keySource"] == "own" and job["provider"] == "fal"

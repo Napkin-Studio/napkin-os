@@ -24,8 +24,8 @@ describe('the regenerate menu', () => {
       'fal:nano-banana-pro-edit', 'fal:kling-image-o3', 'fal:nano-banana-2-edit', 'runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
     expect(keys(withKeys({ heygen: 'k', fal: 'k' }), 'clip')).toEqual([
       'heygen:heygen-video-1', 'fal:kling-v3-pro-i2v', 'fal:veo3.1-fast-i2v', 'fal:veo3.1-i2v', 'runway:veo3.1', 'runway:veo3.1_fast'])
-    // a fal key alone leaves clips on Runway (fal backs up HeyGen only)
-    expect(keys(withKeys({ fal: 'k' }), 'clip')).toEqual(['runway:veo3.1', 'runway:veo3.1_fast'])
+    // a fal key alone makes clips too, Runway behind it
+    expect(keys(withKeys({ fal: 'k' }), 'clip')).toEqual(['fal:kling-v3-pro-i2v', 'fal:veo3.1-fast-i2v', 'fal:veo3.1-i2v', 'runway:veo3.1', 'runway:veo3.1_fast'])
   })
 
   it('carries labels, notes and estimates from the sheets', () => {

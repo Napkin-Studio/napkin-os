@@ -13,8 +13,6 @@ export type OwnKeys = Partial<Record<OwnProvider, string>>
 export const OWN_KEYS_HEADER = 'X-Own-Keys'
 /** Preference order, as the relay has it (relay/own_keys.py PROVIDERS). */
 export const OWN_PROVIDERS: OwnProvider[] = ['heygen', 'fal']
-/** A fal key alone leaves clips on the event's routing (Runway); fal backs up HeyGen there. */
-const BACKUP_ONLY: Partial<Record<OwnProvider, Op[]>> = { fal: ['clip'] }
 const STORAGE_KEY = 'pt.ownKeys'
 
 type Sheets = Partial<Record<Provider, { ops: Partial<Record<Op, unknown>> }>>
@@ -78,8 +76,7 @@ function sessionStorageOrNull(): Storage | null {
 
 /** The providers a participant's keys run an op on, in order (the relay's rule). */
 export function ownProvidersFor(op: Op, keys: OwnKeys, sheets: Sheets): OwnProvider[] {
-  const own = OWN_PROVIDERS.filter((p) => keys[p] && sheets[p]?.ops[op])
-  return own.filter((p) => !(BACKUP_ONLY[p]?.includes(op) && !own.includes('heygen')))
+  return OWN_PROVIDERS.filter((p) => keys[p] && sheets[p]?.ops[op])
 }
 
 /** The routing as this participant's jobs will see it, in the relay's chain order: own-key

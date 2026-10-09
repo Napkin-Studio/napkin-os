@@ -28,10 +28,6 @@ HEADER = "x-own-keys"
 # Preference order: a clip goes to HeyGen before fal; HeyGen does nothing else.
 PROVIDERS = ("heygen", "fal")
 NAMES = {"fal": "fal", "heygen": "HeyGen"}
-# Ops a provider takes on an own key only as the backup to another own key:
-# a fal key alone leaves clips on the event's routing; with a HeyGen key too,
-# fal takes a clip HeyGen cannot.
-BACKUP_ONLY = {"fal": ("clip",)}
 MAX_KEY_LEN = 512
 _INFO = b"production-tool own-keys v1"
 

@@ -355,6 +355,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .player { position: relative; background: #0b0c0e; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; height: min(62vh, 640px); }
 .player video { max-width: 100%; max-height: 100%; display: block; }
 .player .stagebox { position: relative; display: inline-block; max-height: 100%; }
+.player .stagebox.still img { display: block; max-height: 100%; }
+.player .stillnote { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 12px; text-align: center; }
 .player .drawlayer { position: absolute; inset: 0; cursor: crosshair; }
 .player .empty { color: #A6ACB8; font-size: 14px; text-align: center; padding: 20px; }
 .timeline { position: relative; height: 34px; margin-top: 10px; border-radius: 8px; background: var(--soft); cursor: pointer; overflow: hidden; display: flex; }

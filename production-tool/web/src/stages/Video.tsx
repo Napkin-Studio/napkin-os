@@ -3,7 +3,7 @@
 // pinned to a timecode (typing pauses the player; draw a box on the paused
 // frame), a "change the feel" box, and Render / Export.
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
@@ -236,6 +236,14 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const [idx, setIdx] = useState(0)
   const cur = mode === 'all' ? playlist[idx] : take && shot ? { shot, take } : undefined
   const url = useBlobUrl(cur?.take.asset)
+  // The relay's mock makes a still for a clip, not a video: it shows as the picture it is.
+  const still = !!doc.assets.find((a) => a.sha256 === cur?.take.asset)?.mime.startsWith('image/')
+  const stillS = cur ? cur.take.duration_s ?? cur.shot.duration_s : 0
+  useEffect(() => {
+    if (!still || mode !== 'all' || !stillS) return
+    const id = setTimeout(() => setIdx((i) => (i + 1 < playlist.length ? i + 1 : 0)), stillS * 1000)
+    return () => clearTimeout(id)
+  }, [still, mode, stillS, idx, playlist.length])
   const [t, setT] = useState(0)
   const [dur, setDur] = useState(0)
   const [note, setNote] = useState('')
@@ -360,7 +368,12 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
     <div className="video-layout">
     <div className="stack" style={{ gap: 0 }}>
       <div className="player">
-        {cur && url ? (
+        {cur && url && still ? (
+          <div className="stagebox still" style={{ height: '100%' }}>
+            <img src={url} alt={`Shot ${cur.shot.order}`} style={{ height: '100%' }} />
+            <div className="stillnote">A still from the mock: no video was made for this shot.</div>
+          </div>
+        ) : cur && url ? (
           <div className="stagebox" ref={stageBox} style={{ height: '100%' }}>
             <video
               key={cur.take.id}
