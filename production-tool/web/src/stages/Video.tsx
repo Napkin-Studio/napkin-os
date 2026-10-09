@@ -3,7 +3,7 @@
 // pinned to a timecode (typing pauses the player; draw a box on the paused
 // frame), a "change the feel" box, and Render / Export.
 
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
@@ -20,7 +20,10 @@ import { updateDoc } from '../doc/store'
 import { deleteFrom, removeNote, removeTake, restoreTo } from '../doc/remove'
 import { UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
-import { ModelPick } from '../ui/ModelPick'
+import { ModelItems, ModelPick } from '../ui/ModelPick'
+import { Float, MenuItem } from '../ui/Float'
+import { AgentFigure } from '../ui/agents/AgentFigure'
+import { sayer } from '../ui/agents/cast'
 import { madeWith, startingChoice } from '../ui/modelChoice'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 
@@ -84,7 +87,9 @@ export function Video() {
   if (!shots.length) {
     return (
       <div className="panel"><div className="empty-state">
-        <b>No shots yet.</b>Plan your shots and draw the frames first.
+        <AgentFigure agent="dex" size={64} decorative />
+        <span className="sayer">{sayer('dex')}</span>
+        <b>No shots yet.</b>Plan your shots and draw the frames first; I make one clip per frame.
         <div style={{ marginTop: 14 }}><button className="btn" onClick={() => updateDoc(docStore, (d) => { d.stage.current = 'storyboard' })}>← Back to Storyboard</button></div>
       </div></div>
     )
@@ -144,20 +149,20 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
   const ui = useUi()
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
   const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
+  const remove = async () => {
+    if (!sel) return
+    const r = await deleteFrom(docStore, (d) => removeTake(d, sel.id))
+    offerUndo({ label: `v${selIdx + 1} deleted`, undo: () => restoreTo(docStore, r) })
+  }
   return (
-    <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
+    <div className={`shotcard ${selected ? 'sel' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onSelect()}>
       <div className="thumb">
         {thumb && <img src={thumb} alt="" />}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobNode jobId={jobId} compact /></div>}
       </div>
+      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} />}
       <div className="meta">
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
-        {(stale || open > 0) && (
-          <div className="badges">
-            {stale && <span className="behind" title={stale.reason}>{behindLabel(doc, stale)}</span>}
-            {open > 0 && <span className="mockbadge" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
-          </div>
-        )}
         <div className="row wrap" style={{ gap: 4 }}>
           {takes.map((t, i) => (
             <button key={t.id} className={`vchip ${t.selected ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
@@ -170,20 +175,57 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
                 }, 'pick take')
               }}>v{i + 1}</button>
           ))}
-          {sel && (
-            <button className="btn xs icon ghost iconbtn-del" aria-label={`Delete clip v${selIdx + 1}`} title={takes.length <= 1 ? 'Delete the only version: Update what follows makes it again' : `Delete v${selIdx + 1}`}
-              onClick={async (e) => {
-                e.stopPropagation()
-                const r = await deleteFrom(docStore, (d) => removeTake(d, sel.id))
-                offerUndo({ label: `v${selIdx + 1} deleted`, undo: () => restoreTo(docStore, r) })
-              }}>🗑</button>
-          )}
-          {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
           {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
         </div>
+        {(stale || open > 0) && (
+          <div className="badges">
+            {stale && <span className="behind" title={stale.reason}>{behindLabel(doc, stale)}</span>}
+            {open > 0 && <span className="notechip" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
+          </div>
+        )}
+        {undo && <UndoChip label={undo.label} onUndo={runUndo} />}
       </div>
     </div>
+  )
+}
+
+/** A shot card's ⋯ menu: a new take (on the model that made this one, or another), and delete. */
+function ShotMenu({ shot, take, n, only, busy, onDelete }: { shot: Shot; take: Take; n: number; only: boolean; busy: boolean; onDelete: () => void }) {
+  const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  const doc = useDoc()
+  const ui = useUi()
+  const { config } = useConfig()
+  const ref = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState<false | 'main' | 'models'>(false)
+  const close = useCallback(() => setOpen(false), [])
+  const options = modelChoicesFor('clip', config)
+  const start = startingChoice(options, madeWith(doc, ui, take.job_id).made)
+  const newTake = (choice: ModelChoice | undefined) => {
+    close()
+    void submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice) })
+  }
+  return (
+    <>
+      <button ref={ref} className={`shotmore ${open ? 'open' : ''}`} aria-label={`Shot ${shot.order} options`} aria-haspopup="menu" aria-expanded={!!open}
+        onClick={(e) => { e.stopPropagation(); setOpen(open ? false : 'main') }}>⋯</button>
+      <Float anchor={ref} open={!!open} onClose={close} align="end" label={`Shot ${shot.order}, clip v${n}`} className={open === 'models' ? 'modelmenu' : ''}>
+        {open === 'models' ? (
+          <>
+            <div className="fhead">New take of shot {shot.order} with</div>
+            <ModelItems options={options} current={start} onPick={(o) => newTake(o)} />
+          </>
+        ) : (
+          <>
+            <div className="fhead">Shot {shot.order} · clip v{n}</div>
+            <MenuItem icon="▶" disabled={busy} onSelect={() => newTake(start)}>New take</MenuItem>
+            {options.length > 1 && <MenuItem icon="⇄" disabled={busy} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
+            <div className="fsep" />
+            <MenuItem icon="🗑" danger disabled={busy} hint={only ? 'the only one' : undefined} onSelect={() => { close(); onDelete() }}>Delete v{n}</MenuItem>
+          </>
+        )}
+      </Float>
+    </>
   )
 }
 
@@ -391,7 +433,8 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
               return st && st.target.id === cur.take.id ? <span className="behind" title={st.reason}>{behindLabel(doc, st)}</span> : null
             })()}
           </div>
-          <textarea className="textarea" rows={2} placeholder="Leave a note at this moment…" maxLength={1000} value={note}
+          <div className="composer">
+          <textarea className="composer-input" rows={2} aria-label="Note at this moment" placeholder="Leave a note at this moment…" maxLength={1000} value={note}
             onFocus={pause} onChange={(e) => { pause(); setNote(e.target.value) }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -400,14 +443,15 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
               }
             }} />
           <div className="row">
-            <span className="mono" style={{ fontSize: 12, color: 'var(--create)', fontWeight: 600 }}>at {fmtTime(t)}</span>
-            <span className="spacer" />
+            <span className="tc" title="Where the note sticks">{fmtTime(t)}</span>
             {/* The box: on clip_edit where the provider edits video regions (flag videoRegionEdit), and
                 "Fix it in the shot" everywhere frame region edits are on (decided 2026-10-07). */}
             {(controls.videoRegionEdit || controls.fixInShot) && (
-              <button className={`btn sm ${drawing ? 'on' : ''}`} title="Draw a box on the paused frame" onClick={() => { pause(); setDrawing(!drawing) }}>▭ Box</button>
+              <button className={`btn xs ${drawing ? 'on' : ''}`} title="Draw a box on the paused frame" onClick={() => { pause(); setDrawing(!drawing) }}>▭ Box</button>
             )}
+            <span className="spacer" />
             <button className="btn sm dark" disabled={!note.trim()} onClick={addNote}>Add note</button>
+          </div>
           </div>
           {region && <div className="faint" style={{ fontSize: 12 }}>Box set on the paused frame.{controls.fixInShot ? ' It is fixed in the shot\'s frame, then the clip is made again.' : ''} <button className="btn xs ghost" onClick={() => setRegion(null)}>Remove box</button></div>}
           {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
@@ -435,19 +479,32 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
               return noteUndo?.key === String(i) ? [<UndoChip key="undo" label={noteUndo.label} onUndo={runNoteUndo} />, row] : [row]
             })}
             {noteUndo && Number(noteUndo.key) >= reviews.length && <UndoChip label={noteUndo.label} onUndo={runNoteUndo} />}
-            {!reviews.length && <div className="faint" style={{ fontSize: 12.5 }}>Pause the clip and type. Your note sticks to that moment.</div>}
+            {!reviews.length && (
+              <div className="notes-empty">
+                <AgentFigure agent="ellis" size={44} decorative />
+                <div><span className="sayer">{sayer('ellis')}</span>Pause the clip and type. Your note sticks to that moment, and I read them all back before anything is made again.</div>
+              </div>
+            )}
           </div>
-          <div className="row" title={made.label}>
-            <ModelPick op="clip" value={choice} onChange={setPick} />
-            <span className="spacer" />
-            <button className="btn" disabled={fixing} onClick={again} title="Make this shot again from its frame">New take</button>
-          </div>
+          {openNotes.length > 0 && !fixing && (
+            <div className="cameo">
+              <AgentFigure agent="ellis" size={40} decorative />
+              <div><span className="sayer">{sayer('ellis')}</span>{ellisLine(openNotes.length, boxedOpen.length, fixesInShot, !!fixedFrame)}</div>
+            </div>
+          )}
+          <div className="notes-actions">
           {openNotes.length > 0 && (
             <button className="btn primary" disabled={fixing} onClick={fix}
               title={fixedFrame ? 'The frame is already fixed: make the clip from it' : fixesInShot ? 'Fix the box in the storyboard frame, then make the clip again from it' : undefined}>
               {fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : `${fixedFrame ? 'Make the clip from the fixed frame' : fixesInShot ? 'Fix it in the shot' : 'Make a new version'} (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}
             </button>
           )}
+          <div className="row" title={made.label}>
+            <ModelPick op="clip" value={choice} onChange={setPick} />
+            <span className="spacer" />
+            <button className="btn sm" disabled={fixing} onClick={again} title="Make this shot again from its frame">New take</button>
+          </div>
+          </div>
         </div>
       )}
       {children}
@@ -518,4 +575,12 @@ function AdResult({ sha }: { sha: string }) {
       {url && <a className="btn sm" href={url} download={`napkin-${doc.participant.handle}-${sha.slice(7, 15)}.${ext}`}>Download</a>}
     </div>
   )
+}
+
+/** What Ellis says over open notes: built from the notes, never sent anywhere. */
+function ellisLine(n: number, boxed: number, inShot: boolean, frameFixed: boolean): string {
+  const notes = `${n} note${n > 1 ? 's' : ''} on this take${boxed ? `, ${boxed === n ? (n > 1 ? 'all boxed' : 'boxed') : `${boxed} boxed`}` : ''}.`
+  if (frameFixed) return `${notes} The frame is fixed; Dex makes the clip from it next.`
+  if (inShot) return `${notes} The box is fixed in the shot's frame first, then Dex makes the clip again.`
+  return `${notes} Dex makes a new version from them; this one is kept.`
 }

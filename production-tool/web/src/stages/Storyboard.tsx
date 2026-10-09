@@ -28,6 +28,7 @@ import { madeWith, startingChoice } from '../ui/modelChoice'
 import { useUndo } from '../ui/useUndo'
 import { behindLabel } from '../ui/behind'
 import { AgentFigure } from '../ui/agents/AgentFigure'
+import { sayer } from '../ui/agents/cast'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -141,7 +142,14 @@ export function Storyboard() {
                 </span>
               )}
             </div>
-            {!shots.length && <div className="faint" style={{ padding: '18px 0' }}>Your shots show up here. You can change every one.</div>}
+            {!shots.length && (
+              <div className="shots-empty">
+                <AgentFigure agent="dex" size={56} decorative />
+                <span className="sayer">{sayer('dex')}</span>
+                <b>No shots yet</b>
+                <span className="faint">Write what happens in your ad, then Plan shots. Your shots show up here, and you can change every one.</span>
+              </div>
+            )}
             <div className="shots">
               {shots.map((s, i) => confirmShot === s.id ? (
                 <div key={s.id} className="shotrow confirming">

@@ -335,9 +335,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .imgbox.drawing { cursor: crosshair; }
 .regionbox { position: absolute; border: 2px dashed var(--create); background: rgba(255, 79, 46, 0.12); border-radius: 3px; pointer-events: none; }
 .maskcanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.55; }
-.framecard .tools { display: flex; align-items: center; gap: 4px; padding: 8px 10px 0; flex-wrap: wrap; }
-.framecard .foot { padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 6px; }
-.versions { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink2); }
 /* What an item is behind (ui/behind.ts): amber, with the reason as its tooltip. */
 .behind { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--warn-bg); color: var(--warn); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .behind::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
@@ -348,7 +345,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .video-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
 @media (max-width: 1180px) { .video-layout { grid-template-columns: 1fr; } }
 .strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
-.shotcard { flex: 0 0 168px; border-radius: 14px; border: 2px solid transparent; background: var(--card); box-shadow: var(--shadow-soft); overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
+.shotcard { position: relative; flex: 0 0 200px; border-radius: 14px; border: 2px solid transparent; background: var(--card); box-shadow: var(--shadow-soft); overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
 .shotcard.sel { border-color: var(--tool); }
 .shotcard .thumb { position: relative; height: 120px; background: var(--soft); }
 .shotcard .thumb img, .shotcard .thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -521,3 +518,29 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .framecard .head .faint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .framecard .head .behind, .framecard .head .mockbadge, .framecard .head b { flex-shrink: 0; }
 .promptbar .btn.primary { margin-left: auto; }
+
+/* ── Video shot cards: wider, the ⋯ menu floats on the picture ── */
+.shotmore { position: absolute; top: 6px; right: 6px; z-index: 3; width: 26px; height: 26px; border-radius: 8px; border: 0; display: grid; place-items: center; background: var(--frost); backdrop-filter: var(--blur); box-shadow: var(--shadow-pill); font-weight: 700; color: var(--ink); cursor: pointer; }
+.shotmore:hover, .shotmore.open { background: var(--card); }
+.shotmore.open { outline: 2px solid var(--tool); }
+.notechip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink2); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+
+/* ── Notes (stages/Video.tsx): a composer with its moment, Ellis reading back, one clear action ── */
+.composer { border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 8px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.composer:focus-within { border-color: var(--ink3); }
+.composer-input { border: 0; outline: none; resize: vertical; min-height: 40px; background: transparent; font-size: 13.5px; line-height: 1.45; color: var(--ink); padding: 0; }
+.composer-input::placeholder { color: var(--ink3); }
+.composer .row { gap: 6px; }
+.tc { font-family: var(--f-mono); font-size: 11.5px; color: var(--create); font-weight: 600; }
+.composer .tc, .comment .tc { background: var(--create-soft); padding: 2px 7px; border-radius: 6px; }
+.sayer { display: block; margin-bottom: 2px; font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); }
+.cameo { display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px; border-radius: 12px; background: var(--tool-soft); font-size: 12.5px; line-height: 1.45; }
+.cameo .sayer { color: var(--tool-ink); }
+.notes-empty { display: flex; gap: 12px; align-items: flex-end; padding: 6px 2px; font-size: 12.5px; line-height: 1.45; color: var(--ink2); }
+.notes-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.notes-actions > .btn.primary { width: 100%; }
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.empty-state .sayer { margin-top: 6px; }
+.shots-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 22px 16px; border: 1.5px dashed var(--line); border-radius: 14px; }
+.shots-empty b { font-size: 15px; }
+.shots-empty .faint { font-size: 12.5px; max-width: 340px; line-height: 1.45; }
