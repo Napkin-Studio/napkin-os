@@ -95,7 +95,8 @@ def provider(fal):
 
 def job(op="generate", **kw):
     # Image steps default to Nano Banana Pro (features/default-models.clan); these tests are Kling's.
-    model = kw.pop("model", "kling-image-o3" if op in ("generate", "frame") else "m")
+    # Clips default to Veo 3.1 Fast (2026-10-09); the clip tests here are Kling's, so they name it.
+    model = kw.pop("model", "kling-image-o3" if op in ("generate", "frame") else "kling-v3-pro-i2v" if op == "clip" else "m")
     return ProviderJob(op=op, provider="fal", model=model, prompt=kw.pop("prompt", "a fox"),
                        refs=kw.pop("refs", [Ref(HERO, "hero", "character")]), **kw)
 
@@ -153,10 +154,19 @@ def test_frame_with_several_outputs_is_a_series(provider, fal):
     assert "num_images" not in body
 
 
-def test_unknown_tag_is_invalid_input(provider):
-    with pytest.raises(ProviderError) as e:
-        provider.submit(job(prompt="@ghost walks"))
-    assert e.value.code == "invalid_input" and not e.value.retryable
+def test_a_name_the_request_does_not_send_goes_as_words(provider, fal):
+    # Was: an unknown tag failed the job as invalid_input. The director's check still refuses a name
+    # that is in none of the job's refs (and falls back to the passthrough); here at the endpoint, a
+    # name it cannot send is said in words instead (2026-10-09).
+    provider.submit(job(prompt="@ghost walks"))
+    assert "ghost walks" in fal.body()["prompt"] and "@ghost" not in fal.body()["prompt"]
+
+
+def test_a_region_edit_says_the_edited_image_in_words(provider, fal):
+    # 2026-10-09: "@current is not one of the refs [...]": the edited image goes as image_url, not a ref.
+    provider.submit(job(op="region_edit", prompt="the samurai in @current holds @style", mask=MASK,
+                        refs=[Ref(HERO, "current", "current"), Ref(FRAME, "style", "object")]))
+    assert fal.body()["prompt"] == "the samurai in the image holds style"
 
 
 def test_image_op_without_an_image_ref_is_refused(provider, fal):
@@ -182,6 +192,13 @@ def test_view_and_region_edit_name_refs_by_their_bare_name(provider, fal):
     provider.submit(job(op="region_edit", prompt="@style on the coat", mask=MASK,
                         refs=[Ref(HERO, "marked", "current"), Ref(FRAME, "style", "object")]))
     assert fal.body()["prompt"] == "style on the coat"
+
+
+def test_a_view_says_a_name_it_does_not_send_in_words(provider, fal):
+    # 2026-10-09: the director's words named the whole character (@hero_key) and another picture;
+    # only the source goes to the view, so each failed the job as an unknown tag.
+    provider.submit(job(op="view", angle={"horizontal": 90}, prompt="@hero from the side, coat like @style_coat"))
+    assert fal.body()["additional_prompt"] == "hero from the side, coat like style coat"
 
 
 def test_per_endpoint_output_limits_are_refused_before_any_call(provider, fal):
@@ -212,6 +229,16 @@ def test_clip_body_sends_string_duration_and_audio_false(provider, fal):
     assert body["elements"][0]["reference_image_urls"] == ["https://cdn.test/3333"]
     assert body["negative_prompt"] == "blur"
     assert "multi_prompt" not in body
+
+
+def test_clip_leaves_out_a_picture_that_is_not_an_element(provider, fal):
+    """2026-10-08: a shot with @uberto (front and views) and @watchy (front only) was refused whole:
+    Kling video takes pictures only as elements. The start frame shows watchy; the clip goes."""
+    refs = element_refs() + [Ref(SIDE, "watchy_front", "character")]
+    provider.submit(job(op="clip", prompt="@hero meets @watchy_front", refs=refs, first_frame=FRAME))
+    body = fal.body()
+    assert body["prompt"] == "@Element1 meets watchy"
+    assert len(body["elements"]) == 1 and "image_urls" not in body
 
 
 def test_clip_sets_audio_false_even_when_the_job_does_not_say(provider, fal):
@@ -268,6 +295,20 @@ def test_ideogram_mask_is_inverted_black_edit(provider, fal):
     assert body["image_url"] == "https://cdn.test/1111"
     assert body["reference_image_urls"] == ["https://cdn.test/4444"]
     assert (body["quality"], body["edit_precision"]) == ("medium", "regular")
+
+
+def test_region_edit_reads_inline_inputs_on_the_local_relay(fal):
+    """2026-10-08: the local relay sends inputs as data URIs; reading the source's size did an HTTP GET on
+    one, httpx raised InvalidURL, and the job sat in 'uncertain' although nothing reached fal."""
+    inline = {HERO: _png(), MASK: _png()}
+
+    def local(sha: str) -> AssetRef:
+        return AssetRef(sha, "data:image/png;base64," + base64.b64encode(inline[sha]).decode(), "image/png")
+
+    provider = FalProvider(KEY, local, client=httpx.Client(transport=httpx.MockTransport(fal)))
+    provider.submit(job(op="region_edit", prompt="a red scarf", mask=MASK, refs=[Ref(HERO, "marked", "current")]))
+    assert _decode(fal.body()["mask_url"]).size == (64, 48)
+    assert not [r for r in fal.requests if r.url.host == "cdn.test"]
 
 
 def test_mask_must_match_the_source_size(provider, fal):
@@ -690,7 +731,10 @@ def test_characters_and_frames_default_to_nano_banana_pro_with_kling_beside_it()
     for op in ("generate", "frame"):
         assert sheet["ops"][op]["endpoint"] == "fal-ai/nano-banana-pro/edit"
         assert "kling-image-o3" in [a["model"] for a in sheet["ops"][op]["alternates"]]
-    assert sheet["ops"]["clip"]["model"] == "kling-v3-pro-i2v"  # the clip model that keeps named characters
+    # Veo 3.1 Fast is the default clip (2026-10-09: steadier and quicker); Kling, which keeps named
+    # characters as elements, is offered beside it.
+    assert sheet["ops"]["clip"]["model"] == "veo3.1-fast-i2v"
+    assert "kling-v3-pro-i2v" in [a["model"] for a in sheet["ops"]["clip"]["alternates"]]
 
 
 # --- cancel ---

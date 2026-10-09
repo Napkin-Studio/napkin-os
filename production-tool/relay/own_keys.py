@@ -2,7 +2,9 @@
 
 The browser sends `X-Own-Keys: {"fal": "...", "heygen": "..."}` on POST /jobs
 only. A step one of those providers can do runs there on that key; any other
-step runs on the event's routing (Runway) as before. The relay keeps the key a
+step runs on the event's routing (Runway) as before. When the own-key provider
+fails for a provider or account reason, the job is made again once on Runway on
+the event's key (features/runway-fallback.clan). The relay keeps the key a
 job needs on the job item, sealed with AES-GCM under a key derived from
 TOKEN_SECRET, so status polls, cancels and the sweep work with the tab closed.
 A key is never logged, returned, or stored readable.
@@ -26,10 +28,6 @@ HEADER = "x-own-keys"
 # Preference order: a clip goes to HeyGen before fal; HeyGen does nothing else.
 PROVIDERS = ("heygen", "fal")
 NAMES = {"fal": "fal", "heygen": "HeyGen"}
-# Ops a provider takes on an own key only as the backup to another own key:
-# a fal key alone leaves clips on the event's routing; with a HeyGen key too,
-# fal takes a clip HeyGen cannot.
-BACKUP_ONLY = {"fal": ("clip",)}
 MAX_KEY_LEN = 512
 _INFO = b"production-tool own-keys v1"
 

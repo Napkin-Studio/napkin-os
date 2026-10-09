@@ -137,7 +137,7 @@
     },
     "JobRequest": {
       "type": "object",
-      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. Optional header X-Own-Keys: JSON {\"fal\"?: key, \"heygen\"?: key}, read only when config flags.ownKeys is on: a step those providers can do runs on that key (HeyGen before fal for clip), any other step on the event routing. A key the provider refuses fails the job; it never falls back to the event key. Keys are never returned or logged.",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. Optional header X-Own-Keys: JSON {\"fal\"?: key, \"heygen\"?: key}, read only when config flags.ownKeys is on: a step those providers can do runs on that key (HeyGen before fal for clip), any other step on the event routing (Runway). Runway on the event key is the floor of every job (features/runway-fallback.clan; behaviour change approved by the owner 2026-10-09, replacing 'it never falls back to the event key'): when an own-key provider fails for a provider or account reason (refused on its sheet, out of credit, key refused, unavailable, failed at submit or after, timed out, uncertain), the job is made again once on Runway's default model for the op, on the event key, counted against the event's spend and the participant's daily quota (Job.keySource becomes event; Job.fallbackFrom and fallbackReason say so). Moderated or invalid input never falls back. Keys are never returned or logged.",
       "properties": {
         "contractVersion": {
           "$ref": "common.schema.json#/$defs/contractVersion"
@@ -160,7 +160,7 @@
         },
         "modelChoice": {
           "$ref": "#/$defs/ModelChoice",
-          "description": "The model the participant picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider routed for the op and not in config fallbackOnly. Absent: the routing's default. The job runs on that provider and model; when that provider cannot take it, on the first fallbackOnly provider routed for the op, with its default model (Job.fallbackFrom says so). An own-key pick never falls back to the event key. Added 2026-10-08 (additive)."
+          "description": "The model the participant picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider the participant holds a key for (X-Own-Keys) or one routed for the op (the event routes only Runway, so Runway's models are always pickable). Absent: the routing's default. The job runs on that provider and model; when that provider fails for a provider or account reason, before or after submit, it runs once on Runway's default model for the op on the event key (Job.fallbackFrom says so). Since 2026-10-09 this includes an own-key pick (behaviour change approved by the owner; features/runway-fallback.clan). Added 2026-10-08 (additive)."
         }
       },
       "required": [
@@ -252,8 +252,8 @@
         },
         "script": {
           "type": "string",
-          "maxLength": 600,
-          "description": "shot_list: the 10-20 s script. frame: the same script, for the setting."
+          "maxLength": 1500,
+          "description": "shot_list: the script, up to 1500 characters (since 2026-10-09; was 600). frame: the same script for the setting, cut to its first 600 characters by the web."
         },
         "targetS": {
           "type": "integer",
@@ -385,14 +385,18 @@
             "own",
             "event"
           ],
-          "description": "Whose provider key runs this job: the participant's own (sent in X-Own-Keys; billed to them, no event spend or daily quota) or the event's. Absent on shot_list and stitch, and on jobs from before own keys."
+          "description": "Whose provider key runs this job: the participant's own (sent in X-Own-Keys; billed to them, no event spend or daily quota) or the event's. An own-key job that falls back to Runway becomes event (spend and quota counted then). Absent on shot_list and stitch, and on jobs from before own keys."
         },
         "model": {
           "type": "string"
         },
         "fallbackFrom": {
           "$ref": "#/$defs/ModelChoice",
-          "description": "The participant picked this model, its provider could not take the job, and it ran on the fallback provider instead. Added 2026-10-08 (additive)."
+          "description": "Where the job was meant to run (the participant's pick, or the first provider of its chain) when it ran on another provider instead: the next one in its chain, or Runway, the floor, after a failure before or after submit. Added 2026-10-08 (additive); also set without a pick since 2026-10-09 (features/runway-fallback.clan)."
+        },
+        "fallbackReason": {
+          "type": "string",
+          "description": "Why the job left the provider in fallbackFrom, in words a participant can read ('HeyGen could not make it: credit is exhausted.'). When that provider may already have the job (it gave no answer in time), it says it may still charge. Added 2026-10-09 (additive; features/runway-fallback.clan)."
         },
         "requestId": {
           "type": "string",
@@ -516,7 +520,7 @@
     },
     "ClanMirror": {
       "type": "object",
-      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan, mirrored for the organisers. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual. Responses: 204; 401 without a valid token; 400 when the body is not a ZIP; 413 above 5 MiB. Stored at s3 clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. This object documents the headers only.",
+      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan, mirrored for the organisers. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual, and optionally X-Project-Id (a project id, the common id pattern; added 2026-10-09, additive, features/project-home.clan). Responses: 204; 401 without a valid token; 400 when the body is not a ZIP or X-Project-Id is not an id; 413 above 5 MiB. With X-Project-Id, stored at s3 clan/<participantId>/<projectId>/latest.clan and clan/<participantId>/<projectId>/<UTC time>-<reason>.clan; without it, at clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. This object documents the headers only.",
       "properties": {
         "contentType": {
           "const": "application/vnd.clan+zip"

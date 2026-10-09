@@ -19,7 +19,7 @@ from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
     Status, check_capabilities, load_sheet, nearest_ratio, video_audio,
 )
-from .tags import UnknownTag, rewrite_tags
+from .tags import UnknownTag, rewrite_tags, unsent_in_words
 
 BASE = "https://api.heygen.com"
 MODEL = "heygen-video-1"
@@ -106,7 +106,8 @@ class HeyGenProvider:
         if job.duration_s is not None and job.duration_s != int(job.duration_s):
             raise CapabilityMissing("heygen clip duration must be a whole number of seconds")
         try:
-            prompt = rewrite_tags(job.prompt, [r.name for r in job.refs], self._sheet["tagSyntax"])
+            names = [r.name for r in job.refs]
+            prompt = rewrite_tags(unsent_in_words(job.prompt, names), names, self._sheet["tagSyntax"])
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc)) from exc
         if len(prompt) > MAX_PROMPT:

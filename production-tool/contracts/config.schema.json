@@ -8,7 +8,7 @@
     "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
     "routing": {
       "type": "object",
-      "description": "Per op, providers in order of preference. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off.",
+      "description": "Per op, providers in order of preference, on the event's keys. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off. For the event every op routes to ['runway'] only: fal and HeyGen run only on a participant's own keys (flags.ownKeys). When an op routes to runway, Runway is the floor of every job for it, own-key jobs and picks included: a job that fails on another provider for a provider or account reason is made again once on Runway's default model (features/runway-fallback.clan, 2026-10-09).",
       "propertyNames": { "$ref": "common.schema.json#/$defs/op" },
       "additionalProperties": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/provider" }, "uniqueItems": true }
     },
@@ -16,7 +16,8 @@
       "type": "array",
       "items": { "$ref": "common.schema.json#/$defs/provider" },
       "uniqueItems": true,
-      "description": "Providers never offered in the regenerate menu. A job that names a model (JobRequest.modelChoice) falls back to the first of these routed for its op, with its default model, when the picked provider cannot take it. Absent: every routed provider is offered and a failed pick has no fallback. Added 2026-10-08 (additive; upload only to a relay that knows it)."
+      "deprecated": true,
+      "description": "No longer read (2026-10-09, features/runway-fallback.clan): Runway is the floor of every job and its models are always offered, so nothing is fallback-only. Still accepted so a config.json that names it keeps validating on a relay that has moved on; drop it from the live config, then from this schema. Was: providers never offered in the regenerate menu, the fallback for a failed pick."
     },
     "director": {
       "type": "object",

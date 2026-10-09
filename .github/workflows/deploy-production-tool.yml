@@ -179,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           build=$(mktemp -d)
-          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py)
+          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py endcard/*/*.png)
           layers=$(aws lambda get-function-configuration --function-name "$STITCH_FN" --query 'length(Layers || `[]`)' --output text)
           if [ "$layers" = "0" ] || [ "${{ inputs.rebuild_ffmpeg_layer }}" = "true" ]; then
             production-tool/stitch/build-layer.sh "$build/ffmpeg-layer.zip"

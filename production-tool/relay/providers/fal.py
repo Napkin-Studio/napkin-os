@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import re
 from typing import Optional
 from urllib.parse import urlparse
@@ -36,8 +37,9 @@ from .types import (
     AssetResolver, CapabilityMissing, ProviderError, ProviderJob, ProviderOutput,
     Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
 )
-from .tags import TAG, UnknownTag, rewrite_tags
+from .tags import TAG, UnknownTag, rewrite_tags, unsent_in_words
 
+log = logging.getLogger("relay.fal")
 QUEUE = "https://queue.fal.run"
 # fal-ai/kling-image/o3/image-to-image aspect_ratio enum (fal.ai/models/.../api, checked 2026-10-07).
 KLING_IMAGE_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9")
@@ -61,10 +63,12 @@ IMAGE_OPS = {"generate", "frame"}
 NANO = {"nano-banana-2-edit", "nano-banana-pro-edit"}
 VEO = {"veo3.1-fast-i2v", "veo3.1-i2v"}
 KLING_IMAGE = "kling-image-o3"
+KLING_CLIP = "kling-v3-pro-i2v"
 # Nano Banana Pro is the default for generate and frame (features/default-models.clan); Kling O3
-# and Nano Banana 2 are offered beside it.
+# and Nano Banana 2 are offered beside it. Veo 3.1 Fast is the default clip (2026-10-09: steadier
+# and quicker than Kling on fal's queue); Kling v3 Pro and Veo 3.1 are offered beside it.
 ALTERNATES = {"generate": {KLING_IMAGE, "nano-banana-2-edit"}, "frame": {KLING_IMAGE, "nano-banana-2-edit"},
-              "clip": VEO}
+              "clip": {KLING_CLIP, "veo3.1-i2v"}}
 MAX_VIEW_OUTPUTS, MAX_REGION_OUTPUTS = 4, 8  # per endpoint; the sheet has one outputsPerCall
 # 422 types that say the input is wrong: pydantic's, and fal's own (fal.ai/docs/documentation/
 # model-apis/errors, read 2026-10-08). Any other 422 type is fal's failure.
@@ -178,7 +182,8 @@ class FalProvider:
     def __init__(self, api_key: str, assets: AssetResolver, client: Optional[httpx.Client] = None,
                  sheet: Optional[dict] = None):
         self._key, self._assets = api_key, assets
-        self._client = client or httpx.Client(timeout=30)
+        # A long write: a frame with many refs is a large upload (inline on the local relay).
+        self._client = client or httpx.Client(timeout=httpx.Timeout(30, write=120))
         self._sheet = sheet or load_sheet("fal")
         self._chains: dict[str, dict] = {}
         self._completed: set[str] = set()  # requests whose status said COMPLETED: the next poll fetches the result
@@ -199,10 +204,15 @@ class FalProvider:
 
     def _fetch(self, sha: str) -> bytes:
         url = self._assets(sha).url
+        if url.startswith("data:"):  # the local relay sends inputs inline (fal cannot fetch localhost)
+            try:
+                return base64.b64decode(url.split(",", 1)[1])
+            except (IndexError, ValueError) as exc:
+                raise ProviderError("internal", f"could not read the inline {sha[:19]}: {exc}", False, source="napkin") from exc
         try:
             resp = self._client.get(url)
-        except httpx.TransportError as exc:  # our own asset, not a call to fal: never "maybe sent"
-            raise ProviderError("internal", f"could not read {url}: {exc}", True, source="napkin") from exc
+        except (httpx.TransportError, httpx.InvalidURL) as exc:  # our own asset, not a call to fal: never "maybe sent"
+            raise ProviderError("internal", f"could not read {url[:80]}: {exc}", True, source="napkin") from exc
         if resp.status_code >= 400:
             raise ProviderError("internal", f"could not read {url}: HTTP {resp.status_code}", True, source="napkin")
         return resp.content
@@ -237,6 +247,10 @@ class FalProvider:
         """@hero becomes @Element1 for an element ref, else @ImageN by its place in image_urls.
         Only the Kling endpoints name refs that way: the others pass syntax="none" (the bare name)."""
         prompt = TAG.sub(lambda m: element_tags.get(m.group(1), m.group(0)), prompt)
+        # A name this request does not send (the edited image itself, a picture the endpoint cannot take,
+        # the whole character beside its front) is said in words: it must never fail the job
+        # (2026-10-09: "@current is not one of the refs" on region edits, the same on views).
+        prompt = unsent_in_words(prompt, image_names)
         try:
             return rewrite_tags(prompt, image_names, syntax or self._sheet["tagSyntax"])
         except UnknownTag as exc:
@@ -379,9 +393,13 @@ class FalProvider:
     def _clip(self, job: ProviderJob) -> dict:
         if not job.first_frame:
             raise CapabilityMissing("clip needs a first frame")
-        urls, _, elements, tags = self._split_refs(job)
+        urls, names, elements, tags = self._split_refs(job)
         if urls:
-            raise CapabilityMissing("clip refs must be element_front / element_angle")
+            # Kling video takes pictures only as elements (a front and 1-3 angles). A picture that is not
+            # one (a character with only its front, an object) is left out: the start frame already shows
+            # it, and its @tag reads as plain words (features/harness-refusals.clan).
+            log.info("fal clip: left out %s (not elements; the start frame carries them)", ", ".join(names))
+            tags = {**tags, **{n: n.split("_", 1)[0] for n in names}}
         if any(not e["reference_image_urls"] for e in elements):
             raise CapabilityMissing("kling video needs at least one angle ref per element")
         body = {"start_image_url": self._url(job.first_frame), "generate_audio": video_audio(job)}

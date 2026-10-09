@@ -53,8 +53,8 @@ describe('capability gating', () => {
     expect(controlsFor(cfg).video).toBe(false)
     const c = controlsFor(CONFIGS.event)
     expect(c.stitch).toBe(true) // relay-internal: gated by the flag only
-    expect(c.generate).toBe(true) // fal first
-    expect(c.clickSelect).toBe(true) // fal segments and the event flag is on
+    expect(c.generate).toBe(true) // Runway, the event's only provider since 2026-10-09 (features/runway-fallback.clan)
+    expect(c.clickSelect).toBe(false) // Runway does not segment; a fal key brings it back (keys/ownKeys.test.ts)
   })
 
   it('the Wednesday cuts (D9) do not render with the event flags', () => {

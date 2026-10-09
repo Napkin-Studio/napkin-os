@@ -21,6 +21,11 @@
 .history-pin { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; background: var(--create-soft); color: var(--create); }
 .history-action { margin-top: 3px; font-weight: 600; color: var(--ink); }
 .history-why { margin-top: 2px; line-height: 1.4; overflow-wrap: anywhere; }
+.history-saw { margin-top: 5px; font-size: 12px; }
+.history-saw summary { cursor: pointer; color: var(--ink2); font-weight: 600; }
+.history-saw ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.history-saw-tag { font-family: var(--f-mono); font-size: 11px; font-weight: 600; }
+.history-saw-line { line-height: 1.4; color: var(--ink2); overflow-wrap: anywhere; }
 .history-fields { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
 .history-field { font-family: var(--f-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: var(--soft-2); color: var(--ink2); }
 .history-empty { display: flex; flex-direction: column; gap: 6px; padding: 18px 14px; font-size: 12.5px; }

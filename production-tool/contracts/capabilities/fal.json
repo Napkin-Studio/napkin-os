@@ -122,40 +122,40 @@
       "label": "Ideogram v4.5"
     },
     "clip": {
-      "model": "kling-v3-pro-i2v",
-      "endpoint": "fal-ai/kling-video/v3/pro/image-to-video",
-      "estimateUsd": 0.56,
-      "minS": 3,
-      "maxS": 15,
-      "label": "Kling v3 Pro",
-      "note": "Keeps named characters as elements",
+      "model": "veo3.1-fast-i2v",
+      "endpoint": "fal-ai/veo3.1/fast/image-to-video",
+      "estimateUsd": 0.9,
+      "label": "Veo 3.1 Fast",
+      "note": "Natural motion; follows the frame, no character refs",
+      "durationsS": [
+        4,
+        6,
+        8
+      ],
+      "seed": true,
+      "refs": {
+        "max": 0,
+        "maxCharacter": 0,
+        "element": false
+      },
+      "video": {
+        "firstFrameWithRefs": false,
+        "lastFrame": false,
+        "multiShot": false,
+        "regionEdit": "mask",
+        "feelEdit": "strength",
+        "audioDefault": true,
+        "audioControl": true
+      },
       "alternates": [
         {
-          "model": "veo3.1-fast-i2v",
-          "endpoint": "fal-ai/veo3.1/fast/image-to-video",
-          "estimateUsd": 0.9,
-          "label": "Veo 3.1 Fast",
-          "note": "Natural motion; follows the frame, no character refs",
-          "durationsS": [
-            4,
-            6,
-            8
-          ],
-          "seed": true,
-          "refs": {
-            "max": 0,
-            "maxCharacter": 0,
-            "element": false
-          },
-          "video": {
-            "firstFrameWithRefs": false,
-            "lastFrame": false,
-            "multiShot": false,
-            "regionEdit": "mask",
-            "feelEdit": "strength",
-            "audioDefault": true,
-            "audioControl": true
-          }
+          "model": "kling-v3-pro-i2v",
+          "endpoint": "fal-ai/kling-video/v3/pro/image-to-video",
+          "estimateUsd": 0.56,
+          "minS": 3,
+          "maxS": 15,
+          "label": "Kling v3 Pro",
+          "note": "Keeps named characters as elements"
         },
         {
           "model": "veo3.1-i2v",

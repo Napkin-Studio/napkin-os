@@ -210,3 +210,13 @@ describe('a shot names its refs', () => {
     await expect(drawFrame(s.deps, 0, 'again', { text: 'x' })).rejects.toThrow(/@hero_sad/)
   })
 })
+
+describe('script length (2026-10-09)', () => {
+  it('a script is up to 1500 characters; a frame request carries its first 600', async () => {
+    const { FRAME_SCRIPT_MAX, SCRIPT_MAX, scriptText } = await import('./frames')
+    expect([SCRIPT_MAX, FRAME_SCRIPT_MAX]).toEqual([1500, 600])
+    const long = 'x'.repeat(1400)
+    const d = { script: { current: 'rev_1', revisions: [{ id: 'rev_1', imported_text: long }] } } as unknown as Parameters<typeof scriptText>[0]
+    expect(scriptText(d)).toHaveLength(600)
+  })
+})

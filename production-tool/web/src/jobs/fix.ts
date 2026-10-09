@@ -11,9 +11,9 @@
 //
 // It needs no video region support at the provider, only frame region edits.
 
-import type { ProductionDocument, Review } from '../contracts/types'
+import type { ModelChoice, ProductionDocument, Review } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
-import { assetRef } from './assets'
+import { assetRef, boxMaskRef } from './assets'
 import { makeClip, selectedTake } from './clips'
 import { continuity, selectedFrame, type FrameDeps } from './frames'
 import { isActive } from './runner'
@@ -25,8 +25,9 @@ function clipText(notes: Review[], boxedId: string): string | undefined {
   return rest.length ? rest.join('\n').slice(0, 1000) : undefined
 }
 
-/** Start the fix: the region edit on the shot's selected frame. `notes` are the open notes on the clip; one has a box. */
-export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]): Promise<string> {
+/** Start the fix: the region edit on the shot's selected frame. `notes` are the open notes on the clip; one has a box.
+ * `modelChoice`: the clip model picked in the menu, kept with the fix so step 3 uses it, after a reload too. */
+export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
   const boxed = notes.find((r) => r.region)
   if (!boxed?.region) throw new Error('Draw a box on the paused clip first.')
   const d = deps.doc.get()
@@ -40,11 +41,13 @@ export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]
   const region = boxed.region
   // Like any frame region edit, it keeps the frame in its sequence: shot 1's frame and the one before go too.
   const anchors = await continuity(deps.relay, d, index)
+  // The box as a mask too: fal edits only inside a mask; a provider without masks goes by the box.
+  const mask = await boxMaskRef(deps.relay, frame.asset, region)
   return deps.runner.submit(
     'region_edit',
-    { image, region, text: boxed.comment.slice(0, 1000), ...anchors },
+    { image, region, text: boxed.comment.slice(0, 1000), ...(mask ? { mask } : {}), ...anchors },
     [frame.job_id],
-    { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id) },
+    { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id), ...(modelChoice ? { fixModelChoice: modelChoice } : {}) },
   )
 }
 
@@ -69,9 +72,46 @@ export async function continueFix(deps: FrameDeps, jobId: string, ctx: JobCtx | 
   if (!(d.frames ?? []).some((f) => f.job_id === jobId)) return null // the frame has not landed
   const notes = (d.reviews ?? []).filter((r) => ctx.fixReviewIds!.includes(r.id) && !r.resolved)
   if (!notes.length || clipStarted(d, deps, ctx.fixReviewIds)) return null
-  const parentTake = (d.takes ?? []).find((t) => t.id === notes[0].target.id) ?? selectedTake(d, ctx.shotId)
+  return fixClip(deps, ctx.shotId, notes, ctx.fixModelChoice)
+}
+
+/**
+ * A fix whose frame landed (and is still the selected frame) but whose clip did not: the job id of that
+ * frame, so pressing Fix again makes only the clip instead of editing the fixed frame a second time.
+ */
+export function fixFrameLanded(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined, reviewIds: string[]): string | undefined {
+  for (let i = d.jobs.length - 1; i >= 0; i--) {
+    const j = d.jobs[i]
+    const c = ctxOf(j.id)
+    if (c?.for === 'clip' && (c.reviewIds ?? []).some((id) => reviewIds.includes(id))) {
+      if (isActive(j.state) || j.state === 'completed') return undefined // the clip is under way or made
+      continue // a failed or cancelled clip: look for its frame
+    }
+    if (c?.for === 'frame' && (c.fixReviewIds ?? []).some((id) => reviewIds.includes(id))) {
+      return (d.frames ?? []).some((f) => f.job_id === j.id && f.selected) ? j.id : undefined
+    }
+  }
+  return undefined
+}
+
+/** Make the fix's clip again from its landed frame (fixFrameLanded), on `modelChoice` or the fix's own pick. */
+export async function remakeFixClip(deps: FrameDeps, frameJobId: string, modelChoice?: ModelChoice): Promise<string> {
+  const ctx = ctxFor(deps, frameJobId)
+  if (ctx?.for !== 'frame' || !ctx.fixReviewIds?.length) throw new Error('That fix is gone.')
+  const d = deps.doc.get()
+  const notes = (d.reviews ?? []).filter((r) => ctx.fixReviewIds!.includes(r.id) && !r.resolved)
+  if (!notes.length) throw new Error('Those notes are already addressed.')
+  return fixClip(deps, ctx.shotId, notes, modelChoice ?? ctx.fixModelChoice)
+}
+
+/** Step 3's clip: from the shot's selected (fixed) frame, for these notes, as a new take of theirs. */
+function fixClip(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
+  const d = deps.doc.get()
+  const parentTake = (d.takes ?? []).find((t) => t.id === notes[0].target.id) ?? selectedTake(d, shotId)
   const boxed = notes.find((r) => r.region) ?? notes[0]
-  return makeClip(deps, ctx.shotId, { text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}) })
+  return makeClip(deps, shotId, {
+    text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice,
+  })
 }
 
 /** At boot: finish fixes whose frame landed but whose clip was never started. */
@@ -80,6 +120,18 @@ export async function resumeFixes(deps: FrameDeps): Promise<void> {
     const ctx = ctxFor(deps, j.id)
     if (j.state === 'completed' && ctx?.for === 'frame' && ctx.fixReviewIds?.length) await continueFix(deps, j.id, ctx)
   }
+}
+
+/** Shots a fix is working on now (its frame edit or its clip is running): the fix will replace their clip,
+ *  so they are not "out of date" and "Update what follows" leaves them alone. */
+export function shotsBeingFixed(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined): Set<string> {
+  const out = new Set<string>()
+  for (const j of d.jobs) {
+    if (!isActive(j.state)) continue
+    const c = ctxOf(j.id)
+    if ((c?.for === 'frame' && c.fixReviewIds?.length) || (c?.for === 'clip' && c.reviewIds?.length)) out.add(c.shotId)
+  }
+  return out
 }
 
 export type FixStep = { step: 'frame' | 'clip'; jobId: string; running: boolean }

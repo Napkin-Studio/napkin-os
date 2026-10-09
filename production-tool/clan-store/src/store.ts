@@ -7,6 +7,7 @@
 // contract (ajv), so an invalid patch is refused with the contract's words
 // and leaves the document as it was.
 import { parse as parseYaml } from 'yaml'
+import { APP_SCHEMA } from './app-template.gen'
 import { APP_ID, freshHost, route, type NapkinHost, type WasmSource } from './host'
 import { mergePatch } from './merge-patch'
 import { indexedDbPersistence, type Persistence } from './persist'
@@ -313,6 +314,15 @@ export class ClanDocumentStore implements DocumentStore {
   private async openBytesNow(bytes: Uint8Array): Promise<Doc> {
     const h = await freshHost(this.wasm)
     h.upload(bytes, 'production-tool')
+    // A document keeps the schema it was made with; one made under an older schema moves to the
+    // app's when it opens (2026-10-09: scripts grew from 600 to 1500 characters, and saves of the
+    // longer script were rolled back). Loosening only, so the data already there still fits.
+    let upgraded = false
+    try {
+      upgraded = !!route<{ changed?: boolean }>(h, '/patch-schema', APP_SCHEMA)?.changed
+    } catch (e) {
+      console.warn('kept the document\'s own schema: it did not move to the app\'s', e)
+    }
     const prev = this.host
     this.host = h
     let data: Doc
@@ -332,6 +342,7 @@ export class ClanDocumentStore implements DocumentStore {
     this.recorded = null
     this.doc = data
     this.changed()
+    if (upgraded) this.scheduleSave()
     return data
   }
 
