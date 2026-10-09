@@ -3,7 +3,7 @@ import { choiceToSend, modelChoicesFor, modelLabel } from './capabilities'
 import { CONFIGS } from './contracts/load'
 import type { Config, DocJob, ProductionDocument } from './contracts/types'
 import type { UiState } from './doc/ui'
-import { madeWith, price, startingChoice } from './ui/modelChoice'
+import { madeWith, otherModels, price, startingChoice } from './ui/modelChoice'
 
 // features/model-choice.clan: the regenerate menu offers fal and HeyGen models; Runway is fallback only.
 const event: Config = CONFIGS.event
@@ -38,6 +38,17 @@ describe('the regenerate menu', () => {
     expect(startingChoice(options, { provider: 'fal', model: 'veo3.1-i2v' })).toEqual({ provider: 'fal', model: 'veo3.1-i2v' })
     // a take made on Runway (a fallback) is not offered: start on the default
     expect(startingChoice(options, { provider: 'runway', model: 'veo3.1_fast' })).toEqual({ provider: 'fal', model: 'kling-v3-pro-i2v' })
+  })
+
+  it('offers a failed job every other model, another provider first, the failed one left out', () => {
+    const open = { ...event, fallbackOnly: undefined }
+    const options = modelChoicesFor('frame', open)
+    const failed = { provider: 'fal', model: 'nano-banana-pro-edit' } as const
+    const others = otherModels(options, failed).map((o) => `${o.provider}:${o.model}`)
+    expect(others).not.toContain('fal:nano-banana-pro-edit')
+    expect(others[0].startsWith('fal:')).toBe(false)
+    expect(others.filter((k) => k.startsWith('fal:'))).toEqual(['fal:kling-image-o3', 'fal:nano-banana-2-edit'])
+    expect(others).toHaveLength(options.length - 1)
   })
 
   it('shows prices plainly', () => {

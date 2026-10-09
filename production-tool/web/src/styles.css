@@ -39,7 +39,15 @@
   --blur: saturate(1.4) blur(14px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 0.35s;
-  --topbar-h: 56px;
+  --topbar-h: 48px;
+  /* The tool's own colour, the way the OS bar shows Brief Maker in amber
+     (app/src/components/chrome.css .ch-brand-tool). Blue is identity only:
+     the name, the current stage, the selected item, Dex. Actions stay --create. */
+  --tool: #2F64F5;
+  --tool-ink: color-mix(in oklab, var(--tool) 78%, var(--ink));
+  --tool-soft: color-mix(in oklab, var(--tool) 10%, transparent);
+  --plan-eye: #FFFFFF;
+  --warn: #b45309;
   color-scheme: light;
 }
 
@@ -67,6 +75,10 @@
     --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
     --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
     --canvas-bg: #121417;
+    --tool-ink: color-mix(in oklab, var(--tool) 70%, white);
+    --tool-soft: color-mix(in oklab, var(--tool) 22%, transparent);
+    --plan-eye: #14161B;
+    --warn: #fbbf24;
     color-scheme: dark;
   }
 }
@@ -144,20 +156,24 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* ── Top bar ─────────────────────────────────────────────────────────────── */
 .topbar {
   height: var(--topbar-h); flex-shrink: 0; display: grid; grid-template-columns: auto minmax(max-content, 1fr) minmax(0, auto);
-  align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--line-soft);
+  align-items: center; gap: 16px; padding: 0 14px; border-bottom: 1px solid var(--line-soft);
   background: var(--frost); backdrop-filter: var(--blur); position: relative; z-index: 20;
 }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.03em; font-size: 16px; white-space: nowrap; min-width: 0; overflow: hidden; }
-.brand small { font-weight: 500; color: var(--ink3); letter-spacing: 0; font-size: 13px; }
-.rail { justify-self: center; display: flex; align-items: center; gap: 4px; background: var(--soft-2); border-radius: var(--r-pill); padding: 4px; }
+.brand { display: flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: -0.03em; font-size: 15px; line-height: 1; white-space: nowrap; min-width: 0; overflow: hidden; }
+/* The tool's name, set like the OS bar's .ch-brand-tool. */
+.brand .brand-tool { color: var(--tool-ink); }
+.brand .mockbadge { margin-left: 6px; }
+/* A short stripe of the tool colour under the brand, the way an app's accent shows in the OS bar. */
+.topbar::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 160px; height: 2px; background: var(--tool); }
+.rail { justify-self: center; display: flex; align-items: center; gap: 2px; background: var(--soft-2); border-radius: var(--r-pill); padding: 3px; }
 .rail-step {
-  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px 0 6px; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px 0 5px; border-radius: var(--r-pill);
   border: 0; background: transparent; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink2);
 }
-.rail-step .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--line-soft); color: var(--ink2); font-size: 11.5px; font-family: var(--f-mono); }
+.rail-step .n { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--line-soft); color: var(--ink2); font-size: 11.5px; font-family: var(--f-mono); }
 .rail-step.done .n { background: var(--plan); color: var(--paper); }
 .rail-step.current { background: var(--card); color: var(--ink); box-shadow: var(--shadow-pill); }
-.rail-step.current .n { background: var(--create); color: #fff; }
+.rail-step.current .n { background: var(--tool); color: #fff; }
 .rail-step:disabled { cursor: not-allowed; opacity: 0.5; }
 .rail-sep { color: var(--ink3); font-size: 12px; }
 /* One line, always: the bar is a fixed height, so anything that wraps pushes the brand and the rail out of it. */
@@ -167,8 +183,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .topbar-right > .follow { flex-shrink: 1; min-width: 0; flex-wrap: nowrap; }
 .followchip { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 30px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
 .followchip.failed { background: var(--danger-bg); color: var(--danger); }
-@media (max-width: 1440px) { .brand small { display: none; } }
-.topmenu .menu .menu-head { padding: 6px 10px 4px; }
+/* On a narrow bar the studio's name gives way; the tool's name stays. */
+@media (max-width: 1100px) { .brand .brand-studio { display: none; } }
 .jobchip { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
 .jobchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-green); }
 .jobchip.busy .dot { background: var(--create); animation: pulse 1.2s var(--ease) infinite; }
@@ -205,6 +221,12 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 }
 @keyframes drift { to { background-position: 28px 0; } }
 .pending .state { font-weight: 700; color: var(--ink); font-size: 13px; }
+/* The agent at work where the result will land: Dex's blue glow under the stripes. */
+.pending { background: radial-gradient(120% 90% at 50% 100%, var(--tool-soft), transparent 60%), repeating-linear-gradient(-45deg, var(--soft) 0 10px, var(--card) 10px 20px); background-size: auto, 28px 28px; animation: drift-2 1.6s linear infinite; }
+@keyframes drift-2 { to { background-position: 0 0, 28px 0; } }
+.pending.compact { gap: 2px; padding: 6px; }
+.pending.compact .meta { font-size: 10.5px; }
+.errnode .agent-figure { margin-bottom: -2px; }
 .pending .meta { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink3); }
 .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--create); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -216,11 +238,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* In a small card: a few lines of the message, the rest on hover. */
 .errnode.compact { padding: 8px; gap: 4px; font-size: 11.5px; overflow: hidden; }
 .errnode.compact .msg { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.errnode.compact .row { gap: 4px; flex-wrap: wrap; justify-content: center; }
-.errnode .othermodel { gap: 6px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
-.errnode .othermodel .select { max-width: 200px; }
-.errnode.compact .othermodel .select { max-width: 110px; font-size: 11px; }
-.errnode.compact:has(.othermodel) .msg { -webkit-line-clamp: 2; }
 .errnode .code { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 
 /* ── Character stage ─────────────────────────────────────────────────────── */
@@ -318,10 +335,9 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .imgbox.drawing { cursor: crosshair; }
 .regionbox { position: absolute; border: 2px dashed var(--create); background: rgba(255, 79, 46, 0.12); border-radius: 3px; pointer-events: none; }
 .maskcanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.55; }
-.framecard .tools { display: flex; align-items: center; gap: 4px; padding: 8px 10px 0; flex-wrap: wrap; }
-.framecard .foot { padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 6px; }
-.versions { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink2); }
-.stale { font-size: 11px; font-weight: 600; color: var(--danger); white-space: nowrap; }
+/* What an item is behind (ui/behind.ts): amber, with the reason as its tooltip. */
+.behind { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--warn-bg); color: var(--warn); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.behind::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
 .shotcard .badges { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
 .shotcard .badges > * { white-space: nowrap; }
 
@@ -329,8 +345,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .video-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
 @media (max-width: 1180px) { .video-layout { grid-template-columns: 1fr; } }
 .strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
-.shotcard { flex: 0 0 168px; border-radius: 14px; border: 2px solid transparent; background: var(--card); box-shadow: var(--shadow-soft); overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
-.shotcard.sel { border-color: var(--create); }
+.shotcard { position: relative; flex: 0 0 200px; border-radius: 14px; border: 2px solid transparent; background: var(--card); box-shadow: var(--shadow-soft); overflow: hidden; cursor: pointer; text-align: left; padding: 0; }
+.shotcard.sel { border-color: var(--tool); }
 .shotcard .thumb { position: relative; height: 120px; background: var(--soft); }
 .shotcard .thumb img, .shotcard .thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shotcard .meta { padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -381,9 +397,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .iconbtn-del { font-size: 13px; line-height: 1; }
 .comment .del { visibility: hidden; }
 .comment:hover .del, .comment:focus-within .del { visibility: visible; }
-.topmenu { position: relative; }
-.topmenu .menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 180px; padding: 6px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); z-index: 20; display: flex; flex-direction: column; gap: 2px; }
-.topmenu .menu .btn { justify-content: flex-start; width: 100%; }
 .startover { display: flex; justify-content: center; padding: 10px 16px; }
 .startover .confirm { max-width: 560px; }
 
@@ -391,20 +404,42 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .follow { gap: 6px; display: inline-flex; align-items: center; flex-wrap: wrap; }
 .follow .confirm { max-width: 340px; }
 .follow .confirm { border-color: var(--line, var(--create)); }
-.topbar-right .follow .confirm { position: absolute; right: 16px; top: 52px; z-index: 30; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.topbar-right .follow .confirm { position: absolute; right: 16px; top: calc(var(--topbar-h) - 4px); z-index: 30; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
 
 /* ── Your own provider keys (keys/OwnKeysPanel.tsx) ── */
-.topmenu .ownkeys { width: 320px; padding: 14px; gap: 10px; font-size: 12.5px; }
+.fpanel.ownkeys { width: 320px; padding: 14px; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; }
 .ownkeys-use { list-style: none; margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--soft); display: flex; flex-direction: column; gap: 4px; }
 .ownkeys-use li { display: flex; justify-content: space-between; gap: 8px; }
 
-/* The regenerate menu (ui/ModelPick.tsx) */
-.modelpick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; flex-wrap: wrap; }
-.modelpick .select { max-width: 260px; }
-.modelpick .modelnote { flex-basis: 100%; font-size: 11.5px; }
+/* The model menu (ui/ModelPick.tsx): a chip that opens a floating list. */
+.modelpick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.modelchip { display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 6px; border-radius: var(--r-pill); border: 1px solid transparent; background: var(--soft); font: inherit; font-size: 12px; font-weight: 600; color: var(--ink2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modelchip:hover { border-color: var(--line); }
+.modelchip.open { border-color: var(--tool); background: var(--tool-soft); color: var(--tool-ink); }
+.modelprice { font-size: 11.5px; white-space: nowrap; }
+.caret { font-size: 9px; color: var(--ink3); }
+.pmark { width: 16px; height: 16px; border-radius: 5px; display: inline-grid; place-items: center; flex-shrink: 0; font: 700 9px var(--f-mono); color: #fff; background: var(--produce); }
+.pmark-fal { background: #7c3aed; }
+.pmark-runway { background: #14161B; }
+.pmark-heygen { background: #2563eb; }
+.pmark-mock { background: var(--produce); }
+.modelmenu { width: 340px; }
+.mmi { align-items: flex-start; padding: 8px 10px; }
+.mmi .pmark { width: 18px; height: 18px; margin-top: 1px; }
+.mmi b { font-weight: 600; font-size: 13px; }
+.mmi small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink3); line-height: 1.35; }
+.mmi.on { background: var(--tool-soft); }
+.mmi.on .fmi-hint { color: var(--tool-ink); }
+.mmi-tag { margin-left: 6px; padding: 1px 5px; border-radius: 5px; background: var(--tool-soft); color: var(--tool-ink); font: 600 9.5px var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; vertical-align: 1px; }
+.fnote { padding: 8px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line-soft); font-size: 11.5px; color: var(--ink3); }
+
+/* A failed job's options: one floating bar under its message. */
+.optbar { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); max-width: 100%; flex-wrap: wrap; justify-content: center; }
+.errnode.compact .optbar { gap: 0; padding: 2px; border-radius: 10px; box-shadow: var(--shadow-pill); }
+.errnode.compact .optbar .btn { padding: 0 6px; }
 
 /* The update box (ui/UpdateBox.tsx): floats above every stage while a steered update runs. */
-.updatebox { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 360px; max-width: calc(100vw - 40px); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-pop); font-size: 13px; }
+.updatebox { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 360px; max-width: calc(100vw - 40px); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; box-shadow: var(--shadow-pop); font-size: 13px; }
 .updatebox .ub-item { gap: 10px; align-items: center; }
 .updatebox .ub-item img, .updatebox .ub-empty { width: 48px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--soft); flex-shrink: 0; }
 .updatebox .ub-job { height: 110px; border-radius: 12px; overflow: hidden; display: flex; }
@@ -414,3 +449,103 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .undobtns { position: relative; display: inline-flex; gap: 2px; }
 .undobtns .btn.icon { font-size: 15px; }
 .undonote { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; padding: 6px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 12px; white-space: nowrap; color: var(--ink2); }
+
+/* ── Floating menus and panels (ui/Float.tsx): one recipe everywhere ── */
+.float { position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; box-shadow: var(--shadow-pop); color: var(--ink); font-size: 13px; }
+.fmenu { padding: 6px; display: flex; flex-direction: column; gap: 1px; min-width: 220px; max-width: min(360px, calc(100vw - 16px)); }
+.fpanel { padding: 14px; max-width: calc(100vw - 16px); }
+.fmi { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-weight: 500; color: var(--ink); text-align: left; cursor: pointer; }
+.fmi:hover:not(:disabled), .fmi:focus-visible { background: var(--soft); outline: none; }
+.fmi:disabled { opacity: 0.45; cursor: not-allowed; }
+.fmi.danger { color: var(--danger); }
+.fmi-ico { width: 16px; text-align: center; color: var(--ink2); flex-shrink: 0; }
+.fmi.danger .fmi-ico { color: inherit; }
+.fmi-text { flex: 1; min-width: 0; }
+.fmi-hint { margin-left: auto; font: 500 11px var(--f-mono); color: var(--ink3); white-space: nowrap; }
+.fhead { padding: 8px 10px 4px; font: 500 10.5px var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); }
+.fsep { height: 1px; background: var(--line-soft); margin: 4px 2px; }
+.fhead.handle { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* ── The job tray (ui/JobTray.tsx) ── */
+.jobchip.tray { border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; padding: 0 12px 0 8px; }
+.jobchip.tray:hover, .jobchip.tray.open { background: var(--card); border-color: var(--line); box-shadow: var(--shadow-pill); }
+.jobchip .faces { display: inline-flex; align-items: flex-end; height: 24px; }
+.jobchip .faces .agent-figure { margin-right: -5px; }
+.jobchip .faces .agent-figure:last-child { margin-right: 0; }
+.jobchip .sep { color: var(--ink3); font-weight: 400; }
+.jobchip .bad { color: var(--danger); }
+.traypop { width: 380px; padding: 6px; max-height: min(70vh, 560px); overflow: auto; }
+.tray-empty { padding: 12px 10px; font-size: 12.5px; line-height: 1.45; }
+.trayrow { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; }
+.trayrow:hover { background: var(--soft); }
+.trayrow-text { min-width: 0; }
+.trayrow-text b { display: block; font-size: 13px; font-weight: 600; }
+.trayrow-text small { display: block; font-size: 11.5px; color: var(--ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trayrow.failed small { color: var(--danger); white-space: normal; }
+.trayrow-t { display: inline-flex; align-items: center; gap: 4px; font: 500 11.5px var(--f-mono); color: var(--ink3); }
+/* A card the tray just pointed at. */
+.flash { animation: flash 1.2s var(--ease); }
+@keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--tool), var(--shadow-soft); } 100% { box-shadow: var(--shadow-soft); } }
+
+/* The remake bar (ui/Follow.tsx RemakeBar): floats at the bottom of the stage while anything is behind. */
+.remakebar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 7px 7px 7px 14px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); white-space: nowrap; }
+.remakebar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
+.remakebar b { font-size: 13px; }
+.remakebar .remake-what { font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.remakebar .remake-error { color: var(--danger); font-weight: 600; font-size: 12px; }
+
+/* ── Frame cards (stages/Storyboard.tsx FrameCard) ── */
+.framecard .head .num { width: 22px; height: 22px; border-radius: 7px; background: var(--plan); color: var(--paper); display: grid; place-items: center; font: 700 11.5px var(--f-mono); flex-shrink: 0; }
+.framecard .head b { text-transform: capitalize; }
+.framepic { position: relative; }
+.hoverbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); white-space: nowrap; max-width: calc(100% - 16px); opacity: 0; pointer-events: none; transition: opacity 0.15s var(--ease); }
+.framepic:hover .hoverbar, .framepic:focus-within .hoverbar, .hoverbar.pinned { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .hoverbar { opacity: 1; pointer-events: auto; } }
+.hoverbar .sep { width: 1px; height: 18px; background: var(--line); margin: 0 3px; }
+.hoverbar .vlabel { font-size: 11.5px; font-weight: 600; padding: 0 3px; }
+.vstrip { display: flex; align-items: center; gap: 6px; padding: 10px 12px 0; flex-wrap: wrap; }
+.vthumb { position: relative; width: 40px; height: 52px; padding: 0; border-radius: 7px; overflow: hidden; border: 2px solid transparent; background: var(--soft); cursor: pointer; opacity: 0.75; }
+.vthumb:hover { opacity: 1; }
+.vthumb.on { border-color: var(--tool); opacity: 1; }
+.vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vthumb-n { position: absolute; right: 2px; bottom: 1px; font: 600 9px var(--f-mono); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
+.promptbar { margin: 10px 12px 0; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 8px; }
+.promptbar:focus-within { border-color: var(--ink3); }
+.promptbar-input { border: 0; outline: none; background: transparent; padding: 2px 0; font-size: 13px; color: var(--ink); width: 100%; }
+.promptbar-input::placeholder { color: var(--ink3); }
+.promptbar .row { gap: 6px; }
+.framecard-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px; font-size: 12px; min-height: 48px; }
+.framecard-foot .faint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.framecard-error { color: var(--danger); font-size: 12px; font-weight: 600; padding: 0 12px 12px; }
+.pending.idle { animation: none; background: var(--soft); }
+.hoverbar .hb-label { display: none; }
+.hoverbar .btn.on .hb-label { display: inline; }
+.framecard .head .faint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.framecard .head .behind, .framecard .head .mockbadge, .framecard .head b { flex-shrink: 0; }
+.promptbar .btn.primary { margin-left: auto; }
+
+/* ── Video shot cards: wider, the ⋯ menu floats on the picture ── */
+.shotmore { position: absolute; top: 6px; right: 6px; z-index: 3; width: 26px; height: 26px; border-radius: 8px; border: 0; display: grid; place-items: center; background: var(--frost); backdrop-filter: var(--blur); box-shadow: var(--shadow-pill); font-weight: 700; color: var(--ink); cursor: pointer; }
+.shotmore:hover, .shotmore.open { background: var(--card); }
+.shotmore.open { outline: 2px solid var(--tool); }
+.notechip { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--soft); color: var(--ink2); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+
+/* ── Notes (stages/Video.tsx): a composer with its moment, Ellis reading back, one clear action ── */
+.composer { border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 8px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.composer:focus-within { border-color: var(--ink3); }
+.composer-input { border: 0; outline: none; resize: vertical; min-height: 40px; background: transparent; font-size: 13.5px; line-height: 1.45; color: var(--ink); padding: 0; }
+.composer-input::placeholder { color: var(--ink3); }
+.composer .row { gap: 6px; }
+.tc { font-family: var(--f-mono); font-size: 11.5px; color: var(--create); font-weight: 600; }
+.composer .tc, .comment .tc { background: var(--create-soft); padding: 2px 7px; border-radius: 6px; }
+.sayer { display: block; margin-bottom: 2px; font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); }
+.cameo { display: flex; gap: 10px; align-items: flex-end; padding: 10px 12px; border-radius: 12px; background: var(--tool-soft); font-size: 12.5px; line-height: 1.45; }
+.cameo .sayer { color: var(--tool-ink); }
+.notes-empty { display: flex; gap: 12px; align-items: flex-end; padding: 6px 2px; font-size: 12.5px; line-height: 1.45; color: var(--ink2); }
+.notes-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.notes-actions > .btn.primary { width: 100%; }
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.empty-state .sayer { margin-top: 6px; }
+.shots-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 22px 16px; border: 1.5px dashed var(--line); border-radius: 14px; }
+.shots-empty b { font-size: 15px; }
+.shots-empty .faint { font-size: 12.5px; max-width: 340px; line-height: 1.45; }

@@ -37,3 +37,11 @@ export function startingChoice(options: ModelOption[], made?: Pick<DocJob, 'prov
   const o = hit ?? options[0]
   return o && { provider: o.provider, model: o.model }
 }
+
+/** What a failed job may be sent again on: every other model, those from another provider
+ *  first (what made it fail, an account out of credit or a model that cannot take the step,
+ *  may not hold there), the failed one left out. */
+export function otherModels(options: ModelOption[], failed: Pick<DocJob, 'provider' | 'model'>): ModelOption[] {
+  const rest = options.filter((o) => !(o.provider === failed.provider && o.model === failed.model))
+  return [...rest.filter((o) => o.provider !== failed.provider), ...rest.filter((o) => o.provider === failed.provider)]
+}

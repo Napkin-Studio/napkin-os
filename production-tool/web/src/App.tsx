@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
 import type { StageName } from './contracts/types'
 import { systemUpdate } from './doc/store'
 import { download, exportBundle } from './export'
-import { isActive } from './jobs/runner'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
@@ -16,10 +15,12 @@ import { relayId } from './relay'
 import { startOver, START_OVER_TEXT } from './app/startOver'
 import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { InlineConfirm } from './ui/Undo'
-import { UpdateFollows } from './ui/Follow'
+import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { UndoButtons } from './ui/UndoButtons'
 import { SaveButton } from './ui/SaveButton'
+import { Float, MenuItem } from './ui/Float'
+import { JobTray } from './ui/JobTray'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -70,6 +71,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>
         {stage === 'storyboard' && <div className="stage-pane"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane"><Video /></div>}
+        {stage !== 'character' && <RemakeBar />}
       </div>
       <UpdateBox />
       {!import.meta.env.PROD && <DevSwitch />}
@@ -84,21 +86,20 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
   const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
-  const [menu, setMenu] = useState(false)
+  const menuRef = useRef<HTMLButtonElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
   const stage = doc.stage.current
   const reachable = (s: StageName) =>
     s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
   const order = STAGES.findIndex((s) => s.id === stage)
-  const active = doc.jobs.filter((j) => isActive(j.state))
-  const queued = active.filter((j) => j.state === 'queued').length
-  const running = active.length - queued
 
   return (
     <header className="topbar">
       <div className="brand">
-        <StudioMark size={24} />
-        <span>Napkin</span>
-        <small>Production Tool</small>
+        <StudioMark size={22} />
+        <span className="brand-studio">Napkin Studio</span>
+        <span className="brand-tool">Production</span>
         {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
       </div>
       <nav className="rail" aria-label="Stages">
@@ -119,41 +120,36 @@ function TopBar({ history, onHistory, onStartOver }: { history: boolean; onHisto
       </nav>
       <div className="topbar-right">
         {stage !== 'character' && <UpdateFollows />}
-        <span className={`jobchip ${active.length ? 'busy' : ''}`} aria-live="polite">
-          <span className="dot" />
-          {!active.length ? 'Nothing running' : [running && `${running} running`, queued && `${queued} queued`].filter(Boolean).join(' · ')}
-        </span>
+        <JobTray />
         {config.flags.ownKeys && <OwnKeysButton />}
         <UndoButtons />
         <SaveButton />
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
-        {/* Export, the handle and Sign out live in the menu: the bar keeps the run's state, keys and History. */}
-        <span className="topmenu">
-          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-          {menu && (
-            <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.session?.handle ?? doc.participant.handle}</span>
-              <button className="btn sm ghost" role="menuitem" disabled={exporting} title="Download your work: the .clan and its pictures, as a zip" onClick={async () => {
-                setExporting(true)
-                try {
-                  const { blob, name } = await exportBundle(docStore)
-                  download(blob, name)
-                } finally {
-                  setExporting(false)
-                  setMenu(false)
-                }
-              }}>{exporting ? 'Packing…' : 'Export'}</button>
-              {relay.kind === 'http' && ui.session && (
-                <button className="btn sm ghost" role="menuitem" onClick={() => {
-                  setMenu(false)
-                  relay.useToken(null)
-                  uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
-                }}>Sign out</button>
-              )}
-              <button className="btn sm ghost" role="menuitem" style={{ color: 'var(--danger)' }} onClick={() => { setMenu(false); onStartOver() }}>Start over…</button>
-            </span>
+        {/* Export, the handle, Sign out and Start over live in the menu: the bar keeps the run's state, keys and History.
+            Undo, Redo and Save sit just left of History. */}
+        <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
+        <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
+          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}</div>
+          <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
+            setExporting(true)
+            try {
+              const { blob, name } = await exportBundle(docStore)
+              download(blob, name)
+            } finally {
+              setExporting(false)
+              closeMenu()
+            }
+          }}>{exporting ? 'Packing…' : 'Export'}</MenuItem>
+          {relay.kind === 'http' && ui.session && (
+            <MenuItem icon="⎋" onSelect={() => {
+              closeMenu()
+              relay.useToken(null)
+              uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
+            }}>Sign out</MenuItem>
           )}
-        </span>
+          <div className="fsep" />
+          <MenuItem icon="↺" danger onSelect={() => { closeMenu(); onStartOver() }}>Start over…</MenuItem>
+        </Float>
       </div>
     </header>
   )
@@ -223,7 +219,7 @@ function SignIn() {
           setBusy(false)
         }
       }}>
-        <div className="row" style={{ gap: 10 }}><StudioMark size={28} /><b style={{ fontSize: 18, letterSpacing: '-0.02em' }}>Napkin Production Tool</b></div>
+        <div className="row" style={{ gap: 10 }}><StudioMark size={28} /><b className="brand" style={{ fontSize: 18 }}>Napkin Studio <span className="brand-tool">Production</span></b></div>
         <p className="muted" style={{ margin: 0 }}>Make your characters on a free canvas, storyboard them, and turn it into an ad.</p>
         <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Event code</span><input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus /></label>
         <label className="stack" style={{ gap: 4 }}><span className="eyebrow">Your name</span><input className="input" value={handle} onChange={(e) => setHandle(e.target.value)} pattern="[A-Za-z0-9_.\-]{2,24}" title="2-24 letters, numbers, . _ or -" /></label>
