@@ -53,6 +53,13 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
   const ctrl = useMemo(() => (api ? new CanvasController(api, services) : null), [api, services])
+  // Switching project or going Home: the canvas is saved first (features/project-home.clan).
+  useEffect(() => {
+    if (!ctrl) return
+    const save = () => ctrl.save()
+    services.project.beforeClose.add(save)
+    return () => void services.project.beforeClose.delete(save)
+  }, [ctrl, services])
   const raf = useRef<number | null>(null)
   const lastSig = useRef('')
   const wrap = useRef<HTMLDivElement>(null)
@@ -591,7 +598,7 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
 
 function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
   const doc = useDoc()
-  const { doc: docStore } = useServices()
+  const { doc: docStore, project } = useServices()
   const { controls } = useConfig()
   const [library, setLibrary] = useState(false)
   const [cleaning, setCleaning] = useState<string[] | null>(null)
@@ -607,7 +614,8 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
   const cleanUp = async (gone: string[]) => {
     setCleaning(null)
     await systemUpdate(docStore, (d) => sweep(d, gone), 'clean up')
-    await Promise.all(gone.map((sha) => deleteBlob(sha)))
+    // Blobs are shared by every project: a picture another project still uses keeps its bytes.
+    await Promise.all(gone.filter((sha) => !project.usedElsewhere(sha)).map((sha) => deleteBlob(sha)))
     setNote(`Removed ${gone.length} unused ${gone.length === 1 ? 'picture' : 'pictures'}.`)
   }
 

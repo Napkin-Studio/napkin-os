@@ -520,7 +520,7 @@
     },
     "ClanMirror": {
       "type": "object",
-      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan, mirrored for the organisers. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual. Responses: 204; 401 without a valid token; 400 when the body is not a ZIP; 413 above 5 MiB. Stored at s3 clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. This object documents the headers only.",
+      "description": "POST /clan (added 2026-10-06, additive): the participant's current .clan, mirrored for the organisers. Not JSON: the body is the .clan bytes (a ZIP, at most 5 MiB). Headers: Authorization Bearer token, Content-Type application/vnd.clan+zip, X-Clan-Reason interval|accept|manual, and optionally X-Project-Id (a project id, the common id pattern; added 2026-10-09, additive, features/project-home.clan). Responses: 204; 401 without a valid token; 400 when the body is not a ZIP or X-Project-Id is not an id; 413 above 5 MiB. With X-Project-Id, stored at s3 clan/<participantId>/<projectId>/latest.clan and clan/<participantId>/<projectId>/<UTC time>-<reason>.clan; without it, at clan/<participantId>/latest.clan and clan/<participantId>/<UTC time>-<reason>.clan. This object documents the headers only.",
       "properties": {
         "contentType": {
           "const": "application/vnd.clan+zip"

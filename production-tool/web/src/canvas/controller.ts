@@ -26,8 +26,6 @@ import { instruction, planSelection } from './selection'
 import { CanvasDocSync } from './sync'
 import { frameText } from './text'
 
-import { CANVAS_KEY } from './keys'
-export { CANVAS_KEY }
 
 export interface CanvasSnapshot {
   elements: El[]
@@ -94,7 +92,7 @@ export class CanvasController {
     const used = new Set(elements.map((e) => (e as ExcalidrawImageElement).fileId).filter(Boolean) as string[])
     const files: BinaryFiles = {}
     for (const [k, v] of Object.entries(this.api.getFiles())) if (used.has(k)) files[k] = v
-    await idbPut('kv', CANVAS_KEY, { elements, files } satisfies CanvasSnapshot)
+    await idbPut('kv', this.s.project.canvasKey, { elements, files } satisfies CanvasSnapshot)
   }
 
   /** Called on every scene change (throttled by the component). */

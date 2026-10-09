@@ -61,8 +61,10 @@ def test_log_returns_204(h):
     h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "stage": "character"}, token, expect=204)
 
 
-def _clan_post(h, token, body, reason="accept"):
+def _clan_post(h, token, body, reason="accept", project=None):
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.clan+zip", "X-Clan-Reason": reason}
+    if project is not None:
+        headers["X-Project-Id"] = project
     return h.relay.http("POST", "/api/clan", headers, body)
 
 
@@ -76,6 +78,31 @@ def test_clan_mirror_keeps_latest_and_history(h):
     assert any(k.endswith("-accept.clan") for k in keys)
     assert all(h.blobs.objects[k] == (body, "application/vnd.clan+zip") for k in keys)
     assert ctx["clanBytes"] == len(body)
+
+
+def test_clan_mirror_keeps_one_copy_per_project(h):
+    token = h.sign_in()
+    a, b = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N9"
+    _clan_post(h, token, b"PK\x03\x04" + b"a" * 10, project=a)
+    _clan_post(h, token, b"PK\x03\x04" + b"b" * 10, reason="manual", project=b)
+    keys = sorted(k for k in h.blobs.objects if k.startswith("clan/"))
+    pid = keys[0].split("/")[1]
+    assert f"clan/{pid}/{a}/latest.clan" in keys and f"clan/{pid}/{b}/latest.clan" in keys
+    assert h.blobs.objects[f"clan/{pid}/{a}/latest.clan"][0].endswith(b"a" * 10)
+    assert h.blobs.objects[f"clan/{pid}/{b}/latest.clan"][0].endswith(b"b" * 10)
+    assert any(k.startswith(f"clan/{pid}/{a}/") and k.endswith("-accept.clan") for k in keys)
+    assert any(k.startswith(f"clan/{pid}/{b}/") and k.endswith("-manual.clan") for k in keys)
+    # Without the header: today's path, next to the projects.
+    _clan_post(h, token, b"PK\x03\x04" + b"c" * 10)
+    assert h.blobs.objects[f"clan/{pid}/latest.clan"][0].endswith(b"c" * 10)
+
+
+def test_clan_mirror_refuses_a_bad_project_id(h):
+    token = h.sign_in()
+    for bad in ("", "../other", "prj_short", "PRJ_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8/x"):
+        status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"x" * 10, project=bad)
+        assert status == 400 and out["error"]["code"] == "invalid_input", bad
+    assert not [k for k in h.blobs.objects if k.startswith("clan/")]
 
 
 def test_clan_mirror_refuses_bad_bodies(h):

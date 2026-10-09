@@ -42,7 +42,7 @@ from store import MemoryStore
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser (2026-10-07: X-Own-Keys on POST /jobs).
-CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys"
+CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys, X-Project-Id"
 log = logging.getLogger("relay.local")
 
 

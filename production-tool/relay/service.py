@@ -91,6 +91,8 @@ SESSION_TTL_S = 24 * 3600
 CLAN_MAX_BYTES = 5 * 1024 * 1024
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
+# X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
+PROJECT_ID = re.compile(r"^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$")
 DEFAULT_WORKSPACE = "event"
 KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
 
@@ -323,7 +325,7 @@ class Relay:
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
 
     def mirror_clan(self, who: dict, headers: dict, body: bytes | None) -> int:
-        """POST /clan: keep the participant's latest .clan, plus a timestamped copy, for the organisers."""
+        """POST /clan: keep the participant's latest .clan (per project with X-Project-Id), plus a timestamped copy, for the organisers."""
         data = body or b""
         if len(data) > CLAN_MAX_BYTES:
             raise ApiError("invalid_input", "The document is larger than 5 MB.", status=413)
@@ -332,8 +334,13 @@ class Relay:
         reason = headers.get("x-clan-reason", "manual")
         if reason not in CLAN_REASONS:
             reason = "manual"
+        # One copy per project when the app says which (features/project-home.clan); the participant's own path without it.
+        project = headers.get("x-project-id")
+        if project is not None and not PROJECT_ID.match(project):
+            raise ApiError("invalid_input", "X-Project-Id is not a project id.")
+        base = f"clan/{who['pid']}/{project}" if project else f"clan/{who['pid']}"
         stamp = iso(self.clock()).replace(":", "")
-        for key in (f"clan/{who['pid']}/latest.clan", f"clan/{who['pid']}/{stamp}-{reason}.clan"):
+        for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
             self.blobs.put(key, data, CLAN_MIME)
         return len(data)
 

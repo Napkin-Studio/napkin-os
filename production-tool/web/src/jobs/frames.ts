@@ -10,8 +10,9 @@
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
 import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument, StaleMark } from '../contracts/types'
-import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
+import { updateDoc, type DocumentStore } from '../doc/store'
 import type { JobPurpose, UiState } from '../doc/ui'
+import type { UiStore } from '../projects/uiStore'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
@@ -21,7 +22,7 @@ import { refreshClipStale } from './stale'
 export interface FrameDeps {
   relay: Relay
   doc: DocumentStore
-  ui: SnapshotStore<UiState>
+  ui: UiStore
   runner: JobRunner
 }
 

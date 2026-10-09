@@ -7,8 +7,9 @@ import type {
   AgentBlock, ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
 } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { systemUpdate, type DocumentStore, type SnapshotStore } from '../doc/store'
-import type { JobCtx, JobPurpose, UiState } from '../doc/ui'
+import { systemUpdate, type DocumentStore } from '../doc/store'
+import type { JobCtx, JobPurpose } from '../doc/ui'
+import type { UiStore } from '../projects/uiStore'
 import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { asContractError, RelayError, type Relay } from '../relay'
@@ -41,11 +42,13 @@ export class JobRunner {
   private version = 0
   private readonly relay: Relay
   private readonly doc: DocumentStore
-  private readonly ui: SnapshotStore<UiState>
+  private readonly ui: UiStore
+  /** Set by stop(): the project was closed. Its jobs carry on at the relay and land when it is opened again. */
+  private stopped = false
   /** The stage the user is on, for log entries. */
   stage: () => StageName = () => 'character'
 
-  constructor(relay: Relay, doc: DocumentStore, ui: SnapshotStore<UiState>) {
+  constructor(relay: Relay, doc: DocumentStore, ui: UiStore) {
     this.relay = relay
     this.doc = doc
     this.ui = ui
@@ -79,10 +82,21 @@ export class JobRunner {
     }
   }
 
+  /** The project is closing (features/project-home.clan): stop asking about its jobs and start no more.
+   *  Whatever is still being made stays in its document as queued, running or fetching, so resume()
+   *  picks it up the next time the project is opened, in that project and no other. */
+  stop() {
+    this.stopped = true
+    for (const t of this.timers.values()) clearTimeout(t)
+    this.timers.clear()
+    this.listeners.clear()
+  }
+
   // ── submit / retry / cancel ──
 
   /** `modelChoice`: the model picked in the regenerate menu (features/model-choice.clan). */
   async submit(op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job'), modelChoice?: ModelChoice): Promise<string> {
+    if (this.stopped) throw new Error('the project was closed')
     const request: JobRequest = { contractVersion: '2', jobId, op, parentIds, input, ...(modelChoice ? { modelChoice } : {}) }
     const hashes = new Set<string>()
     collectHashes(input, hashes)
@@ -113,6 +127,7 @@ export class JobRunner {
   private async send(request: JobRequest) {
     try {
       const job = await this.relay.createJob(request)
+      if (this.stopped) return
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
@@ -200,6 +215,7 @@ export class JobRunner {
 
   private schedule(jobId: string, seconds: number) {
     this.stopPolling(jobId)
+    if (this.stopped) return
     this.timers.set(jobId, setTimeout(() => void this.poll(jobId), Math.max(0.2, seconds) * 1000))
   }
 
@@ -220,8 +236,10 @@ export class JobRunner {
 
   private async poll(jobId: string) {
     this.timers.delete(jobId)
+    if (this.stopped) return
     try {
       const job = await this.relay.getJob(jobId)
+      if (this.stopped) return
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
@@ -313,6 +331,9 @@ export class JobRunner {
         if (o.durationS) a.duration_s = o.durationS
         assets.push(a)
       }
+      // Closed while its outputs came in: the bytes are kept (shared blobs), the job stays "fetching"
+      // in its own document and lands when that project is opened again.
+      if (this.stopped) return
       systemUpdate(this.doc, (d) => {
         for (const a of assets) if (!d.assets.some((x) => x.sha256 === a.sha256)) d.assets.push(a)
         const j = d.jobs.find((x) => x.id === job.jobId)
