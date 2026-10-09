@@ -185,7 +185,7 @@ def test_a_clip_whose_frame_is_a_video_is_refused_before_quota(h):
     token = h.sign_in()
     _, out = h.post_job(token, op="clip", expect=400, image=asset(3, "video/mp4"))
     assert out["error"]["code"] == "invalid_input" and "frame" in out["error"]["message"]
-    assert h.relay.remaining(participant_id("alice"), "participant")["video"] == 6
+    assert h.relay.remaining(participant_id("blue", "alice"), "participant")["video"] == 6
     assert h.store.counters("spend").get("usd", 0) == 0
 
 
