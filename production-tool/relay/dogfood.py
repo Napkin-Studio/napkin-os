@@ -43,6 +43,7 @@ BATCH_MAX = 500
 BATCH_BYTES = 256 * 1024
 MIME = "application/x-ndjson"
 CLOCK_SKEW_S = 300
+CONSENT_TTL_S = 300
 # Parts of an event that change from one identical call to the next.
 VOLATILE = {"at", "seq", "tab", "ms", "latencyMs"}
 # Never folded: each one is a person's own statement.
@@ -161,18 +162,22 @@ class Dogfood:
 
     def __init__(self, blobs, clock, rand=lambda: secrets.token_hex(3)):
         self.blobs, self.clock, self.rand = blobs, clock, rand
-        self._consented: set[str] = set()
+        # pid -> when its consent object was last seen. Checked again after CONSENT_TTL_S, so a
+        # prune stops a warm Lambda recording that person within minutes.
+        self._consented: dict[str, float] = {}
         # One open run per participant in this warm Lambda: {key, first, count, start, last, object}
         self._runs: dict[str, dict] = {}
 
     # ── consent ────────────────────────────────────────────────────────────
     def consented(self, pid: str) -> bool:
-        if pid in self._consented:
+        seen = self._consented.get(pid)
+        if seen is not None and self.clock() - seen < CONSENT_TTL_S:
             return True
         try:
             if self.blobs.exists(f"{CONSENT}{safe_id(pid)}.json"):
-                self._consented.add(pid)
+                self._consented[pid] = self.clock()
                 return True
+            self._consented.pop(pid, None)
         except Exception:
             log.exception("dogfood: consent check failed")
         return False
@@ -184,7 +189,7 @@ class Dogfood:
         if who.get("t"):
             record["team"] = who["t"]
         self.blobs.put(f"{CONSENT}{safe_id(pid)}.json", json.dumps(record).encode(), "application/json")
-        self._consented.add(pid)
+        self._consented[pid] = self.clock()
         self.record(pid, "consent", "dogfood notice acknowledged", {"role": record["role"]})
 
     # ── writing ────────────────────────────────────────────────────────────

@@ -181,3 +181,13 @@ def test_a_huge_event_is_capped():
     big = dogfood.capped({"text": "x" * (dogfood.BODY_CAP + 10)})
     assert big["capped"]["truncated"] and big["capped"]["size"] > dogfood.BODY_CAP
     assert dogfood.body_value(b"\xff\xfe binary")["binary"]
+
+
+def test_a_pruned_person_stops_being_recorded_within_minutes():
+    h = on()
+    token = agreed(h)
+    for k in [k for k in h.blobs.objects if k.startswith("dogfood/")]:
+        del h.blobs.objects[k]
+    h.clock.tick(dogfood.CONSENT_TTL_S + 1)
+    h.post_job(token, expect=200)
+    assert not objects(h)
