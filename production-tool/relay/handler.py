@@ -23,7 +23,7 @@ from contracts import Contracts
 from director import load_director
 from providers import load_registry
 from runtime import CachedConfig, EnvSecrets
-from service import Relay
+from service import Raw, Relay
 from store import DynamoStore
 
 logging.getLogger().setLevel(logging.INFO)
@@ -89,6 +89,10 @@ def handler(event, context):
     ctx["kind"] = "request"
     print(json.dumps({k: v for k, v in ctx.items() if v is not None}, default=str))
     resp = {"statusCode": status, "headers": {"Content-Type": "application/json", "Cache-Control": "no-store"}}
-    if out is not None:
+    if isinstance(out, Raw):  # the .clan bytes of GET /clan/{project}
+        resp["headers"] = {**resp["headers"], **out.headers, "Content-Type": out.mime}
+        resp["body"] = base64.b64encode(out.data).decode()
+        resp["isBase64Encoded"] = True
+    elif out is not None:
         resp["body"] = json.dumps(out)
     return resp

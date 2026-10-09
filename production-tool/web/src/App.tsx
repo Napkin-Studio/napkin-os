@@ -15,8 +15,10 @@ import { clanDbFor, INDEX_KEY } from './projects/storage'
 import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
+import { FallbackNotices } from './ui/FallbackNotices'
 import { UndoButtons } from './ui/UndoButtons'
 import { SaveButton } from './ui/SaveButton'
+import { SaveConflictBox } from './ui/SaveConflict'
 import { Float, MenuItem } from './ui/Float'
 import { JobTray } from './ui/JobTray'
 import { BetaTag } from './dogfood/Dogfood'
@@ -47,6 +49,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       {config.banner && <div className="banner">{config.banner}</div>}
       {storeNote && <div className="storenote" role="status">{storeNote}</div>}
       {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
+      <SaveConflictBox />
       <div className="stage">
         {history && <HistoryPanel store={clan} onClose={() => setHistory(false)} />}
         {/* The canvas stays mounted so its jobs keep landing while you're on another stage. */}
@@ -58,6 +61,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
       </div>
       <UpdateBox />
+      <FallbackNotices />
       {!import.meta.env.PROD && <DevSwitch />}
     </>
   )
@@ -117,7 +121,7 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
             keys and History. Undo, Redo and Save sit just left of History. */}
         <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
         <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
-          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}</div>
+          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}{ui.session?.team ? ` · ${ui.session.team}` : ''}</div>
           <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
             setExporting(true)
             try {

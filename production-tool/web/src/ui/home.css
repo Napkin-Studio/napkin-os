@@ -127,3 +127,10 @@
 .brand-project { font-size: 13px; font-weight: 500; color: var(--ink3); letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 .brand-project:not(:empty)::before { content: '· '; }
 @media (max-width: 1440px) { .brand-project { display: none; } }
+
+/* ── the person's projects on the server (features/personal-workspaces.clan) ── */
+.hm-notice { margin: 0 0 16px; padding: 10px 14px; border-radius: 12px; background: var(--tool-soft); color: var(--tool-ink); font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.hm-notice > span { flex: 1; }
+.hm-notice .faint { font-weight: 500; }
+.hm-newer { color: var(--warn); font-weight: 600; }
+.hm-ph-cloud { font-size: 30px; opacity: 0.45; }

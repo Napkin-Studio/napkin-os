@@ -9,25 +9,25 @@ from providers.base import Moderated, ProviderError, Status
 
 # ── session and uploads ─────────────────────────────────────────────────────
 def test_session_signs_a_token_with_quotas(h):
-    _, out = h.call("POST", "/session", {"eventCode": "hack", "handle": "Alice"}, expect=200)
+    _, out = h.call("POST", "/session", {"eventCode": "hack", "team": "blue", "handle": "Alice"}, expect=200)
     assert out["role"] == "participant" and out["participantId"].startswith("p_")
     assert out["quotas"] == {"image": 40, "video": 6, "render": 3}
     # the same handle is the same participant (quotas follow it)
-    _, again = h.call("POST", "/session", {"eventCode": "HACK", "handle": "alice"}, expect=200)
+    _, again = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"}, expect=200)
     assert again["participantId"] == out["participantId"]
 
 
 def test_session_organiser_code_and_bad_code(h):
-    _, out = h.call("POST", "/session", {"eventCode": "ORGS", "handle": "shrey"}, expect=200)
+    _, out = h.call("POST", "/session", {"eventCode": "ORGS", "team": "blue", "handle": "shrey"}, expect=200)
     assert out["role"] == "organiser" and out["quotas"]["image"] == 400
-    _, err = h.call("POST", "/session", {"eventCode": "nope", "handle": "bob"}, expect=401)
+    _, err = h.call("POST", "/session", {"eventCode": "nope", "team": "blue", "handle": "bob"}, expect=401)
     assert err["error"]["code"] == "unauthorised"
 
 
 def test_blocked_handle_cannot_sign_in_or_submit(h):
     token = h.sign_in("mallory")
     h.store.blocked.add("mallory")
-    assert h.call("POST", "/session", {"eventCode": "HACK", "handle": "Mallory"}, expect=403)[1]["error"]["code"] == "blocked"
+    assert h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "Mallory"}, expect=403)[1]["error"]["code"] == "blocked"
     assert h.post_job(token, expect=403)[1]["error"]["code"] == "blocked"
 
 
@@ -225,16 +225,26 @@ def test_quota_exhaustion():
     assert out["error"]["code"] == "quota_exhausted" and out["error"]["retryable"] is False
     # a refused job leaves nothing behind
     from service import participant_id
-    assert h.store.counters(f"inflight#{participant_id('alice')}")["n"] == 2
+    assert h.store.counters(f"inflight#{participant_id('blue', 'alice')}")["n"] == 2
 
 
 def test_spend_stop():
-    h = Harness(base_config(spend={"capUsd": 0.02, "warnUsd": 0.01}))
+    # Was a cap of 0.02 with the first 0.15 job admitted ("spent < cap"): that let the last jobs pass the
+    # cap. A job is admitted only when its estimate fits under it (features/video-stage-findings.clan).
+    h = Harness(base_config(spend={"capUsd": 0.2, "warnUsd": 0.1}))
     token = h.sign_in()
-    h.post_job(token, expect=200)            # 0 spent: admitted, reserves fal's 0.15 (Nano Banana Pro)
-    _, out = h.post_job(token, expect=503)   # 0.15 reserved >= 0.02
+    h.post_job(token, expect=200)            # 0 + 0.15 (fal's Nano Banana Pro) <= 0.2: admitted
+    _, out = h.post_job(token, expect=503)   # 0.15 + 0.15 > 0.2
     assert out["error"]["code"] == "spend_stop"
     assert h.store.counters("spend")["usd"] == pytest.approx(0.15)
+
+
+def test_spend_stop_refuses_a_job_that_would_pass_the_cap():
+    h = Harness(base_config(spend={"capUsd": 0.1, "warnUsd": 0.05}))
+    token = h.sign_in()
+    _, out = h.post_job(token, expect=503)   # nothing spent, but 0.15 > 0.1
+    assert out["error"]["code"] == "spend_stop"
+    assert h.store.counters("spend").get("usd", 0) == 0
 
 
 def test_in_flight_limit():
@@ -409,5 +419,5 @@ def test_stitch_rejects_clips_that_are_not_ours(h):
 def test_config_route_and_api_prefix(h):
     _, out = h.call("GET", "/config", expect=200)
     assert out["contractVersion"] == "2"
-    status, out, _ = h.relay.http("POST", "/api/session", {}, b'{"eventCode": "HACK", "handle": "zed"}')
+    status, out, _ = h.relay.http("POST", "/api/session", {}, b'{"eventCode": "HACK", "team": "blue", "handle": "zed"}')
     assert status == 200 and out["handle"] == "zed"

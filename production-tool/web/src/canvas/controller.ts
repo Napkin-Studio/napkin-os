@@ -47,6 +47,8 @@ export class CanvasController {
   readonly api: ExcalidrawImperativeAPI
   private readonly s: Services
   private readonly processing = new Set<string>()
+  /** File ids restoreFiles has looked for once already. */
+  private readonly restoreTried = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private syncTimer: ReturnType<typeof setTimeout> | null = null
   /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
@@ -82,6 +84,29 @@ export class CanvasController {
 
   // ── persistence ──
 
+  /**
+   * Put back the pictures of image elements whose file the scene lacks: a canvas that came from the
+   * server (features/personal-workspaces.clan) carries its elements only. Each picture is found by
+   * the node's asset, else by the file id made from its hash, among this browser's blobs.
+   */
+  async restoreFiles(): Promise<number> {
+    const files = this.api.getFiles()
+    const lacking = alive(this.els()).filter((e) => e.type === 'image' && (e as ExcalidrawImageElement).fileId
+      && !files[(e as ExcalidrawImageElement).fileId!] && !this.restoreTried.has((e as ExcalidrawImageElement).fileId!)) as ExcalidrawImageElement[]
+    if (!lacking.length) return 0
+    for (const el of lacking) this.restoreTried.add(el.fileId!)
+    const byFileId = new Map(this.doc().assets.map((a) => [fileIdFor(a.sha256) as string, a.sha256]))
+    const add: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
+    for (const el of lacking) {
+      const c = cd(el) as { asset?: string } | undefined
+      const sha = c?.asset ?? byFileId.get(el.fileId!)
+      const blob = sha ? await getBlob(sha) : undefined
+      if (sha && blob) add.push({ ...(await fileData(sha, blob)), id: el.fileId! })
+    }
+    if (add.length) this.api.addFiles(add)
+    return add.length
+  }
+
   scheduleSave() {
     if (this.saveTimer) clearTimeout(this.saveTimer)
     this.saveTimer = setTimeout(() => void this.save(), 600)
@@ -99,6 +124,7 @@ export class CanvasController {
   onChange() {
     this.scheduleSave()
     void this.intakePictures()
+    void this.restoreFiles().catch(() => {})
     if (this.syncTimer) clearTimeout(this.syncTimer)
     this.syncTimer = setTimeout(() => this.syncNow(), 250)
   }

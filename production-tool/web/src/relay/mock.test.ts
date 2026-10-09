@@ -105,7 +105,7 @@ describe('the mock workspace library', () => {
 
   it('publishes versions, lists the latest with its front as cover, and refuses an out-of-date publish', async () => {
     const { relay } = setup()
-    await relay.session({ eventCode: 'X', handle: 'ann' })
+    await relay.session({ eventCode: 'X', team: 'blue', handle: 'ann' })
     const v1 = await relay.publish('maya', { role: 'character', baseVer: 0, refs: [ref('side', 'b'), ref('front', 'a')] })
     expect(validate('LibraryEntry')(v1)).toBe(true)
     const v2 = await relay.publish('maya', { role: 'character', baseVer: 1, refs: [ref('front', 'c')] })

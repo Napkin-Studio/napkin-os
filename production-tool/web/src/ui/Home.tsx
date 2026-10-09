@@ -9,8 +9,10 @@ import { effectiveConfig } from '../capabilities'
 import { download } from '../export'
 import { BetaTag } from '../dogfood/Dogfood'
 import { errorShown, setScreen } from '../dogfood/recorder'
+import type { SavedProject } from '../contracts/types'
 import { OwnKeysButton } from '../keys/OwnKeysPanel'
-import { ordered, type ProjectEntry } from '../projects/projectIndex'
+import { homeItems, itemId } from '../projects/homeList'
+import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
 import { clock, displayName, edited, greeting, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
@@ -31,10 +33,26 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // The projects this name saved on the relay, from any browser (features/personal-workspaces.clan).
+  const [saved, setSaved] = useState<SavedProject[]>([])
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+  const token = ui.session?.token
+  useEffect(() => {
+    let live = true
+    shell.serverProjects().then((rows) => {
+      if (!live) return
+      setSaved(rows)
+      setSavedNote(null)
+    }, () => {
+      if (live) setSavedNote('Could not list the projects you saved on the server. Those in this browser are below.')
+    })
+    return () => { live = false }
+  }, [shell, token])
   const config = useMemo(() => effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig), [ui.configChoice, ui.providerChoice, remoteConfig])
-  const shown = ordered(projects, ui.homeSort, query)
+  const all = homeItems(projects, saved)
+  const shown = homeItems(projects, saved, ui.homeSort, query)
   const who = displayName(ui.session?.handle)
-  const first = projects.length === 0
+  const first = all.length === 0
 
   const act = (what: string, p: Promise<unknown>) => {
     setError(null)
@@ -65,7 +83,14 @@ export function Home() {
             )}
           </div>
 
+          {state.notice && (
+            <div className="hm-notice" role="status">
+              <span>☁ {state.notice}. <span className="faint">Not you? Sign out and pick another name.</span></span>
+              <button className="btn xs ghost" onClick={() => shell.say(null)}>OK</button>
+            </div>
+          )}
           {error && <div className="hm-error" role="alert">{error} <button className="btn xs ghost" onClick={() => setError(null)}>OK</button></div>}
+          {savedNote && <div className="hm-notice" role="status"><span>{savedNote}</span></div>}
           {state.busy && <div className="hm-busy" role="status">{state.busy}</div>}
 
           <input ref={fileRef} type="file" accept=".zip,.clan,application/zip,application/vnd.clan+zip" hidden onChange={(e) => {
@@ -105,7 +130,7 @@ export function Home() {
               </div>
 
               <div className="hm-sechead">
-                <h3>Your projects</h3><span className="faint">{projects.length}</span>
+                <h3>Your projects</h3><span className="faint">{all.length}</span>
                 <span className="spacer" />
                 <div className="hm-tabs" role="tablist" aria-label="Order">
                   {(['recent', 'name'] as const).map((s) => (
@@ -115,8 +140,11 @@ export function Home() {
               </div>
               {shown.length === 0 && <p className="faint">No project is called that.</p>}
               <div className="hm-grid">
-                {shown.map((p) => (
-                  <ProjectCard key={p.id} p={p} menu={menuFor === p.id} onMenu={(open) => setMenuFor(open ? p.id : null)} onError={setError} />
+                {shown.map((i) => i.kind === 'local' ? (
+                  <ProjectCard key={i.p.id} p={i.p} server={i.server} newerThere={i.newerThere} menu={menuFor === i.p.id}
+                    onMenu={(open) => setMenuFor(open ? i.p.id : null)} onError={setError} />
+                ) : (
+                  <ServerCard key={itemId(i)} row={i.row} name={i.name} onError={setError} />
                 ))}
               </div>
             </>
@@ -124,7 +152,9 @@ export function Home() {
 
           <div className="hm-foot">
             {ui.savedAt && relay.kind === 'http' && <span className="hm-cloud">☁ Saved to the server · {clock(ui.savedAt)}</span>}
-            <span>Projects live in this browser{relay.kind === 'http' ? ' and save to the server as you work' : ''}. Opening them on another computer comes with the server work.</span>
+            <span>{relay.kind === 'http'
+              ? 'Projects save to the server as you work. Sign in with the same name on any computer to open them there.'
+              : 'Projects live in this browser.'}</span>
           </div>
         </div>
       </main>
@@ -157,6 +187,7 @@ function HomeBar({ ownKeys }: { ownKeys: boolean }) {
               {relay.kind === 'http' && ui.session && (
                 <button className="btn sm ghost" role="menuitem" onClick={() => {
                   setMenu(false)
+                  shell.say(null)
                   relay.useToken(null)
                   app.update((u) => { u.session = undefined; u.sessionFor = undefined })
                 }}>Sign out</button>
@@ -169,7 +200,31 @@ function HomeBar({ ownKeys }: { ownKeys: boolean }) {
   )
 }
 
-function ProjectCard({ p, menu, onMenu, onError }: { p: ProjectEntry; menu: boolean; onMenu: (open: boolean) => void; onError: (m: string) => void }) {
+/** A project saved on the server from another browser: opening it brings it, and every picture it uses, here. */
+function ServerCard({ row, name, onError }: { row: SavedProject; name: string; onError: (m: string) => void }) {
+  const shell = useShell()
+  const open = () => {
+    shell.openFromServer(row).catch((e) => onError(`Could not open “${name}”: ${e instanceof Error ? e.message : String(e)}`))
+  }
+  return (
+    <div className="hm-card" role="button" tabIndex={0} aria-label={`Open ${name} from the server`} onClick={open}
+      onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && open()}>
+      <div className="hm-th">
+        <div className="hm-ph character" aria-hidden><span className="hm-ph-cloud">☁</span></div>
+        <span className="hm-badge">On the server</span>
+      </div>
+      <div className="hm-m">
+        <b title={name}>{name}</b>
+        <div className="row"><span className="hm-stage"><span className="dot" />Not in this browser yet</span></div>
+        <div className="row"><span>☁ saved {edited(row.savedAt).replace(/^edited /, '')}</span></div>
+      </div>
+    </div>
+  )
+}
+
+function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
+  p: ProjectEntry; server?: SavedProject; newerThere: boolean; menu: boolean; onMenu: (open: boolean) => void; onError: (m: string) => void
+}) {
   const shell = useShell()
   const thumb = useBlobUrl(p.summary.thumb)
   const [renaming, setRenaming] = useState(false)
@@ -229,6 +284,12 @@ function ProjectCard({ p, menu, onMenu, onError }: { p: ProjectEntry; menu: bool
           </form>
         ) : <b title={p.name}>{p.name}</b>}
         <div className="row"><StageChip s={p.summary} /><span>· {edited(p.updated)}</span></div>
+        {server && (
+          <div className="row">
+            <span title={`Saved to the server ${new Date(server.savedAt).toLocaleString()}`}>☁ saved {edited(server.savedAt).replace(/^edited /, '')}</span>
+            {newerThere && <span className="hm-newer" title="Saved from another browser since this one: when you save here you choose which to keep">· newer save from elsewhere</span>}
+          </div>
+        )}
         {making && p.summary.making && <span className="hm-work"><AgentFigure agent="dex" state="working" size={19} decorative />{p.summary.making}</span>}
         {deleting && (
           <div className="hm-confirm" role="alertdialog" aria-label={`Delete ${p.name}?`} onClick={(e) => e.stopPropagation()}>

@@ -33,6 +33,8 @@ export type JobCtx = JobPurpose & {
   /** The relay made it elsewhere: Job.fallbackFrom and fallbackReason (features/runway-fallback.clan). */
   fallbackFrom?: ModelChoice
   fallbackReason?: string
+  /** The "Napkin's got you" notice for this fallback was shown (and closed or timed out): once per job. */
+  fallbackShown?: boolean
   /** The character cards the director was given (the relay's agent block), held here for the
    *  director's History entry: the document's jobs[].agent leaves them out. */
   cards?: DirectorCard[]

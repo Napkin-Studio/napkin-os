@@ -13,6 +13,7 @@
 
 import type { ModelChoice, ProductionDocument, Review } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
+import { clipText as cutText } from '../lib/guard'
 import { assetRef, boxMaskRef } from './assets'
 import { makeClip, selectedTake } from './clips'
 import { continuity, selectedFrame, type FrameDeps } from './frames'
@@ -22,7 +23,7 @@ import { isActive } from './runner'
 function clipText(notes: Review[], boxedId: string): string | undefined {
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
   const rest = notes.filter((r) => r.id !== boxedId).map((r) => `At ${fmt(r.at_s ?? 0)}: ${r.comment}`)
-  return rest.length ? rest.join('\n').slice(0, 1000) : undefined
+  return rest.length ? cutText(rest.join('\n'), 1000) : undefined
 }
 
 /** Start the fix: the region edit on the shot's selected frame. `notes` are the open notes on the clip; one has a box.
@@ -45,7 +46,7 @@ export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]
   const mask = await boxMaskRef(deps.relay, frame.asset, region)
   return deps.runner.submit(
     'region_edit',
-    { image, region, text: boxed.comment.slice(0, 1000), ...(mask ? { mask } : {}), ...anchors },
+    { image, region, text: cutText(boxed.comment, 1000), ...(mask ? { mask } : {}), ...anchors },
     [frame.job_id],
     { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id), ...(modelChoice ? { fixModelChoice: modelChoice } : {}) },
   )

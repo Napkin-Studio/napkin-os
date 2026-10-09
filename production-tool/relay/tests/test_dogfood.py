@@ -37,7 +37,7 @@ def test_off_means_404_and_nothing_written(h):
     h.call("POST", "/dogfood/consent", None, token, expect=404)
     h.call("POST", "/dogfood/events", {"events": [{"kind": "click", "name": "button: Go"}]}, token, expect=404)
     h.post_job(token, expect=200)
-    _, session = h.call("POST", "/session", {"eventCode": "HACK", "handle": "alice"}, expect=200)
+    _, session = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"}, expect=200)
     assert "dogfood" not in session
     assert not [k for k in h.blobs.objects if k.startswith("dogfood/")]
 
@@ -51,7 +51,8 @@ def test_nothing_is_recorded_before_consent_and_consent_is_kept_once():
     h.call("POST", "/dogfood/consent", None, token, expect=204)
     consent = [json.loads(v) for k, v in objects(h, "dogfood/consent/").items()]
     assert len(consent) == 1 and consent[0]["handle"] == "alice" and consent[0]["participantId"].startswith("p_")
-    _, session = h.call("POST", "/session", {"eventCode": "HACK", "handle": "alice"}, expect=200)
+    assert consent[0]["team"] == "blue"  # from the token's "t" (personal workspaces)
+    _, session = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"}, expect=200)
     assert session["dogfood"] == {"consented": True}
     kinds = [e["kind"] for e in lines(h)]
     assert kinds == ["consent", "sign-in"]

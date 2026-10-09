@@ -30,12 +30,14 @@ import logging
 import math
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 import dogfood
 import library
 import names
 import own_keys
+import projects
 from contracts import Contracts, api
 from director.base import Director
 from providers import Registry
@@ -94,15 +96,13 @@ CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
 # X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
 PROJECT_ID = re.compile(r"^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$")
-DEFAULT_WORKSPACE = "event"
 KEY = re.compile(r"^[a-z][a-z0-9]{1,23}$")
-
-
-def workspace_of(codes: dict, code: str) -> str:
-    """The workspace an event code belongs to (EVENT_CODES "workspaces": {"CODE": "acme"})."""
-    mapped = {c.upper(): w for c, w in (codes.get("workspaces") or {}).items()}
-    return mapped.get(code, DEFAULT_WORKSPACE)
+# GET /clan/{project} answers with the bytes. A Lambda response is at most 6 MB once base64-encoded,
+# so a larger project is opened from an Export instead (features/personal-workspaces.clan).
+OPEN_MAX_BYTES = 4_300_000
+CANVAS_MAX_BYTES = 4_000_000
 SUBMITTING_STALE_S = 120       # a submit that never came back
+STITCH_BAD_CLIP = "bad_clip"   # stitch.py: a clip it could not read (the result names which)
 FETCH_LEASE_S = 90
 MAX_FETCH_ATTEMPTS = 3
 STATUS_ERRORS = {
@@ -115,6 +115,13 @@ STATUS_ERRORS = {
 
 def own_keys_unreadable(provider: str) -> str:
     return f"The relay can no longer read your {own_keys.NAMES.get(provider, provider)} key for this job. Try again."
+
+
+class Raw:
+    """A response that is not JSON (GET /clan/{project}: the .clan bytes), with its own headers."""
+
+    def __init__(self, data: bytes, mime: str, headers: dict | None = None):
+        self.data, self.mime, self.headers = data, mime, headers or {}
 
 
 class ApiError(Exception):
@@ -131,6 +138,19 @@ class ApiError(Exception):
         return {"error": err}
 
 
+def project_name(raw: str | None) -> str | None:
+    """X-Project-Name: the name Home shows, percent-encoded UTF-8. None when absent or unreadable."""
+    if not raw:
+        return None
+    from urllib.parse import unquote
+
+    try:
+        name = " ".join(unquote(raw, errors="strict").split())[:80]
+    except UnicodeDecodeError:
+        return None
+    return name or None
+
+
 def iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -139,8 +159,41 @@ def parse_iso(s: str) -> float:
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
 
 
-def participant_id(handle: str) -> str:
-    return "p_" + hashlib.sha256(handle.lower().encode()).hexdigest()[:10]
+def same_text(s: str) -> str:
+    """One spelling for a team or a name: Unicode NFKC, case folded, runs of spaces as one, trimmed.
+    'Blue Herons', 'blue  herons' and 'BLUE HERONS' are one team; 'ｔｅａｍ' is 'team'."""
+    return " ".join(unicodedata.normalize("NFKC", s).casefold().split())
+
+
+TEAM_MAX = 40
+
+
+def team_problem(team: str) -> str | None:
+    """Why a team name can't be used, or None. Anything a person might call their team is fine
+    (spaces, accents, any script, emoji, '&'), except '/' (it joins team and name in the workspace
+    key, so 'a/b' + 'c' would be 'a' + 'b/c') and control characters."""
+    t = same_text(team)
+    if len(t) < 2 or len(t) > TEAM_MAX:
+        return f"A team name is 2 to {TEAM_MAX} characters."
+    if "/" in t or any(unicodedata.category(c) in ("Cc", "Cf", "Cs") and c not in "\u200d\ufe0f" for c in t):
+        return "A team name can't have / or hidden characters in it."
+    return None
+
+
+def participant_id(team: str, handle: str) -> str:
+    """The team name and the name together, in one spelling (features/personal-workspaces.clan): two
+    Mayas in different teams are two workspaces. The team only makes the workspace unique; nothing is shared."""
+    return "p_" + hashlib.sha256(f"{same_text(team)}/{same_text(handle)}".encode()).hexdigest()[:10]
+
+
+def blocked_keys(team: str | None, handle: str) -> list[str]:
+    """What a block can name: the person (team/name), or a name in every team."""
+    return [handle] + ([f"{same_text(team)}/{same_text(handle)}"] if team else [])
+
+
+# The same team and name signed in from another browser this recently: probably two people who picked
+# the same name in one team (the one clash team names can't prevent). Sign-in says so; it never refuses.
+ELSEWHERE_S = 2 * 3600
 
 
 def asset_refs(node) -> list[dict]:
@@ -181,8 +234,8 @@ class Relay:
         self.dogfood = dogfood.Dogfood(blobs, clock)
 
     # ── HTTP ────────────────────────────────────────────────────────────────
-    def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | None, dict]:
-        """Returns (status, JSON body or None, log fields). Never raises."""
+    def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | Raw | None, dict]:
+        """Returns (status, body, log fields); the body is a JSON dict, Raw bytes, or None. Never raises."""
         start = self.clock()
         ctx: dict = {"method": method, "route": path}
         try:
@@ -196,7 +249,7 @@ class Relay:
             ctx["error"] = "internal"
         ctx["status"] = status
         ctx["latencyMs"] = int((self.clock() - start) * 1000)
-        if out and "state" in out:
+        if isinstance(out, dict) and "state" in out:
             ctx["state"] = out["state"]
             ctx.setdefault("jobId", out.get("jobId"))
             ctx.setdefault("op", out.get("op"))
@@ -250,8 +303,12 @@ class Relay:
             return 200, self.library_route(who, method, path, body, ctx)
         if method == "POST" and path == "/clan":
             self._not_blocked(who)
-            ctx["clanBytes"] = self.mirror_clan(who, headers, body)
-            return 204, None
+            saved = self.mirror_clan(who, headers, body, ctx)
+            return (200, saved) if saved else (204, None)
+        if method == "GET" and path == "/projects":
+            return 200, {"projects": [projects.public_row(r) for r in self._projects().list(who["pid"])]}
+        if path.startswith("/clan/"):
+            return self.project_route(who, method, path[len("/clan/"):], body, ctx)
         if method == "POST" and path == "/log":
             entry = self._json(body, "LogEntry")
             ctx.update({"clientLevel": entry["level"], "clientMessage": entry["message"][:500],
@@ -266,6 +323,11 @@ class Relay:
             data = json.loads(body or b"null")
         except (ValueError, UnicodeDecodeError):
             raise ApiError("invalid_input", "The body is not JSON.") from None
+        try:  # half an emoji (a lone surrogate) is valid JSON but not UTF-8: it broke the job later, as "uncertain"
+            json.dumps(data, ensure_ascii=False).encode("utf-8")
+        except UnicodeEncodeError:
+            raise ApiError("invalid_input", "The text has a broken character in it (half an emoji). "
+                           "Delete the last character and type it again.") from None
         errors = self.contracts.errors(api(schema), data)
         if errors:
             raise ApiError("invalid_input", f"Invalid {schema}: {errors[0]}")
@@ -283,7 +345,7 @@ class Relay:
         return payload
 
     def _not_blocked(self, who: dict) -> None:
-        if self.store.is_blocked(who["h"]):
+        if any(self.store.is_blocked(k) for k in blocked_keys(who.get("t"), who["h"])):
             raise ApiError("blocked", "This handle has been blocked by the organisers.")
 
     def _own_job(self, who: dict, job_id: str) -> dict:
@@ -347,6 +409,10 @@ class Relay:
                 "jobId": ctx.get("jobId"), "op": ctx.get("op"), "waiting": "queue_full", "status": status}))
             return
         name = route
+        project = heads.get("x-project-id")
+        if route.startswith("/clan/"):  # a saved project's routes (personal workspaces): one name each
+            project = project or route.split("/")[2]
+            name = "/clan/{project}/canvas" if route.endswith("/canvas") else "/clan/{project}"
         for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{key}")):
             if route.startswith(prefix):
                 name = label
@@ -360,7 +426,6 @@ class Relay:
             data["bytes"] = len(body)
         if route == "/clan":
             data["reason"] = heads.get("x-clan-reason")
-        project = heads.get("x-project-id")
         self._dog(lambda: self.dogfood.record(pid, "request", f"{method} {name}", data, project=project))
 
     def _dog_job(self, job: dict, before: str | None) -> None:
@@ -402,22 +467,42 @@ class Relay:
             role = "participant"
         else:
             raise ApiError("unauthorised", "That event code is not right.")
-        handle = req["handle"]
-        if self.store.is_blocked(handle):
+        handle, team = req["handle"], " ".join(req["team"].split())
+        problem = team_problem(team)
+        if problem:
+            raise ApiError("invalid_input", problem)
+        if any(self.store.is_blocked(k) for k in blocked_keys(team, handle)):
             raise ApiError("blocked", "This handle has been blocked by the organisers.")
-        pid = participant_id(handle)
+        pid = participant_id(team, handle)
         ctx["participant"] = pid
         exp = int(self.clock()) + SESSION_TTL_S
-        workspace = workspace_of(codes, code)
-        token = sign({"pid": pid, "h": handle, "r": role, "w": workspace, "exp": exp}, secrets["token_secret"])
-        out = {"token": token, "participantId": pid, "handle": handle, "role": role, "workspace": workspace,
-               "expiresAt": iso(exp), "quotas": self.remaining(pid, role)}
+        # Each name is its own workspace (features/personal-workspaces.clan): the library and the
+        # saved projects are the participant's, whatever code they signed in with.
+        token = sign({"pid": pid, "h": handle, "t": team, "r": role, "exp": exp}, secrets["token_secret"])
+        out = {"token": token, "participantId": pid, "handle": handle, "team": team, "role": role, "workspace": pid,
+               "expiresAt": iso(exp), "quotas": self.remaining(pid, role), "projects": self._projects().count(pid)}
+        elsewhere = self._seen(pid, req.get("device"))
+        if elsewhere:
+            out["elsewhere"] = {"at": elsewhere}
         if self._dog_on():
             consented = self.dogfood.consented(pid)
             out["dogfood"] = {"consented": consented}
             if consented:
-                self._dog(lambda: self.dogfood.record(pid, "sign-in", role, {"workspace": workspace}))
+                self._dog(lambda: self.dogfood.record(pid, "sign-in", role, {"team": team}))
         return out
+
+    def _seen(self, pid: str, device: str | None) -> str | None:
+        """Note this browser as the workspace's latest; return when another browser signed in to it, if
+        that was within ELSEWHERE_S. A browser that sends no device id is neither noted nor warned."""
+        if not device:
+            return None
+        key = f"clan/{pid}/seen.json"
+        last = self.blobs.get_json(key) or {}
+        now = self.clock()
+        self.blobs.put(key, json.dumps({"device": device, "at": now}).encode(), "application/json")
+        if last.get("device") and last["device"] != device and now - float(last.get("at", 0)) < ELSEWHERE_S:
+            return iso(int(last["at"]))
+        return None
 
     def _day(self) -> str:
         return iso(self.clock())[:10]
@@ -433,10 +518,18 @@ class Relay:
         url = self.blobs.public_url(key)
         if self.blobs.exists(key):
             return {"exists": True, "url": url}
+        made = f"out/{req['sha256']}"  # the relay made it: the browser need not send it back
+        if self.blobs.exists(made):
+            return {"exists": True, "url": self.blobs.public_url(made)}
         return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
 
-    def mirror_clan(self, who: dict, headers: dict, body: bytes | None) -> int:
-        """POST /clan: keep the participant's latest .clan (per project with X-Project-Id), plus a timestamped copy, for the organisers."""
+    def _projects(self) -> projects.Projects:
+        return projects.Projects(self.blobs, lambda: iso(self.clock()))
+
+    def mirror_clan(self, who: dict, headers: dict, body: bytes | None, ctx: dict) -> dict | None:
+        """POST /clan: keep the participant's .clan. With X-Project-Id it is a saved project
+        (projects.py): checked against If-Match, listed by GET /projects; answers ClanSaved.
+        Without it, the participant's own latest copy and a timestamped one, as before (None: 204)."""
         data = body or b""
         if len(data) > CLAN_MAX_BYTES:
             raise ApiError("invalid_input", "The document is larger than 5 MB.", status=413)
@@ -449,15 +542,54 @@ class Relay:
         project = headers.get("x-project-id")
         if project is not None and not PROJECT_ID.match(project):
             raise ApiError("invalid_input", "X-Project-Id is not a project id.")
-        base = f"clan/{who['pid']}/{project}" if project else f"clan/{who['pid']}"
-        stamp = iso(self.clock()).replace(":", "")
-        for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
-            self.blobs.put(key, data, CLAN_MIME)
-        return len(data)
+        ctx["clanBytes"] = len(data)
+        if not project:
+            base = f"clan/{who['pid']}"
+            stamp = iso(self.clock()).replace(":", "")
+            for key in (f"{base}/latest.clan", f"{base}/{stamp}-{reason}.clan"):
+                self.blobs.put(key, data, CLAN_MIME)
+            return None
+        ctx["project"] = project
+        try:
+            row = self._projects().save(who["pid"], project, data, reason,
+                                        if_match=projects.parse_if_match(headers.get("if-match")),
+                                        name=project_name(headers.get("x-project-name")))
+        except projects.Stale as e:
+            raise ApiError("conflict", str(e)) from None
+        except projects.Busy as e:
+            raise ApiError("conflict", str(e), retryable=True) from None
+        return {"project": projects.public_row(row)}
+
+    def project_route(self, who: dict, method: str, rest: str, body: bytes | None, ctx: dict):
+        """GET /clan/{project}: the saved bytes (Raw, with their ETag). GET|PUT /clan/{project}/canvas."""
+        project, _, sub = rest.partition("/")
+        if not PROJECT_ID.match(project) or sub not in ("", "canvas"):
+            raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
+        ctx["project"] = project
+        store = self._projects()
+        try:
+            if method == "GET" and not sub:
+                data, row = store.read(who["pid"], project)
+                if len(data) > OPEN_MAX_BYTES:
+                    raise ApiError("invalid_input", "This project is too large to open from the server. "
+                                   "Export it in the browser that made it, and open the file here.", status=413)
+                return 200, Raw(data, CLAN_MIME, {"ETag": f'"{row["etag"]}"', "X-Saved-At": row["savedAt"]})
+            if method == "GET":
+                return 200, store.canvas(who["pid"], project)
+            if method == "PUT" and sub:
+                self._not_blocked(who)
+                if len(body or b"") > CANVAS_MAX_BYTES:
+                    raise ApiError("invalid_input", "The canvas is larger than 4 MB.", status=413)
+                canvas = self._json(body, "ProjectCanvas")
+                store.put_canvas(who["pid"], project, {**canvas, "savedAt": iso(self.clock())})
+                return 204, None
+        except projects.Missing as e:
+            raise ApiError("invalid_input", str(e), status=404) from None
+        raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
 
     # ── the workspace library ───────────────────────────────────────────────
     def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
-        workspace = who.get("w") or DEFAULT_WORKSPACE
+        workspace = who["pid"]  # each name is its own workspace
         lib = library.Library(self.blobs, lambda: iso(self.clock()))
         if method == "GET" and path == "/library":
             return lib.index(workspace)
@@ -591,7 +723,8 @@ class Relay:
             off = "Region edits are switched off for now."
         elif op == "clip_edit" and (inp.get("region") or inp.get("mask")) and not flags["videoRegionEdit"]:
             off = "Region edits on video are switched off for now."
-        elif op == "clip_edit" and inp.get("feel") and not flags["feelEdit"]:
+        elif op == "clip_edit" and not (inp.get("region") or inp.get("mask")) and not flags["feelEdit"]:
+            # A clip_edit with no region and no mask is a feel edit, with or without a feel block.
             off = "Feel edits are switched off for now."
         elif op not in INTERNAL_OPS and not cfg["routing"].get(op):
             off = "This step is switched off for now."
@@ -605,6 +738,18 @@ class Relay:
         price = ((sheet or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
 
+    @staticmethod
+    def _check_frame(req: dict) -> None:
+        """A clip starts from a picture (its shot's frame), or a HeyGen clip from refs alone. Refused here,
+        before quota or spend, not later by the provider (a video as the frame reached Runway)."""
+        if req["op"] != "clip":
+            return
+        image = req["input"].get("image")
+        if image and not str(image.get("mime", "")).startswith("image/"):
+            raise ApiError("invalid_input", "A clip starts from a picture, and this shot's frame is not one. Draw the frame again.")
+        if not image and not req["input"].get("refs"):
+            raise ApiError("invalid_input", "This shot has no frame yet. Draw its frame first.")
+
     def create_job(self, who: dict, req: dict, own_header: str | None = None) -> dict:
         existing = self.store.get_job(req["jobId"])
         if existing:
@@ -616,6 +761,7 @@ class Relay:
         pick = req.get("modelChoice")
         own = self._own_candidates(cfg, op, own_header, pick)
         self._check_pick(cfg, op, pick, own)
+        self._check_frame(req)
         try:  # a misspelt @name is the participant's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
@@ -630,7 +776,8 @@ class Relay:
             prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
-        if estimate > 0 and self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
+        # Admitted only when this job fits under the cap: "spent < cap" let the last jobs pass it.
+        if estimate > 0 and self.store.counters("spend").get("usd", 0) + estimate > cfg["spend"]["capUsd"]:
             raise ApiError("spend_stop", "The event's generation budget is used up.")
 
         pid, role = who["pid"], who.get("r", "participant")
@@ -790,6 +937,8 @@ class Relay:
             return self._run_shot_list(job, cfg)
         if op == "stitch":
             return self._run_stitch(job, cfg)
+        if job.get("_notBefore", 0) > self.clock():  # its provider asked us to wait (a 429's Retry-After)
+            return self._with_poll(job)
         cls = self._slot_class(op)
         candidates = [p for p in self._job_candidates(cfg, job) if p not in job["_tried"]]
         if not candidates:
@@ -843,7 +992,7 @@ class Relay:
         first = job.get("fallbackReason") or ""
         name = PROVIDER_NAMES.get(FLOOR, FLOOR)
         if estimate > 0 and job["cost"].get("reserved", 0) == 0:
-            if self.store.counters("spend").get("usd", 0) >= cfg["spend"]["capUsd"]:
+            if self.store.counters("spend").get("usd", 0) + estimate > cfg["spend"]["capUsd"]:
                 return self._fail(job, "spend_stop", f"{first} {name} could not make it instead: the event's "
                                   "generation budget is used up.".strip(), paid=False, refund=True)
         cls = job["quotaClass"]
@@ -952,10 +1101,24 @@ class Relay:
                 sheet_only = job.get("_sheetOnly", True) and sheet
                 tried = job["_tried"] + [provider]
                 rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
+                retry_after = getattr(e, "retry_after_s", None)
+                if provider == FLOOR and not rest and not sheet and e.retryable and retry_after is not None:
+                    # Runway, the last of the chain, asked us to wait (a 429 with Retry-After; its adapter reads
+                    # the header only there): wait in the queue and send it there again then. It failed at once
+                    # before (2026-10-09); the queue timeout still bounds the wait. An outage still fails at once.
+                    wait = max(1, int(retry_after))
+                    back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
+                                      _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
+                    self.store.incr(slot, "n", -1)
+                    if back is None:
+                        return self._reload(job)
+                    return self._with_poll(back)
+                # Why the job left this provider, for the next one. The floor is the last: no "Runway could not
+                # make it" in front of "Runway cannot do this step either" (it said Runway twice, 2026-10-09).
+                reason = job.get("fallbackReason") or (could_not(provider, e.message) if rest else None)
                 back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
                                   _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
-                                  _sheetOnly=sheet_only, _floorSheet=sheet,
-                                  fallbackReason=job.get("fallbackReason") or could_not(provider, e.message),
+                                  _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason,
                                   keySource="own" if rest and self._on_own(job, rest[0]) else "event")
                 self.store.incr(slot, "n", -1)
                 if back is None:
@@ -1074,8 +1237,13 @@ class Relay:
             return self._with_poll(job)
         if state == "queued":  # waiting since it was made, or since it fell back to the floor
             if now - job.get("_queuedAt", parse_iso(job["createdAt"])) > self._timeout_s(cfg, job):
-                return self._fail(job, "timeout", "Waited too long for a free slot. Try again.",
-                                  retryable=True, paid=False, refund=True)
+                message = "Waited too long for a free slot. Try again."
+                if job.get("_notBefore") and job.get("_lastError"):  # waiting on a busy provider: say which, and why
+                    busy, _, detail = job["_lastError"].partition(": ")
+                    message = f"{PROVIDER_NAMES.get(busy, busy)} could not take it in time ({detail}). Try again."
+                    if job.get("fallbackReason"):
+                        message = f"{job['fallbackReason']} {message}"
+                return self._fail(job, "timeout", message, retryable=True, paid=False, refund=True)
             return self._dispatch(job, cfg)
         if state == "submitting":
             if now - parse_iso(job["updatedAt"]) > SUBMITTING_STALE_S:
@@ -1092,7 +1260,11 @@ class Relay:
                 self._adapter(job).cancel(job["requestId"])
             except Exception:
                 log.exception("cancel after timeout failed")
-            return self._fall_back(job, cfg, "timeout", "The provider took too long. Try again.", retryable=True)
+            # Never seen running (it sat in the provider's queue, THROTTLED at Runway): nothing was made, so
+            # neither the event's spend nor the participant's quota is kept for it (2026-10-09).
+            never_ran = {} if job.get("_ran") else {"paid": False, "refund": True}
+            return self._fall_back(job, cfg, "timeout", "The provider took too long. Try again.", retryable=True,
+                                   **never_ran)
         if state == "submitted" and now < job.get("_nextCheckAt", 0):
             return self._with_poll(job)
         adapter = self._adapter(job)
@@ -1109,7 +1281,8 @@ class Relay:
             saved = self._save(job, _nextCheckAt=now + min_poll)
             return self._with_poll(saved or job)
         if st.state in ("queued", "running"):
-            saved = self._save(job, state="submitted", queuePosition=st.queue_position, _nextCheckAt=now + min_poll)
+            saved = self._save(job, state="submitted", queuePosition=st.queue_position, _nextCheckAt=now + min_poll,
+                               _ran=bool(job.get("_ran")) or st.state == "running")
             return self._with_poll(saved or job)
         if st.state == "moderated":
             return self._fail(job, "moderated", st.error_message or "The provider refused this content.",
@@ -1118,8 +1291,13 @@ class Relay:
             return self._finish(job, "cancelled")
         if st.state == "failed":
             code = st.error_code if st.error_code in STATUS_ERRORS else "provider_failed"
+            # The adapter knows whether trying again can help (INTERNAL.BAD_OUTPUT cannot); it said
+            # "retryable" regardless before. The provider's or our failure gives the quota back; the
+            # event's spend stays reserved, since the provider may have billed it (2026-10-09).
+            retryable = st.retryable if st.retryable is not None else code != "moderated"
+            theirs = st.source != "input" and code not in ("moderated", "invalid_input")
             return self._fall_back(job, cfg, code, st.error_message or "The provider could not make this.",
-                                   retryable=code != "moderated", provider_code=st.provider_code)
+                                   retryable=retryable, provider_code=st.provider_code, refund=theirs)
         return self._fetch(job, st, now)
 
     def _fetch(self, job: dict, st, now: float) -> dict:
@@ -1155,13 +1333,18 @@ class Relay:
 
     def _advance_stitch(self, job: dict, cfg: dict, now: float) -> dict:
         result = self.blobs.get_json(f"ads/{job['jobId']}.json")
+        # A render that failed, timed out or was cancelled made no ad: the day's render comes back (refund).
         if result is None:
             if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
-                return self._fail(job, "timeout", "Stitching took too long. Try again.", retryable=True, paid=False)
+                return self._fail(job, "timeout", "Stitching took too long. Try again.", retryable=True, paid=False,
+                                  refund=True)
             return self._with_poll(job)
         if not result.get("ok"):
+            if result.get("code") == STITCH_BAD_CLIP:  # a clip it cannot read: render again fails the same way
+                return self._fail(job, "invalid_input", result.get("error", "A clip could not be read.")[:300],
+                                  paid=False, refund=True)
             return self._fail(job, "provider_failed", result.get("error", "Stitching failed.")[:300],
-                              retryable=True, paid=False)
+                              retryable=True, paid=False, refund=True)
         out = {"sha256": result["sha256"], "url": self.blobs.public_url(f"ads/{job['jobId']}.mp4"),
                "mime": "video/mp4", "bytes": result["bytes"]}
         for k in ("w", "h", "durationS"):
@@ -1174,10 +1357,12 @@ class Relay:
         if state == "queued":
             return self._finish(job, "cancelled", paid=False, refund=True)
         if state in ("submitted", "uncertain"):
+            if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back
+                return self._finish(job, "cancelled", paid=False, refund=True)
             # Uncertain: no answer in time, so the provider may have it. Stop waiting: cancel it there
             # if we know its id, and never send it again (2026-10-09: a 30 s upload left a job
             # "Checking…" with no way out).
-            if job["op"] != "stitch" and job.get("provider") and job.get("requestId"):
+            if job.get("provider") and job.get("requestId"):
                 try:
                     self._adapter(job).cancel(job["requestId"])
                 except Exception:

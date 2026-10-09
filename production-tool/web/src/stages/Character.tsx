@@ -4,7 +4,7 @@
 // click), Name (key_variant, like @maya_laughing), Set as front, and Make the
 // other views. Curved arrows show what each result was made from. The dock
 // below lists the named references (solid keys), publishes them to the
-// workspace library, imports from it, and cleans up unused pictures.
+// person's library (their own, from any project), imports from it, and cleans up unused pictures.
 
 import { Excalidraw, getSceneVersion, sceneCoordsToViewportCoords, viewportCoordsToSceneCoords } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
@@ -59,6 +59,11 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
   const ctrl = useMemo(() => (api ? new CanvasController(api, services) : null), [api, services])
+  // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
+  useEffect(() => {
+    if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
+  }, [ctrl])
+
   // Switching project or going Home: the canvas is saved first (features/project-home.clan).
   useEffect(() => {
     if (!ctrl) return
@@ -658,7 +663,7 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
       </div>
       <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
         <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => setLibrary(true)} disabled={!ctrl} title="Characters and objects your team published">Team library</button>
+          <button className="btn sm" onClick={() => setLibrary(true)} disabled={!ctrl} title="Characters and objects you published, for any of your projects">Your library</button>
           <button className="btn sm ghost" onClick={startCleanUp} title="Remove pictures nothing uses any more">Clean up</button>
         </div>
         {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void cleanUp(cleaning)} onNo={() => setCleaning(null)} />}
@@ -701,10 +706,10 @@ function KeyRow({ k, ctrl, views }: { k: KeyEntry; ctrl: CanvasController | null
         {refs.map((r) => <Variant key={r.id} r={r} onShow={() => r.node && ctrl?.scrollTo(r.node)} />)}
       </div>
       {views && front && missingViews.length > 0 && <button className="btn xs" disabled={!!busy || !ctrl} onClick={() => run('views', () => ctrl!.makeViews(k.key, missingViews))}>{busy === 'views' ? 'Starting…' : 'Make views'}</button>}
-      <button className="btn xs" disabled={!!busy || !ctrl || !refs.length} title="Share this key with your team" onClick={() => run('publish', () => ctrl!.publish(k.key))}>
+      <button className="btn xs" disabled={!!busy || !ctrl || !refs.length} title="Keep this key in your library, for your other projects" onClick={() => run('publish', () => ctrl!.publish(k.key))}>
         {busy === 'publish' ? 'Publishing…' : k.library ? `Publish v${k.library.ver + 1}` : 'Publish'}
       </button>
-      {k.library && <span className="faint" style={{ fontSize: 11.5 }}>v{k.library.ver} · {k.library.workspace}</span>}
+      {k.library && <span className="faint" style={{ fontSize: 11.5 }}>v{k.library.ver} in your library</span>}
       {error && <span role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>{error}</span>}
     </div>
   )
@@ -743,14 +748,14 @@ function LibraryPanel({ ctrl, onClose }: { ctrl: CanvasController; onClose: () =
   return (
     <div className="candidates library" onPointerDown={(e) => e.stopPropagation()}>
       <div className="row">
-        <b>Team library{index ? ` · ${index.workspace}` : ''}</b>
-        <span className="faint" style={{ fontSize: 12 }}>Characters and objects your team published. Importing copies them in.</span>
+        <b>Your library</b>
+        <span className="faint" style={{ fontSize: 12 }}>Characters and objects you published from any of your projects. Importing copies them in.</span>
         <span className="spacer" />
         <button className="btn xs ghost" onClick={onClose}>Close</button>
       </div>
       {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600 }}>{error}</div>}
       {!index && !error && <span className="faint" style={{ fontSize: 12.5 }}>Loading…</span>}
-      {index && !index.keys.length && <span className="faint" style={{ fontSize: 12.5 }}>Nothing yet. Publish a key from References to share it.</span>}
+      {index && !index.keys.length && <span className="faint" style={{ fontSize: 12.5 }}>Nothing yet. Publish a key from References to use it in your other projects.</span>}
       <div className="grid">
         {index?.keys.map((k) => {
           const mine = doc.keys.find((x) => x.key === k.key)

@@ -7,8 +7,7 @@ Run by a person with AWS access; there is no page for it. Nothing expires on its
            line) and in time order across people, as JSON lines; each line gains the person's
            handle (and team) from their consent record.
              --date YYYY-MM-DD   one day          --participant PID [...]   those people
-             --name 'Team/Name'  as people sign in (any case and spacing; a name alone matches
-                                 a record without a team)
+             --name 'Team/Name'  as people sign in (any case and spacing)
              --raw               as stored, unfolded          --out FILE (default: stdout)
   prune    deletes the record. A DRY RUN by default: it lists what it would delete and writes the
            same as a JSON report. --yes deletes every version of every key (the bucket is
@@ -32,7 +31,6 @@ import argparse
 import json
 import os
 import sys
-import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,11 +39,7 @@ RELAY = HERE.parent
 sys.path.insert(0, str(RELAY))
 
 from dogfood import CONSENT, EVENTS, fold_lines  # noqa: E402
-
-
-def same_text(s: str) -> str:
-    """One spelling for a team or a name, as the relay compares them (NFKC, case folded, one space)."""
-    return " ".join(unicodedata.normalize("NFKC", s).casefold().split())
+from service import participant_id  # noqa: E402
 
 
 class S3Source:
@@ -108,16 +102,14 @@ def consents(src) -> dict[str, dict]:
     return out
 
 
-def resolve(src, pids: list[str] | None, names: list[str] | None) -> set[str]:
-    """Participant ids for --participant and --name ('Team/Name', or a name alone)."""
+def resolve(pids: list[str] | None, names: list[str] | None) -> set[str]:
+    """Participant ids for --participant and --name 'Team/Name' (as people sign in, any case and
+    spacing): the relay's own participant_id, as scripts/prune_workspaces.py does."""
     chosen = set(pids or [])
     for spec in names or []:
-        team, _, name = spec.rpartition("/")
-        for pid, rec in consents(src).items():
-            if same_text(rec.get("handle") or "") != same_text(name):
-                continue
-            if (same_text(rec.get("team") or "") if team else "") == (same_text(team) if team else ""):
-                chosen.add(pid)
+        if "/" not in spec:
+            raise SystemExit(f"--name takes 'Team/Name', not {spec!r}")
+        chosen.add(participant_id(*spec.split("/", 1)))
     return chosen
 
 
@@ -197,14 +189,14 @@ def main(argv=None) -> int:
 
     src = LocalSource(Path(a.local)) if a.local else S3Source(os.environ["BUCKET"])
     if a.cmd == "export":
-        people = resolve(src, a.participant, a.name) if (a.participant or a.name) else None
+        people = resolve(a.participant, a.name) if (a.participant or a.name) else None
         text = "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in export(src, date=a.date, participants=people, raw=a.raw))
         if a.out:
             Path(a.out).write_text(text)
         else:
             sys.stdout.write(text)
         return 0
-    people = resolve(src, a.participant, a.name) if (a.participant or a.name) else None
+    people = resolve(a.participant, a.name) if (a.participant or a.name) else None
     if people is not None and not people:
         print("No one matches.", file=sys.stderr)
         return 1

@@ -1,7 +1,10 @@
 """Where artifacts live: S3 behind CloudFront (Lambda) or a local directory
 served by the dev server. Keys: in/sha256:<hex> (uploads), out/sha256:<hex>
 (provider outputs), ads/<jobId>.mp4 and ads/<jobId>.json (stitch),
-library/<workspace>/… (the workspace library, library.py)."""
+library/<participantId>/… (the person's library, library.py), clan/<participantId>/… (saved
+projects, projects.py) and cards/<hex>.json (cards.py).
+
+get, list_keys and delete are for reading a saved project back and for scripts/prune_workspaces.py."""
 
 from __future__ import annotations
 
@@ -9,6 +12,7 @@ import hashlib
 import json
 import threading
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 FETCH_TIMEOUT_S = 60
@@ -101,6 +105,25 @@ class S3Blobs:
             return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
         return http_fetch(url)
 
+    def get(self, key: str) -> bytes | None:
+        try:
+            return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+        except self.s3.exceptions.NoSuchKey:
+            return None
+
+    def list_keys(self, prefix: str) -> list[dict]:
+        """Every object under prefix: {key, bytes, modified (UTC ISO)}."""
+        out = []
+        for page in self.s3.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix):
+            for o in page.get("Contents", []):
+                out.append({"key": o["Key"], "bytes": o["Size"],
+                            "modified": o["LastModified"].astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+        return out
+
+    def delete(self, keys: list[str]) -> None:
+        for i in range(0, len(keys), 1000):
+            self.s3.delete_objects(Bucket=self.bucket, Delete={"Objects": [{"Key": k} for k in keys[i:i + 1000]], "Quiet": True})
+
 
 class LocalBlobs:
     """Files under a directory, served by local.py at public_base."""
@@ -163,3 +186,27 @@ class LocalBlobs:
         if key:
             return self.path(key).read_bytes()
         return http_fetch(url)
+
+    def get(self, key: str) -> bytes | None:
+        p = self.path(key)
+        return p.read_bytes() if p.exists() else None
+
+    def list_keys(self, prefix: str) -> list[dict]:
+        """Every file under prefix (not the .mime notes beside them): {key, bytes, modified}."""
+        root = self.root.resolve()
+        out = []
+        for p in sorted(root.rglob("*")):
+            if not p.is_file() or p.name.endswith(".mime"):
+                continue
+            key = p.relative_to(root).as_posix()
+            if key.startswith(prefix):
+                st = p.stat()
+                out.append({"key": key, "bytes": st.st_size,
+                            "modified": datetime.fromtimestamp(st.st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+        return out
+
+    def delete(self, keys: list[str]) -> None:
+        for k in keys:
+            p = self.path(k)
+            for f in (p, p.with_name(p.name + ".mime")):
+                f.unlink(missing_ok=True)

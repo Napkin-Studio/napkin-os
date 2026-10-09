@@ -361,20 +361,42 @@ export type CustomData =
 
 // ── relay-api.schema.json ───────────────────────────────────────────────────
 
-export interface SessionRequest { eventCode: string; handle: string }
+/** team + handle make the workspace (features/personal-workspaces.clan); device is a random id this
+ *  browser keeps, to warn when the same team and name signed in from another browser. */
+export interface SessionRequest { eventCode: string; team: string; handle: string; device?: string }
 
 export interface SessionResponse {
   token: string
   participantId: string
   handle: string
   role: 'participant' | 'organiser'
-  /** The team the event code belongs to; the library is shared within it. */
+  /** The participant's own workspace (its participantId): the library and saved projects are kept in it. */
   workspace: string
   expiresAt: string
   quotas: { image: number; video: number; render: number }
   /** Only while flags.dogfood is on: whether this participant has read the beta notice. */
   dogfood?: { consented: boolean }
+  /** How many projects this name has saved on the relay ("Welcome back, Maya: 3 projects"). */
+  projects: number
+  /** The team name as typed: with the handle it makes the workspace unique. */
+  team?: string
+  /** Another browser signed in with this team and name within 2 hours (probably a second person). */
+  elsewhere?: { at: string }
 }
+
+/** One of the person's saved projects (GET /projects, POST /clan with X-Project-Id). */
+export interface SavedProject {
+  id: Id
+  name?: string
+  savedAt: string
+  bytes: number
+  /** SHA-256 (hex) of the saved .clan: If-Match on the next save. */
+  etag: string
+}
+export interface ProjectList { projects: SavedProject[] }
+export interface ClanSaved { project: SavedProject }
+/** The canvas that goes with a saved project (elements only; pictures come back from the assets). */
+export interface ProjectCanvas { elements: unknown[]; savedAt?: string }
 
 export interface UploadRequest { sha256: Sha256; mime: InputMime; bytes: number }
 export interface UploadResponse { exists: boolean; putUrl?: string; url: string }
