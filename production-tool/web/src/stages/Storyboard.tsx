@@ -123,7 +123,7 @@ export function Storyboard() {
               ))}
             </div>
             <div className="row">
-              <button className="btn primary" disabled={planning || !ui.scriptDraft.trim()} onClick={plan}>{planning ? 'Planning…' : shots.length ? 'Plan again' : 'Plan shots'}</button>
+              <button className="btn primary" disabled={planning || !ui.scriptDraft.trim()} onClick={() => void attempt(plan)}>{planning ? 'Planning…' : shots.length ? 'Plan again' : 'Plan shots'}</button>
               {!doc.refs.length && <span className="faint" style={{ fontSize: 12 }}>Name an image on the canvas first, like @maya_front.</span>}
             </div>
             {planJob && <div style={{ height: 120, borderRadius: 12, overflow: 'hidden' }}><JobNode jobId={planJob} /></div>}
