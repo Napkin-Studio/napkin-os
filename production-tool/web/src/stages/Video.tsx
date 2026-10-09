@@ -10,6 +10,7 @@ import { assetRef } from '../jobs/assets'
 import { isRunning, jobAt } from '../jobs/select'
 import { makeClip as submitClip, renderAd } from '../jobs/clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
+import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, takeStale } from '../jobs/stale'
 import { adBehindLabel, behindLabel } from '../ui/behind'
 import { rectToRegion } from '../lib/region'
@@ -39,7 +40,7 @@ export function Video() {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   useJobsTick()
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const shots = doc.shots ?? []
@@ -55,14 +56,14 @@ export function Video() {
   const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch')
   const latestAd = (doc.exports ?? []).filter((e) => e.kind === 'ad_mp4').at(-1)
 
-  const makeClip = (s: Shot) => submitClip(deps, s.id)
+  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, opts)
 
   const makeAll = async () => {
     setError(null)
     try {
       for (const s of shots) {
         if (takesOf(takes, s.id).length || isRunning(doc, clipJob(s.id))) continue
-        await makeClip(s)
+        await makeClip(s, { modelChoice: choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)) })
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -114,7 +115,7 @@ export function Video() {
           {shots.map((s, i) => (
             <ShotCard key={s.id} shot={s} index={i} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
               onSelect={() => { setShotId(s.id); setMode('shot') }}
-              onMake={() => makeClip(s).catch((e) => setError(e instanceof Error ? e.message : 'That did not work.'))} />
+              onMake={(opts) => makeClip(s, opts)} />
           ))}
           <button className={`shotcard ${mode === 'all' ? 'sel' : ''}`} style={{ flexBasis: 140 }} disabled={!allTaken} onClick={() => setMode('all')}>
             <div className="thumb" style={{ display: 'grid', placeItems: 'center', fontWeight: 700, color: 'var(--ink2)' }}>▶ All shots</div>
@@ -134,7 +135,47 @@ export function Video() {
   )
 }
 
-function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Shot; index: number; selected: boolean; jobId?: string; onSelect: () => void; onMake: () => void }) {
+/** Make clip's box (like the update box): words for this clip only, the model, "Make it". */
+function MakeClipBox({ index, onMake }: { index: number; onMake: (opts: { text?: string; modelChoice?: ModelChoice }) => Promise<unknown> }) {
+  const doc = useDoc()
+  const { config } = useConfig()
+  const [text, setText] = useState('')
+  const [pick, setPick] = useState<ModelChoice | undefined>()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const choice = pick ?? lastWorkedModel(doc, 'clip', config)
+  const make = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await onMake({ ...(text.trim() ? { text: text.trim() } : {}), modelChoice: choiceToSend('clip', config, choice) })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="stack clipbox-body" onClick={(e) => e.stopPropagation()}>
+      <div className="fhead">Shot {index + 1} · clip</div>
+      <textarea className="textarea" rows={2} maxLength={1000} autoFocus value={text} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !busy && void make()}
+        placeholder="Add words for this clip only (optional)" />
+      <ModelPick op="clip" value={choice} onChange={setPick} />
+      {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button className="btn sm primary" disabled={busy} onClick={() => void make()}>{busy ? 'Sending…' : 'Make it'}</button>
+      </div>
+    </div>
+  )
+}
+
+function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
+  shot: Shot; index: number; selected: boolean; jobId?: string; onSelect: () => void
+  onMake: (opts: { text?: string; modelChoice?: ModelChoice }) => Promise<unknown>
+}) {
+  const makeRef = useRef<HTMLButtonElement>(null)
+  const [making, setMaking] = useState(false)
   const { doc: docStore } = useServices()
   const doc = useDoc()
   const takes = takesOf(doc.takes ?? [], shot.id)
@@ -171,7 +212,10 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
                 }, 'pick take')
               }}>v{i + 1}</button>
           ))}
-          {!takes.length && !jobId && <button className="btn xs" onClick={(e) => { e.stopPropagation(); onMake() }}>Make clip</button>}
+          {!takes.length && !jobId && <button ref={makeRef} className="btn xs" aria-haspopup="dialog" aria-expanded={making} onClick={(e) => { e.stopPropagation(); setMaking(!making) }}>Make clip</button>}
+          <Float anchor={makeRef} open={making} onClose={() => setMaking(false)} role="dialog" label={`Make the clip for shot ${index + 1}`} className="clipbox">
+            {making && <MakeClipBox index={index} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
+          </Float>
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
         </div>
         {(stale || open > 0) && (

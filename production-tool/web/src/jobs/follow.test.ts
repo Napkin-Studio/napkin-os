@@ -456,6 +456,19 @@ describe('Update what follows', () => {
     expect(lastWorkedModel(s.doc.get(), 'clip', own)).toEqual({ provider: 'fal', model: 'veo3.1-fast-i2v' })
   })
 
+  it('starts on a real provider, not on mock, when one is offered', async () => {
+    // 2026-10-09: mock stills were the last clips that "worked", so an update run sent clips to mock again.
+    const s = await setup(1)
+    await s.makeAll(false)
+    const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['fal', 'mock'] as const } } as unknown as typeof CONFIGS.testing
+    await updateDoc(s.doc, (d) => {
+      for (const j of d.jobs) if (j.op === 'clip') Object.assign(j, { provider: 'mock', model: 'mock', state: 'completed' })
+    })
+    expect(lastWorkedModel(s.doc.get(), 'clip', own)?.provider).toBe('fal')
+    const mockOnly = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['mock'] as const } } as unknown as typeof CONFIGS.testing
+    expect(lastWorkedModel(s.doc.get(), 'clip', mockOnly)?.provider).toBe('mock') // nothing real offered: mock still answers
+  })
+
   it('leaves a shot that a fix is redoing alone: not out of date in the plan while the fix runs', async () => {
     const s = await setup(2)
     await s.makeAll(false)

@@ -125,13 +125,17 @@ export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx |
  *  starts, so a provider that just failed (out of credit) is not tried again by default. */
 export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, sheets?: Sheets): ModelChoice | undefined {
   const offered = modelChoicesFor(op, config, sheets)
+  // A mock result "worked" only as a stand-in: a real provider on offer goes first (2026-10-09:
+  // an update run sent clips to mock again after mock stills, with a fal key there).
+  const real = offered.some((o) => o.provider !== 'mock')
   for (let i = d.jobs.length - 1; i >= 0; i--) {
     const j = d.jobs[i]
-    if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model) continue
+    if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model || (real && j.provider === 'mock')) continue
     const o = offered.find((x) => x.provider === j.provider && x.model === j.model)
     if (o) return { provider: o.provider, model: o.model }
   }
-  return offered[0] && { provider: offered[0].provider, model: offered[0].model }
+  const first = offered.find((o) => !real || o.provider !== 'mock')
+  return first && { provider: first.provider, model: first.model }
 }
 
 /** What a run sends per step at the start: the last model that worked (none: the routed default). */
