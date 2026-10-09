@@ -254,6 +254,20 @@ export class JobRunner {
     })
   }
 
+  /** Keep where the relay meant to run the job, when it made it elsewhere (Runway, after HeyGen or
+   *  fal could not), beside the job's purpose: the card says "Made on Runway: HeyGen could not". */
+  private noteFallback(job: Job) {
+    const ctx = this.ui.get().jobCtx[job.jobId]
+    if (!ctx || !job.fallbackFrom) return
+    if (ctx.fallbackFrom?.provider === job.fallbackFrom.provider && ctx.fallbackReason === job.fallbackReason) return
+    this.ui.update((u) => {
+      const c = u.jobCtx[job.jobId]
+      if (!c) return
+      c.fallbackFrom = { provider: job.fallbackFrom!.provider, model: job.fallbackFrom!.model }
+      if (job.fallbackReason) c.fallbackReason = job.fallbackReason
+    })
+  }
+
   private apply(job: Job) {
     normalisePromptVersion(job)
     const done = job.state === 'completed'
@@ -267,6 +281,7 @@ export class JobRunner {
     if (job.director) patch.agent = job.director
     if (job.error) patch.error = job.error
     this.patchDocJob(job.jobId, patch)
+    this.noteFallback(job)
     this.emit()
     if (done) void this.complete(job)
     else if (isActive(job.state)) this.schedule(job.jobId, job.nextPollS ?? 2)

@@ -4,8 +4,9 @@
 // AgentKind 'director'), in the tool's cobalt. Ellis and Jude are the house sheet's,
 // with the same names and looks as in every app.
 
-import type { DocJob, JobState } from '../../contracts/types'
+import type { DocJob, JobState, ModelChoice } from '../../contracts/types'
 import type { JobPurpose } from '../../doc/ui'
+import { fellBack } from '../modelChoice'
 
 export type CastKey = 'dex' | 'ellis' | 'jude'
 export type AgentState = 'idle' | 'working' | 'needs-you'
@@ -60,14 +61,18 @@ const VERB: Partial<Record<DocJob['op'], string>> = { shot_list: 'planning', gen
 /**
  * Who is shown for a job, and the line under them: Dex while it is made, Jude while it
  * is checked and when it failed (needs you). Words only; the job is not touched.
+ * A job the relay made on Runway after HeyGen or fal could not says so (features/runway-fallback.clan).
  */
-export function whoIsWorking(job: Pick<DocJob, 'op'>, state: JobState, ctx?: JobPurpose, shotOrder?: number): { agent: CastKey; state: AgentState; line: string } {
+export function whoIsWorking(job: Pick<DocJob, 'op'> & Partial<Pick<DocJob, 'provider'>>, state: JobState,
+  ctx?: JobPurpose & { fallbackFrom?: ModelChoice }, shotOrder?: number): { agent: CastKey; state: AgentState; line: string } {
   const what = jobWhat(job, ctx, shotOrder)
   if (FAILED.includes(state)) return { agent: 'jude', state: 'needs-you', line: state === 'cancelled' ? `${capital(what)} was stopped` : `${capital(what)} did not come back` }
-  if (state === 'validating' || state === 'uncertain') return { agent: 'jude', state: 'working', line: `Jude is checking ${what}` }
-  if (state === 'completed') return { agent: 'dex', state: 'idle', line: `Dex made ${what}` }
+  const moved = fellBack(ctx?.fallbackFrom, job.provider)
+  const note = moved ? ` · ${moved}` : ''
+  if (state === 'validating' || state === 'uncertain') return { agent: 'jude', state: 'working', line: `Jude is checking ${what}${note}` }
+  if (state === 'completed') return { agent: 'dex', state: 'idle', line: `Dex made ${what}${note}` }
   const verb = VERB[job.op] ?? 'making'
-  return { agent: 'dex', state: 'working', line: state === 'queued' ? `Dex is waiting to start ${what}` : `Dex is ${verb} ${what}` }
+  return { agent: 'dex', state: 'working', line: (state === 'queued' ? `Dex is waiting to start ${what}` : `Dex is ${verb} ${what}`) + note }
 }
 
 const capital = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)

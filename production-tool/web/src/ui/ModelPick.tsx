@@ -2,7 +2,7 @@
 // which model makes the next version. A chip that opens a floating list: each model
 // with its provider, note and price. It appears only where a version is made again;
 // a first draw runs the routed default. The relay checks every pick, and falls back
-// to config.fallbackOnly when the picked provider cannot take the job.
+// to Runway's default when the picked provider cannot make it (features/runway-fallback.clan).
 
 import { useCallback, useRef, useState } from 'react'
 import { useConfig } from '../app/context'

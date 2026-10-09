@@ -108,21 +108,39 @@ def test_job_id_of_someone_else_is_refused(h):
     assert h.poll(h.sign_in("bob"), jid, expect=404)
 
 
-def test_submit_that_raises_becomes_uncertain_and_is_never_resent(h):
+def test_submit_that_raises_is_never_resent_there_and_is_made_on_runway(h):
+    # Was "becomes uncertain and is never resent": since 2026-10-09 uncertain on a provider in front of
+    # Runway falls back to Runway, once (features/runway-fallback.clan). fal is never sent it again.
     token = h.sign_in()
     h.providers["fal"].submit_effect = TimeoutError("read timed out")
     jid = new_id("job")
     _, out = h.post_job(token, job_id=jid, expect=200)
-    assert out["state"] == "uncertain" and out["error"]["code"] == "uncertain"
+    assert (out["state"], out["provider"]) == ("submitted", "runway")
+    assert "fal may still charge" in out["fallbackReason"]
     h.providers["fal"].submit_effect = None
     _, again = h.post_job(token, job_id=jid, expect=200)
-    assert again["state"] == "uncertain"
-    assert len(h.providers["fal"].submits) == 1
-    assert len(h.providers["runway"].submits) == 0  # never routed elsewhere either
-    assert h.store.counters(f"inflight#{out['participantId']}")["n"] == 0
+    assert again["provider"] == "runway"
+    assert len(h.providers["fal"].submits) == 1 and len(h.providers["runway"].submits) == 1
     assert h.store.counters("slots#fal#image")["n"] == 0
+    # fal's reserved spend stays counted (it may have been paid), plus Runway's estimate
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.15 + 0.2)
+
+
+def test_submit_that_raises_on_the_floor_becomes_uncertain_and_is_never_resent():
+    h = Harness(base_config(routing={**base_config()["routing"], "generate": ["runway"]}))
+    token = h.sign_in()
+    h.providers["runway"].submit_effect = TimeoutError("read timed out")
+    jid = new_id("job")
+    _, out = h.post_job(token, job_id=jid, expect=200)
+    assert out["state"] == "uncertain" and out["error"]["code"] == "uncertain"
+    h.providers["runway"].submit_effect = None
+    _, again = h.post_job(token, job_id=jid, expect=200)
+    assert again["state"] == "uncertain"
+    assert len(h.providers["runway"].submits) == 1 and not h.providers["fal"].submits
+    assert h.store.counters(f"inflight#{out['participantId']}")["n"] == 0
+    assert h.store.counters("slots#runway#image")["n"] == 0
     # the reserved spend stays counted: it may have been paid
-    assert h.store.counters("spend")["usd"] == pytest.approx(0.15)
+    assert h.store.counters("spend")["usd"] == pytest.approx(0.2)
 
 
 def test_completed_job_copies_outputs_to_s3_and_hashes_them(h):
@@ -157,12 +175,14 @@ def test_polls_respect_min_poll(h):
     assert len(h.providers["fal"].status_calls) == 1
 
 
-def test_provider_failure_never_becomes_success(h):
+def test_provider_failure_never_becomes_success():
+    # Runway alone, the floor: a failure there ends the job (fal failing falls back, test_runway_fallback.py).
+    h = Harness(base_config(routing={**base_config()["routing"], "generate": ["runway"]}))
     token = h.sign_in()
     _, job = h.post_job(token, expect=200)
-    h.providers["fal"].states[job["requestId"]] = Status(state="failed", error_code="provider_failed",
-                                                         error_message="boom", provider_code="E1")
-    h.clock.tick(3)
+    h.providers["runway"].states[job["requestId"]] = Status(state="failed", error_code="provider_failed",
+                                                            error_message="boom", provider_code="E1")
+    h.clock.tick(6)
     out = h.poll(token, job["jobId"])
     assert out["state"] == "failed" and out["error"]["code"] == "provider_failed"
     assert "outputs" not in out

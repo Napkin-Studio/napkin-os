@@ -158,9 +158,10 @@ export interface Flags {
 
 export interface Config {
   contractVersion: ContractVersion
+  /** For the event every op routes to ['runway']: Runway is the floor of every job, and fal and
+   *  HeyGen come only from own keys (features/runway-fallback.clan). The schema's deprecated
+   *  fallbackOnly is no longer read. */
   routing: Partial<Record<Op, Provider[]>>
-  /** Never offered in the regenerate menu; a failed pick falls back to them. */
-  fallbackOnly?: Provider[]
   director: { promptVersion: string; perClickModel: string; shotListModel: string }
   quotas: { image: number; video: number; render: number }
   inFlightPerParticipant: number
@@ -420,8 +421,11 @@ export interface Job {
   /** Whose key runs the job (the participant's X-Own-Keys, or the event's). */
   keySource?: 'own' | 'event'
   model?: string
-  /** The pick this job was meant to run on, when it fell back to another provider. */
+  /** Where this job was meant to run (a pick, or its chain's first provider), when it ran on
+   *  another provider instead: Runway, the floor, after HeyGen or fal could not make it. */
   fallbackFrom?: ModelChoice
+  /** Why it left fallbackFrom, in a participant's words; says when that provider may still charge. */
+  fallbackReason?: string
   requestId?: string
   inputHashes: Sha256[]
   director?: AgentBlock

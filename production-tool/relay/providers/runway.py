@@ -87,8 +87,8 @@ def _http_error(resp: httpx.Response) -> ProviderError:
     return ProviderError("invalid_input", message, False)
 
 
-# The previous defaults, kept as alternates (features/default-models.clan). Runway is fallback-only,
-# so the menu never offers them; scripts and a config without fallbackOnly can still pick them.
+# The previous defaults, kept as alternates (features/default-models.clan). Runway is the floor of
+# every job and its models are always offered (features/runway-fallback.clan).
 ALTERNATES = {"generate": {"gemini_image3.1_flash"}, "view": {"gemini_image3.1_flash"},
               "frame": {"gemini_image3.1_flash"}, "clip": {"veo3.1_fast"}}
 

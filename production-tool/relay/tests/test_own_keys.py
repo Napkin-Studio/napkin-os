@@ -94,26 +94,29 @@ def test_both_keys_clip_goes_to_fal_when_heygen_is_busy():
     assert not h.providers["runway"].submits
 
 
-def test_busy_own_providers_never_fall_back_to_the_event_key():
+def test_busy_own_providers_fall_back_to_runway_on_the_event_key():
+    # Was "never fall back to the event key"; Runway is the floor since 2026-10-09 (features/runway-fallback.clan).
     h, fakes = harness()
     token = h.sign_in()
     h.relay.own_adapters.get("heygen", HEYGEN_KEY)
     fakes.one("heygen", HEYGEN_KEY).submit_effect = ProviderError("provider_unavailable", "busy", retryable=True)
     job = post(h, token, "clip", headers=keys(heygen=HEYGEN_KEY))
-    assert job["state"] == "failed" and job["error"]["code"] == "provider_unavailable"
-    assert job["error"]["message"].startswith("Your HeyGen account could not take this step.")
-    assert not h.providers["runway"].submits
+    assert (job["state"], job["keySource"], job["provider"]) == ("submitted", "event", "runway")
+    assert job["fallbackFrom"] == {"provider": "heygen", "model": "heygen-video-1"}
+    assert job["fallbackReason"] == "HeyGen could not make it: busy."
+    assert len(h.providers["runway"].submits) == 1
 
 
-def test_a_refused_key_fails_with_a_clear_message_and_no_fallback():
+def test_a_refused_key_falls_back_to_runway_and_says_why():
+    # Was "fails with a clear message and no fallback" (features/runway-fallback.clan, 2026-10-09).
     h, fakes = harness()
     token = h.sign_in()
     h.relay.own_adapters.get("fal", FAL_KEY)
     fakes.one("fal", FAL_KEY).submit_effect = ProviderError("provider_failed", "fal rejected the API key")
     job = post(h, token, headers=keys(fal=FAL_KEY))
-    assert job["state"] == "failed"
-    assert job["error"]["message"].startswith("Your fal key was refused.")
-    assert not h.providers["fal"].submits and not h.providers["runway"].submits
+    assert (job["state"], job["provider"], job["keySource"]) == ("submitted", "runway", "event")
+    assert job["fallbackReason"].startswith("fal could not make it: Your fal key was refused.")
+    assert not h.providers["fal"].submits and len(h.providers["runway"].submits) == 1
 
 
 def test_bad_header_is_refused_without_echoing_the_key():
@@ -186,8 +189,9 @@ def test_cancel_uses_their_key():
     assert fakes.one("fal", FAL_KEY).cancels == [job["requestId"]]
 
 
-def test_an_unreadable_key_fails_the_job():
-    h, _ = harness()
+def test_an_unreadable_key_sends_the_job_to_runway():
+    # Was "fails the job"; Runway is the floor since 2026-10-09 (features/runway-fallback.clan).
+    h, fakes = harness()
     token = h.sign_in()
     job = post(h, token, headers=keys(fal=FAL_KEY))
     stored = h.store.get_job(job["jobId"])
@@ -195,7 +199,9 @@ def test_an_unreadable_key_fails_the_job():
     h.store.save_job(stored)
     h.clock.tick(5)
     out = h.poll(token, job["jobId"])
-    assert out["state"] == "failed" and "no longer read your fal key" in out["error"]["message"]
+    assert (out["state"], out["provider"]) == ("submitted", "runway")
+    assert "no longer read your fal key" in out["fallbackReason"]
+    assert h.store.counters(f"slots#fal#own#{job['participantId']}#image").get("n", 0) == 0
 
 
 def test_keys_never_leave_or_rest_readable(caplog):
@@ -264,12 +270,16 @@ def test_the_failure_says_why_the_own_provider_could_not_take_the_step():
     fakes.one("heygen", HEYGEN_KEY).submit_effect = ProviderError(
         "provider_unavailable", "heygen is unreachable: [Errno -3] Temporary failure in name resolution", retryable=True)
     job = post(h, token, "clip", headers=keys(heygen=HEYGEN_KEY))
-    assert "Temporary failure in name resolution" in job["error"]["message"]
+    assert "Temporary failure in name resolution" in job["fallbackReason"]  # now on Runway, saying why
+    h.cfg["routing"]["clip"] = ["heygen"]  # without Runway routed there is no floor: it fails, still saying why
+    job = post(h, token, "clip", headers=keys(heygen=HEYGEN_KEY))
+    assert job["state"] == "failed" and "Temporary failure in name resolution" in job["error"]["message"]
 
 
-def test_a_pick_on_their_own_key_runs_there_and_never_falls_back_to_the_event_key():
-    """features/model-choice.clan: a picked model on a provider they hold a key for runs on that key."""
-    cfg = base_config(fallbackOnly=["runway"])
+def test_a_pick_on_their_own_key_runs_there_then_falls_back_to_runway():
+    """features/model-choice.clan: a picked model on a provider they hold a key for runs on that key.
+    Was "never falls back to the event key"; Runway is the floor since 2026-10-09 (features/runway-fallback.clan)."""
+    cfg = base_config()
     cfg["routing"]["clip"] = ["fal", "heygen", "runway"]
     cfg["flags"] = {**cfg["flags"], "ownKeys": True}
     h = Harness(cfg, providers=("fal", "heygen", "runway"))
@@ -281,8 +291,9 @@ def test_a_pick_on_their_own_key_runs_there_and_never_falls_back_to_the_event_ke
     h.relay.own_adapters.get("heygen", HEYGEN_KEY)
     fakes.one("heygen", HEYGEN_KEY).submit_effect = ProviderError("provider_unavailable", "busy", retryable=True)
     job = h.call("POST", "/jobs", req, token, expect=200, headers=keys(heygen=HEYGEN_KEY, fal=FAL_KEY))[1]
-    assert job["keySource"] == "own" and job["state"] == "failed"
-    assert not h.providers["runway"].submits
+    assert (job["keySource"], job["provider"], job["model"]) == ("event", "runway", "veo3.1")
+    assert job["fallbackFrom"] == req["modelChoice"]
+    assert len(h.providers["runway"].submits) == 1
     assert ("fal", FAL_KEY) not in fakes.made  # their fal key is not the pick's provider
 
 

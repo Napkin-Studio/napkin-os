@@ -318,8 +318,19 @@ def test_a_pick_runs_its_model_and_falls_back_to_runway_default_on_the_mix():
     assert (job["provider"], job["model"], job["fallbackFrom"]) == ("runway", "gemini_image3_pro", pick)
 
 
-def test_a_clip_heygen_may_already_have_is_never_sent_anywhere_else():
+def test_a_clip_heygen_may_already_have_is_made_on_runway_and_says_heygen_may_charge():
+    # Was "is never sent anywhere else": Runway is the floor since 2026-10-09 (features/runway-fallback.clan).
+    # HeyGen is never sent it again; Runway makes it, and the job says HeyGen may still charge.
     h, stand = pathway("mix", routing={**pathway_config("mix")["routing"], "clip": ["heygen", "runway"]})
+    stand.submit_reply["heygen"] = httpx.Response(409, json={"error": {"message": "in progress"}})
+    job = run(h, "clip", INPUTS["clip"])
+    assert (job["state"], job["provider"], job["fallbackFrom"]["provider"]) == ("completed", "runway", "heygen")
+    assert "HeyGen may still charge" in job["fallbackReason"]
+    assert len(stand.to("runway")) == 1
+
+
+def test_a_clip_heygen_may_already_have_is_never_sent_anywhere_else_without_a_floor():
+    h, stand = pathway("heygen")
     stand.submit_reply["heygen"] = httpx.Response(409, json={"error": {"message": "in progress"}})
     job = run(h, "clip", INPUTS["clip"])
     assert job["state"] == "uncertain"

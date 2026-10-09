@@ -24,6 +24,9 @@ export type JobCtx = JobPurpose & {
   /** Set when the user cleared a failed job, or it was retried as another job. */
   dismissed?: boolean
   retriedAs?: string
+  /** The relay made it elsewhere: Job.fallbackFrom and fallbackReason (features/runway-fallback.clan). */
+  fallbackFrom?: ModelChoice
+  fallbackReason?: string
 }
 
 export interface UiState {
