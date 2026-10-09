@@ -107,7 +107,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   return (
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
       <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
-      {!compact && <div className="state">{who.line}</div>}
+      {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
         {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
