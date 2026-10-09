@@ -445,6 +445,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .updatebox { position: fixed; right: 20px; bottom: 20px; z-index: 40; width: 360px; max-width: calc(100vw - 40px); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; box-shadow: var(--shadow-pop); font-size: 13px; }
 .updatebox .ub-item { gap: 10px; align-items: center; }
 .updatebox .ub-item img, .updatebox .ub-empty { width: 48px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--soft); flex-shrink: 0; }
+.updatebox-pill { position: fixed; right: 20px; bottom: 20px; z-index: 40; max-width: calc(100vw - 40px); display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; background: var(--card); color: var(--ink); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-pop); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.updatebox-pill.waiting { border-color: var(--status-amber); }
 .updatebox .ub-job { height: 110px; border-radius: 12px; overflow: hidden; display: flex; }
 .updatebox .modelpick .select { max-width: 100%; }
 

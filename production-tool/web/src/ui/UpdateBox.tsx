@@ -24,6 +24,8 @@ export function UpdateBox() {
   const ui = useUi()
   const doc = useDoc()
   useJobsTick()
+  // Minimised to a pill; held here, not in Box, so it stays minimised from one item to the next.
+  const [min, setMin] = useState(false)
   const run = ui.following
   const state = followState(doc, (id) => ui.jobCtx[id], run)
   if (!run || !state || run.cancel) return null
@@ -32,10 +34,23 @@ export function UpdateBox() {
   const making: FollowItem | undefined = runningCtx?.for === 'frame' || runningCtx?.for === 'clip' ? { kind: runningCtx.for, shotId: runningCtx.shotId } : undefined
   const item = run.awaiting ?? (run.steer ? making : undefined)
   if (!item) return null
-  return <Box key={`${item.kind}:${item.shotId}`} item={item} jobId={state.running?.id ?? (run.awaiting ? state.failed?.id : undefined)} />
+  const shot = (doc.shots ?? []).find((s) => s.id === item.shotId)
+  if (min) {
+    const waiting = !!run.awaiting && !state.running
+    return (
+      <button className={`updatebox-pill ${waiting ? 'waiting' : ''}`} onClick={() => setMin(false)} aria-label="Open Update what follows"
+        title={waiting ? 'Waiting for you: open to make it' : 'Open the update box'}>
+        <AgentFigure agent="dex" state={state.running ? 'working' : 'idle'} size={22} decorative />
+        <b>Update what follows</b>
+        <span className="faint">{Math.min(state.done + (run.awaiting ? 1 : 0), run.total ?? 99)} of {run.total ?? '…'}</span>
+        {shot && <span className="faint">· Shot {shot.order} {item.kind}{waiting ? ' · waiting for you' : state.running ? ' · making' : ''}</span>}
+      </button>
+    )
+  }
+  return <Box key={`${item.kind}:${item.shotId}`} item={item} jobId={state.running?.id ?? (run.awaiting ? state.failed?.id : undefined)} onMinimise={() => setMin(true)} />
 }
 
-function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
+function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; onMinimise: () => void }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -79,6 +94,7 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
         <b>Update what follows</b>
         <span className="faint">{n} of {run.total ?? '…'}</span>
         <span className="spacer" />
+        <button className="btn xs icon ghost" onClick={onMinimise} aria-label="Minimise" title="Minimise: the run goes on">–</button>
         <button className="btn xs ghost" onClick={() => void cancelFollow(deps)} title="Stop after the step running now; nothing else is made">Stop</button>
       </div>
       <div className="row ub-item">
