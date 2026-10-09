@@ -20,3 +20,13 @@ output "web_environment" {
   description = "napkin-web's task environment, by name (no secrets)"
   value       = { for e in local.web_environment : e.name => e.value }
 }
+
+output "middleware_environment" {
+  description = "The middleware's task environment, by name (no secrets)"
+  value       = local.middleware_environment
+}
+
+output "middleware_mounts" {
+  description = "The middleware container's mount points"
+  value       = local.middleware_mounts
+}

@@ -61,4 +61,12 @@ run "plans_with_two_agencies" {
     condition     = lookup(module.services.web_environment, "NAPKIN_DOGFOOD", "") == "1"
     error_message = "staging is the dogfood build (features/dogfood-telemetry.clan)"
   }
+  assert {
+    condition     = lookup(module.services.middleware_environment, "NAPKIN_RUNLOG_DIR", "") == "/runlog" && !contains(keys(module.services.middleware_environment), "NAPKIN_RUNLOG_BODIES")
+    error_message = "staging keeps the middleware's run log, sizes only (features/dogfood-log-quality.clan)"
+  }
+  assert {
+    condition     = length(module.services.middleware_mounts) == 1 && module.services.middleware_mounts[0].sourceVolume == "runlog" && module.services.middleware_mounts[0].containerPath == "/runlog"
+    error_message = "the run log is on EFS, so it outlives a task and napkin-web can read it"
+  }
 }

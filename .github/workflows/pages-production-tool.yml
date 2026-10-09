@@ -1,0 +1,34 @@
+# The Production Tool's intro site (site/production-tool), published to GitHub Pages.
+# Static files only: no build. A repository has one Pages site, so pages.yml (the
+# serverless build, run by hand) would replace this one if it ran.
+name: "Pages: Production Tool site"
+
+on:
+  push:
+    branches: [develop]
+    paths: ['site/production-tool/**', '.github/workflows/pages-production-tool.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/production-tool
+      - id: deployment
+        uses: actions/deploy-pages@v4

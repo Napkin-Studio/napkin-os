@@ -53,12 +53,25 @@ def configure(directory: str | None, bodies: bool = False, prices: str | None = 
 
 
 def price(model: str | None, tin: int, tout: int) -> float | None:
-    m = str(model or "")
+    m = _model_name(model)
     best = max((k for k in PRICES if m.startswith(k)), key=len, default=None)
     if best is None:
         return None
     pi, po = PRICES[best]
     return round(tin / 1e6 * pi + tout / 1e6 * po, 6)
+
+
+def _model_name(model: str | None) -> str:
+    """The model's own name, without a wire or a Bedrock region and provider:
+    'bedrock/global.anthropic.claude-opus-5-5' and 'eu.anthropic.claude-opus-5-5'
+    are both 'claude-opus-5-5'. A NAPKIN_PRICES key written whole still matches."""
+    m = str(model or "")
+    if any(m.startswith(k) for k in PRICES):
+        return m
+    m = m.rsplit("/", 1)[-1]
+    if "anthropic." in m:
+        m = m.split("anthropic.", 1)[1]
+    return m
 
 
 def bodies() -> bool:
