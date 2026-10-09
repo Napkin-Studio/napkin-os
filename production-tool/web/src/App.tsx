@@ -112,7 +112,7 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
             keys and History. Undo, Redo and Save sit just left of History. */}
         <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
         <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
-          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}</div>
+          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}{ui.session?.team ? ` · ${ui.session.team}` : ''}</div>
           <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
             setExporting(true)
             try {

@@ -592,3 +592,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .shots-empty .faint { font-size: 12.5px; max-width: 340px; line-height: 1.45; }
 /* Make clip's box (stages/Video.tsx MakeClipBox). */
 .float.clipbox .clipbox-body { gap: 8px; padding: 10px; width: min(320px, calc(100vw - 32px)); }
+
+/* An inline field rule broken (sign-in): said under the field, not in a browser bubble. */
+.field-error { color: var(--danger); font-size: 12px; font-weight: 600; }

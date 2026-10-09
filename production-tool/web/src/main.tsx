@@ -45,7 +45,7 @@ async function boot() {
   }
   if (app.get().session) relay.useToken(app.get().session!.token)
   if (relay.kind === 'mock' && !app.get().session) {
-    const session = await relay.session({ eventCode: 'MOCK', handle: 'guest' })
+    const session = await relay.session({ eventCode: 'MOCK', team: 'mock', handle: 'guest' })
     app.update((u) => { u.session = session; u.sessionFor = here })
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null

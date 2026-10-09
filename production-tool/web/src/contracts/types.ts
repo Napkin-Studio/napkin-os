@@ -359,7 +359,9 @@ export type CustomData =
 
 // ── relay-api.schema.json ───────────────────────────────────────────────────
 
-export interface SessionRequest { eventCode: string; handle: string }
+/** team + handle make the workspace (features/personal-workspaces.clan); device is a random id this
+ *  browser keeps, to warn when the same team and name signed in from another browser. */
+export interface SessionRequest { eventCode: string; team: string; handle: string; device?: string }
 
 export interface SessionResponse {
   token: string
@@ -372,6 +374,10 @@ export interface SessionResponse {
   quotas: { image: number; video: number; render: number }
   /** How many projects this name has saved on the relay ("Welcome back, Maya: 3 projects"). */
   projects: number
+  /** The team name as typed: with the handle it makes the workspace unique. */
+  team?: string
+  /** Another browser signed in with this team and name within 2 hours (probably a second person). */
+  elsewhere?: { at: string }
 }
 
 /** One of the person's saved projects (GET /projects, POST /clan with X-Project-Id). */
