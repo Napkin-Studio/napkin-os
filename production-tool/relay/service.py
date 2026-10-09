@@ -162,17 +162,19 @@ def public(job: dict) -> dict:
 class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config, secrets,
                  contracts: Contracts | None = None, clock=time.time, stitch=None,
-                 own_adapters: own_keys.OwnAdapters | None = None):
+                 own_adapters: own_keys.OwnAdapters | None = None, cards=None):
         """config: () -> config.json dict (cached by the caller).
         secrets: () -> {"event_codes": {"participant": [...], "organiser": [...]}, "token_secret": str}.
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
-        own_adapters: adapters on a participant's own key (built on first use)."""
+        own_adapters: adapters on a participant's own key (built on first use).
+        cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards)."""
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
         self._own_adapters = own_adapters
         self.config, self.secrets = config, secrets
         self.contracts = contracts or Contracts()
         self.clock = clock
         self.stitch = stitch
+        self.cards = cards
 
     # ── HTTP ────────────────────────────────────────────────────────────────
     def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | None, dict]:
@@ -870,8 +872,10 @@ class Relay:
             inp, dropped = names.fit_refs(req["op"], req.get("input") or {}, sheet)
             if dropped:
                 log.info("job %s: left out %s for %s's ref limits", job["jobId"], ", ".join(dropped), job.get("provider"))
+            inp, kinds = self._with_cards(job, inp)
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
-            out = dict(self.director.direct({**req, "input": names.to_wire(req["op"], inp)}, sheet))
+            wired = names.to_wire(req["op"], inp)
+            out = dict(self.director.direct({**req, "input": wired}, sheet))
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
@@ -882,7 +886,25 @@ class Relay:
             raise ApiError("internal", f"The director's answer did not match its schema: {errors[0]}")
         block = {"model": model, "promptVersion": version, "output": out,
                  "rationale": out.get("rationale", ""), "latencyMs": int((self.clock() - start) * 1000)}
+        # What the director was told each picture shows (the History's "What the director saw").
+        used = [{"tag": r["tag"], "sha256": r["asset"]["sha256"], "kind": kinds.get(r["asset"]["sha256"], "other"), "card": r["card"]}
+                for r in wired.get("refs") or [] if r.get("card") and r.get("tag")]
+        if used:
+            block["cards"] = used
         return out, block
+
+    def _with_cards(self, job: dict, inp: dict) -> tuple[dict, dict[str, str]]:
+        """The refs the job sends, each with its character card where one is ready (cards.py), and
+        each carded picture's kind. Never fails the job: without a card the director works from
+        names, as before."""
+        if self.cards is None or job["op"] == "shot_list" or not inp.get("refs"):
+            return inp, {}
+        try:
+            got = self.cards.attach(inp["refs"], job["jobId"])
+        except Exception:
+            log.exception("job %s: cards failed; the director goes on without them", job["jobId"])
+            return inp, {}
+        return {**inp, "refs": got.refs}, {c["sha256"]: c["kind"] for c in got.cards}
 
     def _run_shot_list(self, job: dict, cfg: dict) -> dict:
         saved = self._save(job, state="submitting", _queue="r")

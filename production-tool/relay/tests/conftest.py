@@ -69,7 +69,8 @@ class FakeBlobs:
         return True
 
     def fetch(self, url):
-        return self.remote[url]
+        key = self.key_for_url(url)
+        return self.objects[key][0] if key in self.objects else self.remote[url]
 
 
 class FakeProvider:

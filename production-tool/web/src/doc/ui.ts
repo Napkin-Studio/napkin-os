@@ -2,7 +2,7 @@
 // each pending job is for (so its result lands in the right place after a
 // reload), the dev switch, drafts. Snapshotted next to the document.
 
-import type { JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
+import type { DirectorCard, JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { UndoState } from './undo'
 import type { SessionResponse } from '../contracts/types'
@@ -27,6 +27,9 @@ export type JobCtx = JobPurpose & {
   /** The relay made it elsewhere: Job.fallbackFrom and fallbackReason (features/runway-fallback.clan). */
   fallbackFrom?: ModelChoice
   fallbackReason?: string
+  /** The character cards the director was given (the relay's agent block), held here for the
+   *  director's History entry: the document's jobs[].agent leaves them out. */
+  cards?: DirectorCard[]
 }
 
 export interface UiState {

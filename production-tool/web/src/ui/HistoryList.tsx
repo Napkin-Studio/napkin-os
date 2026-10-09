@@ -1,6 +1,7 @@
 // The chain entries as a list: who (you, the director, the provider), what,
 // why, and which fields changed. Presentational, so it renders in a test.
 
+import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attribution'
 import { aboutItem, kindOf, readable, timeOf, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
 
 const KIND_ICON: Record<AgentKind, string> = { participant: '●', director: '◆', provider: '▲' }
@@ -21,6 +22,8 @@ export function HistoryList({ entries, handle, item }: { entries: ChainLike[]; h
       {shown.map((e, i) => {
         const kind = kindOf(e.agent)
         const w = who(e.agent, kind, handle)
+        // A director entry ends with the character cards it was given (clan-store attribution.ts).
+        const { rest: why, cards } = kind === 'director' && e.rationale ? cardsFromRationale(e.rationale) : { rest: e.rationale, cards: [] as SeenCard[] }
         return (
           <li key={`${e.timestamp}-${i}`} className={`history-entry ${kind}`} data-kind={kind}>
             <div className="history-head">
@@ -34,7 +37,20 @@ export function HistoryList({ entries, handle, item }: { entries: ChainLike[]; h
               <time className="faint" dateTime={e.timestamp} title={e.timestamp}>{timeOf(e.timestamp)}</time>
             </div>
             <div className="history-action">{readable(e.action)}</div>
-            {e.rationale && <div className="history-why muted" title={e.rationale}>{readable(e.rationale)}</div>}
+            {why && <div className="history-why muted" title={why}>{readable(why)}</div>}
+            {cards.length > 0 && (
+              <details className="history-saw">
+                <summary>What the director saw</summary>
+                <ul>
+                  {cards.map((c, k) => (
+                    <li key={k}>
+                      <span className="history-saw-tag">@{c.tag}</span> <span className="faint">{c.kind}</span>
+                      {c.lines.map((l, n) => <div key={n} className="history-saw-line">{l}</div>)}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
             {!!e.fields_changed?.length && (
               <div className="history-fields">{e.fields_changed.map((f) => <span key={f} className="history-field">{f}</span>)}</div>
             )}

@@ -4,7 +4,7 @@
 // reload because the document and the job purposes are both snapshotted.
 
 import type {
-  ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
+  AgentBlock, ContractError, DocAsset, DocJob, Job, JobInput, JobRequest, JobState, LogEntry, ModelChoice, Op, Region, StageName,
 } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
 import { systemUpdate, type DocumentStore, type SnapshotStore } from '../doc/store'
@@ -278,7 +278,13 @@ export class JobRunner {
     if (job.provider) patch.provider = job.provider
     if (job.model) patch.model = job.model
     if (job.requestId) patch.remote_id = job.requestId
-    if (job.director) patch.agent = job.director
+    if (job.director) {
+      patch.agent = agentForDocument(job.director)
+      const cards = job.director.cards
+      if (cards?.length && !this.ui.get().jobCtx[job.jobId]?.cards) {
+        this.ui.update((u) => { const c = u.jobCtx[job.jobId]; if (c) c.cards = cards })
+      }
+    }
     if (job.error) patch.error = job.error
     this.patchDocJob(job.jobId, patch)
     this.noteFallback(job)
@@ -339,6 +345,15 @@ export function outputLocations(sha256: string, url: string): string[] {
  *  pattern was loosened refuses dotted names, and a job directed under the old name would be
  *  refused on every save (2026-10-07: "director.v2.1" looped as "1 queued"). Same prompt, new name. */
 const PROMPT_RENAMES: Record<string, string> = { 'director.v2.1': 'director.v3' }
+
+/** The director block as the document keeps it: without `cards`. A .clan keeps the contract it was
+ *  made with, and one made before character cards refuses the field on every save (the trap above);
+ *  the cards go to the director's History entry instead (jobCtx, then doc/clan.ts). */
+export function agentForDocument(block: AgentBlock): AgentBlock {
+  if (!('cards' in block)) return block
+  const { cards: _cards, ...rest } = block
+  return rest
+}
 
 export function normalisePromptVersion(job: Job): void {
   const v = job.director?.promptVersion

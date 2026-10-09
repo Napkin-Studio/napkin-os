@@ -182,6 +182,16 @@ export interface AgentBlock {
   output: Record<string, unknown>
   rationale: string
   latencyMs?: number
+  /** The character cards the director was given (features/character-cards.clan). The relay's
+   *  Job carries them; the document's jobs[].agent does not (jobs/runner.ts agentForDocument). */
+  cards?: DirectorCard[]
+}
+
+export interface DirectorCard {
+  tag: string
+  sha256: Sha256
+  kind: 'character' | 'object' | 'setting' | 'style' | 'other'
+  card: string
 }
 
 // ── document.schema.json ────────────────────────────────────────────────────
