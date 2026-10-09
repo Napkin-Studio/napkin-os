@@ -8,7 +8,7 @@
 import { CaptureUpdateAction, convertToExcalidrawElements, getVisibleSceneBounds, newElementWith } from '@excalidraw/excalidraw'
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
-import type { CustomData, Job, JobInputRef, Key, LibraryEntry, ProductionDocument, RefRole, Variant, View } from '../contracts/types'
+import type { CustomData, Job, JobInputRef, Key, LibraryEntry, ProductionDocument, RefRole, Variant, View, ModelChoice } from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
@@ -266,7 +266,8 @@ export class CanvasController {
    * One new image from the selected nodes and the typed words. `at` is the spot the participant
    * clicked (top-left of the new node); without it the node goes beside the selection.
    */
-  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number } } = {}) {
+  /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). */
+  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice } = {}) {
     const doc = this.doc()
     let plan = planSelection(this.els(), elIds)
     if (plan.pending.length) throw new Error('One of these is still being made. Wait for it, or leave it out.')
@@ -318,7 +319,7 @@ export class CanvasController {
     const slot = opts.at ? { ...opts.at, ...NODE } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), NODE)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
     const input = { refs, ratio: '4:5' as const, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
-    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId)
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
   }
 
   // ── names: key_variant on any image ──
@@ -377,7 +378,7 @@ export class CanvasController {
   // ── views: any named image is a key's front; the others are generated from it ──
 
   /** Generate the other views of a key from its front (any image named key_front). */
-  async makeViews(key: Key, views: View[] = OTHER_VIEWS) {
+  async makeViews(key: Key, views: View[] = OTHER_VIEWS, modelChoice?: ModelChoice) {
     const doc = this.doc()
     const front = refByName(doc, `${key}_front`)
     if (!front) throw new Error(`Set an image as ${key}'s front first.`)
@@ -408,7 +409,7 @@ export class CanvasController {
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
     for (const p of placed) {
       // Same ratio as the front, so the views line up (the relay refuses a view without one).
-      await this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), ratio: '4:5' }, front.node ? [front.node] : [], { for: 'canvas' }, p.jobId)
+      await this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), ratio: '4:5' }, front.node ? [front.node] : [], { for: 'canvas' }, p.jobId, modelChoice)
     }
   }
 

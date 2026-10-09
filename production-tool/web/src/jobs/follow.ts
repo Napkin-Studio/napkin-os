@@ -123,7 +123,7 @@ export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx |
 
 /** The last model that made a `op` job that worked, where the menu offers it: where the update box
  *  starts, so a provider that just failed (out of credit) is not tried again by default. */
-export function lastWorkedModel(d: ProductionDocument, op: 'frame' | 'clip', config: Config, sheets?: Sheets): ModelChoice | undefined {
+export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, sheets?: Sheets): ModelChoice | undefined {
   const offered = modelChoicesFor(op, config, sheets)
   for (let i = d.jobs.length - 1; i >= 0; i--) {
     const j = d.jobs[i]

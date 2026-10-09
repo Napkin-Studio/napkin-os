@@ -13,7 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot } from '../canvas/controller'
 import { alive, bounds, cd, imageOf, isText, isUserDrawing, type El } from '../canvas/scene'
-import type { CustomData, KeyEntry, LibraryIndex, NamedRef, RefRole, View } from '../contracts/types'
+import type { CustomData, KeyEntry, LibraryIndex, ModelChoice, NamedRef, RefRole, View } from '../contracts/types'
+import { choiceToSend } from '../capabilities'
+import { lastWorkedModel } from '../jobs/follow'
+import { ModelPick } from '../ui/ModelPick'
 import { REF_ROLES } from '../contracts/types'
 import { systemUpdate } from '../doc/store'
 import { sweep, unused } from '../doc/gc'
@@ -66,7 +69,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const [undo, offerUndo, runUndo] = useUndo()
   const [confirming, setConfirming] = useState<{ ids: string[]; text: string; at: Pt } | null>(null)
   /** Waiting for a click that says where the next result goes. */
-  const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean } | null>(null)
+  const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
 
   const initialData = useMemo(() => {
@@ -191,7 +194,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     const job = placing
     setPlacing(null)
     try {
-      await ctrl.generate(job.ids, job.text, { at: { x: p.x - 150, y: p.y - 200 }, more: job.more, limits })
+      await ctrl.generate(job.ids, job.text, { at: { x: p.x - 150, y: p.y - 200 }, more: job.more, limits, modelChoice: job.modelChoice })
     } catch (err) {
       setPlaceError(errText(err))
     }
@@ -229,7 +232,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           })}
           {ctrl && selected.length > 0 && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits}
-              onPlace={(ids, text, more) => { setPlaceError(null); setPlacing({ ids, text, more }) }} />
+              onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
           {confirming && (() => {
             const p = toView(confirming.at)
@@ -349,11 +352,14 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
   selected: El[]
   toView: (p: Pt) => Pt
   onDelete: (sel: El[]) => void
-  onPlace: (ids: string[], text: string, more: boolean) => void
+  onPlace: (ids: string[], text: string, more: boolean, modelChoice?: ModelChoice) => void
   limits: { max: number; characters: number }
 }) {
   const doc = useDoc()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
+  // The model for Make the other views: the last that worked for views, or the one picked here.
+  const [viewPick, setViewPick] = useState<ModelChoice | undefined>()
+  const viewChoice = viewPick ?? lastWorkedModel(doc, 'view', config)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<Popover>(null)
@@ -417,7 +423,10 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
           }}>Set as front</button>
         )}
         {named?.variant === 'front' && controls.views && (
-          <button className="btn sm dark" disabled={!!busy} onClick={() => run('views', () => ctrl.makeViews(named.key))}>{busy === 'views' ? 'Starting…' : 'Make the other views'}</button>
+          <>
+            <ModelPick op="view" value={viewChoice} onChange={setViewPick} />
+            <button className="btn sm dark" disabled={!!busy} onClick={() => run('views', () => ctrl.makeViews(named.key, undefined, choiceToSend('view', config, viewChoice)))}>{busy === 'views' ? 'Starting…' : 'Make the other views'}</button>
+          </>
         )}
         {named && <button className="btn xs ghost" onClick={() => ctrl.unname(singleImage.id)}>Remove name</button>}
       </span>,
@@ -455,11 +464,15 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
   at: Anchor
   limits: { max: number; characters: number }
   onClose: () => void
-  onPlace: (ids: string[], text: string, more: boolean) => void
+  onPlace: (ids: string[], text: string, more: boolean, modelChoice?: ModelChoice) => void
 }) {
   const doc = useDoc()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   const preview = ctrl.preview(ids)
+  // The model for this Generate: the last that worked for pictures, or the one picked here.
+  const [pick, setPick] = useState<ModelChoice | undefined>()
+  const choice = pick ?? lastWorkedModel(doc, 'generate', config)
+  const modelChoice = choiceToSend('generate', config, choice)
   const [text, setText] = useState('')
   const [more, setMore] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -481,7 +494,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
     setBusy(true)
     setError(null)
     try {
-      await ctrl.generate(ids, text, { more, limits })
+      await ctrl.generate(ids, text, { more, limits, modelChoice })
       onClose()
     } catch (e) {
       setError(errText(e))
@@ -524,9 +537,10 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
       <div className="row" style={{ marginTop: 10, gap: 6 }}>
         <span className="faint" style={{ fontSize: 11.5 }}>{text.length}/1000</span>
         {controls.moreOptions && <button className={`btn xs ${more ? 'on' : ''}`} title="Ask for 4 options instead of 1" onClick={() => setMore(!more)}>4 options</button>}
+        <ModelPick op="generate" value={choice} onChange={setPick} />
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm" disabled={busy} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(ids, text, more) }}>Place…</button>
+        <button className="btn sm" disabled={busy} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(ids, text, more, modelChoice) }}>Place…</button>
         <button className="btn sm primary" disabled={busy} onClick={submit}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
     </Floating>
