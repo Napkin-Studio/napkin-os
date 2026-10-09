@@ -23,7 +23,7 @@ uv run python -m local            # http://localhost:8787
 
 - Event codes: `LOCAL` (participant), `ORGLOCAL` (organiser).
 - Routes answer both bare (`/jobs`) and under `/api` (`/api/jobs`). CORS is open.
-- `POST /clan` takes the participant's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, max 5 MiB) and keeps `clan/<participantId>/latest.clan` plus a timestamped copy. It answers 204.
+- `POST /clan` takes the participant's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, max 5 MiB) and keeps `clan/<participantId>/latest.clan` plus a timestamped copy; with `X-Project-Id: <project id>` (optional) it keeps them under `clan/<participantId>/<projectId>/` instead, one copy per project. It answers 204.
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.
 - Config: `contracts/examples/config.testing.json` with every step routed to
@@ -38,7 +38,8 @@ uv run python -m local            # http://localhost:8787
   job's first input asset as the output, labelled `kind: "mock"`.
 - Director: `director/claude.py` (`make()`) when it exists, otherwise the
   passthrough (the shot list is split evenly from the script).
-- Stitch runs in-process when `ffmpeg` is on the PATH (set `FONT_FILE` to a TTF).
+- Stitch runs in-process when `ffmpeg` is on the PATH (the end card's pieces are PNGs in
+  `production-tool/stitch/endcard/`, so no font is needed).
 - Local mode accepts `http://localhost` asset URLs; AWS requires `https://`.
 
 ## Tests

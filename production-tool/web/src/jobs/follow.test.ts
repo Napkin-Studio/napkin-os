@@ -9,9 +9,9 @@ import { putBlob } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { MockRelay, mockShotList, type MockRenderer } from '../relay/mock'
 import { effectiveConfig } from '../capabilities'
-import { adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
+import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
-import { cancelFollow, continueFollow, lastWorkedModel, makeAwaited, planCost, planFollow, planSummary, restAsTheyAre, startFollow } from './follow'
+import { cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planCost, planFollow, planSummary, restAsTheyAre, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { JobRunner } from './runner'
 import { applyFrame } from './handlers'
@@ -302,9 +302,10 @@ describe('the ad is trimmed to the shots', () => {
     expect(s.inputOf(id).clips!.map((c) => c.trimS)).toEqual([3, 2, 4, 4, 2])
   })
 
-  it('ad length = the sum of the shots + the 1 s end card (the FACET ad: 15 s of shots is 16 s, not 21)', () => {
-    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(16)
-    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(7.5)
+  it('ad length = the sum of the shots + the 2.5 s end card (the FACET ad: 15 s of shots is 17.5 s, not 21)', () => {
+    expect(END_CARD_S).toBe(2.5)
+    expect(adLengthS([{ duration_s: 3 }, { duration_s: 2 }, { duration_s: 2 }, { duration_s: 4 }, { duration_s: 4 }])).toBe(17.5)
+    expect(adLengthS([{ duration_s: 2.5 }, { duration_s: 4 }])).toBe(9)
   })
 })
 
@@ -453,6 +454,31 @@ describe('Update what follows', () => {
       d.jobs.push({ ...clips.at(-1)!, id: newId('job'), provider: 'heygen', model: 'heygen-video-1', state: 'failed' })
     })
     expect(lastWorkedModel(s.doc.get(), 'clip', own)).toEqual({ provider: 'fal', model: 'veo3.1-fast-i2v' })
+  })
+
+  it('leaves out a clip that is being made now: it is not behind', async () => {
+    // 2026-10-09: four first clips in the making showed as "4 behind your changes".
+    const s = await setup(3)
+    await s.makeAll(false)
+    await updateDoc(s.doc, (d) => { d.takes = d.takes!.filter((t) => t.shot_id === s.shotId(0)) })
+    const owed = planFollow(s.doc.get())
+    expect(owed.clips).toEqual([s.shotId(1), s.shotId(2)])
+    const making = shotsInTheMaking(s.doc.get(), () => undefined)
+    expect(making.clips.size).toBe(0)
+    expect(planFollow(s.doc.get(), new Set([s.shotId(1), s.shotId(2)])).clips).toEqual([])
+  })
+
+  it('starts on a real provider, not on mock, when one is offered', async () => {
+    // 2026-10-09: mock stills were the last clips that "worked", so an update run sent clips to mock again.
+    const s = await setup(1)
+    await s.makeAll(false)
+    const own = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['fal', 'mock'] as const } } as unknown as typeof CONFIGS.testing
+    await updateDoc(s.doc, (d) => {
+      for (const j of d.jobs) if (j.op === 'clip') Object.assign(j, { provider: 'mock', model: 'mock', state: 'completed' })
+    })
+    expect(lastWorkedModel(s.doc.get(), 'clip', own)?.provider).toBe('fal')
+    const mockOnly = { ...CONFIGS.testing, routing: { ...CONFIGS.testing.routing, clip: ['mock'] as const } } as unknown as typeof CONFIGS.testing
+    expect(lastWorkedModel(s.doc.get(), 'clip', mockOnly)?.provider).toBe('mock') // nothing real offered: mock still answers
   })
 
   it('leaves a shot that a fix is redoing alone: not out of date in the plan while the fix runs', async () => {

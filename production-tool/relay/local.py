@@ -28,6 +28,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import cards
 from blobs import LocalBlobs
 from contracts import Contracts
 from contracts_dir import contracts_dir
@@ -41,7 +42,7 @@ from store import MemoryStore
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser (2026-10-07: X-Own-Keys on POST /jobs).
-CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys"
+CORS_ALLOW_HEADERS = "Authorization, Content-Type, X-Clan-Reason, X-Own-Keys, X-Project-Id"
 log = logging.getLogger("relay.local")
 
 
@@ -108,7 +109,7 @@ def local_stitch(blobs: LocalBlobs):
             stitch.run(payload, get=lambda key, dest: shutil.copy(blobs.path(key), dest),
                        put=lambda key, src, mime: blobs.put(key, Path(src).read_bytes(), mime),
                        put_json=lambda key, data: blobs.put(key, json.dumps(data).encode(), "application/json"),
-                       ffmpeg="ffmpeg", ffprobe="ffprobe", font=os.environ.get("FONT_FILE"))
+                       ffmpeg="ffmpeg", ffprobe="ffprobe")
         threading.Thread(target=work, daemon=True).start()
 
     return run
@@ -128,9 +129,10 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         sheet = json.loads((contracts_dir() / "capabilities" / "mock.json").read_text())
         registry.register(StubMock(sheet), sheet)
         log.warning("providers/mock.py not found: using the local stub")
-    relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=load_director(),
+    director = load_director()
+    relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), secrets=EnvSecrets(), contracts=contracts,
-                  stitch=local_stitch(blobs))
+                  stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
     return relay, blobs
 
 

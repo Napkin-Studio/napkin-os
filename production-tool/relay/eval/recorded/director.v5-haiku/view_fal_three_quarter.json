@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"view\", \"needsUser\": null, \"rationale\": \"Three-quarter view of the source image on the fal Qwen multi-angle model. Source sent as the current ref, angle horizontal 45, vertical 0, ratio 4:5 in W:H form. No participant words, so the prompt is the view template only.\", \"confidence\": 0.9, \"providerJob\": {\"provider\": \"fal\", \"model\": \"qwen-image-edit-2511-multiple-angles\", \"op\": \"view\", \"prompt\": \"three-quarter view of @current, the same character, full body, plain background.\", \"ratio\": \"4:5\", \"angle\": {\"horizontal\": 45, \"vertical\": 0}, \"refs\": [{\"name\": \"current\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"role\": \"current\"}]}}",
+ "version": "director.v5"
+}

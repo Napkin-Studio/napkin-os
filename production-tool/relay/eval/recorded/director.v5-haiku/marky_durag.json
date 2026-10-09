@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"generate\", \"needsUser\": null, \"rationale\": \"Character @marky_body is kept from its picture; the drawing @in_1 gives only the layout, as the words say 'like new drawing'. No ending added since the words set a scene. Realistic style and purple durag are as written. Routed to fal Nano Banana Pro.\", \"confidence\": 0.8, \"providerJob\": {\"provider\": \"fal\", \"model\": \"nano-banana-pro-edit\", \"prompt\": \"put @marky_body between two buildings like new drawing. Realistic. and make @marky_body with purple durag Use the layout of @in_1 only.\", \"ratio\": \"9:16\", \"refs\": [{\"name\": \"in_1\", \"role\": \"object\", \"sha256\": \"sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228\"}, {\"name\": \"marky_body\", \"role\": \"character\", \"sha256\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\"}]}}",
+ "version": "director.v5"
+}

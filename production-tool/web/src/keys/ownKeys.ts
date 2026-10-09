@@ -13,8 +13,6 @@ export type OwnKeys = Partial<Record<OwnProvider, string>>
 export const OWN_KEYS_HEADER = 'X-Own-Keys'
 /** Preference order, as the relay has it (relay/own_keys.py PROVIDERS). */
 export const OWN_PROVIDERS: OwnProvider[] = ['heygen', 'fal']
-/** A fal key alone leaves clips on the event's routing; fal backs up HeyGen there. */
-const BACKUP_ONLY: Partial<Record<OwnProvider, Op[]>> = { fal: ['clip'] }
 const STORAGE_KEY = 'pt.ownKeys'
 
 type Sheets = Partial<Record<Provider, { ops: Partial<Record<Op, unknown>> }>>
@@ -78,19 +76,20 @@ function sessionStorageOrNull(): Storage | null {
 
 /** The providers a participant's keys run an op on, in order (the relay's rule). */
 export function ownProvidersFor(op: Op, keys: OwnKeys, sheets: Sheets): OwnProvider[] {
-  const own = OWN_PROVIDERS.filter((p) => keys[p] && sheets[p]?.ops[op])
-  return own.filter((p) => !(BACKUP_ONLY[p]?.includes(op) && !own.includes('heygen')))
+  return OWN_PROVIDERS.filter((p) => keys[p] && sheets[p]?.ops[op])
 }
 
-/** The routing as this participant's jobs will see it: own-key providers first
- *  where they apply, the event's routing elsewhere. Off unless flags.ownKeys. */
+/** The routing as this participant's jobs will see it, in the relay's chain order: own-key
+ *  providers first where they apply, then the event's routing (Runway, the floor every job
+ *  falls back to; features/runway-fallback.clan). Off unless flags.ownKeys. */
 export function withOwnKeys(config: Config, keys: OwnKeys, sheets: Sheets): Config {
   if (!config.flags.ownKeys || !Object.keys(keys).length) return config
   const routing: Config['routing'] = { ...config.routing }
   for (const op of OPS) {
-    if (!config.routing[op]?.length) continue // switched off by the organisers
+    const event = config.routing[op] ?? []
+    if (!event.length) continue // switched off by the organisers
     const own = ownProvidersFor(op, keys, sheets)
-    if (own.length) routing[op] = own
+    if (own.length) routing[op] = [...own, ...event.filter((p) => !(own as Provider[]).includes(p))]
   }
   return { ...config, routing }
 }
@@ -102,10 +101,11 @@ const STEPS: { label: string; op: Op }[] = [
   { label: 'Clip edits', op: 'clip_edit' },
 ]
 
-/** Where each kind of step runs with these keys, for the keys panel. */
+/** Where each kind of step runs with these keys, for the keys panel: the key providers, then
+ *  Runway on the event's account, which makes the step when they cannot. */
 export function keyUse(keys: OwnKeys, sheets: Sheets): { label: string; on: string }[] {
   return STEPS.map(({ label, op }) => {
     const own = ownProvidersFor(op, keys, sheets)
-    return { label, on: own.length ? `your ${own.map((p) => OWN_NAMES[p]).join(', then ')} key` : "the event's account" }
+    return { label, on: own.length ? `your ${own.map((p) => OWN_NAMES[p]).join(', then ')} key, then Runway` : "Runway, on the event's account" }
   })
 }

@@ -6,7 +6,8 @@ the model port (director/model.py), behind the relay's hook (director/base.py).
 
 The wire comes from the environment (NAPKIN_MODEL_API: bedrock on Lambda, with
 the relay role; anthropic with ANTHROPIC_API_KEY; openai for a self-hosted
-endpoint). The model ids and prompt version come from config.json's
+endpoint; claude-cli for local development on the developer's own Claude Code
+login, `claude -p`, never on Lambda). The model ids and prompt version come from config.json's
 `director` block, which the relay hands over with use_config() before every
 call. With no model configured at all, make() returns the passthrough, so the
 local dev server and the relay tests still run offline.
@@ -28,9 +29,9 @@ log = logging.getLogger(__name__)
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 # config.testing.json's director block; config.json overrides it per call.
-PER_CLICK = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+PER_CLICK = "eu.anthropic.claude-sonnet-5-5"  # director.v5: Sonnet per click (features/director-v5.clan)
 SHOT_LIST = "eu.anthropic.claude-sonnet-5-5"
-PROMPT_VERSION = "director.v4"
+PROMPT_VERSION = "director.v5"
 # Lambda runs 60 s and the HTTP API answers within 30 s: one model call (and its
 # one retry) must leave room for the provider submit.
 TIMEOUT_S = float(os.environ.get("DIRECTOR_TIMEOUT_S", "20"))
@@ -73,8 +74,13 @@ class ClaudeDirector:
         provider = sheet["provider"] if sheet else None
         if sheet:
             self.director.sheets[provider] = sheet  # the relay's copy is the one routing used
-        result = self.director.run(op, job_request.get("input") or {}, provider_name=provider,
-                                   job_id=job_request.get("jobId", ""))
+        try:
+            result = self.director.run(op, job_request.get("input") or {}, provider_name=provider,
+                                       job_id=job_request.get("jobId", ""))
+        except Exception as e:
+            if op == "shot_list":  # a plan split by sentences would stand in for a real one unseen
+                raise
+            return self._fall_back(job_request, sheet, e)
         out = dict(result.output)
         out["_model"] = result.agent_block["model"]
         out["_promptVersion"] = result.agent_block["promptVersion"]
@@ -83,11 +89,31 @@ class ClaudeDirector:
         return out
 
 
+    @staticmethod
+    def _fall_back(job_request: dict, sheet: dict | None, error: Exception) -> dict:
+        """The director's answer failed a check, or the model did not answer: the job is made from
+        the input as written (the passthrough), so a director fault never fails it. The rationale says
+        so, for the History."""
+        log.warning("director %s %s failed (%s: %s); the passthrough makes the job",
+                    job_request.get("jobId"), job_request["op"], type(error).__name__, error)
+        out = dict(PassthroughDirector().direct(job_request, sheet))
+        why = str(error).splitlines()[0][:160] if str(error) else type(error).__name__
+        out["rationale"] = f"The director's answer could not be used ({why}), so your words went to the model as written."
+        out["_model"] = PassthroughDirector.model
+        out["_promptVersion"] = PassthroughDirector.prompt_version
+        return out
+
+
 def make(wire=None):
     api = os.environ.get("NAPKIN_MODEL_API", "").strip()
     if wire is None and not api and not os.environ.get("ANTHROPIC_API_KEY"):
         log.warning("no model configured (NAPKIN_MODEL_API, ANTHROPIC_API_KEY): the passthrough director runs")
         return PassthroughDirector()
+    if api == "claude-cli" and os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        raise RuntimeError("NAPKIN_MODEL_API=claude-cli is for the local relay only: Lambda has no claude CLI or login")
+    if wire is None and api == "claude-cli":
+        from director.cli_wire import ClaudeCliWire
+        wire = ClaudeCliWire(os.environ.get("NAPKIN_CLAUDE_CLI", "claude"))
     wire = wire or build_wire(settings_from_env())
     port = ModelPort(wire, PER_CLICK, timeout=TIMEOUT_S)
     return ClaudeDirector(Director(port, PROMPTS, load_sheets(), per_click_model=PER_CLICK,

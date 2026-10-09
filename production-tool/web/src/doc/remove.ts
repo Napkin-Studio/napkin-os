@@ -11,6 +11,7 @@ import type { DocJob, ProductionDocument, StaleMark, Target } from '../contracts
 import { describeRemoval } from './describe'
 import { createMergePatch, deepEqual } from './mergePatch'
 import type { DocumentStore } from './types'
+import { noteStep } from './undo'
 import { markNextStale, selectedFrame } from '../jobs/frames'
 import { refreshClipStale } from '../jobs/stale'
 
@@ -245,22 +246,24 @@ export function restore(d: Doc, r: Removal) {
 
 /** A delete or restore written to the store: one patch and one chain entry
  * (a record when the data does not change, e.g. an unpicked image). */
-async function commit(store: DocumentStore, change: (d: Doc) => void, r: Removal, restoring: boolean) {
+async function commit(store: DocumentStore, change: (d: Doc) => void, r: Removal, restoring: boolean, system = restoring) {
   const before = store.get()
   const draft = structuredClone(before)
   change(draft)
   const said = describeRemoval(r, restoring)
   const mp = createMergePatch(before, draft)
+  if (!system) noteStep(store, before, draft, said.action) // the canvas's deletes and restores are its own undo
   if (mp !== undefined) await store.patch(mp as object, { action: said.action, ...(said.rationale ? { rationale: said.rationale } : {}) })
   else await store.record?.(said.action, said.rationale)
 }
 
-/** Delete with `remove`, write it, and hand back the Removal for Undo. */
-export async function deleteFrom(store: DocumentStore, remove: (d: Doc) => Removal): Promise<Removal> {
+/** Delete with `remove`, write it, and hand back the Removal. A person's delete is an undo step
+ *  (doc/undo.ts); `system` (the canvas, whose Excalidraw undo puts it back) is not. */
+export async function deleteFrom(store: DocumentStore, remove: (d: Doc) => Removal, opts: { system?: boolean } = {}): Promise<Removal> {
   let r: Removal | undefined
-  // Run once against a copy first, so an error (the last version) leaves the store untouched.
+  // Run once against a copy first, so an error leaves the store untouched.
   r = remove(structuredClone(store.get()))
-  await commit(store, (d) => { r = remove(d) }, r, false)
+  await commit(store, (d) => { r = remove(d) }, r, false, !!opts.system)
   return r
 }
 

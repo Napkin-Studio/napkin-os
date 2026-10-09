@@ -97,8 +97,10 @@ def test_a_sheet_refusal_everywhere_fails_for_good_and_says_what_to_change():
     job = post_clip(h)
     err = job["error"]
     assert job["state"] == "failed" and err["code"] == "capability_missing" and err["retryable"] is False
-    assert err["message"] == ("Runway cannot do this clip: it takes at most 5 character refs. Name fewer "
-                              "characters in this shot, or a single view (@maya_front) instead of a whole character (@maya).")
+    # Since 2026-10-09 (features/runway-fallback.clan) it names the first provider's reason, then Runway's.
+    assert err["message"] == ("fal could not make it: fal takes at most 4 character refs. Runway cannot do this "
+                              "step either: it takes at most 5 character refs. Name fewer characters in this shot, "
+                              "or a single view (@maya_front) instead of a whole character (@maya).")
     assert "account" not in err["message"] and "Try again" not in err["message"]
 
 
@@ -136,3 +138,17 @@ def test_a_masked_edit_carries_no_anchor_or_previous_frame():
     # Runway has no masks: a reference-based redraw, which keeps the continuity frames.
     job = PassthroughDirector().direct({"op": "region_edit", "input": inp}, load_sheet("runway"))["providerJob"]
     assert {anchor["sha256"], previous["sha256"]} <= {r["sha256"] for r in job["refs"]} and "mask" not in job
+
+
+def test_an_uncertain_job_can_be_stopped():
+    # 2026-10-09: a 30 s upload timed out, the job was "uncertain" (fal may have it), and Cancel
+    # did nothing. Stopping it ends it as cancelled; it is never sent again. Uncertain on fal now
+    # falls back to Runway (features/runway-fallback.clan), so this is Runway, the floor, uncertain.
+    h = Harness(base_config())
+    h.providers["runway"].submit_effect = ProviderError("provider_unavailable", "timed out", retryable=True, accepted=True)
+    token = h.sign_in()
+    job = h.call("POST", "/jobs", job_request("clip", new_id("job")), token, expect=200)[1]
+    assert job["state"] == "uncertain"
+    out = h.call("DELETE", f"/jobs/{job['jobId']}", None, token, expect=200)[1]
+    assert out["state"] == "cancelled"
+    assert len(h.providers["runway"].submits) == 1 and not h.providers["fal"].submits

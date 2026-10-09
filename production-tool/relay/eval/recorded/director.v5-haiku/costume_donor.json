@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"generate\", \"needsUser\": null, \"rationale\": \"Generate on fal Nano Banana Pro. in_1 is the character to keep; handyman_dress is a donor for the dress only. Words kept as written, with the standard full-body close.\", \"confidence\": 0.8, \"providerJob\": {\"provider\": \"fal\", \"model\": \"nano-banana-pro-edit\", \"op\": \"generate\", \"prompt\": \"Use the @handyman_dress as reference for the samurai dress\\nbroom\\ntoilet cleaner\\nThe idea is there is a samurai who can do all the chores of the house. The character in @in_1, kept as its design. The dress of @handyman_dress only. Full body, facing the viewer, centred on a plain light background.\", \"ratio\": \"4:5\", \"refs\": [{\"name\": \"in_1\", \"role\": \"character\", \"sha256\": \"sha256:53204dd7a93da45ef82bc362dfe05b6608aad58ea245ca414d68c9207cab2d80\"}, {\"name\": \"handyman_dress\", \"role\": \"object\", \"sha256\": \"sha256:4db7c3a9ba5999a69a673068807328eb63470a0d2dabe713b5a571653c98d9ab\"}]}}",
+ "version": "director.v5"
+}

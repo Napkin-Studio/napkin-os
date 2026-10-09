@@ -10,8 +10,9 @@
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
 import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument, StaleMark } from '../contracts/types'
-import { updateDoc, type DocumentStore, type SnapshotStore } from '../doc/store'
+import { updateDoc, type DocumentStore } from '../doc/store'
 import type { JobPurpose, UiState } from '../doc/ui'
+import type { UiStore } from '../projects/uiStore'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
 import { isActive, type JobRunner } from './runner'
@@ -21,7 +22,7 @@ import { refreshClipStale } from './stale'
 export interface FrameDeps {
   relay: Relay
   doc: DocumentStore
-  ui: SnapshotStore<UiState>
+  ui: UiStore
   runner: JobRunner
 }
 
@@ -49,9 +50,14 @@ export async function continuity(relay: Relay, d: ProductionDocument, index: num
 }
 
 /** The script the shots came from, for the frame's setting. */
+/** A script is up to SCRIPT_MAX characters (2026-10-09); a frame request carries only its first
+ *  FRAME_SCRIPT_MAX, enough for the setting, so every frame's director call stays small. */
+export const SCRIPT_MAX = 1500
+export const FRAME_SCRIPT_MAX = 600
+
 export function scriptText(d: ProductionDocument): string | undefined {
   const rev = d.script?.revisions.find((r) => r.id === d.script?.current)
-  return rev?.imported_text ? rev.imported_text.slice(0, 600) : undefined
+  return rev?.imported_text ? rev.imported_text.slice(0, FRAME_SCRIPT_MAX) : undefined
 }
 
 /** The whole frame request for the shot at `index`. */

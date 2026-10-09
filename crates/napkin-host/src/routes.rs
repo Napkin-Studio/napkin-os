@@ -359,6 +359,14 @@ pub fn dispatch(
             Err(e) => e.into(),
         },
 
+        "/patch-schema" => match session.patch_schema_as(ctx, &req.body_str()) {
+            Ok(done) => {
+                let events = notify_even_if_unchanged(&done, HostEvent::DataChanged);
+                HostResponse::json(200, &done.reply).with_events(events)
+            }
+            Err(e) => e.into(),
+        },
+
         "/fork" => match session.fork_as(ctx, &req.body_str()) {
             Ok(done) => HostResponse::json(200, &done.reply).with_events(done.events),
             Err(e) => e.into(),
