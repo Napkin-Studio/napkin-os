@@ -5,6 +5,7 @@ import pytest
 from conftest import Harness, base_config, job_request
 from director import new_id
 from providers.base import Moderated, ProviderError, Status
+from service import QUEUE_TIMEOUT_S
 
 
 # ── session and uploads ─────────────────────────────────────────────────────
@@ -369,9 +370,26 @@ def test_queued_job_times_out():
     h.post_job(a, expect=200)
     h.post_job(b, expect=200)
     _, queued = h.post_job(c, expect=200)
+    # A queued job waits its turn past the running limit (2026-10-09: a busy room waits, it does not
+    # fail at 10 minutes), and fails at the queue limit with a retry.
     h.clock.tick(cfg["jobTimeoutS"]["image"] + 1)
+    assert h.poll(c, queued["jobId"])["state"] == "queued"
+    h.clock.tick(QUEUE_TIMEOUT_S["image"] - cfg["jobTimeoutS"]["image"])
     out = h.poll(c, queued["jobId"])
     assert out["state"] == "failed" and out["error"]["code"] == "timeout" and out["error"]["retryable"]
+
+
+def test_the_queue_limit_comes_from_config_when_set():
+    cfg = base_config()
+    cfg["routing"]["generate"] = ["fal"]
+    cfg["queueTimeoutS"] = {"image": 300, "video": 900}
+    h = Harness(cfg)
+    a, b, c = (h.sign_in(n) for n in ("ann", "ben", "cat"))
+    h.post_job(a, expect=200)
+    h.post_job(b, expect=200)
+    _, queued = h.post_job(c, expect=200)
+    h.clock.tick(301)  # past 300 but never shorter than the running limit (180 here): fails now
+    assert h.poll(c, queued["jobId"])["state"] == "failed"
 
 
 def test_sweep_advances_jobs_nobody_polls(h):
