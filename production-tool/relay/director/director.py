@@ -21,7 +21,7 @@ from referencing import Registry, Resource
 
 from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, IMAGE_OPS
-from providers.tags import UnknownTag, rewrite_tags
+from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
 from .base import fit_duration, view_angle
 from .model import ModelPort, Usage
@@ -155,6 +155,35 @@ def _lone_fronts_are_characters(job: dict) -> None:
     for i, r in enumerate(refs):
         if r["role"] == "element_front" and not (i + 1 < len(refs) and refs[i + 1]["role"] == "element_angle"):
             r["role"] = "character"
+
+
+# "of anchor", "from the previous frame": the anchor and previous frames named without their @ (v5, 2026-10-09).
+_BARE_ANCHOR = re.compile(r"\b(of|from|in|as|with|like|match|matches|keep) (?:the )?(anchor|previous)(?: frame)?\b(?!-)")
+_CHARACTER_LINE = re.compile(r"The character is @([a-z][a-z0-9_]{2,15}), exactly as in that picture\.\s*")
+
+
+def _tag_anchors(job: dict) -> None:
+    """The anchor and previous frames, when sent, are named by their tags, so the model ties the words to them."""
+    sent = {r["name"] for r in job.get("refs") or []} & {"anchor", "previous"}
+    if sent:
+        job["prompt"] = _BARE_ANCHOR.sub(lambda m: f"{m.group(1)} @{m.group(2)}" if m.group(2) in sent else m.group(0), job["prompt"])
+
+
+def _one_character_line(job: dict) -> None:
+    """One line names every picture of the character, not one line per picture."""
+    names = _CHARACTER_LINE.findall(job["prompt"])
+    if len(names) < 2:
+        return
+    tags = ", ".join(f"@{n}" for n in names[:-1]) + f" and @{names[-1]}"
+    first = True
+
+    def once(m):
+        nonlocal first
+        if not first:
+            return ""
+        first = False
+        return f"The character is {tags}, exactly as in those pictures. "
+    job["prompt"] = _CHARACTER_LINE.sub(once, job["prompt"]).strip()
 
 
 def _donors_are_objects(job: dict, payload: dict) -> None:
@@ -359,9 +388,18 @@ class Director:
         if "strength" in job and sheet["video"]["feelEdit"] != "strength":
             raise DirectorError(f"{provider_name} takes no edit strength")
         if self.sectioned:
+            _tag_anchors(job)
+            _one_character_line(job)
             _donors_are_objects(job, payload)
             _within_budget(job, op, payload)
         self._check_provider_limits(op, sheet, job)
+        # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said
+        # in words. A name in none of the input, or @current/@anchor/@previous without their picture (the
+        # frame would lose its continuity), is still refused, and the relay makes the job as written.
+        given = {r.get("tag") for r in payload.get("refs") or [] if r.get("tag")}
+        job["prompt"] = TAG_IN_TEXT.sub(
+            lambda m: m.group(0) if m.group(1) in names or m.group(1) not in given else unsent_in_words(m.group(0), []),
+            job["prompt"])
         try:
             rewrite_tags(job["prompt"], names, sheet["tagSyntax"])
             check_capabilities(sheet, ProviderJob.from_director(op, job))

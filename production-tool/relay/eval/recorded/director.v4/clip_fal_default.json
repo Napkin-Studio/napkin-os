@@ -1,0 +1,5 @@
+{
+ "version": "director.v4",
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"clip\", \"needsUser\": null, \"rationale\": \"Routed to fal's Veo 3.1 Fast. The 2 s shot rounds up to the nearest allowed clip length, 4 s. The first frame carries the character, and Veo takes no refs, so refs are empty. No ratio is sent because the first frame sets the shape. Audio is off.\", \"confidence\": 0.85, \"providerJob\": {\"provider\": \"fal\", \"model\": \"veo3.1-fast-i2v\", \"op\": \"clip\", \"prompt\": \"The handyman from the first frame, in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, keeps his look exactly as shown. He scrubs the inside of a toilet bowl with a brush in a bathroom, with a steady, rhythmic scrubbing motion and the grey mop and bucket nearby. Medium shot, static camera. Natural motion, no music, no dialogue. No text, captions, subtitles or speech bubbles.\", \"refs\": [], \"firstFrame\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\", \"durationS\": 4, \"audio\": false}}"
+}

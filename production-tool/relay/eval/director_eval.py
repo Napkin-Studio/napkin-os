@@ -26,6 +26,7 @@ from director.base import PassthroughDirector  # noqa: E402
 from director.director import Director, DirectorError  # noqa: E402
 from director.model import ModelError, ModelPort, Reply  # noqa: E402
 from providers import load_sheets  # noqa: E402
+from providers.types import effective_sheet  # noqa: E402
 
 CASES = HERE / "director_cases.json"
 RECORDED = HERE / "recorded"
@@ -84,11 +85,15 @@ def director(wire, version: str, model: str) -> Director:
 def answer(case: dict, data: dict, version: str, wire=None, model: str = MODELS["sonnet"]) -> dict:
     """The providerJob for one case, or {"error": ...} when the director refused its own answer."""
     sheet = load_sheets()[case["provider"]]
+    if case.get("model"):  # a pick: the director sees the sheet as that model runs it, as in the relay
+        sheet = effective_sheet(sheet, case["op"], case["model"])
     inp = job_input(case, data)
     if version == "passthrough":
         return PassthroughDirector().direct({"op": case["op"], "input": inp, "jobId": case["id"]}, sheet)["providerJob"]
     try:
-        return director(wire, version, model).run(case["op"], inp, case["provider"], job_id=case["id"]).output["providerJob"]
+        d = director(wire, version, model)
+        d.sheets = {**d.sheets, case["provider"]: sheet}
+        return d.run(case["op"], inp, case["provider"], job_id=case["id"]).output["providerJob"]
     except (DirectorError, ModelError) as e:
         return {"error": str(e)[:300]}
 
@@ -113,9 +118,14 @@ def score(case: dict, job: dict) -> dict:
     return out
 
 
-def recorded(version: str, case_id: str) -> str | None:
-    p = RECORDED / version / f"{case_id}.json"
-    return json.loads(p.read_text())["reply"] if p.exists() else None
+def recorded(label: str, case_id: str) -> dict | None:
+    """A recording: {"version", "model", "reply"}. The folder is its label (director.v5-haiku)."""
+    p = RECORDED / label / f"{case_id}.json"
+    if not p.exists():
+        return None
+    rec = json.loads(p.read_text())
+    rec.setdefault("version", label)
+    return rec
 
 
 def table(data: dict, versions: list[str]) -> dict[str, dict]:
@@ -127,10 +137,10 @@ def table(data: dict, versions: list[str]) -> dict[str, dict]:
             if v == "passthrough":
                 job = answer(case, data, v)
             else:
-                text = recorded(v, case["id"])
-                if text is None:
+                rec = recorded(v, case["id"])
+                if rec is None:
                     continue
-                job = answer(case, data, v, Replay(text))
+                job = answer(case, data, rec["version"], Replay(rec["reply"]))
             rows[case["id"]] = score(case, job)
         out[v] = rows
     return out
@@ -148,6 +158,7 @@ def main(argv=None) -> None:
     rec.add_argument("version")
     rec.add_argument("--model", default="sonnet", choices=sorted(MODELS))
     rec.add_argument("--case", action="append")
+    rec.add_argument("--as", dest="label", help="the folder to record under (default: the version)")
     sub.add_parser("score")
     args = ap.parse_args(argv)
     data = load()
@@ -164,9 +175,9 @@ def main(argv=None) -> None:
             wire = Recording(base)
             job = answer(case, data, args.version, wire, MODELS[args.model])
             if wire.last is not None:
-                p = RECORDED / args.version / f"{case['id']}.json"
+                p = RECORDED / (args.label or args.version) / f"{case['id']}.json"
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(json.dumps({"model": MODELS[args.model], "reply": wire.last}, indent=1) + "\n")
+                p.write_text(json.dumps({"version": args.version, "model": MODELS[args.model], "reply": wire.last}, indent=1) + "\n")
             print(case["id"], json.dumps(score(case, job)), job.get("error", ""), flush=True)
         return
     versions = ["passthrough"] + sorted(p.name for p in RECORDED.glob("*") if p.is_dir())

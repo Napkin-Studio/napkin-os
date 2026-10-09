@@ -49,8 +49,8 @@ def test_a_pick_runs_on_its_provider_and_model_at_its_price():
 def test_no_pick_routes_as_before():
     h = harness()
     job = post(h, h.sign_in())
-    assert (job["provider"], job["model"]) == ("fal", "kling-v3-pro-i2v")
-    assert job["cost"]["reserved"] == 0.56
+    assert (job["provider"], job["model"]) == ("fal", "veo3.1-fast-i2v")  # the default clip since 2026-10-09
+    assert job["cost"]["reserved"] == 0.9
 
 
 def test_a_pick_its_provider_cannot_take_falls_back_to_runway_default():
@@ -117,8 +117,15 @@ def test_effective_sheet_puts_the_alternate_over_the_op_and_the_sheet():
     kling = effective_sheet(fal, "frame", "kling-image-o3")  # an alternate keeps the sheet's Kling settings
     assert kling["tagSyntax"] == "at_image_n" and kling["refs"]["element"] is True
     assert kling["ops"]["frame"]["endpoint"] == "fal-ai/kling-image/o3/image-to-image"
-    assert effective_sheet(fal, "clip", "kling-v3-pro-i2v") is fal
-    assert effective_sheet(fal, "clip", None) is fal
+    # Kling, an alternate since 2026-10-09, keeps the sheet's element settings and its own lengths;
+    # the default clip (Veo 3.1 Fast) carries its own over the sheet's.
+    kling_clip = effective_sheet(fal, "clip", "kling-v3-pro-i2v")
+    assert kling_clip["refs"]["element"] is True and kling_clip["video"]["firstFrameWithRefs"] is True
+    assert (kling_clip["ops"]["clip"]["minS"], kling_clip["ops"]["clip"]["maxS"]) == (3, 15)
+    assert "durationsS" not in kling_clip["ops"]["clip"]
+    own = effective_sheet(fal, "clip", None)
+    assert own["ops"]["clip"]["model"] == "veo3.1-fast-i2v" and own["refs"]["max"] == 0
+    assert effective_sheet(fal, "view", None) is fal  # an op whose model sets nothing of its own
 
 
 def test_every_alternate_on_a_sheet_is_one_its_adapter_builds():

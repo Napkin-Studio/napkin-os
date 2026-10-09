@@ -571,7 +571,8 @@
         "lacquered",
         "crescent"
       ],
-      "budget": 500
+      "budget": 500,
+      "model": "kling-v3-pro-i2v"
     },
     {
       "id": "clip_runway_push",
@@ -621,6 +622,57 @@
         "lacquered"
       ],
       "budget": 500
+    },
+    {
+      "id": "clip_fal_default",
+      "why": "fal's default clip (Veo 3.1 Fast) takes no character pictures: the words name none, and the job still goes",
+      "op": "clip",
+      "provider": "fal",
+      "input": {
+        "ratio": "9:16",
+        "image": "A7",
+        "shot": {
+          "id": "shot_01K6XA6Z0000000000000002",
+          "order": 2,
+          "duration_s": 2,
+          "composition": "medium",
+          "camera_move": "static",
+          "action": "@handyman scrubs the toilet bowl with a brush in the bathroom.",
+          "refs": [
+            "handyman"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "handyman_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2",
+            "card": "handyman_front"
+          }
+        ]
+      },
+      "must": [
+        [
+          "scrub"
+        ],
+        [
+          "static",
+          "still camera",
+          "locked",
+          "steady",
+          "holds still"
+        ]
+      ],
+      "forbid": [
+        "mop",
+        "duster",
+        "lacquered",
+        "crescent"
+      ],
+      "budget": 500,
+      "only_refs": []
     }
   ]
 }

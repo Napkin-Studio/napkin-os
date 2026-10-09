@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"generate\", \"needsUser\": null, \"rationale\": \"Routed to fal nano-banana-pro-edit. @in_1 is the character kept as it is; @handyman_front is a donor object giving only its polo shirt. Kept the 4:5 ratio and the default full-body ending.\", \"confidence\": 0.8, \"providerJob\": {\"provider\": \"fal\", \"model\": \"nano-banana-pro-edit\", \"op\": \"generate\", \"prompt\": \"make it wear the tshirt like @handyman_front. The character in @in_1, kept as it is; the blue polo shirt of @handyman_front only. Full body, facing the viewer, centred on a plain light background.\", \"ratio\": \"4:5\", \"audio\": false, \"refs\": [{\"name\": \"in_1\", \"role\": \"character\", \"sha256\": \"sha256:73bddd0044e9399c0799c403ced62cf1d108b4cd1d3d69394e577d3566d85381\"}, {\"name\": \"handyman_front\", \"role\": \"object\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\"}]}}",
+ "version": "director.v5"
+}

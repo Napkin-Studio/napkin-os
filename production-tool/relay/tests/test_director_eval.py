@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from director.director import Director, DirectorError, _donors_are_objects, _lone_fronts_are_characters, _within_budget
+from director.director import (Director, DirectorError, _donors_are_objects, _lone_fronts_are_characters,
+                               _one_character_line, _tag_anchors, _within_budget)
 from eval.director_eval import load, table, totals
 from providers import load_sheets
 
@@ -94,3 +95,20 @@ def test_the_directors_additions_have_a_budget_but_the_words_do_not():
     _within_budget({"prompt": words + "y" * 300}, "generate", {"text": words})
     with pytest.raises(DirectorError, match="added"):
         _within_budget({"prompt": "y" * 400}, "generate", {"text": ""})
+
+
+def test_the_anchor_and_previous_frames_are_named_by_their_tags_when_sent():
+    job = {"prompt": "Keep the setting, light and style of anchor. Continue from previous. The previous shot was wide.",
+           "refs": [ref("anchor", "object"), ref("previous", "object")]}
+    _tag_anchors(job)
+    assert job["prompt"] == "Keep the setting, light and style of @anchor. Continue from @previous. The previous shot was wide."
+    alone = {"prompt": "Continue from previous.", "refs": [ref("hero_front", "character")]}
+    _tag_anchors(alone)
+    assert alone["prompt"] == "Continue from previous."  # not sent: left as words
+
+
+def test_one_line_names_every_picture_of_the_character():
+    job = {"prompt": "A sofa. The character is @a_front, exactly as in that picture. The character is @a_side, exactly as in that picture. "
+                     "The character is @a_back, exactly as in that picture. Full-bleed."}
+    _one_character_line(job)
+    assert job["prompt"] == "A sofa. The character is @a_front, @a_side and @a_back, exactly as in those pictures. Full-bleed."

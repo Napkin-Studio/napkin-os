@@ -1,0 +1,5 @@
+{
+ "version": "director.v5",
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"clip\", \"needsUser\": null, \"rationale\": \"Veo 3.1 Fast takes no refs, so @handyman_front became 'the figure in the frame'; the first frame carries the look. 2s rounds up to 4s, audio off, camera held static.\", \"confidence\": 0.7, \"providerJob\": {\"provider\": \"fal\", \"model\": \"veo3.1-fast-i2v\", \"op\": \"clip\", \"prompt\": \"The figure in the frame scrubs the toilet bowl with a brush in the bathroom. The camera holds still. No text, captions, subtitles or speech bubbles.\", \"refs\": [], \"firstFrame\": \"sha256:9459b286afd5a9e76269e51ed23e51dd3d61baec5f1d3dc5e5bb1b56220f612e\", \"durationS\": 4, \"audio\": false, \"ratio\": \"9:16\"}}"
+}
