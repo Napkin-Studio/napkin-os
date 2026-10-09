@@ -143,7 +143,7 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         for name in args.pathways:
             relay = _relay(name, Path(tmp) / name, env)
-            _, session = _call(relay, "POST", "/session", {"eventCode": "SMOKE", "handle": "smoke"})
+            _, session = _call(relay, "POST", "/session", {"eventCode": "SMOKE", "team": "blue", "handle": "smoke"})
             token = session["token"]
             for row in (r for r in rows if r["pathway"] == name):
                 if row["skip"]:

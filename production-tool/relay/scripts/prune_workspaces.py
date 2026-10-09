@@ -6,7 +6,7 @@ A DRY RUN by default: it lists every object, job record and counter it would del
 the same as a JSON report. Pass --yes to delete.
 
 Which workspaces:
-  --name Maya [--name Sam …]   a name as people sign in with it (any case): its participant's workspace
+  --name Herons/Maya [--name Pixels/Sam …]   team name and name as people sign in with them (any case): that workspace
   --workspace ID [...]         a workspace by its id: a participant id (p_…), or a team library left
                                from before personal workspaces (library/event/, library/acme/)
   --all                        every workspace in the stores
@@ -34,8 +34,8 @@ Where:
   --local [DIR]: the dev server's files (default relay/.local-data). Its jobs live in memory, so
                  there are none to delete.
 
-    uv run --frozen --python 3.12 python scripts/prune_workspaces.py --name Maya            # dry run
-    uv run --frozen --python 3.12 python scripts/prune_workspaces.py --name Maya --yes      # delete
+    uv run --frozen --python 3.12 python scripts/prune_workspaces.py --name Herons/Maya     # dry run
+    uv run --frozen --python 3.12 python scripts/prune_workspaces.py --name Herons/Maya --yes  # delete
     uv run --frozen --python 3.12 python scripts/prune_workspaces.py --all --before 2026-10-20 --yes
 
 The report (--report, default prune-report-<UTC time>.json here) names every workspace chosen and
@@ -228,7 +228,7 @@ def stores(args):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     who = ap.add_mutually_exclusive_group(required=True)
-    who.add_argument("--name", action="append", help="a name as people sign in with it (repeat for more)")
+    who.add_argument("--name", action="append", help="team/name as people sign in with them (repeat for more)")
     who.add_argument("--workspace", action="append", help="a workspace id: p_… or an old team library (event)")
     who.add_argument("--all", action="store_true", help="every workspace")
     ap.add_argument("--before", help="only workspaces with nothing on or after this day (YYYY-MM-DD, UTC)")
@@ -242,7 +242,10 @@ def main(argv=None) -> int:
         except ValueError:
             ap.error("--before is YYYY-MM-DD")
     blobs, store, where = stores(args)
-    names = {participant_id(n): n for n in args.name or []}
+    for n in args.name or []:
+        if "/" not in n:
+            ap.error(f"--name takes team/name (the workspace is the two together): {n!r}")
+    names = {participant_id(*n.split("/", 1)): n for n in args.name or []}
     targets = None if args.all else (set(names) | set(args.workspace or []))
     p = plan(blobs, store, workspaces=targets, before=args.before)
 

@@ -37,9 +37,9 @@ def open_clan(h, token, project):
 
 def test_sign_in_with_the_event_code_in_any_case_and_a_name(h):
     for code in ("napkin-studio", "NAPKIN-STUDIO", " Napkin-Studio "):
-        _, out = h.call("POST", "/session", {"eventCode": code, "handle": "maya"}, expect=200)
+        _, out = h.call("POST", "/session", {"eventCode": code, "team": "blue", "handle": "maya"}, expect=200)
         assert out["role"] == "participant" and out["workspace"] == out["participantId"]
-    h.call("POST", "/session", {"eventCode": "napkin", "handle": "maya"}, expect=401)
+    h.call("POST", "/session", {"eventCode": "napkin", "team": "blue", "handle": "maya"}, expect=401)
 
 
 def test_a_save_is_listed_for_its_name_only_newest_first(h):
@@ -60,13 +60,13 @@ def test_a_save_is_listed_for_its_name_only_newest_first(h):
 
 
 def test_sign_in_says_how_many_projects_the_name_has(h):
-    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "handle": "maya"}, expect=200)[1]["projects"] == 0
+    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "maya"}, expect=200)[1]["projects"] == 0
     maya = h.sign_in("maya", "napkin-studio")
     save(h, maya, A, clan("one"))
     save(h, maya, A, clan("one again"))
     save(h, maya, B, clan("two"))
-    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "handle": "MAYA"}, expect=200)[1]["projects"] == 2
-    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "handle": "sam"}, expect=200)[1]["projects"] == 0
+    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "MAYA"}, expect=200)[1]["projects"] == 2
+    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "sam"}, expect=200)[1]["projects"] == 0
 
 
 def test_open_answers_the_newest_bytes_with_their_etag(h):
@@ -115,7 +115,7 @@ def test_a_save_without_if_match_is_taken_as_before(h):
     save(h, maya, A, clan("one"))
     status, _ = save(h, maya, A, clan("two"))
     assert status == 200 and open_clan(h, maya, A)[1].data == clan("two")
-    pid = h.call("POST", "/session", {"eventCode": "HACK", "handle": "maya"}, expect=200)[1]["participantId"]
+    pid = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "maya"}, expect=200)[1]["participantId"]
     assert h.blobs.objects[f"clan/{pid}/{A}/latest.clan"][0] == clan("two")  # the organisers' copy, as before
 
 
@@ -182,7 +182,7 @@ def test_local_server_lets_the_browser_send_if_match_and_read_the_etag():
 
 def test_the_local_server_round_trip(tmp_path):
     relay, blobs = local.build(8799, tmp_path)
-    status, sess, _ = relay.http("POST", "/session", {}, json.dumps({"eventCode": "local", "handle": "maya"}).encode())
+    status, sess, _ = relay.http("POST", "/session", {}, json.dumps({"eventCode": "local", "team": "blue", "handle": "maya"}).encode())
     assert status == 200
     auth = {"Authorization": f"Bearer {sess['token']}", "X-Project-Id": A}
     assert relay.http("POST", "/clan", auth, clan("one"))[0] == 200

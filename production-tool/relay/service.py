@@ -30,6 +30,7 @@ import logging
 import math
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 import library
@@ -156,8 +157,41 @@ def parse_iso(s: str) -> float:
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
 
 
-def participant_id(handle: str) -> str:
-    return "p_" + hashlib.sha256(handle.lower().encode()).hexdigest()[:10]
+def same_text(s: str) -> str:
+    """One spelling for a team or a name: Unicode NFKC, case folded, runs of spaces as one, trimmed.
+    'Blue Herons', 'blue  herons' and 'BLUE HERONS' are one team; 'ｔｅａｍ' is 'team'."""
+    return " ".join(unicodedata.normalize("NFKC", s).casefold().split())
+
+
+TEAM_MAX = 40
+
+
+def team_problem(team: str) -> str | None:
+    """Why a team name can't be used, or None. Anything a person might call their team is fine
+    (spaces, accents, any script, emoji, '&'), except '/' (it joins team and name in the workspace
+    key, so 'a/b' + 'c' would be 'a' + 'b/c') and control characters."""
+    t = same_text(team)
+    if len(t) < 2 or len(t) > TEAM_MAX:
+        return f"A team name is 2 to {TEAM_MAX} characters."
+    if "/" in t or any(unicodedata.category(c) in ("Cc", "Cf", "Cs") and c not in "\u200d\ufe0f" for c in t):
+        return "A team name can't have / or hidden characters in it."
+    return None
+
+
+def participant_id(team: str, handle: str) -> str:
+    """The team name and the name together, in one spelling (features/personal-workspaces.clan): two
+    Mayas in different teams are two workspaces. The team only makes the workspace unique; nothing is shared."""
+    return "p_" + hashlib.sha256(f"{same_text(team)}/{same_text(handle)}".encode()).hexdigest()[:10]
+
+
+def blocked_keys(team: str | None, handle: str) -> list[str]:
+    """What a block can name: the person (team/name), or a name in every team."""
+    return [handle] + ([f"{same_text(team)}/{same_text(handle)}"] if team else [])
+
+
+# The same team and name signed in from another browser this recently: probably two people who picked
+# the same name in one team (the one clash team names can't prevent). Sign-in says so; it never refuses.
+ELSEWHERE_S = 2 * 3600
 
 
 def asset_refs(node) -> list[dict]:
@@ -297,7 +331,7 @@ class Relay:
         return payload
 
     def _not_blocked(self, who: dict) -> None:
-        if self.store.is_blocked(who["h"]):
+        if any(self.store.is_blocked(k) for k in blocked_keys(who.get("t"), who["h"])):
             raise ApiError("blocked", "This handle has been blocked by the organisers.")
 
     def _own_job(self, who: dict, job_id: str) -> dict:
@@ -319,17 +353,37 @@ class Relay:
             role = "participant"
         else:
             raise ApiError("unauthorised", "That event code is not right.")
-        handle = req["handle"]
-        if self.store.is_blocked(handle):
+        handle, team = req["handle"], " ".join(req["team"].split())
+        problem = team_problem(team)
+        if problem:
+            raise ApiError("invalid_input", problem)
+        if any(self.store.is_blocked(k) for k in blocked_keys(team, handle)):
             raise ApiError("blocked", "This handle has been blocked by the organisers.")
-        pid = participant_id(handle)
+        pid = participant_id(team, handle)
         ctx["participant"] = pid
         exp = int(self.clock()) + SESSION_TTL_S
         # Each name is its own workspace (features/personal-workspaces.clan): the library and the
         # saved projects are the participant's, whatever code they signed in with.
-        token = sign({"pid": pid, "h": handle, "r": role, "exp": exp}, secrets["token_secret"])
-        return {"token": token, "participantId": pid, "handle": handle, "role": role, "workspace": pid,
-                "expiresAt": iso(exp), "quotas": self.remaining(pid, role), "projects": self._projects().count(pid)}
+        token = sign({"pid": pid, "h": handle, "t": team, "r": role, "exp": exp}, secrets["token_secret"])
+        out = {"token": token, "participantId": pid, "handle": handle, "team": team, "role": role, "workspace": pid,
+               "expiresAt": iso(exp), "quotas": self.remaining(pid, role), "projects": self._projects().count(pid)}
+        elsewhere = self._seen(pid, req.get("device"))
+        if elsewhere:
+            out["elsewhere"] = {"at": elsewhere}
+        return out
+
+    def _seen(self, pid: str, device: str | None) -> str | None:
+        """Note this browser as the workspace's latest; return when another browser signed in to it, if
+        that was within ELSEWHERE_S. A browser that sends no device id is neither noted nor warned."""
+        if not device:
+            return None
+        key = f"clan/{pid}/seen.json"
+        last = self.blobs.get_json(key) or {}
+        now = self.clock()
+        self.blobs.put(key, json.dumps({"device": device, "at": now}).encode(), "application/json")
+        if last.get("device") and last["device"] != device and now - float(last.get("at", 0)) < ELSEWHERE_S:
+            return iso(int(last["at"]))
+        return None
 
     def _day(self) -> str:
         return iso(self.clock())[:10]

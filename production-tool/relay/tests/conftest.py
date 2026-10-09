@@ -187,7 +187,7 @@ class Harness:
         return status, out
 
     def sign_in(self, handle="alice", code="HACK") -> str:
-        _, out = self.call("POST", "/session", {"eventCode": code, "handle": handle}, expect=200)
+        _, out = self.call("POST", "/session", {"eventCode": code, "team": "blue", "handle": handle}, expect=200)
         return out["token"]
 
     def post_job(self, token, op="generate", job_id=None, expect=None, **inp):

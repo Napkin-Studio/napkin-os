@@ -21,7 +21,7 @@ from store import DynamoStore, MemoryStore
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import prune_workspaces as prune  # noqa: E402
 
-MAYA, SAM = participant_id("maya"), participant_id("sam")
+MAYA, SAM = participant_id("blue", "maya"), participant_id("blue", "sam")
 P1, P2 = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N9"
 
 
@@ -89,12 +89,12 @@ def test_a_dry_run_lists_everything_and_deletes_nothing(local, tmp_path, capsys)
     blobs, _ = local
     before = keys(blobs)
     report = tmp_path / "r.json"
-    assert prune.main(["--name", "Maya", "--local", str(tmp_path / "data"), "--report", str(report)]) == 0
+    assert prune.main(["--name", "blue/Maya", "--local", str(tmp_path / "data"), "--report", str(report)]) == 0
     assert keys(blobs) == before
     out = capsys.readouterr().out
     assert "DRY RUN" in out and f"object  clan/{MAYA}/{P1}/latest.clan" in out and "pass --yes" in out
     r = json.loads(report.read_text())
-    assert r["dryRun"] is True and [c["workspace"] for c in r["chosen"]] == [MAYA] and r["chosen"][0]["name"] == "Maya"
+    assert r["dryRun"] is True and [c["workspace"] for c in r["chosen"]] == [MAYA] and r["chosen"][0]["name"] == "blue/Maya"
 
 
 def test_a_name_is_removed_and_a_shared_picture_is_kept(local):
@@ -156,7 +156,7 @@ def test_the_old_team_library_by_its_id(local):
 def test_yes_deletes_on_the_local_files_and_writes_the_report(local, tmp_path):
     blobs, _ = local
     report = tmp_path / "r.json"
-    prune.main(["--name", "maya", "--local", str(tmp_path / "data"), "--yes", "--report", str(report)])
+    prune.main(["--name", "blue/maya", "--local", str(tmp_path / "data"), "--yes", "--report", str(report)])
     assert f"clan/{MAYA}/{P1}/latest.clan" not in keys(blobs)
     assert not list((tmp_path / "data").rglob(f"sha256:{sha(1)}.mime"))  # the dev server's notes go too
     r = json.loads(report.read_text())
@@ -199,9 +199,9 @@ def test_on_s3_and_dynamodb(monkeypatch, tmp_path):
         blobs, store = S3Blobs("napkin-test", "", client=s3), DynamoStore("jobs", "quotas", "blocked", client=ddb)
         fill(blobs, store)
         report = tmp_path / "r.json"
-        prune.main(["--name", "Maya", "--report", str(report)])  # dry run
+        prune.main(["--name", "blue/Maya", "--report", str(report)])  # dry run
         assert f"clan/{MAYA}/{P1}/latest.clan" in keys(blobs) and len(store.all_jobs()) == 3
-        prune.main(["--name", "Maya", "--yes", "--report", str(report)])
+        prune.main(["--name", "blue/Maya", "--yes", "--report", str(report)])
         left = keys(blobs)
         assert not [k for k in left if MAYA in k] and f"in/sha256:{sha(2)}" in left and f"in/sha256:{sha(1)}" not in left
         assert {j["jobId"] for j in store.all_jobs()} == {"job_s"}

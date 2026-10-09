@@ -21,16 +21,16 @@ def publish(h, token, key="maya", base=0, variants=("front", "side"), expect=200
 
 
 def test_session_workspace_is_the_participant(h):
-    ann = h.call("POST", "/session", {"eventCode": "napkin-studio", "handle": "ann"}, expect=200)[1]
+    ann = h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "ann"}, expect=200)[1]
     assert ann["workspace"] == ann["participantId"]
-    bob = h.call("POST", "/session", {"eventCode": "napkin-studio", "handle": "bob"}, expect=200)[1]
+    bob = h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "bob"}, expect=200)[1]
     assert bob["workspace"] == bob["participantId"] != ann["workspace"]
 
 
 def test_publish_list_and_read_back(h):
     ann = h.sign_in("ann", "napkin-studio")
     entry = publish(h, ann)
-    pid = h.call("POST", "/session", {"eventCode": "napkin-studio", "handle": "ann"}, expect=200)[1]["participantId"]
+    pid = h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "ann"}, expect=200)[1]["participantId"]
     assert (entry["workspace"], entry["key"], entry["ver"], entry["by"]) == (pid, "maya", 1, "ann")
     assert f"library/{pid}/index.json" in h.blobs.objects
     index = h.call("GET", "/library", token=ann, expect=200)[1]

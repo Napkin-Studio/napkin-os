@@ -15,10 +15,23 @@
         "handle": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_.-]{2,24}$"
+        },
+        "team": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[^/\\u0000-\\u001f\\u007f]+$",
+          "description": "The team name: spaces, accents, any script and emoji are fine; no / and no control characters; 2-40 characters after spaces are collapsed (the relay checks). With the name it makes the workspace unique (two Mayas in different teams are two people); nothing is shared within a team."
+        },
+        "device": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9-]{8,64}$",
+          "description": "A random id this browser keeps, to tell when the same team and name signed in from another browser recently (SessionResponse.elsewhere). Not a login."
         }
       },
       "required": [
         "eventCode",
+        "team",
         "handle"
       ],
       "additionalProperties": false
@@ -77,6 +90,23 @@
           "type": "integer",
           "minimum": 0,
           "description": "How many projects this name has saved on the relay (GET /projects), so sign-in can say 'Welcome back, <name>: N projects' when the workspace already exists. Added 2026-10-09."
+        },
+        "team": {
+          "type": "string"
+        },
+        "elsewhere": {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "at"
+          ],
+          "additionalProperties": false,
+          "description": "Another browser signed in with this team and name within the last 2 hours: probably two people who picked the same name in one team."
         }
       },
       "required": [
@@ -87,7 +117,8 @@
         "role",
         "expiresAt",
         "quotas",
-        "projects"
+        "projects",
+        "team"
       ],
       "additionalProperties": false
     },

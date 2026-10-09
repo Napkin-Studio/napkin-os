@@ -136,7 +136,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
         r = handler.handler(event, None)
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
-    status, sess = http("POST", "/api/session", {"eventCode": "HACK", "handle": "alice"})
+    status, sess = http("POST", "/api/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"})
     assert status == 200
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5}, sess["token"])
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
@@ -161,7 +161,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     assert r["statusCode"] == 200 and r["isBase64Encoded"] is True
     assert base64.b64decode(r["body"]) == data
     assert r["headers"]["Content-Type"] == "application/vnd.clan+zip" and r["headers"]["ETag"] == f'"{etag}"'
-    status, again = http("POST", "/api/session", {"eventCode": "hack", "handle": "Alice"})
+    status, again = http("POST", "/api/session", {"eventCode": "hack", "team": "blue", "handle": "Alice"})
     assert again["projects"] == 1
 
 
