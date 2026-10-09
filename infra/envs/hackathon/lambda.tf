@@ -58,7 +58,7 @@ data "aws_iam_policy_document" "relay" {
     sid     = "Objects"
     actions = ["s3:GetObject", "s3:PutObject"]
     # dogfood/: the beta's record (features/production-tool-dogfood.clan)
-    resources = [for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*"] : "${aws_s3_bucket.site.arn}/${p}"]
+    resources = [for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*"] : "${aws_s3_bucket.site.arn}/${p}"]
   }
   statement {
     sid       = "Config"
@@ -73,7 +73,7 @@ data "aws_iam_policy_document" "relay" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["in/*", "out/*", "ads/*", "library/*", "dogfood/*"]
+      values   = ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*"]
     }
   }
   statement {
