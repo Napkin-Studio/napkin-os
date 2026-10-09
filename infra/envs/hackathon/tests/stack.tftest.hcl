@@ -88,6 +88,10 @@ run "plans_the_hackathon_stack" {
     error_message = "jobs ledger has the participant and active indexes"
   }
   assert {
+    condition     = anytrue([for s in data.aws_iam_policy_document.relay.statement : anytrue([for r in s.resources : endswith(r, "/dogfood/*")]) if s.sid == "Objects"]) && anytrue([for s in data.aws_iam_policy_document.relay.statement : contains(one(s.condition).values, "dogfood/*") if s.sid == "ListForExists"])
+    error_message = "the relay may write and check the beta's record under dogfood/ (features/production-tool-dogfood.clan)"
+  }
+  assert {
     condition     = aws_lambda_function_url.relay.qualifier == "live" && aws_cloudwatch_event_rule.sweep.schedule_expression == "rate(1 minute)"
     error_message = "the Function URL and the sweep both use the live alias"
   }
