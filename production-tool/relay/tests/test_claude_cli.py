@@ -17,7 +17,7 @@ SCHEMA = {"type": "object", "properties": {"prompt": {"type": "string"}}, "requi
 class FakeRun:
     def __init__(self, out=None, raise_=None):
         self.calls = []
-        self.out = out if out is not None else {"is_error": False, "result": "{}", "structured_output": {"prompt": "a guinea pig"},
+        self.out = out if out is not None else {"is_error": False, "result": "{}", "structured_output": {"answer": {"prompt": "a guinea pig"}},
                                                 "usage": {"input_tokens": 120, "output_tokens": 30, "cache_read_input_tokens": 10}}
         self.raise_ = raise_
         self.seen_files = []
@@ -44,7 +44,7 @@ def test_a_call_is_one_claude_p_run_with_the_schema_and_no_tools():
     cmd = run.calls[0]["cmd"]
     assert cmd[:2] == ["claude", "-p"] and "--no-session-persistence" in cmd
     assert cmd[cmd.index("--model") + 1] == "haiku"
-    assert json.loads(cmd[cmd.index("--json-schema") + 1]) == SCHEMA
+    assert json.loads(cmd[cmd.index("--json-schema") + 1])["properties"]["answer"] == SCHEMA  # wrapped: no oneOf at the top
     assert cmd[cmd.index("--system-prompt") + 1] == "You write prompts."
     assert cmd[cmd.index("--tools") + 1] == "" and run.calls[0]["input"] == "shot 1"
     assert reply.stop == "ok" and json.loads(reply.text) == {"prompt": "a guinea pig"} and reply.usage == (130, 30)
@@ -92,3 +92,12 @@ def test_chosen_by_the_environment_and_never_on_lambda(monkeypatch):
     monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "relay")
     with pytest.raises(RuntimeError):
         claude.make()
+
+
+def test_the_schema_goes_without_its_draft_marker():
+    run = FakeRun()
+    wire = ClaudeCliWire(run=run)
+    wire.send(model="haiku", system="s", turns=[{"role": "user", "text": "x"}], purpose="director", max_tokens=10, effort=None, timeout=5,
+              schema={"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "x", **SCHEMA})
+    cmd = run.calls[0]["cmd"]
+    assert json.loads(cmd[cmd.index("--json-schema") + 1])["properties"]["answer"] == SCHEMA

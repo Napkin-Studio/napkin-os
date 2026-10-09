@@ -11,6 +11,16 @@ import json
 from director.model import ModelError, Reply
 
 
+def cli_schema(schema):
+    """The schema as the CLI's validator takes it: without the draft marker ($schema) and ids,
+    which it tries to resolve and refuses. The port still validates the answer against the full one."""
+    if isinstance(schema, dict):
+        return {k: cli_schema(v) for k, v in schema.items() if k not in ("$schema", "$id")}
+    if isinstance(schema, list):
+        return [cli_schema(v) for v in schema]
+    return schema
+
+
 class ClaudeCliWire:
     """Local development only: Claude Code's `claude -p` under the developer's own login, for
     the director and character cards without an API key (owner, 2026-10-09: "use claude -p for
@@ -53,7 +63,8 @@ class ClaudeCliWire:
                 message = "Look at these pictures with the Read tool first: " + ", ".join(paths) + "\n\n" + message
             cmd = [self.command, "-p", "--no-session-persistence", "--output-format", "json",
                    "--model", self.model_alias(model), "--system-prompt", system,
-                   "--json-schema", json.dumps(schema)]
+                   "--json-schema", json.dumps({"type": "object", "properties": {"answer": cli_schema(schema)},
+                                                "required": ["answer"], "additionalProperties": False})]
             cmd += ["--tools", "Read", "--allowedTools", "Read", "--add-dir", tmp] if paths else ["--tools", ""]
             try:
                 done = self.run(cmd, input=message, capture_output=True, text=True, timeout=timeout)
@@ -72,6 +83,9 @@ class ClaudeCliWire:
         u = out.get("usage") or {}
         fresh, cw, cr = (int(u.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
         usage = (fresh + cw + cr, int(u.get("output_tokens") or 0)) if u else None
+        # The schema went wrapped (the CLI makes it a tool, whose input may not be oneOf at the top).
         structured = out.get("structured_output")
+        if isinstance(structured, dict) and "answer" in structured:
+            structured = structured["answer"]
         text = json.dumps(structured) if structured is not None else out.get("result")
         return Reply(text, "ok", usage, breakdown={"fresh": fresh, "cache_write": cw, "cache_read": cr} if u else None)
