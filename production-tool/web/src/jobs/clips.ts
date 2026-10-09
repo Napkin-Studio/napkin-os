@@ -3,6 +3,7 @@
 
 import type { JobInput, ModelChoice, ProductionDocument, Shot, Take } from '../contracts/types'
 import type { JobPurpose } from '../doc/ui'
+import { clipText } from '../lib/guard'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
@@ -29,7 +30,7 @@ export async function makeClip(
   const image = await assetRef(deps.relay, frameSha)
   const text = extra.text?.trim()
   const refs = await refsFor(deps.relay, d, shot, text)
-  const input: JobInput = { shot: jobShot(shot), image, ...(refs.length ? { refs } : {}), ratio: deps.ui.get().ratio, ...(text ? { text: text.slice(0, 1000) } : {}) }
+  const input: JobInput = { shot: jobShot(shot), image, ...(refs.length ? { refs } : {}), ratio: deps.ui.get().ratio, ...(text ? { text: clipText(text, 1000) } : {}) }
   const purpose: JobPurpose = {
     for: 'clip',
     shotId: shot.id,
@@ -50,7 +51,7 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc' | 'ui'>)
     if (!t) throw new Error(`Shot ${s.order} has no clip yet.`)
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
     // trimmed to its shot: the ad is the sum of the shots plus the end card (END_CARD_S).
-    clips.push({ asset: await assetRef(deps.relay, t.asset), trimS: s.duration_s })
+    clips.push({ asset: await assetRef(deps.relay, t.asset, d), trimS: s.duration_s })
     parents.push(t.job_id)
   }
   return { input: { clips, ratio: deps.ui.get().ratio }, parents }

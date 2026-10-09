@@ -1,6 +1,6 @@
 // Turning local hashes into AssetRefs the relay and providers can read.
 
-import type { AssetRef, InputMime, Region } from '../contracts/types'
+import type { AssetRef, InputMime, ProductionDocument, Region } from '../contracts/types'
 import { getBlob, putBlob } from '../lib/blobs'
 import { boxMaskPng } from '../lib/mask'
 import { fitForSending } from '../lib/fitImage'
@@ -9,9 +9,22 @@ import { RelayError } from '../relay'
 
 const uploaded = new Map<string, AssetRef>()
 
-export async function assetRef(relay: Relay, sha: string): Promise<AssetRef> {
+/** Where the relay already keeps an asset's bytes: its first https location (a relay output, out/ or ads/). */
+export function remoteUrl(doc: Pick<ProductionDocument, 'assets'>, sha: string | undefined): string | undefined {
+  if (!sha) return undefined
+  return doc.assets.find((a) => a.sha256 === sha)?.locations?.find((l) => l.startsWith('https://'))
+}
+
+/** `doc`: when given, a video the relay made (an https location) is named by that location and not
+ *  uploaded again from this browser (features/video-stage-findings.clan): Render ad re-sent every
+ *  clip, failed on clips over the upload limit, and said "A picture is missing" when this browser
+ *  no longer had the bytes. Pictures always go through the fit below. */
+export async function assetRef(relay: Relay, sha: string, doc?: Pick<ProductionDocument, 'assets'>): Promise<AssetRef> {
   const hit = uploaded.get(sha)
   if (hit) return hit
+  const known = doc?.assets.find((a) => a.sha256 === sha)
+  const at = doc && known?.kind === 'video' && known.mime === 'video/mp4' ? remoteUrl(doc, sha) : undefined
+  if (at) return { sha256: sha, url: at, mime: 'video/mp4' }
   const blob = await getBlob(sha)
   if (!blob) throw new RelayError({ code: 'invalid_input', message: 'A picture is missing from this browser. Add it again.', retryable: false })
   // Fitted again here: every input passes through, including pictures added before a size rule
