@@ -97,6 +97,12 @@ The adapter owns the exact request:
    - fal first for images, with Runway as fallback
    - clips: fal, then HeyGen, then Runway
    - clip_edit on Runway only (aleph2)
+
+   Replaced 2026-10-09 (features/runway-fallback.clan, owner's rule): every op routes to Runway only,
+   on the event's key. fal and HeyGen run only on a participant's own keys (HeyGen then fal for clips,
+   fal for pictures and frames), and Runway is the floor of every job: one that fails on fal or HeyGen
+   for any reason but moderation or invalid input is made again once on Runway's default model, on the
+   event's key (Job.fallbackFrom, Job.fallbackReason). `fallbackOnly` is no longer read.
 8. **Sequential storyboard frames (2026-10-07).** Frames are drawn one after another with three anchors: the character views (identity), frame 1 (setting, light and style) and the previous frame (continuity). `JobInput` gains an optional `anchorFrame` (assetRef: the first storyboard frame) beside `previousFrame`, and a frame request may carry the `script` for the setting. Additive: `contractVersion` stays "1". The director names them `@anchor` and `@previous` (prompt `director.v3`). To name it, `promptVersion` in `config.schema.json` and the agent block in `director.schema.json` now also take a minor version (`director.v3`); this loosens a pattern, so every existing value stays valid.
 9. **Prompt names stay `director.vN`** (2026-10-07). A .clan keeps the contract it was created with, so documents made before the pattern was loosened refuse `director.v2.1`. The frames prompt is `director.v3`, which every document accepts; don't use dotted versions.
 10. **Contract version 2 (2026-10-07, feature canvas-solid-refs).** Breaking, so `contractVersion` is "2". The document's `character` (refs, combines, views, lock) becomes `keys[]` + `refs[]`. A shot names its refs (`shots[].refs`) instead of `lead_view`. `JobInput.sketch` and `JobInput.character` go: every image input is a ref with an optional `name` and a `kind`, and a view takes its source as `image`. The `combine` op folds into `generate` (1-14 inputs). customData `ref` and `sketch` become `pic`, `drawn` and `note`. The relay adds the workspace library routes and `workspace` on the session. The live `config.json` must drop its `combine` routing before this relay is deployed.

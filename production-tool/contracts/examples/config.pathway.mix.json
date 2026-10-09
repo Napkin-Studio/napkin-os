@@ -60,8 +60,5 @@
     "moreOptions": false
   },
   "banner": "",
-  "eventName": "Pathway: mix",
-  "fallbackOnly": [
-    "runway"
-  ]
+  "eventName": "Pathway: mix"
 }
