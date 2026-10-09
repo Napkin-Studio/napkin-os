@@ -345,8 +345,10 @@ class Director:
             raise DirectorError(f"{provider} {op} prompt is {len(job['prompt'])} characters, over its {limit}")
         ratio = job.get("ratio")
         if ratio and (provider, op) in NO_RATIO:
-            raise DirectorError(f"{provider} {op} takes no ratio")
-        if ratio and provider == "runway":
+            # The model often copies the ratio it was given; the frame or clip sets the shape here,
+            # so it is dropped rather than failing the job (2026-10-09: fal clips on Kling).
+            del job["ratio"]
+        elif ratio and provider == "runway":
             # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
             # size this model takes rather than failing the job (2026-10-07: storyboard frames).
             fitted = provider_ratio(provider, op, ratio, job.get("model"))

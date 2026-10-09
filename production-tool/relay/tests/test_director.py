@@ -307,11 +307,11 @@ def test_clip_edit_on_runway_needs_the_keyframe_the_relay_made():
     refuses("not in the input", "clip_edit_runway")  # providerJob has no keyframe source of its own
 
 
-def test_clip_edit_on_fal_is_a_masked_region_job_without_duration_or_ratio():
+def test_clip_edit_on_fal_is_a_masked_region_job_without_duration_and_drops_a_ratio():
     job = attempt("clip_edit_fal_mask").output["providerJob"]
     assert job["model"] == "wan-vace-14b-inpainting" and job["mask"] == fixture("clip_edit_fal_mask")["input"]["mask"]["sha256"]
     refuses("takes no duration", "clip_edit_fal_mask", job_edit(durationS=5))
-    refuses("takes no ratio", "clip_edit_fal_mask", job_edit(ratio="9:16"))
+    assert "ratio" not in attempt("clip_edit_fal_mask", job_edit(ratio="9:16")).output["providerJob"]
 
 
 KEYFRAME = fixture("clip_edit_runway")["extraHashes"][0]
@@ -331,9 +331,10 @@ def test_keyframe_range_is_all_or_none_and_holds_the_time(keyframe, why):
     refuses(why, "clip_edit_runway", edit, extra_hashes=(KEYFRAME,))
 
 
-def test_clip_edit_on_runway_takes_no_duration_or_ratio():
+def test_clip_edit_on_runway_takes_no_duration_and_drops_a_ratio():
     refuses("takes no duration", "clip_edit_runway", job_edit(durationS=5), extra_hashes=(KEYFRAME,))
-    refuses("takes no ratio", "clip_edit_runway", job_edit(ratio="1280:720"), extra_hashes=(KEYFRAME,))
+    edited = attempt("clip_edit_runway", job_edit(ratio="1280:720"), extra_hashes=(KEYFRAME,))
+    assert "ratio" not in edited.output["providerJob"]
 
 
 def area(w, h):
