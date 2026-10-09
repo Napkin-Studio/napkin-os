@@ -326,6 +326,32 @@ pub const LOOK_ACTION: &str = "look";
 const CHAIN_PATH: &str = "agent/decision-chain.yaml";
 
 /// A write made by a person, as the body claims it and the context confirms.
+/// `POST /patch-schema` — replace the document's output schema (`agent/output-schema.json`) with
+/// the body, a JSON Schema: an app moving its documents to a newer contract when it opens them
+/// (the Production Tool, 2026-10-09: scripts grew from 600 to 1500 characters, and documents keep
+/// the schema they were made with). The data already there must still fit the new schema; a
+/// schema equal to the current one changes nothing.
+pub fn patch_schema(_ctx: &Ctx, doc: &Document, schema_json: &str) -> HostResult<Outcome> {
+    let new: Value = serde_json::from_str(schema_json)
+        .map_err(|e| HostError::bad_request(format!("the schema is not JSON: {e}")))?;
+    let current: Option<Value> = doc
+        .clan()
+        .read_entry_string("agent/output-schema.json")
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    if current.as_ref() == Some(&new) {
+        return Ok(Outcome::unchanged(
+            serde_json::json!({ "ok": true, "changed": false }),
+        ));
+    }
+    let bytes = clan_sdk::pack::patch_schema(doc.clan(), schema_json, None)?;
+    let reply = serde_json::json!({ "ok": true, "changed": true });
+    let change = doc
+        .change(bytes)?
+        .with_event(HostEvent::DataChanged(reply.clone()));
+    Ok(Outcome::changed(reply, change))
+}
+
 fn is_human_claim(ctx: &Ctx, claimed: &str) -> bool {
     ctx.actor.is_human() || claimed == "human" || claimed.starts_with("human:")
 }

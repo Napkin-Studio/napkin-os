@@ -1,0 +1,91 @@
+{
+  "op": "frame",
+  "provider": "runway",
+  "input": {
+    "shot": {
+      "id": "shot_01K6XB00000000000000000003",
+      "order": 3,
+      "duration_s": 5,
+      "composition": "medium",
+      "action": "She splashes through a puddle under the yellow umbrella.",
+      "camera_move": "pan",
+      "status": "planned",
+      "refs": [
+        "hero_front",
+        "hero_side"
+      ]
+    },
+    "ratio": "9:16",
+    "script": "It starts to rain on a busy city street. Our hero opens a bright yellow umbrella and grins. She splashes through a puddle.",
+    "anchorFrame": {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://hack.napkin.ie/in/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png"
+    },
+    "previousFrame": {
+      "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url": "https://hack.napkin.ie/in/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mime": "image/png"
+    },
+    "refs": [
+      {
+        "id": "ref_01K6XA6Z0000000000000010VW",
+        "name": "hero_front",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "url": "https://hack.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "mime": "image/png"
+        }
+      },
+      {
+        "id": "ref_01K6XA6Z0000000000000012VW",
+        "name": "hero_side",
+        "role": "character",
+        "kind": "generated",
+        "asset": {
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "url": "https://hack.napkin.ie/in/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "mime": "image/png"
+        }
+      }
+    ]
+  },
+  "reply": {
+    "op": "frame",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3.1_flash",
+      "prompt": "A medium shot on the same rainy city street: the character from @hero_side and @hero_front, identical to the views, splashes through a puddle under her bright yellow umbrella. Keep the setting, lighting, palette and style of @anchor. Continue from @previous: positions, props and action carry over; now she is mid-splash. Flat 2D illustration.",
+      "refs": [
+        {
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "name": "hero_side",
+          "role": "character"
+        },
+        {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "name": "hero_front",
+          "role": "character"
+        },
+        {
+          "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "anchor",
+          "role": "object"
+        },
+        {
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "previous",
+          "role": "object"
+        }
+      ],
+      "ratio": "768:1344",
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "Side view for the lead view, front for identity, @anchor for the street and light, @previous for continuity.",
+    "confidence": 0.8
+  },
+  "recorded": "Written to the director.v3 rules (not a live reply), 2026-10-07"
+}

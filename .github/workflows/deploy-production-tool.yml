@@ -4,8 +4,9 @@ name: Deploy production tool
 # any branch (normally feat/production-tool): Actions → Deploy production tool
 # → Run workflow. Never runs on push, and never touches staging.
 #
-#   web     npm ci && npm run build in production-tool/web, sync dist/ to
-#           s3://<bucket>/web/, invalidate CloudFront
+#   web     npm ci && npm run build in production-tool/web (which builds
+#           napkin-wasm into production-tool/clan-store first: Rust + wasm-bindgen),
+#           sync dist/ to s3://<bucket>/web/, invalidate CloudFront
 #   relay   package production-tool/relay (+ the contracts), update the code,
 #           publish a version, move the `live` alias
 #   stitch  the same for production-tool/stitch; builds and attaches the
@@ -79,19 +80,47 @@ jobs:
           if [ -f production-tool/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"
           else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::production-tool/web does not exist on this branch: skipping the web app."; fi
 
+      # The web app bundles the CLAN store (production-tool/clan-store), which needs
+      # napkin-wasm built for wasm32 and bound with the matching wasm-bindgen CLI.
+      - name: Install Rust toolchain (wasm32)
+        if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo build
+        if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: production-tool
+          cache-all-crates: true
+
+      - name: Install wasm-bindgen CLI
+        if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
+        run: |
+          version=$(grep -oP 'wasm-bindgen = "=\K[0-9.]+' crates/napkin-wasm/Cargo.toml)
+          if [ "$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')" != "$version" ]; then
+            cargo install wasm-bindgen-cli --version "$version" --locked
+          fi
+
       - uses: actions/setup-node@v4
         if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: production-tool/web/package-lock.json
+          cache-dependency-path: |
+            production-tool/web/package-lock.json
+            production-tool/clan-store/package-lock.json
 
-      - name: Build the web app
+      - name: Build the web app (napkin-wasm into clan-store first)
         if: steps.web.outputs.present == 'true' && (env.PARTS == 'all' || env.PARTS == 'web')
         working-directory: production-tool/web
         env:
           VITE_RELAY_URL: /api   # same origin through CloudFront; without it the app runs on its in-browser mock
-        run: npm ci && npm run build
+        run: |
+          npm ci
+          npm run build
+          ls -lh dist/assets/*.wasm
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -103,8 +132,11 @@ jobs:
         working-directory: production-tool/web
         run: |
           # hashed assets cache for a year; index.html is revalidated on every load
-          aws s3 sync dist/ "s3://$BUCKET/web/" --delete --exclude index.html \
+          aws s3 sync dist/ "s3://$BUCKET/web/" --delete --exclude index.html --exclude '*.wasm' \
             --cache-control "public, max-age=31536000, immutable"
+          # napkin-wasm (the CLAN store) as application/wasm, so the browser compiles it while it streams
+          aws s3 sync dist/ "s3://$BUCKET/web/" --exclude '*' --include '*.wasm' \
+            --content-type application/wasm --cache-control "public, max-age=31536000, immutable"
           aws s3 cp dist/index.html "s3://$BUCKET/web/index.html" \
             --cache-control "no-cache" --content-type "text/html; charset=utf-8"
           id=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" \
@@ -121,9 +153,12 @@ jobs:
             --no-emit-package boto3 --no-emit-package botocore --no-emit-package s3transfer \
             --no-emit-package jmespath --no-emit-package urllib3 --no-emit-package python-dateutil \
             --no-emit-package six -o "$build/requirements.txt")
-          uv pip install --target "$build/pkg" --python-platform x86_64-manylinux2014 --python-version 3.12 \
+          # Lambda python3.12 is Amazon Linux 2023 (glibc 2.34), x86_64 (infra/envs/hackathon/lambda.tf).
+          # manylinux_2_28: Pillow 12 ships no manylinux2014 wheels.
+          uv pip install --target "$build/pkg" --python-platform x86_64-manylinux_2_28 --python-version 3.12 \
             --only-binary :all: -r "$build/requirements.txt"
           rsync -a --exclude tests --exclude .venv --exclude .local-data --exclude '__pycache__' \
+            --exclude results --exclude scripts \
             --exclude '*.zip' --exclude uv.lock --exclude pyproject.toml --exclude README.md \
             production-tool/relay/ "$build/pkg/"
           mkdir -p "$build/pkg/contracts"
@@ -144,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           build=$(mktemp -d)
-          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py)
+          (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py endcard/*/*.png)
           layers=$(aws lambda get-function-configuration --function-name "$STITCH_FN" --query 'length(Layers || `[]`)' --output text)
           if [ "$layers" = "0" ] || [ "${{ inputs.rebuild_ffmpeg_layer }}" = "true" ]; then
             production-tool/stitch/build-layer.sh "$build/ffmpeg-layer.zip"

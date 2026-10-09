@@ -453,6 +453,12 @@ impl Session {
         self.perform(ctx, |c, d| edit::patch_data(c, d, input))
     }
 
+    /// `POST /patch-schema` — move the document to a newer output schema (ops::edit::patch_schema).
+    pub fn patch_schema_as(&self, ctx: &Ctx, body: &str) -> HostResult<Applied> {
+        let schema = body.to_string();
+        self.perform(ctx, |c, d| edit::patch_schema(c, d, &schema))
+    }
+
     /// `POST /fork` — fork into ≥2 branch siblings written next to the parent.
     /// Does NOT advance the open document.
     pub fn fork(&self, body: &str) -> HostResult<Value> {
@@ -721,6 +727,31 @@ mod tests {
     }
 
     // --- clan:// API routes ---
+
+    #[test]
+    fn patch_schema_moves_a_document_to_a_newer_schema_once() {
+        let (_dir, session, id) = open_temp_clan();
+        let ctx = session.ctx.clone();
+        let schema =
+            r#"{"type":"object","properties":{"script":{"type":"string","maxLength":1500}}}"#;
+        let first = session
+            .patch_schema_as(&ctx, schema)
+            .expect("patch-schema should succeed");
+        assert_eq!(first.reply["changed"], true);
+        let on_disk = ClanFile::open(id.as_str()).unwrap();
+        let stored: Value = serde_json::from_str(
+            &on_disk
+                .read_entry_string("agent/output-schema.json")
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(stored, serde_json::from_str::<Value>(schema).unwrap());
+        // The same schema again changes nothing.
+        let again = session.patch_schema_as(&ctx, schema).unwrap();
+        assert_eq!(again.reply["changed"], false);
+        // Not JSON: refused.
+        assert!(session.patch_schema_as(&ctx, "{not json").is_err());
+    }
 
     #[test]
     fn patch_data_writes_data_and_attributed_decision() {

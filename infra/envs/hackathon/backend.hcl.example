@@ -1,0 +1,6 @@
+# Copy to backend.hcl. Same state bucket as staging (infra/bootstrap), its own key.
+bucket       = "napkin-tfstate-<account-id>"
+key          = "hackathon/terraform.tfstate"
+region       = "eu-west-1"
+use_lockfile = true
+encrypt      = true

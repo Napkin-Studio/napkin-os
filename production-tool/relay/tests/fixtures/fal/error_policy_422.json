@@ -1,0 +1,1 @@
+{"detail": [{"loc": ["body", "prompt"], "msg": "The prompt was flagged by a content checker", "type": "content_policy_violation", "url": "https://docs.fal.ai/errors#content_policy_violation", "input": "..."}]}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/customdata.schema.json",
+  "title": "Excalidraw customData on the canvas",
+  "description": "Every element the tool owns carries one of these in customData. Every id is also the id in the document (document.schema.json), so the canvas and the record cannot drift apart. Elements without customData are the user's own drawing; using strokes as an input wraps them in a drawn frame. Every image node (pic, drawn, gen) can be named; the name lives in the document (refs[].node is the node id). Storyboard and Video are React panels and have no customData.",
+  "oneOf": [
+    {
+      "type": "object",
+      "title": "pic: a picture dropped or pasted onto the canvas",
+      "properties": {
+        "kind": { "const": "pic" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "node_…" },
+        "asset": { "$ref": "common.schema.json#/$defs/sha256" }
+      },
+      "required": ["kind", "id", "asset"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "title": "drawn: a frame around the user's strokes, made when they are used as an input or named",
+      "properties": {
+        "kind": { "const": "drawn" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "node_…" },
+        "asset": { "$ref": "common.schema.json#/$defs/sha256", "description": "The strokes exported as PNG; re-exported when they change." }
+      },
+      "required": ["kind", "id", "asset"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "title": "note: a text element used as an input (its words join the instruction)",
+      "properties": {
+        "kind": { "const": "note" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "node_…" }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "title": "gen: a generated image on the canvas; a node like any other, usable as an input",
+      "properties": {
+        "kind": { "const": "gen" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "The job id." },
+        "op": { "enum": ["generate", "view", "region_edit"] },
+        "parentIds": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" }, "description": "The node ids it was made from (pic, drawn, note or gen); each has a provenance arrow." },
+        "state": { "$ref": "common.schema.json#/$defs/jobState" },
+        "asset": { "$ref": "common.schema.json#/$defs/sha256" },
+        "view": { "$ref": "common.schema.json#/$defs/view", "description": "op view: the view it was made as." },
+        "mock": { "type": "boolean" }
+      },
+      "required": ["kind", "id", "op", "parentIds", "state"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "title": "pin: a region comment on a gen",
+      "properties": {
+        "kind": { "const": "pin" },
+        "id": { "$ref": "common.schema.json#/$defs/id", "description": "The review id." },
+        "genId": { "$ref": "common.schema.json#/$defs/id" },
+        "region": { "$ref": "common.schema.json#/$defs/region" },
+        "resolvedBy": { "$ref": "common.schema.json#/$defs/id" }
+      },
+      "required": ["kind", "id", "genId", "region"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "title": "provenance: an arrow drawn by the tool, never by hand",
+      "properties": {
+        "kind": { "const": "provenance" },
+        "from": { "$ref": "common.schema.json#/$defs/id" },
+        "to": { "$ref": "common.schema.json#/$defs/id" }
+      },
+      "required": ["kind", "from", "to"],
+      "additionalProperties": false
+    }
+  ]
+}

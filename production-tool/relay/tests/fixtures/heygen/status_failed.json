@@ -1,0 +1,1 @@
+{"data": {"video_id": "vid_abc123", "status": "failed", "failure_code": "generation_failed", "failure_message": "The model could not render this prompt"}}

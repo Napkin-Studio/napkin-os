@@ -1,0 +1,57 @@
+{
+  "contractVersion": "2",
+  "routing": {
+    "shot_list": [],
+    "stitch": [],
+    "generate": [
+      "fal"
+    ],
+    "view": [
+      "fal"
+    ],
+    "frame": [
+      "fal"
+    ],
+    "region_edit": [
+      "fal"
+    ],
+    "clip": [
+      "fal"
+    ],
+    "clip_edit": [
+      "fal"
+    ]
+  },
+  "director": {
+    "promptVersion": "director.v5",
+    "perClickModel": "eu.anthropic.claude-sonnet-5-5",
+    "shotListModel": "eu.anthropic.claude-sonnet-5-5"
+  },
+  "quotas": {
+    "image": 40,
+    "video": 6,
+    "render": 3
+  },
+  "inFlightPerParticipant": 2,
+  "jobTimeoutS": {
+    "image": 180,
+    "video": 600
+  },
+  "spend": {
+    "capUsd": 1300,
+    "warnUsd": 1000
+  },
+  "flags": {
+    "storyboard": true,
+    "video": true,
+    "stitch": true,
+    "regionEditFrames": true,
+    "regionEditCanvas": false,
+    "videoRegionEdit": false,
+    "feelEdit": false,
+    "clickSelect": true,
+    "moreOptions": false
+  },
+  "banner": "",
+  "eventName": "Pathway: fal"
+}

@@ -1,0 +1,5 @@
+{
+ "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+ "reply": "{\"op\": \"generate\", \"needsUser\": null, \"rationale\": \"Routed to Nano Banana Pro edit on fal. The character in in_1 is the one kept; the words ask for real life, weapons that clean houses and a company uniform. No donor refs, so one ref only.\", \"confidence\": 0.7, \"providerJob\": {\"provider\": \"fal\", \"model\": \"nano-banana-pro-edit\", \"op\": \"generate\", \"prompt\": \"make it real life, attach more weapons that cleans houses and should be wearing a company uniform. the character in @in_1, kept as it is. Full body, facing the viewer, centred on a plain light background.\", \"refs\": [{\"name\": \"in_1\", \"role\": \"character\", \"sha256\": \"sha256:95f28e69c67b8c0378c46028c803b34ec8fa8dc62a36d057f1ee95cba0431913\"}], \"ratio\": \"4:5\", \"audio\": false}}",
+ "version": "director.v5"
+}

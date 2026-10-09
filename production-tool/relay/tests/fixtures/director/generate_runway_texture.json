@@ -1,0 +1,56 @@
+{
+  "op": "generate",
+  "provider": "runway",
+  "input": {
+    "text": "A character made from basic shapes, make to look like an AI agent. When happy / When dancing",
+    "refs": [
+      {
+        "id": "node_01K6XA6Z0000000000000000AA",
+        "role": "character",
+        "kind": "drawing",
+        "asset": {
+          "sha256": "sha256:a0efeaa8c099893b1bbe84b18dc553500863bad7f87d115a73b326442fc03ebf",
+          "url": "https://hack.napkin.ie/in/sha256:a0efeaa8c099893b1bbe84b18dc553500863bad7f87d115a73b326442fc03ebf",
+          "mime": "image/png"
+        }
+      },
+      {
+        "id": "ref_01K6XA6Z0000000000000000AD",
+        "name": "maya_texture",
+        "role": "other",
+        "kind": "picture",
+        "asset": {
+          "sha256": "sha256:8bbf762965346a496971fc284afe943c187939d426932e6b3b9c68e2a02fefe6",
+          "url": "https://hack.napkin.ie/in/sha256:8bbf762965346a496971fc284afe943c187939d426932e6b3b9c68e2a02fefe6",
+          "mime": "image/jpeg"
+        }
+      }
+    ],
+    "ratio": "4:5"
+  },
+  "reply": {
+    "op": "generate",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3.1_flash",
+      "prompt": "A character made from basic shapes designed to look like an AI agent, created from @in_1. Keep the character's shapes, proportions and basic design. Apply the surface texture and material of @maya_texture to the character's body. Show the character in a neutral, relaxed standing pose facing forward, full body, centered on a plain light background. Simple, clean 2D illustration style matching the sketch's simplicity with flat colours and clear outlines.",
+      "refs": [
+        {
+          "sha256": "sha256:a0efeaa8c099893b1bbe84b18dc553500863bad7f87d115a73b326442fc03ebf",
+          "name": "in_1",
+          "role": "character"
+        },
+        {
+          "sha256": "sha256:8bbf762965346a496971fc284afe943c187939d426932e6b3b9c68e2a02fefe6",
+          "name": "maya_texture",
+          "role": "object"
+        }
+      ],
+      "ratio": "896:1152"
+    },
+    "needsUser": null,
+    "rationale": "The sketch shows multiple poses (happy, dancing); generated one character in neutral standing pose. The texture tag contributes surface material only to the AI agent character keeping its basic-shape design from the sketch. Ratio 4:5 converts to Runway's 896:1152.",
+    "confidence": 0.85
+  },
+  "recorded": "Live reply from director.v2 on eu.anthropic.claude-haiku-4-5, job job_01K6T62SZYMGG9N4WPGP4Q3307, 2026-10-06"
+}

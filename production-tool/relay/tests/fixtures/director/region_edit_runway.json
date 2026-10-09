@@ -1,0 +1,44 @@
+{
+  "op": "region_edit",
+  "provider": "runway",
+  "input": {
+    "text": "add a scarf",
+    "chips": [],
+    "image": {
+      "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "url": "https://hack.napkin.ie/in/sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "mime": "image/png"
+    },
+    "region": {
+      "x": 0.35,
+      "y": 0.5,
+      "w": 0.3,
+      "h": 0.2
+    }
+  },
+  "reply": {
+    "op": "region_edit",
+    "providerJob": {
+      "provider": "runway",
+      "model": "gemini_image3_pro",
+      "prompt": "The image @current with a knitted scarf added around the neck, in the lower middle of the picture. Everything else stays exactly as it is.",
+      "refs": [
+        {
+          "sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "name": "current",
+          "role": "current"
+        }
+      ],
+      "region": {
+        "x": 0.35,
+        "y": 0.5,
+        "w": 0.3,
+        "h": 0.2
+      },
+      "outputs": 1
+    },
+    "needsUser": null,
+    "rationale": "Runway takes no mask: regenerate from the parent as current, keeping the rest as it is.",
+    "confidence": 0.7
+  }
+}
