@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Napkin Studio Production</title>
+<meta name="description" content="From a drawing and a script to a finished ad. How to use Napkin Studio Production: Canvas, Storyboard, Video, your crew, models, tips and answers.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1114" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="agents.css">
+<script src="site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Napkin Studio Production, back to the top">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><clipPath id="mark-a"><circle cx="11" cy="11" r="11"/></clipPath><g clip-path="url(#mark-a)" transform="rotate(-45 11 11)"><rect width="11" height="11" fill="var(--plan)"/><rect x="11" width="11" height="11" fill="var(--create)"/><rect y="11" width="11" height="11" fill="var(--learn)"/><rect x="11" y="11" width="11" height="11" fill="var(--produce)"/></g></svg>
+      <span>Napkin Studio <b>Production</b></span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#crew">Your crew</a>
+      <a href="#models">Models</a>
+      <a href="#tips">Tips</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ── Hero ─────────────────────────────────────────── -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="crew-mini" aria-hidden="true"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="39" height="52" aria-hidden="true" style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="33" height="44" aria-hidden="true" style="--af-phase:0.207"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 8 L41.5 40 L6.5 40Z" fill="var(--plan)"></path><g class="af-emblem"><g><rect x="19.4" y="29.3" width="9.2" height="6.4" rx="0.8" fill="var(--plan-eye)" opacity="0.88"></rect><path d="M21.2 31.4 h5.6 M21.2 33.6 h4" stroke="var(--plan)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="33" height="44" aria-hidden="true" style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div>
+    <p class="eyebrow">Napkin Studio · Production</p>
+    <h1>From a drawing and a script to <em>a finished ad.</em></h1>
+    <p class="lede">Draw or drop your characters, write a few lines of script, and a small crew plans the shots, draws the frames and makes the clips. You stay in charge of every version.</p>
+    <div class="ctas">
+      <a class="btn primary" href="#how">See how it works <span class="arrow" aria-hidden="true">→</span></a>
+    </div>
+
+    <div class="stagehero">
+      <figure class="window">
+        <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+        <picture>
+          <source srcset="assets/frames-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/frames.webp" width="1440" height="652" alt="The Storyboard stage: four frame cards in a row. Frame 2 carries an amber 'Behind frame 1' chip, frame 4 failed and offers Retry and Try another model, and a bar at the bottom reads '3 behind your changes · Remake them'.">
+        </picture>
+      </figure>
+      <div class="phone">
+        <video class="only-light" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-9x16.webp" aria-label="The end card: 'Made with Napkin Studio' rolls in with the studio mark and the agent crew.">
+          <source src="assets/endcard-roll-up-9x16.mp4" type="video/mp4">
+        </video>
+        <video class="only-dark" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-ink-9x16.webp" aria-label="The end card on ink: 'Made with Napkin Studio' rolls in with the studio mark and the agent crew.">
+          <source src="assets/endcard-roll-up-ink-9x16.mp4" type="video/mp4">
+        </video>
+      </div>
+      <p class="phone-cap">Every ad signs off like this.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ─────────────────────────────────── -->
+<section id="how">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">How it works</p>
+      <h2>Three stages: Canvas, Storyboard, Video.</h2>
+      <p>The tabs at the top of the tool walk you through them in order. You can go back to any stage at any time; what changed shows up as “behind” further along.</p>
+    </div>
+
+    <div class="steps">
+      <article class="step" aria-labelledby="s1">
+        <div class="copy">
+          <span class="num" aria-hidden="true">1</span>
+          <h3 id="s1">Canvas: make your characters</h3>
+          <p>Draw, write or drop pictures anywhere. Then generate the characters and objects your ad needs, and give the keepers a name.</p>
+          <ul>
+            <li><b>Draw or drop.</b> Sketch on the canvas or drop in a picture. Write in a text box inside or beside your drawing: those words become the instruction.</li>
+            <li><b>Generate.</b> Select any mix of drawings, pictures and notes, press Generate, type what you want, then Place… the result. It lands as a new picture you can use again.</li>
+            <li><b>Name it.</b> Name a picture <code>who_what</code>, like <code>@maya_front</code>. Set as front, then Make the other views for three-quarter, side and back.</li>
+            <li><b>Use the names.</b> <code>@maya_laughing</code> is that one picture; plain <code>@maya</code> is the whole character, its front plus up to three more pictures.</li>
+          </ul>
+        </div>
+        <div class="shot">
+          <figure class="window">
+            <picture>
+              <source srcset="assets/canvas-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="assets/canvas.webp" width="1440" height="500" loading="lazy" alt="The Canvas stage: the bar reads Napkin Studio Production with the tabs Canvas, Storyboard and Video, and three cards say Make, Generate, Name, with the example name @maya_front.">
+            </picture>
+          </figure>
+        </div>
+      </article>
+
+      <article class="step" aria-labelledby="s2">
+        <div class="copy">
+          <span class="num" aria-hidden="true">2</span>
+          <h3 id="s2">Storyboard: plan the shots, draw the frames</h3>
+          <p>Write what happens, using your names. The tool splits it into shots and draws a frame for each, in order, so the place and the light carry through.</p>
+          <ul>
+            <li><b>Script.</b> Up to 600 characters, e.g. “@maya opens her umbrella and grins.” Pick 10, 15 or 20 s and 9:16, 1:1 or 16:9.</li>
+            <li><b>Plan shots.</b> 2 to 8 shots, each with a framing, an action, a camera move and a length. Edit any of it, add or delete shots.</li>
+            <li><b>Draw frame 1, then Draw the rest.</b> Frame 1 sets the place, light and style; each frame after follows the one before.</li>
+            <li><b>Change a frame.</b> Type a change and Regenerate, or mark a Box and press Change the box. Older versions stay in the strip under the picture.</li>
+            <li><b>Update what follows.</b> Change frame 1 and later frames show <span class="tag" style="color:var(--amber);background:var(--amber-bg);border-color:transparent">Behind frame 1</span>. Press Remake them to redo just those, one by one, with your words for each.</li>
+          </ul>
+        </div>
+        <div class="shot">
+          <figure class="window">
+            <picture>
+              <source srcset="assets/storyboard-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="assets/storyboard.webp" width="1440" height="705" loading="lazy" alt="The Storyboard stage: a script box with length 15 s and format 9:16, and a list of four planned shots, each with a framing, an action, a camera move, a length and the @maya reference.">
+            </picture>
+          </figure>
+          <figure class="window" style="max-width:380px;justify-self:end;border-radius:var(--r-card)">
+            <picture>
+              <source srcset="assets/update-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="assets/update.webp" width="370" height="326" loading="lazy" alt="The Update what follows panel, 1 of 3: Shot 2's frame is behind frame 1, with a box for words for this frame only, the model chip, and the buttons Do the rest as they are and Make it.">
+            </picture>
+          </figure>
+        </div>
+      </article>
+
+      <article class="step" aria-labelledby="s3">
+        <div class="copy">
+          <span class="num" aria-hidden="true">3</span>
+          <h3 id="s3">Video: clips, notes, the finished ad</h3>
+          <p>Lock the storyboard and each frame becomes a clip. Review it like a cut: pause, leave a note, make it again.</p>
+          <ul>
+            <li><b>Make clips.</b> One clip per shot, made from its frame.</li>
+            <li><b>Notes on the clip.</b> Pause anywhere and type a note; it sticks to that moment. Make a new version sends your open notes as one change, and keeps the old take.</li>
+            <li><b>Fix it in the shot.</b> Draw a Box with your note and the box is fixed in the shot’s frame first, then the clip is made again from it.</li>
+            <li><b>Pick your takes.</b> v1, v2… choose which one the ad uses. New take makes the shot again, on any model you pick.</li>
+            <li><b>Render ad.</b> Joins your chosen takes and ends on the 2.5 s “Made with Napkin Studio” card. Then Download.</li>
+          </ul>
+        </div>
+        <div class="shot">
+          <figure class="window">
+            <picture>
+              <source srcset="assets/video-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="assets/video.webp" width="1440" height="852" loading="lazy" alt="The Video stage: a row of shot cards with versions, a player, and a Notes panel with two notes pinned at 0:01.2 and 0:02.4, Ellis reading them back, and a button Make a new version (2 notes).">
+            </picture>
+          </figure>
+        </div>
+      </article>
+    </div>
+
+    <div class="split">
+      <div>
+        <p class="eyebrow">The end card</p>
+        <h3 style="font-size:clamp(24px,3vw,30px)">Every ad ends on the studio’s sign-off.</h3>
+        <p class="muted" style="margin-top:12px">2.5 seconds: the studio mark rolls along the line, uncovering “Napkin Studio”, and the crew pops up as it passes. Each render gets the white or the ink version, at your ad’s shape.</p>
+      </div>
+      <figure class="window">
+        <video class="only-light" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-16x9.webp" aria-label="The white end card, 16:9: the studio mark rolls in and 'Made with Napkin Studio' appears above six small agent figures.">
+          <source src="assets/endcard-roll-up-16x9.mp4" type="video/mp4">
+        </video>
+        <video class="only-dark" autoplay muted loop playsinline preload="auto" poster="assets/endcard-roll-up-ink-16x9.webp" aria-label="The ink end card, 16:9: the studio mark rolls in and 'Made with Napkin Studio' appears above six small agent figures.">
+          <source src="assets/endcard-roll-up-ink-16x9.mp4" type="video/mp4">
+        </video>
+      </figure>
+    </div>
+
+    <p class="note">Screens are from a test run with placeholder pictures (marked MOCK). Your frames and clips come from the models.</p>
+  </div>
+</section>
+
+<!-- ── Crew ─────────────────────────────────────────── -->
+<section id="crew">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">Your crew</p>
+      <h2>Three agents, each with one job.</h2>
+      <p>They show up where the work is, so you can see who is doing what without reading a log.</p>
+    </div>
+    <div class="crew">
+      <article class="agent dex">
+        <div class="stage" aria-hidden="true"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="78" height="104" aria-hidden="true" style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div>
+        <span class="who"><b>Dex</b> · directs</span>
+        <h3>Plans, draws and makes.</h3>
+        <p>Dex plans the shots, draws the frames and makes the clips. While a job runs, Dex is on its card: “Dex is drawing frame 2”.</p>
+        <p class="where">On frame and shot cards, the job tray and the update box.</p>
+      </article>
+      <article class="agent">
+        <div class="stage" aria-hidden="true"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="78" height="104" aria-hidden="true" style="--af-phase:0.207"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 8 L41.5 40 L6.5 40Z" fill="var(--plan)"></path><g class="af-emblem"><g><rect x="19.4" y="29.3" width="9.2" height="6.4" rx="0.8" fill="var(--plan-eye)" opacity="0.88"></rect><path d="M21.2 31.4 h5.6 M21.2 33.6 h4" stroke="var(--plan)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div>
+        <span class="who"><b>Ellis</b> · reads</span>
+        <h3>Reads your notes back.</h3>
+        <p>Before anything is made again, Ellis reads your notes back in plain words, so you know what the next version will change.</p>
+        <p class="where">At the head of the Notes panel on Video.</p>
+      </article>
+      <article class="agent">
+        <div class="stage" aria-hidden="true"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="78" height="104" aria-hidden="true" style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div>
+        <span class="who"><b>Jude</b> · checks</span>
+        <h3>Checks, and says when it needs you.</h3>
+        <p>Jude checks each result as it lands. When a job fails or is waiting on the provider, Jude flags that card for you.</p>
+        <p class="where">On failed cards and in the tray’s “Needs you” list.</p>
+      </article>
+    </div>
+    <div class="crew-shots">
+      <p class="muted">The job tray in the top bar shows the crew’s faces and counts. Open it to see who is working and what needs you; Show jumps to the card.</p>
+      <figure class="window">
+        <picture>
+          <source srcset="assets/tray-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/tray.webp" width="384" height="164" loading="lazy" alt="The job tray, open: Working now, Dex is drawing frame 1, with a Show button; Needs you, Frame 4 did not come back.">
+        </picture>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ── Models ───────────────────────────────────────── -->
+<section id="models">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">Models</p>
+      <h2>Runway by default. Your own key if you bring one.</h2>
+      <p>Runway runs everything unless you add your own key. You don’t have to choose a model: every first draw and first clip uses the step’s default.</p>
+    </div>
+    <div class="models">
+      <div class="panel main">
+        <h3>No keys: Runway <span class="tag tool">The event’s key</span></h3>
+        <p style="margin-top:10px">With no keys of your own, every step runs on Runway, on the event’s key: characters, views, frames, box edits and clips. It needs nothing from you.</p>
+        <ul>
+          <li>Frames and pictures: Gemini 3 Pro (or Gemini 3.1 Flash)</li>
+          <li>Clips: Veo 3.1 (or Veo 3.1 Fast); clip edits: Aleph 2</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Your key: fal or HeyGen <span class="tag">Optional</span></h3>
+        <p style="margin-top:10px">Add a fal or HeyGen key under <b>Your keys</b> and that provider runs the steps it takes, on your account:</p>
+        <ul>
+          <li>fal for pictures and frames.</li>
+          <li>For clips, HeyGen first, then fal.</li>
+          <li>Their models join Runway’s in the model menu.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="status"><b>Runway catches every job.</b> If your provider can’t make one (out of credit, key refused, a timeout, no answer in time), the tool makes it again on Runway by itself, and the card says “Made on Runway: HeyGen could not”. So your key can never make a job fail. A refused prompt or a problem with your input isn’t retried on Runway: Runway would refuse it too.</p>
+
+    <div class="split">
+      <div>
+        <h3>Pick a model per version.</h3>
+        <p class="muted" style="margin-top:12px">Once a frame or clip exists, the model chip beside Regenerate or New take opens the model menu. It lists Runway’s models, plus those of any provider you gave a key for, each with a short note and its price per job, and starts on the model that made the version you’re replacing.</p>
+        <p class="muted">When a job fails, <b>Try another model</b> sends the same request and the same references; only the model changes.</p>
+        <p class="faint">Most clip models work from the storyboard frame, so a frame drawn from the right named pictures is what keeps a character the same from shot to shot.</p>
+      </div>
+      <figure class="window">
+        <picture>
+          <source srcset="assets/try-model-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/try-model.webp" width="400" height="300" loading="lazy" alt="The Try another model menu on a failed frame, listing another model with its provider, note and price.">
+        </picture>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ── Tips ─────────────────────────────────────────── -->
+<section id="tips">
+  <div class="wrap">
+    <div class="head" id="docs">
+      <p class="eyebrow">Tips and controls</p>
+      <h2>Nothing you do is final.</h2>
+      <p>Every version is kept, every change can be undone, and your work stays in your browser between visits.</p>
+    </div>
+    <div class="tips">
+      <div class="tip">
+        <h3>Undo and redo</h3>
+        <p>↶ and ↷ in the top bar undo anything you did to the project, any time, even after a reload. The button names the step (“Undo: deleted clip v3”). Results that landed since stay put. Jobs aren’t refunded by undo.</p>
+        <div class="keys"><kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Z</kbd></div>
+      </div>
+      <div class="tip">
+        <h3>Save</h3>
+        <p>Your project lives in this browser. Save sends a copy of the project to the server.</p>
+        <div class="keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></div>
+      </div>
+      <div class="tip">
+        <h3>Export</h3>
+        <p>From the ⋯ menu: a zip with your project (<code>.clan</code>, with its full history) and all its pictures and clips.</p>
+      </div>
+      <div class="tip">
+        <h3>Box and brush edits</h3>
+        <p>On a frame, hover the picture for its tools: Box (and Brush, where the model takes one). Mark the area, say what changes, press Change the box. The rest of the frame stays.</p>
+      </div>
+      <div class="tip">
+        <h3>History</h3>
+        <p>History in the top bar lists the changes to your project, and who made each one: you, Dex or a model.</p>
+      </div>
+      <div class="tip">
+        <h3>Home and projects</h3>
+        <p>Home is where you start a new project and open saved ones, searched and sorted. Each project keeps its own work; the Napkin mark in the top bar takes you back to Home.</p>
+      </div>
+    </div>
+
+    <figure class="window home-shot">
+      <picture>
+        <source srcset="assets/home-dark.webp" media="(prefers-color-scheme: dark)">
+        <img src="assets/home.webp" width="1160" height="960" loading="lazy" alt="Design mockup of the coming Home page: a New project card with the crew, an Open a file card, and saved projects as cards with their stage and last change.">
+      </picture>
+    </figure>
+    <p class="faint" style="margin-top:10px">Home, as designed. It isn’t in the tool yet.</p>
+
+    <div class="table-wrap keytable">
+      <table>
+        <caption class="faint" style="caption-side:top;text-align:left;padding:14px 16px 0">Keyboard shortcuts. On a Mac, use <kbd>⌘</kbd> for <kbd>Ctrl</kbd>.</caption>
+        <thead><tr><th scope="col">Keys</th><th scope="col">What it does</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo the last step (not while typing, and not on the canvas, which has its own undo)</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Z</kbd> or <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Redo</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save to the server</td></tr>
+          <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete the selected pictures on the canvas</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Generate, from the Generate box</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>Add a note on Video (<kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line); Regenerate from a frame’s text box</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close a menu or dialog; stop placing a result</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move through an open menu</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ──────────────────────────────────────────── -->
+<section id="faq">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">FAQ and troubleshooting</p>
+      <h2>When something doesn’t go to plan.</h2>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>A step was refused. What do I change?</summary>
+        <div class="body">
+          <p>The card says what the limit was and what to change. There’s no Retry when sending the same thing again can’t work. Common ones:</p>
+          <ul>
+            <li><b>A name with no picture</b> (“Shot 2 uses @maya_jumping, but no image has that name”): name a picture that, or change the shot.</li>
+            <li><b><code>@maya</code> has no front</b>: select her best picture and press Set as front.</li>
+            <li><b>Content refused</b>: the provider’s safety filter said no. Change the words or the pictures; it’s never retried by itself.</li>
+            <li><b>Too many characters in one shot</b>: the tool keeps each character’s front and leaves out extra views, rather than refusing.</li>
+          </ul>
+          <p>Anything unexpected: press Report on the card. It sends the error and the job ID to the organisers.</p>
+        </div>
+      </details>
+      <details>
+        <summary>“No answer in time”: Stop waiting or Try again?</summary>
+        <div class="body">
+          <p>The provider didn’t confirm the job in time. It may still make it, or it may not, so the tool never sends it again on its own.</p>
+          <ul>
+            <li><b>Stop waiting</b> drops it. If the provider did take it, it may still be charged.</li>
+            <li><b>Try again</b> sends it again. If the first one did go through, both may be charged.</li>
+          </ul>
+        </div>
+      </details>
+      <details>
+        <summary>What does “Behind frame 2” mean?</summary>
+        <div class="body">
+          <p>Something this frame or clip was made from has changed since, here frame 2. The amber chip names the cause; hover it for the reason. Nothing is redone without you.</p>
+          <p>When you’re ready, press <b>Remake them</b> on the bar at the bottom (“3 behind your changes”). The update box takes them one at a time: add words for that one, then Make it, or Do the rest as they are. Stop is in the top bar. Each new version replaces the old one only once it lands, and undo brings the old one back.</p>
+        </div>
+      </details>
+      <details>
+        <summary>What does each step cost?</summary>
+        <div class="body">
+          <p>Estimates per job, from the providers’ price lists in the tool’s capability sheets (checked 2026-10-08). On the event’s account you don’t pay; on your own key, your provider bills you.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Step</th><th scope="col">Runway (default)</th><th scope="col">fal (your key)</th></tr></thead>
+              <tbody>
+                <tr><td>Character (Generate)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.15<small>Nano Banana Pro</small></td></tr>
+                <tr><td>View (turnaround)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.035<small>Qwen multi-angle</small></td></tr>
+                <tr><td>Storyboard frame</td><td class="num">$0.20<small>Gemini 3 Pro · Flash $0.07</small></td><td class="num">$0.15<small>Nano Banana Pro · from $0.028</small></td></tr>
+                <tr><td>Box edit</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.06<small>Ideogram v4.5</small></td></tr>
+                <tr><td>Clip</td><td class="num">$1.20<small>Veo 3.1 · Fast $0.60</small></td><td class="num">$0.90<small>Veo 3.1 Fast · Kling v3 Pro $0.56 · Veo 3.1 $2.40</small></td></tr>
+                <tr><td>Clip edit</td><td class="num">$1.40<small>Aleph 2</small></td><td class="num">$0.72<small>Luma Ray 3.2</small></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-top:12px">HeyGen clips: price not published. Before a remake runs, the tool shows its estimated cost.</p>
+          <p>The organisers also set daily limits per person (usually 40 picture jobs, 6 clips and 3 renders, with 2 jobs running at once; more wait “In the queue”).</p>
+        </div>
+      </details>
+      <details>
+        <summary>Where do my keys go?</summary>
+        <div class="body">
+          <ul>
+            <li>Your fal or HeyGen key stays in <b>this browser tab</b>. Closing the tab forgets it, and Forget my keys clears it.</li>
+            <li>It’s never saved in your project or its Export.</li>
+            <li>It goes to the relay only when a job is sent. The relay keeps the key that job needs encrypted, and never logs it or sends it back.</li>
+          </ul>
+        </div>
+      </details>
+      <details>
+        <summary>A job says “Checking…” or sits in the queue.</summary>
+        <div class="body">
+          <p><b>In the queue</b> means it’s waiting for a free slot (your two at once, or the provider’s). It starts by itself. <b>Checking</b> is Jude making sure the provider has it; the tool never sends a job twice, so you’re never charged twice for one.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Where is my work kept?</summary>
+        <div class="body">
+          <p>In this browser, as you go, so a reload brings everything back, including jobs still running. Save (<kbd>Ctrl</kbd>+<kbd>S</kbd>) sends a copy to the server, and Export downloads the whole project as a zip.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ── Get started ──────────────────────────────────── -->
+<section id="start" class="start">
+  <div class="wrap">
+    <div class="head">
+      <p class="eyebrow">Get started</p>
+      <h2>Make your first ad.</h2>
+      <p>The link opens on the day. Ask the organisers for it and for the event code.</p>
+    </div>
+    <div class="ctas">
+      <a class="btn" href="#how">Read how it works</a>
+    </div>
+    <ol>
+      <li>Sign in with the event code and your name.</li>
+      <li>Canvas: draw your character, Generate, name it <code>@maya_front</code>, Make the other views.</li>
+      <li>Storyboard: write two or three lines with your names, Plan shots, Draw frame 1, Draw the rest.</li>
+      <li>Video: Make clips, leave notes, Render ad, Download.</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="made">
+      <svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><clipPath id="mark-b"><circle cx="11" cy="11" r="11"/></clipPath><g clip-path="url(#mark-b)" transform="rotate(-45 11 11)"><rect width="11" height="11" fill="var(--plan)"/><rect x="11" width="11" height="11" fill="var(--create)"/><rect y="11" width="11" height="11" fill="var(--learn)"/><rect x="11" y="11" width="11" height="11" fill="var(--produce)"/></g></svg>
+      <span>Made with<b>Napkin Studio</b></span>
+    </div>
+    <nav aria-label="Footer">
+      <a href="#how">How it works</a>
+      <a href="#docs">Docs</a>
+      <a href="#faq">FAQ</a>
+      <a href="#top">Back to top</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
