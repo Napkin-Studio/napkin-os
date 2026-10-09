@@ -176,7 +176,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: { shot: Sh
         </div>
         {(stale || open > 0) && (
           <div className="badges">
-            {stale && <span className="behind" title={stale.reason}>{behindLabel(doc, stale)}</span>}
+            {stale && <span className={`behind ${isRunning(doc, jobId) ? 'updating' : ''}`} title={stale.reason}>{isRunning(doc, jobId) ? 'Updating…' : behindLabel(doc, stale)}</span>}
             {open > 0 && <span className="notechip" title="Open notes">{open} note{open > 1 ? 's' : ''}</span>}
           </div>
         )}

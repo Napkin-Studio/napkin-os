@@ -318,7 +318,10 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         <b>{label(shot.composition)}</b>
         <span className="faint">· {label(shot.camera_move)} · {shot.duration_s}s</span>
         <span className="spacer" />
-        {staleMark && <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>}
+        {/* The mark is on the version on show; while its replacement is drawn, say so instead. */}
+        {staleMark && (running
+          ? <span className="behind updating" title={staleMark.reason}>Updating…</span>
+          : <span className="behind" title={staleMark.reason}>{behindLabel(doc, staleMark)}</span>)}
         {showMock && current?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
       </div>
       <div className="framepic">

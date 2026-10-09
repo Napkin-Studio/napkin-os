@@ -54,9 +54,9 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
   const sent = run.models?.[item.kind]
   const choice = pick ?? (sent && options.find((o) => keyOf(o) === keyOf(sent))) ?? options[0]
   const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : takeStale(doc, shot.id)
-  const why = mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'
   const job = jobId ? doc.jobs.find((j) => j.id === jobId) : undefined
   const making = !!job && !['completed', 'failed', 'cancelled'].includes(job.state)
+  const why = making ? (mark ? 'Updating…' : 'Making it…') : mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'
   const n = Math.min(run.framesDone.length + run.clipsDone.length + (run.awaiting ? 1 : 0), run.total ?? 99)
   const toSend = () => (choice ? choiceToSend(item.kind, config, choice) ?? null : null)
 
@@ -85,7 +85,7 @@ function Box({ item, jobId }: { item: FollowItem; jobId?: string }) {
         {thumb ? <img src={thumb} alt="" /> : <span className="ub-empty" />}
         <div className="stack" style={{ gap: 2 }}>
           <b>Shot {shot.order} · {item.kind === 'frame' ? 'frame' : 'clip'}</b>
-          <span className="behind" title={mark?.reason}>{why}</span>
+          <span className={`behind ${making ? 'updating' : ''}`} title={mark?.reason}>{why}</span>
         </div>
       </div>
       {job && <div className="ub-job"><JobNode jobId={job.id} /></div>}
