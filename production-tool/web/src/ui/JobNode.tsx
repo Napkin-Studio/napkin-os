@@ -2,7 +2,7 @@
 // elapsed time; when it fails, the error and one floating bar: Retry, Try another model (a menu),
 // Report, Clear. Never a toast.
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import type { DocJob } from '../contracts/types'
@@ -15,6 +15,8 @@ import { otherModels } from './modelChoice'
 import { ModelItems } from './ModelPick'
 import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
+import { Thumbs } from '../dogfood/Dogfood'
+import { errorShown, feedback } from '../dogfood/recorder'
 
 const STATE_LABEL: Record<string, string> = {
   queued: 'In the queue',
@@ -38,6 +40,10 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   const [reported, setReported] = useState<'no' | 'sending' | 'yes' | 'failed'>('no')
   const [confirming, setConfirming] = useState(false)
   const { config } = useConfig()
+  const failed = state === 'failed' ? job?.error : undefined
+  useEffect(() => {
+    if (failed) errorShown('job', failed.message, { jobId, code: failed.code, providerCode: failed.providerCode, op: job?.op, provider: job?.provider })
+  }, [failed, jobId, job?.op, job?.provider])
 
   if (!job) return null
   const ctx = ui.jobCtx[jobId]
@@ -49,7 +55,9 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
     const err = job.error
     const cancelled = state === 'cancelled'
     const retryable = cancelled || (err?.retryable ?? true)
+    const target = { kind: 'error' as const, id: err?.code ?? state, jobId, op: job.op, provider: job.provider, model: job.model }
     const report = async () => {
+      feedback(target, 'down') // Report says this should not have failed
       setReported('sending')
       const ok = await runner.report(jobId, `${job.op} ${err?.code ?? ''}: ${err?.message ?? ''}`)
       setReported(ok ? 'yes' : 'failed')
@@ -75,6 +83,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
               {compact ? '⚑' : reportLabel}
             </button>
           )}
+          {!cancelled && <Thumbs target={target} compact labels={{ up: 'This message is clear', down: 'This should not have failed' }} />}
           <button className={`btn ${compact ? 'xs' : 'sm'} icon ghost`} aria-label="Clear" title="Clear" onClick={() => runner.dismiss(jobId)}>✕</button>
         </div>
       </div>

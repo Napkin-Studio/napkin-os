@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { useShell } from '../app/context'
 import { effectiveConfig } from '../capabilities'
 import { download } from '../export'
+import { BetaTag } from '../dogfood/Dogfood'
+import { errorShown, setScreen } from '../dogfood/recorder'
 import { OwnKeysButton } from '../keys/OwnKeysPanel'
 import { ordered, type ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
@@ -38,11 +40,13 @@ export function Home() {
     setError(null)
     p.catch((e) => setError(`${what}: ${e instanceof Error ? e.message : String(e)}`))
   }
+  useEffect(() => { setScreen({ stage: 'home' }) }, [])
+  useEffect(() => { if (error) errorShown('home', error) }, [error])
   const newProject = () => act('Could not start a new project', shell.newProject())
   const chooseFile = () => fileRef.current?.click()
 
   return (
-    <div className="home-view">
+    <div className="home-view" data-dogfood-area="home">
       <HomeBar ownKeys={!!config.flags.ownKeys} />
       <main className="hm-scroll">
         <div className="hm-wrap">
@@ -139,6 +143,7 @@ function HomeBar({ ownKeys }: { ownKeys: boolean }) {
         <StudioMark size={22} />
         <span className="hm-studio">Napkin Studio</span>
         <span className="hm-tool">Production</span>
+        <BetaTag screen={{ stage: 'home' }} />
         {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
       </span>
       <span />

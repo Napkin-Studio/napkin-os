@@ -19,6 +19,8 @@ import { UndoButtons } from './ui/UndoButtons'
 import { SaveButton } from './ui/SaveButton'
 import { Float, MenuItem } from './ui/Float'
 import { JobTray } from './ui/JobTray'
+import { BetaTag } from './dogfood/Dogfood'
+import { errorShown, setScreen } from './dogfood/recorder'
 
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
@@ -27,13 +29,17 @@ const STAGES: { id: StageName; n: number; label: string }[] = [
 ]
 
 export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null }) {
-  const { clan, storeNote } = useServices()
+  const { clan, storeNote, project } = useServices()
   const doc = useDoc()
   const { config } = useConfig()
   const stage = doc.stage.current
   const [history, setHistory] = useState(false)
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
+  // The beta's record: where the person is, and what went wrong in front of them.
+  useEffect(() => { setScreen({ stage, project: project.id }) }, [stage, project.id])
+  useEffect(() => { if (trouble) errorShown('clan-write', trouble) }, [trouble])
+  useEffect(() => { if (storeNote) errorShown('store', storeNote) }, [storeNote])
 
   return (
     <>
@@ -44,11 +50,11 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       <div className="stage">
         {history && <HistoryPanel store={clan} onClose={() => setHistory(false)} />}
         {/* The canvas stays mounted so its jobs keep landing while you're on another stage. */}
-        <div className={`stage-pane ${stage === 'character' ? '' : 'hidden'}`}>
+        <div className={`stage-pane ${stage === 'character' ? '' : 'hidden'}`} data-dogfood-area="canvas">
           <Character initial={initialCanvas} active={stage === 'character'} />
         </div>
-        {stage === 'storyboard' && <div className="stage-pane"><Storyboard /></div>}
-        {stage === 'video' && <div className="stage-pane"><Video /></div>}
+        {stage === 'storyboard' && <div className="stage-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
+        {stage === 'video' && <div className="stage-pane" data-dogfood-area="video"><Video /></div>}
         {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
       </div>
       <UpdateBox />
@@ -80,6 +86,7 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
         <button className="brand-home" title="Home: your projects" aria-label="Home" onClick={() => void shell.goHome()}><StudioMark size={22} /></button>
         <span className="brand-studio">Napkin Studio</span>
         <span className="brand-tool">Production</span>
+        <BetaTag screen={{ stage, project: project.id }} />
         <small className="brand-project" title={shell.index.get(project.id)?.name}>{shell.index.get(project.id)?.name ?? ''}</small>
         {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
       </div>

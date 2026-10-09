@@ -20,6 +20,7 @@ import {
   type ChainEntry, type JobEntry, type Persistence,
 } from '../../../clan-store/src'
 import type { ProductionDocument } from '../contracts/types'
+import { record } from '../dogfood/recorder'
 import { describeWrite, type Described, type JobCtxOf } from './describe'
 import { createMergePatch, applyMergePatch } from './mergePatch'
 import { normaliseDocument } from './store'
@@ -226,7 +227,11 @@ export class ClanBackedStore implements DocumentStore {
           await this.clan.patch(mp as object, item.why
             ? { action: item.why.action, agent: item.after.participant.handle, ...(item.why.rationale ? { rationale: item.why.rationale } : {}), ...(item.why.pinned ? { pinned: true } : {}) }
             : { action: 'sync', quiet: true })
-          if (item.why) wrote = true
+          if (item.why) {
+            wrote = true
+            // The beta's record reads like the History panel: the same words for what the person did.
+            record('decision', item.why.action, { rationale: item.why.rationale, pinned: item.why.pinned })
+          }
         }
         if (item.why?.mirror) void this.clan.mirrorNow('accept').catch(() => {})
       } catch (e) {

@@ -5,6 +5,7 @@ import type {
   AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output, SessionRequest,
   SessionResponse, UploadResponse,
 } from '../contracts/types'
+import type { ShellEvent } from '../dogfood/recorder'
 import { OWN_KEYS_HEADER } from '../keys/ownKeys'
 import { sha256Of } from '../lib/hash'
 import { RelayError, type Relay, type UploadResult } from './types'
@@ -103,6 +104,20 @@ export class HttpRelay implements Relay {
 
   publish(key: Key, req: LibraryPublish) {
     return this.call<LibraryEntry>('POST', `/library/${encodeURIComponent(key)}`, req)
+  }
+
+  async dogfoodConsent() {
+    await this.call<void>('POST', '/dogfood/consent')
+  }
+
+  /** Sent with keepalive so a batch still goes as the page closes (sendBeacon cannot carry the token). */
+  dogfoodEvents(events: ShellEvent[], _leaving: boolean) {
+    if (!this.token || !events.length) return
+    fetch(this.base + '/dogfood/events', {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}` },
+      body: JSON.stringify({ events }),
+    }).catch(() => { /* recording never gets in the way */ })
   }
 
   async fetchOutput(output: Output | AssetRef): Promise<Blob> {

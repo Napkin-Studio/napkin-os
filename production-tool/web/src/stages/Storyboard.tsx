@@ -4,7 +4,7 @@
 // can be changed with a sentence, optionally inside a box (or a painted mask,
 // or a click when the provider can segment), and stepped back to an earlier version.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { Composition, CameraMove, ModelChoice, Ratio, Region, Shot } from '../contracts/types'
 import { CAMERA_MOVES, COMPOSITIONS } from '../contracts/types'
@@ -32,6 +32,8 @@ import type { FollowScope } from '../jobs/follow'
 import { SplitButton } from '../ui/SplitButton'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
+import { Thumbs } from '../dogfood/Dogfood'
+import { errorShown } from '../dogfood/recorder'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -48,6 +50,8 @@ export function Storyboard() {
   const check = checkDurations(shots, ui.targetS)
   const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list')
   const planning = isRunning(doc, planJob)
+  const lastPlan = doc.jobs.filter((j) => j.op === 'shot_list' && j.state === 'completed').at(-1)
+  useEffect(() => { if (error) errorShown('storyboard', error) }, [error])
   const allFramed = shots.length > 0 && shots.every((s) => (doc.frames ?? []).some((f) => f.shot_id === s.id && f.selected))
   const anyFrameRunning = shots.some((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   const noFrames = !(doc.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
@@ -135,6 +139,7 @@ export function Storyboard() {
           <div className="card section stack">
             <div className="row">
               <h2>Shots</h2>
+              {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.agent?.model, promptVersion: lastPlan?.agent?.promptVersion, shots: shots.length }} />}
               <span className="spacer" />
               {shots.length > 0 && (
                 <span className={`sum ${check.ok ? 'ok' : 'bad'}`}>
@@ -254,6 +259,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
   const [error, setError] = useState<string | null>(null)
   const [pick, setPick] = useState<ModelChoice | undefined>()
   const region = current ? ui.frameRegions[current.id] : undefined
+  useEffect(() => { if (error) errorShown('frame', error, { shot: index + 1 }) }, [error, index])
   const made = madeWith(doc, ui, current?.job_id)
   const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
   const staleMark = current && (doc.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === current.id)
@@ -423,6 +429,10 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
           </div>
           <div className="framecard-foot">
             <span className="faint" title={made.label}>{made.made ? `Made by Dex · ${made.label}` : ''}</span>
+            <Thumbs key={current.id} compact target={{
+              kind: 'frame', id: current.id, jobId: current.job_id, shot: index + 1, asset: current.asset,
+              provider: doc.jobs.find((j) => j.id === current.job_id)?.provider, model: doc.jobs.find((j) => j.id === current.job_id)?.model,
+            }} />
             <span className="spacer" />
             {onNext && nextEmpty && !ui.drawingRest && (
               <button className="btn sm" disabled={running || nextBusy} onClick={onNext} title={`Draw shot ${index + 2}, continuing from this frame`}>Next frame →</button>

@@ -154,6 +154,8 @@ export interface Flags {
   moreOptions: boolean
   /** Participants may send their own fal and HeyGen keys. Optional; absent means off. */
   ownKeys?: boolean
+  /** The beta's record: notice, Beta tag, thumbs, POST /dogfood/* (features/production-tool-dogfood.clan). Optional; absent means off. */
+  dogfood?: boolean
 }
 
 export interface Config {
@@ -370,6 +372,8 @@ export interface SessionResponse {
   workspace: string
   expiresAt: string
   quotas: { image: number; video: number; render: number }
+  /** Only while flags.dogfood is on: whether this participant has read the beta notice. */
+  dogfood?: { consented: boolean }
 }
 
 export interface UploadRequest { sha256: Sha256; mime: InputMime; bytes: number }

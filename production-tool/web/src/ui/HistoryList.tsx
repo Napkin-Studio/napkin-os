@@ -2,6 +2,7 @@
 // why, and which fields changed. Presentational, so it renders in a test.
 
 import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attribution'
+import { Thumbs } from '../dogfood/Dogfood'
 import { aboutItem, kindOf, readable, timeOf, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
 
 const KIND_ICON: Record<AgentKind, string> = { participant: '●', director: '◆', provider: '▲' }
@@ -50,6 +51,14 @@ export function HistoryList({ entries, handle, item }: { entries: ChainLike[]; h
                   ))}
                 </ul>
               </details>
+            )}
+            {kind === 'director' && (
+              <div className="history-thumbs">
+                <Thumbs compact target={{
+                  kind: 'director', id: e.timestamp, action: e.action, model: w.detail,
+                  jobId: `${e.action} ${e.rationale ?? ''}`.match(/job_[0-9A-HJKMNP-TV-Z]{26}/)?.[0],
+                }} />
+              </div>
             )}
             {!!e.fields_changed?.length && (
               <div className="history-fields">{e.fields_changed.map((f) => <span key={f} className="history-field">{f}</span>)}</div>

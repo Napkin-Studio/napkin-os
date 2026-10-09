@@ -13,6 +13,7 @@ import type { UiStore } from '../projects/uiStore'
 import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { asContractError, RelayError, type Relay } from '../relay'
+import { jobState, record } from '../dogfood/recorder'
 
 export interface LiveInfo {
   state: JobState
@@ -120,6 +121,12 @@ export class JobRunner {
     }, `submit ${op}`)
     this.live.set(jobId, { state: 'queued' })
     this.emit()
+    // The beta's record: what was asked, once; then only the job's state changes (never a poll).
+    record('job-submit', op, {
+      jobId, for: purpose.for, pick: modelChoice ? `${modelChoice.provider}:${modelChoice.model}` : undefined,
+      parents: parentIds.length, inputs: [...hashes], text: input.text, chips: input.chips, region: input.region,
+    })
+    jobState(jobId, 'queued', { op })
     await this.send(request)
     return jobId
   }
@@ -160,11 +167,15 @@ export class JobRunner {
       }
     })
     const pick = modelChoice === undefined ? request.modelChoice : modelChoice ?? undefined
+    record('job-action', modelChoice === undefined ? 'retry' : 'other-model', {
+      jobId, newJobId, pick: pick ? `${pick.provider}:${pick.model}` : undefined,
+    })
     await this.submit(request.op, request.input, request.parentIds, purpose as JobPurpose, newJobId, pick)
     return newJobId
   }
 
   async cancel(jobId: string) {
+    record('job-action', 'cancel', { jobId })
     this.stopPolling(jobId)
     try {
       const job = await this.relay.cancelJob(jobId)
@@ -177,6 +188,7 @@ export class JobRunner {
   }
 
   dismiss(jobId: string) {
+    record('job-action', 'dismiss', { jobId })
     this.ui.update((u) => {
       const c = u.jobCtx[jobId]
       if (c) c.dismissed = true
@@ -192,6 +204,7 @@ export class JobRunner {
       ...extra,
     }
     if (jobId) entry.jobId = jobId
+    record('job-action', 'report', { jobId, message: entry.message })
     try {
       await this.relay.log(entry)
       return true
@@ -257,10 +270,17 @@ export class JobRunner {
   }
 
   private fail(jobId: string, error: ContractError) {
+    jobState(jobId, 'failed', { code: error.code, message: error.message, ms: this.ageMs(jobId) })
     this.stopPolling(jobId)
     this.patchDocJob(jobId, { state: 'failed', error })
     this.live.set(jobId, { state: 'failed' })
     this.emit()
+  }
+
+  /** How long since the job was asked for, for the record. */
+  private ageMs(jobId: string): number | undefined {
+    const at = this.doc.get().jobs.find((x) => x.id === jobId)?.created_at
+    return at ? Date.now() - Date.parse(at) : undefined
   }
 
   private patchDocJob(jobId: string, patch: Partial<DocJob>) {
@@ -292,6 +312,10 @@ export class JobRunner {
     const prev = this.doc.get().jobs.find((x) => x.id === job.jobId)
     if (prev && !isActive(prev.state) && prev.state === job.state) return
     this.live.set(job.jobId, { state: done ? 'fetching' : job.state, queuePosition: job.queuePosition })
+    jobState(job.jobId, done ? 'fetching' : job.state, {
+      op: job.op, provider: job.provider, model: job.model, fallbackFrom: job.fallbackFrom?.provider,
+      code: job.error?.code, message: job.error?.message, ms: this.ageMs(job.jobId),
+    })
     const patch: Partial<DocJob> = { state: done ? 'fetching' : job.state, cost: job.cost }
     if (job.provider) patch.provider = job.provider
     if (job.model) patch.model = job.model
@@ -344,6 +368,7 @@ export class JobRunner {
         }
       }, `complete ${job.op}`)
       this.live.set(job.jobId, { state: 'completed' })
+      jobState(job.jobId, 'completed', { op: job.op, provider: job.provider, model: job.model, outputs: assets.map((a) => a.sha256), ms: this.ageMs(job.jobId) })
       this.emit()
       const ctx = this.ui.get().jobCtx[job.jobId]
       if (!ctx) return
