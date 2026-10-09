@@ -136,3 +136,16 @@ def test_a_masked_edit_carries_no_anchor_or_previous_frame():
     # Runway has no masks: a reference-based redraw, which keeps the continuity frames.
     job = PassthroughDirector().direct({"op": "region_edit", "input": inp}, load_sheet("runway"))["providerJob"]
     assert {anchor["sha256"], previous["sha256"]} <= {r["sha256"] for r in job["refs"]} and "mask" not in job
+
+
+def test_an_uncertain_job_can_be_stopped():
+    # 2026-10-09: a 30 s upload timed out, the job was "uncertain" (fal may have it), and Cancel
+    # did nothing. Stopping it ends it as cancelled; it is never sent again.
+    h = two_providers()
+    h.providers["fal"].submit_effect = ProviderError("provider_unavailable", "timed out", retryable=True, accepted=True)
+    token = h.sign_in()
+    job = h.call("POST", "/jobs", job_request("clip", new_id("job")), token, expect=200)[1]
+    assert job["state"] == "uncertain"
+    out = h.call("DELETE", f"/jobs/{job['jobId']}", None, token, expect=200)[1]
+    assert out["state"] == "cancelled"
+    assert len(h.providers["fal"].submits) == 1 and not h.providers["runway"].submits
