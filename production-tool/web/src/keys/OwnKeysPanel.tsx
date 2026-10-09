@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useOwnKeys, useServices } from '../app/context'
+import { useOwnKeys, useOwnKeysStore } from '../app/context'
 import { SHEETS } from '../contracts/load'
 import { keyUse, OWN_NAMES as NAMES, type OwnKeys, type OwnProvider } from './ownKeys'
 
@@ -19,7 +19,7 @@ export function OwnKeysButton() {
 }
 
 function OwnKeysPanel({ onClose }: { onClose: () => void }) {
-  const { ownKeys } = useServices()
+  const ownKeys = useOwnKeysStore()
   const saved = useOwnKeys()
   const [draft, setDraft] = useState<OwnKeys>(saved)
   const changed = (draft.fal ?? '') !== (saved.fal ?? '') || (draft.heygen ?? '') !== (saved.heygen ?? '')
