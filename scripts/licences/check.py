@@ -82,6 +82,8 @@ def parse_spdx(text: str, aliases: dict[str, str] | None = None):
 
     def take():
         nonlocal pos
+        if pos >= len(toks):
+            raise SpdxError(f"expression ends early: {text!r}")
         pos += 1
         return toks[pos - 1]
 
@@ -283,12 +285,16 @@ class Policy:
                 errs.append(f"policy.toml: {label} tier {e['tier']!r} is not one of {TIERS}")
             if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(e["date"])):
                 errs.append(f"policy.toml: {label} date {e['date']!r} is not YYYY-MM-DD")
+            if self.denied_marker(e["licence"]):
+                errs.append(f"policy.toml: {label} excepts a denied licence ({e['licence']}); "
+                            f"no exception can allow it")
+                continue
             try:
                 ids = leaves(parse_spdx(e["licence"], self.aliases))
             except SpdxError as x:
                 errs.append(f"policy.toml: {label} licence: {x}")
                 continue
-            if any(self.is_denied(i) for i in ids) or self.denied_marker(e["licence"]):
+            if any(self.is_denied(i) for i in ids):
                 errs.append(f"policy.toml: {label} excepts a denied licence ({e['licence']}); "
                             f"no exception can allow it")
             if e["tier"] == "client" and any(self.is_copyleft(i) for i in ids):
@@ -637,6 +643,13 @@ def _fix_clarification(p: Pkg) -> str:
             f"      licence_file_sha256 = \"<sha256 of that file>\"\n      reason = \"<what the metadata lacks>\"")
 
 
+def _same_licence(text: str, node, policy: Policy) -> bool:
+    try:
+        return parse_spdx(text, policy.aliases) == node
+    except SpdxError:
+        return False
+
+
 def judge(pkgs: list[Pkg], policy: Policy, report: Report,
           member: Callable[[str, str], bytes] = _archive_member) -> None:
     """Every package against the policy. Failures name the package, tier, licence, the
@@ -690,7 +703,7 @@ def judge(pkgs: list[Pkg], policy: Policy, report: Report,
             if (e["package"], e["ecosystem"], str(e["version"])) == (p.name, p.ecosystem, p.version):
                 hit = (i, e)
                 break
-        if hit and hit[1]["tier"] == p.tier and hit[1]["licence"].strip() == lic.strip():
+        if hit and hit[1]["tier"] == p.tier and _same_licence(hit[1]["licence"], node, policy):
             report.used_exceptions.add(hit[0])
             continue
         if hit:
