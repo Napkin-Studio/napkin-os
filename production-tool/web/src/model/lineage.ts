@@ -83,7 +83,7 @@ function upstreamOf(doc: ProductionDocument, docId: string, entity: string): str
   switch (map) {
     case 'frames': {
       const f = doc.frames[id]
-      return f ? [...at('frames', f.parent_id), ...at('shots', f.shot_id)] : []
+      return f ? [...at('frames', f.parent_id), ...at('shots', f.shot_id), ...at('sketches', f.sketch_id)] : []
     }
     case 'takes': {
       const t = doc.takes[id]

@@ -4,7 +4,8 @@
 //
 //   purpose  the kind and how, in words: "frame next", "clip", "stitch"
 //   node     where it runs: the shot (frame, clip), the storyboard (shot_list),
-//            the video (stitch); a canvas Generate names its own canvas node
+//            the video (stitch), the sketch area (sketch); a canvas Generate
+//            names its own canvas node
 //   inputs   what it builds on: the frame or take it is a new version of, the
 //            notes it fixes
 
@@ -22,6 +23,8 @@ export type JobPurpose =
   | { for: 'frame'; shotId: Id; parentFrameId?: Id; how?: FrameHow; fixReviewIds?: Id[] }
   | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[] }
   | { for: 'stitch' }
+  /** A Generate on a sketch area (features/frame-aspect.clan): it lands as a frame made from the sketch. */
+  | { for: 'sketch'; sketchId: Id }
 
 export type Purpose = JobPurpose['for']
 
@@ -42,6 +45,8 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
       return { kind: 'storyboard', id: mainStoryboard(d)!.id }
     case 'stitch':
       return { kind: 'video', id: mainVideo(d)!.id }
+    case 'sketch':
+      return { kind: 'sketch', id: p.sketchId }
     default:
       // A Generate on today's canvas runs for the selection; its result is the canvas node named by the job's id.
       return { kind: 'group', id: jobId }
@@ -78,6 +83,8 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
       if (notes.length) p.fixReviewIds = notes
       return p
     }
+    case 'sketch':
+      return j.node.kind === 'sketch' ? { for: 'sketch', sketchId: j.node.id } : null
     case 'clip': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'clip', shotId: j.node.id }

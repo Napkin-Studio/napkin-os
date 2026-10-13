@@ -252,6 +252,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .tagchip:focus { border-color: var(--create); outline: none; }
 .rolechip { height: 22px; border-radius: 7px; border: 1px solid var(--line); background: var(--soft); font-size: 11.5px; padding: 0 4px; color: var(--ink2); cursor: pointer; }
 .genlabel { position: absolute; transform: translateY(calc(-100% - 6px)); display: flex; gap: 4px; align-items: center; font-size: 11px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+.framecrop { font-size: 11px; margin-top: 4px; }
+.gencaption { position: absolute; margin-top: 4px; font-family: var(--f-mono); font-size: 11px; color: var(--ink2); white-space: nowrap; pointer-events: none; }
 .genlabel .pill { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; box-shadow: var(--shadow-pill); }
 .genlabel .pill.pick { font: inherit; color: inherit; cursor: pointer; }
 .genlabel .pill.pick:hover { border-color: var(--create); color: var(--create); }

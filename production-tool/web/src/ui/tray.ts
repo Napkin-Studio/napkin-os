@@ -57,6 +57,7 @@ export function whereIs(job: Pick<DocJob, 'op'>, ctx: JobCtx | undefined): { sta
     case 'clip': return { stage: 'video', shotId: ctx.shotId }
     case 'stitch': return { stage: 'video' }
     case 'canvas': return { stage: 'character' }
+    case 'sketch': return { stage: 'character' }
   }
   return { stage: job.op === 'clip' || job.op === 'clip_edit' || job.op === 'stitch' ? 'video' : job.op === 'frame' || job.op === 'shot_list' ? 'storyboard' : 'character' }
 }

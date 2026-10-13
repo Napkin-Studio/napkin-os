@@ -9,7 +9,7 @@
 // `continueDrawing`, which starts the next shot that has no frame. Nothing here
 // polls; the chain only moves when a frame completes, on a click, or at boot.
 
-import type { AssetRef, Frame, JobInput, ModelChoice, ProductionDocument } from '../contracts/types'
+import type { Aspect, AssetRef, Frame, JobInput, ModelChoice, ProductionDocument } from '../contracts/types'
 import { updateDoc, type DocumentStore } from '../doc/store'
 import type { UiState } from '../doc/ui'
 import type { FrameHow, JobPurpose } from '../model/purpose'
@@ -87,6 +87,14 @@ export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, o
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}) }
   const parents = opts.parent?.job_id ? [opts.parent.job_id] : []
   return deps.runner.submit('frame', input, parents, purpose, undefined, opts.modelChoice, opts.followRun ? { local: { followRun: opts.followRun } } : {})
+}
+
+/** A picture's own shape (its measured size), for a region edit: the relay asks for the nearest size and
+ *  crops back to it, so an edit of a 1344x756 frame comes back 1344x756 (features/frame-aspect.clan). An old
+ *  asset without a size sends none, and nothing is cropped, as before. */
+export function ownAspect(d: Pick<ProductionDocument, 'assets'>, sha: string): Aspect | undefined {
+  const a = d.assets[sha]
+  return a?.w && a?.h ? { w: a.w, h: a.h } : undefined
 }
 
 /** Any frame (or frame region edit) job still moving. */

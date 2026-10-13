@@ -8,8 +8,8 @@
 import { useState } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
 import type { Ask, Question } from '../contracts/types'
-import type { AnswerChoice } from '../jobs/runner'
-import { sendAnswer } from './asks'
+import { LOCAL_PERSON, type AnswerChoice } from '../jobs/runner'
+import { answerLocally, sendAnswer } from './asks'
 import { AgentFigure } from './agents/AgentFigure'
 import './askcard.css'
 
@@ -30,8 +30,10 @@ export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boo
   )
 }
 
-export function AskCard({ ask }: { ask: Ask }) {
-  const { runner } = useServices()
+/** `onLocalAnswer`: for an ask with no job (Wren's on a sketch area, features/frame-aspect.clan), the answer is
+ *  written to the document here and handed back, and the caller goes ahead with it. */
+export function AskCard({ ask, onLocalAnswer }: { ask: Ask; onLocalAnswer?: (answer: AnswerChoice) => Promise<void> | void }) {
+  const { runner, doc: docStore } = useServices()
   const ui = useUi()
   const doc = useDoc()
   const [text, setText] = useState('')
@@ -47,11 +49,17 @@ export function AskCard({ ask }: { ask: Ask }) {
   const chose = last?.option_id ? q.options.find((o) => o.id === last.option_id)?.label ?? last.option_id : last?.text
   const job = ask.job_id ? doc.jobs[ask.job_id] : undefined
 
+  const local = !ask.job_id && !!onLocalAnswer
   const send = async (answer: AnswerChoice) => {
-    if (!ask.job_id) return
+    if (!ask.job_id && !onLocalAnswer) return
     setBusy(true)
     setNote(null)
     try {
+      if (!ask.job_id) {
+        await answerLocally(docStore, ask.id, answer, me ?? LOCAL_PERSON)
+        await onLocalAnswer!(answer)
+        return
+      }
       const said = await sendAnswer(runner, ask, answer, changing, byWords)
       if (changing) setChanging(false)
       if (said) setNote(said)
@@ -78,11 +86,11 @@ export function AskCard({ ask }: { ask: Ask }) {
         <div className="askcard-done">
           <span>{byWords(last?.by)} chose: {chose}</span>
           <span className="faint"> · in History</span>
-          <button className="btn xs" disabled={busy} onClick={() => setChanging(true)}>Change</button>
+          {!local && <button className="btn xs" disabled={busy} onClick={() => setChanging(true)}>Change</button>}
         </div>
       ) : (
         <>
-          <AskOptions q={q} disabled={busy || !ask.job_id} onPick={(optionId) => void send({ optionId })} />
+          <AskOptions q={q} disabled={busy || (!ask.job_id && !local)} onPick={(optionId) => void send({ optionId })} />
           {q.allow_text && (
             <form className="askcard-text" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void send({ text: text.trim() }) }}>
               <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder={q.options.find((o) => o.value === undefined)?.label ?? 'Say it in your words'} aria-label="Your answer" />

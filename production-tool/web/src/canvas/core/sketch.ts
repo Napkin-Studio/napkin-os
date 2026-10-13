@@ -54,6 +54,14 @@ function gcd(a: number, b: number): number {
   return b ? gcd(b, a % b) : a
 }
 
+/** A shape in its lowest whole terms ({1344, 704} is {21, 11}). */
+export function reducedAspect(aspect: Aspect): Aspect {
+  const w = Math.round(aspect.w)
+  const h = Math.round(aspect.h)
+  const g = gcd(w, h) || 1
+  return { w: w / g, h: h / g }
+}
+
 /** A shape in its lowest terms: '16:9', '191:100', '2:1'; one of the four by its name. */
 export function ratioText(aspect: Aspect): string {
   const r = exactRatio(aspect)

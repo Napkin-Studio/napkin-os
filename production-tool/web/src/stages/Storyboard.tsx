@@ -14,7 +14,8 @@ import { CAMERA_MOVEMENTS, CAMERA_SIZES } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
 import { isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { nameOf, subjectRefs, wholeKeys } from '../lib/names'
-import { continuity, drawFrame, drawTheRest, firstUndrawn, SCRIPT_MAX, selectFrame } from '../jobs/frames'
+import { croppedCaption } from '../canvas/core/sketch'
+import { continuity, drawFrame, drawTheRest, firstUndrawn, ownAspect, SCRIPT_MAX, selectFrame } from '../jobs/frames'
 import { planShots } from '../jobs/plan'
 import { putBlob } from '../lib/blobs'
 import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
@@ -326,7 +327,8 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         }
         // A region edit keeps the frame in its sequence: shot 1's frame and the one before go too.
         const anchors = await continuity(relay, doc, index)
-        await runner.submit('region_edit', { image, region, text: text.trim(), ...(mask ? { mask } : {}), ...anchors }, current.job_id ? [current.job_id] : [], { for: 'frame', shotId: shot.id, parentFrameId: current.id, how: 'again' })
+        const own = ownAspect(doc, current.asset)
+        await runner.submit('region_edit', { image, region, text: text.trim(), ...(mask ? { mask } : {}), ...anchors, ...(own ? { aspect: own } : {}) }, current.job_id ? [current.job_id] : [], { for: 'frame', shotId: shot.id, parentFrameId: current.id, how: 'again' })
       } else {
         // A pick only on a regenerate: the first draw runs the routed default.
         const modelChoice = current ? choiceToSend('frame', config, choice) : undefined
@@ -419,6 +421,9 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             </div>
           )}
         </RegionImage>
+        {current?.cropped_to && asset?.w && asset?.h && (
+          <div className="framecrop faint mono" title="The model's size was centre-cropped to the storyboard's shape">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</div>
+        )}
         {/* The picture's tools float on it: shown on hover and focus, and kept while marking. */}
         {current && (
           <div className={`hoverbar ${mode !== 'none' || region || strokes.length ? 'pinned' : ''}`} role="toolbar" aria-label={`Shot ${index + 1} frame tools`}>

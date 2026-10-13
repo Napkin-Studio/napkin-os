@@ -10,7 +10,8 @@
 // its purpose); the land* functions write them with the crew's why.
 
 import { crewFor, newUlidId, rankBetween } from '../../../clan-store/src'
-import type { CrewId, DirectorCard, Frame, Job, ProductionDocument, Render, Take } from '../contracts/types'
+import type { Aspect, CrewId, DirectorCard, Frame, Job, Output, ProductionDocument, Render, Take } from '../contracts/types'
+import { aspectOfRatio, exactRatio, reducedAspect } from '../canvas/core/sketch'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
@@ -29,6 +30,45 @@ const cardsOf = (job: Job, ctx?: { cards?: DirectorCard[] }) => job.director?.ca
 
 const crewOf = (d: ProductionDocument, job: Job): CrewId => (d.jobs[job.jobId]?.crew ?? job.crew ?? crewFor(job.op)) as CrewId
 const nextVersion = (versions: { version: number }[]) => Math.max(0, ...versions.map((x) => x.version)) + 1
+
+/**
+ * The frame's crop, when the relay centre-cropped the model's size to the job's shape
+ * (features/frame-aspect.clan): from the model's size to `to` (the sketch's aspect, else the
+ * output's own shape, one of the four ratios when it is one).
+ */
+export function croppedTo(out: Output, to?: Aspect): Frame['cropped_to'] | undefined {
+  if (!out.croppedFrom || !out.w || !out.h) return undefined
+  const own = { w: out.w, h: out.h }
+  const r = exactRatio(own)
+  return { from: { ...out.croppedFrom }, to: to ? { ...to } : r ? aspectOfRatio(r) : reducedAspect(own) }
+}
+
+/** A Generate on a sketch area as a frame made from it (features/frame-aspect.clan). Landing twice does nothing. */
+export function applySketchFrame(d: ProductionDocument, job: Job, sketchId: string): Frame | undefined {
+  const out = job.outputs?.[0]
+  if (!out) return undefined
+  if (Object.values(d.frames).some((f) => f.job_id === job.jobId)) return undefined
+  const sketch = d.sketches[sketchId]
+  // "cropped to 16:9": the sketch's ratio, else its exact shape in lowest terms.
+  const crop = croppedTo(out, sketch ? (sketch.ratio ? aspectOfRatio(sketch.ratio) : reducedAspect(sketch.aspect)) : undefined)
+  const frame: Frame = {
+    id: newUlidId('frame'),
+    v: 1,
+    field_v: {},
+    // The area may have gone while the job ran: the frame stays, without its sketch_id.
+    ...(sketch ? { sketch_id: sketchId } : {}),
+    version: nextVersion(Object.values(d.frames).filter((f) => sketch && f.sketch_id === sketchId)),
+    kind: job.kind === 'mock' ? 'mock' : 'generated',
+    asset: out.sha256,
+    job_id: job.jobId,
+    crew: crewOf(d, job),
+    ...(job.model ? { model: job.model } : {}),
+    ...(job.provider ? { provider: job.provider } : {}),
+    ...(crop ? { cropped_to: crop } : {}),
+  }
+  d.frames[frame.id] = frame
+  return frame
+}
 
 /** A frame job's result as the shot's new frame version, picked now. Landing twice does nothing. */
 export function applyFrame(d: ProductionDocument, job: Job, ctx: FrameCtx): Frame | undefined {
@@ -50,6 +90,8 @@ export function applyFrame(d: ProductionDocument, job: Job, ctx: FrameCtx): Fram
     ...(job.model ? { model: job.model } : {}),
     ...(job.provider ? { provider: job.provider } : {}),
   }
+  const crop = croppedTo(out)
+  if (crop) frame.cropped_to = crop
   d.frames[frame.id] = frame
   // The new version is the frame in the shot (Keep both, which keeps the earlier one as an alternate, is the panel's).
   shot.pick = { current: frame.id }
