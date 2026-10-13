@@ -10,5 +10,5 @@ export function createRelay(): Relay {
   return new MockRelay({ renderer: browserRenderer })
 }
 
-export type { Relay } from './types'
+export type { AnswerResult, Relay } from './types'
 export { RelayError, asContractError } from './types'

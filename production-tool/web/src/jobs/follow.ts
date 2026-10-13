@@ -31,13 +31,13 @@ import type { Config, ModelChoice, Op, ProductionDocument } from '../contracts/t
 import type { FollowItem, FollowRun, JobCtx } from '../doc/ui'
 import { describeFollow } from '../doc/describe'
 import { choiceToSend, modelChoicesFor, routedSheet, type Sheets } from '../capabilities'
-import { removeFrame, removeTake } from '../doc/remove'
 import { updateDoc } from '../doc/store'
 import { newId } from '../lib/ulid'
+import { jobsList, shotsOf } from '../model/selectors'
 import { makeClip, renderAd, selectedTake } from './clips'
 import { shotsBeingFixed } from './fix'
 import { drawFrame, selectedFrame, type FrameDeps } from './frames'
-import { isActive } from './runner'
+import { isActive, jobCtx } from './runner'
 import { adStatus, frameDrift, frameStale, takeStale } from './stale'
 
 export interface FollowPlan {
@@ -62,7 +62,7 @@ export type FollowScope =
 export function shotsInTheMaking(d: ProductionDocument, ctxOf: (id: string) => JobCtx | undefined): { clips: Set<string>; frames: Set<string> } {
   const clips = shotsBeingFixed(d, ctxOf)
   const frames = new Set<string>()
-  for (const j of d.jobs) {
+  for (const j of jobsList(d)) {
     if (!isActive(j.state)) continue
     const c = ctxOf(j.id)
     if (c?.for === 'clip') clips.add(c.shotId)
@@ -86,10 +86,10 @@ export function planMissing(d: ProductionDocument, fixing: ReadonlySet<string> =
 
 /** The plan for a scope (see the top of this file). Empty when there is nothing to make. */
 export function planFor(d: ProductionDocument, scope: FollowScope, fixing: ReadonlySet<string> = new Set(), drawing: ReadonlySet<string> = new Set()): FollowPlan {
-  const shots = d.shots ?? []
+  const shots = shotsOf(d)
   const ids = (list: typeof shots) => list.map((s) => s.id)
-  const hasFrames = (d.frames ?? []).some((f) => shots.some((s) => s.id === f.shot_id))
-  const hasTakes = (d.takes ?? []).some((t) => shots.some((s) => s.id === t.shot_id))
+  const hasFrames = Object.values(d.frames).some((f) => shots.some((s) => s.id === f.shot_id))
+  const hasTakes = Object.values(d.takes).some((t) => shots.some((s) => s.id === t.shot_id))
   const ad = adStatus(d)
   const from = (shotId: string | undefined) => Math.max(0, shots.findIndex((s) => s.id === shotId))
   switch (scope.kind) {
@@ -169,22 +169,22 @@ export function planSummary(p: FollowPlan, config: Config, sheets?: Sheets, mode
 const busy = new WeakSet<object>()
 const again = new WeakSet<object>()
 
-const ctxOf = (deps: FrameDeps, id: string): JobCtx | undefined => deps.ui.get().jobCtx[id]
+const ctxOf = (deps: FrameDeps, id: string): JobCtx | undefined => jobCtx(deps.doc.get(), deps.ui.get(), id)
 
 /** The jobs this run started (a retried one counts in place of its first try). */
 function runJobs(deps: FrameDeps, run: FollowRun) {
-  return deps.doc.get().jobs.filter((j) => {
+  return jobsList(deps.doc.get()).filter((j) => {
     const c = ctxOf(deps, j.id)
-    return !!c && !c.dismissed && 'followRun' in c && c.followRun === run.id
+    return !!c && !c.dismissed && c.followRun === run.id
   })
 }
 
 /** Where a run is, for the UI. */
 export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx | undefined, run: FollowRun | undefined) {
   if (!run) return undefined
-  const jobs = d.jobs.filter((j) => {
+  const jobs = jobsList(d).filter((j) => {
     const c = ctx(j.id)
-    return !!c && !c.dismissed && 'followRun' in c && c.followRun === run.id
+    return !!c && !c.dismissed && c.followRun === run.id
   })
   const running = jobs.find((j) => isActive(j.state))
   const last = jobs.at(-1)
@@ -199,8 +199,9 @@ export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, s
   // A mock result "worked" only as a stand-in: a real provider on offer goes first (2026-10-09:
   // an update run sent clips to mock again after mock stills, with a real provider there).
   const real = offered.some((o) => o.provider !== 'mock')
-  for (let i = d.jobs.length - 1; i >= 0; i--) {
-    const j = d.jobs[i]
+  const jobs = jobsList(d)
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const j = jobs[i]
     if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model || (real && j.provider === 'mock')) continue
     const o = offered.find((x) => x.provider === j.provider && x.model === j.model)
     if (o) return { provider: o.provider, model: o.model }
@@ -255,7 +256,7 @@ export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelC
   for (const j of runJobs(deps, run)) {
     const c = ctxOf(deps, j.id)
     if (c && itemOf(c)?.shotId === item.shotId && itemOf(c)?.kind === item.kind && (j.state === 'failed' || j.state === 'cancelled')) {
-      deps.ui.update((u) => { const x = u.jobCtx[j.id]; if (x) x.dismissed = true })
+      deps.ui.update((u) => { const x = u.jobs[j.id]; if (x) x.dismissed = true })
     }
   }
   deps.ui.update((u) => {
@@ -292,21 +293,21 @@ const itemOf = (c: JobCtx): FollowItem | undefined =>
  *  words), or a clip from the shot's frame; on the run's model for that step. */
 async function send(deps: FrameDeps, run: FollowRun, item: FollowItem, words?: string): Promise<string | null> {
   const d = deps.doc.get()
-  const shots = d.shots ?? []
+  const shots = shotsOf(d)
   const i = shots.findIndex((s) => s.id === item.shotId)
   if (i < 0) return null
   const modelChoice = run.models?.[item.kind]
   if (item.kind === 'frame') {
     const parent = selectedFrame(d, item.shotId)
     // Keep what the user asked of this frame when it was drawn (not a region edit's words: that is for a box).
-    const made = parent ? d.jobs.find((j) => j.id === parent.job_id) : undefined
+    const made = parent?.job_id ? d.jobs[parent.job_id] : undefined
     const text = words ?? (made?.op === 'frame' ? made.text : undefined)
     return drawFrame(deps, i, 'update', { followRun: run.id, ...(parent ? { parent } : {}), ...(text ? { text } : {}), ...(modelChoice ? { modelChoice } : {}) })
   }
   const parentTake = selectedTake(d, item.shotId)
-  const made = parentTake ? d.jobs.find((j) => j.id === parentTake.job_id) : undefined
+  const made = parentTake ? d.jobs[parentTake.job_id] : undefined
   const text = words ?? (made?.op === 'clip' ? made.text : undefined)
-  return makeClip(deps, item.shotId, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), purpose: { followRun: run.id }, ...(modelChoice ? { modelChoice } : {}) })
+  return makeClip(deps, item.shotId, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), followRun: run.id, ...(modelChoice ? { modelChoice } : {}) })
 }
 
 /** A replacement that landed takes its old version out (once). Only versions this run replaced. */
@@ -318,19 +319,36 @@ async function replaceLanded(deps: FrameDeps, run: FollowRun) {
     const c = ctxOf(deps, j.id)
     const old = c?.for === 'frame' ? c.parentFrameId : c?.for === 'clip' ? c.parentTakeId : undefined
     if (!old || run.replaced?.includes(old)) continue
-    const landed = c?.for === 'frame' ? (d.frames ?? []).some((f) => f.job_id === j.id) : (d.takes ?? []).some((t) => t.job_id === j.id)
+    const landed = c?.for === 'frame' ? Object.values(d.frames).some((f) => f.job_id === j.id) : Object.values(d.takes).some((t) => t.job_id === j.id)
     if (!landed) continue
     gone.push(old)
   }
   if (!gone.length) return
   deps.ui.update((u) => { if (u.following) u.following.replaced = [...(u.following.replaced ?? []), ...gone] })
-  await updateDoc(deps.doc, (x) => {
-    for (const id of gone) {
-      if ((x.frames ?? []).some((f) => f.id === id && !f.selected)) removeFrame(x, id)
-      else if ((x.takes ?? []).some((t) => t.id === id && !t.selected)) removeTake(x, id)
-    }
-  }, 'replaced by its update')
+  await updateDoc(deps.doc, (x) => { for (const id of gone) dropReplaced(x, id) }, `delete ${gone.length === 1 ? 'the version' : `${gone.length} versions`} its update replaced`)
 }
+
+/** A frame or take version a run replaced, taken out: only when it is not the one picked now, and with
+ *  the stale marks on it and its place among the alternates. */
+function dropReplaced(d: ProductionDocument, id: string) {
+  const frame = d.frames[id]
+  if (frame) {
+    const shot = frame.shot_id ? d.shots[frame.shot_id] : undefined
+    if (shot?.pick?.current === id) return
+    if (shot?.pick?.alternates?.includes(id)) shot.pick = { ...shot.pick, alternates: shot.pick.alternates.filter((a) => a !== id) }
+    delete d.frames[id]
+  } else if (d.takes[id]) {
+    for (const v of Object.values(d.videos)) {
+      for (const item of Object.values(v.edl)) {
+        if (item.pick?.current === id) return
+        if (item.pick?.alternates?.includes(id)) item.pick = { ...item.pick, alternates: item.pick.alternates.filter((a) => a !== id) }
+      }
+    }
+    delete d.takes[id]
+  } else return
+  for (const m of Object.values(d.stale)) if (m.target.id === id || m.caused_by.id === id) delete d.stale[m.id]
+}
+
 
 /** Stop after the job running now (or at once, when nothing is running). */
 export async function cancelFollow(deps: FrameDeps) {
@@ -392,7 +410,7 @@ async function step(deps: FrameDeps): Promise<void> {
     }
     if (run.awaiting || run.reviewing) return // the box is waiting for the user
     const d = deps.doc.get()
-    const shots = d.shots ?? []
+    const shots = shotsOf(d)
     const note = (fn: (r: FollowRun) => void) => deps.ui.update((u) => { if (u.following) fn(u.following) })
 
     // 1. The plan's frames, in shot order.

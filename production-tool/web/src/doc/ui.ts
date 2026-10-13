@@ -23,7 +23,8 @@ export type StageName = 'character' | 'storyboard' | 'video'
 /** What only this browser keeps about a job. What the job is for (its purpose, node and inputs) is in
  *  the document (model/purpose.ts); this is the rest: the request to send again or retry, and notices. */
 export interface JobLocal {
-  request: JobRequest
+  /** Absent for a job another browser started. */
+  request?: JobRequest
   /** Set when the person cleared a failed job, or it was retried as another job. */
   dismissed?: boolean
   retriedAs?: string

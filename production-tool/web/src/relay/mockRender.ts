@@ -38,7 +38,6 @@ function sizeFor(ratio: Ratio | undefined, long = 1024): { w: number; h: number 
     case '1:1': return { w: long, h: long }
     case '4:5': return { w: Math.round(long * 0.8), h: long }
     case '16:9': return { w: long, h: Math.round((long * 9) / 16) }
-    case '3:1': return { w: long, h: Math.round(long / 3) }
     case '9:16': return { w: Math.round((long * 9) / 16), h: long }
     default: return { w: 768, h: 1024 }
   }
@@ -150,17 +149,18 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
   if (req.op === 'frame') {
     const { w, h } = sizeFor(inp.ratio ?? '9:16')
     const { c, ctx } = canvas(w, h)
-    paper(ctx, w, h, (inp.shot?.order ?? 1) * 3 + n)
+    paper(ctx, w, h, (inp.shot?.id.charCodeAt(inp.shot.id.length - 1) ?? 1) * 3 + n)
     // The shot's first named ref stands in for the character.
     const img = await bitmap(input, inp.refs?.[0]?.asset.sha256)
-    const scale = { wide: 0.45, medium: 0.7, close: 1.05, extreme_close: 1.6, over_shoulder: 0.8, insert: 0.6 }[inp.shot?.composition ?? 'medium'] ?? 0.7
+    const scales: Record<string, number> = { wide: 0.45, medium: 0.7, close: 1.05, extreme_close: 1.6, over_shoulder: 0.8, insert: 0.6 }
+    const scale = scales[inp.shot?.camera.size ?? 'medium'] ?? 0.7
     if (img) contain(ctx, img, 0, h * 0.08, w, h * 0.84, { scale })
     ctx.fillStyle = INK
     ctx.font = `600 ${Math.round(w * 0.04)}px Geist, Helvetica, Arial, sans-serif`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     wrapText(ctx, inp.text || inp.shot?.action || '', w * 0.06, h * 0.04, w * 0.88, w * 0.05, 3)
-    stamp(ctx, w, h, `shot ${inp.shot?.order ?? ''} · ${inp.shot?.composition ?? ''} · ${inp.shot?.camera_move ?? ''}`)
+    stamp(ctx, w, h, `shot · ${inp.shot?.camera.size ?? ''} · ${inp.shot?.camera.movement ?? ''}`)
     return { blob: await toBlob(c), mime: 'image/png', w, h }
   }
   // generate, view
@@ -284,7 +284,7 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
     }
   }
   const img = (await bitmap(input, inp.image?.sha256)) ?? (await bitmap(input, inp.refs?.[0]?.asset.sha256))
-  const move = inp.shot?.camera_move ?? 'push_in'
+  const move = inp.shot?.camera.movement ?? 'push_in'
   return record(w, h, seconds, (ctx, t) => {
     const p = t / seconds
     ctx.fillStyle = '#0F1114'
@@ -304,7 +304,7 @@ async function renderClip(req: JobRequest, input: Input): Promise<RenderedOutput
     ctx.translate(-w / 2, -h / 2)
     if (img) contain(ctx, img, 0, 0, w, h, { scale: 1.02 })
     ctx.restore()
-    timecode(ctx, w, h, t, `shot ${inp.shot?.order ?? ''} · ${move}`)
+    timecode(ctx, w, h, t, `shot · ${move}`)
   })
 }
 

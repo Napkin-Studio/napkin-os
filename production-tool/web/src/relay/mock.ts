@@ -7,17 +7,24 @@
 // Test hooks, typed into any text box that goes with a job:
 //   #fail      → the job fails with provider_failed (retryable)
 //   #moderate  → the job fails with moderated (not retryable)
+//   [ask]      → the job stops at needs_input with a nudge question (two options, one recommended);
+//                POST /jobs/{id}/answer resumes it, and a second answer is 409 AnswerConflict
+//
+// Contract 3 (features/contract-v3.clan): a request of any other contractVersion is refused, the Job
+// names its project, tenant, starter, crew, node, nonce and purpose, a shot list is PlannedShot[], and
+// the stitch leaves out clips marked endCard (it adds its own end card).
 
+import { crewFor, newUlidId } from '../../../clan-store/src'
 import type {
-  AssetRef, Config, ContractError, InputMime, Job, JobRequest, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
-  Me, Shot,
+  Answer, AnswerConflict, AssetRef, CameraMovement, CameraSize, Config, ContractError, CrewId, InputMime, Job, JobAnswer, JobRequest,
+  JobShot, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output, PlannedShot, Question,
 } from '../contracts/types'
-import { quotaClassOf } from '../contracts/types'
+import { AGENCY_SHELF } from '../contracts/types'
+import { quotaClassOf } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
 import { hexOf } from '../lib/hash'
-import { newId } from '../lib/ulid'
 import { splitTarget } from '../lib/shots'
-import type { Relay, UploadResult } from './types'
+import type { AnswerResult, Relay, UploadResult } from './types'
 import { RelayError } from './types'
 
 export interface RenderedOutput {
@@ -49,10 +56,21 @@ interface LedgerItem {
   createdAt: number
   startPos: number
   cancelledAt?: number
-  done?: { state: JobState; outputs?: Output[]; shots?: Shot[]; error?: ContractError; at: number }
+  /** [ask]: the question the job stopped at, and the answer that let it go on. */
+  question?: Question
+  answer?: Answer
+  answeredBy?: string
+  answeredAt?: number
+  done?: { state: JobState; outputs?: Output[]; shots?: PlannedShot[]; error?: ContractError; at: number }
 }
 
 const MOCK_HOST = 'https://mock.napkin.invalid'
+
+/** The words the mock's question is asked about. */
+const ASK = /\[ask\]/i
+
+/** What the contract-3 relay says to a request of another contract. */
+export const OTHER_CONTRACT = 'This build reads contract 3; reload the page.'
 
 function collectHashes(v: unknown, out: Set<string>) {
   if (typeof v === 'string') {
@@ -64,26 +82,58 @@ function collectHashes(v: unknown, out: Set<string>) {
   }
 }
 
-const COMPOSITIONS: Shot['composition'][] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
-const MOVES: Shot['camera_move'][] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
+const SIZES: CameraSize[] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
+const MOVES: CameraMovement[] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
+
 /** The mock director: split the script into sentences, one shot each, seconds summing to the target;
  * each shot shows every character it was given, by its bare key when it has a front (the real
- * director picks a variant only when the moment needs one). */
-export function mockShotList(script: string, targetS: number, names: string[] = []): Shot[] {
+ * director picks a variant only when the moment needs one). A re-plan (`existing`, the shots the
+ * request sent) keeps their ids in order, so the web merges by id. */
+export function mockShotList(script: string, targetS: number, names: string[] = [], existing: Pick<JobShot, 'id'>[] = []): PlannedShot[] {
   const keys = names.filter((n) => n.endsWith('_front')).map((n) => n.split('_')[0])
   names = [...keys, ...names.filter((n) => !keys.includes(n.split('_')[0]))]
   const durations = splitTarget(targetS)
-  const sentences = script.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean)
-  return durations.map((d, i) => ({
-    id: newId('shot'),
-    order: i + 1,
-    duration_s: d,
-    composition: COMPOSITIONS[i % COMPOSITIONS.length],
-    action: (sentences[i] ?? sentences[sentences.length - 1] ?? 'Our hero looks at the camera.').slice(0, 300),
-    camera_move: MOVES[i % MOVES.length],
-    refs: names.slice(0, 9),
-    status: 'planned' as const,
-  }))
+  // A scene heading line (INT. … / EXT. …) is where, not a moment: the shots after it are in that scene.
+  const HEADING = /^(INT|EXT|INT\/EXT|I\/E)[. ]/i
+  let heading: string | undefined
+  const sentences: { text: string; heading?: string }[] = []
+  for (const line of script.split('\n').map((l) => l.trim()).filter(Boolean)) {
+    if (HEADING.test(line)) {
+      heading = line.slice(0, 200)
+      continue
+    }
+    for (const t of line.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)) sentences.push({ text: t, heading })
+  }
+  return durations.map((d, i): PlannedShot => {
+    const camera = { size: SIZES[i % SIZES.length], movement: MOVES[i % MOVES.length] }
+    const said = sentences[i] ?? sentences[sentences.length - 1]
+    return {
+      ...(existing[i] ? { id: existing[i].id } : {}),
+      kind: 'shot',
+      ...(said?.heading ? { scene_heading: said.heading } : {}),
+      duration_s: d,
+      camera,
+      action: (said?.text ?? 'Our hero looks at the camera.').slice(0, 300),
+      refs: names.slice(0, 9),
+      beats: [{ kind: 'camera', at_s: 0, text: `${camera.movement.replace('_', ' ')} on a ${camera.size} shot` }],
+    }
+  })
+}
+
+/** The mock's question: a nudge with two options, the first recommended. Its id is minted here, like the relay's. */
+function mockQuestion(): Question {
+  return {
+    id: newUlidId('q'),
+    kind: 'nudge',
+    text: 'Open wide on the street, or start close on the hero?',
+    why: 'The words could open either way.',
+    options: [
+      { id: 'wide', label: 'Open wide', detail: 'Set the place first.' },
+      { id: 'close', label: 'Start close', detail: 'Lead with the hero.' },
+    ],
+    allow_text: true,
+    recommended_option_id: 'wide',
+  }
 }
 
 /** The mock's agency: Napkin's own tenant, UUIDv5 of 'napkin:agency:napkin' (as napkin-web's TenantId::of_agency). */
@@ -152,9 +202,7 @@ export class MockRelay implements Relay {
   }
 
   async createJob(req: JobRequest): Promise<Job> {
-    if (req.contractVersion !== '2') {
-      throw new RelayError({ code: 'invalid_input', message: 'Unknown contract version.', retryable: false }, 400)
-    }
+    if (req.contractVersion !== '3') throw new RelayError({ code: 'invalid_input', message: OTHER_CONTRACT, retryable: false }, 400)
     const existing = this.ledger.get(req.jobId)
     if (!existing) {
       this.ledger.set(req.jobId, { req, createdAt: this.opts.now(), startPos: 1 + Math.floor(Math.random() * 3) })
@@ -177,6 +225,29 @@ export class MockRelay implements Relay {
       this.save()
     }
     return this.snapshot(jobId)
+  }
+
+  /** POST /jobs/{jobId}/answer. `by`: who answers (tests answer as someone else); the mock's own person by default. */
+  async answerJob(jobId: string, answer: JobAnswer, by = `human:${this.participantId}`): Promise<AnswerResult> {
+    if (answer.contractVersion !== '3') throw new RelayError({ code: 'invalid_input', message: OTHER_CONTRACT, retryable: false }, 400)
+    const item = this.ledger.get(jobId)
+    if (!item) throw new RelayError({ code: 'invalid_input', message: 'No such job.', retryable: false }, 404)
+    if (item.answer && item.answeredBy) {
+      const conflict: AnswerConflict = {
+        error: { code: 'conflict', message: 'Someone answered first.', retryable: false },
+        answeredBy: item.answeredBy,
+        answer: item.answer,
+      }
+      return { conflict }
+    }
+    if (!item.question || item.question.id !== answer.questionId) {
+      throw new RelayError({ code: 'invalid_input', message: 'This job is not asking that.', retryable: false }, 400)
+    }
+    item.answer = answer.optionId ? { option_id: answer.optionId } : { text: answer.text! }
+    item.answeredBy = by
+    item.answeredAt = this.opts.now()
+    this.save()
+    return { job: this.snapshot(jobId) }
   }
 
   async log(entry: LogEntry): Promise<void> {
@@ -207,33 +278,41 @@ export class MockRelay implements Relay {
     } catch { /* storage blocked: memory only */ }
   }
 
-  async library(): Promise<LibraryIndex> {
+  async library(shelf = AGENCY_SHELF): Promise<LibraryIndex> {
     const data = this.libraryData()
     return {
-      workspace: 'mock',
-      keys: Object.values(data).map((versions) => {
+      workspace: MOCK_TENANT.id,
+      shelf,
+      keys: Object.values(data).filter((v) => v.at(-1)!.shelf === shelf).map((versions) => {
         const e = versions[versions.length - 1]
-        const cover = (e.refs.find((r) => r.variant === 'front') ?? e.refs[0]).asset
-        return { key: e.key, ver: e.ver, role: e.role, by: e.by, at: e.at, variants: e.refs.map((r) => r.variant), cover }
+        const refs = e.refs ?? []
+        const front = refs.find((r) => r.variant === 'front') ?? refs[0]
+        return {
+          key: e.key, kind: e.kind, ver: e.ver, ...(e.role ? { role: e.role } : {}), by: e.by, at: e.at,
+          variants: refs.map((r) => r.variant), ...(front ? { cover: front.asset } : {}),
+        }
       }).sort((a, b) => a.key.localeCompare(b.key)),
     }
   }
 
-  async libraryEntry(key: Key, ver?: number): Promise<LibraryEntry> {
+  async libraryEntry(key: Key, ver?: number, _shelf = AGENCY_SHELF): Promise<LibraryEntry> {
     const versions = this.libraryData()[key] ?? []
     const e = ver ? versions.find((v) => v.ver === ver) : versions[versions.length - 1]
     if (!e) throw new RelayError({ code: 'invalid_input', message: `There is no ${key} in your workspace's library.`, retryable: false }, 404)
     return e
   }
 
-  async publish(key: Key, req: LibraryPublish): Promise<LibraryEntry> {
+  async publish(key: Key, req: LibraryPublish, shelf = AGENCY_SHELF): Promise<LibraryEntry> {
     const data = this.libraryData()
     const versions = data[key] ?? []
     const latest = versions.length ? versions[versions.length - 1].ver : 0
     if (req.baseVer !== latest) {
       throw new RelayError({ code: 'conflict', message: `Someone published version ${latest} of this key since yours. Import it first, then publish.`, retryable: false }, 409)
     }
-    const entry: LibraryEntry = { workspace: 'mock', key, ver: latest + 1, role: req.role, by: this.handle, at: new Date(this.opts.now()).toISOString(), refs: req.refs }
+    const entry: LibraryEntry = {
+      workspace: MOCK_TENANT.id, shelf, kind: req.kind, key, ver: latest + 1, ...(req.role ? { role: req.role } : {}), by: this.handle,
+      at: new Date(this.opts.now()).toISOString(), ...(req.refs ? { refs: req.refs } : {}), ...(req.payload ? { payload: req.payload } : {}),
+    }
     this.saveLibrary({ ...data, [key]: [...versions, entry] })
     return entry
   }
@@ -253,7 +332,9 @@ export class MockRelay implements Relay {
   private finish(jobId: string, item: LedgerItem) {
     if (this.running.has(jobId)) return
     const p = (async () => {
-      const { req } = item
+      const req = item.req.op === 'stitch'
+        ? { ...item.req, input: { ...item.req.input, clips: (item.req.input.clips ?? []).filter((c) => !c.endCard) } }
+        : item.req
       const text = `${req.input.text ?? ''} ${req.input.script ?? ''}`
       try {
         if (/#moderate/i.test(text)) {
@@ -261,7 +342,8 @@ export class MockRelay implements Relay {
         } else if (/#fail/i.test(text)) {
           item.done = { state: 'failed', at: this.opts.now(), error: { code: 'provider_failed', message: 'The provider could not make this one. Try again.', retryable: true } }
         } else if (req.op === 'shot_list') {
-          item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))), outputs: [] }
+          const names = (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))
+          item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, names, req.input.shots ?? []), outputs: [] }
         } else {
           const rendered = await this.opts.renderer.render(req, this.opts.getInput)
           const outputs: Output[] = []
@@ -287,12 +369,20 @@ export class MockRelay implements Relay {
     const item = this.ledger.get(jobId)!
     const { req } = item
     const now = this.opts.now()
-    const elapsed = now - item.createdAt
+    // An answered question starts the job's clock again: it goes on from where it stopped.
+    const elapsed = now - (item.answeredAt ?? item.createdAt)
     const delay = this.delayFor(req.op)
+    const asks = ASK.test(`${req.input.text ?? ''} ${req.input.script ?? ''}`) && !req.input.answer
     let state: JobState
     let queuePosition: number | undefined
     if (item.done) {
       state = item.done.state
+    } else if (asks && !item.answer && elapsed >= delay * 0.4) {
+      state = 'needs_input'
+      if (!item.question) {
+        item.question = mockQuestion()
+        this.save()
+      }
     } else if (elapsed < delay * 0.4) {
       state = 'queued'
       queuePosition = Math.max(1, item.startPos - Math.floor(elapsed / (delay * 0.15)))
@@ -306,9 +396,16 @@ export class MockRelay implements Relay {
     const hashes = new Set<string>()
     collectHashes(req.input, hashes)
     const job: Job = {
-      contractVersion: '2',
+      contractVersion: '3',
       jobId,
       participantId: this.participantId,
+      tenantId: MOCK_TENANT.id,
+      projectId: req.projectId,
+      startedBy: `human:${this.participantId}`,
+      crew: crewFor(req.op) as CrewId,
+      node: req.node,
+      nonce: req.nonce,
+      ...(req.purpose ? { purpose: req.purpose } : {}),
       op: req.op,
       quotaClass: quotaClassOf(req.op),
       state,
@@ -326,7 +423,11 @@ export class MockRelay implements Relay {
     if (item.done?.outputs) job.outputs = item.done.outputs
     if (item.done?.shots) job.shots = item.done.shots
     if (item.done?.error) job.error = item.done.error
-    if (item.done?.state === 'completed') job.needsUser = null
+    if (item.question) job.question = item.question
+    if (item.answer && item.answeredBy) {
+      job.answer = item.answer
+      job.answeredBy = item.answeredBy
+    }
     return job
   }
 }

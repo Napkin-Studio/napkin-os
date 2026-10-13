@@ -77,7 +77,7 @@ describe('HttpRelay and who is signed in', () => {
     vi.stubGlobal('fetch', fetchFn)
     const relay = new HttpRelay('http://relay.test')
     await relay.me()
-    await relay.createJob({ contractVersion: '2', jobId: 'job_01K6XA7Q3M9V2D4R8T0B5C1E6F', op: 'generate', parentIds: [], input: { text: 'a cat' } } as JobRequest)
+    await relay.createJob({ contractVersion: '3', jobId: 'job_01K6XA7Q3M9V2D4R8T0B5C1E6F', op: 'generate', projectId: 'proj_01K6XA7Q3M9V2D4R8T0B5C1E6F', nonce: 'nonce_0001', node: { kind: 'group', id: 'job_01K6XA7Q3M9V2D4R8T0B5C1E6F' }, parentIds: [], input: { text: 'a cat' } } satisfies JobRequest)
     await relay.getJob('job_01K6XA7Q3M9V2D4R8T0B5C1E6F')
     relay.dogfoodEvents([{ at: 1 } as never], false)
     expect(fetchFn).toHaveBeenCalledTimes(4)
@@ -87,4 +87,38 @@ describe('HttpRelay and who is signed in', () => {
       expect(h.has('X-Own-Keys')).toBe(false)
     }
   })
+})
+
+describe('HttpRelay and a job that asks', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const JOB = 'job_01K6XA7Q3M9V2D4R8T0B5C1E6F'
+  const reply = { contractVersion: '3' as const, questionId: 'q_01K6XA7Q3M9V2D4R8T0B5C1E6F', optionId: 'wide' }
+
+  it('posts the answer to /jobs/{jobId}/answer and gives back the resumed job', async () => {
+    const fetchFn = answer200({ jobId: JOB, state: 'submitted' })
+    vi.stubGlobal('fetch', fetchFn)
+    const r = await new HttpRelay('http://relay.test').answerJob(JOB, reply)
+    expect(r).toEqual({ job: { jobId: JOB, state: 'submitted' } })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe(`http://relay.test/jobs/${JOB}/answer`)
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual(reply)
+  })
+
+  it('a 409 is the answer that won, not an error', async () => {
+    const conflict = { error: { code: 'conflict', message: 'Someone answered first.', retryable: false }, answeredBy: 'human:p_sai0001', answer: { option_id: 'close' } }
+    vi.stubGlobal('fetch', answer(409, conflict))
+    expect(await new HttpRelay('http://relay.test').answerJob(JOB, reply)).toEqual({ conflict })
+  })
+
+  it('reads a shelf of the library', async () => {
+    const fetchFn = answer200({ workspace: 'w', shelf: 'agency', keys: [] })
+    vi.stubGlobal('fetch', fetchFn)
+    await new HttpRelay('http://relay.test').library()
+    expect(fetchFn.mock.calls[0][0]).toBe('http://relay.test/library/agency')
+  })
+
+  function answer200(body: unknown) {
+    return vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(body), { status: 200 }))
+  }
 })

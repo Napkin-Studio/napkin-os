@@ -3,13 +3,14 @@
 // bodies per relay-api.schema.json. No token: who is asking comes from the relay's identity seam.
 
 import type {
-  AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
+  AnswerConflict, AssetRef, Config, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
   UploadResponse,
 } from '../contracts/types'
+import { AGENCY_SHELF } from '../contracts/types'
 import type { ShellEvent } from '../dogfood/recorder'
 import { sha256Of } from '../lib/hash'
 import { accessOf, type Access } from './access'
-import { RelayError, type Relay, type UploadResult } from './types'
+import { RelayError, type AnswerResult, type Relay, type UploadResult } from './types'
 
 export class HttpRelay implements Relay {
   readonly kind = 'http' as const
@@ -41,7 +42,7 @@ export class HttpRelay implements Relay {
       if (!err && access === 'signed_out') {
         throw new RelayError({ code: 'unauthorised', message: 'Sign in to Napkin Studio to use Production.', retryable: false }, res.status)
       }
-      throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status)
+      throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status, json)
     }
     return json as T
   }
@@ -84,6 +85,16 @@ export class HttpRelay implements Relay {
     return this.call<Job>('DELETE', `/jobs/${encodeURIComponent(jobId)}`)
   }
 
+  async answerJob(jobId: string, answer: JobAnswer): Promise<AnswerResult> {
+    try {
+      return { job: await this.call<Job>('POST', `/jobs/${encodeURIComponent(jobId)}/answer`, answer) }
+    } catch (e) {
+      const body = e instanceof RelayError && e.status === 409 ? (e.body as Partial<AnswerConflict> | null) : null
+      if (body?.answeredBy && body.answer && body.error) return { conflict: body as AnswerConflict }
+      throw e
+    }
+  }
+
   async log(entry: LogEntry) {
     await this.call<void>('POST', '/log', entry)
   }
@@ -96,16 +107,16 @@ export class HttpRelay implements Relay {
     }
   }
 
-  library() {
-    return this.call<LibraryIndex>('GET', '/library')
+  library(shelf = AGENCY_SHELF) {
+    return this.call<LibraryIndex>('GET', `/library/${encodeURIComponent(shelf)}`)
   }
 
-  libraryEntry(key: Key, ver?: number) {
-    return this.call<LibraryEntry>('GET', `/library/${encodeURIComponent(key)}${ver ? `/${ver}` : ''}`)
+  libraryEntry(key: Key, ver?: number, shelf = AGENCY_SHELF) {
+    return this.call<LibraryEntry>('GET', `/library/${encodeURIComponent(shelf)}/${encodeURIComponent(key)}${ver ? `/${ver}` : ''}`)
   }
 
-  publish(key: Key, req: LibraryPublish) {
-    return this.call<LibraryEntry>('POST', `/library/${encodeURIComponent(key)}`, req)
+  publish(key: Key, req: LibraryPublish, shelf = AGENCY_SHELF) {
+    return this.call<LibraryEntry>('POST', `/library/${encodeURIComponent(shelf)}/${encodeURIComponent(key)}`, req)
   }
 
   async dogfoodConsent() {

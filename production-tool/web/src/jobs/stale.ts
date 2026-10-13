@@ -1,88 +1,106 @@
 // What is out of date, and why (decided 2026-10-07, "Change anything later"; one to one
-// since 2026-10-09, features/one-to-one-updates.clan).
+// since 2026-10-09, features/one-to-one-updates.clan; contract 3's stale map since 2026-10-13).
 //
-// Marks follow a shot to its own frame and clip only:  view → frames · a shot's action,
-// composition or refs → its frame · its camera move or length → its clip · its frame → its
-// clip · clip → ad. A new frame never marks the next frame: continuity (a frame drawn from an
-// older frame before it, or an older frame 1) is the quiet "drawn from an older frame" note
-// (frameDrift), never "out of date"; "Carry the look forward" redraws on request (jobs/follow.ts).
+// Marks follow a shot to its own frame and clip only:  a shot's words, framing or refs → its
+// frame · its camera move or length → its clip · its frame → its clip · clip → ad. A new frame
+// never marks the next frame: continuity (a frame drawn from an older frame before it, or an
+// older frame 1) is the quiet "drawn from an older frame" note (frameDrift), never "out of date";
+// "Carry the look forward" redraws on request (jobs/follow.ts).
 //
-// Frames and clips carry `stale[]` marks (target / caused_by / reason). A new version carries
-// no mark, so making an item again lifts it. A clip's frame mark is also lifted when the user
-// goes back to the frame it was made from: the check compares the clip's job inputs
-// (`input_hashes`) with the frame selected now.
+// Marks are entities of `stale` (target / caused_by / reason). A new version carries no mark, so
+// making an item again lifts it. A clip's frame mark is also lifted when the person goes back to
+// the frame it was made from: the check compares the clip's job inputs (`input_hashes`) with the
+// frame picked now.
 //
-// The ad has no mark: the contract's targets are view, frame, take and shot, and
-// adding one would change it. It is worked out instead, the same way: the latest
-// ad is out of date when its job did not take in every shot's selected clip.
-// Nothing here regenerates anything.
+// The ad has no mark: it is worked out the same way. The picked render is out of date when its
+// job did not take in every shot's clip in the cut, in order. Nothing here regenerates anything.
 
-import type { ExportEntry, ProductionDocument, Shot, StaleMark } from '../contracts/types'
-import { selectedFrame } from './frames'
+import { newUlidId } from '../../../clan-store/src'
+import type { Camera, ProductionDocument, Render, Shot, StaleMark, Target } from '../contracts/types'
+import { currentFrame, currentRender, currentTake, shotNumber, shotsOf, staleList } from '../model/selectors'
 
-const takeOf = (d: ProductionDocument, shotId: string) => (d.takes ?? []).find((t) => t.shot_id === shotId && t.selected)
+/** A new mark, with its id. */
+function addMark(d: ProductionDocument, target: Target, causedBy: Target, reason: string, now: string): StaleMark {
+  const id = newUlidId('stale')
+  const mark: StaleMark = { id, v: 1, field_v: {}, target, caused_by: causedBy, reason, marked_at: now }
+  d.stale[id] = mark
+  return mark
+}
 
 /**
- * Shot `shotId`'s selected clip is out of date when its job did not start from
- * the shot's selected frame. Lifts any earlier frame mark on the shot's clips.
+ * Shot `shotId`'s clip in the cut is out of date when its job did not start from the shot's
+ * picked frame. Lifts any earlier frame mark on the shot's clips.
  */
 export function refreshClipStale(d: ProductionDocument, shotId: string, now = new Date().toISOString()) {
-  const shots = d.shots ?? []
-  const i = shots.findIndex((s) => s.id === shotId)
-  if (i < 0) return
-  const takeIds = new Set((d.takes ?? []).filter((t) => t.shot_id === shotId).map((t) => t.id))
-  d.stale = (d.stale ?? []).filter((s) => !(s.target.kind === 'take' && takeIds.has(s.target.id) && s.caused_by.kind === 'frame'))
-  const frame = selectedFrame(d, shotId)
-  const take = takeOf(d, shotId)
+  if (!d.shots[shotId]) return
+  const takeIds = new Set(Object.values(d.takes).filter((t) => t.shot_id === shotId).map((t) => t.id))
+  for (const m of staleList(d)) if (m.target.kind === 'take' && takeIds.has(m.target.id) && m.caused_by.kind === 'frame') delete d.stale[m.id]
+  const frame = currentFrame(d, shotId)
+  const take = currentTake(d, shotId)
   if (!frame || !take) return
-  const job = d.jobs.find((j) => j.id === take.job_id)
+  const job = d.jobs[take.job_id]
   // No inputs on record (an older job): nothing to compare, so no mark.
   if (!job?.input_hashes || job.input_hashes.includes(frame.asset)) return
-  const mark: StaleMark = { target: { kind: 'take', id: take.id }, caused_by: { kind: 'frame', id: frame.id }, reason: `Shot ${i + 1}'s frame changed`, marked_at: now }
-  d.stale.push(mark)
+  addMark(d, { kind: 'take', id: take.id }, { kind: 'frame', id: frame.id }, `Shot ${shotNumber(d, shotId)}'s frame changed`, now)
 }
 
 /** What a shot edit changes, and which of the shot's own items it puts out of date. */
-const SHOT_FIELDS: Partial<Record<keyof Shot, { what: string; on: 'frame' | 'take' }>> = {
+const SHOT_FIELDS: Record<string, { what: string; on: 'frame' | 'take' }> = {
   action: { what: 'words', on: 'frame' },
-  composition: { what: 'composition', on: 'frame' },
+  direction: { what: 'direction', on: 'frame' },
   refs: { what: 'refs', on: 'frame' },
-  camera_move: { what: 'camera move', on: 'take' },
+  'camera/size': { what: 'framing', on: 'frame' },
+  'camera/angle': { what: 'framing', on: 'frame' },
+  'camera/lens_mm': { what: 'framing', on: 'frame' },
+  'camera/macro': { what: 'framing', on: 'frame' },
+  'camera/movement': { what: 'camera move', on: 'take' },
+  'camera/movement_speed': { what: 'camera move', on: 'take' },
   duration_s: { what: 'length', on: 'take' },
 }
 
 /**
- * A person changed `fields` of shot `shotId`: its selected frame (action, composition, refs) or
- * its selected clip (camera move, length) is out of date, and nothing else. Called inside the
- * same updateDoc as the edit, so undo takes both back. One mark per item and shot: one already
- * there is kept (only its reason follows the latest change), so typing does not pile marks up.
+ * A person changed `fields` of shot `shotId` (field names, camera parts as camera/<part>): its picked
+ * frame (words, direction, refs, framing) or its clip in the cut (camera move, length) is out of date,
+ * and nothing else. Called inside the same updateDoc as the edit, so undo takes both back. One mark per
+ * item and shot: one already there is kept (only its reason follows the latest change), so typing does
+ * not pile marks up.
  */
 export function markShotEdit(d: ProductionDocument, shotId: string, fields: readonly string[], now = new Date().toISOString()) {
-  const shots = d.shots ?? []
-  const i = shots.findIndex((s) => s.id === shotId)
-  if (i < 0) return
+  if (!d.shots[shotId]) return
   for (const on of ['frame', 'take'] as const) {
-    const changed = fields.map((f) => SHOT_FIELDS[f as keyof Shot]).filter((x) => x?.on === on)
+    const changed = fields.map((f) => SHOT_FIELDS[f]).filter((x) => x?.on === on)
     if (!changed.length) continue
-    const target = on === 'frame' ? selectedFrame(d, shotId) : takeOf(d, shotId)
+    const target = on === 'frame' ? currentFrame(d, shotId) : currentTake(d, shotId)
     if (!target) continue
-    const reason = `Shot ${i + 1}'s ${changed.at(-1)!.what} changed`
-    d.stale ??= []
-    const had = d.stale.find((s) => s.target.kind === on && s.target.id === target.id && s.caused_by.kind === 'shot' && s.caused_by.id === shotId)
+    const reason = `Shot ${shotNumber(d, shotId)}'s ${changed.at(-1)!.what} changed`
+    const had = staleList(d).find((s) => s.target.kind === on && s.target.id === target.id && s.caused_by.kind === 'shot' && s.caused_by.id === shotId)
     if (had) {
-      if (had.reason !== reason) had.reason = reason
+      if (had.reason !== reason) d.stale[had.id].reason = reason
       continue
     }
-    d.stale.push({ target: { kind: on, id: target.id }, caused_by: { kind: 'shot', id: shotId }, reason, marked_at: now })
+    addMark(d, { kind: on, id: target.id }, { kind: 'shot', id: shotId }, reason, now)
   }
 }
 
+/** The fields (camera parts as camera/<part>) that differ between a shot and a patch of it. */
+function changedFields(s: Shot, patch: Partial<Shot>): string[] {
+  const out: string[] = []
+  for (const k of Object.keys(patch) as (keyof Shot)[]) {
+    if (k === 'camera') {
+      const a = s.camera as unknown as Record<string, unknown>
+      const b = (patch.camera ?? {}) as Camera as unknown as Record<string, unknown>
+      for (const p of new Set([...Object.keys(a), ...Object.keys(b)])) if (JSON.stringify(a[p]) !== JSON.stringify(b[p])) out.push(`camera/${p}`)
+    } else if (JSON.stringify(s[k] ?? null) !== JSON.stringify(patch[k] ?? null)) out.push(k)
+  }
+  return out
+}
+
 /** A person's edit of a shot (the Storyboard's shot list), with the marks it makes: run it inside one
- *  updateDoc. Only fields whose value really changed mark anything. */
+ *  updateDoc. Only fields whose value really changed mark anything. A camera in `patch` is the whole camera. */
 export function editShot(d: ProductionDocument, shotId: string, patch: Partial<Shot>) {
-  const s = d.shots?.find((x) => x.id === shotId)
+  const s = d.shots[shotId]
   if (!s) return
-  const changed = (Object.keys(patch) as (keyof Shot)[]).filter((k) => JSON.stringify(s[k]) !== JSON.stringify(patch[k]))
+  const changed = changedFields(s, patch)
   Object.assign(s, patch)
   markShotEdit(d, shotId, changed)
 }
@@ -93,66 +111,69 @@ export function shotChange(mark: Pick<StaleMark, 'reason'>): string | undefined 
 }
 
 /**
- * Continuity only, never "out of date": shot `shotId`'s selected frame was drawn from another
+ * Continuity only, never "out of date": shot `shotId`'s picked frame was drawn from another
  * picture than the frame now before it (or than frame 1 now). The number of that shot, or
  * undefined. An older job with no inputs on record says nothing.
  */
 export function frameDrift(d: ProductionDocument, shotId: string): number | undefined {
-  const shots = d.shots ?? []
+  const shot = d.shots[shotId]
+  if (!shot) return undefined
+  const shots = shotsOf(d, shot.storyboard_id)
   const i = shots.findIndex((s) => s.id === shotId)
   if (i <= 0) return undefined
-  const frame = selectedFrame(d, shotId)
-  const job = frame && d.jobs.find((j) => j.id === frame.job_id)
+  const frame = currentFrame(d, shotId)
+  const job = frame?.job_id ? d.jobs[frame.job_id] : undefined
   if (!job?.input_hashes) return undefined
-  const prev = selectedFrame(d, shots[i - 1].id)
+  const prev = currentFrame(d, shots[i - 1])
   if (prev && !job.input_hashes.includes(prev.asset)) return i
-  const first = selectedFrame(d, shots[0].id)
+  const first = currentFrame(d, shots[0])
   if (first && !job.input_hashes.includes(first.asset)) return 1
   return undefined
 }
 
-/** The selected frame of a shot is marked out of date. */
+/** The picked frame of a shot is marked out of date. */
 export function frameStale(d: ProductionDocument, shotId: string): StaleMark | undefined {
-  const f = selectedFrame(d, shotId)
-  return f ? (d.stale ?? []).find((s) => s.target.kind === 'frame' && s.target.id === f.id) : undefined
+  const f = currentFrame(d, shotId)
+  return f ? staleList(d).find((s) => s.target.kind === 'frame' && s.target.id === f.id) : undefined
 }
 
-/** The selected clip of a shot is marked out of date. */
+/** The shot's clip in the cut is marked out of date. */
 export function takeStale(d: ProductionDocument, shotId: string): StaleMark | undefined {
-  const t = takeOf(d, shotId)
-  return t ? (d.stale ?? []).find((s) => s.target.kind === 'take' && s.target.id === t.id) : undefined
+  const t = currentTake(d, shotId)
+  return t ? staleList(d).find((s) => s.target.kind === 'take' && s.target.id === t.id) : undefined
 }
 
 export interface AdStatus {
-  ad?: ExportEntry
+  /** The ad render picked now (the main video's pick, else its newest). */
+  ad?: Render
   stale: boolean
   reason?: string
   /** The shot whose clip the ad is missing (for "Update what follows" on that shot). */
   shotId?: string
 }
 
-/** The latest ad, and whether it still matches the shots and their selected clips. */
+/** The picked ad render, and whether it still matches the shots and their clips in the cut. */
 export function adStatus(d: ProductionDocument): AdStatus {
-  const ad = (d.exports ?? []).filter((e) => e.kind === 'ad_mp4').at(-1)
+  const ad = currentRender(d)
   if (!ad) return { stale: false }
-  const job = d.jobs.find((j) => j.id === ad.job_id)
+  const job = d.jobs[ad.job_id]
   if (!job?.input_hashes) return { ad, stale: false }
-  const shots = d.shots ?? []
+  const shots = shotsOf(d)
   for (const [i, s] of shots.entries()) {
-    const t = takeOf(d, s.id)
+    const t = currentTake(d, s.id)
     if (!t) return { ad, stale: true, reason: `Shot ${i + 1} has no clip in it`, shotId: s.id }
     if (!job.input_hashes.includes(t.asset)) return { ad, stale: true, reason: `Shot ${i + 1}'s clip changed`, shotId: s.id }
   }
   if (job.input_hashes.length > shots.length) return { ad, stale: true, reason: 'A shot was deleted' }
   // The same clips in another order are another ad: the job's input_hashes keep the clips' order
   // (the stitch request lists them shot by shot). It stayed "up to date" after a reorder (2026-10-09).
-  const now = shots.map((s) => takeOf(d, s.id)!.asset).filter((h, i, all) => all.indexOf(h) === i)
+  const now = shots.map((s) => currentTake(d, s.id)!.asset).filter((h, i, all) => all.indexOf(h) === i)
   const sent = job.input_hashes.filter((h) => now.includes(h))
   if (sent.join() !== now.join()) return { ad, stale: true, reason: 'The shots were reordered' }
   return { ad, stale: false }
 }
 
-/** Anything at all out of date: a selected frame or clip, or the ad. */
+/** Anything at all out of date: a picked frame or clip, or the ad. */
 export function anythingStale(d: ProductionDocument): boolean {
-  return (d.shots ?? []).some((s) => frameStale(d, s.id) || takeStale(d, s.id)) || adStatus(d).stale
+  return shotsOf(d).some((s) => frameStale(d, s.id) || takeStale(d, s.id)) || adStatus(d).stale
 }

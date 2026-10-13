@@ -1,0 +1,244 @@
+// Dex's plan: the shot_list request, and its landing (contracts/collab.md §5).
+//
+// The request sends the main script's words (its scenes' unplanned text, then
+// the planned shots' action: what Dex re-plans from), the target length, every
+// named picture, and the shots already there (a re-plan keeps their ids).
+//
+// The landing moves the script's words out of the scenes into the shots and
+// their beats: ONE undo step and ONE decision by dex citing the job
+// (clan-store landPlan), on the CLAN store. A re-plan is a merge keyed by shot
+// id: a planned shot with an existing id updates that shot's camera and length,
+// and its words only when a person did not write them last; new shots are
+// added after the others; a shot the plan leaves out goes, unless a person
+// wrote it last. On the snapshot store (no live text) the same entities are
+// written with their words as flat text.
+
+import { EMPTY_PROSE, landPlan, newUlidId, ranksBetween, type Patch, type PlanLanding, type Prose } from '../../../clan-store/src'
+import type { BeatKind, Camera, DirectorCard, Job, JobInput, PlannedShot, ProductionDocument, Shot } from '../contracts/types'
+import { landUpdate } from '../doc/store'
+import type { DocumentStore } from '../doc/types'
+import type { JobCtx } from '../doc/ui'
+import { proseFromText } from '../model/diff'
+import { ModelStore } from '../model/store'
+import { beatsOf, keyNamed, mainStoryboard, refNamed, scenesOf, scriptText, shotsOf } from '../model/selectors'
+import type { Relay } from '../relay'
+import type { FrameDeps } from './frames'
+import { SCRIPT_MAX } from './frames'
+import { landingWhy } from './landing'
+import { allNamed, jobShot } from './select'
+
+// ── the request ─────────────────────────────────────────────────────────────
+
+/** The shot_list request: the script's words, the target, the named pictures, the shots already there. */
+export async function planInput(relay: Relay, d: ProductionDocument, text?: string): Promise<JobInput> {
+  const sb = mainStoryboard(d)
+  if (!sb) throw new Error('This project has no storyboard.')
+  const refs = await allNamed(relay, d)
+  const shots = shotsOf(d, sb.id)
+  return {
+    script: scriptText(d).slice(0, SCRIPT_MAX),
+    targetS: Math.min(600, Math.max(1, Math.round(sb.target_s))),
+    ...(refs.length ? { refs } : {}),
+    ...(shots.length ? { shots: shots.map((s) => jobShot(d, s, false)) } : {}),
+    ...(text?.trim() ? { text: text.trim().slice(0, 1000) } : {}),
+  }
+}
+
+/** Ask Dex for a plan (or a re-plan) of the main storyboard. */
+export async function planShots(deps: FrameDeps, opts: { text?: string } = {}): Promise<string> {
+  const input = await planInput(deps.relay, deps.doc.get(), opts.text)
+  return deps.runner.submit('shot_list', input, [], { for: 'shot_list' })
+}
+
+// ── the landing ─────────────────────────────────────────────────────────────
+
+const isPerson = (writer: string | undefined) => !!writer?.startsWith('human:')
+
+interface ShotRow {
+  id: string
+  /** The shot already there that this plan updates. */
+  existing?: Shot
+  /** A new shot's fields (no text); a re-planned one's camera and length. */
+  fields: Record<string, unknown>
+  action: string
+  direction?: string
+  /** Its words are Dex's to write (a new shot, or one no person wrote last). */
+  writeText: boolean
+}
+
+interface BeatRow { id: string; fields: { shot_id: string; rank: string; at_s: number; kind: BeatKind; speaker?: string; parenthetical?: string }; text: string }
+
+/** What a shot_list job's result does to the document. */
+export interface ShotListPlan {
+  shots: ShotRow[]
+  beats: BeatRow[]
+  /** Shots the plan leaves out that no person wrote last, and the beats that go with them or are replaced. */
+  dropShots: string[]
+  dropBeats: string[]
+}
+
+/** The names a planned shot shows that its words do not mention yet: said in its direction, so they are
+ *  mentions in its text (a shot's refs are the names its text mentions). Only names the document has. */
+function directionOf(d: ProductionDocument, p: PlannedShot): string | undefined {
+  const words = `${p.action} ${p.direction ?? ''}`
+  const missing = p.refs.filter((n) => !new RegExp(`@${n}(?![a-z0-9_-])`).test(words) && (refNamed(d, n) || keyNamed(d, n)))
+  const said = [p.direction?.trim(), missing.length ? `Shows ${missing.map((n) => `@${n}`).join(', ')}.` : ''].filter(Boolean).join(' ')
+  return said ? said.slice(0, 4000) : undefined
+}
+
+function beatRows(shotId: string, p: PlannedShot): BeatRow[] {
+  const beats = p.beats ?? []
+  const ranks = beats.length ? ranksBetween(null, null, beats.length) : []
+  return beats.map((b, i) => ({
+    id: newUlidId('beat'),
+    fields: {
+      shot_id: shotId, rank: ranks[i], at_s: Math.min(b.at_s, p.duration_s), kind: b.kind,
+      ...(b.speaker ? { speaker: b.speaker } : {}), ...(b.parenthetical ? { parenthetical: b.parenthetical } : {}),
+    },
+    text: b.text,
+  }))
+}
+
+/** The plan a shot_list job's result makes of the document as it is now (see the top of this file). */
+export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>): ShotListPlan {
+  const sb = mainStoryboard(d)
+  const out: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [] }
+  if (!sb) return out
+  const planned = job.shots ?? []
+  const existing = shotsOf(d, sb.id)
+  const byId = new Map(existing.map((s) => [s.id, s]))
+  const scenes = scenesOf(d)
+  const fresh = planned.filter((p) => !(p.id && byId.has(p.id)))
+  const ranks = fresh.length ? ranksBetween(existing.at(-1)?.rank ?? null, null, fresh.length) : []
+  let k = 0
+  for (const p of planned) {
+    const was = p.id ? byId.get(p.id) : undefined
+    const direction = directionOf(d, p)
+    if (was) {
+      const writeText = !isPerson(was.last_writer)
+      out.shots.push({ id: was.id, existing: was, fields: { camera: p.camera, duration_s: p.duration_s }, action: p.action, ...(direction ? { direction } : {}), writeText })
+      if (writeText) {
+        out.dropBeats.push(...beatsOf(d, was.id).filter((b) => !isPerson(b.last_writer)).map((b) => b.id))
+        out.beats.push(...beatRows(was.id, p))
+      }
+      continue
+    }
+    const scene = scenes.find((s) => p.scene_heading && s.heading === p.scene_heading) ?? scenes[0]
+    const id = newUlidId('shot')
+    out.shots.push({
+      id,
+      fields: {
+        storyboard_id: sb.id, rank: ranks[k++], kind: p.kind, duration_s: p.duration_s, camera: p.camera, status: 'planned',
+        ...(scene ? { scene_id: scene.id } : {}),
+      },
+      action: p.action,
+      ...(direction ? { direction } : {}),
+      writeText: true,
+    })
+    out.beats.push(...beatRows(id, p))
+  }
+  const named = new Set(planned.map((p) => p.id).filter(Boolean))
+  for (const s of existing) {
+    if (named.has(s.id) || isPerson(s.last_writer)) continue
+    out.dropShots.push(s.id)
+    out.dropBeats.push(...beatsOf(d, s.id).map((b) => b.id))
+  }
+  return out
+}
+
+/** A shot's words as its fragment's prose: action blocks, then one direction block. */
+function shotProse(d: ProductionDocument, row: ShotRow): Prose {
+  const lines = [{ type: 'action', text: row.action }]
+  if (row.direction) lines.push({ type: 'direction', text: row.direction.replace(/\n/g, ' ') })
+  return proseFromText(d, lines)
+}
+
+/** The ref and key ids words mention (the flat `refs` a shot's text gives it). */
+function mentionedIds(d: ProductionDocument, words: string): string[] {
+  const ids: string[] = []
+  for (const m of words.matchAll(/@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g)) {
+    const t = refNamed(d, m[1]) ?? (m[1].includes('_') ? undefined : keyNamed(d, m[1]))
+    if (t && !ids.includes(t.id)) ids.push(t.id)
+  }
+  return ids
+}
+
+/** The plan written into a draft with its words as flat text (the snapshot store, and tests). */
+export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, _ctx?: unknown): ShotListPlan {
+  const plan = planOf(d, job)
+  for (const id of plan.dropBeats) delete d.beats[id]
+  for (const id of plan.dropShots) delete d.shots[id]
+  for (const row of plan.shots) {
+    const text = row.writeText
+      ? { action: row.action, ...(row.direction ? { direction: row.direction } : {}), refs: mentionedIds(d, `${row.action} ${row.direction ?? ''}`), last_writer: 'dex' }
+      : {}
+    if (row.existing) {
+      const s = d.shots[row.id]
+      Object.assign(s, row.fields, text)
+      if (row.writeText && !row.direction) delete s.direction
+      continue
+    }
+    d.shots[row.id] = { id: row.id, v: 1, field_v: {}, ...(row.fields as Omit<Shot, 'id' | 'v' | 'field_v'>), ...text }
+  }
+  for (const b of plan.beats) d.beats[b.id] = { id: b.id, v: 1, field_v: {}, ...b.fields, text: b.text, last_writer: 'dex' }
+  // The words moved into the shots: nothing stays in the scenes (one owner per span).
+  for (const sc of scenesOf(d)) if (sc.text) sc.text = ''
+  return plan
+}
+
+/** The leaf patches that turn a shot's camera into another (one per part). */
+function cameraPatches(s: Shot, camera: Camera): Patch[] {
+  const a = s.camera as unknown as Record<string, unknown>
+  const b = camera as unknown as Record<string, unknown>
+  const out: Patch[] = []
+  for (const p of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (JSON.stringify(a[p]) === JSON.stringify(b[p])) continue
+    out.push({ op: 'set', entity: 'shots', id: s.id, path: `camera/${p}`, value: (b[p] ?? null) as Patch['value'], base_version: s.v })
+  }
+  return out
+}
+
+/**
+ * Dex's plan lands: on the CLAN store, through clan-store landPlan (the entities and the text move in one
+ * undo step, one decision by dex citing the job); on the snapshot store, as flat text. Resolves the plan.
+ */
+export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract<JobCtx, { for: 'shot_list' }>): Promise<ShotListPlan> {
+  const cards: DirectorCard[] | undefined = job.director?.cards ?? ctx?.cards
+  if (!(store instanceof ModelStore)) {
+    const n = job.shots?.length ?? 0
+    let plan: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [] }
+    await landUpdate(store, (x) => { plan = applyShotList(x, job) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
+    return plan
+  }
+  await store.flush()
+  const d = store.get()
+  const plan = planOf(d, job)
+  const n = plan.shots.length
+  const why = landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards)
+  const patches: Patch[] = []
+  for (const row of plan.shots.filter((r) => r.existing)) {
+    const s = row.existing!
+    patches.push(...cameraPatches(s, row.fields.camera as Camera))
+    if (s.duration_s !== row.fields.duration_s) patches.push({ op: 'set', entity: 'shots', id: s.id, path: 'duration_s', value: row.fields.duration_s as number, base_version: s.v })
+  }
+  for (const id of plan.dropBeats) patches.push({ op: 'delete', entity: 'beats', id, base_version: d.beats[id].v })
+  for (const id of plan.dropShots) patches.push({ op: 'delete', entity: 'shots', id, base_version: d.shots[id].v })
+  const landing: PlanLanding = {
+    scenes: scenesOf(d).map((s) => ({ id: s.id, remainder: EMPTY_PROSE })),
+    shots: plan.shots.filter((r) => !r.existing).map((r) => ({ id: r.id, value: r.fields, prose: shotProse(d, r) })),
+    beats: plan.beats.map((b) => ({ id: b.id, value: b.fields, prose: proseFromText(d, [{ type: b.fields.kind === 'line' ? 'dialogue' : 'action', text: b.text.replace(/\n/g, ' ') }]) })),
+    patches,
+  }
+  const agent = why.agent ?? 'dex'
+  if (!landing.shots.length && !landing.beats?.length && !patches.length && !plan.shots.some((x) => x.writeText)) return plan
+  const r = await landPlan(store.bus, store.text, landing, {
+    action: why.action, agent, ...(why.rationale ? { rationale: why.rationale } : {}), ...(why.cites ? { cites: why.cites } : {}),
+  })
+  if (!r.applied) throw new Error(`The plan could not land: ${[...r.refused.map((x) => x.message), ...r.conflicts.map((c) => `${c.entity} ${c.id} changed since`)].join('; ')}`)
+  // A re-planned shot's words, when they are Dex's: part of the same undo step.
+  for (const row of plan.shots.filter((x) => x.existing && x.writeText)) {
+    await store.text.replace('shot', row.id, shotProse(store.bus.doc() as unknown as ProductionDocument, row), agent, { label: why.action, joinStep: true })
+  }
+  await store.flush() // the store shows what the buses hold now
+  return plan
+}
