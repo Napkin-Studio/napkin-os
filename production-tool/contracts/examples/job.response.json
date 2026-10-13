@@ -35,8 +35,9 @@
       "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "url": "https://hack.napkin.ie/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "mime": "image/png",
-      "w": 1080,
-      "h": 1350
+      "w": 896,
+      "h": 1120,
+      "croppedFrom": { "w": 896, "h": 1152 }
     }
   ],
   "kind": "generated",

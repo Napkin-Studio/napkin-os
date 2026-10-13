@@ -376,7 +376,7 @@
     },
     "output": {
       "type": "object",
-      "description": "One result of a job, already copied into our S3 (the provider URL is never handed out).",
+      "description": "One result of a job, already copied into our S3 (the provider URL is never handed out). An image output always carries its measured w and h; one centre-cropped to the job's shape (input.aspect, else input.ratio) also carries croppedFrom.",
       "properties": {
         "sha256": { "$ref": "#/$defs/sha256" },
         "url": { "type": "string", "pattern": "^https://" },
@@ -384,7 +384,8 @@
         "w": { "type": "integer" },
         "h": { "type": "integer" },
         "durationS": { "type": "number" },
-        "bytes": { "type": "integer" }
+        "bytes": { "type": "integer" },
+        "croppedFrom": { "$ref": "#/$defs/aspect", "description": "The model's size before the relay centre-cropped the picture to the job's shape (1344 x 768 for a 16:9 job that came back 1344 x 756). The uncropped original is kept." }
       },
       "required": ["sha256", "url", "mime"],
       "additionalProperties": false

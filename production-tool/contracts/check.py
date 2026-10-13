@@ -187,8 +187,9 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     if "fallbackOnly" in cfg:  # no longer read (features/runway-fallback.clan)
         fail(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
     # Contract 3 needs the director that asks (director.v6): v5 against v3 is refused by the relay.
-    if cfg["director"]["promptVersion"] != "director.v6":
-        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6")
+    # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; v6 stays bundled for a rollback.
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1"):
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6 or director.v6.1")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.

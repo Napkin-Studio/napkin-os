@@ -10,6 +10,7 @@ only @tags the adapter can rewrite.
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -109,28 +110,45 @@ def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
         job["refs"] = []
 
 
-def provider_ratio(provider: str, op: str, ratio: Optional[str], model: Optional[str] = None) -> Optional[str]:
-    """Our ratio ('9:16') in the provider's form: None where the endpoint takes none; Runway's
-    nearest allowed pixel pair for the model (Gemini 3 Pro and 3.1 Flash take different sizes);
-    W:H as it is for the others."""
-    if not ratio or (provider, op) in NO_RATIO:
+def provider_sizes(provider: str, op: str, model: Optional[str] = None) -> Optional[frozenset]:
+    """The sizes the provider's endpoint takes for this op and model, or None where it takes any W:H
+    (or none). The one place the tables are read: provider_ratio, the relay mock and the crop all go
+    through it (runway-sheet-sync will point it at the capability sheet)."""
+    if provider != "runway" or (provider, op) in NO_RATIO:
         return None
-    if provider != "runway":
-        return ratio
+    if op == "clip":
+        return RUNWAY_CLIP_RATIOS
     pro = model == "gemini_image3_pro" or (model is None and op == "region_edit")
-    allowed = RUNWAY_CLIP_RATIOS if op == "clip" else PRO_RATIOS if pro else FLASH_RATIOS
-    return ratio if ratio in allowed else _nearest_ratio(ratio, allowed)
+    return PRO_RATIOS if pro else FLASH_RATIOS
+
+
+def provider_ratio(provider: str, op: str, ratio: Optional[str], model: Optional[str] = None,
+                   aspect: Optional[dict] = None) -> Optional[str]:
+    """The job's shape in the provider's form: `aspect` ({w, h}, a format's exact shape or the
+    picture's own) when given, else `ratio` ('9:16'). None where the endpoint takes none; Runway's
+    nearest allowed pixel pair for the model (Gemini 3 Pro and 3.1 Flash take different sizes),
+    matched by shape whatever the terms (1080:1920, 191:100); W:H as it is for the others."""
+    if aspect and aspect.get("w") and aspect.get("h"):
+        target = f"{int(aspect['w'])}:{int(aspect['h'])}"
+    else:
+        target = ratio
+    if not target or (provider, op) in NO_RATIO:
+        return None
+    allowed = provider_sizes(provider, op, model)
+    if allowed is None:
+        return target
+    return target if target in allowed else _nearest_ratio(target, allowed)
 
 
 def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
-    """For a plain ratio ('9:16', '4:5', '16:9'; both terms 32 or less), the allowed 'W:H' of nearly the
-    same shape and closest to 1 MP. Pixel sizes ('1080:1350') are left alone: those must match exactly."""
-    import math
+    """The allowed 'W:H' of nearly the same shape as `ratio` ('9:16', '1080:1920', '191:100') and
+    closest to 1 MP. Every result is an allowed size, so any shape snaps (frame-aspect: the old cap
+    of terms 32 or less left a format's exact size unsnapped, and the job failed)."""
     try:
         w, h = (int(x) for x in ratio.split(":"))
     except ValueError:
         return None
-    if not allowed or not (0 < w <= 32 and 0 < h <= 32):
+    if not allowed or w <= 0 or h <= 0:
         return None
     target = math.log(w / h)
 
@@ -143,7 +161,7 @@ def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
         return abs(math.log(a * b / 1_048_576))
 
     best = min(shape(r) for r in allowed)
-    return min((r for r in allowed if shape(r) <= best + 0.04), key=area)
+    return min((r for r in allowed if shape(r) <= best + 0.04), key=lambda r: (area(r), r))
 
 
 # "of anchor", "from the previous frame": the anchor and previous frames named without their @ (v5, 2026-10-09).
@@ -359,10 +377,11 @@ class Director:
         if "providerJob" not in output:
             raise DirectorError("answered with neither a job nor a question")
         job = output["providerJob"]
-        if "ratio" not in job and payload.get("ratio") and (job.get("provider"), op) not in NO_RATIO:
+        if "ratio" not in job and (payload.get("ratio") or payload.get("aspect")) and (job.get("provider"), op) not in NO_RATIO:
             # 2026-10-07: Haiku sometimes leaves out the ratio it was given ("frame needs a ratio").
             # Take it from the request; the nearest-size mapping below makes it fit the model.
-            job["ratio"] = payload["ratio"]
+            aspect = payload.get("aspect")
+            job["ratio"] = payload.get("ratio") or f"{aspect['w']}:{aspect['h']}"
         if "angle" not in job:
             # A model that leaves out a view's angle would fail the job on an angle-taking provider.
             angle = view_angle(op, payload, sheet)
@@ -397,7 +416,7 @@ class Director:
             _one_character_line(job)
             _donors_are_objects(job, payload)
             _within_budget(job, op, payload)
-        self._check_provider_limits(op, sheet, job)
+        self._check_provider_limits(op, sheet, job, payload)
         # A named input picture this job does not send (a model that takes no refs, Veo 3.1 Fast) is said
         # in words. A name in none of the input, or @current/@anchor/@previous without their picture (the
         # frame would lose its continuity), is still refused, and the relay makes the job as written.
@@ -447,7 +466,7 @@ class Director:
                 job["prompt"] = re.sub(rf"@{re.escape(name)}\b", f"the {name} frame", job["prompt"])
 
     @staticmethod
-    def _check_provider_limits(op: str, sheet: dict, job: dict) -> None:
+    def _check_provider_limits(op: str, sheet: dict, job: dict, payload: Optional[dict] = None) -> None:
         provider, kind = job["provider"], "image" if op in IMAGE_OPS else op
         limit = PROMPT_MAX.get((provider, kind))
         if limit and len(job["prompt"]) > limit:
@@ -460,7 +479,10 @@ class Director:
         elif ratio and provider == "runway":
             # The model often writes the plain ratio it was given ('9:16'); map it to the nearest
             # size this model takes rather than failing the job (2026-10-07: storyboard frames).
-            fitted = provider_ratio(provider, op, ratio, job.get("model"))
+            # The input's exact shape (frame-aspect) sets the size over what the model wrote: the
+            # model may round a 191:100 banner to 2:1, and the relay crops to the input's shape.
+            aspect = (payload or {}).get("aspect")
+            fitted = provider_ratio(provider, op, ratio, job.get("model"), aspect=aspect)
             if not fitted:
                 raise DirectorError(f"runway {op} does not take ratio {ratio!r}")
             job["ratio"] = fitted

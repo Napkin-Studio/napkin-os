@@ -49,12 +49,13 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
     return res, asked, wire
 
 
-def test_v6_is_the_default_and_the_configs_name_it():
-    # Contract 3 runs director.v6 (features/contract-v3.clan), per click on Sonnet.
+def test_v6_is_the_default_and_the_configs_name_v6_1():
+    # Contract 3 runs director.v6 (features/contract-v3.clan), per click on Sonnet. The configs name
+    # director.v6.1 (features/frame-aspect.clan); the bundle's default stays v6 until config.json moves.
     assert PROMPT_VERSION == "director.v6"
     for name in ("config.testing.json", "config.live.json", "config.pathway.runway.json"):
         director = json.loads((EXAMPLES / name).read_text())["director"]
-        assert director["promptVersion"] == "director.v6"
+        assert director["promptVersion"] == "director.v6.1"
         assert director["perClickModel"] == "eu.anthropic.claude-sonnet-5-5"
 
 

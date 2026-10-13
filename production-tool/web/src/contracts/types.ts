@@ -158,6 +158,8 @@ export interface Output {
   h?: number
   durationS?: number
   bytes?: number
+  /** The model's size before the relay centre-cropped the picture to the job's shape (frame-aspect). */
+  croppedFrom?: Aspect
 }
 
 export type ErrorCode =

@@ -40,6 +40,7 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 
+from aspect import crop_png, measure, target_aspect
 import dogfood
 import identity
 import library
@@ -986,8 +987,10 @@ class Relay:
         model = sheet["ops"][job["op"]]["model"]
         first = job.get("_first") or {"provider": provider, "model": model}
         moved = {"fallbackFrom": first} if first["provider"] != provider else {}
+        shape = target_aspect(job["op"], job["_req"].get("input") or {})
         saved = self._save(job, state="submitting", provider=provider, model=model, _slot=slot,
-                           _queue="r", cost=cost, queuePosition=None, _first=first, **moved)
+                           _queue="r", cost=cost, queuePosition=None, _first=first,
+                           _aspect={"w": shape[0], "h": shape[1]} if shape else None, **moved)
         if saved is None:
             self.store.incr(slot, "n", -1)
             return self._reload(job)
@@ -1314,6 +1317,8 @@ class Relay:
                 for k in ("w", "h", "durationS"):
                     if o.get(k) is not None:
                         out[k] = o[k]
+                if mime.startswith("image/"):
+                    out = self._true_shape(out, data, job.get("_aspect"))
                 outputs.append(out)
             if not outputs:
                 raise ValueError("the provider reported success with no outputs")
@@ -1327,6 +1332,26 @@ class Relay:
             return self._with_poll(back or claimed)
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(claimed, "completed", outputs=outputs, kind=kind, confirmed=st.cost_usd)
+
+    def _true_shape(self, out: dict, data: bytes, aspect: dict | None) -> dict:
+        """An image output measured, and centre-cropped to the job's shape when the provider's size
+        differs (frame-aspect): the cropped PNG is the output, with croppedFrom the size it was cut
+        from; the original stays under its own out/<sha>."""
+        size = measure(data)
+        if size:
+            out["w"], out["h"] = size
+        if not aspect:
+            return out
+        cropped = crop_png(data, (aspect["w"], aspect["h"]))
+        if cropped is None:
+            return out
+        png, (w, h), (ow, oh) = cropped
+        sha = "sha256:" + hashlib.sha256(png).hexdigest()
+        key = f"out/{sha}"
+        if not self.blobs.exists(key):
+            self.blobs.put(key, png, "image/png")
+        return {"sha256": sha, "url": self.blobs.public_url(key), "mime": "image/png", "bytes": len(png),
+                "w": w, "h": h, "croppedFrom": {"w": ow, "h": oh}}
 
     def _advance_stitch(self, job: dict, cfg: dict, now: float) -> dict:
         result = self.blobs.get_json(f"ads/{job['jobId']}.json")
