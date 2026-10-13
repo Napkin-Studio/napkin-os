@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/cost-model.schema.json",
+  "title": "Per-ad cost model",
+  "description": "cost-model.json: scenarios of the jobs one ad takes, priced by relay/scripts/ad_costs.py through contracts/pricing.py, with the unmeasured placeholders, fixed monthly infrastructure and the provider tier's ceilings (features/runway-sheet-sync.clan). It holds no prices: every total comes from the capability sheet. Readers: ad_costs.py, provider_reference.py, later tenant-limits. Contract 3.",
+  "type": "object",
+  "properties": {
+    "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
+    "about": { "type": "string" },
+    "provider": { "$ref": "common.schema.json#/$defs/provider" },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "label": { "type": "string" },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "what": { "type": "string" },
+                "op": { "$ref": "common.schema.json#/$defs/op" },
+                "model": { "type": "string" },
+                "settings": { "$ref": "capabilities.schema.json#/$defs/defaults" },
+                "count": { "type": "integer", "minimum": 1 }
+              },
+              "required": ["what", "op", "model", "settings", "count"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["id", "label", "lines"],
+        "additionalProperties": false
+      }
+    },
+    "expected": {
+      "type": "object",
+      "description": "Each scenario's total in credits at today's sheet: ad_costs.py and check.py fail when the sheet moves them, so a price change is seen and these are updated on purpose.",
+      "additionalProperties": { "type": "number", "minimum": 0 }
+    },
+    "placeholders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "what": { "type": "string" },
+          "usd": { "type": "number", "minimum": 0 },
+          "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+          "measured": { "type": "boolean" },
+          "note": { "type": "string" }
+        },
+        "required": ["what", "measured"],
+        "additionalProperties": false
+      }
+    },
+    "fixedMonthly": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "what": { "type": "string" },
+          "usd": { "type": ["number", "null"], "minimum": 0 },
+          "measured": { "type": "boolean" }
+        },
+        "required": ["what", "usd", "measured"],
+        "additionalProperties": false
+      }
+    },
+    "fixedMonthlyNote": { "type": "string" },
+    "tier": {
+      "type": "object",
+      "properties": {
+        "maxMonthlyCreditSpend": { "type": ["number", "null"], "minimum": 0 },
+        "maxDailyGenerations": { "type": "object", "additionalProperties": { "type": ["integer", "null"] } },
+        "read": { "type": ["string", "null"], "format": "date" },
+        "note": { "type": "string" }
+      },
+      "required": ["maxMonthlyCreditSpend", "read"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["contractVersion", "provider", "scenarios", "expected", "placeholders", "fixedMonthly", "tier"],
+  "additionalProperties": false
+}

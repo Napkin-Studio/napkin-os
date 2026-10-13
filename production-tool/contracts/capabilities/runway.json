@@ -1,117 +1,93 @@
 {
   "contractVersion": "3",
   "provider": "runway",
-  "checked": "2026-10-08",
+  "checked": "2026-10-13",
+  "usdPerCredit": 0.01,
+  "sources": [
+    {"url": "https://docs.dev.runwayml.com/openapi.json", "fetched": "2026-10-13"},
+    {"url": "https://docs.dev.runwayml.com/guides/pricing.md", "fetched": "2026-10-13"}
+  ],
   "ops": {
     "generate": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "896:1152"},
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "label": "Gemini 3 Pro",
       "alternates": [
         {
           "model": "gemini_image3.1_flash",
           "endpoint": "POST /v1/text_to_image",
-          "estimateUsd": 0.07,
+          "defaults": {"outputs": 1, "ratio": "896:1152"},
           "label": "Gemini 3.1 Flash",
           "note": "Faster and cheaper; the previous default",
           "seed": false,
-          "outputs": [
-            1,
-            4
-          ]
+          "outputs": [1, 4]
         }
       ]
     },
     "view": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "896:1152"},
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "label": "Gemini 3 Pro",
       "alternates": [
         {
           "model": "gemini_image3.1_flash",
           "endpoint": "POST /v1/text_to_image",
-          "estimateUsd": 0.07,
+          "defaults": {"outputs": 1, "ratio": "896:1152"},
           "label": "Gemini 3.1 Flash",
           "note": "Faster and cheaper; the previous default",
           "seed": false,
-          "outputs": [
-            1,
-            4
-          ]
+          "outputs": [1, 4]
         }
       ]
     },
     "frame": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "1344:768"},
       "label": "Gemini 3 Pro",
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "alternates": [
         {
           "model": "gemini_image3.1_flash",
           "endpoint": "POST /v1/text_to_image",
-          "estimateUsd": 0.07,
+          "defaults": {"outputs": 1, "ratio": "1344:768"},
           "label": "Gemini 3.1 Flash",
           "note": "Faster and cheaper; the previous default",
           "seed": false,
-          "outputs": [
-            1,
-            4
-          ]
+          "outputs": [1, 4]
         }
       ]
     },
     "region_edit": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "1344:768"},
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "label": "Gemini 3 Pro"
     },
     "clip": {
       "model": "veo3.1",
       "endpoint": "POST /v1/image_to_video",
-      "estimateUsd": 1.2,
+      "defaults": {"durationS": 6, "audio": false},
       "label": "Veo 3.1",
-      "durationsS": [
-        4,
-        6,
-        8
-      ],
+      "durationsS": [4, 6, 8],
       "seed": true,
       "alternates": [
         {
           "model": "veo3.1_fast",
           "endpoint": "POST /v1/image_to_video",
-          "estimateUsd": 0.6,
+          "defaults": {"durationS": 6, "audio": false},
           "label": "Veo 3.1 Fast",
           "note": "Faster and cheaper; the previous default",
-          "durationsS": [
-            4,
-            6,
-            8
-          ],
+          "durationsS": [4, 6, 8],
           "seed": true
         }
       ]
@@ -119,18 +95,268 @@
     "clip_edit": {
       "model": "aleph2",
       "endpoint": "POST /v1/video_to_video",
-      "estimateUsd": 1.4,
+      "defaults": {"inputS": 5},
       "minS": 2,
       "maxS": 30,
       "seed": true,
       "label": "Aleph 2"
     }
   },
-  "tagSyntax": "at_tag",
-  "refs": {
-    "max": 14,
-    "maxCharacter": 5
+  "models": {
+    "gemini_image3_pro": {
+      "endpoint": "POST /v1/text_to_image",
+      "label": "Gemini 3 Pro",
+      "ratios": [
+        {"ratio": "1344:768", "tier": "1K"},
+        {"ratio": "768:1344", "tier": "1K"},
+        {"ratio": "1024:1024", "tier": "1K"},
+        {"ratio": "1184:864", "tier": "1K"},
+        {"ratio": "864:1184", "tier": "1K"},
+        {"ratio": "1536:672", "tier": "1K"},
+        {"ratio": "832:1248", "tier": "1K"},
+        {"ratio": "1248:832", "tier": "1K"},
+        {"ratio": "896:1152", "tier": "1K"},
+        {"ratio": "1152:896", "tier": "1K"},
+        {"ratio": "2048:2048", "tier": "2K"},
+        {"ratio": "1696:2528", "tier": "2K"},
+        {"ratio": "2528:1696", "tier": "2K"},
+        {"ratio": "1792:2400", "tier": "2K"},
+        {"ratio": "2400:1792", "tier": "2K"},
+        {"ratio": "1856:2304", "tier": "2K"},
+        {"ratio": "2304:1856", "tier": "2K"},
+        {"ratio": "1536:2752", "tier": "2K"},
+        {"ratio": "2752:1536", "tier": "2K"},
+        {"ratio": "3168:1344", "tier": "2K"},
+        {"ratio": "4096:4096", "tier": "4K"},
+        {"ratio": "3392:5056", "tier": "4K"},
+        {"ratio": "5056:3392", "tier": "4K"},
+        {"ratio": "3584:4800", "tier": "4K"},
+        {"ratio": "4800:3584", "tier": "4K"},
+        {"ratio": "3712:4608", "tier": "4K"},
+        {"ratio": "4608:3712", "tier": "4K"},
+        {"ratio": "3072:5504", "tier": "4K"},
+        {"ratio": "5504:3072", "tier": "4K"},
+        {"ratio": "6336:2688", "tier": "4K"}
+      ],
+      "outputs": [1, 4],
+      "promptMax": 5500,
+      "promptUnit": "utf16",
+      "refs": {"max": 14, "maxCharacter": 5},
+      "mask": "none",
+      "pricing": {
+        "unit": "image",
+        "byResolution": {"1K": 20, "2K": 20, "4K": 40},
+        "source": ["`gemini_image3_pro` | 20 credits per 1K or 2K image, 40 credits per 4K image"]
+      }
+    },
+    "gemini_image3.1_flash": {
+      "endpoint": "POST /v1/text_to_image",
+      "label": "Gemini 3.1 Flash",
+      "ratios": [
+        {"ratio": "512:512", "tier": "512"},
+        {"ratio": "416:624", "tier": "512"},
+        {"ratio": "624:416", "tier": "512"},
+        {"ratio": "432:592", "tier": "512"},
+        {"ratio": "592:432", "tier": "512"},
+        {"ratio": "448:576", "tier": "512"},
+        {"ratio": "576:448", "tier": "512"},
+        {"ratio": "384:672", "tier": "512"},
+        {"ratio": "672:384", "tier": "512"},
+        {"ratio": "768:336", "tier": "512"},
+        {"ratio": "256:1024", "tier": "512"},
+        {"ratio": "1024:256", "tier": "512"},
+        {"ratio": "176:1408", "tier": "512"},
+        {"ratio": "1408:176", "tier": "512"},
+        {"ratio": "1024:1024", "tier": "1K"},
+        {"ratio": "832:1248", "tier": "1K"},
+        {"ratio": "1248:832", "tier": "1K"},
+        {"ratio": "864:1184", "tier": "1K"},
+        {"ratio": "1184:864", "tier": "1K"},
+        {"ratio": "896:1152", "tier": "1K"},
+        {"ratio": "1152:896", "tier": "1K"},
+        {"ratio": "768:1344", "tier": "1K"},
+        {"ratio": "1344:768", "tier": "1K"},
+        {"ratio": "1536:672", "tier": "1K"},
+        {"ratio": "512:2048", "tier": "1K"},
+        {"ratio": "2048:512", "tier": "1K"},
+        {"ratio": "352:2816", "tier": "1K"},
+        {"ratio": "2816:352", "tier": "1K"},
+        {"ratio": "2048:2048", "tier": "2K"},
+        {"ratio": "1696:2528", "tier": "2K"},
+        {"ratio": "2528:1696", "tier": "2K"},
+        {"ratio": "1792:2400", "tier": "2K"},
+        {"ratio": "2400:1792", "tier": "2K"},
+        {"ratio": "1856:2304", "tier": "2K"},
+        {"ratio": "2304:1856", "tier": "2K"},
+        {"ratio": "1536:2752", "tier": "2K"},
+        {"ratio": "2752:1536", "tier": "2K"},
+        {"ratio": "3168:1344", "tier": "2K"},
+        {"ratio": "1024:4096", "tier": "2K"},
+        {"ratio": "4096:1024", "tier": "2K"},
+        {"ratio": "704:5632", "tier": "2K"},
+        {"ratio": "5632:704", "tier": "2K"},
+        {"ratio": "4096:4096", "tier": "4K"},
+        {"ratio": "3392:5056", "tier": "4K"},
+        {"ratio": "5056:3392", "tier": "4K"},
+        {"ratio": "3584:4800", "tier": "4K"},
+        {"ratio": "4800:3584", "tier": "4K"},
+        {"ratio": "3712:4608", "tier": "4K"},
+        {"ratio": "4608:3712", "tier": "4K"},
+        {"ratio": "3072:5504", "tier": "4K"},
+        {"ratio": "5504:3072", "tier": "4K"},
+        {"ratio": "6336:2688", "tier": "4K"},
+        {"ratio": "2048:8192", "tier": "4K"},
+        {"ratio": "8192:2048", "tier": "4K"},
+        {"ratio": "1408:11264", "tier": "4K"},
+        {"ratio": "11264:1408", "tier": "4K"}
+      ],
+      "outputs": [1, 4],
+      "promptMax": 5500,
+      "promptUnit": "utf16",
+      "refs": {"max": 14, "maxCharacter": 5},
+      "mask": "none",
+      "pricing": {
+        "unit": "image",
+        "byResolution": {"512": 5, "1K": 7, "2K": 11, "4K": 16},
+        "source": [
+          "`gemini_image3.1_flash` | 5 credits per 512px image, 7 credits per 1K image, 11 credits per 2K image, 16 credits per 4K image"
+        ]
+      }
+    },
+    "ideogram_4_5": {
+      "endpoint": "POST /v1/text_to_image",
+      "label": "Ideogram 4.5",
+      "ratios": [
+        {"ratio": "1024:1024"},
+        {"ratio": "1280:720"},
+        {"ratio": "720:1280"},
+        {"ratio": "1152:864"},
+        {"ratio": "864:1152"},
+        {"ratio": "1248:832"},
+        {"ratio": "832:1248"},
+        {"ratio": "1120:896"},
+        {"ratio": "896:1120"},
+        {"ratio": "1440:720"},
+        {"ratio": "720:1440"},
+        {"ratio": "2048:2048"},
+        {"ratio": "2560:1440"},
+        {"ratio": "1440:2560"},
+        {"ratio": "2304:1728"},
+        {"ratio": "1728:2304"},
+        {"ratio": "2496:1664"},
+        {"ratio": "1664:2496"},
+        {"ratio": "2240:1792"},
+        {"ratio": "1792:2240"},
+        {"ratio": "2880:1440"},
+        {"ratio": "1440:2880"},
+        {"ratio": "1024:576"},
+        {"ratio": "576:1024"},
+        {"ratio": "1408:704"},
+        {"ratio": "704:1408"},
+        {"ratio": "auto"}
+      ],
+      "outputs": [1, 2, 3, 4, 5, 6, 7, 8],
+      "promptMax": 10000,
+      "promptUnit": "utf16",
+      "refs": {"max": 5},
+      "mask": "png_black_edit",
+      "preciseEdit": true,
+      "pricing": {
+        "unit": "image",
+        "byQuality": {"very_low": 1, "low": 4, "medium": 8, "high": 25},
+        "defaultQuality": {"withRefs": "medium", "otherwise": "high", "preciseEdit": "high"},
+        "notWithPreciseEdit": ["very_low"],
+        "needsRefs": ["very_low"],
+        "source": [
+          "`ideogram_4_5` | 1–25 credits per image, by quality (see below)",
+          "`ideogram_4_5` and `ideogram_4_0` are billed as credits per image × `outputCount`, at any resolution. `ideogram_4_5` defaults to `medium` when generating from reference images and `high` otherwise, including `preciseEdit`; `very_low` requires reference images and is not available with `preciseEdit`. `ideogram_4_0` defaults to `medium`.",
+          "Quality `very_low`: 1",
+          "Quality `low`: 4",
+          "Quality `medium`: 8",
+          "Quality `high`: 25"
+        ]
+      }
+    },
+    "veo3.1": {
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Veo 3.1",
+      "ratios": [{"ratio": "1280:720"}, {"ratio": "720:1280"}, {"ratio": "1080:1920"}, {"ratio": "1920:1080"}],
+      "durationsS": [4, 6, 8],
+      "promptMax": 1000,
+      "promptUnit": "utf16",
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "pricing": {
+        "unit": "second",
+        "credits": 20,
+        "audioCredits": 40,
+        "source": ["`veo3.1 (audio)` | 40 credits per second", "`veo3.1 (no audio)` | 20 credits per second"]
+      }
+    },
+    "veo3.1_fast": {
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Veo 3.1 Fast",
+      "ratios": [{"ratio": "1280:720"}, {"ratio": "720:1280"}, {"ratio": "1080:1920"}, {"ratio": "1920:1080"}],
+      "durationsS": [4, 6, 8],
+      "promptMax": 1000,
+      "promptUnit": "utf16",
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "pricing": {
+        "unit": "second",
+        "credits": 10,
+        "audioCredits": 15,
+        "source": ["`veo3.1_fast (audio)` | 15 credits per second", "`veo3.1_fast (no audio)` | 10 credits per second"]
+      }
+    },
+    "aleph2": {
+      "endpoint": "POST /v1/video_to_video",
+      "label": "Aleph 2",
+      "inputS": {"min": 2, "max": 30, "maxFps": 30},
+      "promptMax": 1000,
+      "promptUnit": "utf16",
+      "keyframes": {"max": 5, "range": "whole_seconds_end_exclusive"},
+      "targetAspectRatios": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"],
+      "pricing": {
+        "unit": "second",
+        "credits": 28,
+        "minCredits": 56,
+        "source": ["`aleph2` | 28 credits per second (56 credit minimum per generation)"]
+      }
+    },
+    "magnific_precision_upscaler_v2": {
+      "endpoint": "POST /v1/image_upscale",
+      "label": "Magnific Precision Upscaler v2",
+      "scaleFactors": [2, 4, 8, 16],
+      "pricing": {
+        "unit": "image",
+        "credits": 25,
+        "overPx": 4096,
+        "overPxCredits": 150,
+        "source": ["`magnific_precision_upscaler_v2` | 25 credits per image, or 150 credits when output exceeds 4096px"]
+      }
+    },
+    "magnific_video_upscaler_creative": {
+      "endpoint": "POST /v1/video_upscale",
+      "label": "Magnific Video Upscaler Creative",
+      "resolutions": ["720p", "1k", "2k", "4k"],
+      "inputS": {"max": 30},
+      "pricing": {
+        "unit": "frame",
+        "byResolution": {"720p": 0.7, "1k": 0.7, "2k": 0.9, "4k": 1.2},
+        "round": "ceil",
+        "minCredits": 1,
+        "source": [
+          "`magnific_video_upscaler_creative` is billed per output frame, not per second of video. Credits = `ceil(USD / 0.01)`, where `USD = rate × fps × duration_seconds`. Minimum 1 credit per generation. When `fpsBoost` is enabled, output frame count may differ from input and affect cost. Frame-rate conversion on the same endpoint is billed separately — see [Enhance Frame Rate pricing](#enhance-frame-rate-pricing).",
+          "`720p`, `1k` | $0.007 | 210 credits",
+          "`2k` | $0.009 | 270 credits",
+          "`4k` | $0.012 | 360 credits"
+        ]
+      }
+    }
   },
+  "tagSyntax": "at_tag",
+  "refs": {"max": 14, "maxCharacter": 5},
   "seed": false,
   "outputsPerCall": 4,
   "mask": "none",
@@ -146,19 +372,8 @@
     "audioDefault": true,
     "audioControl": true
   },
-  "inputs": {
-    "headRequired": true,
-    "followsRedirects": false,
-    "maxImageMb": 16,
-    "maxVideoMb": 32
-  },
-  "results": {
-    "mode": "poll",
-    "minPollS": 5,
-    "idempotencyKey": false,
-    "outputUrlTtlH": 24,
-    "cancel": true
-  },
+  "inputs": {"headRequired": true, "followsRedirects": false, "maxImageMb": 16, "maxVideoMb": 32},
+  "results": {"mode": "poll", "minPollS": 5, "idempotencyKey": false, "outputUrlTtlH": 24, "cancel": true},
   "concurrency": {
     "image": 20,
     "video": 20,
