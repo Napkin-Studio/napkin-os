@@ -388,7 +388,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 - **Single-value fields:** camera fields, duration and rank are single-value fields written as patches.
 
 **Top bar:**
-- "← Canvas", "Script · First Light", then "Saved".
+- "← Canvas", "Script · First Light", then "Saved" ("Saving…", or "Offline, saved on this device"). Until canvas-nodes gives the canvas its Script node, the editor opens from **Open script** on the Storyboard stage's Script card (or a deep link), and its back button reads "← Storyboard" (features/script-editor.clan).
 - The view switch.
 - Presence ("Sai is in shot 2 · Maya is reading").
 - Undo and Redo.
@@ -407,13 +407,13 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 - **Moment:** an inline pill, "at 0:02", followed by its action. Dialogue right after it belongs to that moment's beat.
   - Insert one with **⌥M / Alt+M** (read from `event.code`; ⌘M minimises the window on macOS), or from the element bar.
   - Time is shot time, in whole or half seconds, and must lie inside the shot ("0:05 is past the end of this 2.6 s shot").
-- **Direction:** per shot, up to 4,000 characters, with the counter "318 / 4,000". The limit comes from the capability sheet, never hard-coded. At 4,000, typing stops and the counter turns warn. Pasting past the limit keeps the first 4,000 characters and says "Kept the first 4,000 characters".
+- **Direction:** per shot, up to 4,000 characters, with the counter "318 / 4,000". The limit comes from the contract (document.schema.json, through clan-store's LIMITS), never hard-coded in the UI; the per-model limit a job sends is the capability sheet's (shot-direction). It counts what the document keeps: a mention counts as its full name, @key_variant. At 4,000, typing stops and the counter turns warn. Pasting past the limit keeps the first 4,000 characters and says "Kept the first 4,000 characters".
 
 **Outline rail (left):**
 - Scenes and shots in order, with drag handles, thumbnails and lengths. The current item is blue.
 - Each shot row carries its who-wrote-it mark (below). A scene with a pending Skye suggestion shows Skye's 20px figure.
 - A warn-coloured length marks the longest shot, or one Skye flagged.
-- The keys list sits at the foot: Tab, @, #, ⌥M.
+- The keys list sits at the foot: Tab, @, ⌥M. (`#` shot links come with the Storyboard editor's shotLink node.)
 
 **Reordering shots** (outline or AV table):
 - Drag a row. The row lifts, its old place stays as a dashed slot, and a blue drop line opens where it will land.
@@ -444,12 +444,12 @@ A floating frosted bar sits above the current selection. Its contents depend on 
   - **Keep mine** drops the draft. The line becomes "Kept yours. Skye will leave this shot alone.", with **Undo**.
   - **Why** opens that decision in the decision tree (3.20), filtered to the shot.
   - Nothing changes until Keep (principle 5). An open suggestion is kept per person across back and forward (2.3).
-- **Floating options on a selection.** Selecting a phrase shows a small bar signed with Skye's figure: **Tighten**, **Make it 10 s**, **Add a beat**, **Write the VO**, **Say it another way**. Each runs Skye on just the selected text and comes back as an inline suggestion. The bar shows the cost ("No cost" for script work).
+- **Floating options on a selection.** Selecting a phrase shows a small bar signed with Skye's figure: **Tighten**, **Make it 10 s**, **Add a beat**, **Write the VO**, **Say it another way**. Each runs Skye on just the selected text and comes back as an inline suggestion. The bar shows no price (owner decision 2026-10-13: costs live only in the decision tree). When the day's writing allowance is used up, it says so in words.
 - **Who-wrote-it marks.** Every scene and shot shows who last wrote it: "You", a person's avatar (Sai), or a crew figure (Skye), with **why?** beside it. The mark changes on each write. **why?** opens the decision tree filtered to that item (3.20).
 - **Asks, not chat.** Ambiguity becomes an ask card anchored to the text (3.17), shared with everyone in the project:
   - Screenplay: "Skye · scripts: Who is the jogger? There's no ref called @jogger, so I can't tell Dex how to show him.", quoting the line ("Shot 2 · 'A @jogger runs past far behind @maya…'"), with **A character**, **An extra**, **Cut him**.
   - Video · Audio: "Dex · directs: Maya has three looks. Which one walks the waterline in shot 2?", with **Front**, **Side**, **Laughing**.
-  - Both say "Sai and Maya see this too. First answer settles it." The answer shows in place, with **Undo**.
+  - Both say "Sai and Maya see this too. First answer settles it." The answer shows in place, with **Undo**. Until live-sync, an ask no job raised (an unknown name) is seen only in the browser that raised it, and that line is hidden.
 - **Unknown names:** Skye raises each one as an ask of this kind, never as a chat line.
 
 **The right-hand area (Screenplay view)**, where the chat panel used to be, holds only facts about the script:
@@ -465,7 +465,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 In the **Video · Audio view** the table takes the full width. The length strip sits in the header ("15 s target · 15.0 s estimated", one segment per shot), and asks and suggestions sit on their rows.
 
 **Plan shots / Update storyboard:**
-- Dex plans the shots from the script. A free planning step runs at once. When a paid step follows, its price shows first.
+- Dex plans the shots from the script. The Storyboard stage and the editor start the same job on the same storyboard: pressing either while one runs joins it. No price is shown (costs live in the decision tree).
 - Re-planning is a merge keyed by `shotId`:
   - shots you edited keep your edits;
   - new shots are added;
