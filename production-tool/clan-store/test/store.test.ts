@@ -1,179 +1,159 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { unzipSync } from 'fflate'
 import { parse as parseYaml } from 'yaml'
 import {
-  ClanDocumentStore, InvalidDocument, buildExportZip, memoryPersistence, postClanMirror, problems, sha256Hex,
-  indexedDbPersistence, type Doc, type DocAsset,
+  ClanDocumentStore, InvalidDocument, LocalPatchBus, UnsupportedContract, buildExportZip, indexedDbPersistence, memoryPersistence,
+  postClanMirror, problems, sha256Hex, integrity, ranksBetween, type Doc, type DocAsset,
 } from '../src/index'
 import { appTemplate } from '../src/host'
+
 import { bundle } from '../scripts/bundle-schema.mjs'
-import { AT, asset, id, job, sha, shot, wasmBytes } from './fixtures'
+import { AT, MAYA, asset, defaults, example, id, jobValue, sha, shotValue, store, wasmBytes } from './fixtures'
 
 const wasm = wasmBytes()
-const maya = { participant: { id: 'p_a1b2c3', handle: 'maya' } }
 const tmp = mkdtempSync(join(tmpdir(), 'clan-store-test-'))
 afterAll(() => rmSync(tmp, { recursive: true, force: true }))
-
-function store(persistence = memoryPersistence() as ReturnType<typeof memoryPersistence> | null) {
-  return new ClanDocumentStore({ wasm, persistence, saveDebounceMs: 20 })
-}
 
 function clanCli(args: string[]): string {
   return execFileSync(process.env.CLAN_BIN || 'clan', ['--quiet', ...args], { encoding: 'utf8' })
 }
 
 async function filled(s: ClanDocumentStore): Promise<Doc> {
-  await s.create(maya)
-  await s.patch({ stage: { current: 'character', next_action: 'Name your character.' } }, { action: 'set the next action' })
-  await s.patch({ assets: [asset(1), asset(2)] }, { action: 'added two assets' })
-  await s.patch(
-    { keys: [{ key: 'hero', role: 'character' }], refs: [{ id: id('ref', 0), key: 'hero', variant: 'front', asset: sha(1), node: id('job', 0), named_at: AT }] },
-    { action: 'named @hero_front', rationale: 'its front' },
-  )
-  await s.patch({ shots: [shot(0), shot(1)], jobs: [job(0), job(1)] }, { action: 'planned shots' })
+  await s.create({ person: MAYA, title: 'Rain' })
+  const { storyboard } = defaults(s)
+  const bus = new LocalPatchBus(s)
+  const r = await bus.apply({
+    patches: [
+      { op: 'create', entity: 'assets', id: sha(1), value: asset(1), base_version: 0 },
+      { op: 'create', entity: 'assets', id: sha(2), value: asset(2), base_version: 0 },
+      { op: 'create', entity: 'keys', id: id('key', 0), value: { key: 'hero', role: 'character' }, base_version: 0 },
+      { op: 'create', entity: 'refs', id: id('ref', 0), value: { key: 'hero', variant: 'front', role: 'character', asset: sha(1), named_at: AT }, base_version: 0 },
+      { op: 'create', entity: 'shots', id: id('shot', 0), value: shotValue(storyboard, 'a0'), base_version: 0 },
+      { op: 'create', entity: 'shots', id: id('shot', 1), value: shotValue(storyboard, 'a1'), base_version: 0 },
+      { op: 'create', entity: 'jobs', id: id('job', 0), value: jobValue(0), base_version: 0 },
+    ],
+    why: { action: 'name @hero_front and plan two shots', rationale: 'its front' },
+  })
+  expect(r.refused).toEqual([])
   return s.get()
 }
 
-describe('ClanDocumentStore against the real napkin-wasm', () => {
+describe('ClanDocumentStore (contract 3) against the real napkin-wasm', () => {
+  it('create makes a valid project with one script, storyboard and video, linked', async () => {
+    const s = store()
+    const d = await s.create({ person: MAYA, title: 'Rain' })
+    expect(d.contract_version).toBe('3')
+    expect(d.project.created_by).toBe('human:p_maya001')
+    expect(Object.keys(d.scripts)).toHaveLength(1)
+    expect(Object.keys(d.storyboards)).toHaveLength(1)
+    expect(Object.keys(d.videos)).toHaveLength(1)
+    const roles = Object.values(d.links).map((l) => l.role).sort()
+    expect(roles).toEqual(['drives', 'renders'])
+    expect(problems(d)).toEqual([])
+    expect(integrity(d)).toEqual([])
+    const chain = await s.chain()
+    expect(chain[0].action).toBe('start the project')
+    expect(chain[0].agent).toBe('human:p_maya001')
+    expect(s.documentId()).toMatch(/[0-9a-f-]{8,}/)
+    s.dispose()
+  })
+
   it('create → patch → export → reopen from bytes: same data, valid', async () => {
     const s = store()
     const before = await filled(s)
     expect(problems(before)).toEqual([])
-    expect(before.participant.handle).toBe('maya')
-    expect(before.shots).toHaveLength(2)
-
-    const bytes = await s.exportClan()
-    expect(bytes.byteLength).toBeGreaterThan(1000)
-
     const again = store()
-    const after = await again.open(bytes)
+    const after = await again.open(await s.exportClan())
     expect(after).toEqual(before)
-    expect(problems(after)).toEqual([])
     s.dispose()
     again.dispose()
   })
 
-  it('a document made under an older schema moves to the app\'s when it opens (scripts to 1500)', async () => {
+  it('refuses a v2 .clan with UnsupportedContract, writes nothing and keeps the open document', async () => {
+    // A v2 project: a real .clan whose data says contract 2 (its own older schema).
     const s = store()
-    await filled(s)
-    // An "older" document: the same, but with the 600-character script limit it was made with.
-    const older = bundle() as Record<string, unknown>
-    const text = JSON.stringify(older).replace(/("imported_text":\{[^}]*"maxLength":)1500/, '$1600')
-    expect(text).toContain('"maxLength":600')
-    const file = join(tmp, 'older.clan')
+    await s.create({ person: MAYA })
+    const file = join(tmp, 'v2.clan')
     writeFileSync(file, await s.exportClan())
-    const schemaFile = join(tmp, 'older-schema.json')
-    writeFileSync(schemaFile, text)
-    clanCli(['patch-schema', file, schemaFile])
-    const olderBytes = new Uint8Array(execFileSync('cat', [file]))
+    const loose = join(tmp, 'loose.json')
+    writeFileSync(loose, JSON.stringify({ type: 'object' }))
+    clanCli(['patch-schema', file, loose])
+    const v2 = JSON.parse(readFileSync(join(__dirname, '..', '..', 'contracts', 'examples', 'invalid', 'document.v2.json'), 'utf8'))
+    clanCli(['patch-data', file, JSON.stringify({ ...Object.fromEntries(Object.keys(s.get()).map((k) => [k, null])), ...v2 }), '--no-decision'])
+    const v2bytes = new Uint8Array(readFileSync(file))
+    const copy = v2bytes.slice()
 
-    const again = store()
-    await again.open(olderBytes)
-    const rev = id('rev', 0)
-    const script = { current: rev, revisions: [{ id: rev, created_at: AT, imported_text: 'a'.repeat(1000), target_s: 15, status: 'draft' }] }
-    await again.patch({ script }, { action: 'a longer script' }) // refused before the move to the app's schema
-    expect((again.get().script?.revisions[0] as { imported_text: string }).imported_text).toHaveLength(1000)
-    s.dispose()
-    again.dispose()
+    const mem = memoryPersistence()
+    const opener = store({ persistence: mem })
+    const current = await opener.create({ person: MAYA, title: 'Mine' })
+    await opener.flush()
+    const writes = mem.writes
+    const err = await opener.open(v2bytes).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(UnsupportedContract)
+    expect((err as UnsupportedContract).found).toBe('2')
+    expect((err as Error).message).toMatch(/older version/)
+    expect(Buffer.from(v2bytes).equals(Buffer.from(copy))).toBe(true)
+    expect(opener.get()).toEqual(current)
+    await opener.flush()
+    expect(mem.writes).toBe(writes)
+
+    // load() of saved v2 bytes refuses too, and leaves them saved.
+    const saved = memoryPersistence()
+    await saved.write({ bytes: v2bytes, handle: 'maya', savedAt: AT })
+    await expect(store({ persistence: saved }).load()).rejects.toBeInstanceOf(UnsupportedContract)
+    expect(Buffer.from((await saved.read())!.bytes).equals(Buffer.from(copy))).toBe(true)
   })
 
-  it('a patch that breaks the schema is refused and leaves the document unchanged', async () => {
+  it('a patch that breaks the schema, the rules or upstream is refused and changes nothing', async () => {
     const s = store()
     await filled(s)
     const before = structuredClone(s.get())
     const bytesBefore = await s.exportClan()
-
-    await expect(s.patch({ stage: { current: 'editing' } }, { action: 'bad stage' })).rejects.toBeInstanceOf(InvalidDocument)
-    await expect(s.patch({ shots: [{ id: 'not-an-id' }] }, { action: 'bad shot' })).rejects.toThrow(/document.schema.json/)
-    await expect(s.patch({ participant: null }, { action: 'drop a required key' })).rejects.toThrow(/participant/)
+    const shot0 = id('shot', 0)
+    await expect(s.patch({ shots: { [shot0]: { camera: { size: 'enormous' } } } }, { action: 'set bad size' })).rejects.toBeInstanceOf(InvalidDocument)
+    await expect(s.patch({ shots: { 'not-an-id': {} } }, { action: 'bad key' })).rejects.toThrow(/document.schema.json/)
+    await expect(s.patch({ project: null }, { action: 'drop a required key' })).rejects.toThrow(/project/)
     await expect(s.patch({ surprise: 1 }, { action: 'unknown key' })).rejects.toThrow(/additional/)
-
+    await expect(s.patch({ upstream: { x: {} } }, { action: 'write upstream' })).rejects.toThrow(/read-only/)
+    // integrity: a beat past the end of its shot
+    const beat = id('beat', 9)
+    await expect(s.patch({ beats: { [beat]: { id: beat, v: 1, field_v: {}, shot_id: shot0, rank: 'a0', at_s: 9, kind: 'moment' } } }, { action: 'late beat' })).rejects.toThrow(/past the end/)
     expect(s.get()).toEqual(before)
-    const reopened = await store().open(await s.exportClan())
-    expect(reopened).toEqual(before)
-    // Nothing was written: the archive is byte-for-byte what it was.
     expect(Buffer.from(await s.exportClan()).equals(Buffer.from(bytesBefore))).toBe(true)
-    // And the store still takes a good patch afterwards.
-    await s.patch({ stage: { current: 'storyboard' } }, { action: 'to storyboard' })
-    expect(s.get().stage.current).toBe('storyboard')
   })
 
-  it('every patch and verdict is in the decision chain, attributed to the handle', async () => {
-    const s = store()
-    await filled(s)
-    await s.verdict({ kind: 'accept', target: { kind: 'take', id: id('take', 1) }, note: 'the light is right' })
-    await s.verdict({ kind: 'reject', target: { kind: 'frame', id: id('frame', 2) } })
-    await s.verdict({ kind: 'select', target: { kind: 'view', id: 'front' } })
-    const before = s.get()
-
-    const chain = await s.chain()
-    const actions = chain.map(d => d.action)
-    expect(actions.slice(0, 3)).toEqual([
-      'select view front',
-      `reject frame ${id('frame', 2)}`,
-      `accept take ${id('take', 1)}`,
-    ])
-    expect(actions).toContain('named @hero_front')
-    expect(actions).toContain('started the document')
-    const accept = chain[2]
-    expect(accept.agent).toBe('maya')
-    expect(accept.rationale).toBe('the light is right')
-    expect(accept.fields_changed ?? []).toEqual([])
-    const named = chain.find(d => d.action === 'named @hero_front')!
-    expect(named.rationale).toBe('its front')
-    expect(named.fields_changed).toEqual(['keys', 'refs'])
-    // A verdict changes no data.
-    expect(s.get()).toEqual(before)
-
-    // The chain travels in the bytes.
-    const again = store()
-    await again.open(await s.exportClan())
-    expect((await again.chain()).map(d => d.action).slice(0, 3)).toEqual(actions.slice(0, 3))
-
-    await expect(s.verdict({ kind: 'maybe' as 'accept', target: { kind: 'take', id: 'x' } })).rejects.toThrow(/accept, reject or select/)
-  })
-
-  it('the exported bytes open with the real clan CLI', async () => {
+  it('the exported bytes open with the real clan CLI; targets reach the chain', async () => {
     const s = store()
     const before = await filled(s)
-    await s.verdict({ kind: 'accept', target: { kind: 'shot', id: id('shot', 0) }, note: 'cli check' })
     const file = join(process.env.KEEP_CLAN_DIR || tmp, 'maya.clan')
     writeFileSync(file, await s.exportClan())
-
     const data = parseYaml(clanCli(['read', 'data', file]))
     delete data.$schema
     expect(data).toEqual(before)
-    const report = clanCli(['validate', '--strict', file])
-    expect(report).toMatch(/^OK$/m)
+    expect(clanCli(['validate', '--strict', file])).toMatch(/^OK$/m)
     const chain = clanCli(['read', 'chain', file])
-    expect(chain).toContain(`accept shot ${id('shot', 0)}`)
-    // The document carries the contract (bundled) as its schema.
-    const agent = clanCli(['read', 'agent', file])
-    expect(agent).toContain('production-tool')
+    expect(chain).toContain('name @hero_front')
+    expect(chain).toContain(`#shots[${id('shot', 0)}]`)
+    expect(chain).toContain('human:p_maya001')
   })
 
   it('saves to persistence after a debounce and restores with load()', async () => {
     const mem = memoryPersistence()
-    const s = store(mem)
-    await s.create(maya)
-    for (let i = 0; i < 5; i++) {
-      await s.patch({ stage: { current: 'character', next_action: `step ${i}` } }, { action: `step ${i}` })
-    }
+    const s = store({ persistence: mem })
+    await s.create({ person: MAYA })
+    const { script } = defaults(s)
+    for (let i = 0; i < 5; i++) await s.patch({ scripts: { [script]: { title: `Draft ${i}` } } }, { action: `set title ${i}` })
     expect(mem.writes).toBe(0)
-    await new Promise(r => setTimeout(r, 80))
+    await new Promise((r) => setTimeout(r, 80))
     expect(mem.writes).toBe(1)
     expect(mem.last?.handle).toBe('maya')
-
-    const again = store(mem)
-    const restored = await again.load()
-    expect(restored).toEqual(s.get())
-    expect(await store(memoryPersistence()).load()).toBeNull()
-    s.dispose()
-    again.dispose()
+    const again = store({ persistence: mem })
+    expect(await again.load()).toEqual(s.get())
+    expect(await store({ persistence: memoryPersistence() }).load()).toBeNull()
   })
 
   it('round-trips through IndexedDB (fake-indexeddb) and works with none', async () => {
@@ -183,8 +163,7 @@ describe('ClanDocumentStore against the real napkin-wasm', () => {
     g.IDBKeyRange = IDBKeyRange
     try {
       const s = new ClanDocumentStore({ wasm, saveDebounceMs: 10, persistence: indexedDbPersistence('test-db') })
-      await s.create(maya)
-      await s.patch({ shots: [shot(0)] }, { action: 'one shot' })
+      await s.create({ person: MAYA })
       await s.flush()
       const again = new ClanDocumentStore({ wasm, persistence: indexedDbPersistence('test-db') })
       expect(await again.load()).toEqual(s.get())
@@ -192,119 +171,141 @@ describe('ClanDocumentStore against the real napkin-wasm', () => {
       delete g.indexedDB
       delete g.IDBKeyRange
     }
-    // No IndexedDB at all: the default persistence quietly keeps nothing.
     const none = new ClanDocumentStore({ wasm, saveDebounceMs: 5 })
-    await none.create(maya)
+    await none.create({ person: MAYA })
     await none.flush()
     expect(await new ClanDocumentStore({ wasm }).load()).toBeNull()
   })
 
-  it('onChange fires on create, patch and verdict; unsubscribe stops it', async () => {
+  it('records a decision with no data change, once when asked', async () => {
     const s = store()
-    const seen: string[] = []
-    const off = s.onChange(d => seen.push(d.stage.current))
-    await s.create(maya)
-    await s.patch({ stage: { current: 'video' } }, { action: 'to video' })
-    await s.verdict({ kind: 'accept', target: { kind: 'shot', id: id('shot', 0) } })
-    off()
-    await s.patch({ stage: { current: 'storyboard' } }, { action: 'back' })
-    expect(seen).toEqual(['character', 'video', 'video'])
+    await s.create({ person: MAYA })
+    const before = s.get()
+    const chain0 = await s.chain()
+    expect(await s.record({ action: 'pin_decision', cites: [chain0[0].id!] })).toBe(true)
+    expect(await s.record({ agent: 'wren', action: 'render failed frame job_X' }, { once: true })).toBe(true)
+    expect(await s.record({ agent: 'wren', action: 'render failed frame job_X' }, { once: true })).toBe(false)
+    expect(s.get()).toEqual(before)
+    const chain = await s.chain()
+    expect(chain[1].action).toBe('pin_decision')
+    expect(chain[1].cites).toEqual([chain0[0].id])
   })
 
-  it('mirrors on accept verdicts and on the interval only when changed', async () => {
+  it('mirrors on the interval only when changed, and on demand', async () => {
     const s = store()
-    await s.create(maya)
+    await s.create({ person: MAYA })
     const posts: { reason: string; size: number }[] = []
     const stop = s.startMirror(async (bytes, meta) => { posts.push({ reason: meta.reason, size: bytes.byteLength }) }, { everyMs: 40 })
-    await new Promise(r => setTimeout(r, 60))
-    expect(posts.filter(p => p.reason === 'interval')).toHaveLength(1)
-    await new Promise(r => setTimeout(r, 90))
-    expect(posts.filter(p => p.reason === 'interval')).toHaveLength(1) // nothing changed since
-    await s.verdict({ kind: 'reject', target: { kind: 'take', id: id('take', 3) } })
-    await s.verdict({ kind: 'accept', target: { kind: 'take', id: id('take', 4) } })
-    await new Promise(r => setTimeout(r, 5))
-    expect(posts.filter(p => p.reason === 'accept')).toHaveLength(1)
+    await new Promise((r) => setTimeout(r, 60))
+    expect(posts.filter((p) => p.reason === 'interval')).toHaveLength(1)
+    await new Promise((r) => setTimeout(r, 90))
+    expect(posts.filter((p) => p.reason === 'interval')).toHaveLength(1)
+    await s.mirrorNow('accept')
+    expect(posts.filter((p) => p.reason === 'accept')).toHaveLength(1)
     stop()
-    const n = posts.length
-    await s.patch({ stage: { current: 'video' } }, { action: 'to video' })
-    await new Promise(r => setTimeout(r, 60))
-    expect(posts).toHaveLength(n)
-    expect(posts.every(p => p.size > 1000)).toBe(true)
+    expect(posts.every((p) => p.size > 1000)).toBe(true)
   })
 
-  it('builds the export zip: <handle>.clan plus assets/<sha256>.<ext>, hashes checked', async () => {
+  it('builds the export zip: <title>.clan plus assets/<sha256>.<ext>, hashes checked', async () => {
     const s = store()
-    await s.create(maya)
+    await s.create({ person: MAYA, title: 'Rain' })
     const png = new TextEncoder().encode('pretend png bytes')
-    const mp4 = new TextEncoder().encode('pretend mp4 bytes')
-    const real = async (b: Uint8Array, kind: 'image' | 'video', mime: string): Promise<DocAsset> => ({
-      sha256: `sha256:${await sha256Hex(b)}`, kind, mime, origin: 'generated', locations: ['idb://x'],
+    const pdf = new TextEncoder().encode('pretend pdf bytes')
+    const real = async (b: Uint8Array, kind: DocAsset['kind'], mime: string): Promise<DocAsset> => ({
+      sha256: `sha256:${await sha256Hex(b)}`, kind, mime, origin: 'uploaded', locations: ['idb://x'],
     })
     const a1 = await real(png, 'image', 'image/png')
-    const a2 = await real(mp4, 'video', 'video/mp4')
-    const lost = { ...asset(77) } as DocAsset
-    const wrong = { ...asset(78) } as DocAsset
-    await s.patch({ assets: [a1, a2, lost, wrong] }, { action: 'assets' })
-    const byHash: Record<string, Uint8Array> = { [a1.sha256]: png, [a2.sha256]: mp4, [wrong.sha256]: png }
-    const out = await buildExportZip({ clan: await s.exportClan(), doc: s.get(), resolve: async a => byHash[a.sha256] ?? null })
+    const a2 = await real(pdf, 'document', 'application/pdf')
+    const lost = asset(77) as DocAsset
+    const wrong = asset(78) as DocAsset
+    await s.patch({ assets: Object.fromEntries([a1, a2, lost, wrong].map((a) => [a.sha256, a])) }, { action: 'add files' })
+    const byHash: Record<string, Uint8Array> = { [a1.sha256]: png, [a2.sha256]: pdf, [wrong.sha256]: png }
+    const out = await buildExportZip({ clan: await s.exportClan(), doc: s.get(), resolve: async (a) => byHash[a.sha256] ?? null })
     const files = unzipSync(out.zip)
-    expect(Object.keys(files).sort()).toEqual([
-      `assets/${a1.sha256.slice(7)}.png`,
-      `assets/${a2.sha256.slice(7)}.mp4`,
-      'maya.clan',
-    ].sort())
+    expect(Object.keys(files).sort()).toEqual([`assets/${a1.sha256.slice(7)}.png`, `assets/${a2.sha256.slice(7)}.pdf`, 'Rain.clan'].sort())
     expect(out.missing).toEqual([lost.sha256])
     expect(out.mismatched).toEqual([wrong.sha256])
-    const reopened = await store().open(files['maya.clan'])
-    expect(reopened).toEqual(s.get())
   })
 
   it('the template app carries exactly the bundled contract (rerun `npm run app` if this fails)', async () => {
-    const { unzipSync: unzip } = await import('fflate')
-    const entries = unzip(appTemplate())
+    const entries = unzipSync(appTemplate())
     const carried = JSON.parse(new TextDecoder().decode(entries['agent/output-schema.json']))
     expect(carried).toEqual(bundle())
   })
+
+  it('document.ad.json, the overhaul scenario, is written through patches and read back', async () => {
+    const ad = example<Doc>('document.ad.json')
+    const s = store()
+    await s.create({ person: MAYA })
+    // The project and its maps, in a few writes; upstream is the host's (never patched).
+    const { upstream: _up, ...rest } = ad
+    const wipe = Object.fromEntries(['scripts', 'storyboards', 'videos', 'links'].map((m) => [m, Object.fromEntries(Object.keys(s.get()[m as 'links']).map((k) => [k, null]))]))
+    await s.patch(wipe, { action: 'delete the defaults' })
+    await s.patch({ project: rest.project, assets: rest.assets, documents: rest.documents, boards: rest.boards, keys: rest.keys, refs: rest.refs }, { action: 'bring in the brand and refs' })
+    await s.patch({ scripts: rest.scripts, scenes: rest.scenes, storyboards: rest.storyboards, jobs: rest.jobs }, { action: 'plan the scenes' })
+    await s.patch({ shots: rest.shots, beats: rest.beats, frames: rest.frames, sketches: rest.sketches, takes: rest.takes }, { action: 'plan the shots' })
+    await s.patch({ videos: rest.videos, renders: rest.renders, reviews: rest.reviews, format_sets: rest.format_sets, sizes: rest.sizes }, { action: 'cut and size' })
+    await s.patch({ links: rest.links, checks: rest.checks, asks: rest.asks, suggestions: rest.suggestions, spin_ins: rest.spin_ins, stale: rest.stale, exports: rest.exports }, { action: 'link and check' })
+    const again = store()
+    const back = await again.open(await s.exportClan())
+    expect(back).toEqual(rest)
+    expect(integrity(back)).toEqual([])
+  })
 })
 
-describe('timing and size, 8 shots + 30 jobs', () => {
-  let s: ClanDocumentStore
-  beforeAll(async () => {
-    s = store(null)
-    await s.create(maya)
-  })
-
-  it('measures each patch', async () => {
-    const rows: string[] = []
-    const shots = Array.from({ length: 8 }, (_, i) => shot(i))
-    const jobs = Array.from({ length: 30 }, (_, i) => job(i))
-    const t0 = performance.now()
-    await s.patch({ shots, assets: Array.from({ length: 16 }, (_, i) => asset(i + 1)) }, { action: 'shot list' })
-    rows.push(`shot list (8 shots, 16 assets): ${(performance.now() - t0).toFixed(1)} ms`)
-    let jobsSoFar: unknown[] = []
-    const times: number[] = []
-    for (const j of jobs) {
-      jobsSoFar = [...jobsSoFar, j]
-      const t = performance.now()
-      await s.patch({ jobs: jobsSoFar }, { action: `job ${j.id} completed` })
-      times.push(performance.now() - t)
+describe('size and time, worst case', () => {
+  it('a worst-case project stays under 3.5 MB and validates in under 60 ms', async () => {
+    const s = store({ persistence: null })
+    await s.create({ person: MAYA })
+    const { storyboard } = defaults(s)
+    const SHOTS = 60
+    const ranks = ranksBetween(null, null, SHOTS)
+    // Text that compresses like prose, not like a repeated letter.
+    let seed = 7
+    const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+    const WORDS = ['light', 'Maya', 'walks', 'the', 'waterline', 'bottle', 'opens', 'golden', 'slow', 'push', 'in', 'on', 'her', 'face', 'sea', 'laughs', 'cold', 'morning', 'hand', 'sharp']
+    const words = (n: number) => { let t = ''; while (t.length < n) t += `${WORDS[Math.floor(rand() * WORDS.length)]}${rand() < 0.1 ? '. ' : ' '}`; return t.slice(0, n) }
+    const prose = (n: number) => ({ type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: words(n) }] }] })
+    const shots: Record<string, unknown> = {}
+    const beats: Record<string, unknown> = {}
+    const frames: Record<string, unknown> = {}
+    const jobs: Record<string, unknown> = {}
+    for (let i = 0; i < SHOTS; i++) {
+      const sid = id('shot', i)
+      shots[sid] = { id: sid, v: 9, field_v: { 'camera/size': 3, duration_s: 4, rank: 7 }, ...shotValue(storyboard, ranks[i]),
+        prose: prose(3000), action: words(600), direction: words(2400), refs: [], last_writer: 'dex' }
+      for (let b = 0; b < 6; b++) {
+        const bid = id('beat', i * 10 + b)
+        beats[bid] = { id: bid, v: 2, field_v: {}, shot_id: sid, rank: `a${b + 1}`, at_s: b * 0.5, kind: 'moment', prose: prose(200), text: words(200) }
+      }
+      for (let f = 0; f < 6; f++) {
+        const fid = id('frame', i * 10 + f)
+        frames[fid] = { id: fid, v: 1, field_v: {}, shot_id: sid, version: f + 1, kind: 'generated', asset: sha(i * 10 + f), crew: 'wren', model: 'gen4_image', provider: 'runway' }
+        const jid = id('job', i * 10 + f)
+        jobs[jid] = { id: jid, v: 3, field_v: {}, ...jobValue(i * 10 + f) }
+      }
     }
-    const size = (await s.exportClan()).byteLength
-    const sorted = [...times].sort((a, b) => a - b)
-    rows.push(`30 job patches: median ${sorted[15].toFixed(1)} ms, p90 ${sorted[27].toFixed(1)} ms, max ${sorted[29].toFixed(1)} ms`)
-    const t2 = performance.now()
-    await s.patch({ stage: { current: 'video', next_action: 'Review the takes.' } }, { action: 'small patch on the full document' })
-    rows.push(`one small patch on the full document: ${(performance.now() - t2).toFixed(1)} ms`)
-    const t3 = performance.now()
-    await s.verdict({ kind: 'accept', target: { kind: 'take', id: id('take', 1) } })
-    rows.push(`one verdict: ${(performance.now() - t3).toFixed(1)} ms`)
-    const finalSize = (await s.exportClan()).byteLength
-    const dataYaml = (await s.chain()).length
-    rows.push(`.clan size: ${size} bytes after the jobs, ${finalSize} bytes at the end (${dataYaml} chain entries)`)
-    console.log(`\n[clan-store timing]\n  ${rows.join('\n  ')}\n`)
-    expect(s.get().jobs).toHaveLength(30)
-    expect(problems(s.get())).toEqual([])
-  })
+    await s.patch({ shots, beats, frames, jobs }, { action: 'fill the worst case', quiet: true })
+    // A long chain: 300 attributed writes, each with its targets and a cite.
+    const doc = s.documentId()
+    const sizes = ['wide', 'medium', 'close']
+    for (let i = 0; i < 300; i++) {
+      const sid = id('shot', i % SHOTS)
+      await s.patch({ shots: { [sid]: { camera: { size: sizes[i % 3] } } } }, {
+        action: `set shots[${sid}].camera.size`, agent: i % 2 ? 'human:p_maya001' : 'dex', rationale: words(120),
+        targets: [`${doc}#shots[${sid}]`, `${doc}#shots[${sid}].camera.size`], cites: [`${doc}#jobs[${id('job', i % 300)}]`],
+      })
+    }
+    const bytes = await s.exportClan()
+    problems(s.get()) // compiled once, as on every write after the first
+    const t = performance.now()
+    const p = problems(s.get())
+    const ms = performance.now() - t
+    console.log(`\n[clan-store worst case] ${SHOTS} shots, ${Object.keys(beats).length} beats, ${Object.keys(frames).length} frames, ${Object.keys(jobs).length} jobs: ${bytes.byteLength} bytes, validate ${ms.toFixed(1)} ms\n`)
+    expect(p).toEqual([])
+    expect(bytes.byteLength).toBeLessThan(3.5 * 1024 * 1024)
+    expect(ms).toBeLessThan(60)
+  }, 180_000)
 })
 
 describe('postClanMirror', () => {

@@ -16,15 +16,23 @@ import { bundle } from './bundle-schema.mjs'
 const here = dirname(fileURLToPath(import.meta.url))
 const pkg = join(here, '..')
 const clan = process.env.CLAN_BIN || 'clan'
+// A minimal valid contract-3 document: the template's data. A new instance
+// never sees it (library create_instance resets the data), and
+// ClanDocumentStore.create writes the real first document in one attributed patch.
+const MAPS = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'takes', 'renders', 'reviews',
+  'links', 'keys', 'refs', 'documents', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 const TEMPLATE_DATA = {
-  contract_version: '2',
+  contract_version: '3',
   app: 'production-tool',
-  participant: { id: 'template', handle: 'template' },
-  stage: { current: 'character' },
-  assets: [],
-  keys: [],
-  refs: [],
-  jobs: [],
+  project: {
+    id: 'proj_00000000000000000000000000',
+    tenant_id: '00000000-0000-0000-0000-000000000000',
+    title: 'Production Tool',
+    created_by: 'human:template',
+    created_at: '2026-10-13T00:00:00Z',
+  },
+  assets: {},
+  ...Object.fromEntries(MAPS.map((m) => [m, {}])),
 }
 const tmp = mkdtempSync(join(tmpdir(), 'pt-app-'))
 const run = args => execFileSync(clan, ['--quiet', ...args], { stdio: ['ignore', 'pipe', 'inherit'] })
@@ -33,7 +41,7 @@ try {
   const schema = join(tmp, 'schema.json')
   writeFileSync(schema, JSON.stringify(bundle(), null, 2) + '\n')
   run(['create', '--title', 'Production Tool', '--brief',
-    "One participant's Production Tool document: character, script, shots, frames, takes, jobs and reviews. Write it only through patch-data; human verdicts are decision-chain entries.",
+    'A Production Tool project (contract 3): boards, scripts, storyboards, shots, frames, videos, links, refs, jobs and asks, as id-keyed maps. Write it only through patch-data, through the buses (contracts/collab.md); upstream is read-only.',
     '--output', join(tmp, 'seed.clan')])
   // The schema validates the data already there, so the template carries a
   // minimal valid document. A new instance never sees it: library

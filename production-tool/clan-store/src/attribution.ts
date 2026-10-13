@@ -1,26 +1,23 @@
-// Who made what: the three kinds of author in a Production Tool decision chain.
+// Who made what (contract 3): people are human:<personId>; the work is the
+// crew's (dex, skye, wren, rhea, edie, ellis, jude), named the same way in
+// every chain (contracts/collab.md §8).
 //
-//   participant   their handle (every patch the UI makes; the store's default)
-//   director      `director · <model> · <promptVersion>`: the model that turned
-//                 the participant's request into a provider job
-//   provider      `<provider> · <model>`: the step that made the pixels
-//
-// The director and provider entries are written once per job, when the job
-// reaches a terminal state, from the job's entry in the document (which
-// mirrors the relay's Job: `agent` is its director block). Their action names
-// the job, so `record(…, { once: true })` keeps them single across reloads and
-// repeated polls.
+// A job's result lands as one batch: one decision, agent the crew member,
+// citing <doc>#jobs[<id>], whose rationale says what the director decided and
+// what the provider made (landingWhy). A job that ends without a result (failed,
+// cancelled) is one decision of its own (recordJobOutcome), written once.
 
-/** The document's job entry (document.schema.json#/properties/jobs/items). */
+/** The document's job entry (document.schema.json#/$defs/job), as far as attribution reads it. */
 export interface JobEntry {
   id: string
   op: string
   state: string
+  crew: string
   provider?: string
   model?: string
   outputs?: string[]
   text?: string
-  agent?: {
+  director?: {
     model: string
     promptVersion: string
     rationale: string
@@ -33,8 +30,7 @@ export interface JobEntry {
   updated_at?: string
 }
 
-/** One character card the director was given (the relay's agent block `cards`,
- * director.schema.json#/$defs/agentBlock): what one vision call saw in a ref picture. */
+/** One character card the director was given (the relay's agent block `cards`). */
 export interface DirectorCard {
   tag: string
   sha256: string
@@ -42,28 +38,47 @@ export interface DirectorCard {
   card: string
 }
 
-/** A card as read back from a director entry. */
+/** A card as read back from a rationale. */
 export interface SeenCard {
   tag: string
   kind: string
   lines: string[]
 }
 
-export interface ChainRecord {
-  agent: string
-  action: string
-  rationale: string
+export const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
+export const CREW = ['dex', 'skye', 'wren', 'rhea', 'edie', 'ellis', 'jude'] as const
+
+/** The kind of author an entry's agent names (for avatars and filters). */
+export function agentKind(agent: string): 'person' | 'crew' | 'other' {
+  if (agent.startsWith('human:')) return 'person'
+  if ((CREW as readonly string[]).includes(agent)) return 'crew'
+  return 'other'
 }
 
-export const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
+/** The collab.md verb a job's landing records, by op. */
+export function opVerb(op: string): string {
+  switch (op) {
+    case 'shot_list': return 'plan'
+    case 'write': return 'write'
+    case 'read': case 'transcribe': return 'read'
+    case 'check': return 'check'
+    case 'cutout': case 'upscale': case 'region_edit': return 'retouch'
+    case 'clip_patch': case 'stitch': return 'edit'
+    default: return 'render'
+  }
+}
 
-export const AGENT_DIRECTOR = 'director'
-
-/** The kind of author an entry's agent names (for icons and filters). */
-export function agentKind(agent: string): 'participant' | 'director' | 'provider' {
-  if (agent === AGENT_DIRECTOR || agent.startsWith(`${AGENT_DIRECTOR} · `)) return 'director'
-  if (agent.includes(' · ')) return 'provider'
-  return 'participant'
+/** Who works an op (ui-behaviour 5.1). */
+export function crewFor(op: string): (typeof CREW)[number] {
+  switch (op) {
+    case 'shot_list': case 'frame_edit': case 'bridge': return 'dex'
+    case 'write': return 'skye'
+    case 'cutout': case 'upscale': case 'region_edit': return 'rhea'
+    case 'clip_patch': case 'stitch': return 'edie'
+    case 'read': case 'transcribe': return 'ellis'
+    case 'check': return 'jude'
+    default: return 'wren'
+  }
 }
 
 const short = (sha: string) => sha.replace(/^sha256:/, '').slice(0, 10)
@@ -84,19 +99,18 @@ function money(n: number): string {
   return `$${n < 1 ? n.toFixed(3).replace(/0$/, '') : n.toFixed(2)}`
 }
 
-/** What the director's entry puts before the cards it was given (always its last part). */
+/** What the rationale puts before the cards the director was given (always its last part). */
 export const SAW = ' · saw: '
 const CARD_SEP = ' ¦ '
 const LINE_SEP = ' / '
 
-/** The cards as the last part of the director's entry: ` · saw: @tag (kind): line / line ¦ @tag …`.
- * The separators are taken out of the card text, so cardsFromRationale() can read them back. */
+/** The cards as the last part of a rationale: ` · saw: @tag (kind): line / line ¦ @tag …`. */
 export function sawPart(cards: DirectorCard[]): string {
   const clean = (t: string) => t.replace(/[·¦]/g, ',').split('\n').map((l) => l.replace(/ \/ /g, ', ').trim()).filter(Boolean).join(LINE_SEP)
   return SAW + cards.map((c) => `@${c.tag} (${c.kind}): ${clean(c.card)}`).join(CARD_SEP)
 }
 
-/** The cards a director entry's rationale carries (sawPart's inverse), and the rationale before them. */
+/** The cards a rationale carries (sawPart's inverse), and the rationale before them. */
 export function cardsFromRationale(rationale: string): { rest: string; cards: SeenCard[] } {
   const at = rationale.lastIndexOf(SAW)
   if (at < 0) return { rest: rationale, cards: [] }
@@ -108,77 +122,61 @@ export function cardsFromRationale(rationale: string): { rest: string; cards: Se
   return cards.length ? { rest: rationale.slice(0, at), cards } : { rest: rationale, cards: [] }
 }
 
-/** The director's entry: its rationale, which refs it used for what, the
- * prompt it wrote (abbreviated), and last the character cards it was given.
- * Null when the job had no director. `cards` come from the relay's agent
- * block; the document keeps them out of `jobs[].agent`, since a .clan made
- * before them carries an agent block that refuses the field. */
-export function directorRecord(job: JobEntry, cards?: DirectorCard[]): ChainRecord | null {
-  const a = job.agent
-  if (!a) return null
-  const out = (a.output ?? {}) as {
-    providerJob?: { prompt?: string; refs?: { name: string; role: string; sha256: string }[]; firstFrame?: string; mask?: string }
-    shots?: unknown[]
-    needsUser?: { question?: string } | null
-  }
+/** What the director decided and what the provider made, in one line: the
+ * director's rationale, the refs it used for what, the prompt (abbreviated),
+ * the model, cost and time, the outputs or the error, then the cards. */
+export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
   const parts: string[] = []
-  if (a.rationale?.trim()) parts.push(clip(a.rationale, 300))
-  const pj = out.providerJob
-  if (pj?.refs?.length) parts.push(`refs: ${pj.refs.map((r) => `${r.name} as ${r.role} (${short(r.sha256)})`).join(', ')}`)
-  if (pj?.firstFrame) parts.push(`first frame ${short(pj.firstFrame)}`)
-  if (pj?.prompt) parts.push(`prompt: "${clip(pj.prompt, 240)}"`)
-  if (Array.isArray(out.shots)) parts.push(`${out.shots.length} shots`)
-  if (out.needsUser?.question) parts.push(`asked: ${clip(out.needsUser.question, 160)}`)
-  if (typeof a.latencyMs === 'number') parts.push(`${(a.latencyMs / 1000).toFixed(1)} s`)
-  return {
-    agent: `${AGENT_DIRECTOR} · ${a.model} · ${a.promptVersion}`,
-    action: `directed ${job.op} ${job.id}`,
-    rationale: parts.join(' · ') + (cards?.length ? sawPart(cards) : ''),
+  const a = job.director
+  if (a) {
+    const out = (a.output ?? {}) as {
+      providerJob?: { prompt?: string; refs?: { name: string; role: string; sha256: string }[]; firstFrame?: string }
+      shots?: unknown[]
+      question?: { text?: string } | null
+    }
+    if (a.rationale?.trim()) parts.push(clip(a.rationale, 300))
+    const pj = out.providerJob
+    if (pj?.refs?.length) parts.push(`refs: ${pj.refs.map((r) => `${r.name} as ${r.role} (${short(r.sha256)})`).join(', ')}`)
+    if (pj?.firstFrame) parts.push(`first frame ${short(pj.firstFrame)}`)
+    if (pj?.prompt) parts.push(`prompt: "${clip(pj.prompt, 240)}"`)
+    if (Array.isArray(out.shots)) parts.push(`${out.shots.length} shots`)
+    if (out.question?.text) parts.push(`asked: ${clip(out.question.text, 160)}`)
+    parts.push(`director ${a.model} · ${a.promptVersion}${typeof a.latencyMs === 'number' ? ` · ${(a.latencyMs / 1000).toFixed(1)} s` : ''}`)
   }
-}
-
-/** The provider step's entry: cost confirmed, time, outputs (sha256), or the
- * error. Null until the job is terminal. */
-export function providerRecord(job: JobEntry): ChainRecord | null {
-  if (!TERMINAL.has(job.state)) return null
-  const agent = `${job.provider ?? 'relay'} · ${job.model ?? 'unknown'}`
-  const parts: string[] = []
+  if (job.provider || job.model) parts.push(`${job.model ?? 'unknown'} on ${job.provider ?? 'the relay'}`)
   const c = job.cost
   if (c?.confirmed !== undefined) parts.push(`cost ${money(c.confirmed)} confirmed`)
   else if (c?.estimate !== undefined) parts.push(`cost ${money(c.estimate)} estimated, not confirmed`)
-  else if (c) parts.push('cost unknown')
   const t = seconds(job.created_at, job.updated_at)
   if (t) parts.push(t)
-  let action: string
-  if (job.state === 'completed') {
-    action = `made ${job.op} ${job.id}`
-    for (const o of job.outputs ?? []) parts.push(`out ${o}`)
-  } else if (job.state === 'failed') {
-    action = `failed ${job.op} ${job.id}`
-    if (job.error) parts.unshift(`${job.error.code}${job.error.providerCode ? ` (${job.error.providerCode})` : ''}: ${clip(job.error.message, 200)}`)
-  } else {
-    action = `cancelled ${job.op} ${job.id}`
-  }
-  return { agent, action, rationale: parts.join(' · ') }
+  for (const o of job.outputs ?? []) parts.push(`out ${o}`)
+  if (job.error) parts.push(`${job.error.code}${job.error.providerCode ? ` (${job.error.providerCode})` : ''}: ${clip(job.error.message, 200)}`)
+  return parts.join(' · ') + (cards?.length ? sawPart(cards) : '')
 }
 
-/** What a store needs to write the job's entries. */
+/** The why of a job's landing: the verb of its op, agent its crew, citing the job. */
+export function landingWhy(docId: string, job: JobEntry, what: string, cards?: DirectorCard[]): { action: string; agent: string; rationale: string; cites: string[] } {
+  return { action: `${opVerb(job.op)} ${what}`.slice(0, 300), agent: job.crew, rationale: jobRationale(job, cards), cites: [`${docId}#jobs[${job.id}]`] }
+}
+
+/** What a store needs to write a job's own entry. */
 export interface Recorder {
-  record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean }, opts?: { once?: boolean }): Promise<boolean>
+  record(entry: { action: string; rationale?: string; agent?: string; targets?: string[]; cites?: string[] }, opts?: { once?: boolean }): Promise<boolean>
+  documentId(): string
 }
 
 /**
- * Write the director and provider entries for a job that has reached a
- * terminal state, at most once each (`cards`: the director's, from the relay's
- * agent block). Resolves the number written (0 when the
- * job is still moving, or was recorded before).
+ * The decision of a job that ended without a result (failed or cancelled),
+ * written once (a completed job's decision is its landing). Resolves whether
+ * it was written.
  */
-export async function recordJobOutcome(store: Recorder, job: JobEntry, cards?: DirectorCard[]): Promise<number> {
-  if (!TERMINAL.has(job.state)) return 0
-  let n = 0
-  const d = directorRecord(job, cards)
-  if (d && (await store.record(d, { once: true }))) n++
-  const p = providerRecord(job)
-  if (p && (await store.record(p, { once: true }))) n++
-  return n
+export async function recordJobOutcome(store: Recorder, job: JobEntry, cards?: DirectorCard[]): Promise<boolean> {
+  if (job.state !== 'failed' && job.state !== 'cancelled') return false
+  const docId = store.documentId()
+  return store.record({
+    agent: job.crew,
+    action: `${opVerb(job.op)} ${job.state} ${job.op} ${job.id}`,
+    rationale: jobRationale(job, cards),
+    targets: [`${docId}#jobs[${job.id}]`],
+  }, { once: true })
 }

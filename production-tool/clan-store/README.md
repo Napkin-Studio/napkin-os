@@ -1,70 +1,61 @@
 # production-tool/clan-store
 
-The Production Tool document as a real `.clan`: napkin-wasm (the same
-`napkin-host` and `clan-sdk` the desktop and the server run) behind the
-`DocumentStore` interface the ui lane also implements with its JSON store.
+The Production Tool document (contract 3) as a real `.clan`: napkin-wasm (the
+same `napkin-host` and `clan-sdk` the desktop and the server run) behind the
+buses `production-tool/contracts/collab.md` defines.
 
-- Every write is `handle('/patch-data')` with the participant's handle as the
-  agent, so the SDK records it in the decision chain with the exact keys it
-  changed.
-- Before it reaches the host, the merged result is validated with ajv against
-  `production-tool/contracts/document.schema.json` as written (the three
-  schema files, cross-file `$ref`s and all). An invalid patch throws
-  `InvalidDocument` and the document is left exactly as it was.
-- The `.clan` carries the same contract, bundled into one self-contained
-  schema (`scripts/bundle-schema.mjs`), as `agent/output-schema.json`, so the
-  SDK refuses an invalid write too, and `clan read agent` shows it.
-- Verdicts (accept, reject, select) are pinned decision-chain entries with the
-  action `<kind> <target.kind> <target.id>` and the note as the rationale.
-  They change no data.
+- **Writes go through the buses.** `LocalPatchBus` applies field patches
+  (`contracts/patch.schema.json`): it checks the leaf rules, the text owners
+  and the versions, applies the batch to a copy, and writes one merge patch
+  through the store, which validates the whole document (ajv, then
+  `integrity.ts`) and records one decision with the targets the bus derives
+  (`/patch-data`'s `targets` and `cites`). `LocalTextBus` holds the live text
+  in a Y.Doc (one fragment per shot, scene, beat and note) and checkpoints its
+  flat fields as quiet writes, with one attributed entry per person per
+  fragment per 60 s. `LocalUndo` keeps one person's steps and persists them.
+- **A v2 `.clan` is refused**, never read or overwritten: `open`, `load` and
+  `openBytes` throw `UnsupportedContract`.
+- The `.clan` carries the contract, bundled into one self-contained schema
+  (`scripts/bundle-schema.mjs`), as `agent/output-schema.json`, so the SDK
+  refuses an invalid write too.
 - The bytes are saved to IndexedDB 300 ms after the last write, and restored
-  with `load()`. Storage that is missing or blocked is skipped silently.
+  with `load()`.
 
 ## Use it from production-tool/web
 
 ```ts
-import { ClanDocumentStore, buildExportZip, postClanMirror } from '../../clan-store/src'
+import { ClanDocumentStore, LocalPatchBus, LocalTextBus, LocalUndo } from '../../clan-store/src'
 
-const store = new ClanDocumentStore()             // IndexedDB, 300 ms debounce
-const doc = (await store.load()) ?? (await store.create({ participant: { id, handle } }))
-const off = store.onChange(d => render(d))
+const store = new ClanDocumentStore({ person: { id, handle, tenant_id } })
+const doc = (await store.load()) ?? (await store.create({ person, title: 'Untitled ad' }))
+const bus = new LocalPatchBus(store)
+const text = new LocalTextBus(bus)
+const undo = new LocalUndo({ saved: ui.undo, onChange: (s) => (ui.undo = s) })
+undo.bind(bus, text)
+text.hydrateAll()
 
-await store.patch({ stage: { current: 'storyboard' } }, { action: 'locked the character' })
-await store.verdict({ kind: 'accept', target: { kind: 'take', id: takeId }, note: 'good light' })
-
-const bytes = await store.exportClan()            // the .clan
-const { zip, missing } = await buildExportZip({ clan: bytes, doc: store.get(), resolve: assetBytesFromIdbOrS3 })
-
-addEventListener('pagehide', () => void store.flush())
+await bus.apply({ patches: [{ op: 'set', entity: 'shots', id, path: 'camera/size', value: 'close', base_version: shot.v }],
+                  why: { action: 'set shots camera size' } })
+await text.replace('shot', id, prose, `human:${person.id}`)
+await undo.undo()
 ```
 
-Import the TypeScript source, as `app/` does with its own modules. Vite
-resolves the JSON schema imports and the `napkin_wasm_bg.wasm` URL beside the
-glue. In node, pass the bytes: `new ClanDocumentStore({ wasm: bytes })`.
+Import the TypeScript source. Vite resolves the JSON schema imports and the
+`napkin_wasm_bg.wasm` URL beside the glue. In node, pass the bytes:
+`new ClanDocumentStore({ wasm: bytes })`.
 
-Writes are serialised. `patch()` replaces arrays, as RFC 7396 does, so to add
-one job send the whole `jobs` list. `get()` returns what the SDK stored,
-read back from `shared/data.yaml`.
+Beyond the buses: `open(bytes)`, `chain()` (newest first, with targets and
+cites), `record()` (a decision with no data change: `pin_decision`, a failed
+job), `documentId()`, `flush()`, `startMirror()`/`mirrorNow()`, `dispose()`.
 
-Beyond the interface: `open(bytes)` (an import), `chain()` (the decision chain,
-newest first), `flush()`, `startMirror()`/`stopMirror()`/`mirrorNow()`, and
-`dispose()`.
+## Who did what: people and the crew
 
-## Who did what: three kinds of author
-
-`patch(mp, why)` records the participant's handle unless `why.agent` names
-someone else; `why.pinned` pins the entry (locks, verdicts) and `why.quiet`
-writes the data with no entry (bookkeeping: a job's state, an asset list).
-`record({agent, action, rationale}, {once: true})` writes a decision that
-changes no data, once per agent and action.
-
-`recordJobOutcome(store, job)` (src/attribution.ts) writes, for a job in a
-terminal state, the director's entry (`director · <model> · <promptVersion>`:
-its rationale, the refs it used as what, the prompt it wrote, abbreviated)
-and the provider's (`<provider> · <model>`: cost confirmed, time, output
-sha256, or the error code). Both name the job id in the action, so they are
-written once however often the job is seen. production-tool/web calls it as
-each job lands (web/src/doc/clan.ts).
+A person's write is claimed as `human:<personId>`; the crew's as their id
+(`dex`, `skye`, `wren`, `rhea`, `edie`, `ellis`, `jude`). A job's result lands
+as one batch: one decision, agent the crew member, citing
+`<doc>#jobs[<jobId>]`, with `landingWhy()`'s rationale (what the director
+decided, the model, cost, time and outputs). A job that ends with no result is
+recorded once by `recordJobOutcome()`.
 
 ## Build and test
 
@@ -117,3 +108,11 @@ It needs Shrey's decision (contract change by D1 rules: a new relay route in
 2. **No data as JSON.** The store reads `entry('shared/data.yaml')` and parses
    the YAML (the `yaml` package). `document_now()` exists in the session but
    no route serves it.
+3. **Write cost grows with the document.** On a 60-shot project (360 frames,
+   jobs and beats) one `/patch-data` costs 55-60 ms in node (release wasm):
+   clan-sdk compiles the document's JSON Schema on every write
+   (`crates/clan-sdk/src/pack.rs`, `jsonschema::validator_for`) and repacks the
+   archive. ajv here is 2 ms and integrity 0.2 ms. The store keeps the merged
+   result instead of re-reading data.yaml (that saved about 110 ms a write).
+   Caching the compiled validator in clan-sdk is the follow-up
+   (`spike/write-cost.spike.ts` measures it).

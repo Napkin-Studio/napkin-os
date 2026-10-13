@@ -25,18 +25,20 @@
 <script>
   (function () {
     var d = (window.__CLAN__ && window.__CLAN__.data) || {};
-    var p = d.participant || {};
-    if (p.handle) document.getElementById('who').textContent = 'Production Tool · ' + p.handle;
-    var s = d.stage || {};
-    document.getElementById('stage').textContent = s.current ? 'Stage: ' + s.current + (s.next_action ? ' — ' + s.next_action : '') : '';
+    var p = d.project || {};
+    if (p.title) document.getElementById('who').textContent = 'Production Tool · ' + p.title;
+    var n = function (m) { return Object.keys(d[m] || {}).length; };
+    document.getElementById('stage').textContent = n('scripts') + ' script · ' + n('storyboards') + ' storyboard · ' + n('videos') + ' video';
     var rows = [
-      ['Character views', Object.keys((d.character && d.character.views) || {}).length],
-      ['Shots', (d.shots || []).length],
-      ['Frames', (d.frames || []).length],
-      ['Takes', (d.takes || []).length],
-      ['Jobs', (d.jobs || []).length],
-      ['Reviews', (d.reviews || []).length],
-      ['Assets', (d.assets || []).length]
+      ['References', n('refs')],
+      ['Shots', n('shots')],
+      ['Frames', n('frames')],
+      ['Takes', n('takes')],
+      ['Ad renders', n('renders')],
+      ['Jobs', n('jobs')],
+      ['Notes', n('reviews')],
+      ['Open questions', Object.keys(d.asks || {}).filter(function (k) { return d.asks[k].state === 'open'; }).length],
+      ['Files', n('assets')]
     ];
     var body = document.getElementById('counts');
     rows.forEach(function (r) {
