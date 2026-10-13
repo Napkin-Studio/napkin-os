@@ -194,6 +194,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 |---|---|---|---|
 | Script → Storyboard | `drives` | One script per storyboard | Plan shots reads this script. Re-planning merges by shotId and never wipes. |
 | Storyboard → Video | `renders` | One storyboard per video; a storyboard can render many videos (cutdowns) | One clip per shot, from each shot's selected frame. |
+| Script → Video | `drives` | One script per video | Allowed without a storyboard (owner, 2026-10-13). On Make video Dex asks "Plan a storyboard first?": **Plan the storyboard first** (recommended) or **Make clips straight from the script**, which feeds the script. |
 | Reference → any generating node, or a Shot | its role (`character`, `location`, `lighting`, …) | Many | The reference joins that node's `@` vocabulary and gets its own link with a "<name> · <role>" chip in the inputs strip. Dex words its role ("lighting reference: match its light only"). |
 | Board or group → any generating node | `input` | One link per board or group | Everything on the board or in the group joins the node's scope. The strip shows "Loc1 · Coast · 3". |
 | Note, ink group or Document → any generating node | `note` or `context` | Many | The text joins the node's instructions (a note) or its background (a document). A document is used only once linked. |
