@@ -76,8 +76,8 @@ run "plans_the_hackathon_stack" {
     error_message = "providers read inputs over HTTPS with no redirect"
   }
   assert {
-    condition     = length(aws_secretsmanager_secret.relay) == 6 && contains(keys(aws_secretsmanager_secret.relay), "TOKEN_SECRET")
-    error_message = "six secrets, values put by hand"
+    condition     = length(aws_secretsmanager_secret.relay) == 3 && contains(keys(aws_secretsmanager_secret.relay), "TOKEN_SECRET") && !contains(keys(aws_secretsmanager_secret.relay), "FAL_KEY")
+    error_message = "three secrets (Runway, Anthropic, token), values put by hand; fal and HeyGen are gone"
   }
   assert {
     condition     = aws_cloudwatch_log_group.relay.retention_in_days == 14 && aws_cloudwatch_log_group.stitch.retention_in_days == 14

@@ -1,5 +1,7 @@
-# The Production Tool for the hackathon (Wed 2026-10-07): its own stack and
-# state, so nothing here touches staging and no staging deploy restarts it.
+# The Production Tool: its own stack and state, so nothing here touches staging
+# and no staging deploy restarts it. Built for the hackathon (2026-10-07), hence
+# the directory and the napkin-hackathon-* names, kept until the production
+# environment is designed (features/drop-hackathon-extras.clan, non_goals).
 # features/production-tool-infra.clan, design.rollout.
 #
 #   storage.tf        S3 (web/, in/, out/, ads/, clan/, config.json) + CloudFront
