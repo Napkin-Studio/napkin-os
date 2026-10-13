@@ -7,29 +7,11 @@ from contracts_dir import contracts_dir
 from director import PassthroughDirector, new_id
 from providers import load_registry
 from providers.base import ProviderError, asset_url, set_asset_urls
-from runtime import CachedConfig, parse_event_codes
-from tokens import sign, verify
-
-
-def test_tokens_round_trip_and_reject_tampering():
-    t = sign({"pid": "p_abcdef", "exp": 100}, "s" * 20)
-    assert verify(t, "s" * 20, 50)["pid"] == "p_abcdef"
-    assert verify(t, "s" * 20, 100) is None
-    assert verify(t, "x" * 20, 50) is None
-    assert verify(t[:-2] + "AA", "s" * 20, 50) is None
-    assert verify("garbage", "s" * 20, 50) is None
-
-
-def test_event_codes_parse():
-    assert parse_event_codes('{"participant": ["A"], "organiser": ["B"]}') == {"participant": ["A"], "organiser": ["B"]}
-    # Rewritten for features/personal-workspaces.clan: a code no longer maps to a shared workspace
-    # (each name is its own), so an old "workspaces" map in the secret is ignored, not an error.
-    assert parse_event_codes('{"participant": ["A"], "workspaces": {"A": "acme"}}') == {"participant": ["A"], "organiser": []}
-    assert parse_event_codes("A, B") == {"participant": ["A", "B"], "organiser": []}
+from runtime import CachedConfig
 
 
 def test_config_cache_keeps_the_last_good_config():
-    good = json.loads((contracts_dir() / "examples" / "config.event.json").read_text())
+    good = json.loads((contracts_dir() / "examples" / "config.live.json").read_text())
     now = [0.0]
     source = [good]
     cfg = CachedConfig(lambda: source[0], Contracts(), ttl=30, clock=lambda: now[0])

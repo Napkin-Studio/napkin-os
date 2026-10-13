@@ -49,16 +49,13 @@ PRO_RATIOS = frozenset("""
 """.split())
 RUNWAY_CLIP_RATIOS = frozenset(("1280:720", "720:1280", "1080:1920", "1920:1080"))
 # Endpoints that take no usable ratio: the output keeps the input's shape (or the endpoint has no such field).
-NO_RATIO = {("runway", "clip_edit"), ("fal", "clip_edit"), ("fal", "clip"), ("heygen", "clip")}
+NO_RATIO = {("runway", "clip_edit")}
 # Longest prompt per provider and op kind; a longer one is a 400 from the provider.
-PROMPT_MAX = {("runway", "clip"): 1000, ("runway", "clip_edit"): 1000, ("runway", "image"): 5500,
-              ("fal", "clip"): 2500, ("fal", "clip_edit"): 2500, ("fal", "image"): 2500}
+PROMPT_MAX = {("runway", "clip"): 1000, ("runway", "clip_edit"): 1000, ("runway", "image"): 5500}
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
 # per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
 ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250}
-# Providers whose view sends its source picture alone: other refs are left out before the model sees them.
-VIEW_SOURCE_ONLY = {"fal"}
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
 # The ops a sectioned prompt has no section for (shot_list) run on this whole prompt.
@@ -89,9 +86,9 @@ def _drop_unusable(job: dict, op: str, sheet: dict) -> None:
 
 
 def _clip_edit_source(job: dict, op: str, payload: dict) -> None:
-    """A clip edit always carries the clip it changes, first, as `current`: the adapters find it
-    there (fal by role, Runway by its video type). The model sometimes leaves it out (recorded
-    reply for a masked fal edit: refs []), and every such job failed (pathway matrix, 2026-10-08)."""
+    """A clip edit always carries the clip it changes, first, as `current`: the adapter finds it
+    there (Runway by its video type). The model sometimes leaves it out (a recorded reply with
+    refs []), and every such job failed (pathway matrix, 2026-10-08)."""
     video = payload.get("video")
     if op != "clip_edit" or not video:
         return
@@ -148,15 +145,6 @@ def _nearest_ratio(ratio: str, allowed) -> Optional[str]:
     return min((r for r in allowed if shape(r) <= best + 0.04), key=area)
 
 
-def _lone_fronts_are_characters(job: dict) -> None:
-    """An element is a front and 1 to 3 angles: a front with no angle after it goes as a character
-    (2026-10-09: the eval's Kling clip; fal refuses an element without an angle at submit)."""
-    refs = job.get("refs") or []
-    for i, r in enumerate(refs):
-        if r["role"] == "element_front" and not (i + 1 < len(refs) and refs[i + 1]["role"] == "element_angle"):
-            r["role"] = "character"
-
-
 # "of anchor", "from the previous frame": the anchor and previous frames named without their @ (v5, 2026-10-09).
 _BARE_ANCHOR = re.compile(r"\b(of|from|in|as|with|like|match|matches|keep) (?:the )?(anchor|previous)(?: frame)?\b(?!-)")
 _CHARACTER_LINE = re.compile(r"The character is @([a-z][a-z0-9_]{2,15}), exactly as in that picture\.\s*")
@@ -193,7 +181,7 @@ def _donors_are_objects(job: dict, payload: dict) -> None:
     refs = job.get("refs") or []
     for r in refs:
         if r["name"] in donors and r["role"] == "character" and any(
-                o is not r and o["role"] in ("character", "element_front") for o in refs):
+                o is not r and o["role"] == "character" for o in refs):
             r["role"] = "object"
 
 
@@ -313,8 +301,6 @@ class Director:
                 raise DirectorError(f"{provider_name} does not support {op}")
         model = self.shot_list_model if op == "shot_list" else self.per_click_model
         payload = _without_dialogue(op, payload)
-        if self.sectioned and op == "view" and provider_name in VIEW_SOURCE_ONLY and payload.get("refs"):
-            payload = {**payload, "refs": []}  # the view sends its source alone: nothing else to write about
         ask = {"op": op, "input": payload}
         if sheet:
             ask["provider"] = provider_name
@@ -364,7 +350,6 @@ class Director:
                 job["angle"] = angle
         _drop_unusable(job, op, sheet)
         _clip_edit_source(job, op, payload)
-        _lone_fronts_are_characters(job)
         if job["provider"] != provider_name:
             raise DirectorError(f"wrote a {job['provider']} job for the routed provider {provider_name}")
         models = {sheet["ops"][op]["model"], sheet["ops"][op].get("regionModel")}
@@ -379,7 +364,7 @@ class Director:
         names = [r["name"] for r in job["refs"]]
         if len(set(names)) != len(names) or not all(TAG.match(n) for n in names):
             raise DirectorError(f"ref names must be unique canonical tags: {names}")
-        if any(r["role"].startswith("element") for r in job["refs"]) and not sheet["refs"]["element"]:
+        if any(r["role"].startswith("element") for r in job["refs"]):
             raise DirectorError(f"{provider_name} has no elements")
         if "keyframe" in job:
             if sheet["video"]["regionEdit"] != "temporal_keyframe":
@@ -425,8 +410,7 @@ class Director:
         if not any(r["role"] == "current" and r["sha256"] == image for r in job["refs"]):
             raise DirectorError("a region edit needs the edited image as a ref with role current")
         region, mask = payload.get("region"), payload.get("mask")
-        # Masked wherever the sheet takes masks, whatever the box's size: fal's edit model cannot
-        # regenerate from a reference, so a large box sent without its mask could never run there
+        # Masked wherever the sheet takes masks, whatever the box's size
         # (features/harness-refusals.clan; the 25% rule is gone).
         masked = bool(region and mask and sheet["mask"] != "none")
         if masked and job.get("mask") != mask["sha256"]:
@@ -451,7 +435,7 @@ class Director:
         ratio = job.get("ratio")
         if ratio and (provider, op) in NO_RATIO:
             # The model often copies the ratio it was given; the frame or clip sets the shape here,
-            # so it is dropped rather than failing the job (2026-10-09: fal clips on Kling).
+            # so it is dropped rather than failing the job (2026-10-09).
             del job["ratio"]
         elif ratio and provider == "runway":
             # The model often writes the plain ratio it was given ('9:16'); map it to the nearest

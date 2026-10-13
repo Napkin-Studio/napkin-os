@@ -21,9 +21,9 @@ export interface CardInput {
 export interface ArrowCard {
   /** "A picture", "The side view", "A change in a box". */
   title: string
-  /** "Dex · Nano Banana Pro (fal)". */
+  /** "Dex · Gen-4 Image (runway)". */
   who: string
-  /** "Made on Runway: fal could not take Nano Banana Pro". */
+  /** "Made on Runway: mock could not take Gen-4 Image". */
   fallback?: string
   /** Not finished yet, or did not come back. */
   state?: string
@@ -49,7 +49,9 @@ export interface CardOptions {
   fmtTime?: (iso: string) => string
 }
 
-const PROVIDER: Record<Provider, string> = { runway: 'Runway', fal: 'fal', heygen: 'HeyGen', mock: 'the mock' }
+const PROVIDER: Record<Provider, string> = { runway: 'Runway', mock: 'the mock' }
+/** A document's madeBy can name a provider no longer routed (features/drop-hackathon-extras.clan): as recorded, then. */
+const providerName = (p: string) => PROVIDER[p as Provider] ?? p
 const VIEW: Record<View, string> = { front: 'front', 'three-quarter': '3/4', side: 'side', back: 'back' }
 const REF_KIND: Record<JobInputRef['kind'], string> = { drawing: 'drawing', picture: 'picture', generated: 'earlier result' }
 const NODE_KIND: Record<NodeKind['kind'], string> = { pic: 'picture', drawn: 'drawing', gen: 'earlier result', note: 'your words' }
@@ -67,8 +69,8 @@ const defaultTime = (iso: string) => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-/** The model's name and provider: "Nano Banana Pro (fal)". */
-function modelWords(provider: Provider, model: string | undefined): string {
+/** The model's name and provider: "Gen-4 Image (runway)". */
+function modelWords(provider: string, model: string | undefined): string {
   if (provider === 'mock') return 'the mock (no model)'
   return `${modelLabel(provider, model) ?? model ?? 'a model'} (${provider})`
 }
@@ -113,7 +115,7 @@ export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobCtx'>, 
   const who = provider ? `${CAST.dex.given} · ${modelWords(provider, job?.model)}` : `${CAST.dex.given} · model not known yet`
   const picked = ctx?.request.modelChoice
   const fallback = picked && provider && picked.provider !== provider
-    ? `Made on ${PROVIDER[provider]}: ${picked.provider} could not take ${modelLabel(picked.provider, picked.model) ?? picked.model}`
+    ? `Made on ${providerName(provider)}: ${picked.provider} could not take ${modelLabel(picked.provider, picked.model) ?? picked.model}`
     : undefined
 
   // The inputs, by name where they have one; this arrow's own source marked.

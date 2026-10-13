@@ -200,10 +200,10 @@ def test_a_tag_not_among_the_refs_goes_as_words(runway, server):
 
 
 def test_tag_syntax_comes_from_the_sheet(server):
-    sheet = {**load_sheet("runway"), "tagSyntax": "at_image_n"}
+    sheet = {**load_sheet("runway"), "tagSyntax": "none"}
     r = RunwayProvider("k", resolve, client=httpx.Client(transport=httpx.MockTransport(server)), sheet=sheet)
     r.submit(job(refs=[Ref(SHA, "hero", "character"), Ref(SHB, "villain", "character")], prompt="@villain and @hero"))
-    assert server.body["promptText"] == "@Image2 and @Image1"
+    assert server.body["promptText"] == "villain and hero"
 
 
 @pytest.mark.parametrize("j", [

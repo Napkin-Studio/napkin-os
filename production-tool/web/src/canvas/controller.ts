@@ -410,7 +410,7 @@ export class CanvasController {
     if (!front) throw new Error(`Set an image as ${key}'s front first.`)
     const frontEl = front.node ? this.nodeEl(front.node) : undefined
     const image = await assetRef(this.s.relay, front.asset)
-    // Other variants of the key keep the identity (up to 3, fal's element limit).
+    // Other variants of the key keep the identity (up to 3, KEY_EXTRAS in lib/names.ts).
     const refs: JobInputRef[] = []
     for (const r of doc.refs.filter((x) => x.key === key && x.id !== front.id).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
     const els = this.els()

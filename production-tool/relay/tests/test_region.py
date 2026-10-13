@@ -229,24 +229,6 @@ def test_pipeline_always_uploads_white_is_change_and_leaves_conversion_to_the_ad
     assert mask.getpixel((10, 10)) == 255 and mask.getpixel((150, 150)) == 0
 
 
-def test_a_black_edit_endpoint_gets_exactly_one_flip_through_the_real_fal_adapter():
-    import base64
-    import httpx
-    from providers.fal import FalProvider
-
-    h, provider, job = _setup({**load_sheet("mock"), "mask": "png_black_edit"})
-    seen = []
-    submit = provider.submit
-    provider.submit = lambda j: (seen.append(j), submit(j))[1]
-    _run(h, provider, job, BOX)
-    by_url = {h.assets(sha).url: data for sha, data in h.blobs.items()}
-    client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, content=by_url[str(req.url)])))
-    fal = FalProvider("key", h.assets, client=client)
-    uri = fal._mask(seen[0].mask, "ideogram/v4.5/edit")
-    mask = Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1])))
-    assert mask.getpixel((10, 10)) == 0 and mask.getpixel((150, 150)) == 255  # black = edit, as ideogram reads it
-
-
 def test_mask_path_still_checks_for_leaks():
     h, provider, job = _setup()
     _, res = _run(h, provider, job, FAR_BOX)

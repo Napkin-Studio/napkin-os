@@ -2,7 +2,7 @@
 
 The relay speaks providers/base.py: `submit(providerJob dict) -> request id`,
 `status(id) -> base.Status`, base.ProviderError. The harness adapters (runway,
-fal, heygen, mock) speak providers/types.py: `submit(ProviderJob)`, a
+mock) speak providers/types.py: `submit(ProviderJob)`, a
 types.Status of ProviderOutputs, types.ProviderError. `Adapted` wraps one
 adapter so the relay can use it; it changes nothing about the request the
 adapter builds.
@@ -66,7 +66,7 @@ class Resolver:
 
 
 # A picture inline above this goes as a JPEG: nine 1.5 MB PNGs made a 19 MB request that
-# did not reach fal within its timeout (2026-10-09). Masks are small and stay exact PNGs.
+# did not reach the provider within its timeout (2026-10-09). Masks are small and stay exact PNGs.
 INLINE_MAX = 400_000
 
 

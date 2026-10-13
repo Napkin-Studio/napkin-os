@@ -1,4 +1,5 @@
-"""Hand fakes: a clock, a blob store, providers that do what a test tells them."""
+"""Hand fakes: a clock, a blob store, providers that do what a test tells them, people the identity
+seam names."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import pytest
 from contracts import Contracts, api
 from contracts_dir import contracts_dir
 from director import PassthroughDirector, new_id
+from identity import person
 from providers import Registry
 from providers.base import Status
 from service import Relay
@@ -19,7 +21,6 @@ from store import MemoryStore
 
 os.environ.setdefault("AWS_DEFAULT_REGION", "eu-west-1")
 CDN = "https://cdn.test"
-SECRET = "test-secret-0123456789abcdef"
 
 
 class Clock:
@@ -128,9 +129,23 @@ def sheets() -> dict:
     return out
 
 
+def front_sheet() -> dict:
+    """The provider in front of the floor in these tests: the mock sheet, priced, slotted and polled
+    like a paid provider (0.15 an image, 2 slots, 2 s polls), so a chain has a first provider whose
+    failure sends the job to Runway (features/runway-fallback.clan)."""
+    sheet = copy.deepcopy(sheets()["mock"])
+    for op, spec in sheet["ops"].items():
+        spec["estimateUsd"] = 0.9 if op in ("clip", "clip_edit") else 0.15
+        for alt in spec.get("alternates", []):
+            alt["estimateUsd"] = spec["estimateUsd"] * 2
+    sheet["concurrency"] = {"image": 2, "video": 2}
+    sheet["results"]["minPollS"] = 2
+    return sheet
+
+
 def base_config(**over) -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
-    cfg["routing"] = {"generate": ["fal", "runway"], "view": ["runway"], "shot_list": [],
+    cfg["routing"] = {"generate": ["mock", "runway"], "view": ["runway"], "shot_list": [],
                       "frame": ["runway"], "region_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"],
                       "stitch": []}
     cfg["inFlightPerParticipant"] = 6
@@ -140,23 +155,27 @@ def base_config(**over) -> dict:
 
 
 class Harness:
-    def __init__(self, config: dict | None = None, providers=("fal", "runway")):
+    def __init__(self, config: dict | None = None, providers=("mock", "runway")):
         self.clock = Clock()
         self.blobs = FakeBlobs()
         self.store = MemoryStore()
         self.cfg = config or base_config()
-        all_sheets = sheets()
+        all_sheets = {**sheets(), "mock": front_sheet()}
         self.providers = {n: FakeProvider(n, copy.deepcopy(all_sheets[n]), self.blobs) for n in providers}
         reg = Registry()
         for p in self.providers.values():
             reg.register(p, p.sheet)
         self.stitched: list[dict] = []
         self.contracts = Contracts()
+        self.people: dict[str, dict] = {}
         self.relay = Relay(store=self.store, blobs=self.blobs, registry=reg, director=PassthroughDirector(),
-                           config=lambda: self.cfg,
-                           secrets=lambda: {"event_codes": {"participant": ["HACK", "napkin-studio"], "organiser": ["ORGS"]},
-                                            "token_secret": SECRET},
-                           clock=self.clock, stitch=self.stitched.append, contracts=self.contracts)
+                           config=lambda: self.cfg, clock=self.clock, stitch=self.stitched.append,
+                           contracts=self.contracts, who=self.who)
+
+    def who(self, headers: dict) -> dict | None:
+        """The test's identity source: "Authorization: Bearer <key>" names a person from as_person()."""
+        auth = headers.get("authorization", "")
+        return self.people.get(auth[7:]) if auth.startswith("Bearer ") else None
 
     # every response is checked against relay-api.schema.json
     def call(self, method, path, body=None, token=None, expect=None, headers=None):
@@ -168,13 +187,13 @@ class Harness:
         elif status == 204:
             assert out is None
         else:
-            name = {"/session": "SessionResponse", "/uploads": "UploadResponse", "/library": "LibraryIndex",
+            name = {"/me": "Me", "/uploads": "UploadResponse", "/library": "LibraryIndex",
                     "/projects": "ProjectList"}.get(path, "Job")
             if path.startswith("/library/"):
                 name = "LibraryEntry"
             if path.startswith("/clan/"):
                 name = "ProjectCanvas" if path.endswith("/canvas") else None  # GET /clan/{project} is the bytes
-            if path == "/config":
+            if path in ("/config", "/health"):
                 name = None
             if name:
                 assert not self.contracts.errors(api(name), out), (self.contracts.errors(api(name), out), out)
@@ -186,9 +205,11 @@ class Harness:
             assert status == expect, (status, out)
         return status, out
 
-    def sign_in(self, handle="alice", code="HACK") -> str:
-        _, out = self.call("POST", "/session", {"eventCode": code, "team": "blue", "handle": handle}, expect=200)
-        return out["token"]
+    def as_person(self, handle="alice", team="blue") -> str:
+        """A key the harness's identity source maps to this person (who sends it is them)."""
+        key = f"{team}/{handle}"
+        self.people[key] = person(handle, team)
+        return key
 
     def post_job(self, token, op="generate", job_id=None, expect=None, **inp):
         job_id = job_id or new_id("job")

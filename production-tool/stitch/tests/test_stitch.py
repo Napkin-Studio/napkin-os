@@ -156,7 +156,7 @@ def test_failure_writes_an_error_result():
     def get(key, dest):
         raise FileNotFoundError(key)
 
-    out = stitch.run({"jobId": "job_x", "clips": [{"key": "out/x"}], "eventName": "E",
+    out = stitch.run({"jobId": "job_x", "clips": [{"key": "out/x"}],
                       "outKey": "ads/x.mp4", "resultKey": "ads/x.json"},
                      get=get, put=lambda *a: None, put_json=lambda k, d: results.__setitem__(k, d),
                      ffmpeg="ffmpeg", ffprobe="ffprobe")
@@ -176,7 +176,7 @@ def _stitch(tmp_path, job, specs, trims):
     store = {}
     res = stitch.run(
         {"jobId": job, "clips": [{"key": f"{n}.mp4", **({"trimS": t} if t else {})} for (n, _, _), t in zip(specs, trims)],
-         "eventName": "Napkin 'Hack': 100%", "outKey": "ads/x.mp4", "resultKey": "ads/x.json"},
+         "outKey": "ads/x.mp4", "resultKey": "ads/x.json"},
         get=lambda key, dest: shutil.copy(src / key, dest),
         put=lambda key, p, mime: store.__setitem__(key, Path(p).read_bytes()),
         put_json=lambda key, d: store.__setitem__(key, json.dumps(d)),

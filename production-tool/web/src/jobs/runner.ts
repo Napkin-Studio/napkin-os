@@ -335,8 +335,8 @@ export class JobRunner {
     })
   }
 
-  /** Keep where the relay meant to run the job, when it made it elsewhere (Runway, after HeyGen or
-   *  fal could not), beside the job's purpose: the card says "Made on Runway: HeyGen could not". */
+  /** Keep where the relay meant to run the job, when it made it elsewhere (Runway, the floor, after its
+   *  pick could not), beside the job's purpose: the card says "Made on Runway: Mock could not". */
   private noteFallback(job: Job) {
     const ctx = this.ui.get().jobCtx[job.jobId]
     if (!ctx || !job.fallbackFrom) return

@@ -10,7 +10,7 @@
 
 import type {
   AssetRef, Config, ContractError, InputMime, Job, JobRequest, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
-  SessionRequest, SessionResponse, Shot,
+  Me, Shot,
 } from '../contracts/types'
 import { quotaClassOf } from '../contracts/types'
 import { getBlob, putBlob } from '../lib/blobs'
@@ -91,8 +91,8 @@ export class MockRelay implements Relay {
   private readonly ledger = new Map<string, LedgerItem>()
   private readonly running = new Map<string, Promise<void>>()
   private readonly opts: Required<Omit<MockOptions, 'persistKey'>> & { persistKey: string | null }
-  private participantId = 'p_mock000'
-  private handle = 'you'
+  private readonly participantId = 'p_mock000'
+  private readonly handle = 'guest'
 
   constructor(opts: MockOptions) {
     this.opts = {
@@ -123,21 +123,15 @@ export class MockRelay implements Relay {
     } catch { /* storage full or blocked */ }
   }
 
-  useToken(_token: string | null) {}
-
-  async session(req: SessionRequest): Promise<SessionResponse> {
-    this.participantId = 'p_' + (req.handle.toLowerCase().replace(/[^a-z0-9]/g, '') + 'mock00').slice(0, 8)
-    this.handle = req.handle
+  /** GET /me: always the same local person; the mock has no sign-in (features/drop-hackathon-extras.clan). */
+  async me(): Promise<Me> {
     return {
-      token: 'mock-token',
       participantId: this.participantId,
-      handle: req.handle,
-      role: 'participant',
-      workspace: 'mock',
-      expiresAt: new Date(this.opts.now() + 24 * 3600 * 1000).toISOString(),
+      handle: this.handle,
+      team: 'mock',
+      workspace: this.participantId,
       quotas: { image: 40, video: 6, render: 3 },
       projects: 0, // nothing is saved to a server without the relay
-      team: req.team,
     }
   }
 

@@ -10,9 +10,8 @@ job, before the director sees it:
   an unnamed input (a node the participant never named) is `in_1`, `in_2`… in input order;
 - `@name` in `text`, `shot.action` and `shot.dialogue` becomes `@tag`, and `shot.refs` becomes the
   tags (frame and clip send exactly the shot's refs);
-- a bare `@key` (`@goremon`) is the whole character: it becomes its front's tag (on fal the front
-  leads the key's Kling element, so the tag stands for the element), and a bare key in `shot.refs`
-  brings the tags of every picture of that key the job carries. A key with no front among the
+- a bare `@key` (`@goremon`) is the whole character: it becomes its front's tag, and a bare key
+  in `shot.refs` brings the tags of every picture of that key the job carries. A key with no front among the
   job's refs cannot be named bare (the owner's choice, 2026-10-07): set a front first;
 - a `@name` the job has no ref for is an error the participant can fix, not a silent drop.
 
@@ -25,8 +24,6 @@ import copy
 import re
 
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
-# Ops where a sheet with elements sends a character's pictures as one Kling element (director/base.py).
-ELEMENT_OPS = {"generate", "frame", "clip"}
 # A mention: @ then key_variant (refName) or a bare key, not inside a word or an address.
 MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
 MAX = 16
@@ -110,7 +107,7 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
     and the names it dropped (features/harness-refusals.clan).
 
     A bare key (`@uberto`) brings its front and up to 3 more views, so two whole characters can be 8
-    character refs where fal and Runway take 5. Only views the job does not name outright are dropped,
+    character refs where Runway takes 5. Only views the job does not name outright are dropped,
     last first: a front stays (a bare key stands for it), and so does any picture named in the shot's
     refs or its words. When that is not enough the input goes as it is and the sheet check refuses it.
     """
@@ -120,10 +117,7 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
         return payload, []
     # anchorFrame, previousFrame and a region edit's image go as refs too (director.v4).
     reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op == "region_edit")
-    # On a sheet with elements, a character's pictures go as one element, which refs.maxCharacter does
-    # not count (check_capabilities counts role "character"): cutting views there only breaks elements.
-    elements = bool(limits.get("element")) and op in ELEMENT_OPS
-    max_char = len(refs) if elements else limits.get("maxCharacter", len(refs))
+    max_char = limits.get("maxCharacter", len(refs))
     max_all = max(limits.get("max", len(refs) + reserved) - reserved, 0)
     named = _named(payload)
     kept = list(refs)

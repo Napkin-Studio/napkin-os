@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from director.director import (Director, DirectorError, _donors_are_objects, _lone_fronts_are_characters,
+from director.director import (Director, DirectorError, _donors_are_objects,
                                _one_character_line, _tag_anchors, _within_budget)
 from eval.director_eval import load, table, totals
 from providers import load_sheets
@@ -82,12 +82,6 @@ def test_a_donor_alone_stays_the_character():
     job = {"refs": [ref("handyman_front", "character")]}
     _donors_are_objects(job, {"text": "like @handyman_front but smiling"})
     assert job["refs"][0]["role"] == "character"
-
-
-def test_an_element_front_without_an_angle_goes_as_a_character():
-    job = {"refs": [ref("maya_front", "element_front"), ref("bob_front", "element_front"), ref("bob_side", "element_angle")]}
-    _lone_fronts_are_characters(job)
-    assert [r["role"] for r in job["refs"]] == ["character", "element_front", "element_angle"]
 
 
 def test_the_directors_additions_have_a_budget_but_the_words_do_not():

@@ -16,7 +16,6 @@ import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
 import { keepUndo } from '../doc/undo'
 import { JobRunner } from '../jobs/runner'
 import { resumeChains, wireJobs } from '../jobs/wire'
-import type { OwnKeysStore } from '../keys/ownKeys'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
 import type { ProjectServer } from './server'
@@ -36,7 +35,6 @@ export interface SessionDeps {
   index: ProjectIndex
   storage: ProjectStorage
   remoteConfig: Config | null
-  ownKeys: OwnKeysStore
   makeClan: MakeClan
   /** The person's projects on the relay (projects/server.ts); absent on the in-browser mock. */
   server?: ProjectServer
@@ -64,7 +62,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   await part.restore((v) => ({ ...initialProjectUi(), ...v }))
   const ui = new ProjectUiStore(app, part)
 
-  const signedIn = app.get().session
+  const signedIn = app.get().me
   const participant = signedIn ? { id: signedIn.participantId, handle: signedIn.handle } : { id: 'p_local', handle: 'guest' }
   const ctxOf: JobCtxOf = (jobId) => ui.get().jobCtx[jobId]
   const { doc, clan, storeNote } = await openDocument({
@@ -127,7 +125,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
     beforeClose: new Set(),
     usedElsewhere: (sha) => index.usedElsewhere(sha, id),
   }
-  const services: Services = { project, relay, doc, ui, runner, remoteConfig: deps.remoteConfig, clan, storeNote, ownKeys: deps.ownKeys, serverCopy }
+  const services: Services = { project, relay, doc, ui, runner, remoteConfig: deps.remoteConfig, clan, storeNote, serverCopy }
 
   let closing: Promise<void> | null = null
   const close = () => (closing ??= (async () => {

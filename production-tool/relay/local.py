@@ -3,13 +3,12 @@ queue; uploads and outputs in .local-data/ (served at /in/, /out/, /ads/).
 
     cd production-tool/relay && uv run python -m local [--port 8787]
 
-Sign in with event code LOCAL (participant) or ORGLOCAL (organiser). Routes are
-served both bare (/jobs) and under /api (/api/jobs), as CloudFront does.
+Every request is the local person (identity.py): NAPKIN_LOCAL_USER="handle@agency",
+else local@napkin. Routes are served both bare (/jobs) and under /api (/api/jobs),
+as CloudFront does.
 
 Config: LOCAL_CONFIG=<file> (re-read every 30 s), otherwise
-contracts/examples/config.testing.json with every step routed to mock and
-participants' own keys on: a fal or HeyGen key typed into Your keys runs that
-step on the participant's account; with no key, everything runs on mock.
+contracts/examples/config.testing.json with every step routed to mock.
 If providers/mock.py (harness lane) is missing, a stub stands in for it: it
 returns an input asset after 2 s, labelled kind "mock".
 """
@@ -29,20 +28,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cards
+import identity
 from blobs import LocalBlobs
 from contracts import Contracts
 from contracts_dir import contracts_dir
 from director import load_director
 from providers import load_registry
 from providers.base import Status, asset_url
-from runtime import CachedConfig, EnvSecrets
+from runtime import CachedConfig
 from service import Raw, Relay
 from store import MemoryStore
 
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
-# the request before it leaves the browser (2026-10-07: X-Own-Keys on POST /jobs).
-CORS_ALLOW_HEADERS = "Authorization, Content-Type, If-Match, X-Clan-Reason, X-Own-Keys, X-Project-Id, X-Project-Name"
+# the request before it leaves the browser.
+CORS_ALLOW_HEADERS = "Authorization, Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name"
 # Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
 CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
 log = logging.getLogger("relay.local")
@@ -51,8 +51,6 @@ log = logging.getLogger("relay.local")
 def default_config() -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     cfg["routing"] = {op: ([] if op in ("shot_list", "stitch") else ["mock"]) for op in cfg["routing"]}
-    cfg["eventName"] = "Local dev"
-    cfg["flags"]["ownKeys"] = True
     return cfg
 
 
@@ -118,8 +116,7 @@ def local_stitch(blobs: LocalBlobs):
 
 
 def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
-    os.environ.setdefault("EVENT_CODES", '{"participant": ["LOCAL"], "organiser": ["ORGLOCAL"]}')
-    os.environ.setdefault("TOKEN_SECRET", "local-dev-secret-not-for-aws")
+    identity.use_local(identity.local_person())  # this dev server only: every request is the local person
     contracts = Contracts(relaxed=True)  # http://localhost URLs pass
     cfg_file = os.environ.get("LOCAL_CONFIG")
     load = (lambda: json.loads(Path(cfg_file).read_text())) if cfg_file else default_config
@@ -133,7 +130,7 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         log.warning("providers/mock.py not found: using the local stub")
     director = load_director()
     relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=director,
-                  config=CachedConfig(load, contracts), secrets=EnvSecrets(), contracts=contracts,
+                  config=CachedConfig(load, contracts), contracts=contracts,
                   stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
     return relay, blobs
 
@@ -213,9 +210,8 @@ def serve(port: int, data_dir: Path) -> None:
 
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    codes = relay.secrets()["event_codes"]
-    print(f"relay (local) on http://localhost:{port}  event codes: {', '.join(codes['participant'] + codes['organiser'])}"
-          f" (any case)  data: {data_dir}", flush=True)
+    me = identity.who({})
+    print(f"relay (local) on http://localhost:{port}  as {me['h']}@{me['t']} ({me['pid']})  data: {data_dir}", flush=True)
     server.serve_forever()
 
 

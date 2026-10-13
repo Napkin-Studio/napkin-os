@@ -4,7 +4,7 @@
 import type { ShellEvent } from '../dogfood/recorder'
 import type {
   AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
-  SessionRequest, SessionResponse,
+  Me,
 } from '../contracts/types'
 
 export interface UploadResult extends AssetRef {
@@ -14,14 +14,11 @@ export interface UploadResult extends AssetRef {
 
 export interface Relay {
   readonly kind: 'http' | 'mock'
-  /** POST /session */
-  session(req: SessionRequest): Promise<SessionResponse>
-  /** Restore a token from an earlier session (no request). */
-  useToken(token: string | null): void
-  /** Called when the server refuses the session (401). The app clears it and shows sign-in. */
+  /** GET /me: who is signed in. No token: the relay's identity seam knows (features/drop-hackathon-extras.clan).
+   *  null when it answers 401 (no one is). */
+  me(): Promise<Me | null>
+  /** Called when any route answers 401. The app forgets who was signed in and says to sign in through Napkin Studio. */
   onUnauthorised?: () => void
-  /** The participant's own keys, sent on POST /jobs only (X-Own-Keys). The mock ignores them. */
-  ownKeys?: () => string | null
   /** Hash in the browser, POST /uploads, PUT the bytes when the relay doesn't have them. */
   upload(blob: Blob, mime: InputMime): Promise<UploadResult>
   /** POST /jobs (idempotent on jobId) */
@@ -42,7 +39,7 @@ export interface Relay {
   libraryEntry(key: Key, ver?: number): Promise<LibraryEntry>
   /** POST /library/{key}: publish the next version (409 conflict when baseVer is not the latest). */
   publish(key: Key, req: LibraryPublish): Promise<LibraryEntry>
-  /** POST /dogfood/consent: this participant read the beta notice. Only the real relay records. */
+  /** POST /dogfood/consent: this person read the beta notice. Only the real relay records. */
   dogfoodConsent?(): Promise<void>
   /** POST /dogfood/events: a batch of the beta's events. Never awaited; failures are dropped. */
   dogfoodEvents?(events: ShellEvent[], leaving: boolean): void

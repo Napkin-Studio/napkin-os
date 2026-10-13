@@ -1,9 +1,7 @@
 """The library: solid keys published as immutable versions, in the person's own workspace.
 
-Rewritten for features/personal-workspaces.clan (2026-10-09). These tests used to say that a
-library is shared by everyone signed in with event codes of one team (EVENT_CODES "workspaces").
-Teams were dropped: each name is its own workspace, so they now say that a library is the
-person's, follows their name to any sign-in, and is never seen by anyone else, even on the same code.
+Rewritten for features/personal-workspaces.clan (2026-10-09): each name is its own workspace, so
+a library is the person's, follows their name to any browser, and is never seen by anyone else.
 """
 
 from conftest import asset
@@ -20,17 +18,17 @@ def publish(h, token, key="maya", base=0, variants=("front", "side"), expect=200
     return h.call("POST", f"/library/{key}", {"role": "character", "baseVer": base, "refs": refs}, token, expect=expect)[1]
 
 
-def test_session_workspace_is_the_participant(h):
-    ann = h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "ann"}, expect=200)[1]
+def test_the_workspace_is_the_person(h):
+    ann = h.call("GET", "/me", token=h.as_person("ann"), expect=200)[1]
     assert ann["workspace"] == ann["participantId"]
-    bob = h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "bob"}, expect=200)[1]
+    bob = h.call("GET", "/me", token=h.as_person("bob"), expect=200)[1]
     assert bob["workspace"] == bob["participantId"] != ann["workspace"]
 
 
 def test_publish_list_and_read_back(h):
-    ann = h.sign_in("ann", "napkin-studio")
+    ann = h.as_person("ann")
     entry = publish(h, ann)
-    pid = h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "ann"}, expect=200)[1]["participantId"]
+    pid = h.call("GET", "/me", token=ann, expect=200)[1]["participantId"]
     assert (entry["workspace"], entry["key"], entry["ver"], entry["by"]) == (pid, "maya", 1, "ann")
     assert f"library/{pid}/index.json" in h.blobs.objects
     index = h.call("GET", "/library", token=ann, expect=200)[1]
@@ -40,17 +38,17 @@ def test_publish_list_and_read_back(h):
     assert h.call("GET", "/library/maya/1", token=ann, expect=200)[1] == entry
 
 
-def test_the_same_name_on_another_sign_in_sees_it_and_publishes_the_next_version(h):
-    publish(h, h.sign_in("ann", "napkin-studio"))
-    again = h.sign_in("Ann", "HACK")  # another browser, another code, another case: the same person
+def test_the_same_name_from_another_browser_sees_it_and_publishes_the_next_version(h):
+    publish(h, h.as_person("ann"))
+    again = h.as_person("Ann")  # another browser, another case: the same person
     assert [k["key"] for k in h.call("GET", "/library", token=again, expect=200)[1]["keys"]] == ["maya"]
     assert publish(h, again, base=1, variants=("front", "laughing"))["ver"] == 2
     assert h.call("GET", "/library/maya/1", token=again, expect=200)[1]["by"] == "ann"  # old versions stay
 
 
-def test_two_people_on_the_same_code_have_separate_libraries(h):
-    publish(h, h.sign_in("ann", "napkin-studio"))
-    bob = h.sign_in("bob", "napkin-studio")
+def test_two_people_in_one_team_have_separate_libraries(h):
+    publish(h, h.as_person("ann"))
+    bob = h.as_person("bob")
     out = h.call("GET", "/library", token=bob, expect=200)[1]
     assert out["keys"] == [] and out["workspace"].startswith("p_")
     _, out = h.call("GET", "/library/maya", token=bob, expect=404)
@@ -59,7 +57,7 @@ def test_two_people_on_the_same_code_have_separate_libraries(h):
 
 
 def test_publishing_over_a_newer_version_is_a_conflict_not_an_overwrite(h):
-    ann = h.sign_in("ann")
+    ann = h.as_person("ann")
     publish(h, ann)
     publish(h, ann, base=1)
     out = publish(h, ann, base=1, expect=409)
@@ -67,7 +65,7 @@ def test_publishing_over_a_newer_version_is_a_conflict_not_an_overwrite(h):
 
 
 def test_a_lost_index_race_reads_again_and_takes_the_next_version(h):
-    ann = h.sign_in("ann")
+    ann = h.as_person("ann")
     publish(h, ann, key="lamp")
     real = h.blobs.put_json_if
     raced = []
@@ -86,7 +84,7 @@ def test_a_lost_index_race_reads_again_and_takes_the_next_version(h):
 
 
 def test_bad_publishes_are_refused(h):
-    ann = h.sign_in("ann")
+    ann = h.as_person("ann")
     refs = [{"variant": "front", "asset": asset(77)}]  # never uploaded
     _, out = h.call("POST", "/library/maya", {"role": "character", "baseVer": 0, "refs": refs}, ann, expect=404)
     assert "has not been uploaded" in out["error"]["message"]

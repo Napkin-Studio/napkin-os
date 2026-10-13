@@ -24,25 +24,25 @@ export interface Opened {
 
 export class ProjectServer {
   private readonly base: string
-  private readonly token: () => string | null
+  private readonly signedIn_: () => boolean
   private readonly fetchFn: typeof fetch
 
-  constructor(opts: { base: string; token: () => string | null; fetchFn?: typeof fetch }) {
+  /** No token: who is asking comes from the relay's identity seam (features/drop-hackathon-extras.clan). */
+  constructor(opts: { base: string; signedIn: () => boolean; fetchFn?: typeof fetch }) {
     this.base = opts.base.replace(/\/+$/, '')
-    this.token = opts.token
+    this.signedIn_ = opts.signedIn
     this.fetchFn = opts.fetchFn ?? ((...a) => fetch(...a))
   }
 
   get signedIn(): boolean {
-    return !!this.token()
+    return this.signedIn_()
   }
 
   private async req(method: string, path: string, init: { body?: BodyInit; headers?: Record<string, string> } = {}): Promise<Response> {
-    const token = this.token()
-    if (!token) throw new RelayError({ code: 'unauthorised', message: 'Sign in again.', retryable: false }, 401)
+    if (!this.signedIn) throw new RelayError({ code: 'unauthorised', message: 'Sign in through Napkin Studio.', retryable: false }, 401)
     let res: Response
     try {
-      res = await this.fetchFn(this.base + path, { method, body: init.body, headers: { Authorization: `Bearer ${token}`, ...init.headers } })
+      res = await this.fetchFn(this.base + path, { method, body: init.body, headers: init.headers })
     } catch {
       throw new RelayError({ code: 'provider_unavailable', message: 'Could not reach the server. Check your connection.', retryable: true })
     }

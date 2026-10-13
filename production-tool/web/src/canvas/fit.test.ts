@@ -3,7 +3,7 @@ import { fitSize, MAX_ASPECT, MAX_SIDE, MIN_SIDE } from './fit'
 
 describe('fitSize: every picture leaves in a size providers take', () => {
   it('a small sketch grows so its short side is at least the minimum', () => {
-    // 2026-10-07: fal's Kling refused a sketch exported at its on-screen size ("too small").
+    // 2026-10-07: a provider refused a sketch exported at its on-screen size ("too small").
     const f = fitSize(140, 300)
     expect(Math.min(f.canvasW, f.canvasH)).toBeGreaterThanOrEqual(MIN_SIDE)
     expect(f.w / f.h).toBeCloseTo(140 / 300, 2)

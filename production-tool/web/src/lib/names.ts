@@ -10,7 +10,7 @@ export const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,3
 
 /** The views a whole character sends after its front, in this order; then its other variants as named. */
 const VIEW_ORDER = ['three-quarter', 'side', 'back']
-/** A whole character is its front plus up to 3 more pictures (fal's Kling element: 1 + 3). */
+/** A whole character is its front plus up to 3 more pictures. */
 export const KEY_EXTRAS = 3
 
 /** Thrown for a bare key with no front: @goremon needs goremon_front (the owner's choice, 2026-10-07). */

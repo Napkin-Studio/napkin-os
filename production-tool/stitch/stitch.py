@@ -1,12 +1,12 @@
 """Stitch Lambda: the selected clips → one MP4 with the Napkin end card.
 
 Invoked asynchronously by the relay with
-  {"jobId", "clips": [{"key": "out/sha256:…", "trimS": 4.5?}, …], "eventName",
+  {"jobId", "clips": [{"key": "out/sha256:…", "trimS": 4.5?}, …],
    "outKey": "ads/<jobId>.mp4", "resultKey": "ads/<jobId>.json"}
 It writes outKey, then resultKey = {"ok": true, "sha256", "bytes", "w", "h",
 "durationS", "endCard"} or {"ok": false, "error", "endCard"}, with "code":
 "bad_clip" and "clip" (its index) when one clip cannot be read; the relay polls
-for resultKey. eventName is no longer drawn (the owner dropped it, 2026-10-09).
+for resultKey. The card draws no text of the job's own.
 
 Every clip is scaled and padded to one size (the first clip's, even, at most
 1280 on the long side), one fps (24), trimmed to trimS seconds when given and

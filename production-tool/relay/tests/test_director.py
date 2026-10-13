@@ -40,7 +40,7 @@ class FakeWire:
 def make(*replies, **kw):
     wire = FakeWire(*replies)
     port = ModelPort(wire, "claude-haiku-4-5", timeout=5)
-    sheets = {n: load_sheet(n) for n in ("mock", "runway", "fal", "heygen")}
+    sheets = {n: load_sheet(n) for n in ("mock", "runway")}
     return Director(port, PROMPTS, sheets, **kw), wire
 
 
@@ -92,11 +92,11 @@ def test_generate_on_runway():
     assert asked["provider"] == "runway" and asked["sheet"]["tagSyntax"] == "at_tag" and asked["op"] == "generate"
 
 
-def test_region_edit_on_fal_is_a_masked_inpaint():
-    d, wire = make(fixture("region_edit_fal_mask")["reply"])
-    res = run("region_edit_fal_mask", d)
+def test_region_edit_on_a_mask_sheet_is_a_masked_inpaint():
+    d, wire = make(fixture("region_edit_mock_mask")["reply"])
+    res = run("region_edit_mock_mask", d)
     job = res.output["providerJob"]
-    assert job["mask"] == fixture("region_edit_fal_mask")["input"]["mask"]["sha256"]
+    assert job["mask"] == fixture("region_edit_mock_mask")["input"]["mask"]["sha256"]
     assert job["refs"][0]["role"] == "current"
 
 
@@ -177,7 +177,6 @@ def test_v4_names_refs_and_limits_each_ref_to_what_it_names():
         "show it once, in the neutral pose",         # several poses, one character
         "Never add a background scene",
         "do not ask",                                # the UI cannot show needsUser yet
-        "`element_front` first",                     # a character key is one Kling element
         "Use only keys and names from `input.refs`", # shot_list names only refs that exist
         "use its bare key",                           # a whole character by its key
     ):
@@ -232,7 +231,7 @@ def variant(name, edit):
     ("generate_runway", lambda r: r["providerJob"].update(outputs=5), "at most 4 outputs"),
     ("clip_runway", lambda r: r["providerJob"]["refs"].append(
         {"sha256": "sha256:" + "9" * 64, "name": "x", "role": "object"}), "not in the input"),
-    ("generate_runway", lambda r: r["providerJob"].update(provider="fal"), "routed provider"),
+    ("generate_runway", lambda r: r["providerJob"].update(provider="mock"), "routed provider"),
     ("generate_runway", lambda r: r["providerJob"].update(prompt="Draw @ghost"), "not one of the refs"),
     ("generate_runway", lambda r: r.update(op="view"), "answered op"),
 ])
@@ -272,8 +271,9 @@ def test_unrouted_provider_or_op_raises():
     f = fixture("clip_runway")
     with pytest.raises(DirectorError, match="no capability sheet"):
         d.run("clip", f["input"], "nope")
+    d.sheets = {**d.sheets, "clips_only": {**d.sheets["runway"], "ops": {"clip": d.sheets["runway"]["ops"]["clip"]}}}
     with pytest.raises(DirectorError, match="does not support generate"):
-        d.run("generate", f["input"], "heygen")
+        d.run("generate", f["input"], "clips_only")
 
 
 # --- director-specific guards ------------------------------------------------
@@ -296,8 +296,8 @@ def refuses(why, *args, **kw):
         attempt(*args, **kw)
 
 
-def test_view_on_fal_sends_the_angle_the_prompt_maps():
-    res = attempt("view_fal")
+def test_a_view_on_a_sheet_with_angles_sends_the_angle_the_prompt_maps():
+    res = attempt("view_mock")
     assert res.output["providerJob"]["angle"] == {"horizontal": 90, "vertical": 0}
     assert "front 0, three-quarter 45, side 90, back 180" in (PROMPTS / "director.v4.md").read_text()
 
@@ -308,11 +308,10 @@ def test_clip_edit_on_runway_needs_the_keyframe_the_relay_made():
     refuses("not in the input", "clip_edit_runway")  # providerJob has no keyframe source of its own
 
 
-def test_clip_edit_on_fal_is_a_masked_region_job_without_duration_and_drops_a_ratio():
-    job = attempt("clip_edit_fal_mask").output["providerJob"]
-    assert job["model"] == "wan-vace-14b-inpainting" and job["mask"] == fixture("clip_edit_fal_mask")["input"]["mask"]["sha256"]
-    refuses("takes no duration", "clip_edit_fal_mask", job_edit(durationS=5))
-    assert "ratio" not in attempt("clip_edit_fal_mask", job_edit(ratio="9:16")).output["providerJob"]
+def test_clip_edit_on_a_mask_sheet_is_a_masked_region_job():
+    job = attempt("clip_edit_mock_mask").output["providerJob"]
+    assert job["model"] == "mock" and job["mask"] == fixture("clip_edit_mock_mask")["input"]["mask"]["sha256"]
+    assert "ratio" not in attempt("clip_edit_runway", job_edit(ratio="9:16"), extra_hashes=(KEYFRAME,)).output["providerJob"]
 
 
 KEYFRAME = fixture("clip_edit_runway")["extraHashes"][0]
@@ -346,14 +345,14 @@ def area(w, h):
 
 @pytest.mark.parametrize("w, h", [(0.2, 0.2), (0.5, 0.5), (0.8, 0.33), (1.0, 1.0)])
 def test_a_mask_on_a_mask_sheet_is_always_a_masked_inpaint(w, h):
-    # The 25% rule is gone (features/harness-refusals.clan): fal cannot regenerate from a
-    # reference, so a large box sent without its mask could never run there.
-    attempt("region_edit_fal_mask", lambda r: None, area(w, h))
-    refuses("send the mask", "region_edit_fal_mask", lambda r: r["providerJob"].pop("mask"), area(w, h))
+    # The 25% rule is gone (features/harness-refusals.clan): wherever the sheet takes masks, a box
+    # with its mask is a masked inpaint, whatever its size.
+    attempt("region_edit_mock_mask", lambda r: None, area(w, h))
+    refuses("send the mask", "region_edit_mock_mask", lambda r: r["providerJob"].pop("mask"), area(w, h))
 
 
 def test_a_small_region_without_a_drawn_mask_regenerates_instead():
-    attempt("region_edit_fal_mask", lambda r: r["providerJob"].pop("mask"), lambda p: p.pop("mask"))
+    attempt("region_edit_mock_mask", lambda r: r["providerJob"].pop("mask"), lambda p: p.pop("mask"))
 
 
 def test_region_edit_needs_the_current_ref():
@@ -365,7 +364,6 @@ def test_region_edit_needs_the_current_ref():
     ("generate_runway", job_edit(ratio="1920:1080"), "does not take ratio"),
     ("region_edit_runway", job_edit(ratio="512:512"), "does not take ratio"),  # a flash size; pro has none
     ("clip_runway", job_edit(ratio="1080:1350"), "does not take ratio"),
-    ("region_edit_fal_mask", job_edit(prompt="x" * 2501), "over its 2500"),
     ("clip_runway", job_edit(prompt="x" * 1001), "over its 1000"),
     ("clip_runway", lambda r: r["providerJob"].pop("durationS"), "needs a durationS"),
 ])
@@ -380,10 +378,10 @@ def test_recorded_ratios_are_in_the_providers_lists():
 
 
 @pytest.mark.parametrize("name, edit, why", [
-    # A front with an angle after it is an element (a lone front now goes as a character, 2026-10-09).
+    # No sheet takes element roles since features/drop-hackathon-extras.clan: never sent.
     ("generate_runway", lambda r: (r["providerJob"]["refs"][1].update(role="element_front"),
                                    r["providerJob"]["refs"][2].update(role="element_angle")), "has no elements"),
-    ("clip_edit_fal_mask", job_edit(keyframe={"sha256": "sha256:" + "2" * 64, "atS": 1}), "takes no keyframe"),
+    ("clip_edit_mock_mask", job_edit(keyframe={"sha256": "sha256:" + "2" * 64, "atS": 1}), "takes no keyframe"),
     ("clip_edit_runway", job_edit(strength="flex"), "takes no edit strength"),
     ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="Ab"), "canonical tags"),
     ("generate_runway", lambda r: r["providerJob"]["refs"][1].update(name="in_1"), "canonical tags"),
@@ -456,7 +454,7 @@ def test_shot_list_names_only_refs_it_was_given():
 
 
 def test_a_view_angle_the_model_left_out_is_filled_from_the_view():
-    res = attempt("view_fal", lambda r: r["providerJob"].pop("angle"))
+    res = attempt("view_mock", lambda r: r["providerJob"].pop("angle"))
     assert res.output["providerJob"]["angle"] == {"horizontal": 90.0, "vertical": 0.0}
 
 

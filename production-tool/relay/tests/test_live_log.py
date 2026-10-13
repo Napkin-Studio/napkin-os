@@ -1,4 +1,4 @@
-"""scripts/live_log.py: the hackathon deploy's lines for one person, failures marked, nothing else."""
+"""scripts/live_log.py: the deploy's lines for one person, failures marked, nothing else."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def test_failures_are_red_and_a_queue_full_retry_is_yellow():
     assert live.fmt(1, live.GROUPS[0], live.parse(EVENTS[4]["message"]), "").startswith(live.YELLOW)
 
 
-def test_only_the_hackathon_deploys_log_groups_are_read():
+def test_only_the_deploys_log_groups_are_read():
     logs = FakeLogs(EVENTS)
     live.run(args(all=True), logs=logs, now=lambda: 1_600.0, sleep=lambda s: None, out=lambda s: None)
     assert {c["logGroupName"] for c in logs.calls} == {"/aws/lambda/napkin-hackathon-relay", "/aws/lambda/napkin-hackathon-stitch"}

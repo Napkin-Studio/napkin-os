@@ -82,7 +82,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
           {!cancelled && offer.otherModel && <OtherModel job={job} compact={compact} onRetried={onRetried} />}
           {!cancelled && offer.report && (
             <button className={`btn ${compact ? 'xs icon' : 'sm'} ghost`} disabled={reported === 'sending' || reported === 'yes'}
-              aria-label={reportLabel} title={compact ? reportLabel : 'Tell the organisers this failed'} onClick={report}>
+              aria-label={reportLabel} title={compact ? reportLabel : 'Report that this failed'} onClick={report}>
               {compact ? '⚑' : reportLabel}
             </button>
           )}

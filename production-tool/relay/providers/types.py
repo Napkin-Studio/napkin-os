@@ -1,6 +1,6 @@
 """The harness lane's adapter types (production-tool/contracts/README.md, "The adapter interface").
 
-The adapters (runway, fal, heygen, mock) are written against these. The relay
+The adapters (runway, mock) are written against these. The relay
 sees them through providers/_seam.py, which wraps each one in the relay's own
 Protocol (providers/base.py): providerJob dict in, base.Status out.
 
@@ -229,7 +229,7 @@ def effective_sheet(sheet: dict, op: str, model: Optional[str]) -> dict:
 
 def nearest_ratio(ratio: str, allowed: tuple[str, ...]) -> str:
     """The allowed W:H closest in shape to `ratio` (plain 4:5 or pixels 896:1152), for endpoints
-    that take a fixed list (fal Kling image has no 4:5; HeyGen reference_to_video)."""
+    that take a fixed list (Gemini 3 Pro's sizes)."""
     if ratio in allowed:
         return ratio
     try:

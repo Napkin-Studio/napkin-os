@@ -28,7 +28,7 @@ function doc() {
 // Newest first, as the chain gives it.
 const entries: ChainLike[] = [
   { agent: 'maya', action: 'named @hero_side', rationale: `ref_01K6XA7Q3M9V2D4R8T0B000002 · ${SHA('c')}`, timestamp: T(47), fields_changed: ['refs'] },
-  { agent: 'fal · qwen-edit', action: `made view ${J2}`, rationale: `cost $0.03 confirmed · 20 s · out ${SHA('c')}`, timestamp: T(46) },
+  { agent: 'runway · gemini_image3.1_flash', action: `made view ${J2}`, rationale: `cost $0.03 confirmed · 20 s · out ${SHA('c')}`, timestamp: T(46) },
   { agent: 'maya', action: 'published hero to the acme library', rationale: 'version 1', timestamp: T(44), pinned: true, fields_changed: ['keys'] },
   { agent: 'runway · gen4_image', action: `made generate ${J1}`, rationale: `cost $0.07 confirmed · 41 s · out ${SHA('b')}`, timestamp: T(41) },
   { agent: 'director · claude-sonnet-4-5 · director.v1', action: `directed generate ${J1}`, rationale: 'The drawing sets the pose · prompt: "@hero_eyes, front view"', timestamp: T(41) },

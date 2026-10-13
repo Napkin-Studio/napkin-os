@@ -51,8 +51,7 @@
   "tagSyntax": "at_tag",
   "refs": {
     "max": 14,
-    "maxCharacter": 5,
-    "element": true
+    "maxCharacter": 5
   },
   "seed": true,
   "outputsPerCall": 4,

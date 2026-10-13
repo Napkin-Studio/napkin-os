@@ -197,7 +197,7 @@ export function followState(d: ProductionDocument, ctx: (id: string) => JobCtx |
 export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, sheets?: Sheets): ModelChoice | undefined {
   const offered = modelChoicesFor(op, config, sheets)
   // A mock result "worked" only as a stand-in: a real provider on offer goes first (2026-10-09:
-  // an update run sent clips to mock again after mock stills, with a fal key there).
+  // an update run sent clips to mock again after mock stills, with a real provider there).
   const real = offered.some((o) => o.provider !== 'mock')
   for (let i = d.jobs.length - 1; i >= 0; i--) {
     const j = d.jobs[i]

@@ -1,10 +1,10 @@
-"""Personal workspaces (features/personal-workspaces.clan): sign in with the event code and a name,
-and the name's saved projects follow it to any browser: listed, opened, and never silently
-overwritten by a save from somewhere else."""
+"""Personal workspaces (features/personal-workspaces.clan): the person the identity seam names has
+saved projects that follow them to any browser: listed, opened, and never silently overwritten by a
+save from somewhere else."""
 
 import hashlib
-import json
 
+import identity
 import local
 from service import Raw
 
@@ -35,15 +35,8 @@ def open_clan(h, token, project):
     return h.relay.http("GET", f"/api/clan/{project}", {"Authorization": f"Bearer {token}"}, None)
 
 
-def test_sign_in_with_the_event_code_in_any_case_and_a_name(h):
-    for code in ("napkin-studio", "NAPKIN-STUDIO", " Napkin-Studio "):
-        _, out = h.call("POST", "/session", {"eventCode": code, "team": "blue", "handle": "maya"}, expect=200)
-        assert out["role"] == "participant" and out["workspace"] == out["participantId"]
-    h.call("POST", "/session", {"eventCode": "napkin", "team": "blue", "handle": "maya"}, expect=401)
-
-
 def test_a_save_is_listed_for_its_name_only_newest_first(h):
-    maya, sam = h.sign_in("maya", "napkin-studio"), h.sign_in("sam", "napkin-studio")
+    maya, sam = h.as_person("maya"), h.as_person("sam")
     assert h.call("GET", "/projects", token=maya, expect=200)[1] == {"projects": []}
     status, out = save(h, maya, A, clan("one"), name="Maya%20finds%20the%20lamp")
     assert status == 200 and out["project"]["etag"] == hashlib.sha256(clan("one")).hexdigest()
@@ -54,34 +47,34 @@ def test_a_save_is_listed_for_its_name_only_newest_first(h):
     assert rows[1]["name"] == "Maya finds the lamp" and "name" not in rows[0]
     assert rows[1]["bytes"] == len(clan("one")) and rows[0]["savedAt"] > rows[1]["savedAt"]
     assert h.call("GET", "/projects", token=sam, expect=200)[1] == {"projects": []}
-    # The same name from another browser (another sign-in) sees them too.
-    again = h.sign_in("Maya", "NAPKIN-STUDIO")
+    # The same name from another browser sees them too.
+    again = h.as_person("Maya")
     assert [r["id"] for r in h.call("GET", "/projects", token=again, expect=200)[1]["projects"]] == [B, A]
 
 
-def test_sign_in_says_how_many_projects_the_name_has(h):
-    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "maya"}, expect=200)[1]["projects"] == 0
-    maya = h.sign_in("maya", "napkin-studio")
+def test_me_says_how_many_projects_the_name_has(h):
+    maya = h.as_person("maya")
+    assert h.call("GET", "/me", token=maya, expect=200)[1]["projects"] == 0
     save(h, maya, A, clan("one"))
     save(h, maya, A, clan("one again"))
     save(h, maya, B, clan("two"))
-    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "MAYA"}, expect=200)[1]["projects"] == 2
-    assert h.call("POST", "/session", {"eventCode": "napkin-studio", "team": "blue", "handle": "sam"}, expect=200)[1]["projects"] == 0
+    assert h.call("GET", "/me", token=h.as_person("MAYA"), expect=200)[1]["projects"] == 2
+    assert h.call("GET", "/me", token=h.as_person("sam"), expect=200)[1]["projects"] == 0
 
 
 def test_open_answers_the_newest_bytes_with_their_etag(h):
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     save(h, maya, A, clan("one"))
     h.clock.tick(5)
     _, saved = save(h, maya, A, clan("two"))
-    status, out, _ = open_clan(h, h.sign_in("maya", "HACK"), A)
+    status, out, _ = open_clan(h, h.as_person("maya"), A)
     assert status == 200 and isinstance(out, Raw)
     assert out.data == clan("two") and out.mime == "application/vnd.clan+zip"
     assert out.headers["ETag"] == f'"{saved["project"]["etag"]}"' and out.headers["X-Saved-At"] == saved["project"]["savedAt"]
 
 
 def test_open_is_only_for_the_owner(h):
-    maya, sam = h.sign_in("maya", "napkin-studio"), h.sign_in("sam", "napkin-studio")
+    maya, sam = h.as_person("maya"), h.as_person("sam")
     save(h, maya, A, clan("one"))
     status, out, _ = open_clan(h, sam, A)
     assert status == 404 and out["error"]["code"] == "invalid_input"
@@ -91,12 +84,12 @@ def test_open_is_only_for_the_owner(h):
 
 
 def test_a_stale_save_is_a_conflict_and_nothing_is_overwritten(h):
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     _, first = save(h, maya, A, clan("from the laptop"))
     etag = first["project"]["etag"]
     h.clock.tick(5)
     # Another browser saved on top of what it opened: fine.
-    _, second = save(h, h.sign_in("maya", "napkin-studio"), A, clan("from the desktop"), if_match=f'"{etag}"')
+    _, second = save(h, h.as_person("maya"), A, clan("from the desktop"), if_match=f'"{etag}"')
     # The laptop, still on the first ETag, is refused; the desktop's save stays the project.
     h.clock.tick(5)
     status, out = save(h, maya, A, clan("the laptop again"), if_match=etag)
@@ -111,22 +104,22 @@ def test_a_stale_save_is_a_conflict_and_nothing_is_overwritten(h):
 
 
 def test_a_save_without_if_match_is_taken_as_before(h):
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     save(h, maya, A, clan("one"))
     status, _ = save(h, maya, A, clan("two"))
     assert status == 200 and open_clan(h, maya, A)[1].data == clan("two")
-    pid = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "maya"}, expect=200)[1]["participantId"]
-    assert h.blobs.objects[f"clan/{pid}/{A}/latest.clan"][0] == clan("two")  # the organisers' copy, as before
+    pid = h.call("GET", "/me", token=maya, expect=200)[1]["participantId"]
+    assert h.blobs.objects[f"clan/{pid}/{A}/latest.clan"][0] == clan("two")  # the latest copy, as before
 
 
 def test_if_match_on_a_project_never_saved_is_taken(h):
     # A project this server does not have (never saved here, or pruned): nothing to overwrite.
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     assert save(h, maya, A, clan("one"), if_match="0" * 64)[0] == 200
 
 
 def test_a_rename_carries_and_a_missing_name_keeps_the_last(h):
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     save(h, maya, A, clan("one"), name="Caf%C3%A9%20ad")
     save(h, maya, A, clan("two"))
     assert h.call("GET", "/projects", token=maya, expect=200)[1]["projects"][0]["name"] == "Café ad"
@@ -135,7 +128,7 @@ def test_a_rename_carries_and_a_missing_name_keeps_the_last(h):
 
 
 def test_the_canvas_goes_with_the_saved_project(h):
-    maya, sam = h.sign_in("maya", "napkin-studio"), h.sign_in("sam", "napkin-studio")
+    maya, sam = h.as_person("maya"), h.as_person("sam")
     els = [{"id": "e1", "type": "image", "fileId": "ab" * 20, "customData": {"kind": "pic"}}]
     # Not before the project is saved.
     h.call("PUT", f"/clan/{A}/canvas", {"elements": els}, maya, expect=404)
@@ -150,7 +143,7 @@ def test_the_canvas_goes_with_the_saved_project(h):
 def test_too_large_to_open_says_to_export(h, monkeypatch):
     import service
 
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     save(h, maya, A, clan("x" * 100))
     monkeypatch.setattr(service, "OPEN_MAX_BYTES", 50)
     status, out, _ = open_clan(h, maya, A)
@@ -158,7 +151,7 @@ def test_too_large_to_open_says_to_export(h, monkeypatch):
 
 
 def test_a_lost_index_race_reads_again(h):
-    maya = h.sign_in("maya", "napkin-studio")
+    maya = h.as_person("maya")
     save(h, maya, A, clan("one"))
     real, raced = h.blobs.put_json_if, []
 
@@ -181,11 +174,14 @@ def test_local_server_lets_the_browser_send_if_match_and_read_the_etag():
 
 
 def test_the_local_server_round_trip(tmp_path):
-    relay, blobs = local.build(8799, tmp_path)
-    status, sess, _ = relay.http("POST", "/session", {}, json.dumps({"eventCode": "local", "team": "blue", "handle": "maya"}).encode())
-    assert status == 200
-    auth = {"Authorization": f"Bearer {sess['token']}", "X-Project-Id": A}
-    assert relay.http("POST", "/clan", auth, clan("one"))[0] == 200
-    status, out, _ = relay.http("GET", f"/clan/{A}", auth, None)
-    assert status == 200 and out.data == clan("one")
-    assert (tmp_path / "clan" / sess["participantId"] / "projects.json").exists()
+    try:
+        relay, blobs = local.build(8799, tmp_path)  # every request is the local person
+        status, me, _ = relay.http("GET", "/me", {}, None)
+        assert status == 200 and (me["handle"], me["team"]) == ("local", "napkin")
+        headers = {"X-Project-Id": A}
+        assert relay.http("POST", "/clan", headers, clan("one"))[0] == 200
+        status, out, _ = relay.http("GET", f"/clan/{A}", headers, None)
+        assert status == 200 and out.data == clan("one")
+        assert (tmp_path / "clan" / me["participantId"] / "projects.json").exists()
+    finally:
+        identity.use_local(None)

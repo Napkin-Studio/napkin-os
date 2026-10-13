@@ -6,9 +6,9 @@ spend money; --max-usd (default 2) is a hard cap checked before every job. The j
 in-process Relay (the real director passthrough, names.py, the seam and the real adapters) to the
 real providers, polled until they end; results land in a JSON file.
 
-Keys come only from the environment (FAL_KEY, RUNWAY_API_KEY, HEYGEN_API_KEY) and are printed only
+Keys come only from the environment (RUNWAY_API_KEY) and are printed only
 as "set" or "missing"; this script never opens .env. Load them first:   set -a; source ../../.env; set +a
-A pathway runs only the steps whose provider has a key.
+A pathway runs only the steps whose provider has a key. The jobs run as the person smoke@napkin.
 
 Inputs are public HTTPS URLs the providers fetch themselves:
   --image-url  a character picture (required for --live)
@@ -16,7 +16,7 @@ Inputs are public HTTPS URLs the providers fetch themselves:
   --video-url  a short MP4 (clip edits; else skipped)
 Images only by default; --video adds clips and clip edits (about $0.5-2.5 each).
 
-    uv run --frozen --python 3.12 python scripts/pathway_smoke.py --image-url https://… [--pathways fal,mix]
+    uv run --frozen --python 3.12 python scripts/pathway_smoke.py --image-url https://… [--pathways runway]
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ sys.path.insert(0, str(RELAY))
 from contracts_dir import contracts_dir  # noqa: E402
 from providers.types import effective_sheet  # noqa: E402
 
-PATHWAYS = ("runway", "fal", "heygen", "mix")
-KEYS = {"fal": "FAL_KEY", "runway": "RUNWAY_API_KEY", "heygen": "HEYGEN_API_KEY"}
+PATHWAYS = ("runway",)
+KEYS = {"runway": "RUNWAY_API_KEY"}
 IMAGE_STEPS = ("generate", "view", "frame", "region_edit")
 VIDEO_STEPS = ("clip", "clip_edit")
 TERMINAL = ("completed", "failed", "cancelled", "uncertain")
@@ -113,28 +113,26 @@ def _relay(name: str, blobs_dir: Path, env: dict):
     from contracts import Contracts
     from director import PassthroughDirector
     from providers import Registry
+    from identity import person
     from providers._seam import Adapted, Resolver
-    from providers.fal import FalProvider
-    from providers.heygen import HeyGenProvider
     from providers.runway import RunwayProvider
     from service import Relay
     from store import MemoryStore
 
     reg = Registry()
-    makers = {"fal": FalProvider, "runway": RunwayProvider, "heygen": HeyGenProvider}
+    makers = {"runway": RunwayProvider}
     for provider, make in makers.items():
         if KEYS[provider] in env:
             reg.register(Adapted(make(env[KEYS[provider]], Resolver())))
     cfg = _config(name)
-    secrets = {"event_codes": {"participant": ["SMOKE"], "organiser": []}, "token_secret": os.urandom(16).hex()}
+    smoke = person("smoke", "napkin")
     return Relay(store=MemoryStore(), blobs=LocalBlobs(blobs_dir, "http://localhost:0"), registry=reg,
-                 director=PassthroughDirector(), config=lambda: cfg, secrets=lambda: secrets, clock=time.time,
-                 stitch=None, contracts=Contracts(relaxed=True))
+                 director=PassthroughDirector(), config=lambda: cfg, clock=time.time,
+                 stitch=None, contracts=Contracts(relaxed=True), who=lambda headers: smoke)
 
 
-def _call(relay, method: str, path: str, body=None, token=None):
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-    status, out, _ = relay.http(method, path, headers, json.dumps(body).encode() if body is not None else None)
+def _call(relay, method: str, path: str, body=None):
+    status, out, _ = relay.http(method, path, {}, json.dumps(body).encode() if body is not None else None)
     return status, out
 
 
@@ -143,8 +141,6 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         for name in args.pathways:
             relay = _relay(name, Path(tmp) / name, env)
-            _, session = _call(relay, "POST", "/session", {"eventCode": "SMOKE", "team": "blue", "handle": "smoke"})
-            token = session["token"]
             for row in (r for r in rows if r["pathway"] == name):
                 if row["skip"]:
                     results.append({**row, "state": "skipped"})
@@ -156,10 +152,10 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
                 spent += cost
                 t0 = time.time()
                 req = {"contractVersion": "2", "jobId": _id("job"), "op": row["op"], "parentIds": [], "input": inp[row["op"]]}
-                status, job = _call(relay, "POST", "/jobs", req, token)
+                status, job = _call(relay, "POST", "/jobs", req)
                 while status == 200 and job["state"] not in TERMINAL and time.time() - t0 < JOB_TIMEOUT_S:
                     time.sleep(max(2, job.get("nextPollS") or 2))
-                    status, job = _call(relay, "GET", f"/jobs/{job['jobId']}", None, token)
+                    status, job = _call(relay, "GET", f"/jobs/{job['jobId']}")
                 results.append({**row, "state": job.get("state") if status == 200 else f"http {status}",
                                 "ranOn": job.get("provider"), "model": job.get("model", row["model"]),
                                 "error": job.get("error"), "cost": job.get("cost"),

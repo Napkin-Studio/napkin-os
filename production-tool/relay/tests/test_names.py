@@ -53,48 +53,34 @@ def test_shot_list_keeps_the_participants_names():
 
 
 def test_an_unknown_name_is_refused_when_the_job_is_posted(h):
-    token = h.sign_in()
+    token = h.as_person()
     _, out = h.post_job(token, "generate", expect=400, text="like @maya_sad", refs=[ref(1, "maya_front")])
     assert out["error"]["code"] == "invalid_input" and "@maya_sad" in out["error"]["message"]
 
 
-# --- a character key on fal is one Kling element ---------------------------------
+# --- what the passthrough sends ------------------------------------------------
 
 def _passthrough(op, inp, provider):
     req = {"jobId": "job_x", "op": op, "input": to_wire(op, inp)}
     return PassthroughDirector().direct(req, load_sheet(provider))["providerJob"]["refs"]
 
 
-def test_on_fal_a_key_with_a_front_and_other_variants_is_one_element():
-    refs = [ref(1, "lamp_on", role="prop"), ref(2, "maya_side"), ref(3, "maya_front"), ref(4, "maya_laughing")]
-    sent = _passthrough("generate", {"text": "x", "refs": refs}, "fal")
-    assert [(r["name"], r["role"]) for r in sent] == [
-        ("maya_front", "element_front"), ("maya_side", "element_angle"), ("maya_laughing", "element_angle"),
-        ("lamp_on", "object")]
-
-
-def test_on_runway_the_same_refs_are_character_and_object():
+def test_refs_go_as_character_and_object():
     refs = [ref(1, "lamp_on", role="prop"), ref(2, "maya_front"), ref(3, "maya_side")]
     sent = _passthrough("generate", {"text": "x", "refs": refs}, "runway")
     assert [(r["name"], r["role"]) for r in sent] == [
         ("lamp_on", "object"), ("maya_front", "character"), ("maya_side", "character")]
 
 
-def test_a_key_without_a_front_or_without_other_variants_is_no_element():
-    for refs in ([ref(1, "maya_front")], [ref(1, "maya_side"), ref(2, "maya_back")]):
-        sent = _passthrough("generate", {"text": "x", "refs": refs}, "fal")
-        assert {r["role"] for r in sent} == {"character"}
-
-
 def test_a_view_sends_its_source_as_current():
-    sent = _passthrough("view", {"view": "three-quarter", "image": asset(9)}, "fal")
+    sent = _passthrough("view", {"view": "three-quarter", "image": asset(9)}, "runway")
     assert sent == [{"sha256": asset(9)["sha256"], "name": "current", "role": "current"}]
 
 
-def test_a_view_on_fal_carries_the_angle_of_its_view():
-    """fal's multiple-angles endpoint refuses a view without an angle ("view needs an angle", 2026-10-07)."""
+def test_a_view_on_a_sheet_with_angles_carries_the_angle_of_its_view():
+    """An angle-taking endpoint refuses a view without an angle ("view needs an angle", 2026-10-07)."""
     req = {"jobId": "job_x", "op": "view", "input": {"view": "three-quarter", "image": asset(9)}}
-    job = PassthroughDirector().direct(req, load_sheet("fal"))["providerJob"]
+    job = PassthroughDirector().direct(req, load_sheet("mock"))["providerJob"]
     assert job["angle"] == {"horizontal": 45.0, "vertical": 0.0}
     assert "angle" not in PassthroughDirector().direct(req, load_sheet("runway"))["providerJob"]
 
@@ -117,14 +103,6 @@ def test_a_bare_key_without_a_front_is_refused_with_what_to_do():
         to_wire("frame", {"refs": [ref(1, "goremon_side")], "shot": {"action": "x", "refs": ["goremon"]}})
     with pytest.raises(UnknownName, match="@nobody is not one"):
         to_wire("generate", {"text": "@nobody", "refs": [ref(1, "goremon_front")]})
-
-
-def test_on_fal_a_bare_key_becomes_the_element():
-    refs = [ref(1, "goremon_front"), ref(2, "goremon_side"), ref(3, "lamp_on", role="prop")]
-    req = {"jobId": "job_x", "op": "generate", "input": to_wire("generate", {"text": "@goremon holds @lamp_on", "refs": refs})}
-    job = PassthroughDirector().direct(req, load_sheet("fal"))["providerJob"]
-    assert [(r["name"], r["role"]) for r in job["refs"]] == [
-        ("goremon_front", "element_front"), ("goremon_side", "element_angle"), ("lamp_on", "object")]
 
 
 def test_the_shot_planner_names_whole_characters_by_their_key():

@@ -36,15 +36,15 @@ export function DogfoodNotice({ onAgree, onClose, busy = false }: { onAgree?: ()
 
 /**
  * Beside the signed-in app: tells the recorder whether this build records (config flags.dogfood,
- * on the real relay) and whether this participant has agreed (the session says), and shows the
+ * on the real relay) and whether this person has agreed (GET /me says), and shows the
  * notice until they have.
  */
 export function DogfoodGate({ shell }: { shell: Shell }) {
   const { relay, app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
-  const session = ui.session
-  const on = isOn(relay, shell.deps.remoteConfig?.flags?.dogfood) && !!session
-  const consented = !!session?.dogfood?.consented
+  const me = ui.me
+  const on = isOn(relay, shell.deps.remoteConfig?.flags?.dogfood) && !!me
+  const consented = !!me?.dogfood?.consented
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     configureDogfood({ on, consented }, (events, leaving) => relay.dogfoodEvents?.(events, leaving))
@@ -54,7 +54,7 @@ export function DogfoodGate({ shell }: { shell: Shell }) {
     setBusy(true)
     try {
       await relay.dogfoodConsent?.()
-      app.update((u) => { if (u.session) u.session.dogfood = { consented: true } })
+      app.update((u) => { if (u.me) u.me.dogfood = { consented: true } })
     } catch { /* the notice stays; nothing is recorded */ } finally {
       setBusy(false)
     }

@@ -81,11 +81,11 @@ def test_dynamo_active_index_lists_in_order(aws):
 def test_dynamo_counters_are_atomic_with_a_limit(aws):
     ddb, _ = aws
     st = DynamoStore("jobs", "quotas", "blocked", client=ddb)
-    assert st.incr("slots#fal#image", "n", 1, 2)
-    assert st.incr("slots#fal#image", "n", 1, 2)
-    assert not st.incr("slots#fal#image", "n", 1, 2)
-    assert st.incr("slots#fal#image", "n", -1)
-    assert st.counters("slots#fal#image") == {"n": 1.0}
+    assert st.incr("slots#runway#image", "n", 1, 2)
+    assert st.incr("slots#runway#image", "n", 1, 2)
+    assert not st.incr("slots#runway#image", "n", 1, 2)
+    assert st.incr("slots#runway#image", "n", -1)
+    assert st.counters("slots#runway#image") == {"n": 1.0}
     assert st.incr("spend", "usd", 0.028)
     assert st.incr("spend", "usd", 0.042)
     assert st.counters("spend")["usd"] == pytest.approx(0.07)
@@ -118,51 +118,57 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
 
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     s3.put_object(Bucket="napkin-test", Key="config.json", Body=json.dumps(cfg).encode())
-    for k, v in {"BUCKET": "napkin-test", "PUBLIC_BASE_URL_PARAM": "/napkin-hackathon/public-base-url", "JOBS_TABLE": "jobs",
-                 "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked",
-                 "EVENT_CODES": '{"participant": ["HACK"]}', "TOKEN_SECRET": "x" * 32}.items():
+    for k, v in {"BUCKET": "napkin-test", "PUBLIC_BASE_URL_PARAM": "/napkin-test/public-base-url", "JOBS_TABLE": "jobs",
+                 "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked"}.items():
         monkeypatch.setenv(k, v)
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     boto3.client("ssm", region_name="eu-west-1").put_parameter(
-        Name="/napkin-hackathon/public-base-url", Value="https://cdn.test", Type="String")
+        Name="/napkin-test/public-base-url", Value="https://cdn.test", Type="String")
     import handler
+    import identity
 
     monkeypatch.setattr(handler, "_relay", None)
 
-    def http(method, path, body=None, token=None):
+    def http(method, path, body=None):
         event = {"rawPath": path, "requestContext": {"http": {"method": method}},
-                 "headers": {"authorization": f"Bearer {token}"} if token else {},
+                 "headers": {"authorization": "Bearer anything"},
                  "body": json.dumps(body) if body is not None else None, "isBase64Encoded": False}
         r = handler.handler(event, None)
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
-    status, sess = http("POST", "/api/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"})
-    assert status == 200
-    status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5}, sess["token"])
+    # No identity source on Lambda yet: every route but health and config is a 401 (fails closed).
+    for method, path in (("GET", "/api/me"), ("POST", "/api/jobs"), ("GET", "/api/projects")):
+        status, out = http(method, path, {} if method == "POST" else None)
+        assert status == 401 and out["error"]["code"] == "unauthorised", path
+    assert http("GET", "/api/health")[0] == 200
+
+    # The rest of the Lambda's wiring, as a person the seam names.
+    monkeypatch.setattr(identity, "_local", identity.person("alice", "blue"))
+    status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5})
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
     # no adapters exist yet in this lane: routing finds no provider
     req = {"contractVersion": "2", "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "parentIds": [],
            "input": {"text": "x"}}
-    status, out = http("POST", "/api/jobs", req, sess["token"])
+    status, out = http("POST", "/api/jobs", req)
     assert status == 422 and out["error"]["code"] == "capability_missing"
     assert handler.handler({"source": "aws.events"}, None) == {"advanced": 0}
 
     # A saved project comes back as its bytes (base64, as a Function URL wants them) with its ETag.
     project, data = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", b"PK\x03\x04" + bytes(range(256))
-    headers = {"authorization": f"Bearer {sess['token']}", "x-project-id": project}
+    headers = {"x-project-id": project}
     r = handler.handler({"rawPath": "/api/clan", "requestContext": {"http": {"method": "POST"}}, "headers": headers,
                          "body": base64.b64encode(data).decode(), "isBase64Encoded": True}, None)
     assert r["statusCode"] == 200
     etag = json.loads(r["body"])["project"]["etag"]
-    status, listed = http("GET", "/api/projects", token=sess["token"])
+    status, listed = http("GET", "/api/projects")
     assert status == 200 and [p["id"] for p in listed["projects"]] == [project]
     r = handler.handler({"rawPath": f"/api/clan/{project}", "requestContext": {"http": {"method": "GET"}},
                          "headers": headers}, None)
     assert r["statusCode"] == 200 and r["isBase64Encoded"] is True
     assert base64.b64decode(r["body"]) == data
     assert r["headers"]["Content-Type"] == "application/vnd.clan+zip" and r["headers"]["ETag"] == f'"{etag}"'
-    status, again = http("POST", "/api/session", {"eventCode": "hack", "team": "blue", "handle": "Alice"})
-    assert again["projects"] == 1
+    status, me = http("GET", "/api/me")
+    assert status == 200 and me["projects"] == 1
 
 
 def test_s3_blobs_get_list_and_delete(aws):

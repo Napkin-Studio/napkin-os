@@ -8,10 +8,9 @@
 // runs) is kept per project, under 'ui:<projectId>'. The panels see both as
 // one UiState (projects/uiStore.ts).
 
-import type { DirectorCard, JobRequest, ModelChoice, Ratio, Region } from '../contracts/types'
+import type { DirectorCard, JobRequest, Me, ModelChoice, Ratio, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { UndoState } from './undo'
-import type { SessionResponse } from '../contracts/types'
 
 export type JobPurpose =
   | { for: 'canvas' }
@@ -44,9 +43,9 @@ export type JobCtx = JobPurpose & {
 export interface AppUi {
   configChoice: ConfigChoice
   providerChoice: ProviderChoice
-  session?: SessionResponse
-  /** relayId() of the server that issued `session`. */
-  sessionFor?: string
+  /** Who is signed in (GET /me), asked again on every load; absent when signed out
+   *  (features/drop-hackathon-extras.clan). */
+  me?: Me
   hintDismissed?: boolean
   /** Home, or the project `project` (features/project-home.clan). */
   view: 'home' | 'project'
@@ -58,7 +57,7 @@ export interface AppUi {
 }
 
 /** The UiState fields that are the app's, not the project's. */
-export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'session', 'sessionFor', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt'] as const satisfies readonly (keyof AppUi)[]
+export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt'] as const satisfies readonly (keyof AppUi)[]
 
 /** Kept per project. */
 export interface ProjectUi {
@@ -113,7 +112,7 @@ export interface FollowRun {
 export interface FollowItem { kind: 'frame' | 'clip'; shotId: string }
 
 export function initialAppUi(): AppUi {
-  return { configChoice: 'event', providerChoice: 'mock', view: 'home', homeSort: 'recent' }
+  return { configChoice: 'live', providerChoice: 'mock', view: 'home', homeSort: 'recent' }
 }
 
 export function initialProjectUi(): ProjectUi {

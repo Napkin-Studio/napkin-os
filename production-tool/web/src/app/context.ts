@@ -7,8 +7,6 @@ import type { UiStore } from '../projects/uiStore'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
 import type { ClanBackedStore } from '../doc/clan'
-import { withOwnKeys, type OwnKeys, type OwnKeysStore } from '../keys/ownKeys'
-import { SHEETS } from '../contracts/load'
 import type { Shell } from '../projects/shell'
 import type { ServerCopy } from '../projects/serverCopy'
 
@@ -35,8 +33,6 @@ export interface Services {
   clan: ClanBackedStore | null
   /** Shown under the top bar when saving is degraded ("Saving without history"). */
   storeNote: string | null
-  /** The participant's own provider keys (this tab only). */
-  ownKeys: OwnKeysStore
   /** The project's copy on the relay, and a save conflict waiting for the person's choice; null on the mock. */
   serverCopy: ServerCopy | null
 }
@@ -50,17 +46,6 @@ export function useShell(): Shell {
   const s = useContext(ShellContext)
   if (!s) throw new Error('ShellContext missing')
   return s
-}
-
-/** The own-keys store outside a project (Home); inside one, the project's services carry it. */
-export const OwnKeysContext = createContext<OwnKeysStore | null>(null)
-
-export function useOwnKeysStore(): OwnKeysStore {
-  const outside = useContext(OwnKeysContext)
-  const services = useContext(ServicesContext)
-  const store = outside ?? services?.ownKeys
-  if (!store) throw new Error('no own-keys store')
-  return store
 }
 
 export function useServices(): Services {
@@ -91,17 +76,11 @@ export function useShowMock(): boolean {
   return useServices().relay.kind === 'mock'
 }
 
-export function useOwnKeys(): OwnKeys {
-  const ownKeys = useOwnKeysStore()
-  return useSyncExternalStore(ownKeys.subscribe, ownKeys.get)
-}
-
 export function useConfig(): { config: Config; controls: Controls } {
   const { remoteConfig } = useServices()
   const ui = useUi()
-  const keys = useOwnKeys()
   return useMemo(() => {
-    const config = withOwnKeys(effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig), keys, SHEETS)
+    const config = effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig)
     return { config, controls: controlsFor(config) }
-  }, [ui.configChoice, ui.providerChoice, remoteConfig, keys])
+  }, [ui.configChoice, ui.providerChoice, remoteConfig])
 }

@@ -61,7 +61,7 @@ const VERB: Partial<Record<DocJob['op'], string>> = { shot_list: 'planning', gen
 /**
  * Who is shown for a job, and the line under them: Dex while it is made, Jude while it
  * is checked and when it failed (needs you). Words only; the job is not touched.
- * A job the relay made on Runway after HeyGen or fal could not says so (features/runway-fallback.clan).
+ * A job the relay made on Runway after its pick could not says so (features/runway-fallback.clan).
  */
 export function whoIsWorking(job: Pick<DocJob, 'op'> & Partial<Pick<DocJob, 'provider'>>, state: JobState,
   ctx?: JobPurpose & { fallbackFrom?: ModelChoice }, shotOrder?: number): { agent: CastKey; state: AgentState; line: string } {

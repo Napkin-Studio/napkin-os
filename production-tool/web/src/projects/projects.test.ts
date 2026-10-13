@@ -19,7 +19,6 @@ import { ClanBackedStore } from '../doc/clan'
 import { emptyDocument, SnapshotStore, systemUpdate, updateDoc } from '../doc/store'
 import { initialAppUi, type AppUi, type UiState } from '../doc/ui'
 import { undo, undoState } from '../doc/undo'
-import { OwnKeysStore } from '../keys/ownKeys'
 import { getBlob, putBlob } from '../lib/blobs'
 import { newId } from '../lib/ulid'
 import { MockRelay, type MockRenderer } from '../relay/mock'
@@ -45,11 +44,11 @@ function setup(opts: { clock?: () => number } = {}) {
   let t = Date.parse('2026-10-09T09:00:00Z')
   const now = () => new Date((t += 1000))
   const index = new ProjectIndex(storage, now)
-  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), session: { participantId: 'p_maya01', handle: 'maya', token: 't', expiresAt: '2099-01-01T00:00:00Z' } as AppUi['session'] }, null)
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'p_maya01', quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
   const renderer: MockRenderer = { async render() { return [{ blob: new Blob([`pic-${Math.random()}`], { type: 'image/png' }), mime: 'image/png', w: 9, h: 16 }] } }
   let rt = 1_000_000
   const relay = new MockRelay({ renderer, now: opts.clock ?? (() => rt), delayMs: 2000, persistKey: null })
-  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, ownKeys: new OwnKeysStore(), makeClan, summaryDelayMs: 1 })
+  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1 })
   return { storage, index, app, relay, shell, advance: (ms: number) => { rt += ms } }
 }
 
@@ -165,7 +164,7 @@ describe('switching between projects', () => {
     expect(open(shell).doc.get().keys.map((k) => k.key)).toEqual(['lamp'])
     expect(open(shell).ui.get().scriptDraft).toBe('A lamp glows.')
     // The app's part (who is signed in) is the same everywhere.
-    expect(open(shell).ui.get().session?.handle).toBe('maya')
+    expect(open(shell).ui.get().me?.handle).toBe('maya')
   })
 
   it('a job still running when you switch lands in its own project, the next time it is opened', async () => {
@@ -297,7 +296,7 @@ describe('the first load: the one project of before becomes the first in the lis
     await store.flush()
     store.clan.dispose()
     await storage.put(LEGACY.canvas, { elements: [{ id: 'old-canvas' }], files: {} } as unknown as CanvasSnapshot)
-    const ui: Partial<UiState> = { configChoice: 'remote', providerChoice: 'config', session: { participantId: 'p_maya01', handle: 'maya', token: 't', expiresAt: '2099-01-01T00:00:00Z' } as UiState['session'], scriptDraft: 'Maya opens the shop.', undo: { done: [{ label: 'name', ops: [], at: 1 } as never], undone: [] }, jobCtx: {} }
+    const ui: Partial<UiState> = { configChoice: 'remote', providerChoice: 'config', me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'p_maya01', quotas: { image: 40, video: 6, render: 3 }, projects: 0 }, scriptDraft: 'Maya opens the shop.', undo: { done: [{ label: 'name', ops: [], at: 1 } as never], undone: [] }, jobCtx: {} }
     await storage.put(LEGACY.ui, ui)
   }
 

@@ -27,35 +27,33 @@ def lines(h) -> list[dict]:
 
 
 def agreed(h, handle="alice") -> str:
-    token = h.sign_in(handle)
+    token = h.as_person(handle)
     h.call("POST", "/dogfood/consent", None, token, expect=204)
     return token
 
 
 def test_off_means_404_and_nothing_written(h):
-    token = h.sign_in()
+    token = h.as_person()
     h.call("POST", "/dogfood/consent", None, token, expect=404)
     h.call("POST", "/dogfood/events", {"events": [{"kind": "click", "name": "button: Go"}]}, token, expect=404)
     h.post_job(token, expect=200)
-    _, session = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"}, expect=200)
-    assert "dogfood" not in session
+    assert "dogfood" not in h.call("GET", "/me", None, token, expect=200)[1]
     assert not [k for k in h.blobs.objects if k.startswith("dogfood/")]
 
 
 def test_nothing_is_recorded_before_consent_and_consent_is_kept_once():
     h = on()
-    token = h.sign_in()
+    token = h.as_person()
     h.post_job(token, expect=200)
     h.call("POST", "/dogfood/events", {"events": [{"kind": "click", "name": "button: Go"}]}, token, expect=403)
     assert not objects(h)
     h.call("POST", "/dogfood/consent", None, token, expect=204)
     consent = [json.loads(v) for k, v in objects(h, "dogfood/consent/").items()]
     assert len(consent) == 1 and consent[0]["handle"] == "alice" and consent[0]["participantId"].startswith("p_")
-    assert consent[0]["team"] == "blue"  # from the token's "t" (personal workspaces)
-    _, session = h.call("POST", "/session", {"eventCode": "HACK", "team": "blue", "handle": "alice"}, expect=200)
-    assert session["dogfood"] == {"consented": True}
+    assert consent[0]["team"] == "blue"  # the person's "t" (personal workspaces)
+    assert h.call("GET", "/me", None, token, expect=200)[1]["dogfood"] == {"consented": True}
     kinds = [e["kind"] for e in lines(h)]
-    assert kinds == ["consent", "sign-in"]
+    assert kinds == ["consent"]
 
 
 def test_a_batch_is_one_object_timed_by_the_browser():
@@ -91,7 +89,7 @@ def test_a_2s_poll_for_a_minute_writes_only_state_changes():
     h.providers[job["provider"]].succeed(job["requestId"])
     h.clock.tick(2)
     assert h.poll(token, job["jobId"])["state"] == "completed"
-    mine = [e for e in lines(h) if e["kind"] not in ("consent", "sign-in")]
+    mine = [e for e in lines(h) if e["kind"] != "consent"]
     assert not [e for e in mine if e["name"].startswith("GET")]
     assert len(mine) <= 6, [(e["kind"], e["name"]) for e in mine]
     states = [e["name"] for e in mine if e["kind"] == "job"]
@@ -120,10 +118,10 @@ def test_what_was_asked_is_kept_capped_but_never_a_header_or_an_upload_url():
     token = agreed(h)
     h.call("POST", "/jobs", {"contractVersion": "2", "jobId": new_id("job"), "op": "generate", "parentIds": [],
                              "input": {"text": "a red coat hero", "refs": []}}, token,
-           headers={"X-Own-Keys": "fal=SECRET-FAL-KEY", "X-Project-Id": "proj_x"})
+           headers={"X-Api-Key": "SECRET-KEY", "X-Project-Id": "proj_x"})
     h.call("POST", "/uploads", {"sha256": "sha256:" + "a" * 64, "mime": "image/png", "bytes": 10}, token, expect=200)
     everything = b"".join(objects(h).values()).decode()
-    assert "SECRET-FAL-KEY" not in everything and token not in everything and "X-Amz-Signature" not in everything
+    assert "SECRET-KEY" not in everything and token not in everything and "X-Amz-Signature" not in everything
     req = [e for e in lines(h) if e["kind"] == "request" and e["name"] == "POST /jobs"]
     assert len(req) == 1 and "a red coat hero" in req[0]["data"]["body"]["text"] and req[0]["project"] == "proj_x"
     up = [e for e in lines(h) if e["name"] == "POST /uploads"]
@@ -133,14 +131,14 @@ def test_what_was_asked_is_kept_capped_but_never_a_header_or_an_upload_url():
 def test_a_job_event_says_where_it_ran_and_why_it_moved():
     h = on()
     token = agreed(h)
-    h.providers["fal"].submit_effect = RuntimeError("fal down")  # the floor (runway) makes it instead
+    h.providers["mock"].submit_effect = RuntimeError("mock down")  # the floor (runway) makes it instead
     _, job = h.post_job(token, expect=200)
     jobs = [e for e in lines(h) if e["kind"] == "job"]
     assert {e["data"]["jobId"] for e in jobs} == {job["jobId"]}
     assert [(e["name"], e["data"].get("provider")) for e in jobs] == [
-        ("queued", None), ("submitting", "fal"), ("queued", None), ("submitting", "runway"), ("submitted", "runway")]
-    assert jobs[2]["data"]["fallbackReason"].startswith("fal could not make it")
-    assert jobs[-1]["data"]["fallbackFrom"]["provider"] == "fal"
+        ("queued", None), ("submitting", "mock"), ("queued", None), ("submitting", "runway"), ("submitted", "runway")]
+    assert jobs[2]["data"]["fallbackReason"].startswith("Mock could not make it")
+    assert jobs[-1]["data"]["fallbackFrom"]["provider"] == "mock"
 
 
 def test_a_failing_store_changes_no_answer():

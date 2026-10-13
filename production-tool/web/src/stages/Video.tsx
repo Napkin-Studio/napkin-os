@@ -103,7 +103,7 @@ export function Video() {
     : anyRunning ? 'Wait for the clips being made' : isMoving(doc, stitchJob) ? 'The ad is rendering' : undefined
 
   if (!controls.video) {
-    return <div className="panel"><div className="empty-state"><b>Video is off right now.</b>The organisers will switch it on soon.</div></div>
+    return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
   }
   if (!shots.length) {
     return (

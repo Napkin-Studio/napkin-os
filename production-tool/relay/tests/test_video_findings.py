@@ -14,7 +14,7 @@ from service import QUEUE_TIMEOUT_S, participant_id
 
 
 def left(h, job, cls):
-    return h.relay.remaining(job["participantId"], "participant")[cls]
+    return h.relay.remaining(job["participantId"])[cls]
 
 
 def runway_only() -> Harness:
@@ -29,7 +29,7 @@ def clip(h, token, expect=200, **inp):
 
 # ── renders come back when no ad was made ───────────────────────────────────
 def start_render(h):
-    token = h.sign_in()
+    token = h.as_person()
     _, job = h.post_job(token, op="stitch", expect=200)
     assert left(h, job, "render") == 2
     return token, job, h.stitched[-1]
@@ -71,7 +71,7 @@ def test_a_clip_the_stitch_cannot_read_names_the_shot_and_is_not_retried(h):
 # ── Runway busy at submit ───────────────────────────────────────────────────
 def test_a_runway_429_waits_for_retry_after_then_sends_it_again():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     runway = h.providers["runway"]
     runway.submit_effect = ProviderError("provider_unavailable", "Runway answered 429", retryable=True, retry_after_s=7)
     job = clip(h, token)
@@ -89,7 +89,7 @@ def test_a_runway_429_waits_for_retry_after_then_sends_it_again():
 
 def test_a_runway_429_that_never_clears_fails_at_the_queue_timeout_saying_why():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     h.providers["runway"].submit_effect = ProviderError("provider_unavailable", "Runway answered 429", retryable=True, retry_after_s=30)
     job = clip(h, token)
     # Waits on the busy provider up to the queue limit (QUEUE_TIMEOUT_S, 2026-10-09), then fails saying why.
@@ -103,7 +103,7 @@ def test_a_runway_429_that_never_clears_fails_at_the_queue_timeout_saying_why():
 
 def test_a_runway_outage_without_retry_after_still_fails_at_once():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     h.providers["runway"].submit_effect = ProviderError("provider_unavailable", "Runway answered 503", retryable=True)
     job = clip(h, token)
     assert job["state"] == "failed" and job["error"]["code"] == "provider_unavailable"
@@ -111,7 +111,7 @@ def test_a_runway_outage_without_retry_after_still_fails_at_once():
 
 def test_runway_alone_refusing_names_runway_once():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     h.providers["runway"].submit_effect = CapabilityMissing("runway takes at most 3 refs")
     job = clip(h, token)
     msg = job["error"]["message"]
@@ -123,7 +123,7 @@ def test_runway_alone_refusing_names_runway_once():
 # ── failures after submit ───────────────────────────────────────────────────
 def test_a_provider_failure_after_submit_keeps_its_retryable_flag_and_gives_the_quota_back():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     job = clip(h, token)
     assert left(h, job, "video") == 5
     h.providers["runway"].states[job["requestId"]] = Status(
@@ -137,7 +137,7 @@ def test_a_provider_failure_after_submit_keeps_its_retryable_flag_and_gives_the_
 
 def test_a_failure_caused_by_the_input_keeps_the_quota():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     job = clip(h, token)
     h.providers["runway"].states[job["requestId"]] = Status(
         state="failed", error_code="invalid_input", error_message="The frame could not be read.",
@@ -150,7 +150,7 @@ def test_a_failure_caused_by_the_input_keeps_the_quota():
 
 def test_a_job_that_never_left_the_providers_queue_is_not_charged_at_the_timeout():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     job = clip(h, token)
     rid = job["requestId"]
     reserved = h.store.counters("spend")["usd"]
@@ -169,7 +169,7 @@ def test_a_job_that_never_left_the_providers_queue_is_not_charged_at_the_timeout
 
 def test_a_job_that_ran_keeps_its_charge_at_the_timeout():
     h = runway_only()
-    token = h.sign_in()
+    token = h.as_person()
     job = clip(h, token)
     reserved = h.store.counters("spend")["usd"]
     h.clock.tick(6)
@@ -183,28 +183,28 @@ def test_a_job_that_ran_keeps_its_charge_at_the_timeout():
 
 # ── refused before any charge ───────────────────────────────────────────────
 def test_a_clip_whose_frame_is_a_video_is_refused_before_quota(h):
-    token = h.sign_in()
+    token = h.as_person()
     _, out = h.post_job(token, op="clip", expect=400, image=asset(3, "video/mp4"))
     assert out["error"]["code"] == "invalid_input" and "frame" in out["error"]["message"]
-    assert h.relay.remaining(participant_id("blue", "alice"), "participant")["video"] == 6
+    assert h.relay.remaining(participant_id("blue", "alice"))["video"] == 6
     assert h.store.counters("spend").get("usd", 0) == 0
 
 
 def test_a_clip_with_no_frame_and_no_ref_is_refused(h):
-    token = h.sign_in()
+    token = h.as_person()
     _, out = h.post_job(token, op="clip", expect=400, text="a clip of nothing")
     assert out["error"]["code"] == "invalid_input" and "no frame" in out["error"]["message"]
 
 
 def test_a_clip_edit_with_no_region_is_a_feel_edit_for_its_switch(h):
-    token = h.sign_in()
+    token = h.as_person()
     assert not h.cfg["flags"]["feelEdit"]
     _, out = h.post_job(token, op="clip_edit", expect=403, video=asset(5, "video/mp4"), text="make it golden")
     assert out["error"]["code"] == "flag_off" and "Feel edits" in out["error"]["message"]
 
 
 def test_a_lone_surrogate_is_refused_as_invalid_input(h):
-    token = h.sign_in()
+    token = h.as_person()
     req = job_request("clip", new_id("job"), image=asset(3), text="a clip \ud83d")
     _, out = h.call("POST", "/jobs", req, token, expect=400)
     assert out["error"]["code"] == "invalid_input" and "half an emoji" in out["error"]["message"]
@@ -212,7 +212,7 @@ def test_a_lone_surrogate_is_refused_as_invalid_input(h):
 
 # ── uploads ─────────────────────────────────────────────────────────────────
 def test_an_upload_of_a_blob_the_relay_made_is_already_there(h):
-    token = h.sign_in()
+    token = h.as_person()
     sha = "sha256:" + "d" * 64
     h.blobs.put(f"out/{sha}", b"mp4", "video/mp4")
     _, out = h.call("POST", "/uploads", {"sha256": sha, "mime": "video/mp4", "bytes": 3}, token, expect=200)

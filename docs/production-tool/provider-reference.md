@@ -18,47 +18,24 @@ plus up to three other pictures, views first. Each line is proven by a case in
 
 | Where | What the provider receives |
 |---|---|
-| fal, characters and frames (Nano Banana Pro, the default) | Every picture as its own image, named `image 1`, `image 2`… in the prompt. |
-| fal, frames picked on Kling O3 | The front and up to three other pictures of one character as one **Kling element** (`@Element1`); other pictures as `@Image1…`. A pose picture inside the element is not told apart from the front. |
-| fal, clips (Kling v3 Pro) | The storyboard frame as the first frame, plus each character as an element (front + 1-3 other pictures). A character with only a front cannot be an element. |
-| fal, clips on Veo 3.1 (a pick) | The storyboard frame only; characters are named in words. |
 | Runway, images (Gemini 3 Pro) | Every picture with its own `@tag` (`@maya_front`, `@maya_jumping`), as `human` (characters, at most 5) or `object`. |
 | Runway, clips (Veo 3.1) | The storyboard frame only; characters are named in words. |
-| HeyGen, clips | The storyboard frame only (image-to-video); characters are named in words. |
-| Region edits | fal: the image, a mask (converted to black = edit) and up to 3 refs. Runway: the image and a copy with the box drawn on it. |
+| Runway, region edits | The image and a copy with the box drawn on it. |
 
 In a clip, the pose and look come from the storyboard frame, so a frame made strictly from the
-right pictures is what keeps a character consistent on every provider.
+right pictures is what keeps a character consistent.
 
 **Planned (features/strict-refs.clan, not approved yet):** a named look such as `@maya_jumping` is
-pinned (always sent, never dropped for a limit), goes outside the Kling element as its own picture,
-and the director must keep its pose and expression.
+pinned (always sent, never dropped for a limit), and the director must keep its pose and expression.
 
 ## Character sheets
 
-| Part | fal | Runway |
-|---|---|---|
-| Views (front, three-quarter, side, back) | Qwen multi-angle: the exact camera angle (0, 45, 90, 180°) from the front | Gemini 3 Pro: the view described in words, the front sent as a reference |
-| A set of looks (expressions, poses) | One Nano Banana call with up to 4 outputs, or Kling O3 `series` (2-9 consistent frames) on a pick | One Gemini call with 4 outputs |
+| Part | Runway |
+|---|---|
+| Views (front, three-quarter, side, back) | Gemini 3 Pro: the view described in words, the front sent as a reference |
+| A set of looks (expressions, poses) | One Gemini call with 4 outputs |
 
 **Planned (features/strict-refs.clan):** a "Make sheet" action that runs the three views and a look set in one go.
-
-## fal (sheet checked 2026-10-08)
-
-| Step | Model | Price | We send | The provider accepts |
-|---|---|---|---|---|
-| Character (canvas generate) | **Nano Banana Pro** (`nano-banana-pro-edit`) default | $0.15 | refs: up to 14, 5 characters; named `image 1` by position | `aspect_ratio`: auto, 21:9, 16:9, 3:2, 4:3, 5:4, 1:1, 4:5, 3:4, 2:3, 9:16; `resolution`: 1K, 2K, 4K; `num_images`: 1-4; prompt: at most 50000 characters (schema 2026-10-08) |
-|  | **Kling O3** (`kling-image-o3`) | $0.028 | refs: up to 14, 5 characters; named `image 1` by position | `aspect_ratio`: 16:9, 9:16, 1:1, 4:3, 3:4, 3:2, 2:3, 21:9, auto; `resolution`: 1K, 2K, 4K; `num_images`: 1-9; `result_type`: single, series; prompt: at most 2500 characters (schema 2026-10-08) |
-|  | **Nano Banana 2** (`nano-banana-2-edit`) | $0.080 | refs: up to 14, 5 characters; named `image 1` by position | `aspect_ratio`: auto, 21:9, 16:9, 3:2, 4:3, 5:4, 1:1, 4:5, 3:4, 2:3, 9:16, 4:1 … (15 in all); `resolution`: 0.5K, 1K, 2K, 4K; `num_images`: 1-4; prompt: at most 50000 characters (schema 2026-10-08) |
-| Views (turnaround) | **Qwen multi-angle** (`qwen-image-edit-2511-multiple-angles`) default | $0.035 | the source picture only, with the exact camera angle | `image_size`: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9; `num_images`: 1-4; `horizontal_angle`: 0-360 (schema 2026-10-08) |
-| Storyboard frame | **Nano Banana Pro** (`nano-banana-pro-edit`) default | $0.15 | refs: up to 14, 5 characters; named `image 1` by position | `aspect_ratio`: auto, 21:9, 16:9, 3:2, 4:3, 5:4, 1:1, 4:5, 3:4, 2:3, 9:16; `resolution`: 1K, 2K, 4K; `num_images`: 1-4; prompt: at most 50000 characters (schema 2026-10-08) |
-|  | **Kling O3** (`kling-image-o3`) | $0.028 | refs: up to 14, 5 characters; named `image 1` by position | `aspect_ratio`: 16:9, 9:16, 1:1, 4:3, 3:4, 3:2, 2:3, 21:9, auto; `resolution`: 1K, 2K, 4K; `num_images`: 1-9; `result_type`: single, series; prompt: at most 2500 characters (schema 2026-10-08) |
-|  | **Nano Banana 2** (`nano-banana-2-edit`) | $0.080 | refs: up to 14, 5 characters; named `image 1` by position | `aspect_ratio`: auto, 21:9, 16:9, 3:2, 4:3, 5:4, 1:1, 4:5, 3:4, 2:3, 9:16, 4:1 … (15 in all); `resolution`: 0.5K, 1K, 2K, 4K; `num_images`: 1-4; prompt: at most 50000 characters (schema 2026-10-08) |
-| Region edit | **Ideogram v4.5** (`ideogram-v4.5-edit`) default | $0.060 | the image, a mask (converted to black = edit) and up to 3 unnamed references | `image_size`: auto, square, square_hd, portrait_4_3, landscape_4_3, portrait_16_9, landscape_16_9; `num_images`: 1-8; `reference_image_urls`: at most 4; prompt: at most 10000 characters (schema 2026-10-08) |
-| Clip | **Veo 3.1 Fast** (`veo3.1-fast-i2v`) default | $0.90 | the storyboard frame only; characters named in words; lengths: 4, 6, 8 s | `aspect_ratio`: auto, 16:9, 9:16; `resolution`: 720p, 1080p, 4k; `duration`: 4s, 6s, 8s; prompt: at most 20000 characters (schema 2026-10-08) |
-|  | **Kling v3 Pro** (`kling-v3-pro-i2v`) | $0.56 | refs: up to 0, 0 characters; named `@Image1…` by position, `@Element1…` for a character element; lengths: 4, 6, 8 s | `duration`: 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 … (13 in all) (schema 2026-10-08) |
-|  | **Veo 3.1** (`veo3.1-i2v`) | $2.40 | the storyboard frame only; characters named in words; lengths: 4, 6, 8 s | `aspect_ratio`: auto, 16:9, 9:16; `resolution`: 720p, 1080p, 4k; `duration`: 4s, 6s, 8s; prompt: at most 20000 characters (schema 2026-10-08) |
-| Clip edit | **Luma Ray 3.2** (`luma-ray-3.2-v2v`) default | $0.72 | the clip and the change in words; a boxed region goes to SAM 2 then Wan VACE inpainting; lengths: 5, 10 s | `resolution`: 540p, 720p, 1080p; `duration`: 5s, 10s; `edit_strength`: adhere_1, adhere_2, adhere_3, flex_1, flex_2, flex_3, reimagine_1, reimagine_2, reimagine_3; prompt: at most 6000 characters (schema 2026-10-08) |
 
 ## runway (sheet checked 2026-10-08)
 
@@ -74,9 +51,3 @@ and the director must keep its pose and expression.
 | Clip | **Veo 3.1** (`veo3.1`) default | $1.20 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-08) |
 |  | **Veo 3.1 Fast** (`veo3.1_fast`) | $0.60 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-08) |
 | Clip edit | **Aleph 2** (`aleph2`) default | $1.40 | the clip, the change in words and an optional keyframe; lengths: 2-30 s | prompt: at most 1000 characters (schema 2026-10-08) |
-
-## heygen (sheet checked 2026-10-06)
-
-| Step | Model | Price | We send | The provider accepts |
-|---|---|---|---|---|
-| Clip | **HeyGen Video 1** (`heygen-video-1`) default | unpublished | the storyboard frame only (image to video); characters named in words; lengths: 5-15 s | `aspect_ratio`: 21:9, 16:9, 4:3, 1:1, 3:4, 9:16; `resolution`: 480p, 768p, 1080p, 2k; `duration`: 5-15; prompt: at most 16000 characters (schema 2026-10-08) |

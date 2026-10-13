@@ -3,14 +3,13 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { idbPersister, SnapshotStore } from './doc/store'
 import { initialAppUi, splitUi, type AppUi } from './doc/ui'
-import { OwnKeysStore } from './keys/ownKeys'
 import { migrateSingleProject } from './projects/migrate'
 import { ProjectIndex } from './projects/projectIndex'
 import { ProjectServer } from './projects/server'
 import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
 import { browserStorage } from './projects/storage'
-import { createRelay, relayId } from './relay'
+import { createRelay } from './relay'
 import { Root } from './Root'
 
 async function boot() {
@@ -34,30 +33,25 @@ async function boot() {
   const hadUi = await app.restore((v) => ({ ...initialAppUi(), ...splitUi(v).app }))
   if (!hadUi && relay.kind === 'http') app.update((u) => { u.configChoice = 'remote'; u.providerChoice = 'config' })
 
-  const here = relayId()
-  const saved = app.get().session
-  if (saved && (app.get().sessionFor !== here || Date.parse(saved.expiresAt) <= Date.now())) {
-    app.update((u) => { u.session = undefined; u.sessionFor = undefined })
-  }
-  relay.onUnauthorised = () => {
-    relay.useToken(null)
-    app.update((u) => { u.session = undefined; u.sessionFor = undefined })
-  }
-  if (app.get().session) relay.useToken(app.get().session!.token)
-  if (relay.kind === 'mock' && !app.get().session) {
-    const session = await relay.session({ eventCode: 'MOCK', team: 'mock', handle: 'guest' })
-    app.update((u) => { u.session = session; u.sessionFor = here })
+  // Who is signed in, asked on every load: the relay's identity seam knows (GET /me), so there is no
+  // sign-in here; signed out shows Root's message (features/drop-hackathon-extras.clan). A 401 on any
+  // route later signs out the same way. The mock always names its local person.
+  relay.onUnauthorised = () => app.update((u) => { u.me = undefined })
+  // Unreachable: keep who this browser last knew, so the projects here still open.
+  try {
+    const me = await relay.me()
+    app.update((u) => { u.me = me ?? undefined })
+  } catch (e) {
+    console.error('could not ask the relay who is signed in', e)
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null
-  const ownKeys = new OwnKeysStore()
-  relay.ownKeys = () => ownKeys.header()
 
   // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
-  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, token: () => app.get().session?.token ?? null }) : undefined
-  const shell = new Shell({ relay, app, index, storage, remoteConfig, ownKeys, makeClan: browserClan, server })
-  if (app.get().session) await shell.start().catch((e) => console.error('could not open the last project', e))
+  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me }) : undefined
+  const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
+  if (app.get().me) await shell.start().catch((e) => console.error('could not open the last project', e))
 
   window.addEventListener('pagehide', () => {
     const s = shell.get().session?.services

@@ -1,16 +1,14 @@
-// Home (features/project-home.clan): where the app opens after sign-in, and
+// Home (features/project-home.clan): where the app opens once signed in, and
 // where the Napkin mark in the bar comes back to. Make a new ad, open a file,
 // or pick up a saved project from its card. Everything here reads the project
 // index (projects/projectIndex.ts); no project is open while Home shows.
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useShell } from '../app/context'
-import { effectiveConfig } from '../capabilities'
 import { download } from '../export'
 import { BetaTag } from '../dogfood/Dogfood'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
-import { OwnKeysButton } from '../keys/OwnKeysPanel'
 import { homeItems, itemId } from '../projects/homeList'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
@@ -25,7 +23,7 @@ const CREW: CastKey[] = ['dex', 'ellis', 'jude']
 
 export function Home() {
   const shell = useShell()
-  const { app, index, relay, remoteConfig } = shell.deps
+  const { app, index, relay } = shell.deps
   const state = useSyncExternalStore(shell.subscribe, shell.get)
   const ui = useSyncExternalStore(app.subscribe, app.get)
   const projects = useSyncExternalStore(index.subscribe, index.all)
@@ -33,10 +31,10 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  // The projects this name saved on the relay, from any browser (features/personal-workspaces.clan).
+  // The projects this person saved on the relay, from any browser (features/personal-workspaces.clan).
   const [saved, setSaved] = useState<SavedProject[]>([])
   const [savedNote, setSavedNote] = useState<string | null>(null)
-  const token = ui.session?.token
+  const signedIn = ui.me?.participantId
   useEffect(() => {
     let live = true
     shell.serverProjects().then((rows) => {
@@ -47,11 +45,10 @@ export function Home() {
       if (live) setSavedNote('Could not list the projects you saved on the server. Those in this browser are below.')
     })
     return () => { live = false }
-  }, [shell, token])
-  const config = useMemo(() => effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig), [ui.configChoice, ui.providerChoice, remoteConfig])
+  }, [shell, signedIn])
   const all = homeItems(projects, saved)
   const shown = homeItems(projects, saved, ui.homeSort, query)
-  const who = displayName(ui.session?.handle)
+  const who = displayName(ui.me?.handle)
   const first = all.length === 0
 
   const act = (what: string, p: Promise<unknown>) => {
@@ -65,7 +62,7 @@ export function Home() {
 
   return (
     <div className="home-view" data-dogfood-area="home">
-      <HomeBar ownKeys={!!config.flags.ownKeys} />
+      <HomeBar />
       <main className="hm-scroll">
         <div className="hm-wrap">
           <div className="hm-head">
@@ -153,7 +150,7 @@ export function Home() {
           <div className="hm-foot">
             {ui.savedAt && relay.kind === 'http' && <span className="hm-cloud">☁ Saved to the server · {clock(ui.savedAt)}</span>}
             <span>{relay.kind === 'http'
-              ? 'Projects save to the server as you work. Sign in with the same name on any computer to open them there.'
+              ? 'Projects save to the server as you work. Sign in to Napkin Studio on any computer to open them there.'
               : 'Projects live in this browser.'}</span>
           </div>
         </div>
@@ -162,7 +159,7 @@ export function Home() {
   )
 }
 
-function HomeBar({ ownKeys }: { ownKeys: boolean }) {
+function HomeBar() {
   const shell = useShell()
   const { relay, app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
@@ -178,20 +175,11 @@ function HomeBar({ ownKeys }: { ownKeys: boolean }) {
       </span>
       <span />
       <span className="hm-right">
-        {ownKeys && <OwnKeysButton />}
         <span className="topmenu">
           <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
           {menu && (
             <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.session?.handle ?? 'guest'}</span>
-              {relay.kind === 'http' && ui.session && (
-                <button className="btn sm ghost" role="menuitem" onClick={() => {
-                  setMenu(false)
-                  shell.say(null)
-                  relay.useToken(null)
-                  app.update((u) => { u.session = undefined; u.sessionFor = undefined })
-                }}>Sign out</button>
-              )}
+              <span className="handle menu-head">@{ui.me?.handle ?? 'guest'}</span>
             </span>
           )}
         </span>

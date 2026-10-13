@@ -36,9 +36,3 @@ export function homeItems(local: readonly ProjectEntry[], server: readonly Saved
   const recent = (a: HomeItem, b: HomeItem) => Date.parse(b.at) - Date.parse(a.at)
   return hits.sort(sort === 'name' ? (a, b) => itemName(a).localeCompare(itemName(b), undefined, { sensitivity: 'base' }) || recent(a, b) : recent)
 }
-
-/** "Welcome back, Maya: 3 projects": said at sign-in when the name already has saved work. */
-export function welcomeBack(name: string, projects: number): string | null {
-  if (projects <= 0) return null
-  return `Welcome back, ${name}: ${projects} ${projects === 1 ? 'project' : 'projects'}`
-}

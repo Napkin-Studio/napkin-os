@@ -1,14 +1,14 @@
 // The size every input picture is sent at. Providers refuse pictures that are
-// too small or too long and thin (2026-10-07: fal's Kling answered "image
+// too small or too long and thin (2026-10-07: a provider answered "image
 // dimensions are too small" for a sketch exported at its on-screen size). So
 // each picture is fitted once, where it is made: scaled so its short side is
 // at least MIN_SIDE and its long side at most MAX_SIDE, then padded with white
 // to an aspect within MAX_ASPECT. Pure maths here; scene.ts draws it.
 
-/** The short side every provider takes (Kling image and video need ≥ 300 px; Qwen and Ideogram less). */
+/** The short side every provider takes (some need ≥ 300 px). */
 export const MIN_SIDE = 512
 export const MAX_SIDE = 1536
-/** The longest side over the shortest that every provider takes (Kling: 1:2.5 to 2.5:1). */
+/** The longest side over the shortest that every provider takes (1:2.5 to 2.5:1). */
 export const MAX_ASPECT = 2.5
 
 export interface Fit {
