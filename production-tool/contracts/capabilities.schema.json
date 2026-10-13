@@ -74,7 +74,7 @@
           "label": {
             "type": "string",
             "maxLength": 40,
-            "description": "The model's name in the regenerate menu (\"Kling O3\"). Added 2026-10-08 (additive)."
+            "description": "The model's name in the regenerate menu (\"Gemini 3 Pro\"). Added 2026-10-08 (additive)."
           },
           "note": {
             "type": "string",
@@ -123,13 +123,9 @@
     "tagSyntax": {
       "enum": [
         "at_tag",
-        "at_image_n",
-        "picture_n",
-        "figure_n",
-        "image_n",
         "none"
       ],
-      "description": "How a prompt names references: at_tag '@hero' (Runway), at_image_n '@Image1'/'@Element1' (Kling on fal), picture_n '<Picture 1>' (HeyGen), figure_n 'Figure 1' (Seedream), image_n 'image 1' (Qwen), none (refs by order only)."
+      "description": "How a prompt names references: at_tag '@hero' (Runway), none (refs by order only)."
     },
     "refs": {
       "type": "object",
@@ -142,10 +138,6 @@
           "type": "integer",
           "minimum": 0,
           "description": "Slots for character references (Runway subject human: 5)."
-        },
-        "element": {
-          "type": "boolean",
-          "description": "Takes the character as one element: a front image plus 1-3 angle images (Kling)."
         }
       },
       "required": [

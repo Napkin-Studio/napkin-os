@@ -216,7 +216,7 @@
         },
         "ratio": {
           "type": "string",
-          "description": "In the provider's own form, e.g. 1080:1920 for Runway, 9:16 for fal."
+          "description": "In the provider's own form, e.g. 1080:1920 for Runway."
         },
         "durationS": {
           "type": "number",

@@ -2,22 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/config.schema.json",
   "title": "Remote config (config.json on S3 behind CloudFront)",
-  "description": "Read by the web app at load and every 2 minutes, and by the relay on every job (cached 30 s). Changing it is uploading a file; no deploy. It is public: never put event codes, keys or handles in it. Event codes and the blocked list live in Secrets Manager / the relay's DynamoDB table.",
+  "description": "Read by the web app at load and every 2 minutes, and by the relay on every job (cached 30 s). Changing it is uploading a file; no deploy. It is public: never put keys or handles in it. Provider keys live in Secrets Manager and the blocked list in the relay's DynamoDB table.",
   "type": "object",
   "properties": {
     "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
     "routing": {
       "type": "object",
-      "description": "Per op, providers in order of preference, on the event's keys. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off. For the event every op routes to ['runway'] only: fal and HeyGen run only on a participant's own keys (flags.ownKeys). When an op routes to runway, Runway is the floor of every job for it, own-key jobs and picks included: a job that fails on another provider for a provider or account reason is made again once on Runway's default model (features/runway-fallback.clan, 2026-10-09).",
+      "description": "Per op, providers in order of preference. The relay sends a job to the first one whose capability sheet supports the op and that has a free slot; the UI shows controls from the first provider's sheet. An empty list turns the op off. When an op routes to runway, Runway is the floor of every job for it, picks included: a job that fails on another provider for a provider or account reason is made again once on Runway's default model (features/runway-fallback.clan).",
       "propertyNames": { "$ref": "common.schema.json#/$defs/op" },
       "additionalProperties": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/provider" }, "uniqueItems": true }
-    },
-    "fallbackOnly": {
-      "type": "array",
-      "items": { "$ref": "common.schema.json#/$defs/provider" },
-      "uniqueItems": true,
-      "deprecated": true,
-      "description": "No longer read (2026-10-09, features/runway-fallback.clan): Runway is the floor of every job and its models are always offered, so nothing is fallback-only. Still accepted so a config.json that names it keeps validating on a relay that has moved on; drop it from the live config, then from this schema. Was: providers never offered in the regenerate menu, the fallback for a failed pick."
     },
     "director": {
       "type": "object",
@@ -31,7 +24,7 @@
     },
     "quotas": {
       "type": "object",
-      "description": "Per participant per day.",
+      "description": "Per person per day.",
       "properties": {
         "image": { "type": "integer", "minimum": 0 },
         "video": { "type": "integer", "minimum": 0 },
@@ -76,15 +69,13 @@
         "feelEdit": { "type": "boolean" },
         "clickSelect": { "type": "boolean" },
         "moreOptions": { "type": "boolean", "description": "Ask for 4 variants instead of 1." },
-        "ownKeys": { "type": "boolean", "description": "Participants may send their own fal and HeyGen keys (X-Own-Keys on POST /jobs). Optional; absent means off." },
         "dogfood": { "type": "boolean", "description": "The beta's record (features/production-tool-dogfood.clan): the notice, the Beta tag and the thumbs in the web app, and POST /dogfood/* on the relay. Optional; absent means off." }
       },
       "required": ["storyboard", "video", "stitch", "regionEditFrames", "regionEditCanvas", "videoRegionEdit", "feelEdit", "clickSelect", "moreOptions"],
       "additionalProperties": false
     },
-    "banner": { "type": "string", "maxLength": 200 },
-    "eventName": { "type": "string", "maxLength": 60, "description": "Shown on the end card." }
+    "banner": { "type": "string", "maxLength": 200 }
   },
-  "required": ["contractVersion", "routing", "director", "quotas", "inFlightPerParticipant", "jobTimeoutS", "spend", "flags", "banner", "eventName"],
+  "required": ["contractVersion", "routing", "director", "quotas", "inFlightPerParticipant", "jobTimeoutS", "spend", "flags", "banner"],
   "additionalProperties": false
 }

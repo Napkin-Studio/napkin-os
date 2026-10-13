@@ -120,7 +120,7 @@
           "job_id": { "$ref": "common.schema.json#/$defs/id" },
           "parent": { "$ref": "common.schema.json#/$defs/id" },
           "kind": { "enum": ["generated", "mock"] },
-          "provider": { "$ref": "common.schema.json#/$defs/provider" },
+          "provider": { "$ref": "common.schema.json#/$defs/madeBy" },
           "model": { "type": "string" },
           "duration_s": { "type": "number" },
           "selected": { "type": "boolean" }
@@ -138,7 +138,7 @@
           "id": { "$ref": "common.schema.json#/$defs/id" },
           "op": { "$ref": "common.schema.json#/$defs/op" },
           "state": { "$ref": "common.schema.json#/$defs/jobState" },
-          "provider": { "$ref": "common.schema.json#/$defs/provider" },
+          "provider": { "$ref": "common.schema.json#/$defs/madeBy" },
           "model": { "type": "string" },
           "remote_id": { "type": "string" },
           "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },

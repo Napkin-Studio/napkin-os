@@ -2,47 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/relay-api.schema.json",
   "title": "Relay HTTP API: request and response bodies",
-  "description": "Every route but POST /session and GET /config needs 'Authorization: Bearer <token>' from POST /session. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: POST /session, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET|POST /library…, POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
+  "description": "Every route but GET /config needs an identity: who is asking comes from the relay's identity seam (relay/identity.py). Local development (relay/local.py, the mock relay) names a fixed local person; anywhere else there is no identity source yet, so every route answers 401 until the Napkin OS sign-in is wired in (features/os-sign-in). Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: GET /me, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET|POST /library…, POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
   "$defs": {
-    "SessionRequest": {
+    "Me": {
       "type": "object",
       "properties": {
-        "eventCode": {
-          "type": "string",
-          "minLength": 4,
-          "maxLength": 32
-        },
-        "handle": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]{2,24}$"
-        },
-        "team": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 80,
-          "pattern": "^[^/\\u0000-\\u001f\\u007f]+$",
-          "description": "The team name: spaces, accents, any script and emoji are fine; no / and no control characters; 2-40 characters after spaces are collapsed (the relay checks). With the name it makes the workspace unique (two Mayas in different teams are two people); nothing is shared within a team."
-        },
-        "device": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9-]{8,64}$",
-          "description": "A random id this browser keeps, to tell when the same team and name signed in from another browser recently (SessionResponse.elsewhere). Not a login."
-        }
-      },
-      "required": [
-        "eventCode",
-        "team",
-        "handle"
-      ],
-      "additionalProperties": false
-    },
-    "SessionResponse": {
-      "type": "object",
-      "properties": {
-        "token": {
-          "type": "string",
-          "description": "Signed, 24 h. Carries participantId and role."
-        },
         "participantId": {
           "type": "string",
           "pattern": "^p_[a-z0-9]{6,}$"
@@ -53,17 +17,7 @@
         "workspace": {
           "type": "string",
           "pattern": "^p_[a-z0-9]{6,}$",
-          "description": "The participant's own workspace: the participantId (features/personal-workspaces.clan, 2026-10-09; before, the team an event code belonged to). The library and the saved projects are kept in it. Each name is its own workspace, whatever event code it signed in with."
-        },
-        "role": {
-          "enum": [
-            "participant",
-            "organiser"
-          ]
-        },
-        "expiresAt": {
-          "type": "string",
-          "format": "date-time"
+          "description": "The person's own workspace: the participantId. The library and the saved projects are kept in it."
         },
         "quotas": {
           "type": "object",
@@ -89,28 +43,15 @@
         "projects": {
           "type": "integer",
           "minimum": 0,
-          "description": "How many projects this name has saved on the relay (GET /projects), so sign-in can say 'Welcome back, <name>: N projects' when the workspace already exists. Added 2026-10-09."
+          "description": "How many projects this person has saved on the relay (GET /projects)."
         },
         "team": {
-          "type": "string"
-        },
-        "elsewhere": {
-          "type": "object",
-          "properties": {
-            "at": {
-              "type": "string",
-              "format": "date-time"
-            }
-          },
-          "required": [
-            "at"
-          ],
-          "additionalProperties": false,
-          "description": "Another browser signed in with this team and name within the last 2 hours: probably two people who picked the same name in one team."
+          "type": "string",
+          "description": "The person's agency (team): with the handle it makes the workspace unique."
         },
         "dogfood": {
           "type": "object",
-          "description": "Only while config.json's flags.dogfood is on (features/production-tool-dogfood.clan): whether this participant has acknowledged the beta notice. Added 2026-10-09 (additive).",
+          "description": "Only while config.json's flags.dogfood is on (features/production-tool-dogfood.clan): whether this person has acknowledged the beta notice.",
           "properties": {
             "consented": {
               "type": "boolean"
@@ -123,17 +64,15 @@
         }
       },
       "required": [
-        "token",
         "participantId",
         "handle",
         "workspace",
-        "role",
-        "expiresAt",
         "quotas",
         "projects",
         "team"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "GET /me: who the identity seam says is asking, their workspace, today's remaining quotas and saved projects. 401 when there is no identity."
     },
     "UploadRequest": {
       "type": "object",
@@ -187,7 +126,7 @@
     },
     "JobRequest": {
       "type": "object",
-      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. Optional header X-Own-Keys: JSON {\"fal\"?: key, \"heygen\"?: key}, read only when config flags.ownKeys is on: a step those providers can do runs on that key (HeyGen before fal for clip), any other step on the event routing (Runway). Runway on the event key is the floor of every job (features/runway-fallback.clan; behaviour change approved by the owner 2026-10-09, replacing 'it never falls back to the event key'): when an own-key provider fails for a provider or account reason (refused on its sheet, out of credit, key refused, unavailable, failed at submit or after, timed out, uncertain), the job is made again once on Runway's default model for the op, on the event key, counted against the event's spend and the participant's daily quota (Job.keySource becomes event; Job.fallbackFrom and fallbackReason say so). Moderated or invalid input never falls back. Keys are never returned or logged.",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. The job runs on the first provider of its op's routing (or the pick); Runway, the floor, makes it again once on its default model for the op when that provider fails for a provider or account reason before or after submit (Job.fallbackFrom and fallbackReason say so; features/runway-fallback.clan). Moderated or invalid input never falls back.",
       "properties": {
         "contractVersion": {
           "$ref": "common.schema.json#/$defs/contractVersion"
@@ -210,7 +149,7 @@
         },
         "modelChoice": {
           "$ref": "#/$defs/ModelChoice",
-          "description": "The model the participant picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider the participant holds a key for (X-Own-Keys) or one routed for the op (the event routes only Runway, so Runway's models are always pickable). Absent: the routing's default. The job runs on that provider and model; when that provider fails for a provider or account reason, before or after submit, it runs once on Runway's default model for the op on the event key (Job.fallbackFrom says so). Since 2026-10-09 this includes an own-key pick (behaviour change approved by the owner; features/runway-fallback.clan). Added 2026-10-08 (additive)."
+          "description": "The model the person picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider routed for the op (Runway's models are always pickable). Absent: the routing's default. The job runs on that provider and model; when it fails for a provider or account reason, it runs once on Runway's default model for the op (Job.fallbackFrom says so)."
         }
       },
       "required": [
@@ -430,23 +369,16 @@
         "provider": {
           "$ref": "common.schema.json#/$defs/provider"
         },
-        "keySource": {
-          "enum": [
-            "own",
-            "event"
-          ],
-          "description": "Whose provider key runs this job: the participant's own (sent in X-Own-Keys; billed to them, no event spend or daily quota) or the event's. An own-key job that falls back to Runway becomes event (spend and quota counted then). Absent on shot_list and stitch, and on jobs from before own keys."
-        },
         "model": {
           "type": "string"
         },
         "fallbackFrom": {
           "$ref": "#/$defs/ModelChoice",
-          "description": "Where the job was meant to run (the participant's pick, or the first provider of its chain) when it ran on another provider instead: the next one in its chain, or Runway, the floor, after a failure before or after submit. Added 2026-10-08 (additive); also set without a pick since 2026-10-09 (features/runway-fallback.clan)."
+          "description": "Where the job was meant to run (the person's pick, or the first provider of its chain) when it ran on another provider instead: the next one in its chain, or Runway, the floor, after a failure before or after submit."
         },
         "fallbackReason": {
           "type": "string",
-          "description": "Why the job left the provider in fallbackFrom, in words a participant can read ('HeyGen could not make it: credit is exhausted.'). When that provider may already have the job (it gave no answer in time), it says it may still charge. Added 2026-10-09 (additive; features/runway-fallback.clan)."
+          "description": "Why the job left the provider in fallbackFrom, in words a person can read ('Runway could not make it: it is busy.'). When that provider may already have the job (it gave no answer in time), it says it may still charge."
         },
         "requestId": {
           "type": "string",

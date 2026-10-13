@@ -5,6 +5,7 @@ sheets and examples match their schemas, and the $refs between files resolve.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -31,11 +32,11 @@ CASES = [
     ("examples/config.*.json", "config.schema.json", ""),
     ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest"),
     ("examples/job.response.json", "relay-api.schema.json", "#/$defs/Job"),
-    ("examples/session.response.json", "relay-api.schema.json", "#/$defs/SessionResponse"),
+    ("examples/me.response.json", "relay-api.schema.json", "#/$defs/Me"),
     ("examples/projects.response.json", "relay-api.schema.json", "#/$defs/ProjectList"),
     ("examples/director.*.json", "director.schema.json", ""),
     ("examples/customdata.*.json", "customdata.schema.json", ""),
-    ("examples/document.json", "document.schema.json", ""),
+    ("examples/document*.json", "document.schema.json", "")  # document.hackathon.json: fal and HeyGen outputs still open,
 ]
 
 failures = 0
@@ -69,12 +70,18 @@ for f in sorted(HERE.glob("examples/config.*.json")):
         failures += 1
         print(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
 
-# The event pays only for Runway: fal and HeyGen come from participants' own keys (features/runway-fallback.clan).
-event = json.loads((HERE / "examples" / "config.event.json").read_text())
-for op, providers in event["routing"].items():
+# Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
+# every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.
+live = json.loads((HERE / "examples" / "config.live.json").read_text())
+for op, providers in live["routing"].items():
     if providers not in ([], ["runway"]):
         failures += 1
-        print(f"✗ examples/config.event.json: routes {op} to {providers}; the event routes every op to ['runway']")
+        print(f"✗ examples/config.live.json: routes {op} to {providers}; the live config routes every op to ['runway']")
+GONE = re.compile(r"\b(fal|heygen)\b|fal-ai/", re.I)
+for f in sorted([*HERE.glob("capabilities/*.json"), *HERE.glob("examples/config.*.json"), *HERE.glob("examples/director.*.json")]):
+    if GONE.search(f.read_text()):
+        failures += 1
+        print(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
 
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():

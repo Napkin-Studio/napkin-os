@@ -9,7 +9,6 @@
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },
   "spend": { "capUsd": 1300, "warnUsd": 1000 },
-  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": true, "moreOptions": false, "ownKeys": true },
-  "banner": "",
-  "eventName": "Napkin Hackathon"
+  "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": true, "moreOptions": false },
+  "banner": ""
 }
