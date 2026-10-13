@@ -388,7 +388,9 @@ when it changes, and the next call uses it.
 
 The middleware ships `server/model-routes.example.json`, which the image copies
 and staging reads. It runs Sonnet 5.5 at low effort, with the brief writers at
-medium (2026-10-13, `features/sonnet-default-caching.clan`).
+medium, and keeps `extract_facts` and `extract_category_facts` on Opus 4.6:
+replayed on Bedrock, Opus 4.6 kept about four times the facts Sonnet 5.5 did,
+at the lowest cost per kept fact (2026-10-13, `features/sonnet-default-caching.clan`).
 
 | Field | Values | |
 |---|---|---|
