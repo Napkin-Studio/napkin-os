@@ -88,6 +88,30 @@ describe('recordTyping', () => {
   })
 })
 
+describe('beforePush', () => {
+  it('an open burst is pushed before the next step, and before an undo', async () => {
+    const { bus, text, undo, storyboard } = await project()
+    const shot = id('shot', 1)
+    await bus.apply({ patches: [{ op: 'create', entity: 'shots', id: shot, value: shotValue(storyboard, 'a0'), base_version: 0 }], why: { action: 'create shot' } })
+    let open: { before: Prose } | null = null
+    undo.beforePush = () => {
+      if (!open) return
+      const o = open
+      open = null
+      text.recordTyping('shot', shot, o.before, text.prose('shot', shot))
+    }
+    open = { before: text.prose('shot', shot) }
+    text.ydoc.transact(() => hydrate(text.fragment('shot', shot), proseFromLines('action', ['typed'])), { binding: true })
+    await bus.apply({ patches: [{ op: 'set', entity: 'shots', id: shot, path: 'duration_s', value: 4, base_version: bus.doc().shots[shot].v }], why: { action: 'set duration' } })
+    expect(undo.serialize().undo.map((s) => s.label)).toEqual(['create shot', 'typing', 'set duration'])
+    open = { before: text.prose('shot', shot) }
+    text.ydoc.transact(() => hydrate(text.fragment('shot', shot), proseFromLines('action', ['typed more'])), { binding: true })
+    await text.checkpoint()
+    expect(await undo.undo()).toMatchObject({ done: true, label: 'typing' })
+    expect(text.prose('shot', shot)).toEqual(proseFromLines('action', ['typed']))
+  })
+})
+
 describe('moveShot', () => {
   async function three() {
     const p = await project()

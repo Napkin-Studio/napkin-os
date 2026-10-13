@@ -46,6 +46,13 @@ export class LocalUndo {
   private text: TextSide | null = null
   private readonly onChange?: (s: SerializedUndo) => void
   private readonly now: () => string
+  /**
+   * Runs before a new step goes on the stack (not a joined one): the editors
+   * close their open typing bursts here, so a burst is always its own step,
+   * older than whatever comes next (features/script-editor.clan).
+   */
+  beforePush: (() => void) | null = null
+  private settling = false
 
   constructor(opts: { saved?: SerializedUndo | null; onChange?: (s: SerializedUndo) => void; now?: () => string } = {}) {
     this.undoStack = structuredClone(opts.saved?.undo ?? [])
@@ -94,7 +101,19 @@ export class LocalUndo {
     this.push({ label, at: this.now(), text: changes })
   }
 
+  /** Let the editors close their open bursts first (beforePush), once. */
+  settle() {
+    if (this.settling || !this.beforePush) return
+    this.settling = true
+    try {
+      this.beforePush()
+    } finally {
+      this.settling = false
+    }
+  }
+
   private push(step: UndoStep) {
+    this.settle()
     this.undoStack.push(step)
     if (this.undoStack.length > MAX_STEPS) this.undoStack.shift()
     this.redoStack = []
@@ -107,6 +126,7 @@ export class LocalUndo {
 
   /** Undo the last step. done false and a notice when it was skipped (it is dropped). */
   async undo(): Promise<{ done: boolean; label?: string; notice?: string }> {
+    this.settle()
     const step = this.undoStack.pop()
     if (!step) return { done: false }
     const out = await this.run(step)
@@ -116,6 +136,7 @@ export class LocalUndo {
   }
 
   async redo(): Promise<{ done: boolean; label?: string; notice?: string }> {
+    this.settle()
     const step = this.redoStack.pop()
     if (!step) return { done: false }
     const out = await this.run(step)
