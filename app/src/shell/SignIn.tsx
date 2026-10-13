@@ -12,15 +12,19 @@
 // gave asks for the person's own, then the studio opens. The gate renders the studio unchanged when the server has no
 // accounts (anonymous mode), when the page is the public viewer, on the
 // device and on the desktop.
+//
+// `/?next=/production/...` (the Production Tool's signed-out page) is followed
+// after sign-in, and at once when the person is already signed in (./next.ts).
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { StudioLogo } from '../brand/StudioMark'
 import { LogoSpinnerFill } from '../brand/LogoSpinner'
 import { PoweredByClan } from '../brand/PoweredByClan'
 import { accountName, isAccountName } from './accountName'
+import { afterSignIn, nextWhenSignedIn } from './next'
 import './SignIn.css'
 
-type Gate = 'checking' | 'open' | 'signin'
+type Gate = 'checking' | 'open' | 'signin' | 'leaving'
 
 export function SignInGate({ children, check }: { children: ReactNode; check: boolean }) {
   const [gate, setGate] = useState<Gate>(check ? 'checking' : 'open')
@@ -36,14 +40,21 @@ export function SignInGate({ children, check }: { children: ReactNode; check: bo
           const b = await r.json().catch(() => ({}))
           if (b && b.password === false) setAsksPassword(false)
           setGate(b && b.signin ? 'signin' : 'open')
-        } else setGate('open')
+        } else {
+          const next = r.ok ? nextWhenSignedIn(location.search, await r.json().catch(() => null)) : null
+          if (!live) return
+          if (next) { setGate('leaving'); location.replace(next) } else setGate('open')
+        }
       })
       // offline or no server: the studio says so itself
       .catch(() => { if (live) setGate('open') })
     return () => { live = false }
   }, [check])
-  if (gate === 'checking') return <LogoSpinnerFill label="Opening the studio…" />
-  if (gate === 'signin') return <SignIn asksPassword={asksPassword} onDone={() => location.reload()} />
+  if (gate === 'checking' || gate === 'leaving') return <LogoSpinnerFill label="Opening the studio…" />
+  if (gate === 'signin') {
+    return <SignIn asksPassword={asksPassword}
+      onDone={() => afterSignIn(location.search, next => location.replace(next), () => location.reload())} />
+  }
   return <>{children}</>
 }
 

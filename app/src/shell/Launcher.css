@@ -65,6 +65,8 @@
   transform: translateY(-2px);
 }
 .ln-app-busy { cursor: progress; border-color: var(--tdeep); }
+/* The Production Tool's card is a link (MakeAnAdCard.tsx), not a button. */
+.ln-app-link { text-decoration: none; }
 
 /* The cover: the tool's colour, its big mark, a faint larger copy of it in
    the corner, and the crew standing on the bottom edge. */

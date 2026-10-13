@@ -37,12 +37,18 @@ function walk(dir: string, root = dir): string[] {
   })
 }
 
+/** pwa/routes.js as plain script for the worker: the same code, without `export`. */
+function inlineRoutes(source: string): string {
+  return source.replace(/^export /gm, '').trim()
+}
+
 /**
  * Write the service worker once the build is on disk.
  *
  * Hand-written (pwa/sw.js) rather than a plugin dependency: it has four rules,
- * and the only part that needs the build is the list of files to precache and
- * a version to name the cache by. The version is a hash of every precached
+ * and the only parts that need the build are the list of files to precache, a
+ * version to name the cache by, and its routes (pwa/routes.js, inlined so the
+ * tests can import the same rules). The version is a hash of every precached
  * file, so any change to the shell, the wasm or a template is a new cache that
  * replaces the old one whole, and an unchanged build is not an update at all.
  */
@@ -60,11 +66,17 @@ function serviceWorker(): Plugin {
       const hash = createHash('sha256')
       for (const f of files) hash.update(f).update('\0').update(readFileSync(join(root, f)))
       const template = readFileSync(fileURLToPath(new URL('./pwa/sw.js', import.meta.url)), 'utf8')
-      hash.update(template)
+      const routes = readFileSync(fileURLToPath(new URL('./pwa/routes.js', import.meta.url)), 'utf8')
+      hash.update(template).update(routes)
       const version = hash.digest('hex').slice(0, 12)
       const sw = template
         .replace('__NAPKIN_VERSION__', () => JSON.stringify(version))
         .replace('__NAPKIN_PRECACHE__', () => JSON.stringify(files, null, 2))
+        .replace('__NAPKIN_ROUTES__', () => inlineRoutes(routes))
+      // A worker without its routes would answer /production with the shell.
+      if (/__NAPKIN_[A-Z]+__/.test(sw) || !/function serverOwned\(/.test(sw) || !sw.includes("'production/'")) {
+        throw new Error('dist/sw.js: the routes (pwa/routes.js) were not inlined')
+      }
       writeFileSync(join(root, 'sw.js'), sw)
     },
   }

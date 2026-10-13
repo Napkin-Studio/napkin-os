@@ -38,11 +38,18 @@ interface SessionInfo {
   quota: { used: number; cap: number }
   /** The signed-in person, on a server with accounts (`name@agency`). */
   user?: { username: string; agency: string; name?: string }
+  /** The Production Tool is served at /production and this person may open it (features/os-sign-in.clan). */
+  production?: boolean
 }
 
 /** The signed-in person, when the server has accounts; null when it is anonymous. */
 export async function signedInUser(): Promise<SessionInfo['user'] | null> {
   try { return (await session()).user ?? null } catch { return null }
+}
+
+/** Whether the OS home offers the Production Tool: a server that serves it, and someone signed in. */
+export async function productionOn(): Promise<boolean> {
+  try { return (await session()).production === true } catch { return false }
 }
 
 /** An opened document, plus what the frame needs to talk to the host. */
