@@ -12,6 +12,8 @@ middleware's own rules, so the numbers mean what the pipeline would have kept:
   verbatim/fig  the two checks separately, per evidence quote
   wanted/vocab  share of keys that are one of the lens's asked-for names / a name in the lens document
 It costs pennies per call, so it is the place to try a cheaper model on the largest model-cost line.
+With --bedrock the calls go to Bedrock as staging makes them, models named as id[@effort]
+(global.anthropic.claude-sonnet-5-5@low,eu.anthropic.claude-opus-4-6-v1), priced from the run log's prices.
 The recorded reply (the model the run used) is graded the same way as the baseline row.
 Writes runs/metrics/exteval-<label>-<utc>/{exteval.json, mock/metrics.jsonl}.
 """
@@ -85,7 +87,10 @@ def score(payload: dict, obj: dict, vocab: dict | None) -> dict:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
-    ap.add_argument("--models", required=True, help="comma-separated model ids the dev model service knows")
+    ap.add_argument("--models", required=True, help="comma-separated model ids the dev model service knows "
+                    "(with --bedrock: Bedrock ids, each optionally @effort)")
+    ap.add_argument("--bedrock", action="store_true",
+                    help="call Bedrock (NAPKIN_MODEL_REGION, default eu-west-1; the AWS credential chain), not the mock")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--effort", default=None)
     ap.add_argument("--vocab", default=None, help="lens_vocabulary.json, to score how many keys use the fixed names")
@@ -115,11 +120,11 @@ def main():
     (out / "mock").mkdir(parents=True)
     env = dict(os.environ, MOCK_BACKEND_PORT=str(port), MOCK_DATA=str(out / "mock"), MOCK_FAKES="model",
                MOCK_TIMEOUT_MODEL="600", MOCK_NO_CACHE="1")
-    mock = subprocess.Popen([sys.executable, str(REPO / "mock-backend" / "server.py")], env=env,
-                            stdout=open(out / "mock.log", "w"), stderr=subprocess.STDOUT)
+    mock = None if a.bedrock else subprocess.Popen([sys.executable, str(REPO / "mock-backend" / "server.py")], env=env,
+                                                   stdout=open(out / "mock.log", "w"), stderr=subprocess.STDOUT)
     rows = {}
     try:
-        for _ in range(200):
+        for _ in range(0 if a.bedrock else 200):
             try:
                 urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=2)
                 break
@@ -127,7 +132,9 @@ def main():
                 time.sleep(0.3)
         from napkin.config import Settings
         from napkin.model import ModelError, ModelPort, Usage, build_wire
-        settings = Settings(model_api="anthropic", model_base_url=f"http://127.0.0.1:{port}", model_api_key="dummy")
+        from napkin.runlog import price
+        settings = Settings(model_api="bedrock", model_region=os.environ.get("NAPKIN_MODEL_REGION", "eu-west-1")) \
+            if a.bedrock else Settings(model_api="anthropic", model_base_url=f"http://127.0.0.1:{port}", model_api_key="dummy")
         port_ = ModelPort(build_wire(settings), "claude-opus-5-5", 600)
 
         base = {"model": "recorded", "units": len(units), "runs": 1, "secs": 0.0,
@@ -139,39 +146,44 @@ def main():
         base["model"] = f"recorded ({units[0][4]})" if units else "recorded"
         rows["recorded"] = base
 
-        for model in [m.strip() for m in a.models.split(",") if m.strip()]:
-            agg = {"model": model, "units": len(units), "runs": a.repeat, "secs": 0.0,
+        for spec in [m.strip() for m in a.models.split(",") if m.strip()]:
+            model, _, effort = spec.partition("@")
+            effort = effort or a.effort
+            agg = {"model": spec, "units": len(units), "runs": a.repeat, "secs": 0.0, "usd": 0.0,
                    **{k: 0 for k in ("returned", "kept", "evidence", "verbatim", "figure_ok", "in_wanted", "in_vocab", "errors")}}
             for rep in range(a.repeat):
                 for unit, system, payload, schema, _, _ in units:
                     job = f"exteval_{model}_{rep}_{re.sub(r'[^a-z0-9]', '', str(unit))}"
-                    t0 = time.monotonic()
+                    t0, u = time.monotonic(), Usage()
                     try:
-                        obj = port_.call("extract_facts", system, payload, schema, usage=Usage(), attribution=job,
-                                         max_tokens=8000, model=model, effort=a.effort, headers={"X-Napkin-Job": job})
+                        obj = port_.call("extract_facts", system, payload, schema, usage=u, attribution=job,
+                                         max_tokens=8000, model=model, effort=effort, headers={"X-Napkin-Job": job})
                     except ModelError as e:
                         agg["errors"] += 1
                         print(f"  {model} {unit}: {e}", flush=True)
                         continue
                     agg["secs"] += time.monotonic() - t0
+                    agg["usd"] += price(model, u.input_tokens, u.output_tokens, u.cache_read, u.cache_write) or 0.0
                     for k, v in score(payload, obj, vocab).items():
                         agg[k] = agg.get(k, 0) + v
                 print(f"{model} repeat {rep + 1} done", flush=True)
-            rows[model] = agg
+            rows[spec] = agg
     finally:
-        mock.terminate()
-        time.sleep(1)
+        if mock is not None:
+            mock.terminate()
+            time.sleep(1)
 
     import run_report
-    led = run_report.load(out / "mock" / "metrics.jsonl")
+    led = [] if a.bedrock else run_report.load(out / "mock" / "metrics.jsonl")
     for model, agg in rows.items():
-        if model == "recorded":
+        if model == "recorded" or a.bedrock:
+            agg["cli_cost"] = round(agg["usd"], 3) if "usd" in agg else "-"
             continue
         mine = [e for e in led if str(e.get("job", "")).startswith(f"exteval_{model}_")]
         agg["cli_cost"] = round(sum(e.get("cost_usd") or 0 for e in mine), 3)
         agg["calls"] = len(mine)
     (out / "exteval.json").write_text(json.dumps(rows, indent=1))
-    print("\n| model | runs x units | returned | kept | kept % | verbatim % | number-in-quote % | wanted-name % | vocab-name % | secs/call | CLI $ |")
+    print(f"\n| model | runs x units | returned | kept | kept % | verbatim % | number-in-quote % | wanted-name % | vocab-name % | secs/call | {'Bedrock' if a.bedrock else 'CLI'} $ |")
     print("|---|---|---|---|---|---|---|---|---|---|---|")
     for m, r in rows.items():
         n_calls = max(1, r["runs"] * r["units"])
