@@ -1,5 +1,5 @@
 // The update box (decided 2026-10-09): a steered update shows its plan first when it has
-// more than one item (the items in order, why each one, the cost: Start, Do them as they
+// more than one item (the items in order and why each one, no price: Start, Do them as they
 // are, Cancel; features/one-to-one-updates.clan), then each frame and clip here, one at a
 // time, in order. Words for that request
 // only (never the script), the model (starting on the last that worked for that
@@ -12,7 +12,7 @@ import { choiceToSend, modelChoicesFor } from '../capabilities'
 import type { ModelChoice } from '../contracts/types'
 import type { FollowItem } from '../doc/ui'
 import { selectedTake } from '../jobs/clips'
-import { beginFollow, cancelFollow, followState, makeAwaited, planSummary, planWords, restAsTheyAre } from '../jobs/follow'
+import { beginFollow, cancelFollow, followState, makeAwaited, planWords, restAsTheyAre } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { frameStale, takeStale } from '../jobs/stale'
 import { ctxReader, jobCtx } from '../jobs/runner'
@@ -67,12 +67,11 @@ export function UpdateBox() {
   return <Box key={`${item.kind}:${item.shotId}`} item={item} jobId={state.running?.id ?? (run.awaiting ? state.failed?.id : undefined)} onMinimise={() => setMin(true)} />
 }
 
-/** A plan of more than one item, shown before anything is sent: the items in order, each with why, and the cost. */
+/** A plan of more than one item, shown before anything is sent: the items in order, each with why (no price: owner, 2026-10-13). */
 function Plan({ onMinimise }: { onMinimise: () => void }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { config } = useConfig()
   const run = ui.following!
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const [busy, setBusy] = useState(false)
@@ -113,7 +112,7 @@ function Plan({ onMinimise }: { onMinimise: () => void }) {
       <ol className="ub-plan">
         {rows.map((r) => <li key={r.key}><b>{r.what}</b><span className="faint">{r.why}</span></li>)}
       </ol>
-      <div className="faint" style={{ fontSize: 12 }}>{planSummary(plan, config, undefined, run.models)}. One at a time, in this order: your words and model for each.</div>
+      <div className="faint" style={{ fontSize: 12 }}>{planWords(plan)}. One at a time, in this order: your words and model for each.</div>
       {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
       <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
         <button className="btn sm ghost" disabled={busy} onClick={() => act(() => cancelFollow(deps))} title="Make nothing">Cancel</button>

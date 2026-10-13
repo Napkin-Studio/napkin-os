@@ -2,7 +2,7 @@
 // ("why does this look like this?"). It reads the addresses each decision
 // targets and cites (model/lineage.ts), never ids in the words.
 
-import type { ProductionDocument } from '../contracts/types'
+import type { Cost, ProductionDocument } from '../contracts/types'
 import { entityOf, kindOf as kindOfDecision, type Kind } from '../model/lineage'
 import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takesOf } from '../model/selectors'
 
@@ -83,6 +83,26 @@ export function who(agent: string, me: string | undefined): { label: string; det
   if (kind === 'person') return { label: me && agent === `human:${me}` ? 'You' : agent.slice('human:'.length) }
   if (kind === 'crew') return { label: agent[0].toUpperCase() + agent.slice(1), detail: CREW[agent] }
   return { label: agent }
+}
+
+/** A job's recorded cost, for History, the one place the tool shows money (owner, 2026-10-13): what
+ *  the provider confirmed, else "about" the reservation. Nothing for a free job (the mock) or an
+ *  unknown price. A failed attempt the provider billed shows its cost like any other, with no words. */
+export function jobCost(cost: Cost | undefined): string | undefined {
+  if (!cost) return undefined
+  const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
+  if (cost.confirmed != null) return cost.confirmed > 0 ? fmt(cost.confirmed) : undefined
+  if (cost.unknown) return undefined
+  return cost.estimate ? `about ${fmt(cost.estimate)}` : undefined
+}
+
+/** The job a decision is about: the first job it targets or cites. */
+export function jobOf(entry: ChainLike): string | undefined {
+  for (const a of [...(entry.targets ?? []), ...(entry.cites ?? [])]) {
+    const m = /#jobs\[([^\]]+)\]/.exec(a)
+    if (m) return m[1]
+  }
+  return undefined
 }
 
 /** Long hashes and ids, shortened for reading (the full text stays in the title). */

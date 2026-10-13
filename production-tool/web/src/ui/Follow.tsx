@@ -66,7 +66,7 @@ export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {})
           <SplitButton kind="dark" menuLabel="More ways to update" onClick={() => void go({ kind: 'direct' })}
             title={`Make ${planWords(direct)} again, only what is out of date: your words and model for each`}
             items={carry > n ? [{
-              label: `Update ${n} and carry forward (${carry})`, hint: update.cost({ kind: 'carry' }), icon: '⇥',
+              label: `Update ${n} and carry forward (${carry})`, icon: '⇥',
               onSelect: () => void go({ kind: 'carry' }),
             }] : []}>
             Update {n}

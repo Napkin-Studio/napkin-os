@@ -5,7 +5,7 @@ import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attri
 import { Thumbs } from '../dogfood/Dogfood'
 import type { Kind } from '../model/lineage'
 import type { ProductionDocument } from '../contracts/types'
-import { aboutItem, entryKind, kindOf, plainWords, readable, timeOf, who, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
+import { aboutItem, entryKind, jobCost, jobOf, kindOf, plainWords, readable, timeOf, who, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
 
 const KIND_ICON: Record<AgentKind, string> = { person: '●', crew: '◆', other: '▲' }
 
@@ -21,6 +21,8 @@ export function HistoryList({ entries, me, item, kind, doc }: { entries: ChainLi
         // A crew landing's rationale ends with the character cards the director was given (clan-store attribution.ts).
         const { rest: why, cards } = ak === 'crew' && e.rationale ? cardsFromRationale(e.rationale) : { rest: e.rationale, cards: [] as SeenCard[] }
         const fields = (e.targets ?? []).filter((t) => /\]\./.test(t)).map((t) => t.slice(t.indexOf('#') + 1))
+        const job = jobOf(e)
+        const cost = doc && job ? jobCost(doc.jobs[job]?.cost) : undefined
         return (
           <li key={`${e.id ?? e.timestamp}-${i}`} className={`history-entry ${ak}`} data-kind={ak} data-decision-kind={entryKind(e)}>
             <div className="history-head">
@@ -32,6 +34,7 @@ export function HistoryList({ entries, me, item, kind, doc }: { entries: ChainLi
               <span className="spacer" />
               <span className="history-kind faint">{entryKind(e)}</span>
               {e.pinned && <span className="history-pin" title="Pinned: never compressed">pinned</span>}
+              {cost && <span className="history-cost faint" title="What this job cost">{cost}</span>}
               <time className="faint" dateTime={e.timestamp} title={e.timestamp}>{timeOf(e.timestamp)}</time>
             </div>
             <div className="history-action" title={e.action}>{words(e.action)}</div>

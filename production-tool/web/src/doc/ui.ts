@@ -101,7 +101,7 @@ export interface FollowRun {
   /** Steered (the Update button): each item waits in the update box for the person's words, model and
    *  "Make it". Off: the run goes on by itself ("Do the rest as they are"). */
   steer?: boolean
-  /** The update box shows the plan (items in order, cost) and nothing is sent until "Start". */
+  /** The update box shows the plan (items in order) and nothing is sent until "Start". */
   reviewing?: boolean
   /** The item the update box shows now. */
   awaiting?: FollowItem

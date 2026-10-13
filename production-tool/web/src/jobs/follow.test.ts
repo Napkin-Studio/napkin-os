@@ -8,11 +8,10 @@ import { initialUi, type UiState } from '../doc/ui'
 import { putBlob } from '../lib/blobs'
 import { beatsOf, edlItemFor, jobsList, mainVideo, shotsOf } from '../model/selectors'
 import { MockRelay, type MockRenderer } from '../relay/mock'
-import { effectiveConfig } from '../capabilities'
 import { addKey, addRef, addScene, addShots, note, planned, snapshotDoc } from '../test/jobFixtures'
 import { END_CARD_S, adLengthS, makeClip, renderAd, selectedTake, stitchInput } from './clips'
 import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, resumeFixes, shotsBeingFixed } from './fix'
-import { beginFollow, cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planCost, planFollow, planFor, planMissing, planSummary, restAsTheyAre, startFollow } from './follow'
+import { beginFollow, cancelFollow, continueFollow, lastWorkedModel, shotsInTheMaking, makeAwaited, planFollow, planFor, planMissing, planWords, restAsTheyAre, startFollow } from './follow'
 import { drawFrame, selectedFrame, selectFrame, type FrameDeps } from './frames'
 import { landFrame } from './handlers'
 import { JobRunner } from './runner'
@@ -457,7 +456,7 @@ describe('out of date, one to one (features/one-to-one-updates.clan)', () => {
 })
 
 describe('Update what follows', () => {
-  const runway = effectiveConfig('live', 'runway')
+
 
   it('plans only what is out of date itself, in shot order, then the ad; carrying forward plans the old chain', async () => {
     const s = await setup(4)
@@ -468,14 +467,11 @@ describe('Update what follows', () => {
     // One to one: only shot 2's clip (its frame changed), then the ad it feeds.
     const plan = planFollow(s.doc.get())
     expect(plan).toEqual({ frames: [], clips: [s.shotId(1)], ad: true })
-    expect(planSummary(plan, runway)).toBe('1 clip, 1 ad · about $1.20')
+    expect(planWords(plan)).toBe('1 clip, 1 ad')  // no price (owner, 2026-10-13)
     // Carry forward: frames 3 and 4 follow frame 2; clips for shots 2-4 (2's frame changed); then the ad.
     const carry = planFor(s.doc.get(), { kind: 'carry' })
     expect(carry).toEqual({ frames: [s.shotId(2), s.shotId(3)], clips: [s.shotId(1), s.shotId(2), s.shotId(3)], ad: true })
-    // Runway: frame $0.20 (Gemini 3 Pro), clip $1.20 (Veo 3.1) (contracts/capabilities/runway.json); the ad is ffmpeg.
-    expect(planCost(carry, runway).usd).toBeCloseTo(2 * 0.2 + 3 * 1.2)
-    expect(planSummary(carry, runway)).toBe('2 frames, 3 clips, 1 ad · about $4.00')
-    expect(planSummary(carry, CONFIGS.testing)).toMatch(/^2 frames, 3 clips, 1 ad · /)
+    expect(planWords(carry)).toBe('2 frames, 3 clips, 1 ad')
   })
 
   it('edits plan their own items in shot order, the ad after the clips; not made yet is a plan of its own', async () => {

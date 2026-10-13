@@ -306,7 +306,8 @@ def test_no_reader_of_a_flat_estimate_is_left():
         if (path.is_file() and (path.suffix in (".py", ".ts", ".tsx") or
                                 path.suffix == ".json" and not path.name.endswith(".schema.json"))
                 and not any(p in path.parts for p in ("node_modules", ".venv", "dist", "results", "pkg"))
-                and path.name != "test_scripts.py" and "estimateUsd" in path.read_text(errors="ignore")):
+                and path.name not in ("test_scripts.py", "noPrices.test.ts")  # the guards themselves
+                and "estimateUsd" in path.read_text(errors="ignore")):
             left.append(str(path.relative_to(root)))
     # The invalid example exists to prove the schema refuses the field.
     assert left == ["contracts/examples/invalid/capabilities.estimate-usd.json"], left

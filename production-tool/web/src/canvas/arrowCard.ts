@@ -40,7 +40,6 @@ export interface ArrowCard {
   passthrough?: string
   /** "Ran at 14:05 · took 12 s". */
   when?: string
-  cost?: string
 }
 
 /** What a source node is, when it is not a named image (the canvas knows; tests pass a map). */
@@ -92,16 +91,6 @@ export function directorPrompt(agent: AgentBlock | undefined): string | undefine
   const out = agent?.output as { providerJob?: { prompt?: unknown }; prompt?: unknown } | undefined
   const p = out?.providerJob?.prompt ?? out?.prompt
   return typeof p === 'string' && p.trim() ? p.trim() : undefined
-}
-
-function costWords(job: DocJob | undefined): string | undefined {
-  const c = job?.cost
-  if (!c || c.unknown) return undefined
-  const fmt = (v: number) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
-  // Nothing charged (the mock) says nothing.
-  if (c.confirmed != null) return c.confirmed > 0 ? fmt(c.confirmed) : undefined
-  if (c.estimate) return `about ${fmt(c.estimate)}`
-  return undefined
 }
 
 /** The card for one provenance arrow. */
@@ -187,8 +176,7 @@ export function arrowCard(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, li
   if (told) card.told = told
   else if (passthrough) card.passthrough = passthrough
   if (when) card.when = when
-  const cost = costWords(job)
-  if (cost) card.cost = cost
+  // No cost on the canvas (owner, 2026-10-13): each job's cost shows only in History.
   return card
 }
 
@@ -204,6 +192,6 @@ export function cardLines(c: ArrowCard): string[] {
     c.changed && `What it changed: ${c.changed}`,
     c.told && `What the model was told: ${c.told}`,
     c.passthrough,
-    [c.when, c.cost].filter(Boolean).join(' · ') || undefined,
+    c.when,
   ].filter((l): l is string => !!l)
 }

@@ -175,10 +175,27 @@ export interface ContractError {
 
 // ── capabilities.schema.json ────────────────────────────────────────────────
 
+/** The settings one job assumes (capabilities.schema.json $defs/defaults); contracts/pricing.py prices
+ *  them for the relay. The web app shows no price (owner, 2026-10-13). */
+export interface OpDefaults {
+  outputs?: number
+  ratio?: string
+  resolution?: string
+  quality?: 'very_low' | 'low' | 'medium' | 'high'
+  preciseEdit?: boolean
+  refs?: number
+  durationS?: number
+  audio?: boolean
+  inputS?: number
+  fps?: number
+  inputPx?: number
+  scaleFactor?: number
+}
+
 export interface OpSheet {
   model: string
   endpoint: string
-  estimateUsd?: number | null
+  defaults: OpDefaults
   maxS?: number
   minS?: number
   durationsS?: number[]
@@ -195,7 +212,7 @@ export interface OpSheet {
 export interface OpAlternate {
   model: string
   endpoint: string
-  estimateUsd: number | null
+  defaults: OpDefaults
   label: string
   note?: string
   maxS?: number
@@ -210,11 +227,36 @@ export interface OpAlternate {
   video?: CapabilitySheet['video']
 }
 
+/** One model in the sheet's catalogue: its checked limits and its published price (read by the relay). */
+export interface ModelSheet {
+  endpoint?: string
+  label: string
+  ratios?: { ratio: string; tier?: string }[]
+  durationsS?: number[]
+  inputS?: { min?: number; max?: number; maxFps?: number }
+  outputs?: number[]
+  promptMax?: number
+  promptUnit?: 'utf16'
+  refs?: { max: number; maxCharacter?: number }
+  mask?: 'none' | 'png_black_edit' | 'png_white_edit'
+  preciseEdit?: boolean
+  keyframes?: { max: number; range?: 'whole_seconds_end_exclusive' }
+  targetAspectRatios?: string[]
+  firstLastFrame?: boolean
+  audioDefault?: boolean
+  scaleFactors?: number[]
+  resolutions?: string[]
+  pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
+}
+
 export interface CapabilitySheet {
   contractVersion: ContractVersion
   provider: Provider
   checked: string
+  usdPerCredit: number
+  sources: { url: string; fetched: string }[]
   ops: Partial<Record<Op, OpSheet>>
+  models: Record<string, ModelSheet>
   tagSyntax: 'at_tag' | 'none'
   refs: { max: number; maxCharacter?: number }
   seed: boolean

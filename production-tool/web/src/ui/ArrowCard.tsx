@@ -177,7 +177,7 @@ function CardView({ arrow, at, pinned = false, api }: { arrow: El; at: Pt; pinne
         {card.told && <><dt>What the model was told</dt><dd className="ac-told">{card.told}</dd></>}
       </dl>
       {card.passthrough && <div className="ac-foot">{card.passthrough}</div>}
-      {(card.when || card.cost) && <div className="ac-foot">{[card.when, card.cost].filter(Boolean).join(' · ')}</div>}
+      {card.when && <div className="ac-foot">{card.when}</div>}
     </div>
   )
 }
