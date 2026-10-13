@@ -20,7 +20,7 @@ import type {
   JobShot, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output, PlannedShot, Question,
 } from '../contracts/types'
 import { AGENCY_SHELF } from '../contracts/types'
-import { quotaClassOf } from '../contracts/load'
+import { quotaClassOf, SPEND_POLICY } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
 import { hexOf } from '../lib/hash'
 import type { AnswerResult, Relay, UploadResult } from './types'
@@ -260,7 +260,9 @@ export class MockRelay implements Relay {
       team: MOCK_TENANT.agency,
       workspace: MOCK_TENANT.id,
       tenant: { ...MOCK_TENANT },
-      quotas: { image: 40, video: 6, render: 3 },
+      // As the relay answers with no tenant limits set (contracts/spend-policy.json, features/tenant-limits.clan).
+      allow: { claude: SPEND_POLICY.allow.claude, makers: [...SPEND_POLICY.allow.makers] },
+      quotas: null,
       projects: 0, // nothing is saved to a server without the relay
     }
   }

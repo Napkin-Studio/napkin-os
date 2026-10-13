@@ -162,7 +162,7 @@ export interface Output {
 
 export type ErrorCode =
   | 'invalid_input' | 'unauthorised' | 'blocked' | 'flag_off' | 'quota_exhausted' | 'spend_stop'
-  | 'queue_full' | 'capability_missing' | 'moderated' | 'provider_failed' | 'provider_unavailable'
+  | 'limit_reached' | 'not_allowed' | 'queue_full' | 'capability_missing' | 'moderated' | 'provider_failed' | 'provider_unavailable'
   | 'timeout' | 'uncertain' | 'conflict' | 'internal'
 
 export interface ContractError {
@@ -229,6 +229,9 @@ export interface OpAlternate {
 
 /** One model in the sheet's catalogue: its checked limits and its published price (read by the relay). */
 export interface ModelSheet {
+  /** The company that makes the model and receives what a job sends it; an agency's allow.makers
+   *  turns models on or off by it (features/tenant-limits.clan). */
+  maker: string
   endpoint?: string
   label: string
   ratios?: { ratio: string; tier?: string }[]
@@ -307,6 +310,17 @@ export interface Config {
   spend: { capUsd: number; warnUsd: number }
   flags: Flags
   banner: string
+  /** Not in config.json: the agency's allowlist from GET /me, which useConfig applies (withAllow):
+   *  routing keeps only providers with a model the agency allows, and the model menus list only those. */
+  allow?: Allow
+}
+
+/** Where an agency's material may go (spend-policy.schema.json#/$defs/allow, features/tenant-limits.clan). */
+export interface Allow {
+  /** The director and the character cards (Claude on Amazon Bedrock). */
+  claude: boolean
+  /** The makers whose models may run; any other is off. */
+  makers: string[]
 }
 
 
@@ -681,8 +695,10 @@ export interface Me {
   workspace: string
   /** The agency the person signed in under (features/os-sign-in.clan). */
   tenant: { id: string; agency: string }
-  /** Remaining today, per quota class. */
-  quotas: { image: number; video: number; render: number }
+  /** Where the agency's material may go (features/tenant-limits.clan). */
+  allow: Allow
+  /** Remaining today, per quota class, while the agency's daily quotas are on; null while off (the default). */
+  quotas: { image: number; video: number; render: number } | null
   /** How many projects the agency has saved on the relay. */
   projects: number
   /** Only while flags.dogfood is on: whether this person has read the beta notice. */

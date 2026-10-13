@@ -3,8 +3,8 @@
 // "the UI shows controls from the first provider's sheet"). Nothing in the UI
 // checks a provider by name; everything goes through `controlsFor`.
 
-import { CONFIGS, SHEETS } from './contracts/load'
-import type { CapabilitySheet, Config, Flags, ModelChoice, Op, Provider } from './contracts/types'
+import { CONFIGS, SHEETS, SPEND_POLICY } from './contracts/load'
+import type { Allow, CapabilitySheet, Config, Flags, ModelChoice, Op, Provider } from './contracts/types'
 import { OPS } from './contracts/types'
 
 export type Sheets = Partial<Record<Provider, CapabilitySheet>>
@@ -110,16 +110,44 @@ export interface ModelOption extends ModelChoice {
 
 /** What the menu offers for an op: each routed provider in the order its jobs run (Runway, the floor,
  *  is always there), its own model first and then its alternates (features/runway-fallback.clan).
+ *  Only models whose maker the agency allows (config.allow, features/tenant-limits.clan).
  *  The relay checks every pick again. */
 export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS): ModelOption[] {
   const out: ModelOption[] = []
   for (const provider of config.routing[op] ?? []) {
     const spec = sheets[provider]?.ops[op]
     if (!spec) continue
-    out.push({ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note })
-    for (const a of spec.alternates ?? []) out.push({ provider, model: a.model, label: a.label, note: a.note })
+    const all = [{ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note },
+      ...(spec.alternates ?? []).map((a) => ({ provider, model: a.model, label: a.label, note: a.note }))]
+    out.push(...all.filter((o) => modelOn(sheets, provider, o.model, config.allow)))
   }
   return out
+}
+
+// ── The agency's allowlist (features/tenant-limits.clan) ──
+
+/** A maker the agency allows: one in its list, or Napkin's own (the mock). An unknown maker is off. */
+export function makerOn(maker: string | undefined, allow: Allow): boolean {
+  return !!maker && (allow.makers.includes(maker) || SPEND_POLICY.alwaysAllowed.includes(maker))
+}
+
+/** A model the agency may run on this provider; every model when no allowlist is known. */
+export function modelOn(sheets: Sheets, provider: Provider, model: string, allow: Allow | undefined): boolean {
+  return !allow || makerOn(sheets[provider]?.models?.[model]?.maker, allow)
+}
+
+/** The config with the agency's allowlist applied: each op routes only to providers with a model the
+ *  agency allows, so a step with none left loses its controls, and the menus list only allowed models. */
+export function withAllow(config: Config, allow: Allow | undefined, sheets: Sheets = SHEETS): Config {
+  if (!allow) return config
+  const routing: Config['routing'] = {}
+  for (const [op, providers] of Object.entries(config.routing) as [Op, Provider[]][]) {
+    routing[op] = providers.filter((p) => {
+      const spec = sheets[p]?.ops[op]
+      return !!spec && [spec.model, ...(spec.alternates ?? []).map((a) => a.model)].some((m) => modelOn(sheets, p, m, allow))
+    })
+  }
+  return { ...config, routing, allow }
 }
 
 /** The pick to send with a job: none for the routing's first model, which routes as before. */

@@ -40,7 +40,7 @@ const settle = async () => {
   for (let i = 0; i < 40; i++) await new Promise<void>((r) => setImmediate(r))
 }
 
-const ME = { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 }
+const ME = { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, allow: { claude: true, makers: ['runway', 'google'] }, quotas: null, projects: 0 }
 
 function setup(opts: { clock?: () => number } = {}) {
   const storage = memoryStorage()

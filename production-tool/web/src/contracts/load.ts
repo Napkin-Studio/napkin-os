@@ -8,7 +8,9 @@ import runway from '../../../contracts/capabilities/runway.json'
 import testing from '../../../contracts/examples/config.testing.json'
 import live from '../../../contracts/examples/config.live.json'
 import common from '../../../contracts/common.schema.json'
-import type { CapabilitySheet, Config, LinkRule, Op, Provider, QuotaClass, RefRole, RefRoleLine } from './types'
+import spendPolicy from '../../../contracts/spend-policy.json'
+import subprocessors from '../../../contracts/subprocessors.json'
+import type { Allow, CapabilitySheet, Config, LinkRule, Op, Provider, QuotaClass, RefRole, RefRoleLine } from './types'
 
 export const SHEETS: Record<Provider, CapabilitySheet> = {
   mock: mock as CapabilitySheet,
@@ -29,3 +31,20 @@ const OP_QUOTA = common.$defs.opQuotaClass.const as Record<Op, QuotaClass>
 export function quotaClassOf(op: Op): QuotaClass {
   return OP_QUOTA[op]
 }
+
+/** Every agency's defaults until its tenant item says otherwise (features/tenant-limits.clan). */
+export const SPEND_POLICY = spendPolicy as { capUsdMonthly: number | null; dailyQuotas: boolean; allow: Allow; alwaysAllowed: string[] }
+
+/** One company that receives an agency's material (contracts/subprocessors.json). */
+export interface Subprocessor {
+  id: string
+  name: string
+  does: string
+  receives: string
+  via?: string
+  region: { where: string; source: string } | null
+  control: 'always' | 'claude' | 'maker'
+}
+
+/** The notice the Data sharing sheet shows (contracts/subprocessors.json; subprocessors.md is generated from it). */
+export const SUBPROCESSORS = subprocessors.entries as Subprocessor[]

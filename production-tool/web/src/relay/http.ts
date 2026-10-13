@@ -8,7 +8,7 @@ import type {
 } from '../contracts/types'
 import { AGENCY_SHELF } from '../contracts/types'
 import type { ShellEvent } from '../dogfood/recorder'
-import { sha256Of } from '../lib/hash'
+import { checksumHeader, sha256Of } from '../lib/hash'
 import { accessOf, type Access } from './access'
 import { RelayError, type AnswerResult, type Relay, type UploadResult } from './types'
 
@@ -64,7 +64,8 @@ export class HttpRelay implements Relay {
     if (!res.exists && res.putUrl) {
       let put: Response
       try {
-        put = await fetch(res.putUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mime } })
+        // The PUT is bound to the bytes' hash: S3 refuses other bytes (features/tenant-limits.clan).
+        put = await fetch(res.putUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mime, 'x-amz-checksum-sha256': checksumHeader(sha256) } })
       } catch (_e) {
         throw new RelayError({ code: 'provider_unavailable', message: 'The upload did not go through. Try again.', retryable: true })
       }
