@@ -45,6 +45,7 @@ import identity
 import library
 import names
 import projects
+from blobs import checksum_header
 from contracts import Contracts, api
 from contracts_dir import contracts_dir, pricing
 from director.base import Director, PassthroughDirector, PromptTooOld, fit_duration, new_id
@@ -588,7 +589,8 @@ class Relay:
                 return {"exists": True, "url": self.blobs.public_url(made)}
         elif not self.blobs.exists(key):
             self.store.hold(tenant, sha)  # the first upload of these bytes: its agency holds them
-        return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"], sha), "url": url}
+        return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"], sha),
+                "putHeaders": {"x-amz-checksum-sha256": checksum_header(sha)}, "url": url}
 
     def _projects(self) -> projects.Projects:
         return projects.Projects(self.blobs, lambda: iso(self.clock()))

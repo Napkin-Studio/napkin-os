@@ -65,6 +65,9 @@ def test_every_presigned_put_is_bound_to_its_hash():
     upload(h, h.as_person(), sha)
     assert rec.bound == [(f"in/{sha}", sha)]
     assert checksum_header(sha) == "LXEWQrcmsEQBYnyp+6wy9chTD7GQPMTbAiWHF5IaSIE="
+    # The web sends exactly the headers the relay names (web/src/tenantLimits.test.ts uses this vector).
+    out = upload(h, h.as_person("sai", team="green"), sha)
+    assert out["putHeaders"] == {"x-amz-checksum-sha256": "LXEWQrcmsEQBYnyp+6wy9chTD7GQPMTbAiWHF5IaSIE="}
 
 
 def test_the_local_relay_refuses_other_bytes_as_s3_does(tmp_path):

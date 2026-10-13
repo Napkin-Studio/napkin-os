@@ -17,15 +17,6 @@ export function hexOf(sha: string): string {
   return sha.startsWith('sha256:') ? sha.slice(7) : sha
 }
 
-/** The x-amz-checksum-sha256 header for a 'sha256:<hex>' hash: the digest in base64, which binds a
- *  presigned upload to its bytes (features/tenant-limits.clan; the relay's blobs.checksum_header). */
-export function checksumHeader(sha: string): string {
-  const hex = hexOf(sha)
-  let bin = ''
-  for (let i = 0; i < hex.length; i += 2) bin += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16))
-  return btoa(bin)
-}
-
 export function extFor(mime: string): string {
   const m = mime.split(';')[0]
   switch (m) {

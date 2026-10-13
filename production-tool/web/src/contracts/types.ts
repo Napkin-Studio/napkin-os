@@ -720,7 +720,13 @@ export interface ClanSaved { project: SavedProject }
 export interface ProjectCanvas { elements: unknown[]; savedAt?: string }
 
 export interface UploadRequest { sha256: Sha256; mime: Mime; bytes: number }
-export interface UploadResponse { exists: boolean; putUrl?: string; url: string }
+export interface UploadResponse {
+  exists: boolean
+  putUrl?: string
+  /** Headers the PUT carries besides Content-Type, as given (x-amz-checksum-sha256: features/tenant-limits.clan). */
+  putHeaders?: Record<string, string>
+  url: string
+}
 
 /** An image input: a named ref (name = key_variant) or an unnamed canvas node. The relay makes the wire tags. */
 export interface JobInputRef { id: Id; name?: RefName; role: RefRole; label?: string; kind: 'drawing' | 'picture' | 'generated'; asset: AssetRef }

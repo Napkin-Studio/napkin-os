@@ -139,6 +139,13 @@
           "type": "string",
           "description": "Presigned S3 PUT, 15 min. Absent when exists is true."
         },
+        "putHeaders": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Headers the PUT must carry besides Content-Type, as given: x-amz-checksum-sha256 binds the upload to its hash, so S3 refuses other bytes (features/tenant-limits.clan). With putUrl only."
+        },
         "url": {
           "type": "string",
           "pattern": "^https://",

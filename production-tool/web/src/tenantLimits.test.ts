@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { controlsFor, effectiveConfig, makerOn, modelChoicesFor, withAllow, type Sheets } from './capabilities'
 import { SHEETS, SPEND_POLICY, SUBPROCESSORS } from './contracts/load'
 import type { Allow, Config } from './contracts/types'
-import { checksumHeader } from './lib/hash'
 import { HttpRelay } from './relay/http'
 import { MockRelay } from './relay/mock'
 import { failedActions } from './ui/jobActions'
@@ -57,17 +56,13 @@ describe('refusals for the agency', () => {
 describe('the upload is bound to its hash', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it("matches the relay's checksum vector (tests/test_upload_leak.py)", () => {
-    expect(checksumHeader('sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881'))
-      .toBe('LXEWQrcmsEQBYnyp+6wy9chTD7GQPMTbAiWHF5IaSIE=')
-  })
-
-  it('sends x-amz-checksum-sha256 with the presigned PUT', async () => {
+  it('sends the headers the relay names with the presigned PUT', async () => {
     const calls: [string, RequestInit | undefined][] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       calls.push([url, init])
       if (url.endsWith('/uploads')) {
-        return new Response(JSON.stringify({ exists: false, putUrl: 'https://bucket.test/in/x?sig', url: 'https://cdn.test/in/x' }),
+        return new Response(JSON.stringify({ exists: false, putUrl: 'https://bucket.test/in/x?sig', url: 'https://cdn.test/in/x',
+          putHeaders: { 'x-amz-checksum-sha256': 'LXEWQrcmsEQBYnyp+6wy9chTD7GQPMTbAiWHF5IaSIE=' } }),
           { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
       return new Response('', { status: 200 })
