@@ -9,6 +9,7 @@ import type { Relay } from '../relay'
 import type { ModelStore } from '../model/store'
 import type { Shell } from '../projects/shell'
 import type { ServerCopy } from '../projects/serverCopy'
+import type { Route, Router } from './route'
 
 /** The open project (features/project-home.clan). */
 export interface ProjectHandle {
@@ -83,4 +84,18 @@ export function useConfig(): { config: Config; controls: Controls } {
     const config = effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig)
     return { config, controls: controlsFor(config) }
   }, [ui.configChoice, ui.providerChoice, remoteConfig])
+}
+
+/** The router (app/route.ts): the editors' routes under the build's base. */
+export const RouterContext = createContext<Router | null>(null)
+
+export function useRouter(): Router {
+  const r = useContext(RouterContext)
+  if (!r) throw new Error('RouterContext missing')
+  return r
+}
+
+export function useRoute(): Route {
+  const r = useRouter()
+  return useSyncExternalStore(r.subscribe, r.get)
 }

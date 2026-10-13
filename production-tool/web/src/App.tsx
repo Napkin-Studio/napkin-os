@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useShell, useUi } from './app/context'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useConfig, useDoc, useJobsTick, useRoute, useServices, useShell, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
 import type { StageName } from './doc/ui'
@@ -27,6 +27,9 @@ import { downloadAllMedia } from './media/download'
 import { viewsOnCanvas } from './media/names'
 import { idbGet } from './lib/idb'
 
+// The Script editor is its own chunk: projects that never open it never load Tiptap.
+const ScriptEditor = lazy(() => import('./script/ScriptEditor').then((m) => ({ default: m.ScriptEditor })))
+
 const STAGES: { id: StageName; n: number; label: string }[] = [
   { id: 'character', n: 1, label: 'Canvas' },
   { id: 'storyboard', n: 2, label: 'Storyboard' },
@@ -37,6 +40,10 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   const { clan, storeNote, project } = useServices()
   const { config } = useConfig()
   const stage = useUi().stage
+  const route = useRoute()
+  // The Script editor opens full screen over the stages (features/script-editor.clan); the canvas
+  // stays mounted underneath, so its jobs keep landing.
+  const script = route.kind === 'script' && route.projectId === project.id ? route.scriptId : null
   const [history, setHistory] = useState(false)
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
@@ -62,6 +69,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         {stage === 'video' && <div className="stage-pane" data-dogfood-area="video"><Video /></div>}
         {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
       </div>
+      {script && <Suspense fallback={<div className="se" role="status" aria-busy="true" />}><ScriptEditor key={script} scriptId={script} /></Suspense>}
       <UpdateBox />
       <FallbackNotices />
       {!import.meta.env.PROD && <DevSwitch />}

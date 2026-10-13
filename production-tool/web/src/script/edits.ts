@@ -175,6 +175,55 @@ export async function moveShotTo(store: ModelStore, shotId: string, place: ShotP
   return r
 }
 
+/**
+ * A reference added to a shot from its chips (the Storyboard card's '+ ref'): a mention at the
+ * end of its action, typed into the live text as the person, one undo step. Replaces the old
+ * flat withMention, which rewrote the whole action as words.
+ */
+export async function insertMention(store: ModelStore, shotId: string, target: { id: string; label: string }) {
+  await store.flush()
+  const prose = store.text.prose('shot', shotId)
+  const blocks = [...(prose.content ?? [])]
+  let i = blocks.map((b) => b.type).lastIndexOf('action')
+  if (i < 0) {
+    blocks.unshift({ type: 'action', content: [] })
+    i = 0
+  }
+  const inline = [...(blocks[i].content ?? [])]
+  const lastText = inline.at(-1)
+  if (lastText && !(lastText.type === 'text' && /\s$/.test(lastText.text ?? ''))) inline.push({ type: 'text', text: ' ' })
+  inline.push({ type: 'mention', attrs: { id: target.id, label: target.label } })
+  blocks[i] = { ...blocks[i], content: inline }
+  await store.text.replace('shot', shotId, { type: 'doc', content: blocks }, store.clan.personClaim(), { label: `name @${target.label} in shots[${shotId}]` })
+  await store.flush()
+}
+
+/** A reference taken off a shot: every mention of it leaves the text, one undo step. */
+export async function removeMention(store: ModelStore, shotId: string, targetId: string) {
+  await store.flush()
+  const prose = store.text.prose('shot', shotId)
+  const strip = (nodes: PMNode[] | undefined): PMNode[] => {
+    const out: PMNode[] = []
+    for (const n of nodes ?? []) {
+      if (n.type === 'mention' && n.attrs?.id === targetId) continue
+      const prev = out.at(-1)
+      // Two spaces where the mention was become one.
+      if (n.type === 'text' && prev?.type === 'text') prev.text = `${prev.text ?? ''}${n.text ?? ''}`.replace(/ {2,}/g, ' ')
+      else out.push({ ...n })
+    }
+    const removed = (nodes ?? []).some((n) => n.type === 'mention' && n.attrs?.id === targetId)
+    const last = out.at(-1)
+    if (removed && last?.type === 'text') last.text = (last.text ?? '').trimEnd()
+    const first = out[0]
+    if (removed && first?.type === 'text') first.text = (first.text ?? '').trimStart()
+    return out.filter((n) => n.type !== 'text' || n.text)
+  }
+  const next: Prose = { type: 'doc', content: (prose.content ?? []).map((b) => (b.content ? { ...b, content: strip(b.content) } : b)) }
+  for (const b of next.content ?? []) if (b.content && !b.content.length) delete b.content
+  await store.text.replace('shot', shotId, next, store.clan.personClaim(), { label: `unlink a reference from shots[${shotId}]` })
+  await store.flush()
+}
+
 /** Prose blocks from Fountain blocks: @words that name a ref become mentions (model/diff.ts). */
 export function fountainProse(d: Doc, blocks: { type: string; text: string }[]): Prose {
   const content: PMNode[] = []

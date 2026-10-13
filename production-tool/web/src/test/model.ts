@@ -5,9 +5,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { strToU8, unzipSync, zipSync } from 'fflate'
-import { ClanDocumentStore, newUlidId, ranksBetween, type Persistence, type Person, type SerializedUndo } from '../../../clan-store/src'
+import { ClanDocumentStore, newUlidId, rankBetween, ranksBetween, type Persistence, type Person, type SerializedUndo } from '../../../clan-store/src'
 import type { DocAsset, DocJob, EdlItem, Frame, ProductionDocument, Shot, Take } from '../contracts/types'
-import { mainStoryboard, mainVideo } from '../model/selectors'
+import { mainScript, mainStoryboard, mainVideo, scenesOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -112,4 +112,22 @@ export async function v2Clan(): Promise<Uint8Array> {
   if (!data.includes("contract_version: '3'")) throw new Error('the data no longer says its contract the way v2Clan expects')
   files['shared/data.yaml'] = strToU8(data.replace("contract_version: '3'", "contract_version: '2'"))
   return zipSync(files)
+}
+
+/** For tests: a script's words in its first scene (made when there is none), the other scenes' emptied,
+ *  as a draft change (the store writes them as live text). The app writes words only through the
+ *  editors (features/script-editor.clan). */
+export function scriptWords(d: ProductionDocument, text: string) {
+  const script = mainScript(d)
+  if (!script) throw new Error('This project has no script.')
+  const scenes = scenesOf(d, script.id)
+  if (!scenes.length) {
+    if (!text) return
+    const sid = id('scene')
+    d.scenes[sid] = { id: sid, v: 1, field_v: {}, script_id: script.id, rank: rankBetween(null, null), heading: '', text }
+    return
+  }
+  const [first, ...rest] = scenes
+  d.scenes[first.id].text = text
+  for (const sc of rest) if (sc.text) d.scenes[sc.id].text = ''
 }

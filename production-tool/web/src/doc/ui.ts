@@ -77,6 +77,17 @@ export interface ProjectUi {
   following?: FollowRun
   /** The person's undo and redo steps (clan-store LocalUndo), kept here so they survive a reload. */
   undo?: SerializedUndo
+  /** The Script editor's choices, per script: its view, and which storyboard's shots it shows. */
+  script?: Record<string, ScriptUi>
+}
+
+/** One person's choices in one script (features/script-editor.clan). */
+export interface ScriptUi {
+  view: 'screenplay' | 'av'
+  /** 'Shots from:' when the script drives more than one storyboard. */
+  storyboard?: string
+  /** The Skye suggestion whose bubble is open, kept across back and forward. */
+  openSuggestion?: string
 }
 
 /** What the panels see: the open project's UI with the app's. */

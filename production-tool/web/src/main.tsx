@@ -12,6 +12,8 @@ import { browserStorage } from './projects/storage'
 import { createRelay } from './relay'
 import { AccessStore, type Access } from './relay/access'
 import { Root } from './Root'
+import { Router } from './app/route'
+import { openRouteProject } from './app/routeOpen'
 
 async function boot() {
   const relay = createRelay()
@@ -60,7 +62,15 @@ async function boot() {
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
   const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
-  if (app.get().me) await shell.start().catch((e) => console.error('could not open the last project', e))
+  // A deep link (/production/p/:project/script/:scriptId) opens its project; else back where the person was.
+  const router = new Router()
+  if (app.get().me) {
+    const opened = await openRouteProject(shell, router).catch((e) => {
+      console.error('could not open the linked project', e)
+      return false
+    })
+    if (!opened) await shell.start().catch((e) => console.error('could not open the last project', e))
+  }
 
   window.addEventListener('pagehide', () => {
     const s = shell.get().session?.services
@@ -79,7 +89,7 @@ async function boot() {
   }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Root shell={shell} access={access} />
+      <Root shell={shell} access={access} router={router} />
     </StrictMode>,
   )
 }

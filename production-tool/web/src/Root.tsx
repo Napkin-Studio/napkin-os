@@ -2,21 +2,28 @@
 // Each project gets its own services (document, UI, runner), and the App is
 // keyed by the project, so nothing on screen carries over from another one.
 
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { App } from './App'
 import { DogfoodGate } from './dogfood/Dogfood'
-import { ServicesContext, ShellContext } from './app/context'
+import { RouterContext, ServicesContext, ShellContext } from './app/context'
+import type { Router } from './app/route'
 import type { Shell } from './projects/shell'
 import { Home } from './ui/Home'
 import { StudioMark } from './ui/Mark'
 import { NO_ACCESS, signInHref, type Access, type AccessStore } from './relay/access'
 import './ui/home.css'
 
-export function Root({ shell, access }: { shell: Shell; access: AccessStore }) {
+export function Root({ shell, access, router }: { shell: Shell; access: AccessStore; router: Router }) {
   const state = useSyncExternalStore(shell.subscribe, shell.get)
   const app = useSyncExternalStore(shell.deps.app.subscribe, shell.deps.app.get)
   const why = useSyncExternalStore(access.subscribe, access.get)
   const { relay } = shell.deps
+  const route = useSyncExternalStore(router.subscribe, router.get)
+  // An editor's route belongs to its open project: on Home, or in another project, it goes.
+  const open = state.view === 'project' ? state.session?.id : undefined
+  useEffect(() => {
+    if (route.kind === 'script' && route.projectId !== open && !state.busy) router.replace({ kind: 'none' })
+  }, [route, open, state.busy, router])
   let body
   if (relay.kind === 'http' && (why !== 'ok' || !app.me)) body = <NoAccess why={why === 'ok' ? 'signed_out' : why} />
   else if (state.view === 'project' && state.session) {
@@ -28,9 +35,11 @@ export function Root({ shell, access }: { shell: Shell; access: AccessStore }) {
   } else body = <Home />
   return (
     <ShellContext.Provider value={shell}>
-      {body}
-      {/* The beta's notice, once signed in (features/production-tool-dogfood.clan). */}
-      <DogfoodGate shell={shell} />
+      <RouterContext.Provider value={router}>
+        {body}
+        {/* The beta's notice, once signed in (features/production-tool-dogfood.clan). */}
+        <DogfoodGate shell={shell} />
+      </RouterContext.Provider>
     </ShellContext.Provider>
   )
 }

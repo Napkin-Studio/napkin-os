@@ -23,6 +23,7 @@ import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } 
 import type { EditorView } from '@tiptap/pm/view'
 import { ySyncPlugin } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
+import type { ProductionDocument } from '../contracts/types'
 import { flatText, FRAGMENT_BLOCKS, LIMITS, shapeProblem, TEXT_EXTENSIONS, type FragmentKind, type PMNode as JsonNode, type Prose, type RefNames } from '../../../clan-store/src'
 
 // ── FragmentSync ────────────────────────────────────────────────────────────
@@ -84,6 +85,8 @@ export interface KeyHooks {
   lineBeat?(editor: Editor): boolean
   /** Escape: close the innermost popover first. True when one closed. */
   escape?(): boolean
+  /** A paste of several lines into unplanned scene text (a script): true when the page took it. */
+  pasteScript?(text: string, editor: Editor): boolean
 }
 
 export interface EditorOptions {
@@ -98,6 +101,8 @@ export interface EditorOptions {
   placeholder?: string | ((blockType: string, index: number) => string)
   /** The compact Storyboard-card editor: no element cycling, Enter makes a new action line. */
   compact?: boolean
+  /** The editor these extensions run in (set once it exists; for paste hooks). */
+  editor?: () => Editor
 }
 
 const NO_REFS = (): RefNames => ({})
@@ -123,6 +128,10 @@ function limitPlugin(opts: EditorOptions): Plugin {
     },
     props: {
       handlePaste(view, _event, slice) {
+        if (opts.kind === 'scene' && opts.keys?.pasteScript && opts.editor) {
+          const text = sliceText(slice)
+          if (text.includes('\n') && opts.keys.pasteScript(text, opts.editor())) return true
+        }
         return pasteWithin(view, slice, opts)
       },
     },
@@ -332,7 +341,10 @@ export function editorExtensions(opts: EditorOptions): AnyExtension[] {
     keys,
     Extension.create({
       name: 'napkinGuards',
-      addProseMirrorPlugins: () => [shapePlugin(opts.kind), limitPlugin(opts)],
+      addProseMirrorPlugins() {
+        const editor = this.editor
+        return [shapePlugin(opts.kind), limitPlugin({ ...opts, editor: () => editor })]
+      },
     }),
   ]
   if (opts.fragment) out.push(FragmentSync.configure({ fragment: opts.fragment }))
@@ -343,4 +355,49 @@ export function editorExtensions(opts: EditorOptions): AnyExtension[] {
     }))
   }
   return out
+}
+
+/** The refs as checkpoint names them: key_variant for a ref, the key alone for a whole character. */
+export function refNames(d: ProductionDocument): RefNames {
+  return {
+    ...Object.fromEntries(Object.values(d.keys ?? {}).map((k) => [k.id, { key: k.key }])),
+    ...Object.fromEntries(Object.values(d.refs ?? {}).map((r) => [r.id, { key: r.key, variant: r.variant }])),
+  }
+}
+
+/** '318 / 4,000', and whether it is at the limit. */
+export function counterText(length: number, limit: number): { text: string; warn: boolean } {
+  return { text: `${length.toLocaleString('en')} / ${limit.toLocaleString('en')}`, warn: length >= limit }
+}
+
+/** The owner's hooks for an editor made once: they change with every render, so the editor calls through this. */
+export class HookRelay {
+  private hooks: KeyHooks | undefined
+  private onNotice: ((m: string) => void) | undefined
+  private onFocus: (() => void) | undefined
+
+  set(hooks: KeyHooks | undefined, onNotice?: (m: string) => void, onFocus?: () => void) {
+    this.hooks = hooks
+    this.onNotice = onNotice
+    this.onFocus = onFocus
+  }
+
+  notice(m: string) {
+    this.onNotice?.(m)
+  }
+
+  focus() {
+    this.onFocus?.()
+  }
+
+  keys(): KeyHooks {
+    return {
+      out: (dir, e) => this.hooks?.out?.(dir, e) ?? false,
+      sceneHeading: (h, i, e) => this.hooks?.sceneHeading?.(h, i, e) ?? false,
+      moment: (e) => this.hooks?.moment?.(e) ?? false,
+      lineBeat: (e) => this.hooks?.lineBeat?.(e) ?? false,
+      escape: () => this.hooks?.escape?.() ?? false,
+      pasteScript: (t, e) => this.hooks?.pasteScript?.(t, e) ?? false,
+    }
+  }
 }
