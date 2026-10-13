@@ -1,0 +1,115 @@
+# Every font family we ship or link, one entry per family. The licence gate fails on a
+# font file (woff2, woff, ttf, otf) in the production install of an npm client root, or
+# tracked in the repo, with no entry here, and on a fonts.googleapis.com family= link
+# in tracked .html/.ts/.tsx/.py code whose family is not listed.
+#
+# Fields: name, shipped_by ("package@version" for fonts inside an npm package,
+# "fonts.googleapis.com" for linked fonts, "repo" for tracked files), files (filename
+# globs, for shipped files), licence (confirmed at source_url), source_url.
+# A version bump of the shipping package needs these entries re-read and updated.
+
+# ---- @excalidraw/excalidraw 0.18.1 (production-tool/web) -------------------------
+# dist/prod/fonts and dist/dev/fonts hold the same set; both are checked against these.
+# Licences read from each family's upstream on 2026-10-13. The woff2 files carry no
+# licence file; the cn-font-split headers in excalidraw's fonts/*/index.ts (v0.18.0)
+# repeat the licence for Excalifont and Xiaolai.
+
+[[family]]
+name = "Assistant"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["Assistant-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/hafontia/Assistant/blob/master/OFL.txt"
+
+[[family]]
+name = "Cascadia Code"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["CascadiaCode-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/microsoft/cascadia-code/blob/main/LICENSE"
+
+[[family]]
+name = "Comic Shanns"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["ComicShanns-*"]
+licence = "MIT"
+source_url = "https://github.com/shannpersand/comic-shanns/blob/master/LICENSE"
+
+[[family]]
+name = "Excalifont"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["Excalifont-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/excalidraw/excalidraw/blob/v0.18.0/packages/excalidraw/fonts/Excalifont/index.ts"
+
+[[family]]
+name = "Liberation Sans"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["LiberationSans-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/liberationfonts/liberation-fonts/blob/main/LICENSE"
+
+[[family]]
+name = "Lilita One"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["Lilita-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/google/fonts/blob/main/ofl/lilitaone/OFL.txt"
+
+[[family]]
+name = "Nunito"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["Nunito-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/googlefonts/nunito/blob/main/OFL.txt"
+
+[[family]]
+name = "Virgil"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["Virgil-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/excalidraw/virgil/blob/main/LICENSE.md"
+
+# Xiaolai SC (LXGW, derived from Nozomi Seto's Seto Font): OFL-1.1 upstream
+# (lxgw/kose-font OFL.txt) and in the font's own name table (excalidraw
+# fonts/Xiaolai/index.ts, v0.18.0). Open question 7 is answered: it is OFL-1.1.
+[[family]]
+name = "Xiaolai"
+shipped_by = "@excalidraw/excalidraw@0.18.1"
+files = ["Xiaolai-*"]
+licence = "OFL-1.1"
+source_url = "https://github.com/lxgw/kose-font/blob/master/OFL.txt"
+
+# ---- katex 0.16.47 (via excalidraw > mermaid-to-excalidraw > mermaid) ------------
+[[family]]
+name = "KaTeX"
+shipped_by = "katex@0.16.47"
+files = ["KaTeX_*", "Extra.otf"]
+licence = "MIT"
+source_url = "https://github.com/KaTeX/katex-fonts/blob/master/LICENSE"
+
+# ---- linked from Google Fonts ----------------------------------------------------
+[[family]]
+name = "Geist"
+shipped_by = "fonts.googleapis.com"
+licence = "OFL-1.1"
+source_url = "https://github.com/vercel/geist-font/blob/main/LICENSE.txt"
+
+[[family]]
+name = "Geist Mono"
+shipped_by = "fonts.googleapis.com"
+licence = "OFL-1.1"
+source_url = "https://github.com/vercel/geist-font/blob/main/LICENSE.txt"
+
+# app/public/mock-clan/human/index.html (ships in the app's public/ folder)
+[[family]]
+name = "Inter"
+shipped_by = "fonts.googleapis.com"
+licence = "OFL-1.1"
+source_url = "https://github.com/rsms/inter/blob/master/LICENSE.txt"
+
+[[family]]
+name = "JetBrains Mono"
+shipped_by = "fonts.googleapis.com"
+licence = "OFL-1.1"
+source_url = "https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt"

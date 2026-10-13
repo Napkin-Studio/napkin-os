@@ -1,0 +1,198 @@
+# The licence policy. scripts/licences/check.py reads it; docs/contracts/licences.md
+# explains it. Every change to this directory needs a person's approval: the pre-push
+# hook refuses it unless NAPKIN_LICENCE_APPROVED=<an approver> is set (person-only),
+# and CI lists every change in the job summary.
+#
+# The owner's rule (Shrey, 2026-10-13; docs/production-tool/overhaul-plan.md "Owner
+# decisions", features/licence-gate.clan decisions):
+#   - permissive open source only: MIT, Apache-2.0, BSD-2/3-Clause, ISC, 0BSD, CC0-1.0,
+#     Unlicense, Zlib, Unicode-3.0, BlueOak-1.0.0, Python-2.0 "and similar permissive";
+#     OFL-1.1 for fonts.
+#   - MPL-2.0 only when installed unmodified from a registry (npm, crates.io, PyPI):
+#     no patches, no vendored copies.
+#   - GPL/LGPL/AGPL never in anything shipped to clients; on servers only, in artefacts
+#     never distributed, and listed here explicitly as an exception.
+#   - never paid, commercial or source-available; no non-commercial model weights.
+
+# The people who may approve an exception. approved_by on every exception, model and
+# server binary must start with one of these names.
+approvers = ["Shrey"]
+
+[licences]
+# Allowed in every tier. The first block is the owner's list as written; the second is
+# "similar permissive" ids found in today's tree, added under the same ruling and listed
+# separately so the owner can see them (features/licence-gate.clan open_questions).
+permissive = [
+  "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "CC0-1.0",
+  "Unlicense", "Zlib", "Unicode-3.0", "BlueOak-1.0.0", "Python-2.0",
+  # similar permissive (2026-10-13 ruling; owner to confirm)
+  "MIT-0", "BSL-1.0", "PSF-2.0", "MIT-CMU", "HPND", "PostgreSQL", "Unicode-DFS-2016",
+  "CDLA-Permissive-2.0", "Python-2.0.1", "CNRI-Python", "X11", "ZPL-2.1", "CC-BY-4.0",
+  "FTL", "IJG", "libpng-2.0", "LicenseRef-AGG-2.3",
+  # The PyPI classifier "License :: OSI Approved :: BSD License" names no variant; the
+  # BSD licences in use are BSD-2-Clause and BSD-3-Clause, both on the owner's list.
+  "LicenseRef-BSD-unspecified",
+]
+# Exceptions a permissive id may carry (they only grant more).
+with_exceptions = ["LLVM-exception"]
+# Build tier only (dev dependencies, build tools; never shipped or run in production).
+build = []
+# Fonts: permissive, plus these.
+fonts = ["OFL-1.1"]
+# Model weights: permissive, plus these.
+weights = ["OpenMDW-1.1"]
+# Copyleft: allowed only on the server tier, only for a package named in an exception.
+copyleft = ["GPL-*", "LGPL-*", "AGPL-*", "EPL-*", "CDDL-*", "EUPL-*", "OSL-*", "CPL-*"]
+# Never allowed, whatever an exception says (glob patterns on SPDX ids).
+denied = [
+  "BUSL-*", "SSPL-*", "Elastic-*", "Commons-Clause", "LicenseRef-*Commons-Clause*",
+  "CC-BY-NC*", "CC-BY-NC-*", "PolyForm-*", "SUL-*", "LicenseRef-tldraw*",
+  "LicenseRef-*Commercial*", "LicenseRef-*Proprietary-Paid*", "UNLICENSED", "Confluent-*",
+]
+# Substrings that deny a licence string outright (npm 'SEE LICENSE IN', 'UNLICENSED').
+denied_markers = ["SEE LICENSE IN", "UNLICENSED", "Commons Clause", "non-commercial", "noncommercial", "BUSL"]
+
+[mpl]
+ids = ["MPL-2.0"]
+# Owner, 2026-10-13: MPL-2.0 from any registry, installed unmodified.
+registries = ["npm", "crates.io", "pypi"]
+
+# Legacy or free-text licence strings, mapped to SPDX. Whole strings or single ids.
+[aliases]
+"Apache License 2.0" = "Apache-2.0"
+"Apache 2.0" = "Apache-2.0"
+"Apache-2" = "Apache-2.0"
+"Apache2" = "Apache-2.0"
+"Apache License, Version 2.0" = "Apache-2.0"
+"Apache Software License" = "Apache-2.0"
+"Apache Software License 2.0" = "Apache-2.0"
+"MIT License" = "MIT"
+"The MIT License" = "MIT"
+"BSD 3-Clause" = "BSD-3-Clause"
+"BSD-3" = "BSD-3-Clause"
+"3-Clause BSD License" = "BSD-3-Clause"
+"new BSD License" = "BSD-3-Clause"
+"Modified BSD License" = "BSD-3-Clause"
+"BSD 2-Clause" = "BSD-2-Clause"
+"ISC License" = "ISC"
+"MPL 2.0" = "MPL-2.0"
+"MPL-2" = "MPL-2.0"
+"PSF" = "PSF-2.0"
+"PSF License" = "PSF-2.0"
+"Python Software Foundation License" = "PSF-2.0"
+"LGPLv3" = "LGPL-3.0-only"
+"GNU Lesser General Public License v3 (LGPLv3)" = "LGPL-3.0-only"
+"Apache 2.0 License" = "Apache-2.0"
+"NVIDIA Proprietary Software" = "LicenseRef-NVIDIA-Proprietary"
+"Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License" = "AGPL-3.0-only OR LicenseRef-Artifex-Commercial"
+
+# The roots we ship or run, and their tiers. A root that does not exist fails the check,
+# so a move (e.g. the Production Tool into napkin-web) must edit this list.
+[roots]
+npm = [
+  { path = "app", tier = "client" },
+  { path = "production-tool/web", tier = "client" },
+  { path = "production-tool/clan-store", tier = "client" },
+]
+rust = [
+  { package = "napkin-wasm", targets = ["wasm32-unknown-unknown"], tier = "client" },
+  { package = "clan-cli", targets = ["all"], tier = "client" },
+  { package = "clan-app", targets = ["all"], tier = "client" },
+  { package = "napkin-web", targets = ["all"], tier = "server" },
+]
+python = [
+  { path = "production-tool/relay", tier = "server" },
+  { path = "production-tool/stitch", tier = "server" },
+  { path = "server", tier = "server" },
+  { path = "layers-service", tier = "server" },
+  { path = "engine", tier = "server" },
+]
+
+[scan]
+# Not shipped and out of scope (features/licence-gate.clan non_goals): local stand-ins,
+# the test sandbox, the marketing site, design hand-offs and docs, and this gate's own
+# test fixtures.
+exclude = [
+  "mock-backend/*", "mock-middleware/*", "mock-agent/*", "test-sandbox/*", "site/*",
+  "docs/*", "AI-Generated Brief App Design/*", "scripts/licences/*",
+]
+# Our own licences: a tracked file may carry these SPDX headers.
+own_licences = ["MPL-2.0", "CC-BY-4.0"]
+
+# ---- exceptions ------------------------------------------------------------------
+# One per package and exact version. Fields: package, ecosystem (npm | cargo | pypi),
+# version, tier, licence (exactly as the gate reads it), reason, approved_by, date.
+# An exception that matches nothing fails the check. Copyleft never gets a client one.
+
+# ---- clarifications --------------------------------------------------------------
+# For a package whose metadata has no usable licence: the licence read from its own
+# licence file, keyed by name@version and that file's sha256, so a bump re-reads it.
+
+# psycopg is LGPL-3.0; the owner's decision (Shrey, 2026-10-13) allows LGPL in server-side
+# artefacts that are never distributed, listed explicitly. Used by server/ (category
+# seeding) and layers-service/ (the knowledge layers), both run on our servers only.
+[[exception]]
+package = "psycopg"
+ecosystem = "pypi"
+version = "3.3.6"
+tier = "server"
+licence = "LGPL-3.0-only"
+reason = "Postgres driver for server/ and layers-service/; runs on our servers only, never distributed to clients."
+approved_by = "Shrey (2026-10-13 decision)"
+date = "2026-10-13"
+
+[[exception]]
+package = "psycopg-binary"
+ecosystem = "pypi"
+version = "3.3.6"
+tier = "server"
+licence = "LGPL-3.0-only"
+reason = "psycopg's C speedups with libpq bundled (PostgreSQL licence); server-only like psycopg, never distributed."
+approved_by = "Shrey (2026-10-13 decision)"
+date = "2026-10-13"
+
+# ---- clarifications --------------------------------------------------------------
+[[clarification]]
+package = "fuzzy"
+ecosystem = "npm"
+version = "0.1.3"
+licence = "MIT"
+licence_file = "package/LICENSE-MIT"
+licence_file_sha256 = "a4aca837172fb1f6188c426e38835202e96bc853e25b7029cc5c933964f8401e"
+reason = "package.json has no license field; LICENSE-MIT is the MIT text (Matt York, 2012)."
+
+[[clarification]]
+package = "khroma"
+ecosystem = "npm"
+version = "2.1.0"
+licence = "MIT"
+licence_file = "package/license"
+licence_file_sha256 = "66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49"
+reason = "package.json has no license field; the license file is the MIT text."
+
+# Build tier: layers-service's test dependency. Its wheel's LICENSE is Apache-2.0, and it
+# bundles PostgreSQL 16's binaries (PostgreSQL licence).
+[[clarification]]
+package = "pgserver"
+ecosystem = "pypi"
+version = "0.1.4"
+licence = "Apache-2.0 AND PostgreSQL"
+licence_file = "pgserver-0.1.4.dist-info/LICENSE"
+licence_file_sha256 = "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+reason = "No licence in PyPI metadata; the wheel's LICENSE is Apache-2.0 and it bundles PostgreSQL."
+
+# pdfplumber's PDF backend. Metadata says "BSD-3-Clause, Apache-2.0, dependency licenses";
+# the wheel's METADATA lists every bundled licence file (REUSE): pypdfium2 and PDFium
+# (BSD-3-Clause, Apache-2.0), CC-BY-4.0 data, abseil and cpu_features (Apache-2.0),
+# libunwind and llvm-libc (Apache-2.0 WITH LLVM-exception), fast_float and simdutf (MIT),
+# FreeType (FTL), ICU (Unicode-3.0), lcms (MIT), libjpeg-turbo (IJG, BSD-3-Clause, Zlib),
+# OpenJPEG (BSD-2-Clause), libpng (libpng-2.0), zlib (Zlib), AGG 2.3, pdfium-binaries (MIT).
+# The hash is of METADATA, so any change to the bundled set forces a re-read.
+[[clarification]]
+package = "pypdfium2"
+ecosystem = "pypi"
+version = "5.14.0"
+licence = "BSD-3-Clause AND Apache-2.0 AND CC-BY-4.0 AND MIT AND BSD-2-Clause AND FTL AND IJG AND Zlib AND libpng-2.0 AND Unicode-3.0 AND Apache-2.0 WITH LLVM-exception AND LicenseRef-AGG-2.3"
+licence_file = "pypdfium2-5.14.0.dist-info/METADATA"
+licence_file_sha256 = "6b233b6136b3ae97b0df54a78d0a584a2ac228d56e4bb048a58ec83f3295dced"
+reason = "Free-text licence in PyPI metadata; read from the wheel's bundled licence files."
