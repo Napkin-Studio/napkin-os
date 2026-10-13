@@ -2,9 +2,9 @@
 // (Runway fails on lettering in an input image: INTERNAL.BAD_OUTPUT.01), so the
 // words travel as `input.text` instead. Pure helpers, no Excalidraw runtime.
 
-import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+import type { SceneElement } from './adapter/excalidraw/types'
 
-type El = ExcalidrawElement
+type El = SceneElement
 type TextEl = El & { type: 'text'; text: string; originalText?: string; containerId?: string | null }
 
 /** The contract's limit on input.text (relay-api.schema.json JobInput.text). */

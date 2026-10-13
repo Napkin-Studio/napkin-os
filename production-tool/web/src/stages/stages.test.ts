@@ -5,8 +5,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-// Excalidraw does not load in node; the projects reach it only through export.ts.
-vi.mock('@excalidraw/excalidraw', () => ({ serializeAsJSON: () => '{}' }))
+// The engine does not load in node; the projects reach it only through export.ts.
+vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
 
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { SnapshotStore, updateDoc } from '../doc/store'

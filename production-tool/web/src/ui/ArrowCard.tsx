@@ -5,27 +5,18 @@
 // over the canvas and hit-tests the arrows itself (canvas/arrowHit.ts); the words
 // come from canvas/arrowCard.ts. Listeners are passive: Excalidraw keeps every event.
 
-import { CaptureUpdateAction, viewportCoordsToSceneCoords } from '@excalidraw/excalidraw'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useDoc, useUi } from '../app/context'
 import { arrowCard, cardLines, type ArrowCard as Card, type NodeKind } from '../canvas/arrowCard'
 import { arrowPath, hitArrow, provenanceOf, type ArrowLike, type Pt } from '../canvas/arrowHit'
-import { byOwnId, cd, textOf, type El } from '../canvas/scene'
+import { byOwnId, cd, textOf, type Canvas, type El } from '../canvas/scene'
 
 const DELAY_MS = 250
 
 interface Shown { arrowId: string; at: Pt }
 
-/** Is the person in the middle of something (drawing, dragging, typing, another tool)? Then no cards. */
-function busy(api: ExcalidrawImperativeAPI): boolean {
-  const st = api.getAppState()
-  return st.activeTool.type !== 'selection' || !!st.newElement || !!st.selectionElement || st.selectedElementsAreBeingDragged ||
-    st.isResizing || st.isRotating || !!st.editingTextElement
-}
-
-export function ArrowCards({ api, wrap, selected, toView }: {
-  api: ExcalidrawImperativeAPI
+export function ArrowCards({ canvas, wrap, selected, toView }: {
+  canvas: Canvas
   wrap: RefObject<HTMLDivElement | null>
   /** The selected elements: one provenance arrow pins its card. */
   selected: El[]
@@ -58,11 +49,12 @@ export function ArrowCards({ api, wrap, selected, toView }: {
       if (hoverId.current) setHover(null)
     }
     const move = (e: PointerEvent) => {
-      // Only over the canvas itself (not a toolbar or a card), with no button down, in the selection tool.
-      if (e.buttons !== 0 || (e.target as Element | null)?.tagName !== 'CANVAS' || busy(api)) return hide()
-      const st = api.getAppState()
-      const scene = viewportCoordsToSceneCoords({ clientX: e.clientX, clientY: e.clientY }, st)
-      const hit = hitArrow(api.getSceneElements() as unknown as ArrowLike[], scene, st.zoom.value)
+      // Only over the canvas itself (not a toolbar or a card), with no button down, in the selection tool:
+      // not while the person is in the middle of something (drawing, dragging, typing, another tool).
+      if (e.buttons !== 0 || (e.target as Element | null)?.tagName !== 'CANVAS' || canvas.isBusy()) return hide()
+      const view = canvas.view()
+      const scene = canvas.viewportToScene({ x: e.clientX, y: e.clientY }, view)
+      const hit = hitArrow(canvas.elements() as unknown as ArrowLike[], scene, view.zoom)
       if (!hit) return hide()
       if (hit.id === hoverId.current || hit.id === pending.current) return
       clearTimer()
@@ -87,7 +79,7 @@ export function ArrowCards({ api, wrap, selected, toView }: {
       el.removeEventListener('pointerleave', hide)
       el.removeEventListener('wheel', hide)
     }
-  }, [api, wrap, setHover, clearTimer])
+  }, [canvas, wrap, setHover, clearTimer])
 
   // Escape closes the card: the hover one, or the pinned one by letting go of the arrow.
   useEffect(() => {
@@ -96,31 +88,31 @@ export function ArrowCards({ api, wrap, selected, toView }: {
       if (e.key !== 'Escape') return
       clearTimer()
       setHover(null)
-      if (pinnedArrow) api.updateScene({ appState: { selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER })
+      if (pinnedArrow) canvas.select([])
     }
     document.addEventListener('keydown', key, true)
     return () => document.removeEventListener('keydown', key, true)
-  }, [api, hover, pinnedArrow, setHover, clearTimer])
+  }, [canvas, hover, pinnedArrow, setHover, clearTimer])
 
   if (pinnedArrow) {
     // Beside the arrow's middle, so it is where the person looked.
     const path = arrowPath(pinnedArrow as unknown as ArrowLike)
     const mid = path[Math.floor(path.length / 2)]
-    return <CardView arrow={pinnedArrow} at={toView(mid)} pinned api={api} />
+    return <CardView arrow={pinnedArrow} at={toView(mid)} pinned canvas={canvas} />
   }
   if (!hover) return null
-  const arrow = api.getSceneElements().find((x) => x.id === hover.arrowId) as El | undefined
+  const arrow = canvas.elements().find((x) => x.id === hover.arrowId)
   if (!arrow) return null
-  return <CardView arrow={arrow} at={hover.at} api={api} />
+  return <CardView arrow={arrow} at={hover.at} canvas={canvas} />
 }
 
-function CardView({ arrow, at, pinned = false, api }: { arrow: El; at: Pt; pinned?: boolean; api: ExcalidrawImperativeAPI }) {
+function CardView({ arrow, at, pinned = false, canvas }: { arrow: El; at: Pt; pinned?: boolean; canvas: Canvas }) {
   const doc = useDoc()
   const ui = useUi()
   const link = provenanceOf(arrow)
   const card: Card | null = useMemo(() => {
     if (!link) return null
-    const els = api.getSceneElements() as El[]
+    const els = canvas.elements()
     const kindOf = (nodeId: string): NodeKind | undefined => {
       const el = byOwnId(els, nodeId)
       const c = cd(el)
@@ -129,7 +121,7 @@ function CardView({ arrow, at, pinned = false, api }: { arrow: El; at: Pt; pinne
       return c.kind === 'pic' || c.kind === 'drawn' || c.kind === 'gen' ? { kind: c.kind } : undefined
     }
     return arrowCard(doc, ui, link, { kindOf })
-  }, [doc, ui, link?.from, link?.to, api]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc, ui, link?.from, link?.to, canvas]) // eslint-disable-line react-hooks/exhaustive-deps
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
@@ -161,7 +153,7 @@ function CardView({ arrow, at, pinned = false, api }: { arrow: El; at: Pt; pinne
         <span className="ac-title">{card.title}</span>
         {pinned && (
           <button type="button" className="btn xs ghost icon" aria-label="Close" title="Close (Esc)"
-            onClick={() => api.updateScene({ appState: { selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER })}>✕</button>
+            onClick={() => canvas.select([])}>✕</button>
         )}
       </div>
       <div className="ac-who">{card.who}</div>
