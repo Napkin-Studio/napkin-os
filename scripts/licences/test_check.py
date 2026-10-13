@@ -655,3 +655,63 @@ def test_notices_list_client_packages_and_every_attribution_licence():
     assert "react" in client and "srv" not in client
     assert "caniuse-lite" in credit and "pypdfium2" in credit and "Odd" in credit
     assert "react" not in credit and "Geist" not in credit
+
+
+# ---- font replacements (Liberation 2.x / Cascadia upstream in place of Excalidraw's) ------
+def _swap_repo(tmp_path: Path, *, new: bytes | None = None, manifest_sha: str | None = None,
+               vite: str = "plugins: [react(), excalidrawFonts()]") -> Path:
+    good = make_font({0: "Copyright (c) 2012 Red Hat", 13: OFL_TEXT}, "ttf")
+    new = good if new is None else new
+    sha = hashlib.sha256(good).hexdigest()
+    overrides = {"overrides": [{"family": "Liberation Sans", "target": "fonts/Liberation/LiberationSans-Regular.woff2",
+                                "file": "LiberationSans-Regular.woff2", "sha256": manifest_sha or sha}]}
+    fonts = [
+        {"name": "Liberation Sans (Excalidraw's)", "shipped_by": "@excalidraw/excalidraw@0.18.1",
+         "files": ["LiberationSans-*"], "licence": "GPL-2.0-only WITH Font-exception-2.0", "source_url": "x",
+         "replaced_by": "web/fonts/LiberationSans-Regular.woff2"},
+        {"name": "Liberation Sans 2.1.5", "shipped_by": "repo", "files": ["LiberationSans-Regular.woff2"],
+         "licence": "OFL-1.1", "sha256": sha, "source_url": "x"},
+    ]
+    repo = mini_repo(tmp_path, {"web/fonts/LiberationSans-Regular.woff2": new,
+                                "web/fonts/overrides.json": json.dumps(overrides), "web/vite.config.ts": vite},
+                     fonts=fonts)
+    ft = repo / "licences" / "fonts.toml"
+    ft.write_text(ft.read_text() + '\n[overrides]\nmanifest = "web/fonts/overrides.json"\n'
+                  'requires = [["web/vite.config.ts", "excalidrawFonts()"]]\n')
+    git(repo, "commit", "-qam", "overrides")
+    return repo
+
+
+def test_a_replaced_package_font_passes_while_the_swap_is_real(tmp_path):
+    assert cheap(_swap_repo(tmp_path)) == []
+
+
+def test_the_old_font_coming_back_as_the_replacement_fails(tmp_path):
+    old = make_font({0: "Digitized data 2007 Ascender Corporation",
+                     13: "Use of this Liberation font software is subject to the license agreement"}, "ttf")
+    fails = cheap(_swap_repo(tmp_path, new=old))
+    assert any("sha256" in f and "pins" in f for f in fails)
+    assert any("GPL-2.0-only WITH Font-exception-2.0" in f for f in fails)
+
+
+@pytest.mark.parametrize("kw, needle", [
+    ({"manifest_sha": "0" * 64}, "does not put this file"),
+    ({"vite": "plugins: [react()]"}, "no longer contains 'excalidrawFonts()'"),
+])
+def test_a_replacement_the_build_no_longer_applies_fails(tmp_path, kw, needle):
+    fails = cheap(_swap_repo(tmp_path, **kw))
+    assert any(needle in f for f in fails), fails
+
+
+def test_the_install_scan_skips_a_replaced_file_but_not_its_neighbours(tmp_path):
+    nm = tmp_path / "node_modules"
+    fdir = nm / "@excalidraw/excalidraw/dist/prod/fonts"
+    fdir.mkdir(parents=True)
+    (nm / "@excalidraw/excalidraw/package.json").write_text('{"version": "0.18.1"}')
+    (fdir / "LiberationSans-Regular.woff2").write_bytes(make_font({13: "Use of this Liberation font software"}, "ttf"))
+    (fdir / "Virgil-Regular.woff2").write_bytes(make_font({13: OFL_TEXT}, "ttf"))
+    lib = {"name": "L", "shipped_by": "@excalidraw/excalidraw@0.18.1", "files": ["LiberationSans-*"],
+           "licence": "GPL-2.0-only WITH Font-exception-2.0", "source_url": "x", "replaced_by": "r.woff2"}
+    rep = Report()
+    check.scan_font_files([("web", nm)], {"family": [lib]}, rep)
+    assert len(rep.failures) == 1 and "Virgil" in rep.failures[0]

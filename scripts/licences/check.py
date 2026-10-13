@@ -1019,8 +1019,49 @@ def _check_font_entries(fonts: dict, policy: Policy, report: Report) -> None:
         except SpdxError as e:
             report.fail(f"{label}: {e}")
             continue
+        if fam.get("replaced_by"):
+            continue                       # never served: check_font_overrides proves the swap
         if satisfy(node, lambda i: policy.allowed(i, "font", "")) is None:
             report.fail(f"{label}: licence {fam['licence']!r} is not allowed for fonts")
+
+
+def check_font_overrides(repo: Path, fonts: dict, report: Report) -> None:
+    """A package's font file we never serve (`replaced_by`) passes only while the swap is
+    real: the replacement is in the repo with the sha256 its own entry pins, the build's
+    override list (fonts.toml [overrides].manifest) puts that exact file in place of the
+    package's, and the build and runtime still wire it in ([overrides].requires)."""
+    ov = fonts.get("overrides", {})
+    replaced = [f for f in fonts.get("family", []) if f.get("replaced_by")]
+    if not replaced:
+        return
+    man_path = repo / ov.get("manifest", "")
+    if not ov.get("manifest") or not man_path.is_file():
+        report.fail(f"fonts.toml: families are replaced_by files but [overrides].manifest ({ov.get('manifest')}) is missing")
+        return
+    manifest = json.loads(man_path.read_text())
+    entries = {e["file"]: e for e in manifest.get("overrides", [])}
+    for rel, marker in ov.get("requires", []):
+        f = repo / rel
+        if not f.is_file() or marker not in f.read_text(errors="replace"):
+            report.fail(f"{rel}: no longer contains {marker!r}, so the font replacements may not reach the build; "
+                        f"Excalidraw would serve its own files")
+    for fam in replaced:
+        rel = fam["replaced_by"]
+        path = repo / rel
+        label = f"fonts.toml family {fam['name']} (replaced_by {rel})"
+        if not path.is_file():
+            report.fail(f"{label}: the replacement file is missing")
+            continue
+        got = hashlib.sha256(path.read_bytes()).hexdigest()
+        own = _family_for(fonts, "repo", path.name)
+        if own is None or own.get("sha256") != got:
+            report.fail(f"{label}: the replacement's sha256 {got} is not the one its own [[family]] "
+                        f"(shipped_by = \"repo\") pins ({own.get('sha256') if own else 'no entry'})")
+        entry = entries.get(path.name)
+        if entry is None or entry.get("sha256") != got or not any(
+                fnmatch.fnmatchcase(Path(entry.get("target", "")).name, g) for g in fam.get("files", [])):
+            report.fail(f"{label}: {ov['manifest']} does not put this file (sha256 {got}) in place of "
+                        f"{fam['files']}; the build would serve the package's own file")
 
 
 def scan_font_files(dirs: list[tuple[str, Path]], fonts: dict, report: Report) -> None:
@@ -1038,6 +1079,8 @@ def scan_font_files(dirs: list[tuple[str, Path]], fonts: dict, report: Report) -
             pj = nm / rel.rsplit(pkg, 1)[0] / pkg / "package.json"
             ver = json.loads(pj.read_text()).get("version", "?") if pj.is_file() else "?"
             fam = _family_for(fonts, f"{pkg}@{ver}", path.name)
+            if fam is not None and fam.get("replaced_by"):
+                continue                   # not served; check_font_overrides proves the swap
             if fam is None:
                 stem = re.split(r"[-.]", path.name, maxsplit=1)[0]
                 missing.setdefault((label, f"{pkg}@{ver}", stem), []).append(rel)
@@ -1079,6 +1122,9 @@ def scan_repo_fonts(repo: Path, files: list[str], fonts: dict, report: Report) -
                 report.fail(f"font {rel}: a tracked font file with no [[family]] (shipped_by = \"repo\") "
                             f"entry in licences/fonts.toml")
             else:
+                if fam.get("sha256") and hashlib.sha256((repo / rel).read_bytes()).hexdigest() != fam["sha256"]:
+                    report.fail(f"font {rel}: sha256 differs from the {fam['sha256']} that family "
+                                f"{fam['name']!r} pins; re-verify the file before changing the pin")
                 _check_embedded(fam, repo / rel, f"font {rel}", mismatched)
             continue
         if not rel.endswith((".html", ".ts", ".tsx", ".py")):
@@ -1295,6 +1341,7 @@ def run(repo: Path = REPO, changed: list[str] | None = None, *, readers: bool | 
     check_weights(weights, policy, found, report)
     _check_font_entries(fonts, policy, report)
     scan_repo_fonts(repo, scan, fonts, report)
+    check_font_overrides(repo, fonts, report)
     check_binaries(repo, binaries, policy, files, report)
     scan_unmodified(repo, files, policy, report)
     check_engine_requirements(repo, report)

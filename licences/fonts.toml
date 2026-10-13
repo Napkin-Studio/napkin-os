@@ -7,7 +7,8 @@
 # "fonts.googleapis.com" for linked fonts, "repo" for tracked files), files (filename
 # globs, for shipped files), licence (confirmed at source_url), source_url, and
 # embedded_licence when the shipped files' own name table does not state `licence`
-# ("none" when it says nothing; the evidence goes in a comment).
+# ("none" when it says nothing; the evidence goes in a comment), sha256 to pin a tracked
+# file, and replaced_by for a package's file we never serve (see [overrides]).
 #
 # The gate reads the licence inside every shipped file (name IDs 13, 14 and 0) and fails
 # when it disagrees with the entry, so a family is "confirmed" only when both the upstream
@@ -27,17 +28,15 @@ files = ["Assistant-*"]
 licence = "OFL-1.1"
 source_url = "https://github.com/hafontia/Assistant/blob/master/OFL.txt"
 
-# OPEN FINDING (features/licence-gate.clan): the shipped file is version 2005.150, the
-# Windows-supplied build. Its own licence text begins "Microsoft supplied font. You may use
-# this font ... as permitted by the license terms ... of the Microsoft product ... Any other
-# use is prohibited", then an OFL-based grant. Upstream (microsoft/cascadia-code) is
-# OFL-1.1, but the shipped text is not plain OFL, so the gate fails until Shrey rules.
+# Excalidraw's own file is version 2005.150, a Windows-supplied build. Owner's ruling (Shrey,
+# 2026-10-13): serve the upstream OFL-1.1 release instead (replaced_by; [overrides] below).
 [[family]]
-name = "Cascadia Code"
+name = "Cascadia Code (Excalidraw's file, not served)"
 shipped_by = "@excalidraw/excalidraw@0.18.1"
 files = ["CascadiaCode-*"]
-licence = "OFL-1.1"
-source_url = "https://github.com/microsoft/cascadia-code/blob/main/LICENSE"
+licence = "LicenseRef-Cascadia-Windows-supplied"
+replaced_by = "production-tool/web/fonts/excalidraw-overrides/CascadiaCode-Regular.woff2"
+source_url = "https://github.com/microsoft/cascadia-code"
 
 [[family]]
 name = "Comic Shanns"
@@ -59,16 +58,17 @@ licence = "OFL-1.1"
 embedded_licence = "none"
 source_url = "https://github.com/excalidraw/excalidraw/blob/v0.18.0/packages/excalidraw/fonts/Excalifont/index.ts"
 
-# OPEN FINDING (features/licence-gate.clan): the shipped file is Liberation Sans 1.05
-# ("Digitized data 2007 Ascender Corporation"; licence text "Use of this Liberation font
-# software is subject to the license agreement under which you accepted ..."), i.e. the
-# 1.x series under GPLv2 with a font exception. Only 2.x (Red Hat, liberationfonts) is
-# OFL-1.1. GPL never ships to clients, so the gate fails; no exception is possible.
+# Excalidraw's own file is Liberation Sans 1.05 ("Digitized data 2007 Ascender Corporation";
+# "Use of this Liberation font software is subject to the license agreement ..."), the 1.x
+# series under GPLv2 with a font exception. GPL never ships to clients. Owner's ruling (Shrey,
+# 2026-10-13): serve Liberation Sans 2.1.5 (OFL-1.1) instead (replaced_by; [overrides] below).
+# Without the replacement this entry fails the font rule again.
 [[family]]
-name = "Liberation Sans"
+name = "Liberation Sans (Excalidraw's file, not served)"
 shipped_by = "@excalidraw/excalidraw@0.18.1"
 files = ["LiberationSans-*"]
 licence = "GPL-2.0-only WITH Font-exception-2.0"
+replaced_by = "production-tool/web/fonts/excalidraw-overrides/LiberationSans-Regular.woff2"
 source_url = "https://web.archive.org/web/2012/https://fedorahosted.org/liberation-fonts/ (1.x: GPLv2 with exceptions); 2.x is OFL-1.1 at https://github.com/liberationfonts/liberation-fonts"
 
 [[family]]
@@ -151,3 +151,49 @@ name = "JetBrains Mono"
 shipped_by = "fonts.googleapis.com"
 licence = "OFL-1.1"
 source_url = "https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt"
+
+# ---- the replacements we serve in place of Excalidraw's files ----------------------
+# production-tool/web/excalidraw-fonts.ts copies Excalidraw's dist/prod/fonts into the build
+# under excalidraw-assets/ with these files in place of its own (same names), checking each
+# sha256; src/excalidrawAssets.ts points EXCALIDRAW_ASSET_PATH there. The gate checks that the
+# manifest, the hashes and both wiring points agree, so the old files cannot come back quietly.
+[overrides]
+manifest = "production-tool/web/fonts/excalidraw-overrides/overrides.json"
+requires = [
+  ["production-tool/web/vite.config.ts", "excalidrawFonts()"],
+  ["production-tool/web/src/main.tsx", "import './excalidrawAssets'"],
+  ["production-tool/web/src/excalidrawAssets.ts", "window.EXCALIDRAW_ASSET_PATH ="],
+]
+
+# Liberation Sans 2.1.5 (Red Hat), metric-compatible with Arial like 1.x: same units per em,
+# ascent and descent; 329 of 330 advance widths in U+0020-024F equal (U+00B7 differs). The
+# file's own name table states OFL-1.1. A lossless WOFF2 conversion (fontTools 4.60.1) of
+# LiberationSans-Regular.ttf (sha256 76d04c18...8ee8) from liberation-fonts-ttf-2.1.5.tar.gz
+# (sha256 7191c669...25d0).
+[[family]]
+name = "Liberation Sans 2.1.5"
+shipped_by = "repo"
+files = ["LiberationSans-Regular.woff2"]
+version = "2.1.5"
+licence = "OFL-1.1"
+sha256 = "426f96004a277f70f696c8e16569022b4463ea3ecca89903bfd3c40e034b1879"
+source_url = "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz"
+
+# Cascadia Code 2407.24 (Microsoft), the upstream OFL-1.1 release (repository LICENSE at tag
+# v2407.24: "This Font Software is licensed under the SIL Open Font License, Version 1.1").
+# Metrics equal to Excalidraw's file (all 352 advance widths in U+0020-024F). Note: every
+# upstream release, this one included, carries Microsoft's standard text in its own name
+# table ("Microsoft supplied font ... The following license, based on the SIL Open Font
+# license, applies ..."), so the file can never read as plain OFL; embedded_licence pins that
+# exact text, and the sha256 pins this exact file. A lossless WOFF2 conversion of
+# ttf/static/CascadiaCode-Regular.ttf (sha256 c33ef522...74a4) from CascadiaCode-2407.24.zip
+# (sha256 e67a68ee...8474).
+[[family]]
+name = "Cascadia Code 2407.24"
+shipped_by = "repo"
+files = ["CascadiaCode-Regular.woff2"]
+version = "2407.24"
+licence = "OFL-1.1"
+embedded_licence = "unknown: Microsoft supplied font. You may use this font to create, display, and print content as permitted by the license terms o"
+sha256 = "038e1f243f90420c02ad33d88782c2f7288bcc835e6ffc3c5726a80a9a1711d3"
+source_url = "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip"
