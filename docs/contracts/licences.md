@@ -84,6 +84,11 @@ archive and checks the hash, so a version bump forces a fresh read.
 - Fonts: every font file in the production install (`npm ci --omit=dev
   --ignore-scripts`) of each npm client root, every tracked font file, and every
   `fonts.googleapis.com` family= link in tracked .html, .ts, .tsx and .py code.
+  The gate also reads the licence inside each shipped or tracked font file (name IDs
+  13, 14 and 0) and fails when it disagrees with the family's entry, so a font is
+  confirmed only when the upstream source and the exact shipped file agree. A file
+  that states nothing needs `embedded_licence = "none"` and the evidence in a comment.
+  Reading WOFF2 needs Brotli, so the gate runs with `uv run --with brotli`.
 - Binaries: each entry's licence for its tier, the last `FROM` of every
   Dockerfile is listed, and a pinned download's script uses exactly the listed
   version, URL, sha256 and mirror path with `sha256sum -c`.
@@ -111,9 +116,9 @@ and the policy lines that would fix it.
 
 ```
 scripts/check.sh --only licences          # unit tests, then the whole tree
-uv run --no-project --python 3.12 python scripts/licences/check.py
-uv run --no-project --python 3.12 python scripts/licences/check.py --changed <files>
-uv run --no-project --python 3.12 python scripts/licences/check.py --notices   # client-tier packages
+uv run --no-project --python 3.12 --with brotli python scripts/licences/check.py
+uv run --no-project --python 3.12 --with brotli python scripts/licences/check.py --changed <files>
+uv run --no-project --python 3.12 --with brotli python scripts/licences/check.py --notices   # client-tier packages
 ```
 
 On a path-picked `scripts/check.sh` run the cheap scans (weights, fonts links,

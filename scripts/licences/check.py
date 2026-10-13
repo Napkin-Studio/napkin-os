@@ -29,7 +29,9 @@ import sys
 import tarfile
 import tomllib
 import urllib.request
+import struct
 import zipfile
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
@@ -873,6 +875,131 @@ def check_weights(manifest: dict, policy: Policy, found: list[tuple[str, int, st
 GFONTS = re.compile(r"fonts\.googleapis\.com/css2?\?([^\"'\s>)]*)")
 
 
+# ---- the licence embedded in a font file ---------------------------------------------
+# The name table: 0 copyright, 13 licence description, 14 licence URL. A shipped file's own
+# text is what reaches users, so the gate reads it and compares it with fonts.toml. WOFF2
+# needs Brotli, which the standard library lacks: the gate runs with `--with brotli`
+# (check.sh, CI) and fails closed without it.
+WOFF2_TAGS = ["cmap", "head", "hhea", "hmtx", "maxp", "name", "OS/2", "post", "cvt ", "fpgm", "glyf",
+              "loca", "prep", "CFF ", "VORG", "EBDT", "EBLC", "gasp", "hdmx", "kern", "LTSH", "PCLT",
+              "VDMX", "vhea", "vmtx", "BASE", "GDEF", "GPOS", "GSUB", "EBSC", "JSTF", "MATH", "CBDT",
+              "CBLC", "COLR", "CPAL", "SVG ", "sbix", "acnt", "avar", "bdat", "bloc", "bsln", "cvar",
+              "fdsc", "feat", "fmtx", "fvar", "gvar", "hsty", "just", "lcar", "mort", "morx", "opbd",
+              "prop", "trak", "Zapf", "Silf", "Glat", "Gloc", "Feat", "Sill"]
+
+
+class FontError(ValueError):
+    """A font file the gate cannot read."""
+
+
+def _b128(data: bytes, pos: int) -> tuple[int, int]:
+    val = 0
+    for i in range(5):
+        b = data[pos + i]
+        val = (val << 7) | (b & 0x7F)
+        if not b & 0x80:
+            return val, pos + i + 1
+    raise FontError("bad UIntBase128")
+
+
+def _name_table(data: bytes) -> bytes:
+    """The raw 'name' table of a TTF/OTF, WOFF or WOFF2 file."""
+    sig = data[:4]
+    if sig == b"wOF2":
+        num = struct.unpack(">H", data[12:14])[0]
+        comp_len = struct.unpack(">I", data[20:24])[0]
+        pos, entries = 48, []
+        for _ in range(num):
+            flags = data[pos]; pos += 1
+            if flags & 0x3F == 63:
+                tag = data[pos:pos + 4].decode("latin-1"); pos += 4
+            else:
+                tag = WOFF2_TAGS[flags & 0x3F]
+            orig, pos = _b128(data, pos)
+            ver = flags >> 6
+            length = orig
+            if (tag in ("glyf", "loca") and ver == 0) or (tag not in ("glyf", "loca") and ver != 0):
+                length, pos = _b128(data, pos)
+            entries.append((tag, length))
+        try:
+            import brotli  # type: ignore[import-not-found]
+        except ImportError as e:
+            raise FontError("reading WOFF2 needs brotli: run the gate with `uv run --with brotli`") from e
+        blob = brotli.decompress(data[pos:pos + comp_len])
+        off = 0
+        for tag, length in entries:
+            if tag == "name":
+                return blob[off:off + length]
+            off += length
+        raise FontError("no name table")
+    if sig == b"wOFF":
+        num = struct.unpack(">H", data[12:14])[0]
+        for i in range(num):
+            tag, off, clen, olen, _ = struct.unpack(">4sIIII", data[44 + 20 * i:64 + 20 * i])
+            if tag == b"name":
+                raw = data[off:off + clen]
+                return zlib.decompress(raw) if clen < olen else raw
+        raise FontError("no name table")
+    if sig in (b"\x00\x01\x00\x00", b"OTTO", b"true"):
+        num = struct.unpack(">H", data[4:6])[0]
+        for i in range(num):
+            tag, _, off, length = struct.unpack(">4sIII", data[12 + 16 * i:28 + 16 * i])
+            if tag == b"name":
+                return data[off:off + length]
+        raise FontError("no name table")
+    raise FontError(f"not a font file (signature {sig!r})")
+
+
+def font_names(data: bytes) -> dict[int, str]:
+    """nameID -> text (Windows/Unicode records preferred over Mac)."""
+    t = _name_table(data)
+    count, str_off = struct.unpack(">HH", t[2:6])
+    out: dict[int, str] = {}
+    for i in range(count):
+        plat, enc, lang, nid, length, off = struct.unpack(">HHHHHH", t[6 + 12 * i:18 + 12 * i])
+        raw = t[str_off + off:str_off + off + length]
+        text = raw.decode("utf-16-be", "replace") if plat in (0, 3) else raw.decode("mac_roman", "replace")
+        if nid not in out or plat in (0, 3):
+            out[nid] = text
+    return out
+
+
+OFL_HINTS = ("open font license", "scripts.sil.org/ofl", "openfontlicense.org")
+RESTRICTIVE = ("supplied font", "other use is prohibited", "may only", "subject to the license agreement",
+               "all rights reserved. no", "personal use", "non-commercial", "evaluation")
+
+
+def embedded_licence(names: dict[int, str]) -> str:
+    """What a font file says about its own licence: an SPDX id, 'none' when it says
+    nothing, or 'unknown: <text>' when it says something the gate does not recognise.
+    The licence description (13) wins over the URL (14), which wins over the copyright (0)."""
+    desc, url, cr = (names.get(13) or "").strip(), (names.get(14) or "").strip(), (names.get(0) or "")
+    low = desc.lower()
+    if "liberation font software" in low or ("ascender" in cr.lower() and "liberation" in low):
+        return "GPL-2.0-only WITH Font-exception-2.0"      # Liberation 1.x (Ascender): GPLv2 + font exception
+    if desc:
+        # Terms that restrict use ("Microsoft supplied font ... Any other use is prohibited")
+        # are never read as OFL, even when OFL-like terms follow: a person reads them.
+        if any(r in low for r in RESTRICTIVE):
+            return "unknown: " + " ".join(desc.split())[:120]
+        if any(h in low for h in OFL_HINTS) or "reserved font name" in low and "ofl" in url.lower():
+            return "OFL-1.1"
+        if "mit license" in low or "permission is hereby granted" in low:
+            return "MIT"
+        if "apache license" in low:
+            return "Apache-2.0"
+        if "general public license" in low:
+            return "LicenseRef-GPL-font"
+        return "unknown: " + " ".join(desc.split())[:120]
+    if any(h in url.lower() for h in OFL_HINTS):
+        return "OFL-1.1"
+    if url:
+        return "unknown: " + url
+    if "mit license" in cr.lower():
+        return "MIT"
+    return "none"
+
+
 def _family_for(fonts: dict, shipped_by: str, filename: str) -> dict | None:
     for fam in fonts.get("family", []):
         if fam.get("shipped_by") == shipped_by and any(fnmatch.fnmatchcase(filename, g) for g in fam.get("files", [])):
@@ -900,6 +1027,7 @@ def scan_font_files(dirs: list[tuple[str, Path]], fonts: dict, report: Report) -
     """Every font file inside installed production packages must have a family entry
     whose shipped_by is that package@version and whose files glob matches."""
     missing: dict[tuple[str, str, str], list[str]] = {}
+    mismatched: dict[tuple[str, str], list[str]] = {}
     for label, nm in dirs:
         for path in sorted(nm.rglob("*")):
             if not path.name.lower().endswith(FONT_EXT) or not path.is_file():
@@ -909,23 +1037,49 @@ def scan_font_files(dirs: list[tuple[str, Path]], fonts: dict, report: Report) -
             pkg = "/".join(parts[:2]) if parts[0].startswith("@") else parts[0]
             pj = nm / rel.rsplit(pkg, 1)[0] / pkg / "package.json"
             ver = json.loads(pj.read_text()).get("version", "?") if pj.is_file() else "?"
-            if _family_for(fonts, f"{pkg}@{ver}", path.name) is None:
+            fam = _family_for(fonts, f"{pkg}@{ver}", path.name)
+            if fam is None:
                 stem = re.split(r"[-.]", path.name, maxsplit=1)[0]
                 missing.setdefault((label, f"{pkg}@{ver}", stem), []).append(rel)
+                continue
+            _check_embedded(fam, path, f"font {label}: node_modules/{rel}", mismatched)
     for (label, shipped, stem), rels in sorted(missing.items()):
         report.fail(f"font {label}: {len(rels)} file(s) like node_modules/{rels[0]} ({shipped}) have no entry "
                     f"in licences/fonts.toml\n    fix: a [[family]] with shipped_by = \"{shipped}\", "
                     f"files = [\"{stem}*\"], its licence and source_url, confirmed upstream")
+    for (fam, problem), where in sorted(mismatched.items()):
+        report.fail(f"{where[0]}{f' (and {len(where) - 1} more)' if len(where) > 1 else ''}: family {fam!r} "
+                    f"{problem}")
+
+
+def _check_embedded(fam: dict, path: Path, where: str, mismatched: dict) -> None:
+    """The file's own licence text must agree with its family entry. A file that says
+    nothing passes only when the entry says embedded_licence = "none" (with the evidence
+    for its licence in a comment); an unrecognised or different text always fails."""
+    try:
+        got = embedded_licence(font_names(path.read_bytes()))
+    except (FontError, struct.error, IndexError, zlib.error) as e:
+        mismatched.setdefault((fam["name"], f"cannot be read ({e})"), []).append(where)
+        return
+    want = fam.get("embedded_licence", fam.get("licence"))
+    if got != want:
+        mismatched.setdefault((fam["name"], f"says {got!r} inside the file, but licences/fonts.toml expects "
+                               f"{want!r}; re-read the shipped file and its upstream before changing the entry"),
+                              []).append(where)
 
 
 def scan_repo_fonts(repo: Path, files: list[str], fonts: dict, report: Report) -> None:
     """Tracked font files, and Google Fonts family= links in tracked code."""
     linked = {f["name"] for f in fonts.get("family", []) if f.get("shipped_by") == "fonts.googleapis.com"}
+    mismatched: dict[tuple[str, str], list[str]] = {}
     for rel in files:
         if rel.lower().endswith(FONT_EXT):
-            if _family_for(fonts, "repo", Path(rel).name) is None:
+            fam = _family_for(fonts, "repo", Path(rel).name)
+            if fam is None:
                 report.fail(f"font {rel}: a tracked font file with no [[family]] (shipped_by = \"repo\") "
                             f"entry in licences/fonts.toml")
+            else:
+                _check_embedded(fam, repo / rel, f"font {rel}", mismatched)
             continue
         if not rel.endswith((".html", ".ts", ".tsx", ".py")):
             continue
@@ -941,6 +1095,8 @@ def scan_repo_fonts(repo: Path, files: list[str], fonts: dict, report: Report) -
                     report.fail(f"{rel}:{line}: Google Fonts family {name!r} is not in licences/fonts.toml\n"
                                 f"    fix: a [[family]] with name = \"{name}\", shipped_by = "
                                 f"\"fonts.googleapis.com\", its licence and source_url")
+    for (fam, problem), where in sorted(mismatched.items()):
+        report.fail(f"{where[0]}: family {fam!r} {problem}")
 
 
 def npm_prod_tree(root: Path) -> Path:

@@ -201,7 +201,7 @@ suite_licences() {
   if [[ $all -eq 0 && -z "$only" ]]; then
     export NAPKIN_LICENCE_CHANGED="$(printf '%s\n' "${licence_files[@]}")"
   fi
-  uv run -q --no-project --python 3.12 --with pytest python -m pytest -q -p no:cacheprovider scripts/licences
+  uv run -q --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
 }
 
 logdir="$(mktemp -d "${TMPDIR:-/tmp}/napkin-check.XXXXXX")"

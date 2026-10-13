@@ -405,7 +405,7 @@ jobs:
           key: napkin-licences-${{ hashFiles('**/uv.lock', '**/package-lock.json', 'licences/policy.toml') }}
           restore-keys: napkin-licences-
       - name: Licence gate (unit tests, then this tree)
-        run: uv run --no-project --python 3.12 --with pytest python -m pytest -q -p no:cacheprovider scripts/licences
+        run: uv run --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
       - name: Licence policy changes in this PR
         if: always() && github.event_name == 'pull_request'
         run: uv run --no-project --python 3.12 python scripts/licences/check.py --policy-diff "origin/${{ github.base_ref }}" >> "$GITHUB_STEP_SUMMARY"

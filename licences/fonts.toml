@@ -5,14 +5,20 @@
 #
 # Fields: name, shipped_by ("package@version" for fonts inside an npm package,
 # "fonts.googleapis.com" for linked fonts, "repo" for tracked files), files (filename
-# globs, for shipped files), licence (confirmed at source_url), source_url.
+# globs, for shipped files), licence (confirmed at source_url), source_url, and
+# embedded_licence when the shipped files' own name table does not state `licence`
+# ("none" when it says nothing; the evidence goes in a comment).
+#
+# The gate reads the licence inside every shipped file (name IDs 13, 14 and 0) and fails
+# when it disagrees with the entry, so a family is "confirmed" only when both the upstream
+# source and the exact shipped files agree (re-verified 2026-10-13 against the files in
+# @excalidraw/excalidraw 0.18.1 dist/prod and dist/dev).
 # A version bump of the shipping package needs these entries re-read and updated.
 
 # ---- @excalidraw/excalidraw 0.18.1 (production-tool/web) -------------------------
 # dist/prod/fonts and dist/dev/fonts hold the same set; both are checked against these.
-# Licences read from each family's upstream on 2026-10-13. The woff2 files carry no
-# licence file; the cn-font-split headers in excalidraw's fonts/*/index.ts (v0.18.0)
-# repeat the licence for Excalifont and Xiaolai.
+# No licence files ship with them. Assistant, Lilita, Nunito and Virgil state OFL in the
+# files themselves; Comic Shanns states MIT in its copyright string.
 
 [[family]]
 name = "Assistant"
@@ -21,6 +27,11 @@ files = ["Assistant-*"]
 licence = "OFL-1.1"
 source_url = "https://github.com/hafontia/Assistant/blob/master/OFL.txt"
 
+# OPEN FINDING (features/licence-gate.clan): the shipped file is version 2005.150, the
+# Windows-supplied build. Its own licence text begins "Microsoft supplied font. You may use
+# this font ... as permitted by the license terms ... of the Microsoft product ... Any other
+# use is prohibited", then an OFL-based grant. Upstream (microsoft/cascadia-code) is
+# OFL-1.1, but the shipped text is not plain OFL, so the gate fails until Shrey rules.
 [[family]]
 name = "Cascadia Code"
 shipped_by = "@excalidraw/excalidraw@0.18.1"
@@ -35,19 +46,30 @@ files = ["ComicShanns-*"]
 licence = "MIT"
 source_url = "https://github.com/shannpersand/comic-shanns/blob/master/LICENSE"
 
+# The shipped subsets carry no licence string (cn-font-split dropped name ID 13). The
+# source font's name table, recorded by Excalidraw when it split the font
+# (packages/excalidraw/fonts/Excalifont/index.ts at v0.18.0), states OFL-1.1 in full
+# (Excalifont derives from Virgil, itself OFL-1.1). OFL asks that the licence travel with
+# the font, so our notices must carry the OFL text for it.
 [[family]]
 name = "Excalifont"
 shipped_by = "@excalidraw/excalidraw@0.18.1"
 files = ["Excalifont-*"]
 licence = "OFL-1.1"
+embedded_licence = "none"
 source_url = "https://github.com/excalidraw/excalidraw/blob/v0.18.0/packages/excalidraw/fonts/Excalifont/index.ts"
 
+# OPEN FINDING (features/licence-gate.clan): the shipped file is Liberation Sans 1.05
+# ("Digitized data 2007 Ascender Corporation"; licence text "Use of this Liberation font
+# software is subject to the license agreement under which you accepted ..."), i.e. the
+# 1.x series under GPLv2 with a font exception. Only 2.x (Red Hat, liberationfonts) is
+# OFL-1.1. GPL never ships to clients, so the gate fails; no exception is possible.
 [[family]]
 name = "Liberation Sans"
 shipped_by = "@excalidraw/excalidraw@0.18.1"
 files = ["LiberationSans-*"]
-licence = "OFL-1.1"
-source_url = "https://github.com/liberationfonts/liberation-fonts/blob/main/LICENSE"
+licence = "GPL-2.0-only WITH Font-exception-2.0"
+source_url = "https://web.archive.org/web/2012/https://fedorahosted.org/liberation-fonts/ (1.x: GPLv2 with exceptions); 2.x is OFL-1.1 at https://github.com/liberationfonts/liberation-fonts"
 
 [[family]]
 name = "Lilita One"
@@ -71,22 +93,38 @@ licence = "OFL-1.1"
 source_url = "https://github.com/excalidraw/virgil/blob/main/LICENSE.md"
 
 # Xiaolai SC (LXGW, derived from Nozomi Seto's Seto Font): OFL-1.1 upstream
-# (lxgw/kose-font OFL.txt) and in the font's own name table (excalidraw
-# fonts/Xiaolai/index.ts, v0.18.0). Open question 7 is answered: it is OFL-1.1.
+# (lxgw/kose-font OFL.txt). The 209 shipped subsets carry no licence string; the source
+# font's name table, recorded by Excalidraw when it split the font
+# (packages/excalidraw/fonts/Xiaolai/index.ts at v0.18.0: same copyright "Copyright © 2020
+# LXGW" and version 3.11 as the shipped files), states OFL-1.1. Our notices must carry
+# the OFL text for it.
 [[family]]
 name = "Xiaolai"
 shipped_by = "@excalidraw/excalidraw@0.18.1"
 files = ["Xiaolai-*"]
 licence = "OFL-1.1"
+embedded_licence = "none"
 source_url = "https://github.com/lxgw/kose-font/blob/master/OFL.txt"
 
 # ---- katex 0.16.47 (via excalidraw > mermaid-to-excalidraw > mermaid) ------------
+# The fonts' own name tables state OFL-1.1 (they derive from the MathJax TeX fonts, Design
+# Science, "with Reserved Font Name KaTeX_*"), not the MIT of the katex-fonts repo's code.
 [[family]]
 name = "KaTeX"
 shipped_by = "katex@0.16.47"
-files = ["KaTeX_*", "Extra.otf"]
-licence = "MIT"
+files = ["KaTeX_*"]
+licence = "OFL-1.1"
 source_url = "https://github.com/KaTeX/katex-fonts/blob/master/LICENSE"
+
+# katex/src/fonts/lib/Extra.otf: a build input in KaTeX's source tree (not in dist/, not
+# bundled), with an empty name table; the KaTeX repository is MIT.
+[[family]]
+name = "KaTeX build extra"
+shipped_by = "katex@0.16.47"
+files = ["Extra.otf"]
+licence = "MIT"
+embedded_licence = "none"
+source_url = "https://github.com/KaTeX/KaTeX/blob/main/LICENSE"
 
 # ---- linked from Google Fonts ----------------------------------------------------
 [[family]]

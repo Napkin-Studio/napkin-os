@@ -401,14 +401,103 @@ EXCALI = {"name": "Virgil", "shipped_by": "@excalidraw/excalidraw@0.18.1", "file
           "licence": "OFL-1.1", "source_url": "https://github.com/excalidraw/virgil"}
 
 
+OFL_TEXT = "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+
+
+def make_font(names: dict[int, str], kind: str = "ttf") -> bytes:
+    """A minimal font whose only table is 'name' (Windows UTF-16 records), as a plain
+    sfnt, WOFF (zlib) or WOFF2 (Brotli): enough for the gate's name-table reader."""
+    import struct
+    import zlib
+    recs, strings = b"", b""
+    for nid, text in sorted(names.items()):
+        raw = text.encode("utf-16-be")
+        recs += struct.pack(">HHHHHH", 3, 1, 0x409, nid, len(raw), len(strings))
+        strings += raw
+    name = struct.pack(">HHH", 0, len(names), 6 + len(recs)) + recs + strings
+    if kind == "ttf":
+        return struct.pack(">IHHHH", 0x00010000, 1, 16, 0, 0) + struct.pack(">4sIII", b"name", 0, 28, len(name)) + name
+    if kind == "woff":
+        comp = zlib.compress(name)
+        return (b"wOFF" + struct.pack(">IIHHIHHIIIII", 0x00010000, 64 + len(comp), 1, 0, 12 + 16 + len(name),
+                                      1, 0, 0, 0, 0, 0, 0)
+                + struct.pack(">4sIIII", b"name", 64, len(comp), len(name), 0) + comp)
+    import brotli
+    comp = brotli.compress(name)
+    def b128(n):
+        out = [n & 0x7F]
+        n >>= 7
+        while n:
+            out.insert(0, 0x80 | (n & 0x7F))
+            n >>= 7
+        return bytes(out)
+    directory = bytes([5]) + b128(len(name))           # flags: known tag 5 = 'name', no transform
+    return (b"wOF2" + struct.pack(">IIHHIIHHIIIII", 0x00010000, 48 + len(directory) + len(comp), 1, 0,
+                                  12 + 16 + len(name), len(comp), 0, 0, 0, 0, 0, 0, 0)
+            + directory + comp)
+
+
+@pytest.mark.parametrize("kind", ["ttf", "woff", "woff2"])
+def test_the_name_table_is_read_from_every_font_format(kind):
+    if kind == "woff2":
+        pytest.importorskip("brotli")
+    names = {0: "Copyright 2020 Someone", 13: OFL_TEXT, 14: "https://scripts.sil.org/OFL"}
+    assert check.font_names(make_font(names, kind)) == names
+
+
+@pytest.mark.parametrize("names, want", [
+    ({13: OFL_TEXT}, "OFL-1.1"),
+    ({14: "https://openfontlicense.org"}, "OFL-1.1"),
+    ({0: "MIT License\n\nCopyright (c) 2018 Shannon Miwa"}, "MIT"),
+    ({0: "Copyright (c) 2024 by Excalidraw. All rights reserved."}, "none"),
+    ({0: "Digitized data 2007 Ascender Corporation. All rights reserved.",
+      13: "Use of this Liberation font software is subject to the license agreement under which you accepted the "
+          "Liberation font software.", 14: "http://www.ascendercorp.com/liberation.html"},
+     "GPL-2.0-only WITH Font-exception-2.0"),
+    ({13: "Microsoft supplied font. You may use this font ... Any other use is prohibited. The following license, "
+          "based on the SIL Open Font license (https://scripts.sil.org/OFL), applies", 14: "https://scripts.sil.org/OFL"},
+     "unknown: Microsoft supplied font."),
+])
+def test_embedded_licence_classification(names, want):
+    got = check.embedded_licence(names)
+    assert got.startswith(want) if want.startswith("unknown:") else got == want
+
+
+def test_a_shipped_font_whose_own_licence_disagrees_with_its_entry_fails(tmp_path):
+    """The canvas-spikes case: Liberation 1.x listed as OFL, and a file with no licence
+    string listed without saying so."""
+    pytest.importorskip("brotli")
+    nm = tmp_path / "node_modules"
+    fonts = nm / "@excalidraw/excalidraw/dist/prod/fonts"
+    fonts.mkdir(parents=True)
+    (nm / "@excalidraw/excalidraw/package.json").write_text('{"version": "0.18.1"}')
+    (fonts / "LiberationSans-Regular.woff2").write_bytes(make_font(
+        {0: "Digitized data 2007 Ascender Corporation", 13: "Use of this Liberation font software is subject to "
+                                                          "the license agreement"}, "woff2"))
+    (fonts / "Excalifont-Regular-1.woff2").write_bytes(make_font({0: "Copyright (c) 2024 by Excalidraw."}, "woff2"))
+    base = {"shipped_by": "@excalidraw/excalidraw@0.18.1", "licence": "OFL-1.1", "source_url": "x"}
+    lib = {**base, "name": "Liberation Sans", "files": ["LiberationSans-*"]}
+    exc = {**base, "name": "Excalifont", "files": ["Excalifont-*"]}
+    rep = Report()
+    check.scan_font_files([("web", nm)], {"family": [lib, exc]}, rep)
+    assert any("Liberation Sans" in f and "GPL-2.0-only WITH Font-exception-2.0" in f for f in rep.failures)
+    assert any("Excalifont" in f and "'none'" in f for f in rep.failures)
+    rep = Report()
+    check.scan_font_files([("web", nm)], {"family": [lib, {**exc, "embedded_licence": "none"}]}, rep)
+    assert len(rep.failures) == 1 and "Liberation" in rep.failures[0]
+    rep = Report()
+    check._check_font_entries({"family": [{**lib, "licence": "GPL-2.0-only WITH Font-exception-2.0"}]}, policy(), rep)
+    assert rep.failures and "not allowed for fonts" in rep.failures[0]
+
+
 def fake_node_modules(root: Path) -> Path:
     nm = root / "node_modules"
     pkg = nm / "@excalidraw" / "excalidraw"
     for d in ("dist/prod/fonts/Virgil", "dist/dev/fonts/Virgil", "dist/prod/fonts/Mystery"):
         (pkg / d).mkdir(parents=True, exist_ok=True)
     (pkg / "package.json").write_text('{"name": "@excalidraw/excalidraw", "version": "0.18.1"}')
-    (pkg / "dist/prod/fonts/Virgil/Virgil-Regular.woff2").write_bytes(b"wOF2")
-    (pkg / "dist/dev/fonts/Virgil/Virgil-Regular.woff2").write_bytes(b"wOF2")
+    (pkg / "dist/prod/fonts/Virgil/Virgil-Regular.woff2").write_bytes(make_font({13: OFL_TEXT}, "woff"))
+    (pkg / "dist/dev/fonts/Virgil/Virgil-Regular.woff2").write_bytes(make_font({13: OFL_TEXT}, "woff"))
     return nm
 
 
@@ -417,7 +506,7 @@ def test_an_unlisted_font_in_a_production_install_fails(tmp_path):
     rep = Report()
     check.scan_font_files([("web", nm)], {"family": [EXCALI]}, rep)
     assert rep.failures == []
-    (nm / "@excalidraw/excalidraw/dist/dev/fonts/Mystery-Regular.woff2").write_bytes(b"wOF2")
+    (nm / "@excalidraw/excalidraw/dist/dev/fonts/Mystery-Regular.woff2").write_bytes(make_font({13: OFL_TEXT}, "woff"))
     check.scan_font_files([("web", nm)], {"family": [EXCALI]}, rep)
     assert len(rep.failures) == 1 and "Mystery" in rep.failures[0] and "dist/dev" in rep.failures[0]
 
