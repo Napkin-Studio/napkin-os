@@ -1,10 +1,10 @@
 {
-  "contractVersion": "2",
+  "contractVersion": "3",
   "routing": {
     "generate": ["runway"], "view": ["runway"], "shot_list": [],
     "frame": ["runway"], "region_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "stitch": []
   },
-  "director": { "promptVersion": "director.v5", "perClickModel": "eu.anthropic.claude-sonnet-5-5", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
+  "director": { "promptVersion": "director.v6", "perClickModel": "eu.anthropic.claude-sonnet-5-5", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
   "quotas": { "image": 40, "video": 6, "render": 3 },
   "inFlightPerParticipant": 2,
   "jobTimeoutS": { "image": 180, "video": 600 },

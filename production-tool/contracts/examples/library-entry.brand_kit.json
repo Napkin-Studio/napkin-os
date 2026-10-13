@@ -1,0 +1,40 @@
+{
+  "workspace": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "shelf": "lumen",
+  "kind": "brand_kit",
+  "key": "brandkit",
+  "ver": 2,
+  "by": "maya",
+  "at": "2026-10-13T09:30:00Z",
+  "payload": {
+    "logo": [
+      {
+        "variant": "front",
+        "asset": {
+          "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "url": "https://studio.napkin.ie/in/sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "mime": "image/png"
+        }
+      }
+    ],
+    "palette": [
+      {
+        "hex": "#0B5FFF",
+        "name": "Lumen blue"
+      }
+    ],
+    "fonts": [
+      {
+        "family": "Lumen Sans",
+        "use": "headlines"
+      }
+    ],
+    "rules": [
+      {
+        "kind": "do",
+        "text": "Leave one cap height of clear space around the logo.",
+        "page": 14
+      }
+    ]
+  }
+}

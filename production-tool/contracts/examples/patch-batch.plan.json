@@ -1,0 +1,40 @@
+{
+  "patches": [
+    {
+      "op": "set",
+      "entity": "shots",
+      "id": "shot_01K7B00000000000000000SH02",
+      "path": "camera/size",
+      "value": "extreme_close",
+      "base_version": 3
+    },
+    {
+      "op": "set",
+      "entity": "shots",
+      "id": "shot_01K7B00000000000000000SH02",
+      "path": "camera/lens_mm",
+      "value": 100,
+      "base_version": 3
+    },
+    {
+      "op": "create",
+      "entity": "beats",
+      "id": "beat_01K7B00000000000000000BT09",
+      "value": {
+        "shot_id": "shot_01K7B00000000000000000SH02",
+        "rank": "a2",
+        "at_s": 1.5,
+        "kind": "moment"
+      },
+      "base_version": 0
+    }
+  ],
+  "why": {
+    "action": "plan shot 2: an insert on the bottle",
+    "agent": "dex",
+    "rationale": "The line names @product_bottle; the fizz is the product moment.",
+    "cites": [
+      "doc_lumen01#jobs[job_01K7B00000000000000000PA01]"
+    ]
+  }
+}

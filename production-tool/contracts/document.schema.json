@@ -1,263 +1,2557 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/document.schema.json",
-  "title": "Production Tool document (CLAN shared/data.yaml)",
-  "description": "The source of truth for one participant's work; the canvas and panels render it. snake_case, like all CLAN data in this repo. Shots, frames, takes, jobs and reviews are separate lists joined by id rather than one tree per shot, so a version, a comment or a stale mark can point at anything. Its own app: it promises no compatibility with any other app's document. Bytes are never inline: assets hold hashes and locations, plus an optional thumbnail under 4 KB. Only selected and referenced artifacts go in; other iterations stay in S3. Human verdicts (accept, reject, select) are also appended to the decision chain.",
+  "title": "Production Tool document (CLAN shared/data.yaml), contract 3",
+  "description": "The source of truth for one project; the canvas, the editors and today's panels render it. snake_case. Every entity list is a map keyed by the entity's id (its `id` repeats the key), so a patch can name one leaf of one entity and two people never rewrite each other's work (contracts/collab.md). Every entity carries v and field_v. Order is rank, never position. Live text (shot action and direction, beat, scene and note words) lives in Yjs fragments, and checkpoint() alone writes its flat copies here. Bytes are never inline. A v2 document is refused, never read (features/contract-v3.clan).",
   "type": "object",
   "properties": {
-    "contract_version": { "$ref": "common.schema.json#/$defs/contractVersion" },
-    "app": { "const": "production-tool" },
-    "participant": {
-      "type": "object",
-      "properties": { "id": { "type": "string" }, "handle": { "type": "string" } },
-      "required": ["id", "handle"],
-      "additionalProperties": false
+    "contract_version": {
+      "$ref": "common.schema.json#/$defs/contractVersion"
     },
-    "stage": {
+    "app": {
+      "const": "production-tool"
+    },
+    "project": {
       "type": "object",
+      "description": "Who the project belongs to.",
       "properties": {
-        "current": { "enum": ["character", "storyboard", "video"] },
-        "next_action": { "type": "string", "maxLength": 140 }
+        "id": {
+          "type": "string",
+          "pattern": "^proj_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "tenant_id": {
+          "$ref": "common.schema.json#/$defs/tenantId"
+        },
+        "client_id": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "The client (library shelf) the project is for."
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "created_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["current"],
+      "required": [
+        "id",
+        "tenant_id",
+        "title",
+        "created_by",
+        "created_at"
+      ],
       "additionalProperties": false
     },
-    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
-    "keys": {
-      "type": "array",
-      "description": "Solid references: one entry per character or object the participant named. A key's refs (its variants) survive Clean up; unnamed canvas nodes are weak and go once nothing reaches them.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "key": { "$ref": "common.schema.json#/$defs/key" },
-          "role": { "$ref": "common.schema.json#/$defs/refRole" },
-          "library": {
-            "type": "object",
-            "description": "Set when the key was published to or imported from the workspace library: the version this document holds. A copy, never a live link.",
-            "properties": {
-              "workspace": { "type": "string", "maxLength": 64 },
-              "ver": { "type": "integer", "minimum": 1 },
-              "by": { "type": "string", "maxLength": 64, "description": "The handle that published this version." },
-              "at": { "type": "string", "format": "date-time" }
-            },
-            "required": ["workspace", "ver", "by", "at"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["key", "role"],
-        "additionalProperties": false
+    "upstream": {
+      "type": "object",
+      "description": "What this project was spun off from (os-layer §5.2): data.upstream.<document_id>, written by the host and read-only (a patch under it is refused, napkin-host ops/edit.rs).",
+      "additionalProperties": {
+        "type": "object"
       }
+    },
+    "boards": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/board"
+      },
+      "maxProperties": 64
+    },
+    "sketches": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/sketch"
+      },
+      "maxProperties": 300
+    },
+    "scripts": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/script"
+      },
+      "maxProperties": 16
+    },
+    "scenes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/scene"
+      },
+      "maxProperties": 300
+    },
+    "storyboards": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/storyboard"
+      },
+      "maxProperties": 16
+    },
+    "shots": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/shot"
+      },
+      "maxProperties": 300
+    },
+    "beats": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/beat"
+      },
+      "maxProperties": 2400
+    },
+    "frames": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/frame"
+      },
+      "maxProperties": 2000
+    },
+    "videos": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/video"
+      },
+      "maxProperties": 32
+    },
+    "takes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/take"
+      },
+      "maxProperties": 1200
+    },
+    "renders": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/render"
+      },
+      "maxProperties": 200
+    },
+    "reviews": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/review"
+      },
+      "maxProperties": 1000
+    },
+    "links": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/link"
+      },
+      "maxProperties": 2000
+    },
+    "keys": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/key"
+      },
+      "maxProperties": 300
     },
     "refs": {
-      "type": "array",
-      "description": "Named images: key_variant -> one asset. Scripts and shots use them by name (@maya_laughing).",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "key": { "$ref": "common.schema.json#/$defs/key" },
-          "variant": { "$ref": "common.schema.json#/$defs/variant" },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "node": { "$ref": "common.schema.json#/$defs/id", "description": "The canvas node the name sits on (absent for a ref imported from the library and not placed)." },
-          "named_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "key", "variant", "asset"],
-        "additionalProperties": false
-      }
-    },
-    "script": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/ref"
+      },
+      "maxProperties": 1000
+    },
+    "documents": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/document"
+      },
+      "maxProperties": 64
+    },
+    "format_sets": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/format_set"
+      },
+      "maxProperties": 64
+    },
+    "sizes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/size"
+      },
+      "maxProperties": 1000
+    },
+    "checks": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/check"
+      },
+      "maxProperties": 2000
+    },
+    "asks": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/ask"
+      },
+      "maxProperties": 500
+    },
+    "suggestions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/suggestion"
+      },
+      "maxProperties": 500
+    },
+    "spin_ins": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/spin_in"
+      },
+      "maxProperties": 32
+    },
+    "jobs": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/job"
+      },
+      "maxProperties": 3000
+    },
+    "stale": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/stale"
+      },
+      "maxProperties": 2000
+    },
+    "exports": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/export"
+      },
+      "maxProperties": 200
+    },
+    "assets": {
+      "type": "object",
+      "description": "Files, keyed by their sha256.",
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/sha256"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/asset"
+      },
+      "maxProperties": 5000
+    }
+  },
+  "required": [
+    "contract_version",
+    "app",
+    "project",
+    "assets",
+    "boards",
+    "sketches",
+    "scripts",
+    "scenes",
+    "storyboards",
+    "shots",
+    "beats",
+    "frames",
+    "videos",
+    "takes",
+    "renders",
+    "reviews",
+    "links",
+    "keys",
+    "refs",
+    "documents",
+    "format_sets",
+    "sizes",
+    "checks",
+    "asks",
+    "suggestions",
+    "spin_ins",
+    "jobs",
+    "stale",
+    "exports"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "v": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The entity's version: every applied patch batch that touches it adds one (PatchBus)."
+    },
+    "field_v": {
+      "type": "object",
+      "description": "For each leaf written since the entity was created, the entity version that wrote it, keyed by the leaf's path inside the entity with '/' between parts (camera/size, edl/edl_X/pick/current). A set whose base_version is older than its leaf's field_v is a conflict.",
+      "propertyNames": {
+        "pattern": "^[a-z_0-9]+(/[A-Za-z_0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "maxProperties": 256
+    },
+    "prose": {
+      "type": "object",
+      "description": "A live-text fragment as ProseMirror JSON (clan-store/src/text/extensions.ts), at most 64 KB serialised. hydrate() rebuilds the fragment from it on another device. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text).",
       "properties": {
-        "current": { "$ref": "common.schema.json#/$defs/id" },
-        "revisions": {
+        "type": {
+          "const": "doc"
+        },
+        "content": {
           "type": "array",
+          "maxItems": 400,
           "items": {
-            "type": "object",
-            "properties": {
-              "id": { "$ref": "common.schema.json#/$defs/id" },
-              "parent": { "$ref": "common.schema.json#/$defs/id" },
-              "created_at": { "type": "string", "format": "date-time" },
-              "imported_text": { "type": "string", "maxLength": 1500, "description": "The user's own words, kept verbatim. Up to 1500 characters since 2026-10-09 (was 600)." },
-              "target_s": { "type": "integer", "minimum": 10, "maximum": 20 },
-              "status": { "enum": ["draft", "approved", "superseded"] }
-            },
-            "required": ["id", "created_at", "imported_text", "target_s", "status"],
-            "additionalProperties": false
+            "type": "object"
           }
         }
       },
-      "required": ["revisions"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false
     },
-    "shots": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/shot" } },
-    "frames": {
-      "type": "array",
-      "description": "Storyboard frame versions. shots[].storyboard_frame names the selected one.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "shot_id": { "$ref": "common.schema.json#/$defs/id" },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "job_id": { "$ref": "common.schema.json#/$defs/id" },
-          "parent": { "$ref": "common.schema.json#/$defs/id", "description": "The frame this one was edited from." },
-          "selected": { "type": "boolean" },
-          "kind": { "enum": ["generated", "mock"] }
-        },
-        "required": ["id", "shot_id", "asset", "job_id", "selected", "kind"],
-        "additionalProperties": false
-      }
-    },
-    "takes": {
-      "type": "array",
-      "description": "Clips. A take is never deleted to make room.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "shot_id": { "$ref": "common.schema.json#/$defs/id" },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "job_id": { "$ref": "common.schema.json#/$defs/id" },
-          "parent": { "$ref": "common.schema.json#/$defs/id" },
-          "kind": { "enum": ["generated", "mock"] },
-          "provider": { "$ref": "common.schema.json#/$defs/madeBy" },
-          "model": { "type": "string" },
-          "duration_s": { "type": "number" },
-          "selected": { "type": "boolean" }
-        },
-        "required": ["id", "shot_id", "asset", "job_id", "kind", "provider", "selected"],
-        "additionalProperties": false
-      }
-    },
-    "jobs": {
-      "type": "array",
-      "description": "One entry per job, written at submit (state queued) and patched as it moves. Mirrors the relay ledger.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "op": { "$ref": "common.schema.json#/$defs/op" },
-          "state": { "$ref": "common.schema.json#/$defs/jobState" },
-          "provider": { "$ref": "common.schema.json#/$defs/madeBy" },
-          "model": { "type": "string" },
-          "remote_id": { "type": "string" },
-          "parent_ids": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/id" } },
-          "input_hashes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
-          "region": { "$ref": "common.schema.json#/$defs/region" },
-          "text": { "type": "string" },
-          "chips": { "type": "array", "items": { "type": "string" } },
-          "outputs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/sha256" } },
-          "agent": { "$ref": "director.schema.json#/$defs/agentBlock" },
-          "cost": { "$ref": "common.schema.json#/$defs/cost" },
-          "error": { "$ref": "common.schema.json#/$defs/error" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "updated_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "op", "state", "parent_ids", "input_hashes", "created_at"],
-        "additionalProperties": false
-      }
-    },
-    "reviews": {
-      "type": "array",
-      "description": "Comments on a ref, frame or take; with a region they are pins. resolved_by_job is set when the job they caused lands.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "target": { "$ref": "#/$defs/target" },
-          "comment": { "type": "string", "maxLength": 1000 },
-          "chips": { "type": "array", "items": { "type": "string" } },
-          "region": { "$ref": "common.schema.json#/$defs/region" },
-          "at_s": { "type": "number", "minimum": 0, "description": "Takes only: the paused time." },
-          "resolved": { "type": "boolean" },
-          "resolved_by_job": { "$ref": "common.schema.json#/$defs/id" },
-          "created_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "target", "comment", "resolved", "created_at"],
-        "additionalProperties": false
-      }
-    },
-    "stale": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "target": { "$ref": "#/$defs/target" },
-          "caused_by": { "$ref": "#/$defs/target" },
-          "reason": { "type": "string" },
-          "marked_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["target", "caused_by", "reason"],
-        "additionalProperties": false
-      }
-    },
-    "exports": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "$ref": "common.schema.json#/$defs/id" },
-          "kind": { "enum": ["ad_mp4", "bundle_zip"] },
-          "asset": { "$ref": "common.schema.json#/$defs/sha256" },
-          "job_id": { "$ref": "common.schema.json#/$defs/id" },
-          "created_at": { "type": "string", "format": "date-time" }
-        },
-        "required": ["id", "kind", "asset", "created_at"],
-        "additionalProperties": false
-      }
-    }
-  },
-  "required": ["contract_version", "app", "participant", "stage", "assets", "keys", "refs", "jobs"],
-  "additionalProperties": false,
-  "$defs": {
-    "asset": {
+    "textProblem": {
       "type": "object",
+      "description": "Set by checkpoint() when live text overflows its flat field: the field keeps its last valid value, and job starts for the entity refuse with these words.",
       "properties": {
-        "sha256": { "$ref": "common.schema.json#/$defs/sha256" },
-        "kind": { "enum": ["image", "video"] },
-        "mime": { "type": "string" },
-        "bytes": { "type": "integer" },
-        "w": { "type": "integer" },
-        "h": { "type": "integer" },
-        "duration_s": { "type": "number" },
-        "origin": { "enum": ["uploaded", "drawn", "generated", "mock"] },
-        "job_id": { "$ref": "common.schema.json#/$defs/id" },
-        "locations": {
+        "field": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "field",
+        "length",
+        "limit",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "pick": {
+      "type": "object",
+      "description": "Which version is current, and which are kept beside it (Keep both: ui-behaviour 3.20). A restore is a new pick decision.",
+      "properties": {
+        "current": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "alternates": {
           "type": "array",
-          "description": "Where to find the bytes, in resolution order: idb://sha256/<hex>, s3://<bucket>/assets/<hex>, then our https URL.",
-          "items": { "type": "string", "pattern": "^(idb|s3|https)://" }
-        },
-        "thumb": { "type": "string", "pattern": "^data:image/webp;base64,", "maxLength": 5500 }
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        }
       },
-      "required": ["sha256", "kind", "mime", "origin", "locations"],
+      "required": [
+        "current"
+      ],
       "additionalProperties": false
     },
-    "shot": {
+    "libraryCopy": {
       "type": "object",
-      "description": "One row of the shot list. Shared with the relay API, so it keeps snake_case there too.",
+      "description": "Set when this came from, or was published to, the team library: the version this project holds. A copy, never a live link.",
       "properties": {
-        "id": { "$ref": "common.schema.json#/$defs/id" },
-        "order": { "type": "integer", "minimum": 1 },
-        "duration_s": { "type": "number", "minimum": 1, "maximum": 10 },
-        "composition": { "enum": ["wide", "medium", "close", "extreme_close", "over_shoulder", "insert"] },
-        "action": { "type": "string", "maxLength": 300 },
-        "camera_move": { "enum": ["static", "pan", "tilt", "push_in", "pull_out", "track", "orbit", "handheld"] },
-        "refs": { "type": "array", "maxItems": 9, "items": { "$ref": "common.schema.json#/$defs/subject" }, "description": "What this shot shows, as written in the script: bare keys for whole characters (@goremon), key_variant for a specific look (@goremon_laughing). Frames and takes send exactly these. At most 9 (set for the hackathon providers; Runway takes up to 14 refs, 5 of them characters)." },
-        "dialogue": { "type": "string", "maxLength": 200 },
-        "storyboard_frame": { "$ref": "common.schema.json#/$defs/sha256" },
-        "selected_take": { "$ref": "common.schema.json#/$defs/id" },
-        "status": { "enum": ["planned", "needs_review", "locked"] }
+        "shelf": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "ver": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "order", "duration_s", "composition", "action", "camera_move"],
+      "required": [
+        "shelf",
+        "key",
+        "ver",
+        "by",
+        "at"
+      ],
       "additionalProperties": false
     },
     "target": {
       "type": "object",
       "properties": {
-        "kind": { "enum": ["ref", "frame", "take", "shot"] },
-        "id": { "type": "string" }
+        "kind": {
+          "enum": [
+            "ref",
+            "frame",
+            "take",
+            "render",
+            "video",
+            "shot",
+            "scene",
+            "beat",
+            "script",
+            "storyboard",
+            "size",
+            "format_set",
+            "sketch",
+            "document",
+            "board",
+            "key"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
       },
-      "required": ["kind", "id"],
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "handsOff": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/crewId"
+      },
+      "maxItems": 7,
+      "uniqueItems": true,
+      "description": "Crew who leave this alone: a person pressed Keep mine on their suggestion, so later jobs of theirs skip it."
+    },
+    "window": {
+      "type": "object",
+      "description": "A note's time window in whole seconds of shot time (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped to the shot, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json).",
+      "properties": {
+        "from_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_s": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "from_s",
+        "to_s"
+      ],
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "description": "One file the project uses, keyed by its hash. Bytes are never inline.",
+      "properties": {
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video",
+            "audio",
+            "document",
+            "font",
+            "vector"
+          ]
+        },
+        "mime": {
+          "$ref": "common.schema.json#/$defs/mime"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "enum": [
+            "uploaded",
+            "drawn",
+            "generated",
+            "mock",
+            "edited",
+            "extracted"
+          ]
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(idb|s3|https)://"
+          },
+          "maxItems": 8,
+          "description": "Where to find the bytes, in resolution order: idb://sha256/<hex>, s3://<bucket>/assets/<hex>, then our https URL."
+        },
+        "thumb": {
+          "type": "string",
+          "pattern": "^data:image/webp;base64,",
+          "maxLength": 5500
+        }
+      },
+      "required": [
+        "sha256",
+        "kind",
+        "mime",
+        "origin",
+        "locations"
+      ],
+      "additionalProperties": false
+    },
+    "board": {
+      "type": "object",
+      "description": "An art board: an Excalidraw frame with a purpose (ui-behaviour 3.2).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 1
+        },
+        "purpose": {
+          "enum": [
+            "script",
+            "character",
+            "location",
+            "reference",
+            "product",
+            "storyboard",
+            "video",
+            "sketches",
+            "brand",
+            "formats",
+            "none"
+          ]
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "name_prefix": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "source": {
+          "type": "object",
+          "description": "A Brand board made from a brand book: the Document it reads.",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          "required": [
+            "document_id"
+          ],
+          "additionalProperties": false
+        },
+        "library": {
+          "$ref": "#/$defs/libraryCopy"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "purpose",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "sketch": {
+      "type": "object",
+      "description": "A ratio-locked sketch area (ui-behaviour 3.7). Its strokes stay on the canvas.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "aspect": {
+          "$ref": "common.schema.json#/$defs/aspect"
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "format": {
+          "$ref": "common.schema.json#/$defs/formatRef"
+        },
+        "board_id": {
+          "type": "string",
+          "pattern": "^board_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "drawn_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "aspect",
+        "drawn_by"
+      ],
+      "additionalProperties": false
+    },
+    "script": {
+      "type": "object",
+      "description": "A script. Its text lives in its scenes, shots and beats; its order in their ranks.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "target_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "target_s"
+      ],
+      "additionalProperties": false
+    },
+    "scene": {
+      "type": "object",
+      "description": "A scene of a script. Its fragment (scenes/<id>) holds only script text no shot owns yet.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "script_id": {
+          "type": "string",
+          "pattern": "^script_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "heading": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "hands_off": {
+          "$ref": "#/$defs/handsOff"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 20000,
+          "description": "The scene's unplanned text, flat. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "script_id",
+        "rank",
+        "heading"
+      ],
+      "additionalProperties": false
+    },
+    "storyboard": {
+      "type": "object",
+      "description": "A storyboard: shots in rank order. A script drives it through a link.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "target_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "implicit": {
+          "type": "boolean",
+          "description": "Planned straight from a script for a Video (ui-behaviour 3.5): owned by the Video, with no canvas node until it is shown."
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "ratio",
+        "target_s"
+      ],
+      "additionalProperties": false
+    },
+    "shot": {
+      "type": "object",
+      "description": "One shot of a storyboard. Camera, duration, rank and status are single-value fields; action, direction and the refs come from its live text (shots/<id>).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "storyboard_id": {
+          "type": "string",
+          "pattern": "^storyboard_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "kind": {
+          "enum": [
+            "shot",
+            "end_card"
+          ],
+          "description": "end_card: the last clip, edited like any shot (Graphic · Static)."
+        },
+        "scene_id": {
+          "type": "string",
+          "pattern": "^scene_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 30,
+          "multipleOf": 0.1
+        },
+        "camera": {
+          "$ref": "common.schema.json#/$defs/camera"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "needs_review",
+            "locked"
+          ],
+          "description": "Gates today's Video stage."
+        },
+        "pick": {
+          "$ref": "#/$defs/pick"
+        },
+        "hands_off": {
+          "$ref": "#/$defs/handsOff"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 600,
+          "description": "What happens. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "direction": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Performance direction. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "maxItems": 14,
+          "uniqueItems": true,
+          "description": "The refs the shot's text mentions, by id. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "text_problem": {
+          "$ref": "#/$defs/textProblem"
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        },
+        "direction_condensed": {
+          "type": "object",
+          "description": "Dex's condensed direction for models that read 1,000 characters (Veo 3.1). Written only by Dex's job; read-only to people.",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "from_hash": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "job_id": {
+              "type": "string",
+              "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+            }
+          },
+          "required": [
+            "text",
+            "from_hash",
+            "job_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "storyboard_id",
+        "rank",
+        "kind",
+        "duration_s",
+        "camera",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "beat": {
+      "type": "object",
+      "description": "A timed row inside a shot (ui-behaviour 3.10): a moment, a line, VO, music, a sound or a camera change. Its words live in beats/<id>.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "at_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30,
+          "multipleOf": 0.5
+        },
+        "kind": {
+          "$ref": "common.schema.json#/$defs/beatKind"
+        },
+        "speaker": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "parenthetical": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "moment_id": {
+          "type": "string",
+          "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "A line tied to a moment: moving either writes both in one batch."
+        },
+        "hands_off": {
+          "$ref": "#/$defs/handsOff"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "The beat's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "shot_id",
+        "rank",
+        "at_s",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "frame": {
+      "type": "object",
+      "description": "A still version: a storyboard frame (shot_id), a frame made from a sketch area (sketch_id), or a size of a format set (size_id).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "sketch_id": {
+          "type": "string",
+          "pattern": "^sketch_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "size_id": {
+          "type": "string",
+          "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^frame_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "kind": {
+          "enum": [
+            "generated",
+            "mock",
+            "edited"
+          ]
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              "params": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "op"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 64,
+          "description": "The image editor's non-destructive op list that made an edited frame."
+        },
+        "cropped_to": {
+          "type": "object",
+          "description": "The model's output was not exactly the ratio, so it was centre-cropped ('1344×756 · cropped to 16:9').",
+          "properties": {
+            "from": {
+              "$ref": "common.schema.json#/$defs/aspect"
+            },
+            "to": {
+              "$ref": "common.schema.json#/$defs/aspect"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "version",
+        "kind",
+        "asset",
+        "crew"
+      ],
+      "additionalProperties": false,
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "shot_id",
+              "sketch_id"
+            ]
+          },
+          {
+            "required": [
+              "shot_id",
+              "size_id"
+            ]
+          },
+          {
+            "required": [
+              "sketch_id",
+              "size_id"
+            ]
+          }
+        ]
+      }
+    },
+    "take": {
+      "type": "object",
+      "description": "A clip version of a shot. A spliced take lists its segments. Never deleted to make room.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "kind": {
+          "enum": [
+            "generated",
+            "mock"
+          ],
+          "description": "A mock take is labelled everywhere and never counts as final."
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_take": {
+                "type": "string",
+                "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "job_id": {
+                "type": "string",
+                "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              }
+            },
+            "required": [
+              "source_take",
+              "in_s",
+              "out_s"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "shot_id",
+        "version",
+        "asset",
+        "job_id",
+        "crew",
+        "kind",
+        "model",
+        "provider",
+        "duration_s",
+        "segments"
+      ],
+      "additionalProperties": false
+    },
+    "video": {
+      "type": "object",
+      "description": "A video (the cut): its items in rank order, each with its picked take, and its ad renders.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "target_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "pick": {
+          "$ref": "#/$defs/pick"
+        },
+        "edl": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^edl_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "description": "One item of the cut: a shot's clip or a bridge.",
+            "properties": {
+              "rank": {
+                "$ref": "common.schema.json#/$defs/rank"
+              },
+              "kind": {
+                "enum": [
+                  "shot",
+                  "bridge"
+                ]
+              },
+              "shot_id": {
+                "type": "string",
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "pick": {
+                "$ref": "#/$defs/pick"
+              },
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "rank",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          "maxProperties": 100
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "ratio",
+        "edl"
+      ],
+      "additionalProperties": false
+    },
+    "render": {
+      "type": "object",
+      "description": "An ad render of a video: a version Edie made.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "video_id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent_id": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "video_id",
+        "version",
+        "asset",
+        "job_id"
+      ],
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "description": "A note on a frame, take, render, ref or video; with a region it is a box, with at_s it has a window. Its words live in reviews/<id>.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^rev_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "frame",
+                "take",
+                "render",
+                "ref",
+                "video"
+              ]
+            },
+            "id": {
+              "$ref": "common.schema.json#/$defs/id"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "video_id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "render_id": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "shot_id": {
+          "type": "string",
+          "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "at_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "region": {
+          "$ref": "common.schema.json#/$defs/region"
+        },
+        "still": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "chips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 8
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        },
+        "state": {
+          "enum": [
+            "open",
+            "resolved"
+          ]
+        },
+        "resolved_by_job": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "fixed_in_render": {
+          "type": "string",
+          "pattern": "^render_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "prose": {
+          "$ref": "#/$defs/prose"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "The note's words. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+        },
+        "last_writer": {
+          "$ref": "common.schema.json#/$defs/actorRef"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "by",
+        "state",
+        "created_at"
+      ],
+      "additionalProperties": false,
+      "dependentRequired": {
+        "at_s": [
+          "window"
+        ],
+        "window": [
+          "at_s"
+        ]
+      }
+    },
+    "link": {
+      "type": "object",
+      "description": "A link between two nodes (ui-behaviour 3.4): the only record of drives, renders, inputs, brand and master. Allowed by common linkRule.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "from": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "to": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/linkRole"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "from",
+        "to",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "key": {
+      "type": "object",
+      "description": "A solid reference key: one character, place or object. Its refs are its variants.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/refRole"
+        },
+        "library": {
+          "$ref": "#/$defs/libraryCopy"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "key",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "ref": {
+      "type": "object",
+      "description": "A named reference: key_variant and what it holds for its role (refRoleTable payload: image, swatches, font, rule or document).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/key"
+        },
+        "variant": {
+          "$ref": "common.schema.json#/$defs/variant"
+        },
+        "role": {
+          "$ref": "common.schema.json#/$defs/refRole"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "swatches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hex": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "hex"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 24
+        },
+        "font": {
+          "type": "object",
+          "properties": {
+            "family": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "use": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "file": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            }
+          },
+          "required": [
+            "family"
+          ],
+          "additionalProperties": false
+        },
+        "rule": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "do",
+                "dont",
+                "tone"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "page": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "document_id": {
+          "type": "string",
+          "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/sceneId"
+        },
+        "library": {
+          "$ref": "#/$defs/libraryCopy"
+        },
+        "named_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "key",
+        "variant",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "document": {
+      "type": "object",
+      "description": "A Document node: a file Ellis reads, used as context once linked (ui-behaviour 3.18).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1
+        },
+        "file_name": {
+          "type": "string",
+          "maxLength": 200,
+          "minLength": 1
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excerpt": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "read": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "unread",
+                "reading",
+                "read",
+                "failed"
+              ]
+            },
+            "pages_read": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "state",
+            "pages_read"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "title",
+        "file_name",
+        "asset",
+        "pages",
+        "read"
+      ],
+      "additionalProperties": false
+    },
+    "format_set": {
+      "type": "object",
+      "description": "A Format set: a master adapted to every format of a pack (ui-behaviour 3.19). Its sizes are their own entities.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "master": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "frame",
+                "ref",
+                "render",
+                "video"
+              ]
+            },
+            "id": {
+              "$ref": "common.schema.json#/$defs/id"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "pack": {
+          "type": "object",
+          "properties": {
+            "pack_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "pack_version": {
+              "type": "string",
+              "maxLength": 40,
+              "minLength": 1
+            },
+            "client_id": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "pack_id",
+            "pack_version"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "master",
+        "pack"
+      ],
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "object",
+      "description": "One size of a format set: the format's values copied at creation.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "set_id": {
+          "type": "string",
+          "pattern": "^fset_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "rank": {
+          "$ref": "common.schema.json#/$defs/rank"
+        },
+        "format": {
+          "$ref": "common.schema.json#/$defs/formatRef"
+        },
+        "aspect": {
+          "$ref": "common.schema.json#/$defs/aspect"
+        },
+        "delivery": {
+          "$ref": "common.schema.json#/$defs/deliveryPx"
+        },
+        "bleed_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "safe_area": {
+          "$ref": "common.schema.json#/$defs/safeArea"
+        },
+        "method": {
+          "enum": [
+            "crop",
+            "extend",
+            "nearest",
+            "reframe"
+          ]
+        },
+        "media": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "set_id",
+        "rank",
+        "format",
+        "aspect",
+        "delivery",
+        "method",
+        "media"
+      ],
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "description": "Jude's check of a result against the shot or the brand rules. Brand rules never block; Ignore is recorded here.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^check_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "crew": {
+          "const": "jude"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "flag"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,63}$"
+        },
+        "rule_ref": {
+          "type": "string",
+          "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "ignored": {
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "common.schema.json#/$defs/personRef"
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "by",
+            "at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "crew",
+        "result",
+        "reason_code",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "ask": {
+      "type": "object",
+      "description": "An agent's question on a node (ui-behaviour 3.17). Its key is question.id; a job's ask copies Job.question (minted by the relay), and the relay decides which answer won. kind is question.kind.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "question": {
+          "$ref": "common.schema.json#/$defs/question"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "state": {
+          "enum": [
+            "open",
+            "answered",
+            "withdrawn"
+          ]
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Every answer in order: the first settled it; a later one is a Change.",
+            "properties": {
+              "option_id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}$"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              "by": {
+                "$ref": "common.schema.json#/$defs/personRef"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "by",
+              "at"
+            ],
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "option_id"
+                ],
+                "not": {
+                  "required": [
+                    "text"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "text"
+                ],
+                "not": {
+                  "required": [
+                    "option_id"
+                  ]
+                }
+              }
+            ]
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "question",
+        "node",
+        "crew",
+        "state",
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "suggestion": {
+      "type": "object",
+      "description": "Skye's proposed words on a scene, shot or beat, shown inline until Keep or Keep mine (ui-behaviour 3.10). Nothing changes until Keep.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sug_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "scene",
+                "shot",
+                "beat"
+              ]
+            },
+            "id": {
+              "$ref": "common.schema.json#/$defs/id"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "crew": {
+          "const": "skye"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "for": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "base_hash": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The hash of the target's prose the suggestion was written against: a different hash makes it stale."
+        },
+        "proposed": {
+          "type": "object",
+          "properties": {
+            "prose": {
+              "$ref": "#/$defs/prose"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 20000
+            }
+          },
+          "required": [
+            "prose",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "state": {
+          "enum": [
+            "open",
+            "kept",
+            "dropped",
+            "stale"
+          ]
+        },
+        "decided_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "crew",
+        "job_id",
+        "for",
+        "base_hash",
+        "proposed",
+        "note",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "spin_in": {
+      "type": "object",
+      "description": "A spin-in from Brief Maker or Research waiting on Bring in (ui-behaviour 3.18).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^spin_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "document_id": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "app": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "document_id",
+            "app"
+          ],
+          "additionalProperties": false
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "script",
+                  "ref",
+                  "document",
+                  "brand"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              "note": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "kind",
+              "title"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        },
+        "state": {
+          "enum": [
+            "waiting",
+            "brought_in",
+            "dismissed"
+          ]
+        },
+        "decided_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "source",
+        "plan",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "job": {
+      "type": "object",
+      "description": "One job, written at submit and patched as it moves; mirrors the relay ledger.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "op": {
+          "$ref": "common.schema.json#/$defs/op"
+        },
+        "state": {
+          "$ref": "common.schema.json#/$defs/jobState"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the job is for, in the app's words (it was ProjectUi.jobCtx)."
+        },
+        "started_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "tenant_id": {
+          "$ref": "common.schema.json#/$defs/tenantId"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,64}$"
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "One thing a job used (the send tray's rows): what it was, which link brought it, what it was used as, and whether it was ticked.",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "ref",
+                  "sketch",
+                  "text",
+                  "note",
+                  "ink",
+                  "document",
+                  "brand",
+                  "frame",
+                  "take",
+                  "render",
+                  "board",
+                  "group"
+                ]
+              },
+              "ref": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "link_id": {
+                "type": "string",
+                "pattern": "^link_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "used_as": {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              "included": {
+                "type": "boolean"
+              },
+              "confirmed": {
+                "type": "boolean"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "kind",
+              "used_as",
+              "included"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        },
+        "region": {
+          "$ref": "common.schema.json#/$defs/region"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "chips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 8
+        },
+        "ask_id": {
+          "type": "string",
+          "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "parent_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "maxItems": 32
+        },
+        "input_hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "maxItems": 32
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "maxItems": 16
+        },
+        "director": {
+          "$ref": "director.schema.json#/$defs/agentBlock"
+        },
+        "cost": {
+          "$ref": "common.schema.json#/$defs/cost"
+        },
+        "error": {
+          "$ref": "common.schema.json#/$defs/error"
+        },
+        "stopped_by": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "provider": {
+          "$ref": "common.schema.json#/$defs/madeBy"
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "remote_id": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "op",
+        "state",
+        "node",
+        "started_by",
+        "tenant_id",
+        "nonce",
+        "crew",
+        "parent_ids",
+        "input_hashes",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "stale": {
+      "type": "object",
+      "description": "Something out of date because what it was made from changed.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^stale_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "caused_by": {
+          "$ref": "#/$defs/target"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "marked_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "target",
+        "caused_by",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "export": {
+      "type": "object",
+      "description": "A download that was made.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^exp_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "kind": {
+          "enum": [
+            "ad_mp4",
+            "bundle_zip",
+            "media_zip",
+            "clan_bundle",
+            "script_pdf",
+            "script_fountain",
+            "storyboard_pdf",
+            "sizes_zip"
+          ]
+        },
+        "asset": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "kind",
+        "asset",
+        "created_at"
+      ],
       "additionalProperties": false
     }
   }

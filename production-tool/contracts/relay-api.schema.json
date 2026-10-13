@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/relay-api.schema.json",
   "title": "Relay HTTP API: request and response bodies",
-  "description": "Every route but GET /config needs an identity: who is asking comes from the relay's identity seam (relay/identity.py). Behind napkin-web (/production/api, features/os-sign-in.clan) that is napkin-web's signed X-Napkin-Identity assertion (docs/contracts/production-tool-identity.md); standalone local development (relay/local.py with no TOKEN_SECRET, the mock relay) names a fixed local person. No identity is a 401. A person whose agency (tenant) is not turned on gets 403 flag_off on every route but GET /health and GET /config. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Routes: GET /me, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET|POST /library…, POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
+  "description": "Every route but GET /config needs an identity: who is asking comes from the relay's identity seam (relay/identity.py). Behind napkin-web (/production/api, features/os-sign-in.clan) that is napkin-web's signed X-Napkin-Identity assertion (docs/contracts/production-tool-identity.md); standalone local development (relay/local.py with no TOKEN_SECRET, the mock relay) names a fixed local person. No identity is a 401. A person whose agency (tenant) is not turned on gets 403 flag_off on every route but GET /health and GET /config. Errors are a non-2xx status with {error} (common error). A 2xx body never carries an error key. Contract 3: a body whose contractVersion is not '3' gets 400 invalid_input 'This build reads contract 3; reload the page.' before anything else is read. Routes: GET /me, POST /uploads, POST /jobs, GET /jobs/{jobId}, DELETE /jobs/{jobId}, POST /jobs/{jobId}/answer, POST /log, POST /clan, GET /projects, GET /clan/{projectId}, GET|PUT /clan/{projectId}/canvas, GET /library/{shelf}, GET|POST /library/{shelf}/{key}[/{ver}], POST /dogfood/consent, POST /dogfood/events, GET /config (served by CloudFront as config.json).",
   "$defs": {
     "Me": {
       "type": "object",
@@ -106,12 +106,7 @@
           "$ref": "common.schema.json#/$defs/sha256"
         },
         "mime": {
-          "enum": [
-            "image/png",
-            "image/jpeg",
-            "image/webp",
-            "video/mp4"
-          ]
+          "$ref": "common.schema.json#/$defs/mime"
         },
         "bytes": {
           "type": "integer",
@@ -174,6 +169,24 @@
         "modelChoice": {
           "$ref": "#/$defs/ModelChoice",
           "description": "The model the person picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider routed for the op (Runway's models are always pickable). Absent: the routing's default. The job runs on that provider and model; when it fails for a provider or account reason, it runs once on Runway's default model for the op (Job.fallbackFrom says so)."
+        },
+        "projectId": {
+          "$ref": "common.schema.json#/$defs/id",
+          "description": "The document's project.id: jobs are the project's, whoever started them."
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,64}$",
+          "description": "The client's nonce: an intentional 'another take' carries a new one, so it is never deduped with the running job (ui-behaviour 4.3)."
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "What the job is for, in the app's words (the document's jobs[id].purpose)."
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint",
+          "description": "The node the job runs for: dedupe is keyed by (node, op, input hashes) while it runs."
         }
       },
       "required": [
@@ -181,7 +194,10 @@
         "jobId",
         "op",
         "parentIds",
-        "input"
+        "input",
+        "projectId",
+        "nonce",
+        "node"
       ],
       "additionalProperties": false
     },
@@ -223,7 +239,7 @@
         "refs": {
           "type": "array",
           "maxItems": 14,
-          "description": "Every image input, in the order chosen. generate: the selected nodes. view: named refs of the same key besides the source. frame, clip: the shot's named refs. The relay gives each a wire tag (relay/names.py) before the director sees the job.",
+          "description": "Every image input, in the order chosen, each with its role: the director writes refRoleTable's prompt_line for it. The relay gives each a wire tag (relay/names.py) before the director sees the job.",
           "items": {
             "type": "object",
             "properties": {
@@ -248,6 +264,11 @@
               },
               "asset": {
                 "$ref": "common.schema.json#/$defs/assetRef"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 60,
+                "description": "The ref's free label ('Maya's beach outfit')."
               }
             },
             "required": [
@@ -265,18 +286,18 @@
         },
         "script": {
           "type": "string",
-          "maxLength": 1500,
-          "description": "shot_list: the script, up to 1500 characters (since 2026-10-09; was 600). frame: the same script for the setting, cut to its first 600 characters by the web."
+          "maxLength": 20000,
+          "description": "shot_list: the script text Dex plans from (the scenes' unplanned text, or the shots' text when re-planning). frame: the script for the setting, cut to its first 600 characters by the web."
         },
         "targetS": {
           "type": "integer",
-          "minimum": 10,
-          "maximum": 20,
+          "minimum": 1,
+          "maximum": 600,
           "description": "shot_list: total length."
         },
         "shot": {
-          "$ref": "document.schema.json#/$defs/shot",
-          "description": "frame, clip: the shot being made."
+          "$ref": "#/$defs/JobShot",
+          "description": "frame, clip, frame_edit, clip_patch: the shot being made."
         },
         "previousFrame": {
           "$ref": "common.schema.json#/$defs/assetRef",
@@ -320,18 +341,9 @@
           },
           "additionalProperties": false
         },
-        "ratio": {
-          "enum": [
-            "1:1",
-            "4:5",
-            "9:16",
-            "16:9",
-            "3:1"
-          ]
-        },
         "clips": {
           "type": "array",
-          "description": "stitch: the selected takes in order.",
+          "description": "stitch: the picked takes in cut order. An end-card shot's clip carries endCard: the relay leaves it out, because stitch draws the end card itself (its payload is unchanged).",
           "items": {
             "type": "object",
             "properties": {
@@ -341,6 +353,9 @@
               "trimS": {
                 "type": "number",
                 "minimum": 0
+              },
+              "endCard": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -349,12 +364,64 @@
             "additionalProperties": false
           },
           "minItems": 1,
-          "maxItems": 8
+          "maxItems": 100
         },
         "answer": {
-          "type": "string",
-          "maxLength": 200,
-          "description": "The option the user tapped when the previous job came back with needsUser."
+          "$ref": "#/$defs/JobAnswer",
+          "description": "Change (ui-behaviour 3.17): the new answer to the question the parent job (parentIds [jobId]) asked, sent as a follow-up job."
+        },
+        "shots": {
+          "type": "array",
+          "maxItems": 300,
+          "items": {
+            "$ref": "#/$defs/JobShot"
+          },
+          "description": "shot_list when re-planning: the storyboard's shots as they are, so planning is a merge keyed by shot id."
+        },
+        "ratio": {
+          "$ref": "common.schema.json#/$defs/ratio"
+        },
+        "aspect": {
+          "$ref": "common.schema.json#/$defs/aspect",
+          "description": "The exact shape wanted, when it is not one of the four ratios (a format's size)."
+        },
+        "delivery": {
+          "$ref": "common.schema.json#/$defs/deliveryPx"
+        },
+        "safeArea": {
+          "$ref": "common.schema.json#/$defs/safeArea"
+        },
+        "context": {
+          "type": "array",
+          "maxItems": 16,
+          "description": "What the node's links bring besides pictures: notes, documents and the Brand board's rules. Dex writes brand rules into the prompt and uses documents as background only.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "note",
+                  "document",
+                  "brand_rule",
+                  "palette",
+                  "typography"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 4000
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
@@ -417,13 +484,10 @@
         "director": {
           "$ref": "director.schema.json#/$defs/agentBlock"
         },
-        "needsUser": {
-          "$ref": "director.schema.json#/$defs/needsUser"
-        },
         "shots": {
           "type": "array",
           "items": {
-            "$ref": "document.schema.json#/$defs/shot"
+            "$ref": "director.schema.json#/$defs/plannedShot"
           },
           "description": "shot_list only."
         },
@@ -453,12 +517,53 @@
         "updatedAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "tenantId": {
+          "$ref": "common.schema.json#/$defs/tenantId"
+        },
+        "projectId": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "startedBy": {
+          "$ref": "common.schema.json#/$defs/personRef",
+          "description": "Who started the job: its cost is on their budget, whoever answers its question."
+        },
+        "crew": {
+          "$ref": "common.schema.json#/$defs/crewId",
+          "description": "Who works it: dex for planning, wren for frames and clips, edie for the ad, …"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "question": {
+          "$ref": "common.schema.json#/$defs/question",
+          "description": "needs_input: what the agent asked. Its id is the document's ask key."
+        },
+        "answeredBy": {
+          "$ref": "common.schema.json#/$defs/personRef",
+          "description": "Who answered the question: the first answer wins."
+        },
+        "answer": {
+          "$ref": "common.schema.json#/$defs/answer"
         }
       },
       "required": [
         "contractVersion",
         "jobId",
         "participantId",
+        "tenantId",
+        "projectId",
+        "startedBy",
+        "crew",
+        "node",
+        "nonce",
         "op",
         "quotaClass",
         "state",
@@ -487,13 +592,6 @@
         "jobId": {
           "$ref": "common.schema.json#/$defs/id"
         },
-        "stage": {
-          "enum": [
-            "character",
-            "storyboard",
-            "video"
-          ]
-        },
         "browser": {
           "type": "string",
           "maxLength": 300
@@ -504,6 +602,9 @@
         "stack": {
           "type": "string",
           "maxLength": 8000
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/linkEndpoint"
         }
       },
       "required": [
@@ -563,8 +664,16 @@
     },
     "LibraryPublish": {
       "type": "object",
-      "description": "POST /library/{key}: publish the key's current refs as the next version. Every asset must already be uploaded (POST /uploads). baseVer is the version the document holds (0 for a new key); a newer one on the server is a 409 conflict, so two people never overwrite each other.",
+      "description": "POST /library/{shelf}/{key}: publish the next version. Every asset must already be uploaded. baseVer is the version the document holds (0 for a new key); a newer one on the server is 409 conflict ('Maya published v5 a moment ago').",
       "properties": {
+        "kind": {
+          "enum": [
+            "key",
+            "brand_kit",
+            "format_pack"
+          ],
+          "description": "key: a reference key and its variants (refs). brand_kit: the Brand board's logo, palette, fonts and rules (payload). format_pack: a client's own format pack (payload, format-packs.schema.json#/$defs/pack)."
+        },
         "role": {
           "$ref": "common.schema.json#/$defs/refRole"
         },
@@ -579,21 +688,59 @@
           "items": {
             "$ref": "#/$defs/LibraryRef"
           }
+        },
+        "payload": {
+          "type": "object",
+          "description": "brand_kit and format_pack: the kit or pack itself."
         }
       },
       "required": [
-        "role",
-        "baseVer",
-        "refs"
+        "kind",
+        "baseVer"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "key"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "role",
+              "refs"
+            ]
+          },
+          "else": {
+            "required": [
+              "payload"
+            ]
+          }
+        }
+      ]
     },
     "LibraryEntry": {
       "type": "object",
-      "description": "GET /library/{key} (latest) or /library/{key}/{ver}, and the response of a publish: one immutable version of a key. Stored at s3 library/<participantId>/<key>/<ver>.json.",
+      "description": "GET /library/{shelf}/{key}[/{ver}], and the answer to a publish: one immutable version. Stored at tenants/{tenantId}/library/{shelf}/{key}/{ver}.json.",
       "properties": {
         "workspace": {
           "type": "string"
+        },
+        "shelf": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "description": "A client's shelf (its client id), or 'agency' for what no client owns."
+        },
+        "kind": {
+          "enum": [
+            "key",
+            "brand_kit",
+            "format_pack"
+          ],
+          "description": "key: a reference key and its variants (refs). brand_kit: the Brand board's logo, palette, fonts and rules (payload). format_pack: a client's own format pack (payload, format-packs.schema.json#/$defs/pack)."
         },
         "key": {
           "$ref": "common.schema.json#/$defs/key"
@@ -617,22 +764,25 @@
           "items": {
             "$ref": "#/$defs/LibraryRef"
           }
+        },
+        "payload": {
+          "type": "object"
         }
       },
       "required": [
         "workspace",
+        "shelf",
+        "kind",
         "key",
         "ver",
-        "role",
         "by",
-        "at",
-        "refs"
+        "at"
       ],
       "additionalProperties": false
     },
     "LibraryIndex": {
       "type": "object",
-      "description": "GET /library: the workspace's keys, latest version each. Stored at s3 library/<participantId>/index.json, written with If-Match on its ETag.",
+      "description": "GET /library/{shelf}: the shelf's items, latest version each. Stored at tenants/{tenantId}/library/{shelf}/index.json, written with If-Match on its ETag.",
       "properties": {
         "workspace": {
           "type": "string"
@@ -650,7 +800,8 @@
                 "minimum": 1
               },
               "role": {
-                "$ref": "common.schema.json#/$defs/refRole"
+                "$ref": "common.schema.json#/$defs/refRole",
+                "description": "kind key only."
               },
               "by": {
                 "type": "string"
@@ -668,23 +819,35 @@
               "cover": {
                 "$ref": "common.schema.json#/$defs/assetRef",
                 "description": "The front variant if there is one, else the first."
+              },
+              "kind": {
+                "enum": [
+                  "key",
+                  "brand_kit",
+                  "format_pack"
+                ],
+                "description": "key: a reference key and its variants (refs). brand_kit: the Brand board's logo, palette, fonts and rules (payload). format_pack: a client's own format pack (payload, format-packs.schema.json#/$defs/pack)."
               }
             },
             "required": [
               "key",
+              "kind",
               "ver",
-              "role",
               "by",
-              "at",
-              "variants",
-              "cover"
+              "at"
             ],
             "additionalProperties": false
           }
+        },
+        "shelf": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+          "description": "A client's shelf (its client id), or 'agency' for what no client owns."
         }
       },
       "required": [
         "workspace",
+        "shelf",
         "keys"
       ],
       "additionalProperties": false
@@ -844,6 +1007,162 @@
       },
       "required": [
         "events"
+      ],
+      "additionalProperties": false
+    },
+    "JobShot": {
+      "type": "object",
+      "description": "A shot as a job sends it: the document's shot with its flat text, its refs as names (the relay tags them) and its beats.",
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "shot",
+            "end_card"
+          ]
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 30
+        },
+        "camera": {
+          "$ref": "common.schema.json#/$defs/camera"
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "direction": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "direction_condensed": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "refs": {
+          "type": "array",
+          "maxItems": 14,
+          "items": {
+            "$ref": "common.schema.json#/$defs/subject"
+          }
+        },
+        "beats": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "common.schema.json#/$defs/beatKind"
+              },
+              "at_s": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "speaker": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "parenthetical": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "kind",
+              "at_s",
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "duration_s",
+        "camera",
+        "action",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "JobAnswer": {
+      "type": "object",
+      "description": "POST /jobs/{jobId}/answer: a person's answer to the job's question. The job resumes on the same jobId and its starter's budget; any member of the job's tenant may answer. A second answer is 409 AnswerConflict with the winner.",
+      "properties": {
+        "contractVersion": {
+          "$ref": "common.schema.json#/$defs/contractVersion"
+        },
+        "questionId": {
+          "type": "string",
+          "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "optionId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "contractVersion",
+        "questionId"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "optionId"
+          ],
+          "not": {
+            "required": [
+              "text"
+            ]
+          }
+        },
+        {
+          "required": [
+            "text"
+          ],
+          "not": {
+            "required": [
+              "optionId"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "AnswerConflict": {
+      "type": "object",
+      "description": "409 from POST /jobs/{jobId}/answer: someone answered first. The card shows their answer; the person's own is not applied.",
+      "properties": {
+        "error": {
+          "$ref": "common.schema.json#/$defs/error"
+        },
+        "answeredBy": {
+          "$ref": "common.schema.json#/$defs/personRef"
+        },
+        "answer": {
+          "$ref": "common.schema.json#/$defs/answer"
+        }
+      },
+      "required": [
+        "error",
+        "answeredBy",
+        "answer"
       ],
       "additionalProperties": false
     }

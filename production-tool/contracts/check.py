@@ -1,7 +1,10 @@
 """Check the Production Tool contracts: every schema is valid, the capability
-sheets and examples match their schemas, and the $refs between files resolve.
+sheets and examples match their schemas, the $refs between files resolve,
+every examples/invalid/ case is refused, and the document rules a schema
+cannot say (a key is its entity's id, a note window is 2 s or more and inside
+its shot, every link is in common linkRule) hold.
 
-    uv run --no-project --with jsonschema python production-tool/contracts/check.py
+    uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py
 """
 
 import json
@@ -19,6 +22,8 @@ schemas = {p.name: json.loads(p.read_text()) for p in HERE.glob("*.schema.json")
 registry = Registry().with_resources(
     (BASE + name, Resource.from_contents(s)) for name, s in schemas.items()
 )
+COMMON = schemas["common.schema.json"]["$defs"]
+LINK_RULE = COMMON["linkRule"]["const"]
 
 
 def validator(name, pointer=""):
@@ -26,76 +31,193 @@ def validator(name, pointer=""):
     return Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
 
 
-# What each instance file must match: (glob, schema file, $defs pointer).
+# ── the rules JSON Schema cannot say ────────────────────────────────────────
+# clan-store/src/integrity.ts checks these and more on every write; this is the
+# same subset for the examples, so a bad example is caught without a browser.
+def link_problem(link: dict, kinds_of_board: dict) -> str | None:
+    """None when common linkRule allows the link, else why not (canLink's words)."""
+    fk, tk, role = link["from"]["kind"], link["to"]["kind"], link["role"]
+    for rule in LINK_RULE["rules"]:
+        if fk in rule["from"] and tk in rule["to"] and role in rule["roles"]:
+            purpose = rule.get("board_purpose")
+            if purpose and kinds_of_board.get(link["from"]["id"]) != purpose:
+                continue
+            return None
+    return f"no link rule lets a {fk} feed a {tk} as {role}"
+
+
+def document_rules(doc: dict) -> list[str]:
+    problems = []
+    if not isinstance(doc, dict):
+        return problems
+    for name, value in doc.items():
+        if not isinstance(value, dict) or name in ("project", "upstream"):
+            continue
+        for key, item in value.items():
+            if any(c in key for c in ".[]#"):
+                problems.append(f"{name}: the key {key!r} holds '.', '[', ']' or '#'")
+            if name != "assets" and isinstance(item, dict) and item.get("id") != key:
+                problems.append(f"{name}[{key}]: its id is {item.get('id')!r}, not its key")
+            if name == "assets" and isinstance(item, dict) and item.get("sha256") != key:
+                problems.append(f"assets[{key}]: its sha256 is not its key")
+    shots = doc.get("shots") or {}
+    for rid, r in (doc.get("reviews") or {}).items():
+        w = r.get("window") if isinstance(r, dict) else None
+        if not w:
+            continue
+        if w["to_s"] - w["from_s"] < 2:
+            problems.append(f"reviews[{rid}].window: {w['to_s'] - w['from_s']} s is under the 2 s a fix needs")
+        shot = shots.get(r.get("shot_id"))
+        if shot and w["to_s"] > shot["duration_s"]:
+            problems.append(f"reviews[{rid}].window ends at {w['to_s']} s, past its {shot['duration_s']} s shot (across a cut)")
+    boards = {k: b.get("purpose") for k, b in (doc.get("boards") or {}).items() if isinstance(b, dict)}
+    for lid, link in (doc.get("links") or {}).items():
+        if isinstance(link, dict) and "from" in link:
+            why = link_problem(link, boards)
+            if why:
+                problems.append(f"links[{lid}]: {why}")
+    for qid, ask in (doc.get("asks") or {}).items():
+        if isinstance(ask, dict) and ask.get("question", {}).get("id") != qid:
+            problems.append(f"asks[{qid}]: its question's id is not its key")
+    return problems
+
+
+# What each instance file must match: (glob, schema file, $defs pointer, extra rules).
 CASES = [
-    ("capabilities/*.json", "capabilities.schema.json", ""),
-    ("examples/config.*.json", "config.schema.json", ""),
-    ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest"),
-    ("examples/job.response.json", "relay-api.schema.json", "#/$defs/Job"),
-    ("examples/me.response.json", "relay-api.schema.json", "#/$defs/Me"),
-    ("examples/projects.response.json", "relay-api.schema.json", "#/$defs/ProjectList"),
-    ("examples/director.*.json", "director.schema.json", ""),
-    ("examples/customdata.*.json", "customdata.schema.json", ""),
-    ("examples/document*.json", "document.schema.json", "")  # document.hackathon.json: fal and HeyGen outputs still open,
+    ("capabilities/*.json", "capabilities.schema.json", "", None),
+    ("examples/config.*.json", "config.schema.json", "", None),
+    ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest", None),
+    ("examples/job.*.json", "relay-api.schema.json", "#/$defs/Job", None),
+    ("examples/job-answer.json", "relay-api.schema.json", "#/$defs/JobAnswer", None),
+    ("examples/answer-conflict.json", "relay-api.schema.json", "#/$defs/AnswerConflict", None),
+    ("examples/library-entry.*.json", "relay-api.schema.json", "#/$defs/LibraryEntry", None),
+    ("examples/library-index.json", "relay-api.schema.json", "#/$defs/LibraryIndex", None),
+    ("examples/library-publish.*.json", "relay-api.schema.json", "#/$defs/LibraryPublish", None),
+    ("examples/me.response.json", "relay-api.schema.json", "#/$defs/Me", None),
+    ("examples/projects.response.json", "relay-api.schema.json", "#/$defs/ProjectList", None),
+    ("examples/director.*.json", "director.schema.json", "", None),
+    ("examples/customdata.*.json", "customdata.schema.json", "", None),
+    ("examples/document*.json", "document.schema.json", "", document_rules),
+    ("examples/patch-batch.*.json", "patch.schema.json", "#/$defs/PatchBatch", None),
+    ("examples/patch-result.*.json", "patch.schema.json", "#/$defs/PatchResult", None),
+    ("format-packs.json", "format-packs.schema.json", "", None),
 ]
+# Each examples/invalid/<schema stem>.<case>.json must be refused by that schema (or its rules).
+INVALID_TARGETS = {
+    "document": ("document.schema.json", "", document_rules),
+    "job-request": ("relay-api.schema.json", "#/$defs/JobRequest", None),
+    "job-answer": ("relay-api.schema.json", "#/$defs/JobAnswer", None),
+    "patch-batch": ("patch.schema.json", "#/$defs/PatchBatch", None),
+    "customdata": ("customdata.schema.json", "", None),
+    "question": ("common.schema.json", "#/$defs/question", None),
+}
 
 failures = 0
+
+
+def fail(msg: str):
+    global failures
+    failures += 1
+    print(msg)
+
+
+def problems_of(name, pointer, rules, data):
+    errors = sorted(validator(name, pointer).iter_errors(data), key=str)
+    out = [f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message[:200]}" for e in errors]
+    if rules and not errors:
+        out += rules(data)
+    return out
+
+
 for name, schema in schemas.items():
     Draft202012Validator.check_schema(schema)
-for pattern, name, pointer in CASES:
+for pattern, name, pointer, rules in CASES:
     files = sorted(HERE.glob(pattern))
     if not files:
-        print(f"✗ {pattern}: no files")
-        failures += 1
+        fail(f"✗ {pattern}: no files")
     for f in files:
-        errors = sorted(validator(name, pointer).iter_errors(json.loads(f.read_text())), key=str)
         rel = f.relative_to(HERE)
-        if errors:
-            failures += 1
-            print(f"✗ {rel}")
-            for e in errors[:5]:
-                print(f"    {'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message[:200]}")
+        found = problems_of(name, pointer, rules, json.loads(f.read_text()))
+        if found:
+            fail(f"✗ {rel}")
+            for p in found[:5]:
+                print(f"    {p}")
         else:
             print(f"✓ {rel}")
+
+# The invalid cases: each must be refused, or the contract lets through what it promised to stop.
+invalid = sorted((HERE / "examples" / "invalid").glob("*.json"))
+if not invalid:
+    fail("✗ examples/invalid/: no cases")
+for f in invalid:
+    stem = f.name.split(".")[0]
+    if stem not in INVALID_TARGETS:
+        fail(f"✗ {f.relative_to(HERE)}: no schema for '{stem}' cases")
+        continue
+    name, pointer, rules = INVALID_TARGETS[stem]
+    if problems_of(name, pointer, rules, json.loads(f.read_text())):
+        print(f"✓ {f.relative_to(HERE)} (refused)")
+    else:
+        fail(f"✗ {f.relative_to(HERE)}: was accepted; it must be refused")
+
+# links.json: what canLink() says for each pair, from linkRule (vitest asserts the same file).
+for case in json.loads((HERE / "examples" / "links.json").read_text())["cases"]:
+    link = {"from": {"kind": case["from"], "id": "x"}, "to": {"kind": case["to"], "id": "y"}, "role": case["role"]}
+    allowed = link_problem(link, {"x": case.get("board_purpose")}) is None
+    if allowed != case["ok"]:
+        fail(f"✗ examples/links.json: {case['from']} → {case['to']} as {case['role']} is {'allowed' if allowed else 'refused'}; the case says {case['ok']}")
+print("✓ examples/links.json")
+
+# Every op has a quota class; the role table has a line for every role.
+ops = set(COMMON["op"]["enum"])
+if ops != set(COMMON["opQuotaClass"]["const"]):
+    fail(f"✗ common opQuotaClass does not cover exactly the ops: {sorted(ops ^ set(COMMON['opQuotaClass']['const']))}")
+roles = set(COMMON["refRole"]["enum"])
+if roles != set(COMMON["refRoleTable"]["const"]):
+    fail(f"✗ common refRoleTable does not cover exactly the roles: {sorted(roles ^ set(COMMON['refRoleTable']['const']))}")
 
 # Every op a sheet claims must be routable, and config must name only known providers.
 sheets = {json.loads(p.read_text())["provider"]: json.loads(p.read_text()) for p in (HERE / "capabilities").glob("*.json")}
 for f in sorted(HERE.glob("examples/config.*.json")):
-    for op, providers in json.loads(f.read_text())["routing"].items():
+    cfg = json.loads(f.read_text())
+    for op, providers in cfg["routing"].items():
         for p in providers:
             if op not in sheets.get(p, {}).get("ops", {}):
-                failures += 1
-                print(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
-    if "fallbackOnly" in json.loads(f.read_text()):  # no longer read (features/runway-fallback.clan)
-        failures += 1
-        print(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
+                fail(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
+    if "fallbackOnly" in cfg:  # no longer read (features/runway-fallback.clan)
+        fail(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
+    # Contract 3 needs the director that asks (director.v6): v5 against v3 is refused by the relay.
+    if cfg["director"]["promptVersion"] != "director.v6":
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.
 live = json.loads((HERE / "examples" / "config.live.json").read_text())
 for op, providers in live["routing"].items():
     if providers not in ([], ["runway"]):
-        failures += 1
-        print(f"✗ examples/config.live.json: routes {op} to {providers}; the live config routes every op to ['runway']")
+        fail(f"✗ examples/config.live.json: routes {op} to {providers}; the live config routes every op to ['runway']")
 GONE = re.compile(r"\b(fal|heygen)\b|fal-ai/", re.I)
 for f in sorted([*HERE.glob("capabilities/*.json"), *HERE.glob("examples/config.*.json"), *HERE.glob("examples/director.*.json")]):
     if GONE.search(f.read_text()):
-        failures += 1
-        print(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
+        fail(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
 
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():
     for op, spec in sheet["ops"].items():
         models = [spec["model"]] + [a["model"] for a in spec.get("alternates", [])]
         if len(set(models)) != len(models):
-            failures += 1
-            print(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
+            fail(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
 
 # Tenant data never goes in config.json, which is public three ways (features/os-sign-in.clan).
 for f in sorted(HERE.glob("examples/config.*.json")):
     if "tenants" in json.loads(f.read_text()):
-        failures += 1
-        print(f"✗ {f.relative_to(HERE)}: carries tenants; tenant items live in the private tenants table")
+        fail(f"✗ {f.relative_to(HERE)}: carries tenants; tenant items live in the private tenants table")
+
+# Format ids never contain '/' and are unique across the file.
+packs = json.loads((HERE / "format-packs.json").read_text())
+ids = [fmt["id"] for pack in packs["packs"] for fmt in pack["formats"]]
+if len(set(ids)) != len(ids):
+    fail("✗ format-packs.json: a format id is used twice")
 
 # The X-Napkin-Identity v1 vector (docs/contracts/production-tool-identity.md): the claims, key and body
 # give exactly the assertion, which napkin-web's cargo test and the relay's pytest also check.
@@ -115,8 +237,7 @@ problems = [
     (c["m"], c["p"]) != (vec["method"], vec["pathAndQuery"]) and "m and p do not name the request",
 ]
 for p in filter(None, problems):
-    failures += 1
-    print(f"✗ examples/identity-assertion.vector.json: {p}")
+    fail(f"✗ examples/identity-assertion.vector.json: {p}")
 if not any(problems):
     print("✓ examples/identity-assertion.vector.json")
 

@@ -1,0 +1,22 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CH01",
+  "op": "clip",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_change01a",
+  "purpose": "make video",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [
+    "job_01K7B00000000000000000AK01"
+  ],
+  "input": {
+    "answer": {
+      "contractVersion": "3",
+      "questionId": "q_01K7B00000000000000000Q001",
+      "optionId": "plan_first"
+    }
+  }
+}

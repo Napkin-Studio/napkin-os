@@ -1,19 +1,52 @@
 {
-  "contractVersion": "2",
+  "contractVersion": "3",
   "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F",
   "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "wren",
+  "node": {
+    "kind": "sketch",
+    "id": "sketch_01K7A00000000000000000SK01"
+  },
+  "nonce": "n_7Hq2Lx9Pw4",
+  "purpose": "a character from the drawing",
   "op": "generate",
   "quotaClass": "image",
   "state": "completed",
   "provider": "runway",
   "model": "gemini_image3.1_flash",
   "requestId": "4b1c9a2e-0000-4000-8000-000000000000",
-  "inputHashes": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
-  "director": { "model": "claude-haiku-4-5", "promptVersion": "director.v1", "output": {}, "rationale": "front view from the sketch, eyes and palette as object refs", "latencyMs": 1400 },
-  "needsUser": null,
-  "outputs": [ { "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "url": "https://hack.napkin.ie/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mime": "image/png", "w": 1080, "h": 1350 } ],
+  "inputHashes": [
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ],
+  "director": {
+    "model": "claude-haiku-4-5",
+    "promptVersion": "director.v6",
+    "output": {},
+    "rationale": "front view from the sketch, eyes and palette as object refs",
+    "latencyMs": 1400
+  },
+  "outputs": [
+    {
+      "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "url": "https://hack.napkin.ie/out/sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/png",
+      "w": 1080,
+      "h": 1350
+    }
+  ],
   "kind": "generated",
-  "cost": { "estimate": 0.07, "reserved": 0.07, "confirmed": 0.07, "currency": "USD", "unknown": false },
+  "cost": {
+    "estimate": 0.07,
+    "reserved": 0.07,
+    "confirmed": 0.07,
+    "currency": "USD",
+    "unknown": false
+  },
   "createdAt": "2026-10-07T10:12:03Z",
   "updatedAt": "2026-10-07T10:12:31Z"
 }

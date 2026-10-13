@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/patch.schema.json",
+  "title": "Entity patches: what PatchBus carries",
+  "description": "Field-level writes to the document (contracts/collab.md). A patch names one entity by its map and id, and one leaf inside it. Patches are stateless JSON, so the same batch runs through clan-store's LocalPatchBus today and the sync service later. A batch is atomic: every patch applies or none does, and it is one decision in the chain and one undo step.",
+  "$defs": {
+    "entity": {
+      "enum": ["project", "assets", "boards", "sketches", "scripts", "scenes", "storyboards", "shots", "beats", "frames", "videos", "takes", "renders", "reviews", "links", "keys", "refs", "documents", "format_sets", "sizes", "checks", "asks", "suggestions", "spin_ins", "jobs", "stale", "exports"],
+      "description": "A map of document.schema.json (project: the root object, its id is project.id). upstream is never patched."
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^[a-z_][a-z0-9_]*(/[A-Za-z0-9_:]+)*$",
+      "maxLength": 128,
+      "description": "A leaf inside the entity, '/' between parts: duration_s, camera/size, pick/current, edl/edl_X, edl/edl_X/pick/current. Never v, field_v or id. The leaf rules are in collab.md."
+    },
+    "Patch": {
+      "type": "object",
+      "properties": {
+        "op": { "enum": ["create", "set", "delete"] },
+        "entity": { "$ref": "#/$defs/entity" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "path": { "$ref": "#/$defs/path" },
+        "value": { "description": "create: the whole entity (its id, v and field_v are filled by the bus). set: the leaf's new value; null removes an optional leaf." },
+        "base_version": { "type": "integer", "minimum": 0, "description": "The entity's v the writer saw (0 for a create). A set conflicts when its leaf's field_v is newer." }
+      },
+      "required": ["op", "entity", "id", "base_version"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "op": { "const": "create" } } }, "then": { "required": ["value"], "not": { "required": ["path"] } } },
+        { "if": { "properties": { "op": { "const": "set" } } }, "then": { "required": ["path", "value"] } },
+        { "if": { "properties": { "op": { "const": "delete" } } }, "then": { "not": { "anyOf": [{ "required": ["path"] }, { "required": ["value"] }] } } }
+      ]
+    },
+    "Why": {
+      "type": "object",
+      "description": "The decision the batch records. action starts with a collab.md verb (plan, render, pick, restore, …). agent is the claim: human:<personId> for a person, the crewId for an agent. A job's landing cites <doc-id>#jobs[<jobId>] and carries reasoning.",
+      "properties": {
+        "action": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "agent": { "$ref": "common.schema.json#/$defs/actorRef" },
+        "rationale": { "type": "string", "maxLength": 2000 },
+        "reasoning": { "type": "object", "description": "clan-sdk Reasoning: decided, evidence, alternatives, certainty." },
+        "cites": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "anyOf": [{ "$ref": "common.schema.json#/$defs/address" }, { "$ref": "common.schema.json#/$defs/decisionId" }] }
+        },
+        "pinned": { "type": "boolean" },
+        "quiet": { "type": "boolean", "description": "Bookkeeping (a job's state, a checkpoint): the data changes and no decision is written." }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "PatchBatch": {
+      "type": "object",
+      "properties": {
+        "patches": { "type": "array", "minItems": 1, "maxItems": 500, "items": { "$ref": "#/$defs/Patch" } },
+        "why": { "$ref": "#/$defs/Why" }
+      },
+      "required": ["patches", "why"],
+      "additionalProperties": false
+    },
+    "PatchResult": {
+      "type": "object",
+      "description": "What happened to a batch. applied false: nothing changed, and conflicts or refused say why.",
+      "properties": {
+        "applied": { "type": "boolean" },
+        "v": {
+          "type": "object",
+          "description": "The new version of every entity the batch touched, by '<entity>/<id>'.",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "entity": { "$ref": "#/$defs/entity" },
+              "id": { "type": "string" },
+              "path": { "$ref": "#/$defs/path" },
+              "base_version": { "type": "integer", "minimum": 0 },
+              "field_v": { "type": "integer", "minimum": 1 },
+              "current": { "description": "The value that won." }
+            },
+            "required": ["index", "entity", "id", "base_version", "field_v"],
+            "additionalProperties": false
+          }
+        },
+        "refused": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "reason": { "enum": ["owned_by_text", "not_leaf", "invalid", "not_found", "exists", "read_only"] },
+              "message": { "type": "string" }
+            },
+            "required": ["index", "reason", "message"],
+            "additionalProperties": false
+          }
+        },
+        "inverse": { "$ref": "#/$defs/PatchBatch", "description": "The batch that undoes this one (an undo step stores it)." }
+      },
+      "required": ["applied", "v", "conflicts", "refused"],
+      "additionalProperties": false
+    }
+  }
+}

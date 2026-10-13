@@ -1,5 +1,5 @@
 {
-  "contractVersion": "2",
+  "contractVersion": "3",
   "routing": {
     "shot_list": [],
     "stitch": [],
@@ -23,7 +23,7 @@
     ]
   },
   "director": {
-    "promptVersion": "director.v5",
+    "promptVersion": "director.v6",
     "perClickModel": "eu.anthropic.claude-sonnet-5-5",
     "shotListModel": "eu.anthropic.claude-sonnet-5-5"
   },

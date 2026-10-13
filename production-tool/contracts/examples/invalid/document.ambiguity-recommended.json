@@ -1,0 +1,2387 @@
+{
+  "contract_version": "3",
+  "app": "production-tool",
+  "project": {
+    "id": "proj_01K7A000000000000000000007",
+    "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+    "client_id": "lumen",
+    "title": "Lumen · First Light",
+    "created_by": "human:p_shrey01",
+    "created_at": "2026-10-13T10:00:00Z"
+  },
+  "assets": {
+    "sha256:102ce40d373598887d55b7ffc70dea7cb7b8f25ec6a6eb35697aaf56c4deaa1d": {
+      "sha256": "sha256:102ce40d373598887d55b7ffc70dea7cb7b8f25ec6a6eb35697aaf56c4deaa1d",
+      "kind": "image",
+      "mime": "image/jpeg",
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/102ce40d373598887d55b7ffc70dea7cb7b8f25ec6a6eb35697aaf56c4deaa1d"
+      ]
+    },
+    "sha256:23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b": {
+      "sha256": "sha256:23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b"
+      ],
+      "job_id": "job_01K7A00000000000000000001V"
+    },
+    "sha256:27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137": {
+      "sha256": "sha256:27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137"
+      ]
+    },
+    "sha256:2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0": {
+      "sha256": "sha256:2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0"
+      ],
+      "job_id": "job_01K7A00000000000000000001W"
+    },
+    "sha256:31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4": {
+      "sha256": "sha256:31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4"
+      ]
+    },
+    "sha256:3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d": {
+      "sha256": "sha256:3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d"
+      ]
+    },
+    "sha256:5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7": {
+      "sha256": "sha256:5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7",
+      "kind": "video",
+      "mime": "video/mp4",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7"
+      ],
+      "duration_s": 2
+    },
+    "sha256:63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561": {
+      "sha256": "sha256:63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "edited",
+      "locations": [
+        "idb://sha256/63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561"
+      ],
+      "job_id": "job_01K7A00000000000000000001J"
+    },
+    "sha256:64d797a00568213c0fc775806e3408a40f7f1ba17c620c73722c790f2d229400": {
+      "sha256": "sha256:64d797a00568213c0fc775806e3408a40f7f1ba17c620c73722c790f2d229400",
+      "kind": "document",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/64d797a00568213c0fc775806e3408a40f7f1ba17c620c73722c790f2d229400"
+      ],
+      "pages": 2
+    },
+    "sha256:689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36": {
+      "sha256": "sha256:689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "extracted",
+      "locations": [
+        "idb://sha256/689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36"
+      ]
+    },
+    "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99": {
+      "sha256": "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99",
+      "kind": "video",
+      "mime": "video/mp4",
+      "origin": "edited",
+      "locations": [
+        "idb://sha256/7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99"
+      ],
+      "duration_s": 5
+    },
+    "sha256:83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835": {
+      "sha256": "sha256:83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835",
+      "kind": "image",
+      "mime": "image/jpeg",
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835"
+      ]
+    },
+    "sha256:93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2": {
+      "sha256": "sha256:93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "mock",
+      "locations": [
+        "idb://sha256/93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2"
+      ]
+    },
+    "sha256:a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5": {
+      "sha256": "sha256:a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5",
+      "kind": "video",
+      "mime": "video/mp4",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5"
+      ],
+      "duration_s": 15
+    },
+    "sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d": {
+      "sha256": "sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d",
+      "kind": "vector",
+      "mime": "image/svg+xml",
+      "origin": "extracted",
+      "locations": [
+        "idb://sha256/c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d"
+      ]
+    },
+    "sha256:d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1": {
+      "sha256": "sha256:d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1"
+      ],
+      "job_id": "job_01K7A00000000000000000001G"
+    },
+    "sha256:da88bea3ef39d03a3aebbeae40cdc8cffc2e046e0ae2d7bfc6e467827322aaf7": {
+      "sha256": "sha256:da88bea3ef39d03a3aebbeae40cdc8cffc2e046e0ae2d7bfc6e467827322aaf7",
+      "kind": "document",
+      "mime": "application/pdf",
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/da88bea3ef39d03a3aebbeae40cdc8cffc2e046e0ae2d7bfc6e467827322aaf7"
+      ],
+      "pages": 32,
+      "bytes": 4200000
+    },
+    "sha256:ea5153261dca1d9b08a657c2991e8a944da7998e76439585270c4e6149355e56": {
+      "sha256": "sha256:ea5153261dca1d9b08a657c2991e8a944da7998e76439585270c4e6149355e56",
+      "kind": "video",
+      "mime": "video/mp4",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/ea5153261dca1d9b08a657c2991e8a944da7998e76439585270c4e6149355e56"
+      ],
+      "duration_s": 5
+    },
+    "sha256:f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a": {
+      "sha256": "sha256:f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a",
+      "kind": "document",
+      "mime": "application/zip",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a"
+      ]
+    },
+    "sha256:fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48": {
+      "sha256": "sha256:fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48",
+      "kind": "video",
+      "mime": "video/mp4",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48"
+      ],
+      "duration_s": 15
+    },
+    "sha256:fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9": {
+      "sha256": "sha256:fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9",
+      "kind": "image",
+      "mime": "image/png",
+      "origin": "generated",
+      "locations": [
+        "idb://sha256/fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9"
+      ],
+      "job_id": "job_01K7A00000000000000000001H"
+    }
+  },
+  "boards": {
+    "board_01K7A00000000000000000000A": {
+      "id": "board_01K7A00000000000000000000A",
+      "v": 1,
+      "field_v": {},
+      "title": "Script",
+      "purpose": "script",
+      "rank": "a0",
+      "name_prefix": "script"
+    },
+    "board_01K7A00000000000000000000B": {
+      "id": "board_01K7A00000000000000000000B",
+      "v": 1,
+      "field_v": {},
+      "title": "Characters",
+      "purpose": "character",
+      "rank": "a1",
+      "name_prefix": "maya"
+    },
+    "board_01K7A00000000000000000000C": {
+      "id": "board_01K7A00000000000000000000C",
+      "v": 1,
+      "field_v": {},
+      "title": "Locations",
+      "purpose": "location",
+      "rank": "a2",
+      "name_prefix": "loc"
+    },
+    "board_01K7A00000000000000000000D": {
+      "id": "board_01K7A00000000000000000000D",
+      "v": 1,
+      "field_v": {},
+      "title": "References",
+      "purpose": "reference",
+      "rank": "a3",
+      "name_prefix": "ref"
+    },
+    "board_01K7A00000000000000000000E": {
+      "id": "board_01K7A00000000000000000000E",
+      "v": 1,
+      "field_v": {},
+      "title": "Products",
+      "purpose": "product",
+      "rank": "a4",
+      "name_prefix": "product"
+    },
+    "board_01K7A00000000000000000000F": {
+      "id": "board_01K7A00000000000000000000F",
+      "v": 1,
+      "field_v": {},
+      "title": "Storyboard",
+      "purpose": "storyboard",
+      "rank": "a5",
+      "name_prefix": "board"
+    },
+    "board_01K7A00000000000000000000G": {
+      "id": "board_01K7A00000000000000000000G",
+      "v": 1,
+      "field_v": {},
+      "title": "Video",
+      "purpose": "video",
+      "rank": "a6",
+      "name_prefix": "video"
+    },
+    "board_01K7A00000000000000000000H": {
+      "id": "board_01K7A00000000000000000000H",
+      "v": 1,
+      "field_v": {},
+      "title": "Brand · Lumen",
+      "purpose": "brand",
+      "rank": "a7",
+      "name_prefix": "brand",
+      "source": {
+        "document_id": "doc_01K7A000000000000000000008"
+      }
+    },
+    "board_01K7A00000000000000000000J": {
+      "id": "board_01K7A00000000000000000000J",
+      "v": 1,
+      "field_v": {},
+      "title": "Social sizes",
+      "purpose": "formats",
+      "rank": "a8",
+      "name_prefix": "fmt"
+    }
+  },
+  "sketches": {
+    "sketch_01K7A000000000000000000021": {
+      "id": "sketch_01K7A000000000000000000021",
+      "v": 1,
+      "field_v": {},
+      "aspect": {
+        "w": 16,
+        "h": 9
+      },
+      "ratio": "16:9",
+      "drawn_by": "human:p_shrey01"
+    },
+    "sketch_01K7A000000000000000000022": {
+      "id": "sketch_01K7A000000000000000000022",
+      "v": 1,
+      "field_v": {},
+      "aspect": {
+        "w": 1080,
+        "h": 1920
+      },
+      "ratio": "9:16",
+      "board_id": "board_01K7A00000000000000000000J",
+      "drawn_by": "human:p_maya001",
+      "format": {
+        "pack_id": "social",
+        "pack_version": "2026-10-13",
+        "format_id": "meta-stories-9x16"
+      }
+    }
+  },
+  "scripts": {
+    "script_01K7A00000000000000000000Z": {
+      "id": "script_01K7A00000000000000000000Z",
+      "v": 1,
+      "field_v": {},
+      "title": "First Light",
+      "target_s": 15
+    }
+  },
+  "scenes": {
+    "scene_01K7A000000000000000000010": {
+      "id": "scene_01K7A000000000000000000010",
+      "v": 1,
+      "field_v": {},
+      "script_id": "script_01K7A00000000000000000000Z",
+      "rank": "a0",
+      "heading": "EXT. BEACH - DAWN",
+      "prose": {
+        "type": "doc",
+        "content": []
+      },
+      "text": "",
+      "last_writer": "dex"
+    },
+    "scene_01K7A000000000000000000011": {
+      "id": "scene_01K7A000000000000000000011",
+      "v": 1,
+      "field_v": {},
+      "script_id": "script_01K7A00000000000000000000Z",
+      "rank": "a1",
+      "heading": "EXT. BEACH - MORNING",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "Maya laughs at the sea."
+              }
+            ]
+          },
+          {
+            "type": "character",
+            "content": [
+              {
+                "type": "text",
+                "text": "MAYA"
+              }
+            ]
+          },
+          {
+            "type": "parenthetical",
+            "content": [
+              {
+                "type": "text",
+                "text": "quietly"
+              }
+            ]
+          },
+          {
+            "type": "dialogue",
+            "content": [
+              {
+                "type": "text",
+                "text": "Again."
+              }
+            ]
+          }
+        ]
+      },
+      "text": "Maya laughs at the sea.\nMAYA\n(quietly)\nAgain.",
+      "last_writer": "human:p_maya001",
+      "hands_off": [
+        "skye"
+      ]
+    }
+  },
+  "storyboards": {
+    "storyboard_01K7A000000000000000000012": {
+      "id": "storyboard_01K7A000000000000000000012",
+      "v": 1,
+      "field_v": {},
+      "title": "First Light",
+      "ratio": "16:9",
+      "target_s": 15
+    },
+    "storyboard_01K7A000000000000000000013": {
+      "id": "storyboard_01K7A000000000000000000013",
+      "v": 1,
+      "field_v": {},
+      "title": "First Light · clips",
+      "ratio": "9:16",
+      "target_s": 15,
+      "implicit": true
+    }
+  },
+  "shots": {
+    "shot_01K7A000000000000000000015": {
+      "id": "shot_01K7A000000000000000000015",
+      "v": 1,
+      "field_v": {},
+      "storyboard_id": "storyboard_01K7A000000000000000000012",
+      "rank": "a0",
+      "kind": "shot",
+      "scene_id": "scene_01K7A000000000000000000010",
+      "duration_s": 5,
+      "camera": {
+        "size": "wide",
+        "angle": "eye_level",
+        "movement": "track",
+        "movement_speed": "slow",
+        "lens_mm": 35
+      },
+      "status": "locked",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "mention",
+                "attrs": {
+                  "id": "ref_01K7A00000000000000000000N",
+                  "label": "maya_front"
+                }
+              },
+              {
+                "type": "text",
+                "text": " walks the waterline at "
+              },
+              {
+                "type": "mention",
+                "attrs": {
+                  "id": "ref_01K7A00000000000000000000Q",
+                  "label": "loc_beach"
+                }
+              },
+              {
+                "type": "text",
+                "text": "."
+              }
+            ]
+          },
+          {
+            "type": "direction",
+            "content": [
+              {
+                "type": "text",
+                "text": "Unhurried. Let the light do the work."
+              }
+            ]
+          }
+        ]
+      },
+      "action": "@maya_front walks the waterline at @loc_beach.",
+      "direction": "Unhurried. Let the light do the work.",
+      "refs": [
+        "ref_01K7A00000000000000000000N",
+        "ref_01K7A00000000000000000000Q"
+      ],
+      "last_writer": "dex",
+      "direction_condensed": {
+        "text": "Unhurried; the light does the work.",
+        "from_hash": "sha256:4c1f6165302b81fd587e79db729a5a05ea130ea35602a76dcf0dd96a2366f33c",
+        "job_id": "job_01K7A000000000000000000014"
+      },
+      "pick": {
+        "current": "frame_01K7A000000000000000000020",
+        "alternates": []
+      }
+    },
+    "shot_01K7A000000000000000000016": {
+      "id": "shot_01K7A000000000000000000016",
+      "v": 1,
+      "field_v": {},
+      "storyboard_id": "storyboard_01K7A000000000000000000012",
+      "rank": "a1",
+      "kind": "shot",
+      "scene_id": "scene_01K7A000000000000000000010",
+      "duration_s": 3,
+      "camera": {
+        "size": "insert",
+        "angle": "high_angle",
+        "movement": "static",
+        "lens_mm": 100,
+        "macro": true
+      },
+      "status": "needs_review",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "The bottle opens in golden light."
+              }
+            ]
+          }
+        ]
+      },
+      "action": "The bottle opens in golden light.",
+      "direction": "",
+      "refs": [
+        "ref_01K7A00000000000000000000S"
+      ],
+      "last_writer": "human:p_maya001",
+      "hands_off": [
+        "skye"
+      ],
+      "pick": {
+        "current": "frame_01K7A00000000000000000001Z",
+        "alternates": [
+          "frame_01K7A00000000000000000001Y"
+        ]
+      }
+    },
+    "shot_01K7A000000000000000000017": {
+      "id": "shot_01K7A000000000000000000017",
+      "v": 1,
+      "field_v": {},
+      "storyboard_id": "storyboard_01K7A000000000000000000012",
+      "rank": "a2",
+      "kind": "shot",
+      "scene_id": "scene_01K7A000000000000000000010",
+      "duration_s": 4.5,
+      "camera": {
+        "size": "close",
+        "angle": "eye_level",
+        "movement": "handheld"
+      },
+      "status": "planned",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "Maya laughs."
+              }
+            ]
+          }
+        ]
+      },
+      "action": "Maya laughs.",
+      "direction": "",
+      "refs": [],
+      "last_writer": "dex",
+      "text_problem": {
+        "field": "direction",
+        "length": 4102,
+        "limit": 4000,
+        "message": "The direction is over 4,000 characters; Dex keeps the last version that fitted."
+      }
+    },
+    "shot_01K7A000000000000000000018": {
+      "id": "shot_01K7A000000000000000000018",
+      "v": 1,
+      "field_v": {},
+      "storyboard_id": "storyboard_01K7A000000000000000000012",
+      "rank": "a3",
+      "kind": "end_card",
+      "scene_id": "scene_01K7A000000000000000000010",
+      "duration_s": 2.5,
+      "camera": {
+        "size": "graphic",
+        "movement": "static"
+      },
+      "status": "planned",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "Lumen logo on white."
+              }
+            ]
+          }
+        ]
+      },
+      "action": "Lumen logo on white.",
+      "direction": "",
+      "refs": [],
+      "last_writer": "dex"
+    }
+  },
+  "beats": {
+    "beat_01K7A000000000000000000019": {
+      "id": "beat_01K7A000000000000000000019",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "rank": "a0",
+      "at_s": 2,
+      "kind": "moment",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "eyes open"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "eyes open",
+      "last_writer": "dex"
+    },
+    "beat_01K7A00000000000000000001A": {
+      "id": "beat_01K7A00000000000000000001A",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "rank": "a1",
+      "at_s": 3,
+      "kind": "line",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "dialogue",
+            "content": [
+              {
+                "type": "text",
+                "text": "It's perfect!"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "It's perfect!",
+      "last_writer": "dex",
+      "speaker": "MAYA",
+      "parenthetical": "to herself",
+      "moment_id": "beat_01K7A000000000000000000019"
+    },
+    "beat_01K7A00000000000000000001B": {
+      "id": "beat_01K7A00000000000000000001B",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "rank": "a2",
+      "at_s": 0,
+      "kind": "vo",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "Every morning starts somewhere."
+              }
+            ]
+          }
+        ]
+      },
+      "text": "Every morning starts somewhere.",
+      "last_writer": "human:p_maya001"
+    },
+    "beat_01K7A00000000000000000001C": {
+      "id": "beat_01K7A00000000000000000001C",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "rank": "a3",
+      "at_s": 0,
+      "kind": "music",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "soft piano, rising"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "soft piano, rising",
+      "last_writer": "dex"
+    },
+    "beat_01K7A00000000000000000001D": {
+      "id": "beat_01K7A00000000000000000001D",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000016",
+      "rank": "a0",
+      "at_s": 1,
+      "kind": "sound",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "the cap hisses"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "the cap hisses",
+      "last_writer": "dex"
+    },
+    "beat_01K7A00000000000000000001E": {
+      "id": "beat_01K7A00000000000000000001E",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000016",
+      "rank": "a1",
+      "at_s": 1.5,
+      "kind": "camera",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "rack focus to the bubbles"
+              }
+            ]
+          }
+        ]
+      },
+      "text": "rack focus to the bubbles",
+      "last_writer": "dex",
+      "hands_off": [
+        "dex"
+      ]
+    }
+  },
+  "frames": {
+    "frame_01K7A00000000000000000001X": {
+      "id": "frame_01K7A00000000000000000001X",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000016",
+      "version": 1,
+      "kind": "generated",
+      "asset": "sha256:d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1",
+      "job_id": "job_01K7A00000000000000000001G",
+      "crew": "wren",
+      "model": "gen4_image",
+      "provider": "runway"
+    },
+    "frame_01K7A00000000000000000001Y": {
+      "id": "frame_01K7A00000000000000000001Y",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000016",
+      "version": 2,
+      "parent_id": "frame_01K7A00000000000000000001X",
+      "kind": "generated",
+      "asset": "sha256:fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9",
+      "job_id": "job_01K7A00000000000000000001H",
+      "crew": "wren",
+      "model": "gen4_image",
+      "provider": "runway"
+    },
+    "frame_01K7A00000000000000000001Z": {
+      "id": "frame_01K7A00000000000000000001Z",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000016",
+      "version": 3,
+      "parent_id": "frame_01K7A00000000000000000001Y",
+      "kind": "edited",
+      "asset": "sha256:63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561",
+      "job_id": "job_01K7A00000000000000000001J",
+      "crew": "rhea",
+      "edits": [
+        {
+          "op": "cutout",
+          "params": {
+            "subject": "bottle"
+          }
+        },
+        {
+          "op": "fill",
+          "params": {
+            "region": {
+              "x": 0.1,
+              "y": 0.1,
+              "w": 0.2,
+              "h": 0.2
+            }
+          }
+        }
+      ]
+    },
+    "frame_01K7A000000000000000000020": {
+      "id": "frame_01K7A000000000000000000020",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "version": 1,
+      "kind": "mock",
+      "asset": "sha256:93ad49869708c5fa02f9c27366b1fb377bfa171b1683f7fbc6a43212807d65c2",
+      "crew": "wren",
+      "provider": "mock",
+      "model": "mock"
+    },
+    "frame_01K7A000000000000000000023": {
+      "id": "frame_01K7A000000000000000000023",
+      "v": 1,
+      "field_v": {},
+      "sketch_id": "sketch_01K7A000000000000000000021",
+      "version": 1,
+      "kind": "generated",
+      "asset": "sha256:23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b",
+      "job_id": "job_01K7A00000000000000000001V",
+      "crew": "wren",
+      "model": "gemini_image3_pro",
+      "provider": "runway",
+      "cropped_to": {
+        "from": {
+          "w": 1344,
+          "h": 768
+        },
+        "to": {
+          "w": 16,
+          "h": 9
+        }
+      }
+    },
+    "frame_01K7A00000000000000000002R": {
+      "id": "frame_01K7A00000000000000000002R",
+      "v": 1,
+      "field_v": {},
+      "size_id": "size_01K7A00000000000000000002M",
+      "version": 1,
+      "kind": "generated",
+      "asset": "sha256:2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0",
+      "job_id": "job_01K7A00000000000000000001W",
+      "crew": "wren",
+      "model": "gen4_image",
+      "provider": "runway"
+    }
+  },
+  "videos": {
+    "video_01K7A000000000000000000027": {
+      "id": "video_01K7A000000000000000000027",
+      "v": 1,
+      "field_v": {},
+      "title": "First Light",
+      "ratio": "16:9",
+      "target_s": 15,
+      "edl": {
+        "edl_01K7A000000000000000000028": {
+          "rank": "a0",
+          "kind": "shot",
+          "shot_id": "shot_01K7A000000000000000000015",
+          "pick": {
+            "current": "take_01K7A000000000000000000025",
+            "alternates": [
+              "take_01K7A000000000000000000024"
+            ]
+          },
+          "in_s": 0,
+          "out_s": 5
+        },
+        "edl_01K7A000000000000000000029": {
+          "rank": "a1",
+          "kind": "bridge",
+          "pick": {
+            "current": "take_01K7A000000000000000000026",
+            "alternates": []
+          }
+        },
+        "edl_01K7A00000000000000000002A": {
+          "rank": "a2",
+          "kind": "shot",
+          "shot_id": "shot_01K7A000000000000000000016"
+        },
+        "edl_01K7A00000000000000000002B": {
+          "rank": "a3",
+          "kind": "shot",
+          "shot_id": "shot_01K7A000000000000000000017"
+        },
+        "edl_01K7A00000000000000000002C": {
+          "rank": "a4",
+          "kind": "shot",
+          "shot_id": "shot_01K7A000000000000000000018"
+        }
+      },
+      "pick": {
+        "current": "render_01K7A00000000000000000002E",
+        "alternates": [
+          "render_01K7A00000000000000000002D"
+        ]
+      }
+    }
+  },
+  "takes": {
+    "take_01K7A000000000000000000024": {
+      "id": "take_01K7A000000000000000000024",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "version": 1,
+      "asset": "sha256:ea5153261dca1d9b08a657c2991e8a944da7998e76439585270c4e6149355e56",
+      "job_id": "job_01K7A00000000000000000001K",
+      "crew": "wren",
+      "kind": "generated",
+      "model": "veo3.1_fast",
+      "provider": "runway",
+      "duration_s": 5,
+      "segments": []
+    },
+    "take_01K7A000000000000000000025": {
+      "id": "take_01K7A000000000000000000025",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000015",
+      "version": 2,
+      "parent_id": "take_01K7A000000000000000000024",
+      "asset": "sha256:7c9d98d474a970e8cb805c1c5a9ff647411176b2de48c18396602871a6bacf99",
+      "job_id": "job_01K7A00000000000000000001M",
+      "crew": "edie",
+      "kind": "generated",
+      "model": "aleph2",
+      "provider": "runway",
+      "duration_s": 5,
+      "segments": [
+        {
+          "source_take": "take_01K7A000000000000000000024",
+          "in_s": 0,
+          "out_s": 2
+        },
+        {
+          "source_take": "take_01K7A000000000000000000024",
+          "in_s": 2,
+          "out_s": 4,
+          "job_id": "job_01K7A00000000000000000001M"
+        },
+        {
+          "source_take": "take_01K7A000000000000000000024",
+          "in_s": 4,
+          "out_s": 5
+        }
+      ]
+    },
+    "take_01K7A000000000000000000026": {
+      "id": "take_01K7A000000000000000000026",
+      "v": 1,
+      "field_v": {},
+      "shot_id": "shot_01K7A000000000000000000016",
+      "version": 1,
+      "asset": "sha256:5bbcb32d82b32d836279691d2226df7db69d0452d48d214ddd24f5cbe1998ee7",
+      "job_id": "job_01K7A00000000000000000001K",
+      "crew": "wren",
+      "kind": "mock",
+      "model": "mock",
+      "provider": "mock",
+      "duration_s": 2,
+      "segments": []
+    }
+  },
+  "renders": {
+    "render_01K7A00000000000000000002D": {
+      "id": "render_01K7A00000000000000000002D",
+      "v": 1,
+      "field_v": {},
+      "video_id": "video_01K7A000000000000000000027",
+      "version": 1,
+      "asset": "sha256:fa60c18d5b79b485b551e8a9198820cb551164c4a8b0f7c2099cab7052e81b48",
+      "job_id": "job_01K7A00000000000000000001N"
+    },
+    "render_01K7A00000000000000000002E": {
+      "id": "render_01K7A00000000000000000002E",
+      "v": 1,
+      "field_v": {},
+      "video_id": "video_01K7A000000000000000000027",
+      "version": 2,
+      "parent_id": "render_01K7A00000000000000000002D",
+      "asset": "sha256:a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5",
+      "job_id": "job_01K7A00000000000000000001N"
+    }
+  },
+  "reviews": {
+    "rev_01K7A00000000000000000002F": {
+      "id": "rev_01K7A00000000000000000002F",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "take",
+        "id": "take_01K7A000000000000000000024"
+      },
+      "video_id": "video_01K7A000000000000000000027",
+      "shot_id": "shot_01K7A000000000000000000015",
+      "at_s": 3.2,
+      "window": {
+        "from_s": 2,
+        "to_s": 5
+      },
+      "region": {
+        "x": 0.4,
+        "y": 0.3,
+        "w": 0.2,
+        "h": 0.25
+      },
+      "still": "sha256:689ae89037dfda4f52948be2f9cf981c4862cd8ec3b4c388f8943d803a1dbb36",
+      "chips": [
+        "sharper"
+      ],
+      "by": "human:p_maya001",
+      "state": "resolved",
+      "resolved_by_job": "job_01K7A00000000000000000001M",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "Her hand blurs here; keep it sharp."
+              }
+            ]
+          }
+        ]
+      },
+      "text": "Her hand blurs here; keep it sharp.",
+      "last_writer": "human:p_maya001",
+      "created_at": "2026-10-13T10:20:00Z"
+    },
+    "rev_01K7A00000000000000000002G": {
+      "id": "rev_01K7A00000000000000000002G",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "render",
+        "id": "render_01K7A00000000000000000002D"
+      },
+      "video_id": "video_01K7A000000000000000000027",
+      "render_id": "render_01K7A00000000000000000002D",
+      "by": "human:p_sai0001",
+      "state": "resolved",
+      "fixed_in_render": "render_01K7A00000000000000000002E",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "The end card arrives too early."
+              }
+            ]
+          }
+        ]
+      },
+      "text": "The end card arrives too early.",
+      "last_writer": "human:p_sai0001",
+      "created_at": "2026-10-13T10:25:00Z"
+    },
+    "rev_01K7A00000000000000000002H": {
+      "id": "rev_01K7A00000000000000000002H",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "frame",
+        "id": "frame_01K7A00000000000000000001X"
+      },
+      "region": {
+        "x": 0.6,
+        "y": 0.1,
+        "w": 0.3,
+        "h": 0.2
+      },
+      "by": "human:p_shrey01",
+      "state": "open",
+      "prose": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "action",
+            "content": [
+              {
+                "type": "text",
+                "text": "Logo too close to the edge."
+              }
+            ]
+          }
+        ]
+      },
+      "text": "Logo too close to the edge.",
+      "last_writer": "human:p_shrey01",
+      "created_at": "2026-10-13T10:12:00Z"
+    }
+  },
+  "links": {
+    "link_01K7A00000000000000000002S": {
+      "id": "link_01K7A00000000000000000002S",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "script",
+        "id": "script_01K7A00000000000000000000Z"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "role": "drives"
+    },
+    "link_01K7A00000000000000000002T": {
+      "id": "link_01K7A00000000000000000002T",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "script",
+        "id": "script_01K7A00000000000000000000Z"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000013"
+      },
+      "role": "drives"
+    },
+    "link_01K7A00000000000000000002V": {
+      "id": "link_01K7A00000000000000000002V",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "to": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "role": "renders"
+    },
+    "link_01K7A00000000000000000002W": {
+      "id": "link_01K7A00000000000000000002W",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "ref",
+        "id": "ref_01K7A00000000000000000000N"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "role": "character"
+    },
+    "link_01K7A00000000000000000002X": {
+      "id": "link_01K7A00000000000000000002X",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "ref",
+        "id": "ref_01K7A00000000000000000000R"
+      },
+      "to": {
+        "kind": "sketch",
+        "id": "sketch_01K7A000000000000000000021"
+      },
+      "role": "lighting",
+      "label": "golden hour · lighting"
+    },
+    "link_01K7A00000000000000000002Y": {
+      "id": "link_01K7A00000000000000000002Y",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "board",
+        "id": "board_01K7A00000000000000000000C"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "role": "input"
+    },
+    "link_01K7A00000000000000000002Z": {
+      "id": "link_01K7A00000000000000000002Z",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "group",
+        "id": "grpQ7xK2mP"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "role": "input"
+    },
+    "link_01K7A000000000000000000030": {
+      "id": "link_01K7A000000000000000000030",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "note",
+        "id": "noteZ81kLq"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "role": "note"
+    },
+    "link_01K7A000000000000000000031": {
+      "id": "link_01K7A000000000000000000031",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "ink",
+        "id": "inkW4pT9sR"
+      },
+      "to": {
+        "kind": "sketch",
+        "id": "sketch_01K7A000000000000000000021"
+      },
+      "role": "note"
+    },
+    "link_01K7A000000000000000000032": {
+      "id": "link_01K7A000000000000000000032",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "document",
+        "id": "doc_01K7A000000000000000000009"
+      },
+      "to": {
+        "kind": "script",
+        "id": "script_01K7A00000000000000000000Z"
+      },
+      "role": "context"
+    },
+    "link_01K7A000000000000000000033": {
+      "id": "link_01K7A000000000000000000033",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "board",
+        "id": "board_01K7A00000000000000000000H"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "role": "brand"
+    },
+    "link_01K7A000000000000000000034": {
+      "id": "link_01K7A000000000000000000034",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "frame",
+        "id": "frame_01K7A00000000000000000001Z"
+      },
+      "to": {
+        "kind": "format_set",
+        "id": "fset_01K7A00000000000000000002J"
+      },
+      "role": "master"
+    },
+    "link_01K7A000000000000000000035": {
+      "id": "link_01K7A000000000000000000035",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "to": {
+        "kind": "format_set",
+        "id": "fset_01K7A00000000000000000002K"
+      },
+      "role": "master"
+    },
+    "link_01K7A000000000000000000036": {
+      "id": "link_01K7A000000000000000000036",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "frame",
+        "id": "frame_01K7A000000000000000000023"
+      },
+      "to": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000017"
+      },
+      "role": "frame"
+    },
+    "link_01K7A000000000000000000037": {
+      "id": "link_01K7A000000000000000000037",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "ref",
+        "id": "ref_01K7A00000000000000000000Q"
+      },
+      "to": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000015"
+      },
+      "role": "layout"
+    },
+    "link_01K7A000000000000000000038": {
+      "id": "link_01K7A000000000000000000038",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "sketch",
+        "id": "sketch_01K7A000000000000000000021"
+      },
+      "to": {
+        "kind": "frame",
+        "id": "frame_01K7A000000000000000000023"
+      },
+      "role": "made_from"
+    },
+    "link_01K7A000000000000000000039": {
+      "id": "link_01K7A000000000000000000039",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "ink",
+        "id": "inkM2nB7vC"
+      },
+      "to": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000016"
+      },
+      "role": "note_on_shot"
+    }
+  },
+  "keys": {
+    "key_01K7A00000000000000000000K": {
+      "id": "key_01K7A00000000000000000000K",
+      "v": 1,
+      "field_v": {},
+      "key": "maya",
+      "role": "character",
+      "library": {
+        "shelf": "lumen",
+        "key": "maya",
+        "ver": 4,
+        "by": "human:p_sai0001",
+        "at": "2026-10-13T10:01:00Z"
+      }
+    },
+    "key_01K7A00000000000000000000M": {
+      "id": "key_01K7A00000000000000000000M",
+      "v": 1,
+      "field_v": {},
+      "key": "loc",
+      "role": "location"
+    }
+  },
+  "refs": {
+    "ref_01K7A00000000000000000000N": {
+      "id": "ref_01K7A00000000000000000000N",
+      "v": 1,
+      "field_v": {},
+      "key": "maya",
+      "variant": "front",
+      "role": "character",
+      "asset": "sha256:27d21229139572f00cfc56986fc9ece27049387c6e1dd911bf10a3f47fea1137",
+      "named_at": "2026-10-13T10:02:00Z"
+    },
+    "ref_01K7A00000000000000000000P": {
+      "id": "ref_01K7A00000000000000000000P",
+      "v": 1,
+      "field_v": {},
+      "key": "maya",
+      "variant": "side",
+      "role": "character",
+      "asset": "sha256:3fd09589a4c1d39fd2ba2ed461f4c4911147c3bec2b20bf214657e41cee54a1d",
+      "named_at": "2026-10-13T10:02:00Z"
+    },
+    "ref_01K7A00000000000000000000Q": {
+      "id": "ref_01K7A00000000000000000000Q",
+      "v": 1,
+      "field_v": {},
+      "key": "loc",
+      "variant": "beach",
+      "role": "location",
+      "asset": "sha256:83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835",
+      "node": "exA1b2C3d4"
+    },
+    "ref_01K7A00000000000000000000R": {
+      "id": "ref_01K7A00000000000000000000R",
+      "v": 1,
+      "field_v": {},
+      "key": "ref",
+      "variant": "golden-hour",
+      "role": "lighting",
+      "label": "golden hour",
+      "asset": "sha256:102ce40d373598887d55b7ffc70dea7cb7b8f25ec6a6eb35697aaf56c4deaa1d"
+    },
+    "ref_01K7A00000000000000000000S": {
+      "id": "ref_01K7A00000000000000000000S",
+      "v": 1,
+      "field_v": {},
+      "key": "product",
+      "variant": "bottle",
+      "role": "product",
+      "asset": "sha256:31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4"
+    },
+    "ref_01K7A00000000000000000000T": {
+      "id": "ref_01K7A00000000000000000000T",
+      "v": 1,
+      "field_v": {},
+      "key": "brand",
+      "variant": "logo",
+      "role": "logo",
+      "asset": "sha256:c2b3a5f0b9e8a918bb5d240127759b0ec6f359ba4354e793d0e35778c9d51a3d"
+    },
+    "ref_01K7A00000000000000000000V": {
+      "id": "ref_01K7A00000000000000000000V",
+      "v": 1,
+      "field_v": {},
+      "key": "brand",
+      "variant": "palette",
+      "role": "palette",
+      "swatches": [
+        {
+          "hex": "#0B5FFF",
+          "name": "Lumen blue"
+        },
+        {
+          "hex": "#F4F1EA"
+        }
+      ]
+    },
+    "ref_01K7A00000000000000000000W": {
+      "id": "ref_01K7A00000000000000000000W",
+      "v": 1,
+      "field_v": {},
+      "key": "brand",
+      "variant": "type",
+      "role": "typography",
+      "font": {
+        "family": "Lumen Sans",
+        "use": "headlines"
+      }
+    },
+    "ref_01K7A00000000000000000000X": {
+      "id": "ref_01K7A00000000000000000000X",
+      "v": 1,
+      "field_v": {},
+      "key": "brand",
+      "variant": "clear-space",
+      "role": "brand_rule",
+      "rule": {
+        "kind": "do",
+        "text": "Leave one cap height of clear space around the logo.",
+        "page": 14
+      }
+    },
+    "ref_01K7A00000000000000000000Y": {
+      "id": "ref_01K7A00000000000000000000Y",
+      "v": 1,
+      "field_v": {},
+      "key": "brand",
+      "variant": "notes",
+      "role": "document",
+      "document_id": "doc_01K7A000000000000000000009"
+    }
+  },
+  "documents": {
+    "doc_01K7A000000000000000000008": {
+      "id": "doc_01K7A000000000000000000008",
+      "v": 1,
+      "field_v": {},
+      "title": "Lumen brand book",
+      "file_name": "lumen-brand-book.pdf",
+      "asset": "sha256:da88bea3ef39d03a3aebbeae40cdc8cffc2e046e0ae2d7bfc6e467827322aaf7",
+      "pages": 32,
+      "excerpt": "Logo clear space: one cap height on every side.",
+      "read": {
+        "state": "reading",
+        "pages_read": 14
+      }
+    },
+    "doc_01K7A000000000000000000009": {
+      "id": "doc_01K7A000000000000000000009",
+      "v": 1,
+      "field_v": {},
+      "title": "Client notes",
+      "file_name": "client_notes.docx",
+      "asset": "sha256:64d797a00568213c0fc775806e3408a40f7f1ba17c620c73722c790f2d229400",
+      "pages": 2,
+      "excerpt": "Keep it calm. No running.",
+      "read": {
+        "state": "read",
+        "pages_read": 2
+      }
+    }
+  },
+  "format_sets": {
+    "fset_01K7A00000000000000000002J": {
+      "id": "fset_01K7A00000000000000000002J",
+      "v": 1,
+      "field_v": {},
+      "master": {
+        "kind": "frame",
+        "id": "frame_01K7A00000000000000000001Z"
+      },
+      "pack": {
+        "pack_id": "social",
+        "pack_version": "2026-10-13",
+        "client_id": "lumen"
+      }
+    },
+    "fset_01K7A00000000000000000002K": {
+      "id": "fset_01K7A00000000000000000002K",
+      "v": 1,
+      "field_v": {},
+      "master": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "pack": {
+        "pack_id": "film",
+        "pack_version": "2026-10-13"
+      }
+    }
+  },
+  "sizes": {
+    "size_01K7A00000000000000000002M": {
+      "id": "size_01K7A00000000000000000002M",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7A00000000000000000002J",
+      "rank": "a0",
+      "format": {
+        "pack_id": "social",
+        "pack_version": "2026-10-13",
+        "format_id": "meta-stories-9x16",
+        "client_id": "lumen"
+      },
+      "aspect": {
+        "w": 9,
+        "h": 16
+      },
+      "delivery": {
+        "width": 1440,
+        "height": 2560
+      },
+      "safe_area": {
+        "type": "insets",
+        "top": 14,
+        "right": 6,
+        "bottom": 35,
+        "left": 6,
+        "unit": "%"
+      },
+      "method": "extend",
+      "media": "image",
+      "asset": "sha256:2de8301f666559efcd8054c0d13234598b7b83b454526ad17e888a003b353cc0",
+      "job_id": "job_01K7A00000000000000000001W"
+    },
+    "size_01K7A00000000000000000002N": {
+      "id": "size_01K7A00000000000000000002N",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7A00000000000000000002J",
+      "rank": "a1",
+      "format": {
+        "pack_id": "social",
+        "pack_version": "2026-10-13",
+        "format_id": "linkedin-image-1.91x1"
+      },
+      "aspect": {
+        "w": 191,
+        "h": 100
+      },
+      "delivery": {
+        "width": 1200,
+        "height": 628
+      },
+      "method": "crop",
+      "media": "image"
+    },
+    "size_01K7A00000000000000000002P": {
+      "id": "size_01K7A00000000000000000002P",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7A00000000000000000002J",
+      "rank": "a2",
+      "format": {
+        "pack_id": "print",
+        "pack_version": "2026-10-13",
+        "format_id": "iso-a4"
+      },
+      "aspect": {
+        "w": 210,
+        "h": 297
+      },
+      "delivery": {
+        "width": 2480,
+        "height": 3508
+      },
+      "bleed_mm": 3,
+      "method": "nearest",
+      "media": "image"
+    },
+    "size_01K7A00000000000000000002Q": {
+      "id": "size_01K7A00000000000000000002Q",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7A00000000000000000002K",
+      "rank": "a0",
+      "format": {
+        "pack_id": "film",
+        "pack_version": "2026-10-13",
+        "format_id": "film-9x16"
+      },
+      "aspect": {
+        "w": 9,
+        "h": 16
+      },
+      "delivery": {
+        "width": 1080,
+        "height": 1920
+      },
+      "method": "reframe",
+      "media": "video",
+      "job_id": "job_01K7A00000000000000000001P"
+    }
+  },
+  "checks": {
+    "check_01K7A00000000000000000003A": {
+      "id": "check_01K7A00000000000000000003A",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "frame",
+        "id": "frame_01K7A00000000000000000001X"
+      },
+      "crew": "jude",
+      "job_id": "job_01K7A00000000000000000001S",
+      "result": "flag",
+      "reason_code": "logo_clear_space",
+      "rule_ref": "ref_01K7A00000000000000000000X",
+      "note": "The logo sits too close to the edge (clear space rule, Brand board).",
+      "ignored": {
+        "by": "human:p_shrey01",
+        "at": "2026-10-13T10:14:00Z"
+      }
+    },
+    "check_01K7A00000000000000000003B": {
+      "id": "check_01K7A00000000000000000003B",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "frame",
+        "id": "frame_01K7A00000000000000000001Z"
+      },
+      "crew": "jude",
+      "job_id": "job_01K7A00000000000000000001S",
+      "result": "pass",
+      "reason_code": "logo_clear_space",
+      "note": "Clear space kept."
+    }
+  },
+  "asks": {
+    "q_01K7A00000000000000000003C": {
+      "id": "q_01K7A00000000000000000003C",
+      "v": 2,
+      "field_v": {
+        "answers": 2,
+        "state": 1
+      },
+      "question": {
+        "id": "q_01K7A00000000000000000003C",
+        "kind": "nudge",
+        "text": "Plan a storyboard first?",
+        "why": "Clips come out better from frames you've checked.",
+        "options": [
+          {
+            "id": "plan_first",
+            "label": "Plan the storyboard first",
+            "value": {
+              "route": "plan_storyboard",
+              "node": {
+                "kind": "storyboard",
+                "id": "storyboard_01K7A000000000000000000012"
+              }
+            },
+            "detail": "6 shots · about $1.20 for frames",
+            "cost": {
+              "estimate": 1.2,
+              "currency": "USD"
+            }
+          },
+          {
+            "id": "straight",
+            "label": "Make clips straight from the script",
+            "value": {
+              "route": "clips_from_script"
+            },
+            "detail": "6 clips · about $7.20",
+            "cost": {
+              "estimate": 7.2,
+              "currency": "USD"
+            }
+          }
+        ],
+        "allow_text": false,
+        "recommended_option_id": "plan_first"
+      },
+      "node": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "job_id": "job_01K7A00000000000000000001Q",
+      "crew": "dex",
+      "state": "answered",
+      "answers": [
+        {
+          "option_id": "straight",
+          "by": "human:p_sai0001",
+          "at": "2026-10-13T10:05:00Z"
+        },
+        {
+          "option_id": "plan_first",
+          "by": "human:p_shrey01",
+          "at": "2026-10-13T10:06:00Z"
+        }
+      ]
+    },
+    "q_01K7A00000000000000000003G": {
+      "id": "q_01K7A00000000000000000003G",
+      "v": 1,
+      "field_v": {},
+      "question": {
+        "id": "q_01K7A00000000000000000003G",
+        "kind": "ambiguity",
+        "text": "Bigger how?",
+        "options": [
+          {
+            "id": "camera",
+            "label": "Move the camera in",
+            "value": "camera"
+          },
+          {
+            "id": "subject",
+            "label": "Make her bigger in frame",
+            "value": "subject"
+          },
+          {
+            "id": "other",
+            "label": "Something else"
+          }
+        ],
+        "allow_text": true,
+        "recommended_option_id": "camera"
+      },
+      "node": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000017"
+      },
+      "job_id": "job_01K7A00000000000000000003F",
+      "crew": "dex",
+      "state": "open",
+      "answers": []
+    }
+  },
+  "suggestions": {
+    "sug_01K7A00000000000000000003D": {
+      "id": "sug_01K7A00000000000000000003D",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "scene",
+        "id": "scene_01K7A000000000000000000011"
+      },
+      "crew": "skye",
+      "job_id": "job_01K7A00000000000000000001R",
+      "for": "human:p_maya001",
+      "base_hash": "sha256:d1e42bfd09eea951820fa74f34e17d01216480f78a5df056d483380ae29e53c4",
+      "proposed": {
+        "prose": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "action",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Maya laughs at the sea, once."
+                }
+              ]
+            }
+          ]
+        },
+        "text": "Maya laughs at the sea, once."
+      },
+      "note": "I tightened it to fit 1.6 s.",
+      "state": "open"
+    }
+  },
+  "spin_ins": {
+    "spin_01K7A00000000000000000003E": {
+      "id": "spin_01K7A00000000000000000003E",
+      "v": 1,
+      "field_v": {},
+      "source": {
+        "document_id": "doc_research_lumen01",
+        "app": "campaign-research",
+        "title": "Lumen research"
+      },
+      "plan": [
+        {
+          "kind": "ref",
+          "title": "4 references from the research"
+        },
+        {
+          "kind": "script",
+          "title": "Skye drafts from the proposition and tone"
+        }
+      ],
+      "state": "waiting"
+    }
+  },
+  "jobs": {
+    "job_01K7A00000000000000000001F": {
+      "id": "job_01K7A00000000000000000001F",
+      "v": 1,
+      "field_v": {},
+      "op": "shot_list",
+      "state": "completed",
+      "node": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001F",
+      "crew": "dex",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "purpose": "plan shots",
+      "cost": {
+        "estimate": 0,
+        "confirmed": 0,
+        "currency": "USD",
+        "unknown": false
+      },
+      "inputs": [
+        {
+          "kind": "text",
+          "used_as": "script",
+          "included": true
+        },
+        {
+          "kind": "ref",
+          "ref": "ref_01K7A00000000000000000000N",
+          "used_as": "character",
+          "included": true
+        },
+        {
+          "kind": "brand",
+          "used_as": "brand rules",
+          "included": true
+        }
+      ],
+      "director": {
+        "model": "eu.anthropic.claude-sonnet-5-5",
+        "promptVersion": "director.v6",
+        "output": {},
+        "rationale": "An insert on the bottle: the fizz is the product moment."
+      }
+    },
+    "job_01K7A00000000000000000001G": {
+      "id": "job_01K7A00000000000000000001G",
+      "v": 1,
+      "field_v": {},
+      "op": "frame",
+      "state": "completed",
+      "node": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000012"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001G",
+      "crew": "wren",
+      "parent_ids": [
+        "job_01K7A00000000000000000001F"
+      ],
+      "input_hashes": [
+        "sha256:31deeeba6a233f3004af27aa26d0ebfdc37cb572860092bb5031f41346f5c7d4"
+      ],
+      "created_at": "2026-10-13T10:03:00Z",
+      "outputs": [
+        "sha256:d0fb89804463b8d57104cff35cdea1046c166e63e65551a946c2b7c4d69cc7c1"
+      ],
+      "provider": "runway",
+      "model": "gen4_image",
+      "remote_id": "rw-123",
+      "cost": {
+        "estimate": 0.08,
+        "confirmed": 0.08,
+        "currency": "USD",
+        "unknown": false
+      },
+      "purpose": "frame 2"
+    },
+    "job_01K7A00000000000000000001H": {
+      "id": "job_01K7A00000000000000000001H",
+      "v": 1,
+      "field_v": {},
+      "op": "frame_edit",
+      "state": "completed",
+      "node": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000016"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001H",
+      "crew": "wren",
+      "parent_ids": [
+        "job_01K7A00000000000000000001G",
+        "job_01K7A00000000000000000001Q"
+      ],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "ask_id": "q_01K7A00000000000000000003C",
+      "text": "bigger",
+      "chips": [
+        "camera"
+      ],
+      "outputs": [
+        "sha256:fd19d615d1e2dad847a3a0de41a03266fd8d3c777b7627dfdb8c76ac0cc940c9"
+      ],
+      "provider": "runway",
+      "model": "gen4_image",
+      "cost": {
+        "estimate": 0.08,
+        "confirmed": 0.08,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001J": {
+      "id": "job_01K7A00000000000000000001J",
+      "v": 1,
+      "field_v": {},
+      "op": "cutout",
+      "state": "completed",
+      "node": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000016"
+      },
+      "started_by": "human:p_maya001",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001J",
+      "crew": "rhea",
+      "parent_ids": [
+        "job_01K7A00000000000000000001H"
+      ],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "region": {
+        "x": 0.3,
+        "y": 0.2,
+        "w": 0.4,
+        "h": 0.6
+      },
+      "outputs": [
+        "sha256:63873dc6591a141d75fd840611883c1c80d3d5143779bbe3fe0be7b11af40561"
+      ],
+      "cost": {
+        "estimate": 0,
+        "confirmed": 0,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001K": {
+      "id": "job_01K7A00000000000000000001K",
+      "v": 1,
+      "field_v": {},
+      "op": "clip",
+      "state": "completed",
+      "node": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001K",
+      "crew": "wren",
+      "parent_ids": [
+        "job_01K7A00000000000000000001G"
+      ],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "provider": "runway",
+      "model": "veo3.1_fast",
+      "cost": {
+        "estimate": 1.2,
+        "confirmed": 1.2,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001M": {
+      "id": "job_01K7A00000000000000000001M",
+      "v": 1,
+      "field_v": {},
+      "op": "clip_patch",
+      "state": "completed",
+      "node": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "started_by": "human:p_maya001",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001M",
+      "crew": "edie",
+      "parent_ids": [
+        "job_01K7A00000000000000000001K"
+      ],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "region": {
+        "x": 0.4,
+        "y": 0.3,
+        "w": 0.2,
+        "h": 0.25
+      },
+      "text": "keep her hand sharp",
+      "provider": "runway",
+      "model": "aleph2",
+      "cost": {
+        "estimate": 0.56,
+        "confirmed": 0.56,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001N": {
+      "id": "job_01K7A00000000000000000001N",
+      "v": 1,
+      "field_v": {},
+      "op": "stitch",
+      "state": "completed",
+      "node": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001N",
+      "crew": "edie",
+      "parent_ids": [
+        "job_01K7A00000000000000000001M"
+      ],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "cost": {
+        "estimate": 0,
+        "confirmed": 0,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001P": {
+      "id": "job_01K7A00000000000000000001P",
+      "v": 1,
+      "field_v": {},
+      "op": "cutdown",
+      "state": "failed",
+      "node": {
+        "kind": "format_set",
+        "id": "fset_01K7A00000000000000000002K"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001P",
+      "crew": "wren",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "stopped_by": "human:p_sai0001",
+      "error": {
+        "code": "capability_missing",
+        "message": "Cut-downs are not built yet.",
+        "retryable": false
+      },
+      "cost": {
+        "estimate": 0,
+        "currency": "USD",
+        "unknown": true
+      }
+    },
+    "job_01K7A00000000000000000001Q": {
+      "id": "job_01K7A00000000000000000001Q",
+      "v": 1,
+      "field_v": {},
+      "op": "clip",
+      "state": "completed",
+      "node": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000027"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001Q",
+      "crew": "dex",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "purpose": "make video",
+      "cost": {
+        "estimate": 0,
+        "confirmed": 0,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001R": {
+      "id": "job_01K7A00000000000000000001R",
+      "v": 1,
+      "field_v": {},
+      "op": "write",
+      "state": "completed",
+      "node": {
+        "kind": "script",
+        "id": "script_01K7A00000000000000000000Z"
+      },
+      "started_by": "human:p_maya001",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001R",
+      "crew": "skye",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "cost": {
+        "estimate": 0,
+        "confirmed": 0,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001S": {
+      "id": "job_01K7A00000000000000000001S",
+      "v": 1,
+      "field_v": {},
+      "op": "check",
+      "state": "completed",
+      "node": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000016"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001S",
+      "crew": "jude",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "cost": {
+        "estimate": 0,
+        "confirmed": 0,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000001T": {
+      "id": "job_01K7A00000000000000000001T",
+      "v": 1,
+      "field_v": {},
+      "op": "read",
+      "state": "submitted",
+      "node": {
+        "kind": "document",
+        "id": "doc_01K7A000000000000000000008"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001T",
+      "crew": "ellis",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "cost": {
+        "estimate": 0,
+        "currency": "USD",
+        "unknown": true
+      }
+    },
+    "job_01K7A00000000000000000001V": {
+      "id": "job_01K7A00000000000000000001V",
+      "v": 1,
+      "field_v": {},
+      "op": "generate",
+      "state": "completed",
+      "node": {
+        "kind": "sketch",
+        "id": "sketch_01K7A000000000000000000021"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001V",
+      "crew": "wren",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "provider": "runway",
+      "model": "gemini_image3_pro",
+      "cost": {
+        "estimate": 0.2,
+        "confirmed": 0.2,
+        "currency": "USD",
+        "unknown": false
+      },
+      "inputs": [
+        {
+          "kind": "sketch",
+          "used_as": "16:9 layout",
+          "included": true
+        },
+        {
+          "kind": "ink",
+          "used_as": "instruction",
+          "included": true,
+          "confirmed": false,
+          "text": "brighter sky"
+        }
+      ]
+    },
+    "job_01K7A00000000000000000001W": {
+      "id": "job_01K7A00000000000000000001W",
+      "v": 1,
+      "field_v": {},
+      "op": "resize",
+      "state": "completed",
+      "node": {
+        "kind": "format_set",
+        "id": "fset_01K7A00000000000000000002J"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000001W",
+      "crew": "wren",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "provider": "runway",
+      "model": "gen4_image",
+      "cost": {
+        "estimate": 0.08,
+        "confirmed": 0.08,
+        "currency": "USD",
+        "unknown": false
+      }
+    },
+    "job_01K7A00000000000000000003F": {
+      "id": "job_01K7A00000000000000000003F",
+      "v": 1,
+      "field_v": {},
+      "op": "frame_edit",
+      "state": "needs_input",
+      "node": {
+        "kind": "shot",
+        "id": "shot_01K7A000000000000000000017"
+      },
+      "started_by": "human:p_shrey01",
+      "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+      "nonce": "n_000000003F",
+      "crew": "dex",
+      "parent_ids": [],
+      "input_hashes": [],
+      "created_at": "2026-10-13T10:03:00Z",
+      "ask_id": "q_01K7A00000000000000000003G",
+      "text": "bigger",
+      "cost": {
+        "estimate": 0.08,
+        "currency": "USD",
+        "unknown": true
+      }
+    }
+  },
+  "stale": {
+    "stale_01K7A00000000000000000003H": {
+      "id": "stale_01K7A00000000000000000003H",
+      "v": 1,
+      "field_v": {},
+      "target": {
+        "kind": "take",
+        "id": "take_01K7A000000000000000000026"
+      },
+      "caused_by": {
+        "kind": "frame",
+        "id": "frame_01K7A00000000000000000001Z"
+      },
+      "reason": "frame 2 changed",
+      "marked_at": "2026-10-13T10:30:00Z"
+    }
+  },
+  "exports": {
+    "exp_01K7A00000000000000000003J": {
+      "id": "exp_01K7A00000000000000000003J",
+      "v": 1,
+      "field_v": {},
+      "kind": "ad_mp4",
+      "asset": "sha256:a3f55ce3012f843ffb35d062837d041430350878710e5a5616870392f0034bc5",
+      "job_id": "job_01K7A00000000000000000001N",
+      "created_at": "2026-10-13T10:40:00Z"
+    },
+    "exp_01K7A00000000000000000003K": {
+      "id": "exp_01K7A00000000000000000003K",
+      "v": 1,
+      "field_v": {},
+      "kind": "sizes_zip",
+      "asset": "sha256:f736f04bd7f60d712a921b0580c33c672f79098841d6f6a6f6922cb80d9c6e6a",
+      "created_at": "2026-10-13T10:41:00Z"
+    }
+  },
+  "upstream": {
+    "doc_brief_lumen01": {
+      "title": "Lumen 'First Light' brief",
+      "proposition": "Water that tastes like morning",
+      "tone": [
+        "bright",
+        "calm"
+      ]
+    }
+  }
+}

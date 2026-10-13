@@ -1,0 +1,16 @@
+{
+  "applied": false,
+  "v": {},
+  "conflicts": [
+    {
+      "index": 0,
+      "entity": "shots",
+      "id": "shot_01K7B00000000000000000SH02",
+      "path": "camera/size",
+      "base_version": 3,
+      "field_v": 4,
+      "current": "close"
+    }
+  ],
+  "refused": []
+}

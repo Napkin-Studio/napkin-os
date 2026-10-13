@@ -1,0 +1,72 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000AK01",
+  "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "dex",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "nonce": "n_7Hq2Lx9Pw4",
+  "purpose": "make video",
+  "op": "clip",
+  "quotaClass": "video",
+  "state": "needs_input",
+  "inputHashes": [
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ],
+  "director": {
+    "model": "claude-haiku-4-5",
+    "promptVersion": "director.v6",
+    "output": {},
+    "rationale": "front view from the sketch, eyes and palette as object refs",
+    "latencyMs": 1400
+  },
+  "outputs": [],
+  "cost": {
+    "estimate": 0,
+    "currency": "USD",
+    "unknown": true
+  },
+  "createdAt": "2026-10-07T10:12:03Z",
+  "updatedAt": "2026-10-07T10:12:31Z",
+  "question": {
+    "id": "q_01K7B00000000000000000Q001",
+    "kind": "nudge",
+    "text": "Plan a storyboard first?",
+    "why": "Clips come out better from frames you've checked.",
+    "options": [
+      {
+        "id": "plan_first",
+        "label": "Plan the storyboard first",
+        "value": {
+          "route": "plan_storyboard"
+        },
+        "detail": "6 shots · about $1.20 for frames",
+        "cost": {
+          "estimate": 1.2,
+          "currency": "USD"
+        }
+      },
+      {
+        "id": "straight",
+        "label": "Make clips straight from the script",
+        "value": {
+          "route": "clips_from_script"
+        },
+        "detail": "6 clips · about $7.20",
+        "cost": {
+          "estimate": 7.2,
+          "currency": "USD"
+        }
+      }
+    ],
+    "allow_text": false,
+    "recommended_option_id": "plan_first"
+  }
+}

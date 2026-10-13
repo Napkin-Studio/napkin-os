@@ -1,0 +1,39 @@
+{
+  "applied": true,
+  "v": {
+    "shots/shot_01K7B00000000000000000SH02": 4,
+    "beats/beat_01K7B00000000000000000BT09": 1
+  },
+  "conflicts": [],
+  "refused": [],
+  "inverse": {
+    "patches": [
+      {
+        "op": "delete",
+        "entity": "beats",
+        "id": "beat_01K7B00000000000000000BT09",
+        "base_version": 1
+      },
+      {
+        "op": "set",
+        "entity": "shots",
+        "id": "shot_01K7B00000000000000000SH02",
+        "path": "camera/lens_mm",
+        "value": 85,
+        "base_version": 4
+      },
+      {
+        "op": "set",
+        "entity": "shots",
+        "id": "shot_01K7B00000000000000000SH02",
+        "path": "camera/size",
+        "value": "close",
+        "base_version": 4
+      }
+    ],
+    "why": {
+      "action": "undo plan shot 2: an insert on the bottle",
+      "agent": "dex"
+    }
+  }
+}

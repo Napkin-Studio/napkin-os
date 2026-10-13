@@ -1,0 +1,38 @@
+{
+  "op": "clip",
+  "question": {
+    "kind": "nudge",
+    "text": "Plan a storyboard first?",
+    "why": "Clips come out better from frames you've checked.",
+    "options": [
+      {
+        "id": "plan_first",
+        "label": "Plan the storyboard first",
+        "value": {
+          "route": "plan_storyboard"
+        },
+        "detail": "6 shots · about $1.20 for frames",
+        "cost": {
+          "estimate": 1.2,
+          "currency": "USD"
+        }
+      },
+      {
+        "id": "straight",
+        "label": "Make clips straight from the script",
+        "value": {
+          "route": "clips_from_script"
+        },
+        "detail": "6 clips · about $7.20",
+        "cost": {
+          "estimate": 7.2,
+          "currency": "USD"
+        }
+      }
+    ],
+    "allow_text": false,
+    "recommended_option_id": "plan_first"
+  },
+  "rationale": "Nothing is planned yet; frames first are cheaper to check.",
+  "confidence": 0.6
+}

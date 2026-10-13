@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/format-packs.schema.json",
+  "title": "Format packs (format-packs.json)",
+  "description": "The industry format packs Make all sizes and scamp sheets read (ui-behaviour 3.19; docs/production-tool/format-packs.md). It validates the file as it stands: the values stay the owner's draft. A client's own packs (their library shelf, kind format_pack) use $defs/pack. A format id is lowercase with digits, dots and hyphens, never '/', and never a map key: sizes copy it as a value (common formatRef). ratio is free text for people ('1:√2', '~2.7:1'), never an enum; the exact shape is delivery_px.",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "status": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "safe_area_schema": {
+      "type": "object",
+      "description": "Words describing the two safe-area shapes; common safeArea is the schema.",
+      "properties": { "insets": { "type": "string" }, "box": { "type": "string" } },
+      "required": ["insets", "box"],
+      "additionalProperties": false
+    },
+    "packs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pack" } }
+  },
+  "required": ["version", "status", "safe_area_schema", "packs"],
+  "additionalProperties": false,
+  "$defs": {
+    "pack": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "formats": { "type": "array", "minItems": 1, "maxItems": 200, "items": { "$ref": "#/$defs/format" } }
+      },
+      "required": ["id", "name", "formats"],
+      "additionalProperties": false
+    },
+    "format": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/formatId" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "kind": { "enum": ["image", "video", "display", "ooh", "print"] },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "unit": { "enum": ["px", "mm"] },
+        "ratio": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "delivery_px": { "$ref": "common.schema.json#/$defs/deliveryPx" },
+        "safe_area": { "$ref": "common.schema.json#/$defs/safeArea" },
+        "bleed_mm": { "type": "number", "minimum": 0, "maximum": 50 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "source": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          ]
+        },
+        "verified": { "type": "boolean", "description": "false: derived, or not confirmed on a primary page; the sheet says 'Size not confirmed'." }
+      },
+      "required": ["id", "name", "kind", "width", "height", "unit", "ratio", "delivery_px", "source", "verified"],
+      "additionalProperties": false
+    }
+  }
+}

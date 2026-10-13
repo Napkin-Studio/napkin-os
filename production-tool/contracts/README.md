@@ -1,4 +1,4 @@
-# Production Tool contracts (v1, locked 2026-10-06)
+# Production Tool contracts (contract 3, 2026-10-13; locked 2026-10-06)
 
 These files are the contract between the three lanes:
 - `production-tool-ui`: Shrey designs it, then Sai wires it
@@ -7,7 +7,7 @@ These files are the contract between the three lanes:
 
 **Locked (D1) by Shreyansh Soni on 2026-10-06.** From now on a contract changes only by: (1) asking Shrey, (2) a decision recorded in `features/production-tool.clan` (`clan patch-decision`), (3) a bump of `contractVersion` when the change breaks an existing payload, (4) `check.py` passing. Adding an optional field is not breaking; renaming, removing, tightening or changing a meaning is.
 
-Check after any change:
+Check after any change (every example must pass, and every `examples/invalid/` case must be refused):
 
 ```bash
 uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py
@@ -19,8 +19,12 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `relay-api.schema.json` | request and response bodies of every relay route, and the job ledger item | infra writes the relay; ui calls it; harness plugs in behind it |
 | `capabilities.schema.json` + `capabilities/*.json` | what each provider can do, with which model, at what price | harness writes; the director, relay and UI read |
 | `director.schema.json` | the director's strict JSON output and the logged agent block | harness |
-| `document.schema.json` | the CLAN document (shared/data.yaml): keys, refs, script, shots, frames, takes, jobs, reviews | ui writes; export and the Viewer read |
-| `customdata.schema.json` | Excalidraw `customData` on the canvas (pic, drawn, note, gen, pin, provenance) | ui |
+| `document.schema.json` | the CLAN document (shared/data.yaml): the project, and id-keyed maps of boards, sketches, scripts, scenes, storyboards, shots, beats, frames, videos, takes, renders, reviews, links, keys, refs, documents, format sets, sizes, checks, asks, suggestions, spin-ins, jobs, stale marks, exports and assets | clan-store writes through its buses; web, the export and the relay's JobInput read |
+| `patch.schema.json` | the field-level patches PatchBus carries: Patch, PatchBatch (with its decision), PatchResult | clan-store, later the sync service |
+| `collab.md` | who writes what: fields and live text, the Y.Doc layout, field owners, checkpoint, the leaf rules, decision verbs, addresses, undo | everyone who writes the document |
+| `format-packs.schema.json` + `format-packs.json` | the industry format packs (owner's draft) | Make all sizes, scamp sheets |
+| `examples/ranks.json`, `windows.json`, `links.json` | the rank keys, the note window and canLink, asserted in both vitest and pytest | clan-store, relay, canvas |
+| `customdata.schema.json` | Excalidraw `customData` on the canvas (pic, drawn, note, gen, provenance; {kind, id} tags for board, sketch, script, storyboard, video, link, document, format_set, suggestion) | ui |
 | `config.schema.json` + `examples/config.*.json` | remote `config.json`: routing per op, director models, quotas, timeouts, spend stop, flags, banner | Shrey uploads it; web and relay read |
 
 ## Relay routes
@@ -33,9 +37,10 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `GET /jobs/{jobId}` | → `Job` | Poll no faster than `nextPollS`. |
 | `DELETE /jobs/{jobId}` | → `Job` (state `cancelled`) | Also cancels at the provider where it can. |
 | `POST /log` | `LogEntry` → 204 | Client errors and the Report button. |
-| `GET /library` | → `LibraryIndex` | The workspace's keys, latest version each. Added 2026-10-07 (v2). |
-| `GET /library/{key}[/{ver}]` | → `LibraryEntry` | One version; the latest without `{ver}`. |
-| `POST /library/{key}` | `LibraryPublish` → `LibraryEntry` | Publishes the next version. 409 `conflict` when `baseVer` is not the latest. Assets must be uploaded first. |
+| `POST /jobs/{jobId}/answer` | `JobAnswer` → `Job` | Answers the job's question (state `needs_input`): the job resumes on the same jobId and its starter's budget. Any member of the job's tenant may answer; a second answer is 409 `AnswerConflict` with the winner. Added in contract 3. |
+| `GET /library/{shelf}` | → `LibraryIndex` | One shelf's items (a client's, or `agency`), latest version each, at `tenants/{t}/library/{shelf}/index.json`. Contract 3. |
+| `GET /library/{shelf}/{key}[/{ver}]` | → `LibraryEntry` | One version; the latest without `{ver}`. |
+| `POST /library/{shelf}/{key}` | `LibraryPublish` → `LibraryEntry` | Publishes the next version of a key, brand kit or format pack. 409 `conflict` when `baseVer` is not the latest. Assets must be uploaded first. |
 | `POST /clan` | `.clan` bytes → `ClanSaved` (with `X-Project-Id`) or 204 | The person's project, saved on Save, on accept and every 5 minutes (`ClanMirror` lists the headers). Max 5 MiB. With `X-Project-Id` it is one of the person's saved projects: `If-Match` (its last ETag) makes a save that someone else got in before a 409 `conflict`, never an overwrite. Every save is kept with a timestamp. Added 2026-10-06; projects and ETags 2026-10-09. |
 | `GET /projects` | → `ProjectList` | The caller's saved projects, from any browser, newest first. Added 2026-10-09 (features/personal-workspaces.clan). |
 | `GET /clan/{projectId}` | → `.clan` bytes (`ProjectOpen` lists the headers) | The newest save, with its `ETag`. 404 when it is not the caller's; 413 above 4.3 MB. |
@@ -115,3 +120,4 @@ The adapter owns the exact request:
 12. **Personal workspaces (2026-10-09, feature personal-workspaces).** Each name is its own workspace: `SessionResponse.workspace` is the participantId (it was the team an event code belonged to, via the EVENT_CODES `workspaces` map, which is gone), so the library is the person's own. `SessionResponse` gains `projects` (how many projects the name has saved), and the relay adds `GET /projects`, `GET /clan/{projectId}`, the project canvas, and ETag-checked saves on `POST /clan` (If-Match, 409). Only the relay and the web app read these; both change together. `contractVersion` stays "2": no document or job payload changes.
 13. **The beta's record (2026-10-09, feature production-tool-dogfood).** `config.flags.dogfood` (optional, absent = off), `SessionResponse.dogfood` {consented} (present only when on), and `POST /dogfood/consent` and `POST /dogfood/events` (`DogfoodBatch` of `DogfoodShellEvent`). Additive: `contractVersion` stays "2". The stored line is `{ts, participant, source: web|relay, kind, name, project?, stage?, data}`; a run of identical events is its first line plus `kind: "repeat"` {of, count (times after the first), first, last}.
 14. **After the hackathon (2026-10-13, feature drop-hackathon-extras).** Breaking. fal and HeyGen are gone: the provider enum is `mock | runway`, their capability sheets and pathway configs are deleted, and `tagSyntax` and `refs` keep only what Runway uses. Participants' own keys go with them (`X-Own-Keys`, `flags.ownKeys`, `Job.keySource`). A document's history records `madeBy`, a free string, so projects saved on fal or HeyGen still open (`examples/document.hackathon.json`). The tool's own sign-in goes: `POST /session`, event codes and the organiser role give way to `GET /me` behind the identity seam. `config.json` loses `eventName` and `fallbackOnly`; `config.event.json` is `config.live.json`. The web app and the relay change together.
+15. **Contract 3 (2026-10-13, feature contract-v3).** Breaking, so `contractVersion` is "3", in one batch with no importer and no shim (owner). The document's lists become maps keyed by id, every entity carries `v` and `field_v`, and order is `rank` (fractional keys). Gone: `participant`, `stage`, the singleton `script`, shots' `maxItems 8`, `order`, `composition`, `camera_move`, `dialogue`, `selected_take`, and `selected` on frames and takes. New: the root `project` and the read-only `upstream`; boards, sketches, scripts, scenes, storyboards, beats, videos (the cut, with picks and alternates), renders, links, documents, format sets, sizes, checks, asks, suggestions and spin-ins; shot `camera` (size with `graphic`, angle, movement, speed, `lens_mm`, `macro`), `kind` (the end card is a shot), action 600 and direction 4,000 as live text with Dex's `direction_condensed`; the open ref roles with `refRoleTable` (one line per role for the UI and the prompt); `linkRule`; the question shape with `needs_input`; the crew, tenants and people; formats. Writes go through `patch.schema.json`; who writes what is `collab.md`. The relay refuses any other `contractVersion` with "This build reads contract 3; reload the page.", answers jobs' questions at `POST /jobs/{jobId}/answer`, stores the library by shelf, and runs `director.v6`. A v2 `.clan` is refused, never read or overwritten. napkin-host's `/patch-data` gains optional `targets` and `cites`. The web app, clan-store and the relay change together and flip in one announced window.

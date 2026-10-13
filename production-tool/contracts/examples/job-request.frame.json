@@ -1,0 +1,85 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000FR02",
+  "op": "frame",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_frame02aa",
+  "purpose": "frame for shot 2",
+  "node": {
+    "kind": "storyboard",
+    "id": "storyboard_01K7B00000000000000000SB01"
+  },
+  "parentIds": [
+    "job_01K7B00000000000000000PA01"
+  ],
+  "input": {
+    "shot": {
+      "id": "shot_01K7B00000000000000000SH02",
+      "kind": "shot",
+      "duration_s": 3,
+      "camera": {
+        "size": "insert",
+        "angle": "high_angle",
+        "movement": "static",
+        "lens_mm": 100,
+        "macro": true
+      },
+      "action": "The bottle opens in golden light.",
+      "direction": "Hold still; let the fizz rise.",
+      "refs": [
+        "product_bottle"
+      ],
+      "beats": [
+        {
+          "kind": "sound",
+          "at_s": 1,
+          "text": "the cap hisses"
+        }
+      ]
+    },
+    "ratio": "16:9",
+    "script": "EXT. BEACH - DAWN. The bottle opens in golden light.",
+    "refs": [
+      {
+        "id": "ref_01K7B00000000000000000RF01",
+        "name": "product_bottle",
+        "role": "product",
+        "kind": "picture",
+        "asset": {
+          "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "url": "https://studio.napkin.ie/in/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "mime": "image/png"
+        }
+      },
+      {
+        "id": "ref_01K7B00000000000000000RF02",
+        "name": "ref_golden-hour",
+        "role": "lighting",
+        "label": "golden hour",
+        "kind": "picture",
+        "asset": {
+          "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "url": "https://studio.napkin.ie/in/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+          "mime": "image/jpeg"
+        }
+      }
+    ],
+    "context": [
+      {
+        "kind": "brand_rule",
+        "title": "Clear space",
+        "text": "Leave one cap height of clear space around the logo."
+      },
+      {
+        "kind": "document",
+        "title": "Client notes",
+        "text": "Keep it calm. No running."
+      }
+    ],
+    "anchorFrame": {
+      "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "url": "https://studio.napkin.ie/in/sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "mime": "image/png"
+    }
+  }
+}
