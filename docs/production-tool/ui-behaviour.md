@@ -1039,11 +1039,20 @@ Owner decision 2026-10-13 (fourth round). It supersedes the earlier prices on bu
 - **Caps are built but off.**
   - The monthly per-tenant cap exists and is switched off. Each agency chooses its own cap later, at its own request; Napkin staff set it with a script for now (features/tenant-limits.clan builds the machinery; this replaces D16's "Napkin sets, admins only lower").
   - While it is off there is no cap line, no 80% warning, no confirm above an amount, no "left this month" and no "Monthly limit reached". When an agency switches its cap on, its copy is designed then, under the no-prices rule.
-- **Per-person daily quotas:** the mechanism is kept and switched off. No quota shows anywhere.
+  - Until then, an agency at a cap it chose gets one plain line on the job that was refused, with no amount: "Your agency's monthly limit is reached, so nothing new can be made this month." (`limit_reached`; no other model, no Report). A job already running settles at what Runway charged.
+- **Per-person daily quotas:** the mechanism is kept and switched off. The relay keeps counting each person's day, and enforces config.json's quotas only for an agency that asks for them. No quota shows anywhere.
 - **The global spend stop** stays on as an invisible safety backstop. It has no UI of its own; if it ever trips, a job fails with a plain reason and no amount (5.3).
 - **The per-ad cost model** behind any cap an agency picks is `production-tool/contracts/cost-model.json` (typical first pass $10.89, with 3 takes $27.69, with audio $18.09, audio and takes $49.29, heavy $88.63 at 2026-10-13 list prices; `docs/production-tool/provider-reference.md`). It is reference data, never shown in the UI.
 - **Admin and tenant views** show no spend, cost or cap figures. Costs are read per project in its decision tree.
 - **Free and on-device work** never asks.
+
+### 5.4a Data sharing and the agency's allowlist (features/tenant-limits.clan)
+
+- **Where material goes is the agency's to choose.** Each agency has an allowlist: Claude (the director and the character cards) on or off, and the makers whose models may run. By default Claude, Runway and Google are on; every other maker is off until the agency asks. Napkin staff change it on the agency's request; there is no admin control in the tool yet.
+- **Models that are off are not offered.** The model menus list only allowed models. A step with no allowed model left loses its controls. When an op's default model is off, its first allowed alternate runs instead, without a word (it is the agency's own setting).
+- **Claude off:** Dex directs without Claude (the words go as written), no character cards are made, and Plan shots is refused with "Dex plans shots with Claude, which your agency has turned off."
+- **A refusal** a stale page could still send reads "<Model> is made by <Company>, which your agency has turned off. Pick another model." or "Your agency has turned off every model that can make this step." (`not_allowed`; no other model, no Report).
+- **The Data sharing sheet** opens from Home's ⋯ menu. One row per company in `contracts/subprocessors.json`: its name, what it does, what it receives, what carries the material to it ("Through Runway"), where it processes it ("not yet confirmed" until a source confirms it), and an On or Off pill for this agency. The foot reads "To change what your agency shares, ask Napkin. Turning a company off also turns off the steps only its models can make." It shows no prices, costs or limits. `subprocessors.md` is the same list for a contract.
 
 ### 5.5 Fallbacks
 
