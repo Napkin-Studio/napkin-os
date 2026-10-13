@@ -1,9 +1,11 @@
 {
-  "comment": "NAPKIN_MODEL_ROUTES (docs/contracts/peripherals.md §1.9). Edit and save: the next call uses it. Choices measured 2026-10-04 on 32 real seed requests: Opus 4.6 found the most verified facts (143 vs 131 for Opus 5.5 high, 106 low); every model passed every dossier cell.",
-  "default": {"model": "opus-4.6", "schema": "auto"},
-  "vision": {"model": "opus-4.6"},
+  "comment": "NAPKIN_MODEL_ROUTES (docs/contracts/peripherals.md §1.9). Edit and save: the next call uses it. Sonnet 5.5 by default (features/sonnet-default-caching.clan, 2026-10-13): $2/$10 per MTok against Opus 4.6's $5/$25, and its 512-token cache minimum lets the system prompt cache, where Opus 4.6's 4096 cached none. Effort low is the nearest to Opus 4.6, which ran without thinking; the brief writers think at medium. The schema goes in the prompt: Bedrock does not enforce it for the 5.5 models. Measured 2026-10-04 on 32 real seed requests: Opus 4.6 found the most verified facts (143 vs 131 for Opus 5.5 high, 106 low); a purpose that does worse on Sonnet goes back to opus-4.6 here.",
+  "default": {"model": "sonnet-5.5", "effort": "low", "schema": "prompt"},
+  "vision": {"model": "sonnet-5.5"},
   "purposes": {
-    "extract_category_facts": {"model": "opus-4.6"},
-    "write_dossier_cell": {"model": "opus-4.6"}
+    "plan_brief": {"effort": "medium"},
+    "draft_brief_whole": {"effort": "medium"},
+    "extract_category_facts": {"model": "sonnet-5.5"},
+    "write_dossier_cell": {"model": "sonnet-5.5"}
   }
 }

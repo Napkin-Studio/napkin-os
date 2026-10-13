@@ -57,7 +57,8 @@ def test_anthropic_structured_call_with_images_effort_and_usage():
                          headers={"X-Napkin-Handler": "h@1.0", "X-Napkin-Job": "job_1"})
     assert out == GOOD and u.as_dict() == {"input_tokens": 15, "output_tokens": 5}
     kw = sdk.calls[0]
-    assert kw["model"] == "vision-x" and kw["system"] == "sys" and sdk.opts["max_retries"] == 1
+    assert kw["model"] == "vision-x" and sdk.opts["max_retries"] == 1
+    assert kw["system"] == [{"type": "text", "text": "sys", "cache_control": {"type": "ephemeral"}}]
     assert kw["extra_headers"] == {"X-Napkin-Handler": "h@1.0", "X-Napkin-Job": "job_1"}
     content = kw["messages"][0]["content"]
     assert content[0] == {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": PNG}}
@@ -311,8 +312,10 @@ def test_bedrock_refusing_structured_output_under_schema_auto_switches_that_mode
     assert len(calls) == 2
     retry = calls[1]
     assert retry["output_config"] == {"effort": "low"}            # effort kept, format gone
-    assert retry["system"].startswith("sys") and '"required"' in retry["system"]   # the full schema
-    assert "maxItems" in retry["system"]   # the prompt carries the schema unstripped
+    system = retry["system"][0]["text"]
+    assert system.startswith("sys") and '"required"' in system   # the full schema
+    assert "maxItems" in system   # the prompt carries the schema unstripped
+    assert retry["system"][0]["cache_control"] == {"type": "ephemeral"}   # the schema is cached with it
     # the model is remembered: the next call goes straight to the prompt
     assert p.call("p", "sys", {}, SCHEMA, usage=u, attribution="t") == GOOD
     assert len(calls) == 3 and "output_config" not in calls[2]
@@ -461,3 +464,31 @@ def test_the_middleware_names_no_mock():
     hits = [f"{p}:{i}" for p in root.rglob("*.py") for i, line in enumerate(p.read_text().splitlines(), 1)
             if re.search(r"mock|8797|claude -p", line, re.I)]
     assert hits == []
+
+
+# ---------------------------------------------------------------------------- the prompt cache
+
+def test_every_call_of_a_purpose_sends_the_same_cached_system_block():
+    sdk = FakeSDK([(json.dumps(GOOD), "end_turn", U(10, 5, 600, 0)), (json.dumps(GOOD), "end_turn", U(10, 5, 0, 600))])
+    routes = Routes("anthropic", "claude-sonnet-5-5", source='{"default": {"schema": "prompt"}}')
+    p, u = ModelPort(sdk, "claude-sonnet-5-5", 30, routes=routes), Usage()
+    p.call("extract", "sys", {"source": 1}, SCHEMA, usage=u, attribution="t")
+    p.call("extract", "sys", {"source": 2}, SCHEMA, usage=u, attribution="t")
+    first, second = sdk.calls
+    assert first["system"] == second["system"] and len(first["system"]) == 1   # byte for byte: a stable prefix
+    assert first["system"][0]["cache_control"] == {"type": "ephemeral"} and '"required"' in first["system"][0]["text"]
+    assert first["messages"] != second["messages"]                             # only the payload differs
+    assert (u.input_tokens, u.cache_write, u.cache_read) == (1220, 600, 600)
+
+
+def test_the_openai_wire_sends_no_cache_marker():
+    seen = []
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(GOOD)}, "finish_reason": "stop"}],
+                                         "usage": {"prompt_tokens": 3, "completion_tokens": 2}})
+    wire = OpenAIWire("http://nim/v1", transport=httpx.MockTransport(handler))
+    u = Usage()
+    ModelPort(wire, "m", 30).call("p", "sys", {}, SCHEMA, usage=u, attribution="t")
+    assert seen[0]["messages"][0] == {"role": "system", "content": "sys"} and "cache_control" not in json.dumps(seen[0])
+    assert (u.cache_read, u.cache_write) == (0, 0)

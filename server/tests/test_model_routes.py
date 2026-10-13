@@ -125,3 +125,16 @@ def test_the_table_shows_what_is_in_force(tmp_path):
     assert t["default"]["model"] == "eu.anthropic.claude-opus-4-6-v1"
     assert t["purposes"]["extract_category_facts"] == {"model": "global.anthropic.claude-opus-5-5", "effort": "low",
                                                        "schema": "auto", "alias": "opus-5.5"}
+
+
+def test_the_shipped_routes_run_sonnet_5_5_at_low_effort_and_the_brief_writers_at_medium():
+    # The image copies this file and staging points NAPKIN_MODEL_ROUTES at it (server/Dockerfile).
+    from pathlib import Path
+    r = Routes("bedrock", "unused", source=str(Path(__file__).resolve().parents[1] / "model-routes.example.json"))
+    sonnet = "global.anthropic.claude-sonnet-5-5"
+    for purpose in ("research_select", "extract_facts", "extract_category_facts", "write_dossier_cell"):
+        route = r.resolve(purpose)
+        assert (route.model, route.effort, route.schema) == (sonnet, "low", "prompt"), purpose
+    assert r.resolve("transcribe", vision=True).model == sonnet
+    for purpose in ("plan_brief", "draft_brief_whole"):
+        assert (r.resolve(purpose).model, r.resolve(purpose).effort) == (sonnet, "medium")
