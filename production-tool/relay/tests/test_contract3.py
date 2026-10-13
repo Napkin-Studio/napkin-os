@@ -54,7 +54,7 @@ def test_a_contract_3_job_carries_who_started_it_where_and_for_what(h):
     assert plan["crew"] == "dex" and plan["quotaClass"] == "text"
 
 
-@pytest.mark.parametrize("op", ["frame_edit", "clip_patch", "bridge", "cutout", "transcribe", "write", "read", "check",
+@pytest.mark.parametrize("op", ["frame_edit", "clip_patch", "bridge", "cutout", "transcribe", "read", "check",
                                 "resize", "cutdown", "upscale"])
 def test_an_op_not_built_yet_is_422_capability_missing_before_quota(h, op):
     token = h.as_person()

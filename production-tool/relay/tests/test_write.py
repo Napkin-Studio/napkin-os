@@ -1,0 +1,160 @@
+"""Skye's `write` op (features/script-editor.clan): internal, no spend, the text quota, crew skye,
+unknown @names reach her as written, the tenant's text-model hook, a question as needs_input
+that an answer resumes, base_hash echoed, and the prompt's contract with a fake model."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from conftest import envelope
+from contracts_dir import contracts_dir
+from director import new_id
+from writer import ModelWriter, PassthroughWriter, output_schema, settle
+
+BASE = "sha256:" + "d" * 64
+
+
+def write_input(intent="tighten", text="@maya_front walks the waterline. The light is low and gold.", **extra) -> dict:
+    return {"write": {
+        "intent": intent,
+        "target": {"kind": "shot", "id": new_id("shot")},
+        "base_hash": BASE,
+        "lines": [{"type": "action", "text": text}, {"type": "direction", "text": "Unhurried."}],
+        "context": {"script_title": "First Light", "target_s": 15, "neighbours": "Shot 2: The sea.",
+                    "refs": [{"name": "maya_front", "role": "character"}]},
+        **extra,
+    }}
+
+
+def post_write(h, token, expect=200, **kw):
+    req = {**envelope("write", new_id("job")), "node": {"kind": "script", "id": new_id("script")}, "input": write_input(**kw)}
+    return h.call("POST", "/jobs", req, token, expect=expect)
+
+
+def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
+    token = h.as_person()
+    _, job = post_write(h, token)
+    assert job["state"] == "completed"
+    assert (job["crew"], job["quotaClass"], job["op"]) == ("skye", "text", "write")
+    assert "provider" not in job
+    assert job["cost"]["estimate"] == 0 and job["cost"]["reserved"] == 0
+    assert h.store.counters("spend").get("usd", 0) == 0
+    for p in h.providers.values():
+        assert p.submits == []
+    [draft] = job["writes"]
+    assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
+    assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
+    assert draft["note"] == "I tightened it."
+    assert job["director"]["promptVersion"] == "skye.v1"
+
+
+def test_fit_seconds_sets_the_length_and_add_beat_keeps_beats_inside_it(h):
+    token = h.as_person()
+    _, fit = post_write(h, token, intent="fit_seconds", seconds=1.6)
+    assert fit["writes"][0]["duration_s"] == 1.6
+    assert fit["writes"][0]["note"] == "I tightened it to fit 1.6 s."
+    _, beat = post_write(h, token, intent="add_beat", seconds=0.5)
+    assert beat["writes"][0]["new_beats"][0] == {"kind": "moment", "at_s": 0.5, "text": "A beat to breathe."}
+
+
+def test_an_unknown_name_reaches_skye_as_written(h):
+    token = h.as_person()
+    _, job = post_write(h, token, intent="cut_name", text="A @jogger runs past far behind @maya_front.", name="jogger")
+    assert job["state"] == "completed"
+    assert job["writes"][0]["lines"][0]["text"] == "A runs past far behind @maya_front."
+
+
+def test_an_agency_whose_text_may_not_go_to_the_model_is_refused_before_quota(h):
+    token = h.as_person(team="red")
+    tid = h.people[token]["tenant"]["id"]
+    h.store.put_tenant({"tenantId": tid, "agency": "red", "enabled": True, "textModel": False})
+    h.relay._tenants.pop(tid, None)
+    _, out = post_write(h, token, expect=422)
+    assert out["error"]["code"] == "capability_missing"
+    assert out["error"]["message"] == "Skye isn't available here yet."
+
+
+def test_a_write_without_its_input_is_invalid(h):
+    token = h.as_person()
+    req = {**envelope("write", new_id("job")), "input": {"text": "x"}}
+    _, out = h.call("POST", "/jobs", req, token, expect=400)
+    assert out["error"]["code"] == "invalid_input"
+
+
+def test_a_question_waits_in_needs_input_and_the_answer_resumes_it(h):
+    token = h.as_person()
+    _, job = post_write(h, token, intent="draft", text="[ask] a jogger")
+    assert job["state"] == "needs_input"
+    q = job["question"]
+    assert q["id"].startswith("q_") and job["cost"]["reserved"] == 0
+    body = {"contractVersion": "3", "questionId": q["id"], "optionId": "maya"}
+    _, done = h.call("POST", f"/jobs/{job['jobId']}/answer", body, token, expect=200)
+    assert done["state"] == "completed"
+    assert done["writes"][0]["base_hash"] == BASE
+
+
+# ── the prompt's contract, with a fake model ────────────────────────────────
+
+class FakePort:
+    """The model port's call(): records what it was asked, answers with a fixture."""
+
+    def __init__(self, answer: dict):
+        self.answer, self.asked = answer, []
+
+    def call(self, purpose, system, payload, schema, *, usage, attribution, model=None, max_tokens=None, **_):
+        self.asked.append({"purpose": purpose, "system": system, "payload": payload, "schema": schema, "model": model})
+        return json.loads(json.dumps(self.answer))
+
+
+def test_the_model_writer_asks_sonnet_with_skye_v1_and_the_relay_owns_target_and_hash():
+    target = {"kind": "shot", "id": new_id("shot")}
+    other = {"kind": "shot", "id": new_id("shot")}
+    port = FakePort({"writes": [
+        {"target": target, "base_hash": "sha256:" + "0" * 64, "lines": [{"type": "action", "text": "She stops."}], "note": "I tightened it." * 30},
+        {"target": other, "base_hash": BASE, "lines": [{"type": "action", "text": "Not mine."}], "note": "x"},
+    ], "rationale": "Shorter verbs."})
+    w = ModelWriter(port, contracts_dir())
+    inp = write_input()
+    inp["write"]["target"] = target
+    out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
+    [asked] = port.asked
+    assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
+    assert asked["system"].startswith("# Skye · scripts (skye.v1)")
+    assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
+    assert [d["target"] for d in out["writes"]] == [target]
+    assert out["writes"][0]["base_hash"] == BASE
+    assert len(out["writes"][0]["note"]) == 200
+    assert "price" not in asked["system"].lower().replace("no prices", "")
+
+
+def test_the_output_schema_takes_writes_or_a_question_and_nothing_else():
+    from jsonschema import Draft202012Validator
+
+    v = Draft202012Validator(output_schema(contracts_dir()))
+    ok = {"writes": [{"target": {"kind": "beat", "id": new_id("beat")}, "base_hash": BASE, "lines": [{"type": "dialogue", "text": "Hi."}], "note": "I said it another way."}]}
+    assert not list(v.iter_errors(ok))
+    assert list(v.iter_errors({"writes": [], "chat": "hello"}))
+    assert list(v.iter_errors({"writes": [{**ok["writes"][0], "new_beats": [{"kind": "moment", "at_s": 0.3, "text": "x"}]}]}))
+
+
+def test_every_passthrough_intent_validates_against_the_contract():
+    from contracts import Contracts
+    from writer import check
+
+    c = Contracts()
+    for intent in ("draft", "tighten", "fit_seconds", "add_beat", "write_vo", "rephrase", "cut_name"):
+        out = PassthroughWriter().write({"input": write_input(intent, seconds=2, name="maya_front")})
+        assert out["writes"], intent
+        assert check(c, out) == [], (intent, check(c, out))
+
+
+def test_settle_keeps_new_beats_inside_the_length():
+    inp = write_input(seconds=1.6)
+    out = settle(inp, {"writes": [{"lines": [], "note": "n", "duration_s": 1.6, "new_beats": [{"kind": "moment", "at_s": 3.0, "text": "late"}]}]})
+    assert out["writes"][0]["new_beats"][0]["at_s"] == 1.5
+
+
+def test_the_prompt_file_is_versioned_and_says_no_chat():
+    text = (Path(__file__).parent.parent / "prompts" / "skye.v1.md").read_text()
+    assert "You never chat" in text and "No prices, no costs" in text

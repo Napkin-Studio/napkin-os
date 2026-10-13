@@ -366,6 +366,9 @@
           "minItems": 1,
           "maxItems": 100
         },
+        "write": {
+          "$ref": "#/$defs/WriteInput"
+        },
         "answer": {
           "$ref": "#/$defs/JobAnswer",
           "description": "Change (ui-behaviour 3.17): the new answer to the question the parent job (parentIds [jobId]) asked, sent as a follow-up job."
@@ -552,6 +555,14 @@
         },
         "answer": {
           "$ref": "common.schema.json#/$defs/answer"
+        },
+        "writes": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/Write"
+          },
+          "description": "write only: Skye's drafts, each landing as a suggestion on its target (one job may draft several)."
         }
       },
       "required": [
@@ -1008,6 +1019,126 @@
       "required": [
         "events"
       ],
+      "additionalProperties": false
+    },
+    "WriteInput": {
+      "type": "object",
+      "description": "write (Skye, features/script-editor.clan): what to draft or rewrite, and the words around it. base_hash comes back on each write, so a draft lands right after a reload.",
+      "properties": {
+        "intent": {
+          "enum": ["draft", "tighten", "fit_seconds", "add_beat", "write_vo", "rephrase", "cut_name"]
+        },
+        "target": {
+          "$ref": "#/$defs/WriteTarget"
+        },
+        "base_hash": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "lines": {
+          "$ref": "#/$defs/WriteLines"
+        },
+        "selection": {
+          "type": "object",
+          "properties": {
+            "from": { "type": "integer", "minimum": 0 },
+            "to": { "type": "integer", "minimum": 0 },
+            "text": { "type": "string", "maxLength": 4000 }
+          },
+          "required": ["from", "to", "text"],
+          "additionalProperties": false
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 60
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "cut_name: the @name to take out."
+        },
+        "explicit": {
+          "type": "boolean",
+          "description": "A person pressed it on a target Skye was asked to leave alone (hands_off)."
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "script_title": { "type": "string", "maxLength": 200 },
+            "target_s": { "type": "number", "minimum": 0, "maximum": 600 },
+            "scene_heading": { "type": "string", "maxLength": 200 },
+            "neighbours": { "type": "string", "maxLength": 4000 },
+            "refs": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "maxLength": 60 },
+                  "role": { "$ref": "common.schema.json#/$defs/refRole" },
+                  "label": { "type": "string", "maxLength": 120 }
+                },
+                "required": ["name", "role"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["neighbours", "refs"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["intent", "target", "base_hash", "lines", "context"],
+      "additionalProperties": false
+    },
+    "WriteTarget": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["scene", "shot", "beat"] },
+        "id": { "$ref": "common.schema.json#/$defs/id" }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false
+    },
+    "WriteLines": {
+      "type": "array",
+      "maxItems": 400,
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "enum": ["action", "character", "parenthetical", "dialogue", "direction"] },
+          "text": { "type": "string", "maxLength": 4000 }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      }
+    },
+    "Write": {
+      "type": "object",
+      "description": "One of Skye's drafts: the target's new lines, written against base_hash. Lands as a suggestion; nothing changes until Keep.",
+      "properties": {
+        "target": { "$ref": "#/$defs/WriteTarget" },
+        "base_hash": { "$ref": "common.schema.json#/$defs/sha256" },
+        "lines": { "$ref": "#/$defs/WriteLines" },
+        "note": { "type": "string", "maxLength": 200 },
+        "reasoning": { "type": "string", "maxLength": 2000 },
+        "duration_s": { "type": "number", "minimum": 0.5, "maximum": 30, "multipleOf": 0.1 },
+        "new_beats": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": { "$ref": "common.schema.json#/$defs/beatKind" },
+              "at_s": { "type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.5 },
+              "speaker": { "type": "string", "maxLength": 60 },
+              "text": { "type": "string", "minLength": 1, "maxLength": 500 }
+            },
+            "required": ["kind", "at_s", "text"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["target", "base_hash", "lines", "note"],
       "additionalProperties": false
     },
     "JobShot": {

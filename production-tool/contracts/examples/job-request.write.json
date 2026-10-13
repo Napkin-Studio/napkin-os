@@ -1,0 +1,38 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7C00000000000000000WR01",
+  "op": "write",
+  "projectId": "proj_01K7A00000000000000000PR01",
+  "nonce": "n_wr1te0001",
+  "purpose": "Skye tightens shot 3",
+  "node": {
+    "kind": "script",
+    "id": "script_01K7A00000000000000000SC01"
+  },
+  "parentIds": [],
+  "input": {
+    "write": {
+      "intent": "fit_seconds",
+      "target": {
+        "kind": "shot",
+        "id": "shot_01K7A00000000000000000SH03"
+      },
+      "base_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "lines": [
+        { "type": "action", "text": "@maya_front walks the length of the waterline as the light comes up gold behind her, then stops." },
+        { "type": "direction", "text": "Unhurried; hold on her face." }
+      ],
+      "seconds": 1.6,
+      "context": {
+        "script_title": "First Light",
+        "target_s": 15,
+        "scene_heading": "EXT. BEACH - DAWN",
+        "neighbours": "Shot 2: The sea, flat and pink.\nShot 4: She laughs.",
+        "refs": [
+          { "name": "maya_front", "role": "character" },
+          { "name": "shirt_linen", "role": "wardrobe", "label": "Maya's beach outfit" }
+        ]
+      }
+    }
+  }
+}

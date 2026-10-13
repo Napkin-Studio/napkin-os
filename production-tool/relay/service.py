@@ -44,6 +44,7 @@ import dogfood
 import identity
 import library
 import names
+import writer as writers
 import projects
 from contracts import Contracts, api
 from director.base import Director, PromptTooOld, new_id
@@ -96,9 +97,9 @@ CONTRACT = _COMMON["contractVersion"]["const"]  # "3"
 STALE_BUILD = "This build reads contract 3; reload the page."
 # Each op's daily quota class (common opQuotaClass).
 QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
-INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
+INTERNAL_OPS = {"shot_list", "stitch", "write"}  # no provider: the director, the stitch Lambda, or Skye (writer.py)
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
-BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch"}
+BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch", "write"}
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
@@ -223,13 +224,15 @@ def public(job: dict) -> dict:
 class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config,
                  contracts: Contracts | None = None, clock=time.time, stitch=None, cards=None,
-                 who=identity.who):
+                 who=identity.who, writer=None):
         """config: () -> config.json dict (cached by the caller).
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
         cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards).
         who: (method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"} or None,
         the identity seam (identity.py)."""
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
+        # Skye (write): on the director's model port, or the passthrough without one (writer.py).
+        self.writer = writer if writer is not None else writers.make(director)
         self.config, self.who = config, who
         self.contracts = contracts or Contracts()
         self.clock = clock
@@ -709,6 +712,11 @@ class Relay:
         op = req["op"]
         if op in UNBUILT_OPS:
             raise ApiError("capability_missing", "This step is not built yet.")
+        if op == "write" and not isinstance(req["input"].get("write"), dict):
+            raise ApiError("invalid_input", "A write job says what to write (input.write).")
+        if op == "write" and not self.may_send_text(who["tenant"]["id"]):
+            # Script text is the agency's: it goes to the text model only where the agency allows it.
+            raise ApiError("capability_missing", "Skye isn't available here yet.")
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
@@ -880,6 +888,8 @@ class Relay:
         op = job["op"]
         if op == "shot_list":
             return self._run_shot_list(job, cfg)
+        if op == "write":
+            return self._run_write(job)
         if op == "stitch":
             return self._run_stitch(job, cfg)
         if job.get("_notBefore", 0) > self.clock():  # its provider asked us to wait (a 429's Retry-After)
@@ -1125,6 +1135,41 @@ class Relay:
             return self._ask(saved, out["question"], block)
         return self._finish(saved, "completed", shots=out["shots"], director=block, outputs=[],
                             kind="generated", paid=False)
+
+    def may_send_text(self, tenant_id: str) -> bool:
+        """Whether this agency's script text may go to the text model (features/script-editor.clan).
+        tenant-limits fills this with the per-tenant Bedrock allowlist; until then it allows what
+        shot_list already sends, for the same tenants: an agency that is on, unless its item says
+        textModel: false."""
+        item = self._tenant(tenant_id)
+        if item is None:
+            return True  # the local relay and the tests have no tenants table; _tenant_on guards real ones
+        return item.get("textModel", True) is not False
+
+    def _run_write(self, job: dict) -> dict:
+        """Skye drafts: no provider, no spend; the text quota was counted at admission."""
+        saved = self._save(job, state="submitting", _queue="r")
+        if saved is None:
+            return self._reload(job)
+        req = saved["_req"]
+        start = self.clock()
+        try:
+            out = dict(self.writer.write({**req, "jobId": saved["jobId"]}))
+        except Exception as e:
+            log.exception("writer failed")
+            return self._fail(saved, "internal", f"Skye could not write this ({type(e).__name__}).", paid=False, refund=True)
+        latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
+        out.pop("_usage", None)
+        errors = writers.check(self.contracts, out)
+        if errors:
+            return self._fail(saved, "internal", f"Skye's draft did not match its schema: {errors[0]}", paid=False, refund=True)
+        block = {"model": getattr(self.writer, "model", "unknown"), "promptVersion": getattr(self.writer, "prompt_version", "skye.v1"),
+                 "output": {k: v for k, v in out.items() if k != "rationale"}, "rationale": out.get("rationale", ""), "latencyMs": latency}
+        if out.get("question") and not out.get("writes"):
+            return self._ask(saved, out["question"], block)
+        if not out.get("writes"):
+            return self._fail(saved, "internal", "Skye wrote nothing for this. Try again.", paid=False, refund=True)
+        return self._finish(saved, "completed", writes=out["writes"], director=block, outputs=[], kind="generated", paid=False)
 
     # ── asks (needs_input, ui-behaviour 3.17, 5.2) ──────────────────────────
     def _ask(self, job: dict, question: dict, block: dict) -> dict:
