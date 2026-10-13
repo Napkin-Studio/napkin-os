@@ -23,7 +23,7 @@ no-loss guarantee on capture.
 git clone <repo> && cd briefing
 python3 -m venv .venv && source .venv/bin/activate   # or your env of choice (Python ≥3.11)
 pip install -e .            # core (.pdf/.docx ingestion)
-pip install -e ".[all]"     # + PyYAML, python-dotenv, PyMuPDF (vision), anthropic
+pip install -e ".[all]"     # + PyYAML, python-dotenv, pypdfium2 (vision), anthropic
 cp .env.example .env        # then add your keys (see table below)
 ```
 
