@@ -222,29 +222,19 @@
   <div class="wrap">
     <div class="head">
       <p class="eyebrow">Models</p>
-      <h2>Runway by default. Your own key if you bring one.</h2>
-      <p>Runway runs everything unless you add your own key. You don’t have to choose a model: every first draw and first clip uses the step’s default.</p>
+      <h2>Runway runs every step.</h2>
+      <p>You don’t have to choose a model: every first draw and first clip uses the step’s default, and the model menu offers the others when you remake one.</p>
     </div>
     <div class="models">
       <div class="panel main">
-        <h3>No keys: Runway <span class="tag tool">The event’s key</span></h3>
-        <p style="margin-top:10px">With no keys of your own, every step runs on Runway, on the event’s key: characters, views, frames, box edits and clips. It needs nothing from you.</p>
+        <h3>Runway <span class="tag tool">Every step</span></h3>
+        <p style="margin-top:10px">Characters, views, frames, box edits and clips all run on Runway. It needs nothing from you.</p>
         <ul>
           <li>Frames and pictures: Gemini 3 Pro (or Gemini 3.1 Flash)</li>
           <li>Clips: Veo 3.1 (or Veo 3.1 Fast); clip edits: Aleph 2</li>
         </ul>
       </div>
-      <div class="panel">
-        <h3>Your key: fal or HeyGen <span class="tag">Optional</span></h3>
-        <p style="margin-top:10px">Add a fal or HeyGen key under <b>Your keys</b> and that provider runs the steps it takes, on your account:</p>
-        <ul>
-          <li>fal for pictures and frames.</li>
-          <li>For clips, HeyGen first, then fal.</li>
-          <li>Their models join Runway’s in the model menu.</li>
-        </ul>
-      </div>
     </div>
-    <p class="status"><b>Runway catches every job.</b> If your provider can’t make one (out of credit, key refused, a timeout, no answer in time), the tool makes it again on Runway by itself, and the card says “Made on Runway: HeyGen could not”. So your key can never make a job fail. A refused prompt or a problem with your input isn’t retried on Runway: Runway would refuse it too.</p>
 
     <div class="split">
       <div>
@@ -345,7 +335,7 @@
             <li><b>Content refused</b>: the provider’s safety filter said no. Change the words or the pictures; it’s never retried by itself.</li>
             <li><b>Too many characters in one shot</b>: the tool keeps each character’s front and leaves out extra views, rather than refusing.</li>
           </ul>
-          <p>Anything unexpected: press Report on the card. It sends the error and the job ID to the organisers.</p>
+          <p>Anything unexpected: press Report on the card. It sends the error and the job ID to the Napkin team.</p>
         </div>
       </details>
       <details>
@@ -368,32 +358,22 @@
       <details>
         <summary>What does each step cost?</summary>
         <div class="body">
-          <p>Estimates per job, from the providers’ price lists in the tool’s capability sheets (checked 2026-10-08). On the event’s account you don’t pay; on your own key, your provider bills you.</p>
+          <p>Estimates per job, from Runway’s price list in the tool’s capability sheet (checked 2026-10-08).</p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th scope="col">Step</th><th scope="col">Runway (default)</th><th scope="col">fal (your key)</th></tr></thead>
+              <thead><tr><th scope="col">Step</th><th scope="col">Runway</th></tr></thead>
               <tbody>
-                <tr><td>Character (Generate)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.15<small>Nano Banana Pro</small></td></tr>
-                <tr><td>View (turnaround)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.035<small>Qwen multi-angle</small></td></tr>
-                <tr><td>Storyboard frame</td><td class="num">$0.20<small>Gemini 3 Pro · Flash $0.07</small></td><td class="num">$0.15<small>Nano Banana Pro · from $0.028</small></td></tr>
-                <tr><td>Box edit</td><td class="num">$0.20<small>Gemini 3 Pro</small></td><td class="num">$0.06<small>Ideogram v4.5</small></td></tr>
-                <tr><td>Clip</td><td class="num">$1.20<small>Veo 3.1 · Fast $0.60</small></td><td class="num">$0.90<small>Veo 3.1 Fast · Kling v3 Pro $0.56 · Veo 3.1 $2.40</small></td></tr>
-                <tr><td>Clip edit</td><td class="num">$1.40<small>Aleph 2</small></td><td class="num">$0.72<small>Luma Ray 3.2</small></td></tr>
+                <tr><td>Character (Generate)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td></tr>
+                <tr><td>View (turnaround)</td><td class="num">$0.20<small>Gemini 3 Pro</small></td></tr>
+                <tr><td>Storyboard frame</td><td class="num">$0.20<small>Gemini 3 Pro · Flash $0.07</small></td></tr>
+                <tr><td>Box edit</td><td class="num">$0.20<small>Gemini 3 Pro</small></td></tr>
+                <tr><td>Clip</td><td class="num">$1.20<small>Veo 3.1 · Fast $0.60</small></td></tr>
+                <tr><td>Clip edit</td><td class="num">$1.40<small>Aleph 2</small></td></tr>
               </tbody>
             </table>
           </div>
-          <p style="margin-top:12px">HeyGen clips: price not published. Before a remake runs, the tool shows its estimated cost.</p>
-          <p>The organisers also set daily limits per person (usually 40 picture jobs, 6 clips and 3 renders, with 2 jobs running at once; more wait “In the queue”).</p>
-        </div>
-      </details>
-      <details>
-        <summary>Where do my keys go?</summary>
-        <div class="body">
-          <ul>
-            <li>Your fal or HeyGen key stays in <b>this browser tab</b>. Closing the tab forgets it, and Forget my keys clears it.</li>
-            <li>It’s never saved in your project or its Export.</li>
-            <li>It goes to the relay only when a job is sent. The relay keeps the key that job needs encrypted, and never logs it or sends it back.</li>
-          </ul>
+          <p style="margin-top:12px">Before a remake runs, the tool shows its estimated cost.</p>
+          <p>There are daily limits per person (usually 40 picture jobs, 6 clips and 3 renders, with 2 jobs running at once; more wait “In the queue”).</p>
         </div>
       </details>
       <details>
@@ -418,13 +398,13 @@
     <div class="head">
       <p class="eyebrow">Get started</p>
       <h2>Make your first ad.</h2>
-      <p>The link opens on the day. Ask the organisers for it and for the event code.</p>
+      <p>Open it from Napkin Studio, signed in there.</p>
     </div>
     <div class="ctas">
       <a class="btn" href="#how">Read how it works</a>
     </div>
     <ol>
-      <li>Sign in with the event code and your name.</li>
+      <li>Open the Production Tool from Napkin Studio.</li>
       <li>Canvas: draw your character, Generate, name it <code>@maya_front</code>, Make the other views.</li>
       <li>Storyboard: write two or three lines with your names, Plan shots, Draw frame 1, Draw the rest.</li>
       <li>Video: Make clips, leave notes, Render ad, Download.</li>

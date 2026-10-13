@@ -246,7 +246,7 @@ figcaption { font-size: 13px; color: var(--ink3); margin-top: 10px; }
 @media (max-width: 600px) { .crew-shots { grid-template-columns: 1fr; } }
 
 /* ── models ──────────────────────────────────────────── */
-.models { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.models { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .panel { border: 1px solid var(--line-soft); border-radius: var(--r-panel); background: var(--card); padding: 28px; }
 .panel.main { border-color: color-mix(in srgb, var(--tool) 40%, var(--line-soft)); background: linear-gradient(180deg, var(--tool-soft), var(--card) 70%); }
 .panel h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

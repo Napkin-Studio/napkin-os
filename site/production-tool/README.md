@@ -1,7 +1,6 @@
 # Production Tool intro site
 
-A static page introducing Napkin Studio Production to people trying it at the
-event: what it is, the three stages, the crew, models, tips and an FAQ. It has
+A static page introducing Napkin Studio Production to people trying it: what it is, the three stages, the crew, models, tips and an FAQ. It has
 no build step. Open `index.html` in a browser, or serve the folder:
 
 ```sh
@@ -28,8 +27,7 @@ All links are relative, so it works from any sub-path (for example
 to `develop` that touch the folder, or by hand (Actions → Pages: Production Tool site →
 Run workflow). The repository is public, so Pages needs no paid plan; the site is
 public, so nothing here may carry keys, client material or internal URLs. There is no
-"Try it" link on purpose: people get the tool's address and the event code from the
-organisers.
+"Try it" link on purpose: people open the tool from Napkin Studio.
 
 A repository has one Pages site: `.github/workflows/pages.yml` (the serverless build,
 run by hand) publishes to the same place and would replace this site if it ran.

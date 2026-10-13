@@ -1,12 +1,12 @@
 # Napkin Production Tool: user guide
 
 Make a short ad from a sketch: create your characters, storyboard a script, and turn the frames into
-video clips. This guide is for participants and organisers. Anything not built yet is marked
+video clips. This guide is for the people making ads with it. Anything not built yet is marked
 **Planned**.
 
 ## Quick start
 
-1. **Sign in** with the event code from the organisers and your name.
+1. **Open it from Napkin Studio**, signed in there (see [Signing in](#signing-in)).
 2. **Canvas:** draw or drop a picture of your character, press **Generate**, then **Name** the result
    (for example `maya_front`) and press **Make the other views**.
 3. **Storyboard:** write a few lines of script using your names (*"@maya opens her umbrella and
@@ -23,7 +23,6 @@ video clips. This guide is for participants and organisers. Anything not built y
 - [Stage 2: Storyboard](#stage-2-storyboard)
 - [Stage 3: Video](#stage-3-video)
 - [Choosing a model when you regenerate](#choosing-a-model-when-you-regenerate)
-- [Your keys (your own fal or HeyGen account)](#your-keys-your-own-fal-or-heygen-account)
 - [Costs and limits](#costs-and-limits)
 - [What the job states and errors mean](#what-the-job-states-and-errors-mean)
 
@@ -35,11 +34,11 @@ You make an ad in three stages:
 2. **Storyboard**: write a short script. The tool plans the shots and draws a frame for each one.
 3. **Video**: turn each frame into a clip, leave notes to improve them, then render the ad.
 
-Behind the scenes, the tool sends each step to an image or video service: fal, Runway or HeyGen. The organisers choose which service does which step.
+Behind the scenes, the tool sends each step to Runway's image and video models.
 
 ## Signing in
 
-Enter the **event code** from the organisers and **your name**, then press **Start**. Organiser codes get higher daily limits (see [Costs and limits](#costs-and-limits)).
+The tool has no sign-in of its own: it uses your Napkin Studio sign-in. **Planned:** until that is connected, it runs only on a developer's machine, and the hosted tool says *"Sign in through Napkin Studio to use the Production Tool."*
 
 ## Stage 1: Canvas
 
@@ -88,7 +87,6 @@ Two technical details:
 - **Unnamed inputs:** anything you didn't name is called `in_1`, `in_2`, … in what the tool sends.
 
 **Honest limit: a named pose is a hint, not a guarantee.** On some services, a picture like `@maya_jumping` steers the result rather than fixing it:
-- On fal, the extra pictures of a character are sent as identity references, so the pose isn't enforced.
 - The director may leave a pose picture out when a service's reference limit is full.
 - The shot's action text can override the pose.
 
@@ -130,7 +128,7 @@ One clip is made per frame.
 | **Render ad** | Joins the chosen takes into one ad with the end card. |
 | **Download** | Saves the rendered ad. |
 
-These are switched off by the organisers today, so you may not see them:
+These are switched off today, so you may not see them:
 - **Change the feel**: small, noticeable or big changes (Adhere / Flex / Reimagine).
 - **Box on a paused frame**: region edits on video.
 
@@ -138,58 +136,38 @@ These are switched off by the organisers today, so you may not see them:
 
 Every model, its price and what each service accepts are listed in the [provider reference](provider-reference.md).
 
-Your first draw and your first clip always use the event's default model. The defaults are chosen for keeping characters consistent: Nano Banana Pro for characters and frames, Kling v3 Pro for clips (the clip model that takes your named characters). Veo 3.1 has the best motion but ignores character references, so it is offered rather than used by default. When you **regenerate a frame** or make a **New take** (or a new version from notes), a **Model** menu lets you pick another vetted model. The menu starts on the model that made the version you're replacing.
+Your first draw and your first clip always use the default model. When you **regenerate a frame** or make a **New take** (or a new version from notes), a **Model** menu lets you pick another vetted model. The menu starts on the model that made the version you're replacing.
 
 | Step | Default | Other choices | Approx. cost per job |
 |---|---|---|---|
-| Storyboard frame | Nano Banana Pro (fal) | Kling O3 (fal), Nano Banana 2 (fal) | ~$0.15 / ~$0.028 / ~$0.08 |
-| Clip | Kling v3 Pro (fal) | Veo 3.1 Fast (fal), Veo 3.1 (fal), HeyGen Video 1 | ~$0.56 / ~$0.90 / ~$2.40 / price not published |
+| Storyboard frame | Gemini 3 Pro | Gemini 3.1 Flash | ~$0.20 / ~$0.07 |
+| Clip | Veo 3.1 | Veo 3.1 Fast | ~$1.20 / ~$0.60 |
 
 Notes:
-- **Veo ignores character references.** It works from the frame only, as its menu note says. For clips where exact characters matter, stay on Kling v3 Pro.
-- **Prices are estimates** from the services' price lists. The Veo prices are an upper bound.
-- **Runway is never offered.** It's the event's safety net. If the service you picked can't take the job, the tool makes it with Runway's default model instead. Hover the version or take afterwards: the tooltip names the model, and in that case says something like *"Veo 3.1 (runway), because fal could not take Veo 3.1 Fast"*.
+- **Prices are estimates** from Runway's price list.
 - **The menu isn't on the canvas** (Generate, views, region edits).
-
-## Your keys (your own fal or HeyGen account)
-
-When the organisers switch it on, a **Your keys** button appears in the top bar. Enter a fal key ("For pictures, frames and clip edits") and/or a HeyGen key ("For clips"), then **Save**.
-
-- **What runs on your key:**
-  - Steps your keys cover run on your account and are billed to you. Everything else runs on the event's account.
-  - Clips go to HeyGen first.
-  - A fal key on its own doesn't take clips. With a HeyGen key as well, fal takes a clip HeyGen can't.
-- **No fallback to the event's account.** If your key is refused, you'll see *"Your fal key was refused…"*. If your account is busy, the step fails rather than running on the event's money.
-- **No daily quota and no event spend** for steps on your own key. The limit on jobs running at once still applies.
-- **Where the keys live:**
-  - Only in this browser tab . Closing the tab forgets them, and **Forget my keys** clears them.
-  - They're never saved in your document or its export.
-  - They're sent to the relay only when a job is submitted.
-  - The relay stores the key a job needs encrypted (AES-GCM), and never logs it, returns it or stores it readable.
 
 ## Costs and limits
 
-These are the usual event settings. The organisers can change them at any time.
+These are the usual settings; they can change at any time.
 
 | Limit | Value |
 |---|---|
-| Daily quota per participant | 40 image jobs, 6 video jobs, 3 renders. Organisers get 10×. |
+| Daily quota per person | 40 image jobs, 6 video jobs, 3 renders. |
 | Jobs running at once, per person | 2. More are queued and sent automatically, shown as **In the queue**. |
-| Event spend cap | $1,300. Generating stops with "The event's generation budget is used up." |
+| Spend cap | $1,300 across everyone. Generating stops when it is used up. |
 | Job time limits | 3 min for images, 10 min for video |
 
 Estimated cost per job with the default models:
 
-| Step | fal | Runway (fallback) | HeyGen |
-|---|---|---|---|
-| Canvas generate | $0.15 (Nano Banana Pro) | $0.20 (Gemini 3 Pro) | — |
-| View (turnaround) | $0.035 (Qwen multi-angle) | $0.20 (Gemini 3 Pro) | — |
-| Storyboard frame | $0.15 (Nano Banana Pro) | $0.20 (Gemini 3 Pro) | — |
-| Region edit | $0.06 (Ideogram v4.5) | $0.20 (Gemini 3 Pro) | — |
-| Clip | $0.56 (Kling v3 Pro, 5 s) | $1.20 (Veo 3.1, 6 s) | not published |
-| Clip edit | $0.72 (Luma Ray 3.2) | $1.40 (aleph2) | — |
-
-A typical ad (one character with 3 views, 8 frames, 6 clips and one clip edit) comes to about $5.54 with the default models.
+| Step | Runway |
+|---|---|
+| Canvas generate | $0.20 (Gemini 3 Pro) |
+| View (turnaround) | $0.20 (Gemini 3 Pro) |
+| Storyboard frame | $0.20 (Gemini 3 Pro) |
+| Region edit | $0.20 (Gemini 3 Pro) |
+| Clip | $1.20 (Veo 3.1, 6 s) |
+| Clip edit | $1.40 (Aleph 2) |
 
 ## What the job states and errors mean
 
@@ -202,9 +180,9 @@ A job card moves through **Sending… → In the queue → Making it… → Almo
 | **Retry** | The job failed in a way that trying again may fix (service busy or down, a network blip). | Press **Retry**. |
 | An error **without Retry** | Trying again won't help as is, e.g. a name with no picture, or content the service refused. | Change the input, or **Clear** the card. |
 | Content refused (moderated) | The service's safety filter refused the prompt or picture. It's never retried automatically, and some services still bill it. | Change the words or pictures. |
-| **Report** | Sends the error and the job ID to the organisers. | Use it for anything unexpected. |
+| **Report** | Sends the error and the job ID to the Napkin team. | Use it for anything unexpected. |
 | **Clear** | Removes the failed card. | — |
-| **Cancel** | Stops a running job. HeyGen has no cancel, so the clip still runs on their side and is billed; the tool just ignores the result. | — |
+| **Cancel** | Stops a running job. | — |
 
 **Whose fault is it?** Every failure from a service now records who has to act:
 
@@ -215,7 +193,7 @@ A job card moves through **Sending… → In the queue → Making it… → Almo
 | **napkin** | A Napkin bug, or a problem with our own storage. |
 | **input** | Your content or request. |
 
-For example, a HeyGen outage now falls back to Runway instead of getting stuck, and a service that may already have the job is never sent it again. The wording you'll see on screen for these cases is **Planned**. Examples are "this isn't a Napkin problem" and "Napkin is making this with Runway instead". Until it ships, the error card shows the service's own message and code.
+For example, a service that may already have the job is never sent it again. The wording you'll see on screen for these cases is **Planned**. An example is "this isn't a Napkin problem". Until it ships, the error card shows the service's own message and code.
 
 ---
 
