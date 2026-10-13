@@ -16,10 +16,14 @@ name: Deploy
 on:
   push:
     branches: [ main ]
-    # The Production Tool has its own stack and workflow
-    # (deploy-production-tool.yml); merging it must not redeploy staging.
+    # The Production Tool's relay and stitch have their own stack and workflow
+    # (deploy-production-tool.yml); merging them must not redeploy staging.
+    # Its web app, CLAN store and contracts are built into napkin-web's image
+    # (Dockerfile, production stage; features/os-sign-in.clan), so they do.
+    # The terraform suite (scripts/check.sh) refuses a bare production-tool/** here.
     paths-ignore:
-      - 'production-tool/**'
+      - 'production-tool/relay/**'
+      - 'production-tool/stitch/**'
       - 'infra/envs/hackathon/**'
       - 'docs/production-tool/**'
       - '.github/workflows/deploy-production-tool.yml'

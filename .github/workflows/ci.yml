@@ -289,6 +289,14 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.10"
+      # A release that changes only the Production Tool's web app must redeploy
+      # staging, which builds it into napkin-web (features/os-sign-in.clan).
+      - name: deploy.yml does not ignore all of production-tool
+        run: |
+          if grep -nE "^[[:space:]]*-[[:space:]]*'?production-tool/\*\*'?[[:space:]]*$" .github/workflows/deploy.yml; then
+            echo "::error::deploy.yml ignores all of production-tool/**; ignore only production-tool/relay/** and production-tool/stitch/**"
+            exit 1
+          fi
       - name: Format
         working-directory: infra
         run: terraform fmt -check -recursive
@@ -365,3 +373,49 @@ jobs:
           npm run lint
           npm test
           npm run build:web
+
+  # napkin-web's image, built (never pushed) when what it bundles changes:
+  # the Dockerfile, .dockerignore, and the Production Tool's web app, CLAN
+  # store and contracts (features/os-sign-in.clan). Nothing else builds the
+  # image before a merge into main deploys it. The job always reports, so the
+  # required check is green when nothing it builds has changed.
+  image:
+    name: Image — napkin-web docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        name: Does the change reach the image
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD |
+             grep -qE '^(Dockerfile|\.dockerignore|production-tool/(web|clan-store|contracts)/)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nothing the image bundles changed: not building it."
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.changed.outputs.build == 'true'
+      - name: Build the runtime image (no push)
+        if: steps.changed.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: napkin-web:ci
+          cache-from: type=gha,scope=web
+      - name: The Production Tool is in the image
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/production/index.html
+          docker image ls napkin-web:ci

@@ -79,6 +79,22 @@ variable "web_dogfood" {
   default     = false
 }
 
+variable "production_relay_url" {
+  description = "The Production Tool relay napkin-web proxies /production/api to (NAPKIN_PRODUCTION_RELAY_URL; the hackathon stack's relay_function_url). Empty: no /production and no 'Make an ad' card (features/os-sign-in.clan)."
+  type        = string
+  default     = ""
+}
+
+variable "production_relay_secret_arn" {
+  description = "Secrets Manager ARN of the key napkin-web signs X-Napkin-Identity with (NAPKIN_PRODUCTION_RELAY_SECRET; the hackathon stack's TOKEN_SECRET). Set together with production_relay_url."
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_relay_secret_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_relay_secret_arn are set together, or neither"
+  }
+}
+
 variable "middleware_runlog" {
   description = "Keep the middleware's per-job run log (sizes, costs; no bodies) on web's EFS under /data/_runlog, where napkin-web serves and purges it (NAPKIN_RUNLOG_DIR; features/dogfood-log-quality.clan). Dogfood environments only."
   type        = bool

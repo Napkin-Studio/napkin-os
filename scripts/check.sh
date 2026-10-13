@@ -9,7 +9,9 @@
 #   scripts/check.sh --only rust,wasm  just these suites
 #   scripts/check.sh --list            say which suites would run, run nothing
 #
-# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool
+# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image
+# `image` (docker build --target runtime) runs when the Dockerfile, .dockerignore or the parts of
+# production-tool the image bundles change, or when named; it needs docker.
 # `desktop` (cargo check of app/src-tauri) runs only when that path changes or is named:
 # the full .deb bundle stays in CI.
 set -uo pipefail
@@ -22,7 +24,7 @@ unset CLAN_NO_HINTS
 for b in chromium chromium-browser google-chrome-stable google-chrome; do
   command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
 done
-ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool)
+ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image)
 
 base="" range="" only="" list=0 all=0
 while [[ $# -gt 0 ]]; do
@@ -85,14 +87,21 @@ else
         want[middleware]=1 ;;
       mock-backend/*|mock-middleware/*)
         want[mock-backend]=1 ;;
+      production-tool/web/*|production-tool/clan-store/*|production-tool/contracts/*)
+        # napkin-web's image bundles the tool's web app (Dockerfile, production stage)
+        want[production-tool]=1; want[image]=1 ;;
       production-tool/*)
         want[production-tool]=1 ;;
       infra/*)
         want[terraform]=1
         infra_changed=1 ;;
+      .github/workflows/deploy.yml)
+        want[terraform]=1 ;;  # its paths-ignore lint lives in the terraform suite
       .github/workflows/*)
         notes+=("$f changed: workflows run only on GitHub; consider scripts/check.sh --all") ;;
-      Dockerfile|docker-compose.yml|server/Dockerfile|.dockerignore)
+      Dockerfile|.dockerignore)
+        want[image]=1 ;;
+      docker-compose.yml|server/Dockerfile)
         notes+=("$f changed: the Deploy workflow builds the images; try 'docker build .' locally") ;;
     esac
   done < <(changed_files | sort -u)
@@ -160,12 +169,29 @@ suite_terraform() {
   # backend in .terraform, and the mocked-provider test must never reach AWS.
   local cache="${XDG_CACHE_HOME:-$HOME/.cache}/napkin-check"
   mkdir -p "$cache/tf-plugins"
+  deploy_paths_lint &&
   ( cd infra && terraform fmt -check -recursive ) &&
   for env in staging hackathon; do
     ( cd "infra/envs/$env" && export TF_DATA_DIR="$cache/tfdata-$env" TF_PLUGIN_CACHE_DIR="$cache/tf-plugins" &&
       terraform init -backend=false -input=false >/dev/null &&
       terraform validate && terraform test ) || return 1
   done
+}
+# deploy.yml must not ignore the parts of production-tool that napkin-web's image bundles
+# (features/os-sign-in.clan): a release that changes only the tool has to redeploy staging.
+deploy_paths_lint() {
+  if grep -nE "^[[:space:]]*-[[:space:]]*'?production-tool/\*\*'?[[:space:]]*$" .github/workflows/deploy.yml; then
+    echo "deploy.yml ignores all of production-tool/**; ignore only production-tool/relay/** and production-tool/stitch/**" >&2
+    return 1
+  fi
+}
+suite_image() {
+  if ! command -v docker >/dev/null; then
+    echo "image: docker is not installed; the CI image job builds it" >&2
+    return 0
+  fi
+  docker build -q --target runtime -t napkin-web:check . >/dev/null &&
+  docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/production/index.html
 }
 suite_production-tool() {
   # relay and stitch (offline), the locked contracts, and the web app once the UI lane adds it

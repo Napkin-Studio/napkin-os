@@ -30,3 +30,13 @@ output "middleware_mounts" {
   description = "The middleware container's mount points"
   value       = local.middleware_mounts
 }
+
+output "web_secrets" {
+  description = "napkin-web's task secrets: name to the Secrets Manager ARN it is read from (never a value)"
+  value       = { for s in local.web_secrets : s.name => s.valueFrom }
+}
+
+output "execution_secret_arns" {
+  description = "The secrets the execution role may read (GetSecretValue) to start the tasks"
+  value       = concat([var.session_secret_arn], values(var.middleware_secrets), local.production_secret_arns)
+}

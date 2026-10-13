@@ -97,7 +97,7 @@ resource "aws_iam_role_policy_attachment" "execution" {
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = concat([var.session_secret_arn], values(var.middleware_secrets))
+    resources = concat([var.session_secret_arn], values(var.middleware_secrets), local.production_secret_arns)
   }
   statement {
     actions   = ["kms:Decrypt"]
@@ -409,6 +409,15 @@ locals {
     local.https ? [{ name = "NAPKIN_WEB_SECURE_COOKIE", value = "1" }] : [],
     # the dogfood record, on the task's EFS under /data/_dogfood
     var.web_dogfood ? [{ name = "NAPKIN_DOGFOOD", value = "1" }] : [],
+    # The Production Tool at /production, proxied to its relay (features/os-sign-in.clan)
+    local.production ? [{ name = "NAPKIN_PRODUCTION_RELAY_URL", value = var.production_relay_url }] : [],
+  )
+  production             = var.production_relay_url != ""
+  production_secret_arns = local.production ? [var.production_relay_secret_arn] : []
+  web_secrets = concat(
+    [{ name = "NAPKIN_SESSION_SECRET", valueFrom = var.session_secret_arn }],
+    # the key napkin-web signs each proxied call's X-Napkin-Identity with
+    local.production ? [{ name = "NAPKIN_PRODUCTION_RELAY_SECRET", valueFrom = var.production_relay_secret_arn }] : [],
   )
 }
 
@@ -438,7 +447,7 @@ resource "aws_ecs_task_definition" "web" {
     portMappings = [{ containerPort = 8080, protocol = "tcp" }]
     mountPoints  = [{ sourceVolume = "data", containerPath = "/data" }]
     environment  = local.web_environment
-    secrets      = [{ name = "NAPKIN_SESSION_SECRET", valueFrom = var.session_secret_arn }]
+    secrets      = local.web_secrets
     logConfiguration = {
       logDriver = "awslogs"
       options = {

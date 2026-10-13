@@ -277,6 +277,11 @@ module "services" {
   # included, until the dogfood ends and it is purged (owner, 2026-10-05;
   # features/dogfood-telemetry.clan). Staging only.
   web_dogfood = true
+  # The Production Tool at /production (features/os-sign-in.clan): the
+  # hackathon relay and the key napkin-web signs each call to it with. Empty
+  # until a person sets them (the design's rollout step 4).
+  production_relay_url        = var.production_relay_url
+  production_relay_secret_arn = var.production_relay_secret_arn
   # The middleware's run log beside the record, sizes and costs only
   # (features/dogfood-log-quality.clan). Staging only.
   middleware_runlog     = true

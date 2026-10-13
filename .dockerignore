@@ -14,3 +14,9 @@ engine/.env
 test-sandbox/
 docs/
 *.pdf
+# The Production Tool: its sources go into the image (the production stage),
+# never its installs, builds or local data.
+production-tool/*/node_modules/
+production-tool/*/dist/
+production-tool/*/.venv/
+production-tool/relay/.local-data/

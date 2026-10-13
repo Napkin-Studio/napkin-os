@@ -24,6 +24,11 @@ output "quotas_table" {
   value = aws_dynamodb_table.quotas.name
 }
 
+output "tenants_table" {
+  description = "Which agencies may use the tool (production-tool/relay/scripts/tenants.py writes it)"
+  value       = aws_dynamodb_table.tenants.name
+}
+
 output "blocked_table" {
   value = aws_dynamodb_table.blocked.name
 }

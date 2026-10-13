@@ -51,6 +51,12 @@ mock_provider "aws" {
 }
 mock_provider "archive" {}
 
+# Its own ARN, so the tests can tell which statements reach it (the mock gives every table the same one).
+override_resource {
+  target = aws_dynamodb_table.tenants
+  values = { arn = "arn:aws:dynamodb:eu-west-1:111111111111:table/napkin-hackathon-tenants" }
+}
+
 run "plans_the_hackathon_stack" {
   # apply against the mocks: computed values (the Function URL host) come from the defaults above
   command = apply
@@ -94,7 +100,7 @@ run "plans_the_hackathon_stack" {
   assert {
     # Every prefix the relay reads must also be listable, or S3 answers a missing object with 403, not 404:
     # 2026-10-09, sign-in failed for every new workspace (clan/<pid>/projects.json absent, AccessDenied).
-    condition     = alltrue([for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*"] : anytrue([for s in data.aws_iam_policy_document.relay.statement : contains(one(s.condition).values, p) if s.sid == "ListForExists"])])
+    condition     = alltrue([for p in ["in/*", "out/*", "ads/*", "clan/*", "library/*", "dogfood/*", "cards/*", "tenants/*"] : anytrue([for s in data.aws_iam_policy_document.relay.statement : contains(one(s.condition).values, p) if s.sid == "ListForExists"])])
     error_message = "the relay may list every prefix it reads, so a missing object is a 404"
   }
   assert {
@@ -113,4 +119,66 @@ run "plans_the_hackathon_stack" {
     condition     = aws_iam_role.deploy.name == "napkin-hackathon-github-deploy"
     error_message = "deploy role for deploy-production-tool.yml"
   }
+
+  # features/os-sign-in.clan
+  assert {
+    condition     = aws_dynamodb_table.tenants.name == "napkin-hackathon-tenants" && aws_dynamodb_table.tenants.hash_key == "tenantId" && aws_dynamodb_table.tenants.billing_mode == "PAY_PER_REQUEST"
+    error_message = "the tenants table: pk tenantId, on demand"
+  }
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.relay.statement : s.actions if s.sid == "Tenants"]) == toset(["dynamodb:GetItem"]) && one([for s in data.aws_iam_policy_document.relay.statement : s.resources if s.sid == "Tenants"]) == toset([aws_dynamodb_table.tenants.arn])
+    error_message = "the relay only reads the tenants table; a person writes it"
+  }
+  assert {
+    condition     = alltrue([for s in data.aws_iam_policy_document.relay.statement : !contains(s.resources, aws_dynamodb_table.tenants.arn) if s.sid != "Tenants"])
+    error_message = "no other relay statement reaches the tenants table"
+  }
+  assert {
+    condition     = aws_lambda_function.relay.environment[0].variables["TENANTS_TABLE"] == "napkin-hackathon-tenants"
+    error_message = "the relay learns its tenants table from TENANTS_TABLE"
+  }
+  assert {
+    condition     = anytrue([for s in data.aws_iam_policy_document.relay.statement : anytrue([for r in s.resources : endswith(r, "/tenants/*")]) if s.sid == "Objects"])
+    error_message = "the relay may write each agency's projects and library under tenants/"
+  }
+  assert {
+    condition     = length(aws_cloudfront_response_headers_policy.studio_cors) == 0 && alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == null || b.response_headers_policy_id == ""])
+    error_message = "no studio origin, no CORS policy"
+  }
+}
+
+# The studio at <origin>/production reads and uploads across origins (features/os-sign-in.clan).
+run "allows_the_studio_origin" {
+  command = apply
+
+  variables {
+    studio_origins = ["https://studio.example.com"]
+  }
+
+  assert {
+    condition     = contains(one(aws_s3_bucket_cors_configuration.site.cors_rule).allowed_origins, "https://studio.example.com")
+    error_message = "the studio's browsers PUT uploads straight to S3"
+  }
+  assert {
+    condition     = one(one(one(aws_cloudfront_response_headers_policy.studio_cors).cors_config).access_control_allow_origins).items == toset(["https://studio.example.com"])
+    error_message = "the CORS response-headers policy allows the studio origin"
+  }
+  assert {
+    condition     = alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == one(aws_cloudfront_response_headers_policy.studio_cors).id if contains(["/in/*", "/out/*", "/ads/*"], b.path_pattern)])
+    error_message = "/in/*, /out/* and /ads/* answer the studio with CORS"
+  }
+  assert {
+    condition     = alltrue([for b in aws_cloudfront_distribution.site.ordered_cache_behavior : b.response_headers_policy_id == null || b.response_headers_policy_id == "" if !contains(["/in/*", "/out/*", "/ads/*"], b.path_pattern)])
+    error_message = "only the asset paths carry the studio's CORS"
+  }
+}
+
+run "refuses_a_studio_origin_with_a_path" {
+  command = plan
+
+  variables {
+    studio_origins = ["https://studio.example.com/production/"]
+  }
+
+  expect_failures = [var.studio_origins]
 }

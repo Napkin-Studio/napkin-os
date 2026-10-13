@@ -3,7 +3,8 @@
 #   in/sha256:…   uploads (presigned PUT from browsers) → /in/*
 #   out/sha256:…  provider outputs copied by the relay  → /out/*
 #   ads/<id>.mp4  stitched ads                          → /ads/*
-#   clan/         server copies of documents
+#   clan/         server copies of documents (the hackathon's, kept as they are)
+#   tenants/<id>/ each agency's saved projects and library (features/os-sign-in.clan)
 #   config.json   the remote config, uploaded by hand   → /config.json (uncached)
 # Providers read /in/* and /out/*: HTTPS, HEAD answers with Content-Type and
 # Content-Length, no redirects (Runway's input rules).
@@ -42,7 +43,8 @@ resource "aws_s3_bucket_cors_configuration" "site" {
   bucket = aws_s3_bucket.site.id
   cors_rule {
     allowed_methods = ["PUT"]
-    allowed_origins = concat(["https://${aws_cloudfront_distribution.site.domain_name}"], [for d in var.domain_aliases : "https://${d}"], var.cors_origins)
+    # studio_origins: the tool at <studio>/production (features/os-sign-in.clan)
+    allowed_origins = concat(["https://${aws_cloudfront_distribution.site.domain_name}"], [for d in var.domain_aliases : "https://${d}"], var.cors_origins, var.studio_origins)
     allowed_headers = ["Content-Type", "Content-Length"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
@@ -124,6 +126,24 @@ resource "aws_cloudfront_function" "spa" {
   code    = local.cloudfront_spa_function_js
 }
 
+# The tool at <studio>/production (features/os-sign-in.clan) reads inputs,
+# outputs and ads from here across origins: drawing a frame into a canvas to
+# export it (no taint) and downloading need Access-Control-Allow-Origin.
+resource "aws_cloudfront_response_headers_policy" "studio_cors" {
+  count   = length(var.studio_origins) > 0 ? 1 : 0
+  name    = "${local.name}-studio-cors"
+  comment = "CORS for the Napkin OS studio origins on /in, /out and /ads"
+  cors_config {
+    access_control_allow_credentials = false
+    access_control_allow_headers { items = ["*"] }
+    access_control_allow_methods { items = ["GET", "HEAD"] }
+    access_control_allow_origins { items = var.studio_origins }
+    access_control_expose_headers { items = ["Content-Length", "Content-Type", "ETag"] }
+    access_control_max_age_sec = 3600
+    origin_override            = true
+  }
+}
+
 resource "aws_cloudfront_distribution" "site" {
   enabled             = true
   comment             = "${local.name}: Production Tool"
@@ -182,6 +202,8 @@ resource "aws_cloudfront_distribution" "site" {
       cached_methods         = ["GET", "HEAD"]
       cache_policy_id        = local.cache_optimized
       compress               = false
+      # the studio's /production reads these across origins (features/os-sign-in.clan)
+      response_headers_policy_id = one(aws_cloudfront_response_headers_policy.studio_cors[*].id)
     }
   }
 

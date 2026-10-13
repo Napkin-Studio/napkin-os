@@ -26,6 +26,16 @@ variable "cors_origins" {
   default     = ["http://localhost:5173"]
 }
 
+variable "studio_origins" {
+  description = "The Napkin OS studio origins that serve the Production Tool at /production (features/os-sign-in.clan), e.g. https://<staging host>. Their browsers PUT uploads straight to S3 and read /in/*, /out/* and /ads/* across origins (canvas exports, downloads). Empty: no cross-origin reads."
+  type        = list(string)
+  default     = []
+  validation {
+    condition     = alltrue([for o in var.studio_origins : can(regex("^https?://[^/]+$", o))])
+    error_message = "studio_origins are origins: scheme and host, no path or trailing slash (https://studio.example.com)"
+  }
+}
+
 variable "domain_aliases" {
   description = "Custom domains for the distribution (e.g. hack.napkin.ie); empty uses the cloudfront.net name"
   type        = list(string)
