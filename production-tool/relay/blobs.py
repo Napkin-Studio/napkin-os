@@ -8,6 +8,7 @@ get, list_keys and delete are for reading a saved project back and for scripts/p
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import threading
@@ -18,6 +19,11 @@ from pathlib import Path
 FETCH_TIMEOUT_S = 60
 MAX_FETCH_BYTES = 200 * 1024 * 1024
 _LOCAL_LOCK = threading.Lock()
+
+
+def checksum_header(sha256: str) -> str:
+    """The x-amz-checksum-sha256 value for a 'sha256:<hex>' hash: the digest in base64."""
+    return base64.b64encode(bytes.fromhex(sha256.removeprefix("sha256:"))).decode()
 
 
 def http_fetch(url: str) -> bytes:
@@ -64,9 +70,12 @@ class S3Blobs:
                 return False
             raise
 
-    def presign_put(self, key: str, mime: str) -> str:
+    def presign_put(self, key: str, mime: str, sha256: str) -> str:
+        """A 15-minute PUT bound to the bytes' hash (features/tenant-limits.clan): the URL signs
+        x-amz-checksum-sha256, the browser sends it, and S3 refuses any other bytes."""
         return self.s3.generate_presigned_url(
-            "put_object", Params={"Bucket": self.bucket, "Key": key, "ContentType": mime}, ExpiresIn=900)
+            "put_object", Params={"Bucket": self.bucket, "Key": key, "ContentType": mime,
+                                  "ChecksumSHA256": checksum_header(sha256)}, ExpiresIn=900)
 
     def put(self, key: str, data: bytes, mime: str) -> None:
         self.s3.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=mime)
@@ -149,8 +158,19 @@ class LocalBlobs:
     def exists(self, key: str) -> bool:
         return self.path(key).exists()
 
-    def presign_put(self, key: str, mime: str) -> str:
+    def presign_put(self, key: str, mime: str, sha256: str) -> str:
         return f"{self.public_base}/_upload/{key}"
+
+    def accept_upload(self, key: str, data: bytes, mime: str, checksum: str | None) -> bool:
+        """local.py's stand-in for S3's checksum check: the bytes must hash to the key's sha256 and
+        to the x-amz-checksum-sha256 header the web sends. False: refused, nothing written."""
+        name = key.rsplit("/", 1)[-1]
+        if not name.startswith("sha256:"):
+            return False
+        if checksum != checksum_header(name) or "sha256:" + hashlib.sha256(data).hexdigest() != name:
+            return False
+        self.put(key, data, mime)
+        return True
 
     def put(self, key: str, data: bytes, mime: str) -> None:
         p = self.path(key)

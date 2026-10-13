@@ -117,14 +117,44 @@ def test_dynamo_tenants(aws):
     assert DynamoStore("jobs", "quotas", "blocked", client=ddb).tenant("t-1") is None
 
 
+def test_dynamo_job_items_carry_the_audit_attributes(aws):
+    """tenantId, op, usd and month are top-level (features/tenant-limits.clan), for tenant-ops' index."""
+    ddb, _ = aws
+    st = DynamoStore("jobs", "quotas", "blocked", client=ddb)
+    j = {**job("j1"), "_tenant": "t-1", "op": "clip", "_month": "2026-10", "cost": {"reserved": 1.2}}
+    assert st.create_job(j)
+    item = ddb.get_item(TableName="jobs", Key={"jobId": {"S": "j1"}})["Item"]
+    assert (item["tenantId"]["S"], item["op"]["S"], item["usd"]["N"], item["month"]["S"]) == ("t-1", "clip", "1.2", "2026-10")
+    j["cost"] = {"reserved": 1.2, "confirmed": 1.55}
+    assert st.save_job(j)
+    assert ddb.get_item(TableName="jobs", Key={"jobId": {"S": "j1"}})["Item"]["usd"]["N"] == "1.55"
+
+
+def test_dynamo_holds_and_the_ledger(aws):
+    from ledger import Ledger, LimitReached
+
+    ddb, _ = aws
+    st = DynamoStore("jobs", "quotas", "blocked", client=ddb)
+    assert not st.holds("t-1", "sha256:" + "a" * 64)
+    st.hold("t-1", "sha256:" + "a" * 64)
+    assert st.holds("t-1", "sha256:" + "a" * 64) and not st.holds("t-2", "sha256:" + "a" * 64)
+    led = Ledger(st, lambda: 1_791_360_000.0)
+    assert led.reserve("t-1", 0.6, cap_month=1.0, cap_global=10) == "2026-10"
+    with pytest.raises(LimitReached):
+        led.reserve("t-1", 0.6, cap_month=1.0, cap_global=10)
+    assert led.month_used("t-1") == pytest.approx(0.6) and led.total() == pytest.approx(0.6)
+
+
 def test_s3_blobs(aws):
     _, s3 = aws
     b = S3Blobs("napkin-test", "https://cdn.test", client=s3)
     assert not b.exists("in/x")
     b.put("in/x", b"data", "image/png")
     assert b.exists("in/x") and b.fetch("https://cdn.test/in/x") == b"data"
-    url = b.presign_put("in/y", "image/png")
+    url = b.presign_put("in/y", "image/png", "sha256:" + "ab" * 32)
     assert url.startswith("https://napkin-test.s3.eu-west-1.amazonaws.com/in/y?") and "X-Amz-Signature" in url
+    # Bound to the bytes' hash (features/tenant-limits.clan): S3 refuses a PUT whose body hashes otherwise.
+    assert "x-amz-checksum-sha256" in url.split("X-Amz-SignedHeaders=", 1)[1].split("&", 1)[0]
     assert b.get_json("ads/none.json") is None
     b.put("ads/j.json", b'{"ok": true}', "application/json")
     assert b.get_json("ads/j.json") == {"ok": True}

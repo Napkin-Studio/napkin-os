@@ -209,3 +209,6 @@ def test_the_relay_bundle_carries_the_price_function():
     workflow = (contracts_dir().parents[1] / ".github" / "workflows" / "deploy-production-tool.yml").read_text()
     assert 'cp production-tool/contracts/pricing.py "$build/pkg/contracts/"' in workflow
     assert 'cp -r production-tool/contracts/capabilities "$build/pkg/contracts/"' in workflow
+    # each agency's defaults and the makers' names (features/tenant-limits.clan): the relay reads both at import
+    assert ('cp production-tool/contracts/spend-policy.json production-tool/contracts/subprocessors.json '
+            '"$build/pkg/contracts/"') in workflow

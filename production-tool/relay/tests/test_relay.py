@@ -16,6 +16,10 @@ def test_me_says_who_the_seam_names_with_quotas(h):
     assert out["participantId"].startswith("p_") and out["workspace"] == out["tenant"]["id"]
     assert out["tenant"] == {"id": tenant_id("blue"), "agency": "blue"} and out["name"] == "Alice Ng"
     assert (out["handle"], out["team"]) == ("Alice", "blue") and out["projects"] == 0
+    # Daily quotas are off until the agency turns them on (features/tenant-limits.clan).
+    assert out["quotas"] is None and out["allow"] == {"claude": True, "makers": ["runway", "google"]}
+    h.limits("blue", dailyQuotas=True)
+    _, out = h.call("GET", "/me", None, token, expect=200)
     assert out["quotas"] == {"image": 40, "video": 6, "render": 3}
     assert "dogfood" not in out
     # the same name in any case is the same person (quotas and workspace follow it)
@@ -262,6 +266,7 @@ def test_provider_failure_never_becomes_success():
 def test_quota_exhaustion():
     h = Harness(base_config(quotas={"image": 2, "video": 1, "render": 1}))
     token = h.as_person()
+    h.limits("blue", dailyQuotas=True)  # off by default (features/tenant-limits.clan)
     h.post_job(token, expect=200)
     h.post_job(token, expect=200)
     _, out = h.post_job(token, expect=429)

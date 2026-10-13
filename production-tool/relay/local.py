@@ -48,7 +48,7 @@ from store import MemoryStore
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser.
-CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name"
+CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name, x-amz-checksum-sha256"
 # Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
 CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
 log = logging.getLogger("relay.local")
@@ -199,7 +199,10 @@ def serve(port: int, data_dir: Path) -> None:
                 return self._relay()  # PUT /clan/{project}/canvas
             key = self.path[len("/_upload/"):].split("?", 1)[0]
             data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            blobs.put(key, data, self.headers.get("Content-Type", "application/octet-stream"))
+            # As S3 does with the presigned PUT's checksum (features/tenant-limits.clan): other bytes are refused.
+            if not blobs.accept_upload(key, data, self.headers.get("Content-Type", "application/octet-stream"),
+                                       self.headers.get("x-amz-checksum-sha256")):
+                return self._send(400, b'{"error":"BadDigest"}')
             self._send(200, b"{}")
 
         def _relay(self):

@@ -63,6 +63,7 @@ def test_admission_still_reserves_at_the_dearest_candidate():
 
 def test_an_unpriced_model_reserves_the_unknown_price_and_says_so():
     h = runway_only()
-    h.relay.registry.sheet("runway")["models"].pop("veo3.1")
+    # Its maker stays (an unknown maker is off: features/tenant-limits.clan); only its price goes.
+    h.relay.registry.sheet("runway")["models"]["veo3.1"].pop("pricing")
     cost = reserved(h, "clip", image=asset(3), refs=[ref(2, "hero_front")])
     assert cost["unknown"] is True and cost["reserved"] == 1.0
