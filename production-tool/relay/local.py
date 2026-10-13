@@ -121,11 +121,13 @@ def local_stitch(blobs: LocalBlobs):
     return run
 
 
-def local_tenants(store: MemoryStore, agencies: list[str]) -> None:
-    """Turn these agencies on in the in-memory tenants table."""
+def local_tenants(store: MemoryStore, agencies: list[str], limits: dict | None = None) -> None:
+    """Turn these agencies on in the in-memory tenants table, each with `limits` (NAPKIN_LOCAL_LIMITS: a
+    JSON object of tenant-item fields, e.g. {"capUsdMonthly": 1, "allow": {"claude": true, "makers": ["runway"]}},
+    features/tenant-limits.clan), as scripts/tenants.py would set them."""
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     for agency in agencies:
-        store.put_tenant({"tenantId": identity.tenant_id(agency), "agency": agency, "enabled": True,
+        store.put_tenant({**(limits or {}), "tenantId": identity.tenant_id(agency), "agency": agency, "enabled": True,
                           "updatedAt": now, "by": "local.py"})
 
 
@@ -149,7 +151,7 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         log.warning("providers/mock.py not found: using the local stub")
     director = load_director()
     store = MemoryStore()
-    local_tenants(store, agencies)
+    local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
     relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
                   stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
