@@ -1,0 +1,95 @@
+{
+ "endpoint": "POST /v1/image_upscale",
+ "fetched": "2026-10-13",
+ "schema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+   "propertyName": "model"
+  },
+  "oneOf": [
+   {
+    "additionalProperties": false,
+    "properties": {
+     "flavor": {
+      "description": "Optimization preset: `sublime` (illustration), `photo` (photographic), or `photo_denoiser` (noisy photos).",
+      "enum": [
+       "sublime",
+       "photo",
+       "photo_denoiser"
+      ],
+      "type": "string"
+     },
+     "imageUri": {
+      "anyOf": [
+       {
+        "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+        "example": "https://example.com/image.jpg",
+        "maxLength": 2048,
+        "minLength": 13,
+        "pattern": "^https:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+        "example": "runway://<token>",
+        "maxLength": 5000,
+        "minLength": 13,
+        "pattern": "^runway:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A data URI containing encoded media, up to 5MB.",
+        "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "maxLength": 5242880,
+        "minLength": 13,
+        "pattern": "^data:image\\/.*",
+        "type": "string"
+       }
+      ],
+      "description": "Image to upscale. See [image inputs](/assets/inputs#images) for URL, upload, and file size limits.",
+      "example": "https://example.com/image.jpg"
+     },
+     "model": {
+      "const": "magnific_precision_upscaler_v2",
+      "type": "string"
+     },
+     "scaleFactor": {
+      "description": "Multiplies each input dimension to produce output width and height. Defaults to 2.",
+      "enum": [
+       2,
+       4,
+       8,
+       16
+      ],
+      "type": "number"
+     },
+     "sharpen": {
+      "description": "Sharpness intensity from 0 (none) to 100.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer"
+     },
+     "smartGrain": {
+      "description": "Grain and texture enhancement from 0 to 100.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer"
+     },
+     "ultraDetail": {
+      "description": "Fine detail enhancement from 0 to 100.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "imageUri",
+     "model"
+    ],
+    "title": "magnific_precision_upscaler_v2",
+    "type": "object"
+   }
+  ]
+ },
+ "source": "https://docs.dev.runwayml.com/openapi.json"
+}
