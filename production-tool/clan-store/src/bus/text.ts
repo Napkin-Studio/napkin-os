@@ -26,6 +26,12 @@ export interface TextBus {
   replace(kind: FragmentKind, id: string, prose: Prose, origin: string, opts?: { label?: string; undo?: boolean; joinStep?: boolean }): Promise<void>
   /** Several fragments changed in one Y transaction (the plan move): one undo step. */
   edit(fragments: { kind: FragmentKind; id: string }[], origin: string, change: (frag: (kind: FragmentKind, id: string) => Y.XmlFragment) => void, opts?: { label?: string; undo?: boolean; joinStep?: boolean }): Promise<void>
+  /**
+   * A typing burst an editor bound to the fragment already made: recorded as
+   * ONE undo text step (before → after), never applied again (collab.md §10).
+   * No step when nothing changed. Editors keep no undo of their own.
+   */
+  recordTyping(kind: FragmentKind, id: string, before: Prose, after: Prose, label?: string): boolean
   /** Write the flat fields of every changed fragment now. */
   checkpoint(): Promise<void>
 }
@@ -103,6 +109,17 @@ export class LocalTextBus implements TextBus, TextSide {
     const changes: TextChange[] = before.map((b) => ({ ...b, after: this.prose(b.kind, b.id) })).filter((c) => !deepEqual(c.before, c.after))
     if (changes.length && (opts.undo ?? true) && this.bus.undo) this.bus.undo.pushText(opts.label ?? 'edit the text', changes, opts.joinStep)
     await this.checkpoint()
+  }
+
+  recordTyping(kind: FragmentKind, id: string, before: Prose, after: Prose, label = 'typing'): boolean {
+    if (deepEqual(before, after) || !this.bus.undo) return false
+    this.bus.undo.pushText(label, [{ kind, id, before, after }])
+    return true
+  }
+
+  /** Whether a fragment has changes no checkpoint has written yet. */
+  isDirty(kind: FragmentKind, id: string): boolean {
+    return this.dirty.has(fragmentName(kind, id))
   }
 
   /** LocalUndo's way back: the prose as it was, as the person, with no new step.

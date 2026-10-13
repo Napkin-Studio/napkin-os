@@ -4,6 +4,7 @@ import type { LocalPatchBus } from '../bus/local'
 import type { LocalTextBus } from '../bus/text'
 import type { Patch, PatchResult, PatchWhy } from '../bus/types'
 import type { Entity } from '../types'
+import { rankBetween } from '../rank'
 import { hydrate, proseHash, type Prose } from './checkpoint'
 import type { FragmentKind } from './extensions'
 
@@ -95,6 +96,49 @@ export async function keepMine(bus: LocalPatchBus, sugId: string): Promise<Patch
       ...(ent ? [{ op: 'set' as const, entity: map, id: target.id, path: 'hands_off', value: handsOff, base_version: ent.v }] : []),
     ],
     why: { action: `keep_mine ${map}[${target.id}]`, cites: [`${bus.store.documentId()}#suggestions[${sugId}]`] },
+  })
+}
+
+export interface ShotPlace {
+  /** The shot that will sit right before it (null: first). */
+  beforeId?: string | null
+  /** The shot that will sit right after it (null: last). */
+  afterId?: string | null
+  /** Its scene after the move: an id, null for no scene, undefined to keep the one it has. */
+  sceneId?: string | null
+}
+
+/**
+ * Move a shot (features/script-editor.clan, item 3): ONE batch, so one undo
+ * step and one decision: its rank between its new neighbours, and its scene
+ * when the move crosses scenes. Its id, frames, takes and picks stay. `extra`
+ * rides in the same batch (the drift marks on the clips on both sides).
+ * When the neighbours' ranks do not bracket a place (they were given out of
+ * order), the shot goes right after `beforeId`.
+ */
+export async function moveShot(bus: LocalPatchBus, shotId: string, place: ShotPlace, opts: { extra?: Patch[]; agent?: string } = {}): Promise<PatchResult> {
+  const doc = bus.doc()
+  const shot = doc.shots[shotId] as (Entity & { rank: string; scene_id?: string; storyboard_id: string }) | undefined
+  if (!shot) throw new Error(`no shot ${shotId}`)
+  const rankOf = (id?: string | null) => (id ? ((doc.shots[id] as { rank?: string } | undefined)?.rank ?? null) : null)
+  const a = rankOf(place.beforeId)
+  let b = rankOf(place.afterId)
+  if (a !== null && b !== null && a >= b) {
+    // Out of order: right after `beforeId`, before whatever follows it on the storyboard.
+    b = Object.values(doc.shots as unknown as Record<string, { id: string; rank: string; storyboard_id: string }>)
+      .filter((s) => s.storyboard_id === shot.storyboard_id && s.id !== shotId && s.rank > a)
+      .map((s) => s.rank).sort()[0] ?? null
+  }
+  const rank = rankBetween(a, b)
+  const patches: Patch[] = [{ op: 'set', entity: 'shots', id: shotId, path: 'rank', value: rank, base_version: shot.v }]
+  if (place.sceneId !== undefined && (place.sceneId ?? undefined) !== shot.scene_id) {
+    if (place.sceneId && !doc.scenes[place.sceneId]) throw new Error(`no scene ${place.sceneId}`)
+    patches.push({ op: 'set', entity: 'shots', id: shotId, path: 'scene_id', value: place.sceneId, base_version: shot.v })
+  }
+  patches.push(...(opts.extra ?? []))
+  return bus.apply({
+    patches,
+    why: { action: `move shots[${shotId}]`, ...(opts.agent ? { agent: opts.agent } : {}) },
   })
 }
 
