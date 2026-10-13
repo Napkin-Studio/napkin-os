@@ -143,7 +143,8 @@ Every non-quiet batch is one decision-chain entry, through napkin-host's
   `unlink`, `keep_suggestion`, `keep_mine`, `ignore_check`, `publish`,
   `update_from_library`, `bring_in`, `pin_decision`, `unpin_decision`,
   and the plain verbs of a person's edits: `set`, `create`, `delete`, `move`,
-  `name`, `start`.
+  `name`, `start` (a job asked for), and `undo` and `redo` (LocalUndo taking a
+  step back or forward: the rest of the action is the step it reverses).
 - **`targets`** are addresses (§9) of what the batch changed: one per entity,
   and one per leaf when the batch sets 8 leaves or fewer. LocalPatchBus derives
   them; nobody writes them by hand.

@@ -4,6 +4,7 @@
 // to be valid and unique in the document.
 
 import { KEY_RE, VARIANT_RE, type Key, type NamedRef, type ProductionDocument, type RefName, type Variant } from '../contracts/types'
+import { keysList, refsList } from '../model/selectors'
 
 /** `@maya_laughing` or a bare `@maya` in someone's words (not inside a word or an address). */
 export const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
@@ -24,7 +25,7 @@ export class NoFrontError extends Error {
 
 /** The pictures a bare @key sends: its front, then three-quarter, side, back, then the rest as named. */
 export function keyRefs(doc: ProductionDocument, key: Key): NamedRef[] {
-  const mine = doc.refs.filter((r) => r.key === key)
+  const mine = refsList(doc).filter((r) => r.key === key)
   const front = mine.find((r) => r.variant === 'front')
   if (!front) throw new NoFrontError(key)
   const rank = (r: NamedRef) => (VIEW_ORDER.includes(r.variant) ? VIEW_ORDER.indexOf(r.variant) : VIEW_ORDER.length + mine.indexOf(r))
@@ -33,12 +34,13 @@ export function keyRefs(doc: ProductionDocument, key: Key): NamedRef[] {
 
 /** Keys that can be named bare (they have a front). */
 export function wholeKeys(doc: ProductionDocument): Key[] {
-  return doc.keys.map((k) => k.key).filter((k) => doc.refs.some((r) => r.key === k && r.variant === 'front'))
+  const refs = refsList(doc)
+  return keysList(doc).map((k) => k.key).filter((k) => refs.some((r) => r.key === k && r.variant === 'front'))
 }
 
 /** The pictures a subject (bare key or key_variant) sends; [] for a name nothing has. */
 export function subjectRefs(doc: ProductionDocument, subject: string): NamedRef[] {
-  if (!subject.includes('_')) return doc.refs.some((r) => r.key === subject) ? keyRefs(doc, subject) : []
+  if (!subject.includes('_')) return refsList(doc).some((r) => r.key === subject) ? keyRefs(doc, subject) : []
   const r = refByName(doc, subject)
   return r ? [r] : []
 }
@@ -71,7 +73,7 @@ export function nameProblem(key: string, variant: string): string | null {
 }
 
 export function refByName(doc: ProductionDocument, name: RefName): NamedRef | undefined {
-  return doc.refs.find((r) => nameOf(r) === name)
+  return refsList(doc).find((r) => nameOf(r) === name)
 }
 
 /**
@@ -84,7 +86,7 @@ export function mentions(doc: ProductionDocument, text: string): { found: NamedR
   const add = (r: NamedRef) => { if (!found.includes(r)) found.push(r) }
   for (const m of text.matchAll(MENTION)) {
     if (!m[1].includes('_')) {
-      if (doc.refs.some((r) => r.key === m[1])) keyRefs(doc, m[1]).forEach(add)
+      if (refsList(doc).some((r) => r.key === m[1])) keyRefs(doc, m[1]).forEach(add)
       else unknown.push(m[1])
       continue
     }

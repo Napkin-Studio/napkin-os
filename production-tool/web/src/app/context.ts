@@ -6,7 +6,7 @@ import type { UiState } from '../doc/ui'
 import type { UiStore } from '../projects/uiStore'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
-import type { ClanBackedStore } from '../doc/clan'
+import type { ModelStore } from '../model/store'
 import type { Shell } from '../projects/shell'
 import type { ServerCopy } from '../projects/serverCopy'
 
@@ -30,7 +30,7 @@ export interface Services {
   /** The config the relay served (GET /config), when there is one. */
   remoteConfig: Config | null
   /** The CLAN store behind `doc` (decision chain, .clan export); null when the wasm did not load. */
-  clan: ClanBackedStore | null
+  clan: ModelStore | null
   /** Shown under the top bar when saving is degraded ("Saving without history"). */
   storeNote: string | null
   /** The project's copy on the relay, and a save conflict waiting for the person's choice; null on the mock. */

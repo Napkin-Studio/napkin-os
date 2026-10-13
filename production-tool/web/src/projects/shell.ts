@@ -1,19 +1,21 @@
 // Home and the projects (features/project-home.clan): which view is showing,
 // the open project's session, and what Home can do to a project (new, open,
 // rename, duplicate, export, delete, open a file). One action at a time, in
-// order, so two clicks never open two projects.
+// order, so two clicks never open two projects. A project made under another
+// contract is refused in words (ProjectRefused, NotAProject) and never created
+// over: its bytes stay where they are.
 
+import { UnsupportedContract } from '../../../clan-store/src'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { ProductionDocument, SavedProject } from '../contracts/types'
 import { CURRENT } from '../doc/open'
-import { normaliseDocument } from '../doc/store'
 import { exportBundle } from '../export'
 import { putBlobAs } from '../lib/blobs'
 import { copyName, newProjectId, type ProjectEntry, type ServerMark } from './projectIndex'
 import { NotAProject, unpackFile, type Unpacked } from './openFile'
 import { fetchAssets } from './serverAssets'
 import type { ServerCopy } from './serverCopy'
-import { openProjectSession, type ProjectSession, type SessionDeps } from './session'
+import { openProjectSession, personOf, ProjectRefused, type ProjectSession, type SessionDeps } from './session'
 import { canvasKeyFor, clanDbFor, docKeyFor, uiKeyFor } from './storage'
 import { autoName, summarise } from './summary'
 
@@ -47,19 +49,33 @@ export class Shell {
   }
 
   /** After boot: back where the person was (a reload keeps the open project), else Home. */
-  start(): Promise<void> {
+  async start(): Promise<void> {
     const { view, project } = this.deps.app.get()
-    if (view === 'project' && project && this.index.get(project)) return this.open(project)
+    if (view === 'project' && project && this.index.get(project)) {
+      try {
+        return await this.open(project)
+      } catch (e) {
+        // Back on Home, saying why (the project stays in the list, untouched).
+        if (e instanceof ProjectRefused) return this.say(e.message)
+        throw e
+      }
+    }
     return this.goHome()
   }
 
+  /** Open a project of this browser. Throws ProjectRefused (Home stays) for one made under another contract. */
   open(id: string): Promise<void> {
     return this.serial('Opening…', async () => {
       if (!this.index.get(id)) throw new Error('That project is not in this browser any more.')
       if (this.state.session?.id !== id) {
         await this.closeSession()
-        const session = await openProjectSession(id, this.deps)
-        this.set({ session })
+        try {
+          const session = await openProjectSession(id, this.deps)
+          this.set({ session })
+        } catch (e) {
+          if (e instanceof ProjectRefused) await this.remember({ view: 'home' })
+          throw e
+        }
       }
       this.set({ view: 'project' })
       await this.remember({ view: 'project', project: id })
@@ -137,13 +153,12 @@ export class Shell {
       const { storage, makeClan } = this.deps
       const read = (k: string) => storage.get<CanvasSnapshot>(k)
       if (open?.id === id) return exportBundle(open.services.doc, open.services.project.canvasKey, entry.name, read)
-      const store = makeClan(storage.clan(clanDbFor(id)), () => undefined)
-      if (!(await store.load())) throw new Error('That project has nothing saved to export yet.')
+      const store = makeClan(storage.clan(clanDbFor(id)), { person: personOf(this.deps.app.get().me) })
       try {
+        if (!(await store.load())) throw new Error('That project has nothing saved to export yet.')
         return await exportBundle(store, canvasKeyFor(id), entry.name, read)
       } finally {
-        await store.flush().catch(() => {})
-        store.clan.dispose()
+        await store.close().catch(() => {})
       }
     })
   }
@@ -257,25 +272,27 @@ export class Shell {
     }
     let doc: ProductionDocument
     if (unpacked.clan) {
-      const store = makeClan(storage.clan(clanDbFor(id)), () => undefined)
+      // Opened, never created: a .clan of another contract is refused with the bytes as they were.
+      const store = makeClan(storage.clan(clanDbFor(id)), { person: personOf(this.deps.app.get().me) })
       try {
-        doc = normaliseDocument((await store.clan.open(unpacked.clan)) as unknown as ProductionDocument)
-        if (doc.contract_version !== CURRENT) throw new NotAProject('That .clan was made by an older Production Tool and cannot be opened here.')
+        doc = await store.open(unpacked.clan)
         await fetchFirst(doc)
-        await store.clan.flush()
+        await store.close()
       } catch (e) {
+        await store.close().catch(() => {})
         await storage.dropClan(clanDbFor(id))
-        throw e instanceof NotAProject ? e : new NotAProject(`That .clan could not be opened: ${e instanceof Error ? e.message : e}`)
-      } finally {
-        store.clan.dispose()
+        if (e instanceof NotAProject) throw e
+        if (e instanceof UnsupportedContract) throw new NotAProject(e.message)
+        throw new NotAProject(`That .clan could not be opened: ${e instanceof Error ? e.message : e}`)
       }
     } else {
-      doc = normaliseDocument(unpacked.json!)
-      if (doc.contract_version !== CURRENT) throw new NotAProject('That export was made by an older Production Tool and cannot be opened here.')
+      const json = unpacked.json!
+      if (json.contract_version !== CURRENT) throw new NotAProject(new UnsupportedContract((json as { contract_version?: string }).contract_version ?? null).message)
+      doc = json
       await fetchFirst(doc)
       await storage.put(docKeyFor(id), doc)
     }
-    const mimeOf = new Map(doc.assets.map((a) => [a.sha256, a.mime]))
+    const mimeOf = new Map(Object.values(doc.assets).map((a) => [a.sha256, a.mime]))
     for (const a of unpacked.assets) await putBlobAs(a.sha256, new Blob([a.bytes.slice().buffer as ArrayBuffer], { type: mimeOf.get(a.sha256) ?? a.mime }))
     if (unpacked.canvas) await storage.put(canvasKeyFor(id), unpacked.canvas satisfies CanvasSnapshot)
     const auto = autoName(doc)

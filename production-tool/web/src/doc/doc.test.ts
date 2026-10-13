@@ -1,77 +1,69 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../contracts/types'
-import { applyFrame, applyShotList, applyTake } from '../jobs/handlers'
-import { newId } from '../lib/ulid'
-import { makeAjv, SCHEMA, loadJson } from '../test/schemas'
-import { emptyDocument, memoryPersister, normaliseDocument, SnapshotDocumentStore, updateDoc } from './store'
-import { mockShotList } from '../relay/mock'
-import type { Job } from '../contracts/types'
+import { mainScript, mainStoryboard, mainVideo } from '../model/selectors'
+import { addFrame, addShots, addTake, asset, id, job, MAYA, SHA, T } from '../test/model'
+import { loadJson, makeAjv, SCHEMA } from '../test/schemas'
+import { emptyDocument, memoryPersister, SnapshotDocumentStore, updateDoc } from './store'
 
-const SHA = (c: string) => `sha256:${c.repeat(64)}`
-
-function job(partial: Partial<Job>): Job {
-  return {
-    contractVersion: '2', jobId: newId('job'), participantId: 'p_test01', op: 'frame', quotaClass: 'image', state: 'completed',
-    inputHashes: [], cost: { currency: 'USD', unknown: false }, kind: 'mock', provider: 'mock', model: 'mock',
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...partial,
-  }
-}
+// The snapshot store: what stands in when the .clan engine cannot load ("Saving without history").
 
 describe('document store', () => {
-  const ajv = makeAjv()
-  const validate = ajv.getSchema(SCHEMA('document'))!
+  const validate = makeAjv().getSchema(SCHEMA('document'))!
 
-  it('the empty document validates', () => {
-    expect(validate(emptyDocument()), JSON.stringify(validate.errors)).toBe(true)
+  it('the empty document validates, with one script, storyboard and video, linked', () => {
+    const d = emptyDocument(MAYA, 'Rain')
+    expect(validate(d), JSON.stringify(validate.errors)).toBe(true)
+    expect(d.project).toMatchObject({ title: 'Rain', tenant_id: MAYA.tenant_id, created_by: `human:${MAYA.id}` })
+    expect(mainScript(d)).toBeDefined()
+    expect(mainStoryboard(d)).toBeDefined()
+    expect(mainVideo(d)).toBeDefined()
   })
 
-  it('the contract example validates (schemas load)', () => {
-    expect(validate(loadJson('examples/document.json')), JSON.stringify(validate.errors)).toBe(true)
+  it('the contract examples validate (schemas load)', () => {
+    for (const f of ['examples/document.json', 'examples/document.ad.json']) expect(validate(loadJson(f)), `${f}: ${JSON.stringify(validate.errors)}`).toBe(true)
   })
 
   it('round-trips through a snapshot and still validates', async () => {
     const persister = memoryPersister<ProductionDocument>()
-    const store = new SnapshotDocumentStore(emptyDocument({ id: 'p_test01', handle: 'maya' }), persister, 0)
-    const refId = newId('ref')
-    const jobId = newId('job')
-    updateDoc(store, (d) => {
-      d.assets.push({ sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'uploaded', locations: ['idb://sha256/' + 'a'.repeat(64)] })
-      d.keys.push({ key: 'maya', role: 'character' })
-      d.refs.push({ id: refId, key: 'maya', variant: 'eyes', asset: SHA('a'), node: newId('node'), named_at: new Date().toISOString() })
-      d.jobs.push({ id: jobId, op: 'generate', state: 'completed', parent_ids: [], input_hashes: [SHA('a')], outputs: [SHA('b')], created_at: new Date().toISOString(), cost: { currency: 'USD', unknown: false } })
-      d.refs.push({ id: newId('ref'), key: 'maya', variant: 'three-quarter', asset: SHA('b'), node: jobId })
-      d.script = { current: newId('rev'), revisions: [] }
-      d.script.revisions.push({ id: d.script.current!, created_at: new Date().toISOString(), imported_text: 'Rain. The hero smiles.', target_s: 10, status: 'draft' })
-    })
-    const shotJob = job({ op: 'shot_list', quotaClass: 'text', shots: mockShotList('Rain. @maya_eyes smiles.', 10, ['maya_eyes']), outputs: [] })
-    updateDoc(store, (d) => applyShotList(d, shotJob, { for: 'shot_list', revId: d.script!.current!, request: {} as never }))
-    const shotId = store.get().shots![0].id
-    updateDoc(store, (d) => applyFrame(d, job({ outputs: [{ sha256: SHA('c'), url: 'https://x.invalid/c', mime: 'image/png' }] }), { for: 'frame', shotId, request: {} as never }))
-    updateDoc(store, (d) => {
-      d.reviews!.push({ id: newId('pin'), target: { kind: 'take', id: 'x' }, comment: 'brighter', region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, at_s: 1.2, resolved: false, created_at: new Date().toISOString() })
-    })
-    const reviewId = store.get().reviews![0].id
-    updateDoc(store, (d) => applyTake(d, job({ op: 'clip', quotaClass: 'video', outputs: [{ sha256: SHA('d'), url: 'https://x.invalid/d', mime: 'video/webm', durationS: 4 }] }), { for: 'clip', shotId, reviewIds: [reviewId], request: {} as never }))
+    const store = new SnapshotDocumentStore(emptyDocument(MAYA), persister, 0)
+    let shotId = ''
+    await updateDoc(store, (d) => {
+      d.assets[SHA('a')] = asset(SHA('a'), 'image', { origin: 'uploaded', locations: [`idb://sha256/${'a'.repeat(64)}`] })
+      const key = { id: id('key'), v: 1, field_v: {}, key: 'maya', role: 'character' as const }
+      d.keys[key.id] = key
+      const ref = { id: id('ref'), v: 1, field_v: {}, key: 'maya', variant: 'eyes', role: 'character' as const, asset: SHA('a'), named_at: T }
+      d.refs[ref.id] = ref
+      const [s] = addShots(d, 1, { action: 'Rain. @maya_eyes smiles.', refs: [ref.id] })
+      shotId = s.id
+      const fj = job(d, 'frame', [SHA('a')], SHA('c'), { node: { kind: 'shot', id: s.id }, purpose: 'frame first' })
+      const cj = job(d, 'clip', [SHA('c')], SHA('d'), { node: { kind: 'shot', id: s.id }, purpose: 'clip' })
+      d.jobs[fj.id] = fj
+      d.jobs[cj.id] = cj
+      addFrame(d, s, SHA('c'), { pick: true, job: fj })
+      addTake(d, s, SHA('d'), cj, { pick: true })
+    }, 'work')
     await store.flush()
 
-    const restored = new SnapshotDocumentStore(emptyDocument(), persister, 0)
-    expect(await restored.restore(normaliseDocument)).toBe(true)
+    const restored = new SnapshotDocumentStore(emptyDocument(MAYA), persister, 0)
+    expect(await restored.load()).not.toBeNull()
     const doc = restored.get()
     expect(doc).toEqual(store.get())
     expect(JSON.parse(JSON.stringify(doc))).toEqual(doc)
     expect(validate(doc), JSON.stringify(validate.errors)).toBe(true)
-    expect(doc.frames![0].selected).toBe(true)
-    expect(doc.shots![0].storyboard_frame).toBe(SHA('c'))
-    expect(doc.takes![0].selected).toBe(true)
-    expect(doc.reviews![0].resolved).toBe(true)
-    expect(doc.shots![0].refs).toEqual(['maya_eyes'])
+    expect(doc.frames[doc.shots[shotId].pick!.current].asset).toBe(SHA('c'))
+  })
+
+  it('a snapshot of another contract is not read', async () => {
+    const persister = memoryPersister<ProductionDocument>()
+    persister.value = { ...emptyDocument(MAYA), contract_version: '2' } as unknown as ProductionDocument
+    expect(await new SnapshotDocumentStore(emptyDocument(MAYA), persister, 0).load()).toBeNull()
   })
 
   it('catches a document that breaks the contract', () => {
-    const bad = emptyDocument() as unknown as Record<string, unknown>
-    ;(bad.refs as unknown[]).push({ id: newId('ref'), key: 'maya_x', variant: 'Front', asset: SHA('a') })
+    const bad = emptyDocument(MAYA)
+    const r = id('ref')
+    bad.refs[r] = { id: r, v: 1, field_v: {}, key: 'maya_x', variant: 'Front', role: 'character', asset: SHA('a') }
     expect(validate(bad)).toBe(false)
-    const old = { ...emptyDocument(), contract_version: '1' }
-    expect(validate(old)).toBe(false)
+    expect(validate({ ...emptyDocument(MAYA), contract_version: '2' })).toBe(false)
   })
 })

@@ -1,44 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import type { DocAsset, ProductionDocument } from '../contracts/types'
+import type { DocAsset, Mime, ProductionDocument } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
+import { mainStoryboard, mainVideo } from '../model/selectors'
+import { MAYA } from '../test/model'
 import { fileSafe, mediaItem, mediaItems, viewsOnCanvas, zipName } from './names'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
+/** An entity into its map, with what the bus keeps. */
+const put = <T extends { id: string }>(m: Record<string, T>, e: Omit<T, 'v' | 'field_v'>) => { m[e.id] = { v: 1, field_v: {}, ...e } as unknown as T }
 const asset = (c: string, mime = 'image/png', origin: DocAsset['origin'] = 'generated'): DocAsset =>
-  ({ sha256: SHA(c), kind: mime.startsWith('video/') ? 'video' : 'image', mime, origin, locations: [] })
+  ({ sha256: SHA(c), kind: mime.startsWith('video/') ? 'video' : 'image', mime: mime as Mime, origin, locations: [] })
 
-/** Two named pictures, a view whose name was taken, an upload, a drawing, two shots with versions, two ads. */
+/** Two named pictures, a view whose name was taken, an upload, a drawing, two shots with versions, two ad renders. */
 function project(): ProductionDocument {
-  const d = emptyDocument()
-  d.assets = [
+  const d = emptyDocument(MAYA)
+  for (const a of [
     asset('a'), asset('b', 'image/jpeg', 'uploaded'), asset('c'), asset('d', 'image/webp', 'uploaded'), asset('e', 'image/png', 'drawn'),
     asset('f'), asset('9'), asset('1'),
     asset('2', 'video/mp4'), asset('3', 'video/mp4'), asset('4', 'image/png', 'mock'),
     asset('5', 'video/mp4'), asset('6', 'video/mp4'),
-  ]
-  d.keys = [{ key: 'maya', role: 'character' }]
-  d.refs = [
-    { id: 'ref_1', key: 'maya', variant: 'front', asset: SHA('a'), node: 'node_front' },
-    { id: 'ref_2', key: 'maya', variant: 'red-coat', asset: SHA('b') },
-  ]
-  d.shots = [
-    { id: 'shot_1', order: 1, duration_s: 3, composition: 'wide', action: 'walks', camera_move: 'static' },
-    { id: 'shot_2', order: 2, duration_s: 3, composition: 'close', action: 'laughs', camera_move: 'push_in' },
-  ]
-  d.frames = [
-    { id: 'frame_1', shot_id: 'shot_1', asset: SHA('f'), job_id: 'job_1', selected: true, kind: 'generated' },
-    { id: 'frame_2', shot_id: 'shot_2', asset: SHA('9'), job_id: 'job_2', selected: false, kind: 'generated' },
-    { id: 'frame_3', shot_id: 'shot_2', asset: SHA('1'), job_id: 'job_3', selected: true, kind: 'generated' },
-  ]
-  d.takes = [
-    { id: 'take_1', shot_id: 'shot_1', asset: SHA('2'), job_id: 'job_4', kind: 'generated', provider: 'runway', selected: true },
-    { id: 'take_2', shot_id: 'shot_2', asset: SHA('3'), job_id: 'job_5', kind: 'generated', provider: 'runway', selected: false },
-    { id: 'take_3', shot_id: 'shot_2', asset: SHA('4'), job_id: 'job_6', kind: 'mock', provider: 'mock', selected: true },
-  ]
-  d.exports = [
-    { id: 'exp_1', kind: 'ad_mp4', asset: SHA('5'), created_at: '2026-10-09T10:00:00Z' },
-    { id: 'exp_2', kind: 'ad_mp4', asset: SHA('6'), created_at: '2026-10-09T11:00:00Z' },
-  ]
+  ]) d.assets[a.sha256] = a
+  const sb = mainStoryboard(d)!.id
+  const video = mainVideo(d)!.id
+  put(d.keys, { id: 'key_1', key: 'maya', role: 'character' })
+  put(d.refs, { id: 'ref_1', key: 'maya', variant: 'front', role: 'character', asset: SHA('a'), node: 'node_front' })
+  put(d.refs, { id: 'ref_2', key: 'maya', variant: 'red-coat', role: 'wardrobe', asset: SHA('b') })
+  // Ranks, not ids, order the shots: shot_2 sorts first by id but is the second shot.
+  put(d.shots, { id: 'shot_2', storyboard_id: sb, rank: 'a1', kind: 'shot', duration_s: 3, camera: { size: 'close', movement: 'push_in' }, status: 'locked' })
+  put(d.shots, { id: 'shot_9', storyboard_id: sb, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'wide' }, status: 'locked' })
+  const frame = (id: string, shot: string, version: number, c: string) => put(d.frames, { id, shot_id: shot, version, kind: 'generated', asset: SHA(c), crew: 'wren' })
+  frame('frame_1', 'shot_9', 1, 'f')
+  frame('frame_3', 'shot_2', 2, '1')
+  frame('frame_2', 'shot_2', 1, '9')
+  const take = (id: string, shot: string, version: number, c: string, kind: 'generated' | 'mock' = 'generated') =>
+    put(d.takes, { id, shot_id: shot, version, asset: SHA(c), job_id: `job_${id}`, crew: 'wren', kind, model: 'm', provider: 'runway', duration_s: 3, segments: [] })
+  take('take_1', 'shot_9', 1, '2')
+  take('take_2', 'shot_2', 1, '3')
+  take('take_3', 'shot_2', 2, '4', 'mock')
+  put(d.renders, { id: 'render_1', video_id: video, version: 1, asset: SHA('5'), job_id: 'job_r1' })
+  put(d.renders, { id: 'render_2', video_id: video, version: 2, asset: SHA('6'), job_id: 'job_r2' })
   return d
 }
 
@@ -77,8 +77,8 @@ describe('media names (features/media-download.clan)', () => {
       'clips/Summer-ad-shot1-clip-v1.mp4',
       'clips/Summer-ad-shot2-clip-v1.mp4',
       'clips/Summer-ad-shot2-clip-v2.png',
-      'ad/Summer-ad-ad-1.mp4',
-      'ad/Summer-ad-ad-2.mp4',
+      'ad/Summer-ad-ad-v1.mp4',
+      'ad/Summer-ad-ad-v2.mp4',
     ])
     expect(items.map((m) => m.kind)).toEqual(['picture', 'picture', 'view', 'picture', 'frame', 'frame', 'frame', 'clip', 'clip', 'clip', 'ad', 'ad'])
     // What the beta record names each by: never bytes.
@@ -88,10 +88,10 @@ describe('media names (features/media-download.clan)', () => {
 
   it('a drawing is left out unless it is named; one ad has no number', () => {
     const d = project()
-    d.exports = d.exports!.slice(0, 1)
+    delete d.renders.render_2
     expect(mediaItems(d, 'P').some((m) => m.sha256 === SHA('e'))).toBe(false)
     expect(mediaItems(d, 'P').filter((m) => m.kind === 'ad').map((m) => m.name)).toEqual(['P-ad.mp4'])
-    d.refs.push({ id: 'ref_3', key: 'maya', variant: 'sketch', asset: SHA('e') })
+    put(d.refs, { id: 'ref_3', key: 'maya', variant: 'sketch', role: 'character', asset: SHA('e') })
     expect(mediaItem(d, 'P', SHA('e'))?.name).toBe('P-maya_sketch.png')
   })
 
@@ -104,7 +104,8 @@ describe('media names (features/media-download.clan)', () => {
     expect(mediaItem(d, 'P', SHA('c'), undefined, views)?.name).toBe('P-maya-side.png')
     expect(mediaItem(d, 'P', SHA('1'), 'frame')?.name).toBe('P-shot2-frame-v2.png')
     expect(mediaItem(d, 'P', SHA('3'), 'clip')?.name).toBe('P-shot2-clip-v1.mp4')
-    expect(mediaItem(d, 'P', SHA('6'), 'ad')?.name).toBe('P-ad-2.mp4')
+    expect(mediaItem(d, 'P', SHA('6'), 'ad')?.name).toBe('P-ad-v2.mp4')
+    expect(mediaItem(d, 'P', SHA('6'), 'ad')?.which).toBe('render_2')
     expect(mediaItem(d, 'P', undefined)).toBeUndefined()
     expect(mediaItem(d, 'P', SHA('0'))).toBeUndefined()
   })

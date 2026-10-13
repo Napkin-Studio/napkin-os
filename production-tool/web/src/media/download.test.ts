@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { unzipSync } from 'fflate'
-import type { DocAsset, ProductionDocument } from '../contracts/types'
+import type { DocAsset, Mime, ProductionDocument } from '../contracts/types'
 import { emptyDocument } from '../doc/store'
+import { mainStoryboard, mainVideo } from '../model/selectors'
+import { MAYA } from '../test/model'
 
 const blobs = new Map<string, Blob>()
 vi.mock('../lib/blobs', () => ({ getBlob: vi.fn(async (sha: string) => blobs.get(sha)) }))
@@ -15,23 +17,25 @@ const { mediaItem } = await import('./names')
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
 const asset = (c: string, mime: string, locations: string[] = []): DocAsset =>
-  ({ sha256: SHA(c), kind: mime.startsWith('video/') ? 'video' : 'image', mime, origin: 'generated', locations })
+  ({ sha256: SHA(c), kind: mime.startsWith('video/') ? 'video' : 'image', mime: mime as Mime, origin: 'generated', locations })
+
+const e = { v: 1, field_v: {} }
 
 function project(): ProductionDocument {
-  const d = emptyDocument()
-  d.assets = [
+  const d = emptyDocument(MAYA)
+  for (const a of [
     asset('a', 'image/png'),
     asset('b', 'image/png', ['idb://sha256/bbb', 'https://relay.example/out/b.png']),
     asset('c', 'image/png'),
     asset('d', 'video/mp4', ['https://relay.example/out/d.mp4']),
     asset('e', 'video/mp4'),
-  ]
-  d.keys = [{ key: 'maya', role: 'character' }]
-  d.refs = [{ id: 'ref_1', key: 'maya', variant: 'front', asset: SHA('a') }]
-  d.shots = [{ id: 'shot_1', order: 1, duration_s: 3, composition: 'wide', action: 'walks', camera_move: 'static' }]
-  d.frames = [{ id: 'frame_1', shot_id: 'shot_1', asset: SHA('b'), job_id: 'job_1', selected: true, kind: 'generated' }]
-  d.takes = [{ id: 'take_1', shot_id: 'shot_1', asset: SHA('d'), job_id: 'job_2', kind: 'generated', provider: 'runway', selected: true }]
-  d.exports = [{ id: 'exp_1', kind: 'ad_mp4', asset: SHA('e'), created_at: '2026-10-09T10:00:00Z' }]
+  ]) d.assets[a.sha256] = a
+  d.keys.key_1 = { ...e, id: 'key_1', key: 'maya', role: 'character' }
+  d.refs.ref_1 = { ...e, id: 'ref_1', key: 'maya', variant: 'front', role: 'character', asset: SHA('a') }
+  d.shots.shot_1 = { ...e, id: 'shot_1', storyboard_id: mainStoryboard(d)!.id, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'wide' }, status: 'locked' }
+  d.frames.frame_1 = { ...e, id: 'frame_1', shot_id: 'shot_1', version: 1, kind: 'generated', asset: SHA('b'), job_id: 'job_1', crew: 'wren' }
+  d.takes.take_1 = { ...e, id: 'take_1', shot_id: 'shot_1', version: 1, asset: SHA('d'), job_id: 'job_2', crew: 'wren', kind: 'generated', model: 'm', provider: 'runway', duration_s: 3, segments: [] }
+  d.renders.render_1 = { ...e, id: 'render_1', video_id: mainVideo(d)!.id, version: 1, asset: SHA('e'), job_id: 'job_3' }
   return d
 }
 
@@ -87,7 +91,7 @@ describe('one download', () => {
     const d = project()
     expect(await downloadItem(d, mediaItem(d, 'P', SHA('e'), 'ad')!)).toBe(false)
     expect(saved).toEqual([])
-    expect(events).toEqual([{ kind: 'download', name: 'ad', data: { which: SHA('e'), ok: false } }])
+    expect(events).toEqual([{ kind: 'download', name: 'ad', data: { which: 'render_1', ok: false } }])
   })
 })
 
@@ -122,7 +126,7 @@ describe('the media zip', () => {
 
   it('nothing anywhere: no zip is saved', async () => {
     const d = project()
-    d.assets = d.assets.map((a) => ({ ...a, locations: [] }))
+    for (const a of Object.values(d.assets)) a.locations = []
     expect(await downloadAllMedia(d, 'P')).toEqual({ packed: 0, missing: 5 })
     expect(saved).toEqual([])
   })

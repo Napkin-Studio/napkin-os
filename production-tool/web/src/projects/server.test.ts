@@ -3,20 +3,18 @@
 // someone else got in before is never an overwrite, and the person chooses.
 // On the real .clan engine (napkin-wasm), against a fake relay that keeps the relay's rules.
 
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@excalidraw/excalidraw', () => ({ serializeAsJSON: () => '{}' }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import type { DocAsset, ProductionDocument, SavedProject } from '../contracts/types'
-import { ClanBackedStore } from '../doc/clan'
 import { SnapshotStore, updateDoc } from '../doc/store'
+import type { DocumentStore } from '../doc/types'
 import { initialAppUi, type AppUi } from '../doc/ui'
 import { deleteBlob, getBlob, putBlob } from '../lib/blobs'
 import { hexOf, sha256Hex } from '../lib/hash'
-import { newId } from '../lib/ulid'
+import { mainStoryboard } from '../model/selectors'
+import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import type { Relay } from '../relay'
 import { homeItems } from './homeList'
@@ -26,12 +24,14 @@ import { describeAsset, forgetSent, MissingPictures } from './serverAssets'
 import type { MakeClan } from './session'
 import { Shell } from './shell'
 import { canvasKeyFor, clanDbFor, memoryStorage } from './storage'
+import { id, MAYA, wasm } from '../test/model'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const wasmPath = join(here, '..', '..', '..', 'clan-store', 'src', 'wasm', 'napkin_wasm_bg.wasm')
-if (!existsSync(wasmPath)) throw new Error(`no ${wasmPath}: run \`npm run clan-store\` first`)
-const wasm = new Uint8Array(readFileSync(wasmPath))
-const makeClan: MakeClan = (persistence, ctxOf) => new ClanBackedStore(new ClanDocumentStore({ wasm, persistence, saveDebounceMs: 0 }), { ctxOf, debounceMs: 1 })
+const makeClan: MakeClan = (persistence, opts = {}) =>
+  new ModelStore(new ClanDocumentStore({ wasm: wasm(), persistence, saveDebounceMs: 0, person: opts.person }), { debounceMs: 1, undo: opts.undo })
+const nameKey = (store: DocumentStore, key: string) => updateDoc(store, (d) => {
+  const k = id('key')
+  d.keys[k] = { id: k, v: 1, field_v: {}, key, role: 'prop' }
+}, `name ${key}`)
 
 const CDN = 'https://cdn.test'
 
@@ -106,7 +106,7 @@ function browser(fake: FakeRelay) {
   const storage = memoryStorage()
   let t = Date.parse('2026-10-10T09:00:00Z')
   const index = new ProjectIndex(storage, () => new Date((t += 1000)))
-  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'f283da90-07cd-59ec-b370-b23704a2bc91', tenant: { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
   const renderer: MockRenderer = { async render() { return [] } }
   const mock = new MockRelay({ renderer, now: () => 0, delayMs: 10, persistKey: null })
   // The real relay over HTTP, as far as saving is concerned.
@@ -132,12 +132,15 @@ async function made(fake: FakeRelay) {
   const frame = await picture(`frame ${Math.random()}`)
   const frameBytes = new Uint8Array(await (await getBlob(frame.sha256))!.arrayBuffer())
   fake.uploads.set(frame.sha256, frameBytes)
-  const shotId = newId('shot')
+  const shotId = id('shot')
+  const frameId = id('frame')
+  const refId = id('ref')
   await updateDoc(s.doc, (d) => {
-    d.assets.push(front, { ...frame, origin: 'generated', locations: [`${CDN}/in/${frame.sha256}`] })
-    d.refs.push({ id: newId('ref'), key: 'maya', variant: 'front', asset: front.sha256 })
-    d.shots = [{ id: shotId, order: 1, duration_s: 3, composition: 'wide', action: 'Maya waves.', camera_move: 'static' }]
-    d.frames = [{ id: newId('frame'), shot_id: shotId, asset: frame.sha256, job_id: newId('job'), selected: true, kind: 'generated' }]
+    d.assets[front.sha256] = front
+    d.assets[frame.sha256] = { ...frame, origin: 'generated', locations: [`${CDN}/in/${frame.sha256}`] }
+    d.refs[refId] = { id: refId, v: 1, field_v: {}, key: 'maya', variant: 'front', role: 'character', asset: front.sha256 }
+    d.shots[shotId] = { id: shotId, v: 1, field_v: {}, storyboard_id: mainStoryboard(d)!.id, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'wide' }, status: 'planned', action: 'Maya waves.', pick: { current: frameId } }
+    d.frames[frameId] = { id: frameId, v: 1, field_v: {}, shot_id: shotId, version: 1, kind: 'generated', asset: frame.sha256, crew: 'wren' }
   }, 'add pictures')
   await laptop.storage.put(canvasKeyFor(p.id), { elements: [{ id: 'el1', type: 'image', fileId: 'abc' }], files: { abc: { dataURL: 'data:,' } } })
   await laptop.shell.rename(p.id, 'Maya waves')
@@ -184,7 +187,7 @@ describe('a project saved in one browser opens in another', () => {
     await desktop.shell.openFromServer(listed[0])
     const s = services(desktop.shell)
     expect(s.project.id).toBe(p.id) // the same project: its saves stay one project
-    expect(s.doc.get().refs.map((r) => `${r.key}_${r.variant}`)).toEqual(['maya_front'])
+    expect(Object.values(s.doc.get().refs).map((r) => `${r.key}_${r.variant}`)).toEqual(['maya_front'])
     expect(await getBlob(front.sha256)).toBeDefined()
     expect(await getBlob(frame.sha256)).toBeDefined()
     expect(desktop.shell.get().session!.initialCanvas).toEqual({ elements: [{ id: 'el1', type: 'image', fileId: 'abc' }], files: {} })
@@ -209,11 +212,11 @@ describe('a project saved in one browser opens in another', () => {
   })
 
   it('a picture whose bytes do not match its hash counts as missing', async () => {
-    const doc = { refs: [], shots: [], frames: [], takes: [], exports: [] } as unknown as ProductionDocument
+    const doc = { refs: {}, shots: {}, frames: {}, takes: {}, renders: {}, exports: {}, assets: {} } as unknown as ProductionDocument
     const a: DocAsset = { sha256: `sha256:${'0'.repeat(64)}`, kind: 'video', mime: 'video/mp4', origin: 'generated', locations: [`${CDN}/out/x`] }
     expect(describeAsset(doc, a)).toBe('a clip (00000000)')
     const { fetchAssets } = await import('./serverAssets')
-    const err = await fetchAssets({ ...doc, assets: [a] }, { where: async () => null, download: async () => new TextEncoder().encode('not it') }).catch((x: unknown) => x)
+    const err = await fetchAssets({ ...doc, assets: { [a.sha256]: a } }, { where: async () => null, download: async () => new TextEncoder().encode('not it') }).catch((x: unknown) => x)
     expect(err).toBeInstanceOf(MissingPictures)
   })
 })
@@ -226,12 +229,12 @@ describe('a save from somewhere else is never overwritten', () => {
     const desktop = browser(fake)
     await desktop.shell.openFromServer({ id: p.id })
     // The desktop changes it and saves: the laptop's copy is now behind.
-    await updateDoc(services(desktop.shell).doc, (d) => { d.keys.push({ key: 'lamp', role: 'prop' }) }, 'name lamp')
+    await nameKey(services(desktop.shell).doc, 'lamp')
     await services(desktop.shell).clan!.flush()
     await services(desktop.shell).clan!.clan.mirrorNow('manual')
     const theirs = fake.projects.get(p.id)!.row
     // The laptop changes it too, and saves on top of the copy it had.
-    await updateDoc(services(laptop.shell).doc, (d) => { d.keys.push({ key: 'kite', role: 'prop' }) }, 'name kite')
+    await nameKey(services(laptop.shell).doc, 'kite')
     await services(laptop.shell).clan!.flush()
     const err = await services(laptop.shell).clan!.clan.mirrorNow('manual').catch((x: unknown) => x)
     return { fake, laptop, desktop, p, theirs, err }
@@ -263,7 +266,7 @@ describe('a save from somewhere else is never overwritten', () => {
     expect(fake.saves.at(-1)).toMatchObject({ id: p.id, ifMatch: theirs.etag })
     expect(fake.projects.get(p.id)!.row.etag).not.toBe(theirs.etag)
     expect(services(laptop.shell).serverCopy!.get()).toBeNull()
-    expect(services(laptop.shell).doc.get().keys.map((k) => k.key)).toContain('kite')
+    expect(Object.values(services(laptop.shell).doc.get().keys).map((k) => k.key)).toContain('kite')
   })
 
   it('save this as a new version: it goes on top of theirs, which stays among the earlier saves', async () => {
@@ -280,7 +283,7 @@ describe('a save from somewhere else is never overwritten', () => {
     const fake = new FakeRelay()
     const { laptop, p } = await made(fake)
     const first = fake.projects.get(p.id)!.row.etag
-    await updateDoc(services(laptop.shell).doc, (d) => { d.keys.push({ key: 'kite', role: 'prop' }) }, 'name kite')
+    await nameKey(services(laptop.shell).doc, 'kite')
     await services(laptop.shell).clan!.flush()
     await services(laptop.shell).clan!.clan.mirrorNow('manual')
     expect(fake.saves.at(-1)).toMatchObject({ ifMatch: first })

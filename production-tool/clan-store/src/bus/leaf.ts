@@ -81,7 +81,8 @@ export function writePath(obj: Record<string, unknown>, path: string, value: unk
     }
     delete trail[trail.length - 1][last]
     for (let i = trail.length - 1; i > 0; i--) {
-      if (Object.keys(trail[i]).length) break
+      // Only a composite left empty goes (pick/current alone leaves no pick); a nested map (edl) stays, even empty.
+      if (Object.keys(trail[i]).length || s[i - 1] !== 'pick') break
       delete trail[i - 1][s[i - 1]]
     }
     return

@@ -3,19 +3,19 @@
 // from the project's own storage; closing saves them and stops the runner.
 // Jobs still being made when a project closes stay in its document and land
 // the next time it is opened (runner.resume, resumeChains): never in another.
+// A project made under another contract is refused (ProjectRefused): said,
+// never created over, its bytes left where they are.
 
-import type { Persistence } from '../../../clan-store/src'
+import { ClanDocumentStore, type Persistence, type Person } from '../../../clan-store/src'
 import type { ProjectHandle, Services } from '../app/context'
 import type { CanvasSnapshot } from '../canvas/controller'
-import type { Config } from '../contracts/types'
-import { ClanBackedStore } from '../doc/clan'
-import type { JobCtxOf } from '../doc/describe'
-import { openDocument } from '../doc/open'
-import { SnapshotStore, systemUpdate } from '../doc/store'
+import type { Config, Me } from '../contracts/types'
+import { isRefused, openDocument } from '../doc/open'
+import { SnapshotStore } from '../doc/store'
 import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
-import { keepUndo } from '../doc/undo'
 import { JobRunner } from '../jobs/runner'
 import { resumeChains, wireJobs } from '../jobs/wire'
+import { ModelStore, type ModelStoreOptions } from '../model/store'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
 import type { ProjectServer } from './server'
@@ -24,10 +24,28 @@ import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storag
 import { autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
 
-/** A .clan store over a project's own database (the browser's by default; tests pass the wasm and memory). */
-export type MakeClan = (persistence: Persistence, ctxOf: JobCtxOf) => ClanBackedStore
+/** A .clan store over a project's own database (the browser's by default; tests pass the wasm and memory).
+ *  `person` is who writes (absent: only to read it); `undo` where its undo steps are kept. */
+export type MakeClan = (persistence: Persistence, opts?: { person?: Person; undo?: ModelStoreOptions['undo'] }) => ModelStore
 
-export const browserClan: MakeClan = (persistence, ctxOf) => ClanBackedStore.inBrowser({ persistence, ctxOf })
+export const browserClan: MakeClan = (persistence, opts = {}) =>
+  new ModelStore(new ClanDocumentStore({ person: opts.person, persistence }), { undo: opts.undo })
+
+/** Who writes when nobody is signed in (the in-browser mock, or a relay that cannot say who). */
+export const LOCAL_PERSON: Person = { id: 'p_local', handle: 'guest', tenant_id: '00000000-0000-0000-0000-000000000000' }
+
+/** The person the app UI's `me` names, as the document records them. */
+export function personOf(me: Me | undefined): Person {
+  return me ? { id: me.participantId, handle: me.handle, tenant_id: me.tenant.id } : LOCAL_PERSON
+}
+
+/** A project this build cannot open (made under another contract): why, in words. Nothing was written. */
+export class ProjectRefused extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProjectRefused'
+  }
+}
 
 export interface SessionDeps {
   relay: Relay
@@ -56,31 +74,32 @@ export function projectUiStore(storage: ProjectStorage, id: string): SnapshotSto
   return new SnapshotStore<ProjectUi>(initialProjectUi(), { load: () => storage.get<ProjectUi>(key), save: (v) => storage.put(key, v) })
 }
 
+/** Open project `id`. Throws ProjectRefused for a project made under another contract. */
 export async function openProjectSession(id: string, deps: SessionDeps): Promise<ProjectSession> {
   const { relay, app, index, storage } = deps
   const part = projectUiStore(storage, id)
   await part.restore((v) => ({ ...initialProjectUi(), ...v }))
   const ui = new ProjectUiStore(app, part)
 
-  const signedIn = app.get().me
-  const participant = signedIn ? { id: signedIn.participantId, handle: signedIn.handle } : { id: 'p_local', handle: 'guest' }
-  const ctxOf: JobCtxOf = (jobId) => ui.get().jobCtx[jobId]
-  const { doc, clan, storeNote } = await openDocument({
+  const person = personOf(app.get().me)
+  // Undo and redo steps live with the project's UI (LocalUndo, model/store.ts), so they survive a reload
+  // and stay its own.
+  const undo = { saved: ui.get().undo, save: (s: NonNullable<ProjectUi['undo']>) => ui.update((u) => { u.undo = s }) }
+  const opened = await openDocument({
     project: id,
-    participant,
-    ctxOf,
-    make: () => deps.makeClan(storage.clan(clanDbFor(id)), ctxOf),
+    person,
+    title: index.get(id)?.name,
+    undo,
+    make: () => deps.makeClan(storage.clan(clanDbFor(id)), { person, undo }),
     storage,
   })
-  // A project made before signing in, or opened from a file: from now on it is the signed-in person's.
-  if (signedIn && doc.get().participant.id !== participant.id) {
-    await systemUpdate(doc, (d) => { d.participant = participant }, 'sign in')
+  if (isRefused(opened)) {
+    await ui.close()
+    throw new ProjectRefused(opened.refused)
   }
-  // Undo and redo steps live with the project's UI (doc/undo.ts), so they survive a reload and stay its own.
-  keepUndo(doc, { get: () => ui.get().undo ?? { done: [], undone: [] }, set: (s) => ui.update((u) => { u.undo = s }) })
+  const { doc, clan, storeNote } = opened
 
   const runner = new JobRunner(relay, doc, ui)
-  runner.stage = () => doc.get().stage.current
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
   const frameDeps = { relay, doc, ui, runner }
   wireJobs(frameDeps)
@@ -106,7 +125,7 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   // Home's card follows the project: its stage, counts, picture and (until renamed) its name.
   const record = async (changed = true) => {
     const d = doc.get()
-    await index.touch(id, summarise(d, ui.get().jobCtx), { name: autoName(d), changed })
+    await index.touch(id, summarise(d, ui.get()), { name: autoName(d), changed })
   }
   let timer: ReturnType<typeof setTimeout> | null = null
   let changedSinceOpen = false

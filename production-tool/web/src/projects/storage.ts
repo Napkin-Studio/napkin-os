@@ -1,14 +1,14 @@
 // Where each project keeps its things in this browser (features/project-home.clan).
 // Blobs (pictures and clips, by sha256) are shared by every project; everything
 // else is the project's own:
-//   - its .clan: the IndexedDB database CLAN_DB + ':' + id (doc/clan.ts);
+//   - its .clan: the IndexedDB database CLAN_DB + ':' + id (model/store.ts);
 //   - its canvas: kv 'canvas:<id>';
 //   - its UI (job purposes, drafts, undo steps, update runs): kv 'ui:<id>';
 //   - its plain-data fallback, when the .clan engine does not load: kv 'doc:<id>'.
 // The project index is kv 'projects'.
 
 import { indexedDbPersistence, memoryPersistence, type Persistence, type Saved } from '../../../clan-store/src'
-import { CLAN_DB } from '../doc/clan'
+import { CLAN_DB } from '../model/store'
 import { idbDelete, idbGet, idbPut } from '../lib/idb'
 
 export const INDEX_KEY = 'projects'

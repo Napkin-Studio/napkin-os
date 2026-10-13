@@ -1,24 +1,45 @@
-// The History panel: the .clan's decision chain, newest first. Who did it
-// (you, the director, the provider), what, why, and which fields changed,
-// narrowed to one item when you ask "why does this look like this?".
+// The History panel: the .clan's decision chain, newest first. Who did it (you,
+// another person, the crew), what, why, which fields it changed, its Kind,
+// narrowed to one item when you ask "why does this look like this?". The
+// items and the narrowing read the decisions' targets and cites
+// (model/lineage.ts), not ids in the words.
 
 import { useEffect, useMemo, useState } from 'react'
-import { useDoc } from '../app/context'
-import type { ClanBackedStore } from '../doc/clan'
+import { useDoc, useUi } from '../app/context'
+import type { Kind } from '../model/lineage'
+import type { ModelStore } from '../model/store'
 import { download, exportClanFile } from '../export'
-import { historyItems, type ChainLike } from './historyItems'
+import { entryKind, historyItems, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
 import './history.css'
 
-export function HistoryPanel({ store, onClose }: { store: ClanBackedStore | null; onClose: () => void }) {
+const KINDS: { id: Kind; label: string }[] = [
+  { id: 'decision', label: 'Decisions' }, { id: 'check', label: 'Checks' }, { id: 'ask', label: 'Asks' }, { id: 'pick', label: 'Picks' },
+]
+
+export function HistoryPanel({ store, onClose }: { store: ModelStore | null; onClose: () => void }) {
   const doc = useDoc()
+  const ui = useUi()
   const [entries, setEntries] = useState<ChainLike[] | null>(null)
   const [itemKey, setItemKey] = useState('all')
+  const [kind, setKind] = useState<Kind | 'all'>('all')
   const [error, setError] = useState<string | null>(null)
-  const items = useMemo(() => historyItems(doc), [doc])
+  const docId = useMemo(() => {
+    try {
+      return store?.documentId() ?? ''
+    } catch {
+      return ''
+    }
+  }, [store])
+  const items = useMemo(() => historyItems(doc, docId), [doc, docId])
   const item = items.find((i) => i.key === itemKey)
+  const counts = useMemo(() => {
+    const c: Record<Kind, number> = { decision: 0, check: 0, ask: 0, pick: 0 }
+    for (const e of entries ?? []) c[entryKind(e)]++
+    return c
+  }, [entries])
 
-  // Escape closes it (it did not, 2026-10-09). An open menu takes Escape first (ui/Float.tsx stops it).
+  // Escape closes it. An open menu takes Escape first (ui/Float.tsx stops it).
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !e.defaultPrevented) onClose()
@@ -50,7 +71,7 @@ export function HistoryPanel({ store, onClose }: { store: ClanBackedStore | null
     <aside className="history" aria-label="History">
       <div className="history-top">
         <b>History</b>
-        <span className="faint">{entries ? `${entries.length} entries` : ''}</span>
+        <span className="faint">{entries ? `${entries.length} decisions` : ''}</span>
         <span className="spacer" />
         <button className="btn xs ghost" onClick={onClose} aria-label="Close history">Close</button>
       </div>
@@ -67,9 +88,14 @@ export function HistoryPanel({ store, onClose }: { store: ClanBackedStore | null
               <option value="all">Everything</option>
               {items.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
             </select>
+            <label className="faint" htmlFor="history-kind">Kind</label>
+            <select id="history-kind" className="select" value={kind} onChange={(e) => setKind(e.target.value as Kind | 'all')}>
+              <option value="all">All</option>
+              {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label} {counts[k.id]}</option>)}
+            </select>
           </div>
           {error && <div role="alert" className="history-error">{error}</div>}
-          {entries ? <HistoryList entries={entries} handle={doc.participant.handle} item={item} /> : <div className="history-empty faint">Reading the .clan…</div>}
+          {entries ? <HistoryList entries={entries} me={ui.me?.participantId} item={item} kind={kind === 'all' ? undefined : kind} /> : <div className="history-empty faint">Reading the .clan…</div>}
           <div className="history-foot">
             <button className="btn sm" onClick={async () => {
               const { blob, name } = await exportClanFile(store)

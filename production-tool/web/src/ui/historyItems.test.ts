@@ -2,103 +2,79 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../doc/store'
-import { aboutItem, historyItems, kindOf, readable, type ChainLike } from './historyItems'
+import { aboutItem, entryKind, historyItems, kindOf, readable, who, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
-import { directorRecord, type DirectorCard } from '../../../clan-store/src/attribution'
+import { jobRationale, type DirectorCard, type JobEntry } from '../../../clan-store/src/attribution'
 
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
+const DOC = 'doc1'
 const J1 = 'job_01K6XA7Q3M9V2D4R8T0B000001'
-const J2 = 'job_01K6XA7Q3M9V2D4R8T0B000002'
-const T = (m: number) => `2026-10-07T10:${String(m).padStart(2, '0')}:00Z`
+const S1 = 'shot_01K6XA7Q3M9V2D4R8T0B000001'
+const F1 = 'frame_01K6XA7Q3M9V2D4R8T0B000001'
+const F2 = 'frame_01K6XA7Q3M9V2D4R8T0B000002'
+const R1 = 'ref_01K6XA7Q3M9V2D4R8T0B000001'
+const K1 = 'key_01K6XA7Q3M9V2D4R8T0B000001'
+const T = (m: number) => `2026-10-13T10:${String(m).padStart(2, '0')}:00Z`
 
 function doc() {
-  const d = emptyDocument({ id: 'p_maya01', handle: 'maya' })
-  d.jobs.push(
-    { id: J1, op: 'generate', state: 'completed', parent_ids: [], input_hashes: [SHA('a')], outputs: [SHA('b')], created_at: T(40) },
-    { id: J2, op: 'view', state: 'completed', parent_ids: [J1], input_hashes: [SHA('b')], outputs: [SHA('c')], created_at: T(45) },
-  )
-  d.keys.push({ key: 'hero', role: 'character' })
-  d.refs.push(
-    { id: 'ref_01K6XA7Q3M9V2D4R8T0B000001', key: 'hero', variant: 'front', asset: SHA('b'), node: J1 },
-    { id: 'ref_01K6XA7Q3M9V2D4R8T0B000002', key: 'hero', variant: 'side', asset: SHA('c'), node: J2 },
-  )
+  const d = emptyDocument({ id: 'p_maya001', handle: 'maya', tenant_id: '5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f' })
+  const sb = Object.keys(d.storyboards)[0]
+  d.keys[K1] = { id: K1, v: 1, field_v: {}, key: 'hero', role: 'character' }
+  d.refs[R1] = { id: R1, v: 1, field_v: {}, key: 'hero', variant: 'front', role: 'character', asset: SHA('b') }
+  d.shots[S1] = { id: S1, v: 3, field_v: {}, storyboard_id: sb, rank: 'a0', kind: 'shot', duration_s: 3, camera: { size: 'close' }, status: 'planned', pick: { current: F2 } }
+  d.frames[F1] = { id: F1, v: 1, field_v: {}, shot_id: S1, version: 1, kind: 'generated', asset: SHA('c'), job_id: J1, crew: 'wren' }
+  d.frames[F2] = { id: F2, v: 1, field_v: {}, shot_id: S1, version: 2, parent_id: F1, kind: 'edited', asset: SHA('d'), crew: 'rhea' }
   return d
 }
 
 // Newest first, as the chain gives it.
 const entries: ChainLike[] = [
-  { agent: 'maya', action: 'named @hero_side', rationale: `ref_01K6XA7Q3M9V2D4R8T0B000002 · ${SHA('c')}`, timestamp: T(47), fields_changed: ['refs'] },
-  { agent: 'runway · gemini_image3.1_flash', action: `made view ${J2}`, rationale: `cost $0.03 confirmed · 20 s · out ${SHA('c')}`, timestamp: T(46) },
-  { agent: 'maya', action: 'published hero to the acme library', rationale: 'version 1', timestamp: T(44), pinned: true, fields_changed: ['keys'] },
-  { agent: 'runway · gen4_image', action: `made generate ${J1}`, rationale: `cost $0.07 confirmed · 41 s · out ${SHA('b')}`, timestamp: T(41) },
-  { agent: 'director · claude-sonnet-4-5 · director.v1', action: `directed generate ${J1}`, rationale: 'The drawing sets the pose · prompt: "@hero_eyes, front view"', timestamp: T(41) },
-  { agent: 'maya', action: 'generated from 1 input', rationale: `from @hero_eyes · ${J1}`, timestamp: T(40), fields_changed: ['jobs'] },
-  { agent: 'maya', action: 'named @hero_eyes', rationale: `ref_01K6XA7Q3M9V2D4R8T0B000009 · ${SHA('a')}`, timestamp: T(39), fields_changed: ['refs'] },
-  { agent: 'maya', action: 'signed in as @maya', timestamp: T(38) },
+  { id: 'd_6', agent: 'human:p_maya001', action: 'restore frames v1 in shot 1', timestamp: T(47), targets: [`${DOC}#shots[${S1}]`, `${DOC}#shots[${S1}].pick.current`], cites: [`${DOC}#frames[${F1}]`] },
+  { id: 'd_5', agent: 'jude', action: `check frames[${F2}]: pass`, timestamp: T(46), targets: [`${DOC}#checks[check_01K6XA7Q3M9V2D4R8T0B000001]`], cites: [`${DOC}#frames[${F2}]`] },
+  { id: 'd_4', agent: 'rhea', action: 'retouch frames[v2] for shot 1', timestamp: T(45), targets: [`${DOC}#frames[${F2}]`, `${DOC}#shots[${S1}]`], cites: [`${DOC}#jobs[${J1}]`] },
+  { id: 'd_3', agent: 'human:p_sai0001', action: 'publish hero to the agency shelf', timestamp: T(44), pinned: true, targets: [`${DOC}#keys[${K1}]`] },
+  { id: 'd_2', agent: 'wren', action: 'render frames[v1] for shot 1', rationale: 'cost $0.08 confirmed', timestamp: T(41), targets: [`${DOC}#frames[${F1}]`, `${DOC}#shots[${S1}]`], cites: [`${DOC}#jobs[${J1}]`] },
+  { id: 'd_1', agent: 'human:p_maya001', action: 'name @hero_front', timestamp: T(39), targets: [`${DOC}#refs[${R1}]`] },
 ]
 
-describe('History', () => {
-  it('knows the three kinds of author', () => {
-    expect(entries.map((e) => kindOf(e.agent))).toEqual(['participant', 'provider', 'participant', 'provider', 'director', 'participant', 'participant', 'participant'])
+describe('History (contract 3)', () => {
+  it('knows people and the crew, and says who in the panel\'s words', () => {
+    expect(entries.map((e) => kindOf(e.agent))).toEqual(['person', 'crew', 'crew', 'person', 'crew', 'person'])
+    expect(who('human:p_maya001', 'p_maya001')).toEqual({ label: 'You' })
+    expect(who('rhea', 'p_maya001')).toEqual({ label: 'Rhea', detail: 'retouches' })
   })
 
-  it('narrows to an item through the jobs that made it and the pictures they took in', () => {
-    const items = historyItems(doc())
-    expect(items.map((i) => i.label)).toEqual(['@hero_front', '@hero_side'])
-    const front = items[0]
-    expect(entries.filter((e) => aboutItem(e, front)).map((e) => e.action)).toEqual([
-      `made generate ${J1}`, `directed generate ${J1}`, 'generated from 1 input', 'named @hero_eyes',
-    ])
-    // The side view came from the front: its history includes the front's.
-    const side = items[1]
-    const about = entries.filter((e) => aboutItem(e, side)).map((e) => e.action)
-    expect(about).toContain('named @hero_side')
-    expect(about).toContain(`made view ${J2}`)
-    expect(about).toContain(`directed generate ${J1}`)
-    expect(about).toContain('named @hero_eyes')
-    expect(about).not.toContain('published hero to the acme library')
+  it('gives each decision its Kind from its verb and targets', () => {
+    expect(entries.map(entryKind)).toEqual(['pick', 'check', 'decision', 'decision', 'decision', 'decision'])
   })
 
-  it('renders entries newest first with who, what, why and fields', () => {
-    const html = renderToStaticMarkup(createElement(HistoryList, { entries, handle: 'maya' }))
-    expect(html.indexOf('named @hero_side')).toBeLessThan(html.indexOf('signed in as @maya'))
-    expect(html).toContain('data-kind="director"')
-    expect(html).toContain('data-kind="provider"')
-    expect(html).toContain('data-kind="participant"')
-    expect(html).toContain('>You<')
-    expect(html).toContain('>Director<')
-    expect(html).toContain('claude-sonnet-4-5 · director.v1')
-    expect(html).toContain('>runway<')
+  it('narrows to an item by what decisions target and cite, not by words', () => {
+    const items = historyItems(doc(), DOC)
+    expect(items.map((i) => i.label)).toEqual(['@hero_front', 'Shot 1 frame'])
+    const [ref, frame] = items
+    expect(entries.filter((e) => aboutItem(e, ref)).map((e) => e.id)).toEqual(['d_3', 'd_1'])
+    expect(entries.filter((e) => aboutItem(e, frame)).map((e) => e.id)).toEqual(['d_6', 'd_5', 'd_4', 'd_2'])
+  })
+
+  it('renders the list: who, Kind, pinned, the fields it changed, the cards the director saw', () => {
+    const cards: DirectorCard[] = [{ tag: 'hero', sha256: SHA('b'), kind: 'character', card: 'A boy, 10.\nYellow raincoat.' }]
+    const job = { id: J1, op: 'frame', state: 'completed', crew: 'wren', created_at: T(40), updated_at: T(41), director: { model: 'claude', promptVersion: 'director.v6', rationale: 'Front view leads.', output: {} } } as JobEntry
+    const withCards = { ...entries[4], rationale: jobRationale(job, cards) }
+    const html = renderToStaticMarkup(createElement(HistoryList, { entries: [entries[0], entries[3], withCards], me: 'p_maya001' }))
+    expect(html).toContain('You')
+    expect(html).toContain('p_sai0001')
+    expect(html).toContain('Wren')
+    expect(html).toContain('renders')
     expect(html).toContain('pinned')
-    expect(html).toContain('history-field')
-    expect(html).toContain(readable(`cost $0.07 confirmed · 41 s · out ${SHA('b')}`))
+    expect(html).toContain('pick')
+    expect(html).toContain('shots[shot_…000001].pick.current')
+    expect(html).toContain('What the director saw')
+    expect(html).toContain('@hero')
+    const kindOnly = renderToStaticMarkup(createElement(HistoryList, { entries, kind: 'check' }))
+    expect(kindOnly.match(/history-entry/g)).toHaveLength(1)
   })
 
-  it('shows what the director saw under its entry: the cards it was given', () => {
-    const job = {
-      id: J1, op: 'generate', state: 'completed', created_at: T(40), outputs: [SHA('b')],
-      agent: { model: 'claude-haiku-4-5', promptVersion: 'director.v4', rationale: 'The drawing sets the pose', output: {}, latencyMs: 2100 },
-    }
-    const cards: DirectorCard[] = [
-      { tag: 'hero_eyes', sha256: SHA('a'), kind: 'character', card: 'A round blue robot with one eye\nFlat 2D, thick outlines\nFront view' },
-      { tag: 'in_1', sha256: SHA('c'), kind: 'other', card: 'Grey feathers, close up' },
-    ]
-    const d = directorRecord(job, cards)!
-    const html = renderToStaticMarkup(createElement(HistoryList, { entries: [{ ...d, timestamp: T(41) }], handle: 'maya' }))
-    expect(html).toContain('<details class="history-saw"><summary>What the director saw</summary>')
-    expect(html).toContain('@hero_eyes')
-    expect(html).toContain('>A round blue robot with one eye<')
-    expect(html).toContain('>Flat 2D, thick outlines<')
-    expect(html).toContain('>Grey feathers, close up<')
-    // The cards are in the disclosure, not in the rationale line above it.
-    expect(html).toContain('>The drawing sets the pose · 2.1 s<')
-    // An entry with no cards has no disclosure.
-    const plain = renderToStaticMarkup(createElement(HistoryList, { entries: [{ ...directorRecord(job)!, timestamp: T(41) }], handle: 'maya' }))
-    expect(plain).not.toContain('What the director saw')
-  })
-
-  it('says so when nothing is about the item', () => {
-    const html = renderToStaticMarkup(createElement(HistoryList, { entries: [], handle: 'maya', item: { key: 'ad', label: 'The ad', tokens: ['x'] } }))
-    expect(html).toContain('Nothing recorded about this yet.')
+  it('shortens hashes and ids for reading', () => {
+    expect(readable(`out ${SHA('a')} for ${J1}`)).toBe('out sha256:aaaaaaaa… for job_…000001')
   })
 })

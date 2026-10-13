@@ -1,0 +1,16 @@
+/* The ask card (ui/AskCard.tsx): the needs-you orange border is the Research tool's rule. */
+.askcard { border: 2px solid #e8590c; border-radius: 10px; padding: 10px 12px; background: var(--panel, #fff); display: grid; gap: 6px; max-width: 420px; }
+.askcard.answered { border-color: var(--line, #ddd); }
+.askcard-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.askcard-who { font-family: ui-monospace, monospace; }
+.askcard-q { font-weight: 600; }
+.askcard-why { font-size: 12px; }
+.askcard-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.askcard-rec { font-weight: 600; }
+.askcard-detail { font-size: 11px; }
+.askcard-text { display: flex; gap: 6px; }
+.askcard-text .input { flex: 1; }
+.askcard-foot { display: flex; justify-content: flex-end; }
+.askcard-done { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.askcard-note { font-size: 12px; color: #b45309; }
+.askcard-later { border-color: #e8590c; }
