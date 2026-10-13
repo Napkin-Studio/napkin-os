@@ -26,7 +26,7 @@ import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
 import { keyNamed, mainStoryboard, refsList } from '../model/selectors'
 import { cropLoss } from '../lib/runwaySizes'
-import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
+import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
 import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
   alive, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
@@ -511,6 +511,27 @@ export class CanvasController {
     const input: JobInput = { refs, ...(ratio ? { ratio } : { aspect }), ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice)
     return { jobId }
+  }
+
+  /**
+   * Put resized sketch areas back on their shape: anchored top-left, led by the width (core/sketch.ts
+   * lockAspect). Called once on pointer-up, as a system write, so the resize stays one undo step of
+   * the person's and two browsers correcting it write the same thing. Returns how many moved.
+   */
+  lockAreas(): number {
+    const d = this.doc()
+    let moved = 0
+    const next = this.els().map((e) => {
+      const c = cd(e)
+      if (c?.kind !== 'sketch' || e.isDeleted || e.type !== 'rectangle') return e
+      const s = d.sketches[c.id]
+      const r = s && lockAspect({ x: e.x, y: e.y, w: e.width, h: e.height }, s.aspect)
+      if (!r) return e
+      moved++
+      return this.canvas.patch(e, { height: r.h })
+    })
+    if (moved) this.setEls(next, false)
+    return moved
   }
 
   /** Wren's ask on a sketch with no words and nothing linked: an asks[id] row on the sketch, with no job. */

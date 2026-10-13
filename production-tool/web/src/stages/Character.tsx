@@ -135,6 +135,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     return off
   }, [canvas, refresh])
 
+  // A resized sketch area keeps its shape: corrected once, when the pointer comes up (features/frame-aspect.clan).
+  useEffect(() => {
+    if (!canvas || !ctrl) return
+    return canvas.onPointer((p) => {
+      if (p.phase === 'up') requestAnimationFrame(() => ctrl.lockAreas())
+    })
+  }, [canvas, ctrl])
+
   const onChange = useCallback(() => {
     ctrl?.onChange()
     refresh()

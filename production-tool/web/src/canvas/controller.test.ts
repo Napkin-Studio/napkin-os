@@ -386,3 +386,18 @@ describe('what the document says about sketches', () => {
     expect(mockImageSize({}, { w: 768, h: 1024 })).toEqual({ w: 768, h: 1024 })
   })
 })
+
+describe('a resized area keeps its shape', () => {
+  it('is put back on its aspect as one system write, and a correct one is left alone', async () => {
+    withFrame(t)
+    await t.ctrl.generate(['F'], 'a jogger')
+    const area = t.canvas.els.find((e) => (e.customData as Rec | undefined)?.kind === 'sketch')!
+    t.canvas.els = t.canvas.els.map((e) => (e.id === area.id ? ({ ...e, width: 640, height: 200 } as El) : e))
+    const commits = t.canvas.commits.length
+    expect(t.ctrl.lockAreas()).toBe(1)
+    const now = t.canvas.els.find((e) => e.id === area.id)!
+    expect({ x: now.x, y: now.y, w: now.width, h: now.height }).toEqual({ x: 0, y: 0, w: 640, h: 360 })
+    expect(t.canvas.commits.slice(commits)).toEqual([{ undoable: false, n: t.canvas.els.length }])
+    expect(t.ctrl.lockAreas()).toBe(0)
+  })
+})
