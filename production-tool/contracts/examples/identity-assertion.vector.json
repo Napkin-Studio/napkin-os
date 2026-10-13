@@ -1,0 +1,32 @@
+{
+  "description": "X-Napkin-Identity v1 (docs/contracts/production-tool-identity.md). napkin-web's signer (crates/napkin-web/src/production.rs) and the relay's verifier (production-tool/relay/identity.py) both check this vector: these claims, this key and this body give exactly this assertion, and verifying it at `now` gives `person`.",
+  "key": "dev-identity-secret-for-the-shared-vector-0123456789",
+  "now": 1791360010,
+  "method": "POST",
+  "pathAndQuery": "/api/jobs?x=1",
+  "body": "{\"op\":\"generate\"}",
+  "claims": {
+    "u": "visionary@napkin",
+    "a": "napkin",
+    "t": "f283da90-07cd-59ec-b370-b23704a2bc91",
+    "n": "Laurance",
+    "aud": "relay",
+    "iat": 1791360000,
+    "exp": 1791360060,
+    "m": "POST",
+    "p": "/api/jobs?x=1",
+    "bh": "8b0876435b617b9e2511b8113733c4f6014c3f372dd3baed7814fdd5bf979ba7"
+  },
+  "claimsJson": "{\"u\":\"visionary@napkin\",\"a\":\"napkin\",\"t\":\"f283da90-07cd-59ec-b370-b23704a2bc91\",\"n\":\"Laurance\",\"aud\":\"relay\",\"iat\":1791360000,\"exp\":1791360060,\"m\":\"POST\",\"p\":\"/api/jobs?x=1\",\"bh\":\"8b0876435b617b9e2511b8113733c4f6014c3f372dd3baed7814fdd5bf979ba7\"}",
+  "assertion": "v1.eyJ1IjoidmlzaW9uYXJ5QG5hcGtpbiIsImEiOiJuYXBraW4iLCJ0IjoiZjI4M2RhOTAtMDdjZC01OWVjLWIzNzAtYjIzNzA0YTJiYzkxIiwibiI6IkxhdXJhbmNlIiwiYXVkIjoicmVsYXkiLCJpYXQiOjE3OTEzNjAwMDAsImV4cCI6MTc5MTM2MDA2MCwibSI6IlBPU1QiLCJwIjoiL2FwaS9qb2JzP3g9MSIsImJoIjoiOGIwODc2NDM1YjYxN2I5ZTI1MTFiODExMzczM2M0ZjYwMTRjM2YzNzJkZDNiYWVkNzgxNGZkZDViZjk3OWJhNyJ9.sWAybp6RLJON3HTky8wQxOJxeCtxF78WKZoObdM1UOU",
+  "person": {
+    "pid": "p_4ec1965e9c",
+    "h": "visionary",
+    "t": "napkin",
+    "name": "Laurance",
+    "tenant": {
+      "id": "f283da90-07cd-59ec-b370-b23704a2bc91",
+      "agency": "napkin"
+    }
+  }
+}
