@@ -9,6 +9,7 @@ import type { CaretChain } from './caret'
 import { counterText, type KeyHooks } from './extensions'
 import { FragmentEditor } from './FragmentEditor'
 import { useEditorTick, useFieldLength } from './hooks'
+import type { MentionHooks } from './mentions'
 
 export interface ShotEditorProps {
   store: ModelStore
@@ -23,9 +24,10 @@ export interface ShotEditorProps {
   readOnly?: boolean
   onFocus?: () => void
   onEditor?: (e: Editor | null) => void
+  mentions?: MentionHooks
 }
 
-export function ShotEditor({ store, shotId, name, compact, chain, chainKey, keys, autoFocus, readOnly, onFocus, onEditor }: ShotEditorProps) {
+export function ShotEditor({ store, shotId, name, compact, chain, chainKey, keys, autoFocus, readOnly, onFocus, onEditor, mentions }: ShotEditorProps) {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const direction = useFieldLength(editor, store, 'shot', 'direction')
@@ -38,7 +40,7 @@ export function ShotEditor({ store, shotId, name, compact, chain, chainKey, keys
     <div className={`shoteditor ${compact ? 'compact' : ''}`}>
       <FragmentEditor
         store={store} kind="shot" id={shotId} label={`${name}: action and direction`} compact={compact}
-        chain={chain} chainKey={chainKey} keys={keys} autoFocus={autoFocus} readOnly={readOnly} onFocus={onFocus}
+        chain={chain} chainKey={chainKey} keys={keys} autoFocus={autoFocus} readOnly={readOnly} onFocus={onFocus} mentions={mentions}
         placeholder={(type) => (type === 'direction' ? 'How it plays: the look, the pace, the feeling…' : compact ? 'What happens in this shot…' : 'What happens in this shot. Tab for Direction.')}
         onNotice={(m) => {
           setNotice(m)

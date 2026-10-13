@@ -1,0 +1,38 @@
+/* Live-text editors, wherever they mount (the Script editor, the Storyboard stage's shot cards):
+   screenplay blocks, the Direction block, mentions and their underline, the @ popover. */
+
+.fragment { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.55em; }
+.fragment p, .sp-static p { margin: 0 0 0.6em; }
+.fragment p[data-type="character"], .sp-static p[data-type="character"] { margin: 0.9em 0 0; padding-left: 37%; text-transform: uppercase; }
+.fragment p[data-type="parenthetical"], .sp-static p[data-type="parenthetical"] { margin: 0; padding-left: 30%; }
+.fragment p[data-type="parenthetical"]::before, .sp-static p[data-type="parenthetical"]::before { content: "("; }
+.fragment p[data-type="parenthetical"]::after, .sp-static p[data-type="parenthetical"]::after { content: ")"; }
+.fragment p[data-type="dialogue"], .sp-static p[data-type="dialogue"] { margin: 0 0 0.6em; padding: 0 18% 0 22%; }
+.fragment p[data-type="direction"], .sp-static p[data-type="direction"] {
+.fragment p[data-type="direction"]::before {
+.fragment p.is-empty::after, .fragment p.is-editor-empty::after { content: attr(data-placeholder); color: var(--ink3); pointer-events: none; }
+.fragment p.is-empty:first-child::after { float: none; }
+.fragment .mention, span[data-type="mention"], .sp-static .mention { color: var(--tool-ink); font-weight: 600; }
+.shoteditor .fragment { min-height: 2.4em; }
+.shoteditor.compact .fragment { font-family: var(--f-display); font-size: 13px; line-height: 1.45; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--paper); }
+.shoteditor.compact .fragment:focus-within, .shoteditor.compact .fragment.ProseMirror-focused { border-color: var(--tool); }
+.shoteditor.compact .fragment p { margin: 0 0 0.3em; }
+.shoteditor-foot { display: flex; gap: 10px; justify-content: flex-end; align-items: center; min-height: 18px; font-size: 11.5px; }
+.shoteditor-foot .counter.warn { color: var(--warn); font-weight: 600; }
+.se-notice { color: var(--ink2); }
+.script-excerpt { white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: var(--ink2); max-height: 9.5em; overflow: hidden; }
+.script-excerpt.empty { color: var(--ink3); }
+.fragment .mention-typed.unknown { text-decoration: underline wavy var(--warn); text-underline-offset: 3px; }
+
+.caretfloat {
+  z-index: 200; min-width: 240px; max-width: 340px; max-height: 300px; overflow: auto; padding: 6px;
+  background: var(--card); border: 1px solid var(--line-soft); border-radius: 12px; box-shadow: var(--shadow-pop); font-family: var(--f-display); font-size: 13px;
+}
+.cf-group { padding: 6px 8px 2px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink3); }
+.cf-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; cursor: pointer; }
+.cf-row.on, .cf-row:hover { background: var(--tool-soft); }
+.cf-thumb { width: 24px; height: 24px; border-radius: 6px; object-fit: cover; background: var(--soft-2); flex: none; }
+.cf-name { font-weight: 600; color: var(--tool-ink); }
+.cf-label, .cf-note { color: var(--ink3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-note { margin-left: auto; }
+.cf-empty { padding: 8px; color: var(--ink3); }

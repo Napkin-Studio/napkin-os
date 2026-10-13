@@ -35,6 +35,8 @@ import { FragmentEditor } from './FragmentEditor'
 import { parseFountain } from './fountain'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
+import { scriptMentionHooks } from './mentionHooks'
+import type { MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
 import './script.css'
 
@@ -106,7 +108,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
   const [focus, setFocus] = useState<Focus>(null)
   const [history, setHistory] = useState(false)
   const [sheet, setSheet] = useState<'outline' | 'facts' | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
@@ -114,10 +116,12 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
   const [chain] = useState(() => new CaretChain())
   const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
 
-  const say = useCallback((m: string) => {
-    setNotice(m)
-    setTimeout(() => setNotice((x) => (x === m ? null : x)), 6000)
+  const say = useCallback((m: string, undo = false) => {
+    const n = { text: m, undo }
+    setNotice(n)
+    setTimeout(() => setNotice((x) => (x === n ? null : x)), 8000)
   }, [])
+  const mentions = useMemo(() => scriptMentionHooks(store, scriptId, (item) => say(`Linked @${item.name} to this script.`, true)), [store, scriptId, say])
   const attempt = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null)
     try {
@@ -216,7 +220,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
       <div className="sp-rows">
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
-            current={current} active={active} setCurrent={setCurrent} setActive={setActive}
+            current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions}
             hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} />
         ))}
       </div>
@@ -269,7 +273,8 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
       {(notice || error) && (
         <div className={`se-line ${error ? 'bad' : ''}`} role={error ? 'alert' : 'status'}>
-          {error ?? notice}
+          {error ?? notice?.text}
+          {!error && notice?.undo && <button className="btn xs" onClick={() => { setNotice(null); void store.undo() }}>Undo</button>}
           <button className="btn xs ghost" onClick={() => { setError(null); setNotice(null) }}>OK</button>
         </div>
       )}
@@ -324,6 +329,7 @@ interface RowProps {
   focusOn(key: string): (e: Editor | null) => void
   say(m: string): void
   onError(m: string | null): void
+  mentions: MentionHooks
 }
 
 function Row(p: RowProps) {
@@ -335,7 +341,7 @@ function Row(p: RowProps) {
 }
 
 /** A scene: its heading (one line, a field) and the text no shot owns yet (live text). */
-function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError }: RowProps & { scene: Scene; number: number }) {
+function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions }: RowProps & { scene: Scene; number: number }) {
   const key = caretKey('scene', scene.id)
   const headingKey = caretKey('heading', scene.id)
   const input = useRef<HTMLInputElement>(null)
@@ -389,7 +395,7 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
         }} />
       {editing && !readOnly ? (
         <FragmentEditor store={store} kind="scene" id={scene.id} label={`Scene ${number}: unplanned script`} className="sp-text"
-          chain={chain} chainKey={key} keys={sceneHooks} onEditor={focusOn(key)}
+          chain={chain} chainKey={key} keys={sceneHooks} onEditor={focusOn(key)} mentions={mentions}
           placeholder={(type, i) => (i === 0 && type === 'action' ? 'Write what happens. INT. or EXT. starts a scene; Tab for Character.' : '')}
           onNotice={say} />
       ) : (
@@ -430,7 +436,7 @@ function StaticProse({ prose, doc }: { prose?: { content?: PMNodeLike[] }; doc: 
 }
 
 /** A shot: one line when collapsed; the current shot expands to its action and Direction, then its beats. */
-function ShotRow({ shot, number, start, end, store, chain, readOnly, current, setCurrent, hooksFor, focusOn, onError }: RowProps & { shot: Shot; number: number; start: number; end: boolean }) {
+function ShotRow({ shot, number, start, end, store, chain, readOnly, current, setCurrent, hooksFor, focusOn, onError, mentions }: RowProps & { shot: Shot; number: number; start: number; end: boolean }) {
   const key = caretKey('shot', shot.id)
   const open = current === shot.id
   const docStore = useServices().doc
@@ -468,7 +474,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
         </label>
       </div>
       <ShotEditor store={store} shotId={shot.id} name={`Shot ${number}`} chain={chain} chainKey={key} keys={shotHooks}
-        onEditor={focusOn(key)} />
+        onEditor={focusOn(key)} mentions={mentions} />
       <div className="sp-beatadd">
         <button className="linkbtn" onClick={() => void addBeat(store, shot.id, 'line', { at_s: 0 }).then((id) => chain.focus(caretKey('beat', id), 'start'), (e) => onError(e instanceof Error ? e.message : 'That line could not be added.'))}>+ Line</button>
       </div>
@@ -477,7 +483,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
 }
 
 /** A beat of the current shot: a line (speaker, then the words) or another kind, with its time. */
-function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say }: RowProps & { beatId: string }) {
+function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, mentions }: RowProps & { beatId: string }) {
   const beat = doc.beats[beatId]
   const docStore = useServices().doc
   const [speaker, setSpeaker] = useState<string | null>(null)
@@ -498,7 +504,7 @@ function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say }
           }} />
       )}
       <FragmentEditor store={store} kind="beat" id={beatId} label={beat.kind === 'line' ? 'Line' : `${beat.kind} beat`} className="sp-beattext"
-        chain={chain} chainKey={key} keys={hooksFor(key)} onEditor={focusOn(key)} onNotice={say} readOnly={readOnly}
+        chain={chain} chainKey={key} keys={hooksFor(key)} onEditor={focusOn(key)} onNotice={say} readOnly={readOnly} mentions={mentions}
         placeholder={beat.kind === 'line' ? 'What they say…' : 'What happens…'} />
     </div>
   )

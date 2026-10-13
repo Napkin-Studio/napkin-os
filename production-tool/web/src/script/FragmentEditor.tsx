@@ -12,6 +12,8 @@ import type { ModelStore } from '../model/store'
 import type { CaretChain } from './caret'
 import { editorExtensions, HookRelay, refNames, type KeyHooks } from './extensions'
 import { trackTyping } from './typing'
+import { redrawMentions, type MentionHooks } from './mentions'
+import './fragment.css'
 
 export interface FragmentEditorProps {
   store: ModelStore
@@ -32,13 +34,15 @@ export interface FragmentEditorProps {
   /** Focus as soon as it mounts. */
   autoFocus?: 'start' | 'end'
   readOnly?: boolean
+  /** @ mentions here (mentionHooks.ts). */
+  mentions?: MentionHooks
 }
 
-export function FragmentEditor({ store, kind, id, label, className, compact, placeholder, keys, chain, chainKey, onNotice, onEditor, onFocus, autoFocus, readOnly }: FragmentEditorProps) {
+export function FragmentEditor({ store, kind, id, label, className, compact, placeholder, keys, chain, chainKey, onNotice, onEditor, onFocus, autoFocus, readOnly, mentions }: FragmentEditorProps) {
   // The hooks change with every render; the editor is made once per fragment, so it reads them through a relay.
   const [relay] = useState(() => new HookRelay())
   useEffect(() => {
-    relay.set(keys, onNotice, onFocus)
+    relay.set(keys, onNotice, onFocus, mentions)
   })
   const editor = useEditor({
     extensions: editorExtensions({
@@ -49,6 +53,7 @@ export function FragmentEditor({ store, kind, id, label, className, compact, pla
       placeholder,
       notice: (m) => relay.notice(m),
       keys: relay.keys(),
+      mentions: () => relay.mentions(),
     }),
     editable: !readOnly,
     editorProps: {
@@ -90,6 +95,13 @@ export function FragmentEditor({ store, kind, id, label, className, compact, pla
   useEffect(() => {
     editor?.setEditable(!readOnly)
   }, [editor, readOnly])
+
+  // A ref renamed, linked or gone: the mentions redraw under their names now.
+  useEffect(() => {
+    if (!editor) return
+    redrawMentions(editor)
+    return store.onChange(() => redrawMentions(editor))
+  }, [editor, store])
 
   return <EditorContent editor={editor} />
 }

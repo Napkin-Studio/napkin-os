@@ -7,7 +7,7 @@
 // Contract 3: the script's words are the main script's scenes; the shots are the main storyboard's,
 // in rank order; the ratio and the target length are the storyboard's; the frame in a shot is its pick.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import type { CameraMovement, CameraSize, ModelChoice, Ratio, Region, Shot } from '../contracts/types'
 import { CAMERA_MOVEMENTS, CAMERA_SIZES } from '../contracts/types'
@@ -49,6 +49,7 @@ import { scriptRoute } from '../app/route'
 import type { ModelStore } from '../model/store'
 import { insertMention, removeMention } from '../script/edits'
 import { ShotEditor } from '../script/ShotEditor'
+import { scriptMentionHooks } from '../script/mentionHooks'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -94,6 +95,7 @@ export function Storyboard() {
     if (!scriptText(doc).trim()) return setError('Write a line or two first.')
     await planOrJoin(deps)
   }
+  const mentionHooks = useMemo(() => (clan ? scriptMentionHooks(clan, undefined) : undefined), [clan])
   const openScript = (shot?: string) => script && router.push(scriptRoute(project.id, script.id, shot))
 
   const attempt = async (fn: () => Promise<unknown>) => {
@@ -205,7 +207,7 @@ export function Storyboard() {
                   </div>
                   <div className="stack" style={{ gap: 4 }}>
                     {clan
-                      ? <ShotEditor store={clan} shotId={s.id} name={`Shot ${i + 1}`} compact />
+                      ? <ShotEditor store={clan} shotId={s.id} name={`Shot ${i + 1}`} compact mentions={mentionHooks} />
                       : <div className="script-excerpt">{s.action ?? ''}</div>}
                     <ShotRefs shot={s} store={clan} onOpen={() => openScript(s.id)} />
                   </div>

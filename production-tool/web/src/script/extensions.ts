@@ -24,6 +24,7 @@ import type { EditorView } from '@tiptap/pm/view'
 import { ySyncPlugin } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
 import type { ProductionDocument } from '../contracts/types'
+import { mentionExtensions, type MentionHooks } from './mentions'
 import { flatText, FRAGMENT_BLOCKS, LIMITS, shapeProblem, TEXT_EXTENSIONS, type FragmentKind, type PMNode as JsonNode, type Prose, type RefNames } from '../../../clan-store/src'
 
 // ── FragmentSync ────────────────────────────────────────────────────────────
@@ -103,6 +104,8 @@ export interface EditorOptions {
   compact?: boolean
   /** The editor these extensions run in (set once it exists; for paste hooks). */
   editor?: () => Editor
+  /** @ mentions: the popover, names now, the underline (mentions.ts). */
+  mentions?: () => MentionHooks | undefined
 }
 
 const NO_REFS = (): RefNames => ({})
@@ -336,8 +339,11 @@ function keysExtension(opts: EditorOptions) {
 export function editorExtensions(opts: EditorOptions): AnyExtension[] {
   const keys = keysExtension(opts)
   const placeholder = opts.placeholder
+  const mentions = opts.mentions ? mentionExtensions(opts.mentions) : []
+  const nodes = mentions.length ? TEXT_EXTENSIONS.map((e) => (e.name === 'mention' ? mentions[0] : e)) : TEXT_EXTENSIONS
   const out: AnyExtension[] = [
-    ...TEXT_EXTENSIONS,
+    ...nodes,
+    ...mentions.slice(1),
     keys,
     Extension.create({
       name: 'napkinGuards',
@@ -375,11 +381,17 @@ export class HookRelay {
   private hooks: KeyHooks | undefined
   private onNotice: ((m: string) => void) | undefined
   private onFocus: (() => void) | undefined
+  private mentionHooks: MentionHooks | undefined
 
-  set(hooks: KeyHooks | undefined, onNotice?: (m: string) => void, onFocus?: () => void) {
+  set(hooks: KeyHooks | undefined, onNotice?: (m: string) => void, onFocus?: () => void, mentions?: MentionHooks) {
     this.hooks = hooks
     this.onNotice = onNotice
     this.onFocus = onFocus
+    this.mentionHooks = mentions
+  }
+
+  mentions(): MentionHooks | undefined {
+    return this.mentionHooks
   }
 
   notice(m: string) {
