@@ -22,7 +22,7 @@ resource "aws_dynamodb_table" "jobs" {
     type = "S"
   }
 
-  # A participant's jobs, for the organiser queries.
+  # A participant's jobs, for the operator queries.
   global_secondary_index {
     name            = "participant"
     hash_key        = "participantId"
