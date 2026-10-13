@@ -1,14 +1,15 @@
 """People's names for images (key_variant, free variants) to the wire tags a provider job uses.
 
 A participant names an image `maya_laughing` or `maya_three-quarter` and writes `@maya_laughing` in
-an instruction, a shot's action or its dialogue. Providers need far less: Runway takes a tag of 3-16
+an instruction, a shot's action, direction or beats. Providers need far less: Runway takes a tag of 3-16
 characters from letters, digits and underscores, and the director's check holds every provider to
 that (common.schema.json#/$defs/tag). This module is the one place that maps between the two, per
 job, before the director sees it:
 
 - each input ref gets a `tag`: its name when that is already a valid tag, else a short unique form;
   an unnamed input (a node the participant never named) is `in_1`, `in_2`… in input order;
-- `@name` in `text`, `shot.action` and `shot.dialogue` becomes `@tag`, and `shot.refs` becomes the
+- `@name` in `text`, the shot's `action`, `direction`, `direction_condensed` and beat texts becomes `@tag`,
+  and `shot.refs` (contract 3's JobShot: names) becomes the
   tags (frame and clip send exactly the shot's refs);
 - a bare `@key` (`@goremon`) is the whole character: it becomes its front's tag, and a bare key
   in `shot.refs` brings the tags of every picture of that key the job carries. A key with no front among the
@@ -27,6 +28,8 @@ TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
 # A mention: @ then key_variant (refName) or a bare key, not inside a word or an address.
 MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
 MAX = 16
+# The words of a contract-3 JobShot that may name pictures.
+SHOT_WORDS = ("action", "direction", "direction_condensed")
 
 
 class UnknownName(ValueError):
@@ -96,7 +99,7 @@ def _rewrite(text: str, by_name: dict[str, str]) -> str:
 def _named(payload: dict) -> set[str]:
     """Every key_variant the job names outright: in the shot's refs, its words or the instruction."""
     shot = payload.get("shot") or {}
-    words = [payload.get("text") or "", shot.get("action") or "", shot.get("dialogue") or ""]
+    words = [payload.get("text") or "", *(shot.get(f) or "" for f in SHOT_WORDS), *(b.get("text") or "" for b in shot.get("beats") or [])]
     named = {n for n in shot.get("refs") or [] if "_" in n}
     named |= {m for w in words for m in MENTION.findall(w) if "_" in m}
     return named
@@ -157,9 +160,12 @@ def to_wire(op: str, payload: dict) -> dict:
         out["text"] = _rewrite(out["text"], by_name)
     shot = out.get("shot")
     if shot:
-        for field in ("action", "dialogue"):
+        for field in SHOT_WORDS:
             if shot.get(field):
                 shot[field] = _rewrite(shot[field], by_name)
+        for beat in shot.get("beats") or []:
+            if beat.get("text"):
+                beat["text"] = _rewrite(beat["text"], by_name)
         tags: list[str] = []
         for n in shot.get("refs") or []:
             if "_" in n:

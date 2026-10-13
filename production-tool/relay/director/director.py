@@ -1,7 +1,7 @@
 """The director: one job input plus the routed provider's capability sheet in, strict JSON out.
 
-The output is director.schema.json: one providerJob for an image or video op, shots for
-shot_list, plus needsUser, rationale and confidence. The model port (model.py) enforces the
+The output is director.schema.json (contract 3): one providerJob for an image or video op,
+planned shots for shot_list, or instead a question for a person, plus rationale and confidence. The model port (model.py) enforces the
 schema with one retry and then fails loudly; this module adds what a schema cannot say: the job
 must pass the routed sheet (base.check_capabilities), name only refs it was given, and write
 only @tags the adapter can rewrite.
@@ -23,7 +23,7 @@ from providers import CapabilityMissing, ProviderJob, check_capabilities
 from providers.types import CONTRACTS, IMAGE_OPS
 from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
-from .base import fit_duration, view_angle
+from .base import fit_duration, require_prompt, view_angle
 from .model import ModelPort, Usage
 
 BASE = "https://napkin.ie/production-tool/contracts/"
@@ -58,8 +58,9 @@ KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250}
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
-# The ops a sectioned prompt has no section for (shot_list) run on this whole prompt.
-FALLBACK_PROMPT = "director.v4"
+# Where a prompt's role lines go: one line per ref role, written from common.schema.json's
+# refRoleTable at load, so the prompt and the role picker never differ (contract 3).
+ROLE_LINES = "<!-- role-lines -->"
 # Words that take one thing from a picture: "like @x", "@x's", "the dress of @x", "from @x", "as in @x".
 DONOR = re.compile(r"(?:\blike|\bfrom|\bas in|\bof)\s+@([a-z][a-z0-9_]{2,15})\b|@([a-z][a-z0-9_]{2,15})'s\b")
 
@@ -195,6 +196,16 @@ def _within_budget(job: dict, op: str, payload: dict) -> None:
         raise DirectorError(f"the director added {added} characters to the words; {op} allows about {budget}")
 
 
+def role_lines(contracts: Path = CONTRACTS) -> str:
+    table = json.loads((contracts / "common.schema.json").read_text())["$defs"]["refRoleTable"]["const"]
+    return "\n".join(f"- `{role}`: {row['prompt_line']}" for role, row in table.items())
+
+
+def load_prompt(path: Path, contracts: Path = CONTRACTS) -> str:
+    """A prompt file with its role lines filled in."""
+    return path.read_text().replace(ROLE_LINES, role_lines(contracts))
+
+
 class DirectorError(Exception):
     """The director's answer cannot be used: it breaks the routed sheet or the job's own facts."""
 
@@ -242,26 +253,30 @@ def _hashes(node) -> set:
     return set(SHA.findall(json.dumps(node)))
 
 
+SPOKEN = {"line", "vo"}
+
+
 def _without_dialogue(op: str, payload: dict) -> dict:
-    """A shot's dialogue is voice-over: a model told the words draws them (a "Dialogue - ..."
-    caption box in a frame, then in every clip made from it; decided 2026-10-07). The web app no
-    longer sends it for frames and clips; this keeps it from an older page or another client too."""
+    """Spoken words (a shot's line and VO beats) are never sent to an image or video model: a model
+    told the words draws them (a "Dialogue - ..." caption box in a frame, then in every clip made from
+    it; decided 2026-10-07). Moments, music, sound and camera beats stay."""
     shot = payload.get("shot")
-    if op == "shot_list" or not isinstance(shot, dict) or "dialogue" not in shot:
+    if op == "shot_list" or not isinstance(shot, dict) or not shot.get("beats"):
         return payload
-    return {**payload, "shot": {k: v for k, v in shot.items() if k != "dialogue"}}
+    return {**payload, "shot": {**shot, "beats": [b for b in shot["beats"] if b.get("kind") not in SPOKEN]}}
 
 
 class Director:
     def __init__(self, model_port: ModelPort, prompt_dir: Path, sheets: dict, *,
                  per_click_model: str = "claude-haiku-4-5", shot_list_model: str = "claude-sonnet-5-5",
-                 prompt_version: str = "director.v4", contracts: Path = CONTRACTS):
+                 prompt_version: str = "director.v6", contracts: Path = CONTRACTS):
         self.port = model_port
         self.sheets = sheets
         self.per_click_model, self.shot_list_model = per_click_model, shot_list_model
         self.prompt_dir = Path(prompt_dir)
+        require_prompt(prompt_version)
         self.prompt_version = prompt_version
-        self.system = (self.prompt_dir / f"{prompt_version}.md").read_text()
+        self.system = load_prompt(self.prompt_dir / f"{prompt_version}.md", contracts)
         schemas = load_schemas(contracts)
         self.schema = bundle(schemas)
         registry = Registry().with_resources((BASE + n, Resource.from_contents(s)) for n, s in schemas.items())
@@ -282,10 +297,9 @@ class Director:
         for ops, body in zip(parts[1::2], parts[2::2]):
             for o in ops.split():
                 sections[o] = body
-        if op not in sections:
-            return (self.prompt_dir / f"{FALLBACK_PROMPT}.md").read_text()
         tail = "\n\nAnswer with the JSON only.\n"
-        return common.rstrip() + "\n\n" + sections[op].replace("Answer with the JSON only.", "").strip() + tail
+        body = sections.get(op, "").replace("Answer with the JSON only.", "").strip()
+        return common.rstrip() + ("\n\n" + body if body else "") + tail
 
     def run(self, op: str, payload: dict, provider_name: Optional[str] = None, job_id: str = "",
             extra_hashes: tuple = ()) -> DirectorResult:
@@ -330,14 +344,20 @@ class Director:
         if output["op"] != op:
             raise DirectorError(f"answered op {output['op']!r} for {op!r}")
         if op == "shot_list":
+            if output.get("question") is not None:
+                if "shots" in output:
+                    raise DirectorError("answered with a question and shots; send one or the other")
+                return
             self._check_shots(payload, output["shots"])
             return
         if "shots" in output:
             raise DirectorError(f"shots belong to shot_list, not {op}")
+        if output.get("question") is not None:
+            if "providerJob" in output or "shots" in output:
+                raise DirectorError("answered with a question and a job; send one or the other")
+            return  # a question for a person: the job waits in needs_input
         if "providerJob" not in output:
-            return  # a question for the user; there is nothing to submit yet
-        if output["needsUser"] is not None:
-            raise DirectorError("answered with a question and a job; send one or the other")
+            raise DirectorError("answered with neither a job nor a question")
         job = output["providerJob"]
         if "ratio" not in job and payload.get("ratio") and (job.get("provider"), op) not in NO_RATIO:
             # 2026-10-07: Haiku sometimes leaves out the ratio it was given ("frame needs a ratio").
@@ -453,18 +473,20 @@ class Director:
 
     @staticmethod
     def _check_shots(payload: dict, shots: list) -> None:
-        if [s["order"] for s in shots] != list(range(1, len(shots) + 1)):
-            raise DirectorError("shot orders must run 1..n")
-        if len({s["id"] for s in shots}) != len(shots):
+        ids = [s["id"] for s in shots if s.get("id")]
+        if len(set(ids)) != len(ids):
             raise DirectorError("shot ids must be unique")
         known = {r["name"] for r in payload.get("refs") or [] if r.get("name")}
         # A bare key names the whole character, and only a key with a front can be named bare.
         known |= {n.split("_", 1)[0] for n in known if n.endswith("_front")}
-        for s in shots:
+        for i, s in enumerate(shots, 1):
             unknown = [n for n in s.get("refs") or [] if n not in known]
             if unknown:
-                raise DirectorError(f"shot {s['order']} names {unknown[0]!r}, which is not an input ref")
+                raise DirectorError(f"shot {i} names {unknown[0]!r}, which is not an input ref")
+            late = [b for b in s.get("beats") or [] if b["at_s"] > s["duration_s"]]
+            if late:
+                raise DirectorError(f"shot {i} has a beat at {late[0]['at_s']} s, past its {s['duration_s']} s")
         target = payload.get("targetS")
         total = sum(s["duration_s"] for s in shots)
-        if target is not None and total != target:
+        if target is not None and abs(total - target) > 0.5:
             raise DirectorError(f"shots add up to {total} s, not the {target} s asked for")

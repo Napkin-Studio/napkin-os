@@ -18,7 +18,7 @@
       {
         "id": "ref_01K6XA6Z0000000000000000AB",
         "name": "maya_eyes",
-        "role": "shape",
+        "role": "other",
         "kind": "picture",
         "asset": {
           "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -66,7 +66,7 @@
       "ratio": "896:1152",
       "outputs": 1
     },
-    "needsUser": null,
+    "question": null,
     "rationale": "Sketch as the character ref; eyes and palette as object refs, named by tag.",
     "confidence": 0.8
   }

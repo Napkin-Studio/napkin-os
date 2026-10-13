@@ -7,6 +7,11 @@ passthrough and each director prompt, scored by checks in code.
 `record` calls the model (NAPKIN_MODEL_API: claude-cli locally, on the developer's own login)
 and keeps each raw reply under eval/recorded/<version>/<case>.json. `score` and the test
 (tests/test_director_eval.py) only replay them, so CI makes no model call.
+
+Contract 3 (features/contract-v3.clan) runs director.v6 only: the v4 and v5 recordings, converted
+to contract 3's shapes (needsUser became question), are replayed through today's checks and prompt,
+so the comparison still says what each recorded answer was worth. Record v6 with a live model to
+add it.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from providers.types import effective_sheet  # noqa: E402
 CASES = HERE / "director_cases.json"
 RECORDED = HERE / "recorded"
 PROMPTS = HERE.parent / "prompts"
+CURRENT = "director.v6"  # the prompt a replay runs under: the recordings are only replies
 MODELS = {"haiku": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "sonnet": "eu.anthropic.claude-sonnet-5-5"}
 CDN = "https://cdn.test/in"
 
@@ -140,7 +146,7 @@ def table(data: dict, versions: list[str]) -> dict[str, dict]:
                 rec = recorded(v, case["id"])
                 if rec is None:
                     continue
-                job = answer(case, data, rec["version"], Replay(rec["reply"]))
+                job = answer(case, data, CURRENT, Replay(rec["reply"]))
             rows[case["id"]] = score(case, job)
         out[v] = rows
     return out

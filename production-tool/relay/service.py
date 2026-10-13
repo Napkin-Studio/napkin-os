@@ -9,6 +9,8 @@ Job life (states from common.schema.json#/$defs/jobState):
   submitting  a slot is held; the director and the provider submit are running
   submitted   the provider has it (requestId saved)
   fetching    outputs are being copied to S3 and hashed
+  needs_input the director asked (Job.question); uncharged, holding nothing, waiting for
+              POST /jobs/{jobId}/answer from anyone in the agency (contract 3)
   completed | failed | cancelled   final
   uncertain   the provider may have taken it with no id saved: never resubmitted there
 
@@ -44,7 +46,7 @@ import library
 import names
 import projects
 from contracts import Contracts, api
-from director.base import Director
+from director.base import Director, PromptTooOld, new_id
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
 from providers.types import effective_sheet, op_models
@@ -84,11 +86,28 @@ def could_not(provider: str, message: str) -> str:
     """Why a job left a provider for the next one in its chain (Job.fallbackReason)."""
     return f"{PROVIDER_NAMES.get(provider, provider)} could not make it: {message.rstrip('.')}."
 
-QUOTA_CLASS = {
-    "generate": "image", "view": "image", "frame": "image", "region_edit": "image",
-    "clip": "video", "clip_edit": "video", "stitch": "render", "shot_list": "text",
-}
+def _common_defs() -> dict:
+    from contracts_dir import contracts_dir
+    return json.loads((contracts_dir() / "common.schema.json").read_text())["$defs"]
+
+
+_COMMON = _common_defs()
+CONTRACT = _COMMON["contractVersion"]["const"]  # "3"
+STALE_BUILD = "This build reads contract 3; reload the page."
+# Each op's daily quota class (common opQuotaClass).
+QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
 INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
+# Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
+BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch"}
+UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
+QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
+
+
+def crew_for(op: str) -> str:
+    """Who works an op (ui-behaviour 5.1; clan-store's attribution.crewFor)."""
+    return {"shot_list": "dex", "frame_edit": "dex", "bridge": "dex", "write": "skye", "cutout": "rhea",
+            "upscale": "rhea", "region_edit": "rhea", "clip_patch": "edie", "stitch": "edie", "read": "ellis",
+            "transcribe": "ellis", "check": "jude"}.get(op, "wren")
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
 # The provider every job falls back to, once, when the op routes to it (features/runway-fallback.clan).
 FLOOR = "runway"
@@ -284,9 +303,14 @@ class Relay:
                 ctx["pick"] = f'{req["modelChoice"]["provider"]}:{req["modelChoice"]["model"]}'
             return 200, public(self.create_job(who, req))
         if path.startswith("/jobs/"):
-            job_id = path[len("/jobs/"):]
+            job_id, _, sub = path[len("/jobs/"):].partition("/")
             ctx["jobId"] = job_id
-            job = self._own_job(who, job_id)
+            job = self._tenant_job(who, job_id)
+            if sub == "answer" and method == "POST":
+                self._not_blocked(who)
+                return self.answer(who, job, self._json(body, "JobAnswer"))
+            if sub:
+                raise ApiError("invalid_input", f"No route {method} {path}.", status=404)
             if method == "GET":
                 return 200, public(self.advance(job))
             if method == "DELETE":
@@ -304,7 +328,7 @@ class Relay:
         if method == "POST" and path == "/log":
             entry = self._json(body, "LogEntry")
             ctx.update({"clientLevel": entry["level"], "clientMessage": entry["message"][:500],
-                        "jobId": entry.get("jobId"), "stage": entry.get("stage"), "browser": entry.get("browser")})
+                        "jobId": entry.get("jobId"), "node": entry.get("node"), "browser": entry.get("browser")})
             if entry.get("stack"):
                 ctx["clientStack"] = entry["stack"][:2000]
             return 204, None
@@ -320,6 +344,9 @@ class Relay:
         except UnicodeEncodeError:
             raise ApiError("invalid_input", "The text has a broken character in it (half an emoji). "
                            "Delete the last character and type it again.") from None
+        # A page from an older build (contract 2) is told to reload, before its body is read any further.
+        if schema in ("JobRequest", "JobAnswer") and isinstance(data, dict) and data.get("contractVersion") != CONTRACT:
+            raise ApiError("invalid_input", STALE_BUILD)
         errors = self.contracts.errors(api(schema), data)
         if errors:
             raise ApiError("invalid_input", f"Invalid {schema}: {errors[0]}")
@@ -358,9 +385,11 @@ class Relay:
         if any(self.store.is_blocked(k) for k in blocked_keys(who.get("t"), who["h"])):
             raise ApiError("blocked", "This name has been blocked.")
 
-    def _own_job(self, who: dict, job_id: str) -> dict:
+    def _tenant_job(self, who: dict, job_id: str) -> dict:
+        """A job of the person's agency: anyone in it may read it, stop it and answer its question
+        (ui-behaviour 4.3, 4.7); its cost stays on its starter's budget."""
         job = self.store.get_job(job_id)
-        if not job or job["participantId"] != who["pid"]:
+        if not job or job.get("_tenant") != who["tenant"]["id"]:
             raise ApiError("invalid_input", "No such job.", status=404)
         return job
 
@@ -423,9 +452,11 @@ class Relay:
         if route.startswith("/clan/"):  # a saved project's routes (personal workspaces): one name each
             project = project or route.split("/")[2]
             name = "/clan/{project}/canvas" if route.endswith("/canvas") else "/clan/{project}"
-        for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{key}")):
+        for prefix, label in (("/jobs/", "/jobs/{id}"), ("/library/", "/library/{shelf}/{key}")):
             if route.startswith(prefix):
                 name = label
+        if route.startswith("/jobs/") and route.endswith("/answer"):
+            name = "/jobs/{id}/answer"
         data = {"status": status, "latencyMs": ctx.get("latencyMs")}
         for k in ("error", "jobId", "op", "pick", "libraryKey"):
             if ctx.get(k) is not None:
@@ -566,18 +597,23 @@ class Relay:
     def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
         workspace = self._workspace(who)  # the agency's library, shared by everyone in it
         lib = library.Library(self.blobs, lambda: iso(self.clock()))
-        if method == "GET" and path == "/library":
-            return lib.index(workspace)
-        key, _, ver = path[len("/library/"):].partition("/")
-        if not KEY.match(key) or (ver and not ver.isdigit()):
+        parts = path[len("/library/"):].split("/") if path.startswith("/library/") else []
+        if not parts:
+            raise ApiError("invalid_input", "Name a shelf: /library/{shelf} (agency for what no client owns).", status=404)
+        shelf, key, ver = (parts + [None, None])[:3]
+        if len(parts) > 3 or not library.SHELF.match(shelf):
+            raise ApiError("invalid_input", "A shelf is lowercase letters, digits, - and _, up to 64 of them.")
+        if method == "GET" and key is None:
+            return lib.index(workspace, shelf)
+        if not KEY.match(key or "") or (ver and not ver.isdigit()):
             raise ApiError("invalid_input", "A key is lowercase letters and digits, 2 to 24 of them.")
-        ctx["libraryKey"] = key
+        ctx["libraryKey"] = f"{shelf}/{key}"
         try:
             if method == "GET":
-                return lib.entry(workspace, key, int(ver) if ver else None)
+                return lib.entry(workspace, shelf, key, int(ver) if ver else None)
             if method == "POST" and not ver:
                 self._not_blocked(who)
-                return lib.publish(workspace, key, self._json(body, "LibraryPublish"), who["h"])
+                return lib.publish(workspace, shelf, key, self._json(body, "LibraryPublish"), who["h"])
         except library.Conflict as e:
             raise ApiError("conflict", str(e)) from None
         except library.Missing as e:
@@ -671,6 +707,8 @@ class Relay:
             return self._existing(who, existing)
         cfg = self.config()
         op = req["op"]
+        if op in UNBUILT_OPS:
+            raise ApiError("capability_missing", "This step is not built yet.")
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
@@ -707,8 +745,10 @@ class Relay:
 
         now = self.clock()
         job = {
-            "contractVersion": "2", "jobId": req["jobId"], "participantId": pid, "op": op,
-            "quotaClass": qclass, "state": "queued", "inputHashes": sorted({a["sha256"] for a in asset_refs(req["input"])}),
+            "contractVersion": CONTRACT, "jobId": req["jobId"], "participantId": pid,
+            "tenantId": who["tenant"]["id"], "projectId": req["projectId"], "startedBy": f"human:{pid}",
+            "crew": crew_for(op), "node": req["node"], "nonce": req["nonce"], "purpose": req.get("purpose"),
+            "op": op, "quotaClass": qclass, "state": "queued", "inputHashes": sorted({a["sha256"] for a in asset_refs(req["input"])}),
             "cost": {"estimate": estimate, "reserved": estimate, "currency": "USD", "unknown": unknown},
             "createdAt": iso(now), "updatedAt": iso(now),
             "_req": req, "_day": day, "_counted": counted, "_queue": "q", "_tenant": who["tenant"]["id"],
@@ -960,9 +1000,8 @@ class Relay:
             directed, block = self._direct(job, sheet)
         except ApiError as e:
             return self._fail(job, e.code, e.message, paid=False, refund=True)
-        if directed.get("needsUser"):
-            return self._finish(job, "completed", needsUser=directed["needsUser"], director=block,
-                                outputs=[], paid=False, refund=True)
+        if directed.get("question"):
+            return self._ask(job, directed["question"], block)
         pjob = directed["providerJob"]
         set_job_context(job["op"], asset_refs(job["_req"]["input"]))
         try:
@@ -1033,7 +1072,17 @@ class Relay:
             inp, kinds = self._with_cards(job, inp)
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
             wired = names.to_wire(req["op"], inp)
+            if wired.get("answer"):  # what was asked, and what the person chose, in words the director reads
+                q = self._asked(job) or {}
+                a = wired["answer"]
+                chose = next((o for o in q.get("options", []) if o["id"] == a.get("optionId")), None)
+                wired = {**wired, "answer": {**a, **({"question": q["text"]} if q.get("text") else {}),
+                                              **({"chose": chose["label"]} if chose else {}),
+                                              **({"value": chose["value"]} if chose and "value" in chose else {})}}
             out = dict(self.director.direct({**req, "input": wired}, sheet))
+        except PromptTooOld as e:  # a config with director.v5 under contract 3: said plainly, never run
+            log.error("%s", e)
+            raise ApiError("internal", str(e)) from e
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
@@ -1072,16 +1121,92 @@ class Relay:
             out, block = self._direct(saved, None)
         except ApiError as e:
             return self._fail(saved, e.code, e.message, paid=False, refund=True)
-        if out.get("needsUser"):
-            return self._finish(saved, "completed", needsUser=out["needsUser"], director=block, outputs=[], paid=False)
+        if out.get("question"):
+            return self._ask(saved, out["question"], block)
         return self._finish(saved, "completed", shots=out["shots"], director=block, outputs=[],
                             kind="generated", paid=False)
+
+    # ── asks (needs_input, ui-behaviour 3.17, 5.2) ──────────────────────────
+    def _ask(self, job: dict, question: dict, block: dict) -> dict:
+        """The director asked instead of guessing: the job waits in needs_input, uncharged, holding no
+        in-flight place and no provider slot, and never times out into a guess. The relay names the
+        question (its id is the document's ask key)."""
+        q = {"id": new_id("q"), **{k: v for k, v in question.items() if k != "id"}}
+        cost = {**job["cost"], "reserved": 0.0}
+        saved = self._save(job, state="needs_input", question=q, director=block, cost=cost, _queue=None,
+                           _released=True, queuePosition=None, _slot=None, provider=None, model=None,
+                           requestId=None, fallbackFrom=None)
+        if saved is None:
+            return self._reload(job)
+        if not job.get("_released"):
+            self.store.incr(f"inflight#{job['participantId']}", "n", -1)
+            if job.get("_slot"):
+                self.store.incr(job["_slot"], "n", -1)
+            if job["cost"].get("reserved"):
+                self.store.incr("spend", "usd", -job["cost"]["reserved"])
+        return self._with_poll(saved)
+
+    @staticmethod
+    def _answer_of(body: dict) -> dict:
+        return {"option_id": body["optionId"]} if "optionId" in body else {"text": body["text"]}
+
+    def _answer_conflict(self, job: dict) -> tuple[int, dict]:
+        q = job.get("question") or {}
+        ans = job.get("answer") or {}
+        label = next((o["label"] for o in q.get("options", []) if o["id"] == ans.get("option_id")), ans.get("text", ""))
+        who = (job.get("answeredBy") or "").removeprefix("human:") or "someone"
+        if not job.get("answeredBy"):
+            raise ApiError("conflict", "This job is not waiting for an answer.")
+        return 409, {"error": {"code": "conflict", "message": f"{who} answered first: {label}."[:300], "retryable": False},
+                     "answeredBy": job["answeredBy"], "answer": ans}
+
+    def answer(self, who: dict, job: dict, body: dict) -> tuple[int, dict]:
+        """POST /jobs/{jobId}/answer: anyone in the job's agency answers; the first answer wins. The same
+        job resumes, on its starter's budget (participantId and startedBy stay theirs)."""
+        if job.get("answeredBy") or job["state"] != "needs_input":
+            return self._answer_conflict(job)
+        q = job.get("question") or {}
+        if body["questionId"] != q.get("id"):
+            raise ApiError("invalid_input", "That is not this job's question.")
+        if "optionId" in body and body["optionId"] not in {o["id"] for o in q.get("options", [])}:
+            raise ApiError("invalid_input", "That is not one of the question's options.")
+        if "text" in body and not q.get("allow_text"):
+            raise ApiError("invalid_input", "This question takes one of its options, not words.")
+        req = json.loads(json.dumps(job["_req"]))
+        req["input"] = {**req["input"], "answer": {k: v for k, v in body.items()}}
+        saved = self._save(job, answeredBy=f"human:{who['pid']}", answer=self._answer_of(body), _req=req)
+        if saved is None:  # someone else's answer got in first
+            return self._answer_conflict(self.store.get_job(job["jobId"]))
+        cfg = self.config()
+        starter = saved["participantId"]
+        if not self.store.incr(f"inflight#{starter}", "n", 1, cfg["inFlightPerParticipant"]):
+            failed = self._fail(saved, "queue_full", "Its starter has too many jobs running; answer again soon.",
+                                retryable=True, paid=False, refund=True)
+            return 200, public(failed)
+        resumed = self._save(saved, state="queued", _queue="q", _released=False, _queuedAt=self.clock(), _tried=[])
+        if resumed is None:
+            self.store.incr(f"inflight#{starter}", "n", -1)
+            return 200, public(self._reload(saved))
+        return 200, public(self._dispatch(resumed, cfg))
+
+    def _asked(self, job: dict) -> dict | None:
+        """The question an answer in this job's input settles: its own (it resumed), or its parent's (a Change)."""
+        if job.get("question"):
+            return job["question"]
+        qid = ((job["_req"].get("input") or {}).get("answer") or {}).get("questionId")
+        for pid in job["_req"].get("parentIds") or []:
+            parent = self.store.get_job(pid)
+            if parent and (parent.get("question") or {}).get("id") == qid:
+                return parent["question"]
+        return None
 
     def _run_stitch(self, job: dict, cfg: dict) -> dict:
         if self.stitch is None:
             return self._fail(job, "provider_unavailable", "Stitching is not available here.", paid=False, refund=True)
         clips = []
         for c in job["_req"]["input"].get("clips") or []:
+            if c.get("endCard"):  # contract 3's end-card shot: stitch draws the end card itself
+                continue
             key = self.blobs.key_for_url(c["asset"]["url"])
             if not key:
                 return self._fail(job, "invalid_input", "A clip is not one of ours; upload it first.",
@@ -1107,7 +1232,7 @@ class Relay:
         cfg = self.config()
         now = self.clock()
         state = job["state"]
-        if state in TERMINAL:
+        if state in TERMINAL or state == "needs_input":  # an ask waits for a person, never for a clock
             return self._with_poll(job)
         if state == "queued":  # waiting since it was made, or since it fell back to the floor
             if now - job.get("_queuedAt", parse_iso(job["createdAt"])) > self._queue_timeout_s(cfg, job):
@@ -1228,6 +1353,11 @@ class Relay:
         state = job["state"]
         if state == "queued":
             return self._finish(job, "cancelled", paid=False, refund=True)
+        if state == "needs_input":  # holds nothing but the day's quota, which comes back
+            out = self._finish(job, "cancelled", paid=False)
+            if out["state"] == "cancelled" and job.get("_counted"):
+                self.store.incr(f"{job['participantId']}#{job['_day']}", job["quotaClass"], -1)
+            return out
         if state in ("submitted", "uncertain"):
             if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back
                 return self._finish(job, "cancelled", paid=False, refund=True)

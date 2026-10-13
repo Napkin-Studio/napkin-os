@@ -7,6 +7,8 @@ import time
 
 import boto3
 import pytest
+
+from conftest import envelope
 from moto import mock_aws
 
 from blobs import S3Blobs
@@ -189,8 +191,7 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5})
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
     # no adapters exist yet in this lane: routing finds no provider
-    req = {"contractVersion": "2", "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "parentIds": [],
-           "input": {"text": "x"}}
+    req = {**envelope("generate", "job_01K6XA7Q3M9V2D4R8T0B5C1E6F"), "input": {"text": "x"}}
     status, out = http("POST", "/api/jobs", req)
     assert status == 422 and out["error"]["code"] == "capability_missing"
     assert handler.handler({"source": "aws.events"}, None) == {"advanced": 0}

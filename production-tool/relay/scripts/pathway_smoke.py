@@ -73,9 +73,8 @@ def inputs(args) -> dict[str, dict | None]:
     """The input for each step, or None when an argument it needs is missing."""
     image = _asset(args.image_url or "https://example.invalid/character.png", "image/png")
     front = {"id": _id("ref"), "name": "hero_front", "role": "character", "kind": "picture", "asset": image}
-    shot = {"id": _id("shot"), "order": 1, "duration_s": 5, "composition": "medium",
-            "action": "@hero_front waves at the camera in a sunny park", "camera_move": "static",
-            "refs": ["hero_front"]}
+    shot = {"id": _id("shot"), "kind": "shot", "duration_s": 5, "camera": {"size": "medium", "movement": "static"},
+            "action": "@hero_front waves at the camera in a sunny park", "refs": ["hero_front"]}
     return {
         "generate": {"text": "@hero_front standing, full body, plain background", "refs": [front], "ratio": "4:5"},
         "view": {"view": "side", "image": image, "ratio": "4:5"},
@@ -151,7 +150,11 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
                     continue
                 spent += cost
                 t0 = time.time()
-                req = {"contractVersion": "2", "jobId": _id("job"), "op": row["op"], "parentIds": [], "input": inp[row["op"]]}
+                job_id = _id("job")
+                kind = {"frame": "storyboard", "clip": "video", "clip_edit": "video"}.get(row["op"], "sketch")
+                req = {"contractVersion": "3", "jobId": job_id, "op": row["op"], "projectId": _id("proj"),
+                       "nonce": "n_" + job_id[-12:], "node": {"kind": kind, "id": _id(kind)}, "parentIds": [],
+                       "input": inp[row["op"]]}
                 status, job = _call(relay, "POST", "/jobs", req)
                 while status == 200 and job["state"] not in TERMINAL and time.time() - t0 < JOB_TIMEOUT_S:
                     time.sleep(max(2, job.get("nextPollS") or 2))

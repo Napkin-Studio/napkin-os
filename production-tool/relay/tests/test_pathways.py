@@ -18,7 +18,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from conftest import CDN, Harness
+from conftest import CDN, Harness, envelope
 from contracts_dir import contracts_dir
 from director import new_id
 from providers import Registry
@@ -136,8 +136,8 @@ def named(n: int, name: str, role: str = "character") -> dict:
     return {"id": new_id("ref"), "name": name, "role": role, "kind": "picture", "asset": asset(n)}
 
 
-SHOT = {"id": new_id("shot", "pathways"), "order": 1, "duration_s": 5, "composition": "medium",
-        "action": "@maya waves at the camera", "camera_move": "static", "refs": ["maya"]}
+SHOT = {"id": new_id("shot", "pathways"), "kind": "shot", "duration_s": 5, "camera": {"size": "medium", "movement": "static"},
+        "action": "@maya waves at the camera", "refs": ["maya"]}
 MAYA = [named(1, "maya_front"), named(2, "maya_side")]
 BOX = {"x": 0.2, "y": 0.2, "w": 0.3, "h": 0.3}
 
@@ -158,7 +158,7 @@ def expected_provider(cfg: dict, h: Harness, op: str) -> str:
 def run(h: Harness, op: str, inp: dict, **req_over) -> dict:
     """POST the job, then poll as the browser does until it ends."""
     token = h.as_person()
-    req = {"contractVersion": "2", "jobId": new_id("job"), "op": op, "parentIds": [], "input": inp, **req_over}
+    req = {**envelope(op, new_id("job")), "input": inp, **req_over}
     _, job = h.call("POST", "/jobs", req, token, expect=200)
     for _ in range(12):
         if job["state"] in ("completed", "failed", "cancelled", "uncertain"):
@@ -236,7 +236,7 @@ def test_a_permanent_status_error_ends_the_job_at_once_not_at_the_timeout(op):
     h, stand = pathway("runway")
     stand.status_reply["runway"] = httpx.Response(404, json={"error": "no such task"})
     token = h.as_person()
-    req = {"contractVersion": "2", "jobId": new_id("job"), "op": op, "parentIds": [], "input": INPUTS[op]}
+    req = {**envelope(op, new_id("job")), "input": INPUTS[op]}
     _, job = h.call("POST", "/jobs", req, token, expect=200)
     h.clock.tick(10)
     job = h.poll(token, job["jobId"])  # one poll, well inside the 600 s timeout
@@ -275,8 +275,11 @@ def test_the_recorded_director_output_runs_on_its_pathway(fixture_name):
     h.relay.director = ClaudeDirector(Director(ModelPort(FakeWire(f["reply"]), "claude-haiku-4-5", timeout=5),
                                                PROMPTS, sheets))
     job = run(h, f["op"], f["input"])
+    if f["reply"].get("question"):  # the director asked: the job waits for a person, nothing is sent
+        assert job["state"] == "needs_input" and job["question"]["id"].startswith("q_") and not stand.sent
+        return
     assert job["state"] == "completed", (fixture_name, job.get("error"), stand.sent)
-    if f["op"] == "shot_list" or job.get("needsUser"):
+    if f["op"] == "shot_list":
         assert not stand.sent
         return
     assert job["provider"] == f["provider"]

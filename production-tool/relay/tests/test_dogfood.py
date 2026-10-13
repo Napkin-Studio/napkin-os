@@ -3,7 +3,7 @@ write and job state change, never a poll, a header or a key, and runs folded."""
 
 import json
 
-from conftest import Harness, base_config
+from conftest import Harness, base_config, envelope
 from director import new_id
 
 import dogfood
@@ -116,7 +116,7 @@ def test_twenty_identical_queue_full_answers_are_one_queued_line_and_one_repeat(
 def test_what_was_asked_is_kept_capped_but_never_a_header_or_an_upload_url():
     h = on()
     token = agreed(h)
-    h.call("POST", "/jobs", {"contractVersion": "2", "jobId": new_id("job"), "op": "generate", "parentIds": [],
+    h.call("POST", "/jobs", {**envelope("generate", new_id("job")),
                              "input": {"text": "a red coat hero", "refs": []}}, token,
            headers={"X-Api-Key": "SECRET-KEY", "X-Project-Id": "proj_x"})
     h.call("POST", "/uploads", {"sha256": "sha256:" + "a" * 64, "mime": "image/png", "bytes": 10}, token, expect=200)

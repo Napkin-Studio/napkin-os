@@ -1,12 +1,35 @@
 # Production Tool relay
 
 Python 3.12 AWS Lambda behind a Function URL (CloudFront sends `/api/*` here).
-Implements `production-tool/contracts/relay-api.schema.json` (v1, locked).
+Implements `production-tool/contracts/relay-api.schema.json`, contract 3
+(features/contract-v3.clan).
+
+## Contract 3
+
+- A `JobRequest` or `JobAnswer` whose `contractVersion` is not "3" gets 400 `invalid_input`
+  "This build reads contract 3; reload the page." before anything else is read; nothing is written.
+- A job carries `tenantId`, `projectId`, `startedBy` (`human:<participantId>`), `crew` (dex plans,
+  wren renders, edie stitches, …), `node`, `nonce` and `purpose`. Any member of its agency may read
+  it, stop it and answer its question; its cost stays on its starter's budget.
+- Ops contract 3 names but the relay does not build yet (frame_edit, clip_patch, bridge, cutout,
+  transcribe, write, read, check, resize, cutdown, upscale) answer 422 `capability_missing`.
+- When the director asks (`question`), the job waits in `needs_input`: uncharged, holding no
+  in-flight place or provider slot, never timing out. `POST /jobs/{jobId}/answer` (`JobAnswer`)
+  records the first answer (`answeredBy`, `answer`) with the ledger's conditional write and re-runs
+  the director on the same job; a second answer is 409 `AnswerConflict` with the winner. Change is
+  a new job with `input.answer` and `parentIds: [jobId]`. Locally, words with `[ask]` make the
+  passthrough director ask (a Mock run of the whole flow).
+- Stitch: a clip with `endCard` is left out of the stitch payload (stitch draws its own card).
+- The library is shelved: `GET /library/{shelf}`, `GET|POST /library/{shelf}/{key}[/{ver}]`, at
+  `tenants/<tenantId>/library/<shelf>/…`; kinds key, brand_kit and format_pack.
+- The director runs `prompts/director.v6.md`; its role lines are written from common.schema.json's
+  `refRoleTable` at load. An older prompt version in config.json fails the job loudly.
 
 | File | What |
 |---|---|
 | `service.py` | Routes, job ledger, quotas, fair-share queue, spend stop, the Runway floor, output copy |
 | `identity.py` | Who is asking: `who(method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"}` or `None` (then 401) |
+| `rank.py`, `time_rules.py` | Order keys and the note window, the twins of clan-store's (contracts/examples/ranks.json, windows.json) |
 | `store.py` | `MemoryStore` (tests, local) and `DynamoStore` (Lambda) |
 | `blobs.py` | `LocalBlobs` and `S3Blobs` (`in/`, `out/`, `ads/` keys) |
 | `runtime.py` | `config.json` cache (30 s, keeps the last good one), provider keys from Secrets Manager |

@@ -57,10 +57,12 @@
         "image": "A6",
         "shot": {
           "id": "shot_01K6XA6Z0000000000000001",
-          "order": 1,
+          "kind": "shot",
           "duration_s": 2,
-          "composition": "wide",
-          "camera_move": "push_in",
+          "camera": {
+            "size": "wide",
+            "movement": "push_in"
+          },
           "action": "Wide view of a busy family house, @handyman walks in carrying his toolbox, ready for a long day of odd jobs.",
           "refs": [
             "handyman"

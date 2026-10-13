@@ -1,8 +1,9 @@
 """The director comparison (features/director-v5.clan), replayed: no model call.
 
 The recordings under eval/recorded/ come from `python -m eval.director_eval record`. These tests
-hold the bar the feature set: v5 keeps the participant's words and adds nothing they did not ask
-for at least as well as the passthrough, and beats v4.
+hold the bar the feature set: v5's answers keep the words and add nothing unasked at least as well as
+the passthrough, and beat v4's. Under contract 3 the recordings (converted to its shapes) replay
+through director.v6's checks; v6 itself is recorded live.
 """
 
 from __future__ import annotations
@@ -50,21 +51,17 @@ def director(version: str) -> Director:
     return Director(None, PROMPTS, load_sheets(), prompt_version=version)
 
 
-def test_v5_sends_each_op_only_its_own_section():
-    d = director("director.v5")
+def test_v6_sends_each_op_only_its_own_section():
+    d = director("director.v6")
     frame, view = d.system_for("frame"), d.system_for("view")
     assert "## frame" in frame and "## view" not in frame
     assert "## view" in view and "## frame" not in view
-    assert len(frame.split()) < len(director("director.v4").system.split()) / 2
+    assert len(frame.split()) < len(d.system.split()) / 1.5
 
 
-def test_a_shot_list_still_runs_on_the_v4_prompt():
-    assert "shot_list: turn `input.script`" in director("director.v5").system_for("shot_list")
-
-
-def test_v4_is_one_prompt_for_every_op():
-    d = director("director.v4")
-    assert d.system_for("frame") == d.system_for("view") == d.system
+def test_a_shot_list_runs_on_its_own_v6_section():
+    text = director("director.v6").system_for("shot_list")
+    assert "## shot_list" in text and "plannedShot" not in text and "`beats`" in text and "## frame" not in text
 
 
 def ref(name, role):

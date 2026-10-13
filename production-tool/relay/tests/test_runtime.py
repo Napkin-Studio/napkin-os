@@ -33,9 +33,9 @@ def test_passthrough_director_matches_its_schema_for_every_op():
     sheet = json.loads((contracts_dir() / "capabilities" / "runway.json").read_text())
     c = Contracts()
     a = {"sha256": "sha256:" + "a" * 64, "url": "https://x.test/a", "mime": "image/png"}
-    shot = {"id": new_id("shot"), "order": 1, "duration_s": 5, "composition": "wide", "action": "walks", "camera_move": "static"}
+    shot = {"id": new_id("shot"), "kind": "shot", "duration_s": 5, "camera": {"size": "wide", "movement": "static"}, "action": "walks", "refs": []}
     inputs = {
-        "generate": {"text": "hero", "sketch": a, "refs": [{"id": new_id("ref"), "tag": "eyes", "role": "shape", "asset": a}]},
+        "generate": {"text": "hero", "sketch": a, "refs": [{"id": new_id("ref"), "tag": "eyes", "role": "composition", "asset": a}]},
         "view": {"view": "side", "character": {"front": a}},
         "frame": {"shot": shot, "character": {"front": a}},
         "region_edit": {"image": a, "region": {"x": 0, "y": 0, "w": 0.5, "h": 0.5}, "text": "red hat"},

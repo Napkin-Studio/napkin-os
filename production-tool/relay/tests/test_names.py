@@ -23,13 +23,15 @@ def test_long_and_hyphenated_names_get_short_unique_tags():
 
 def test_words_shot_and_shot_refs_are_rewritten_to_the_tags():
     refs = [ref(1, "maya_three-quarter"), ref(2, "brolly_red")]
-    shot = {"id": "shot_x", "order": 1, "duration_s": 5, "composition": "wide", "camera_move": "pan",
-            "action": "@maya_three-quarter opens @brolly_red.", "dialogue": "Hi @brolly_red-ish",
+    shot = {"id": "shot_x", "kind": "shot", "duration_s": 5, "camera": {"size": "wide", "movement": "pan"},
+            "action": "@maya_three-quarter opens @brolly_red.", "direction": "Slow; @brolly_red last.",
+            "beats": [{"kind": "line", "at_s": 1, "text": "Hi @brolly_red-ish"}],
             "refs": ["maya_three-quarter", "brolly_red"]}
     out = to_wire("frame", {"text": "Keep @maya_three-quarter's coat", "refs": refs, "shot": shot})
     assert out["text"] == "Keep @maya_three_quart's coat"
     assert out["shot"]["action"] == "@maya_three_quart opens @brolly_red."
-    assert out["shot"]["dialogue"] == "Hi @brolly_red-ish"  # the longest known name, then the rest as written
+    assert out["shot"]["beats"][0]["text"] == "Hi @brolly_red-ish"  # the longest known name, then the rest as written
+    assert out["shot"]["direction"] == "Slow; @brolly_red last."
     assert out["shot"]["refs"] == ["maya_three_quart", "brolly_red"]
     assert "tag" not in refs[0]  # the caller's input is not changed
 

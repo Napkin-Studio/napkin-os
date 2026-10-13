@@ -87,7 +87,7 @@ def test_generate_on_runway():
     assert [r["name"] for r in job["refs"]] == ["in_1", "maya_eyes", "maya_palette"]
     assert res.usage == {"input_tokens": 120, "output_tokens": 60}
     sent = wire.calls[0]
-    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == (PROMPTS / "director.v4.md").read_text()
+    assert sent["model"] == "claude-haiku-4-5" and sent["system"] == d.system_for("generate")
     asked = json.loads(sent["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     assert asked["provider"] == "runway" and asked["sheet"]["tagSyntax"] == "at_tag" and asked["op"] == "generate"
 
@@ -124,61 +124,73 @@ def test_shot_list_sums_to_the_target_and_uses_the_shot_list_model():
     assert wire.calls[0]["model"] == "claude-sonnet-5-5" and "sheet" not in wire.calls[0]["turns"][0]["text"]
 
 
-def test_needs_user_carries_one_question_and_no_job():
+def test_a_question_comes_alone_with_no_job():
     d, _ = make(fixture("needs_user")["reply"])
     out = run("needs_user", d).output
-    assert len(out["needsUser"]["options"]) == 2 and "providerJob" not in out
+    assert len(out["question"]["options"]) == 2 and "providerJob" not in out
+    assert out["question"]["kind"] == "ambiguity" and "recommended_option_id" not in out["question"]
 
 
 def test_agent_block_logs_the_prompt_version():
     d, _ = make(fixture("generate_runway")["reply"])
     res = run("generate_runway", d)
     block = res.agent_block
-    assert block["promptVersion"] == "director.v4" and block["model"] == "claude-haiku-4-5"
+    assert block["promptVersion"] == "director.v6" and block["model"] == "claude-haiku-4-5"
     assert block["output"] == res.output and block["rationale"] == res.output["rationale"]
     assert isinstance(block["latencyMs"], int)
 
 
 def test_prompt_version_comes_from_the_prompt_file(tmp_path):
-    (tmp_path / "director.v2.md").write_text("You are the director.")
+    (tmp_path / "director.v7.md").write_text("You are the director.\n<!-- role-lines -->")
     wire = FakeWire(fixture("generate_runway")["reply"])
     sheets = {"runway": load_sheet("runway")}
-    d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), tmp_path, sheets, prompt_version="director.v2")
-    assert run("generate_runway", d).agent_block["promptVersion"] == "director.v2"
-    assert wire.calls[0]["system"] == "You are the director."
+    d = Director(ModelPort(wire, "claude-haiku-4-5", timeout=5), tmp_path, sheets, prompt_version="director.v7")
+    assert run("generate_runway", d).agent_block["promptVersion"] == "director.v7"
+    assert wire.calls[0]["system"].startswith("You are the director.\n- `character`: character reference")
+
+
+def test_contract_3_refuses_a_prompt_older_than_v6(tmp_path):
+    from director.base import PromptTooOld
+    (tmp_path / "director.v5.md").write_text("You are the director.")
+    with pytest.raises(PromptTooOld, match="director.v5; contract 3 needs director.v6"):
+        Director(ModelPort(FakeWire(), "m", timeout=5), tmp_path, {}, prompt_version="director.v5")
 
 
 def test_prompt_carries_the_rules():
-    text = (PROMPTS / "director.v4.md").read_text()
-    for rule in ("Keep the seed", "whatever the region's size", "role `current`", "`audio` to false", "input.answer"):
-        assert rule in text
+    text = (PROMPTS / "director.v6.md").read_text()
+    for rule in ("Never invent a seed", "are `current`", "`audio` is false", "input.answer", "recommended_option_id",
+                 "Never on an ambiguity", "`block` only when no option can go ahead", "background only", "brand_rule",
+                 "`end_card`", "half-second steps", "`direction_condensed`", "camera.movement", "input.aspect"):
+        assert rule in text, rule
 
 
-def test_only_the_v4_and_v5_prompts_are_bundled():
-    """Contract v2 has no sketch or character views: the older prompts would name inputs that no longer exist.
-    v5 directs each click; v4 stays for the shot list (features/director-v5.clan)."""
-    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v4.md", "director.v5.md"]
+def test_the_role_lines_are_the_contracts_verbatim():
+    """One table (common refRoleTable) feeds the role picker and the prompt: every prompt_line is in the system prompt."""
+    table = json.loads((CONTRACTS / "common.schema.json").read_text())["$defs"]["refRoleTable"]["const"]
+    d, _ = make()
+    for role, row in table.items():
+        assert f"- `{role}`: {row['prompt_line']}" in d.system, role
+    assert "<!-- role-lines -->" not in d.system
+    for op in ("generate", "frame", "shot_list", "clip"):
+        assert table["lighting"]["prompt_line"] in d.system_for(op), op
 
 
-def test_v4_names_refs_and_limits_each_ref_to_what_it_names():
-    text = (PROMPTS / "director.v4.md").read_text()
+def test_only_the_v6_prompt_is_bundled():
+    """Contract 3 runs director.v6: the older prompts write fields contract 3 refuses."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v6.md"]
+
+
+def test_v6_names_refs_and_limits_each_ref_to_what_it_names():
+    text = (PROMPTS / "director.v6.md").read_text()
     for rule in (
-        "its wire tag, already made for you",        # names.py made the tags; use them as given
-        "`key_variant`",                             # refs that share a key are one character
-        "never \"the sketch provided\"",           # every ref by its @tag, drawings too
-        "it sets the design",                        # a drawing with role character is the character
-        "It is the user's instruction",              # input.text, typed words and notes
-        "it wins over the defaults",
-        "only what its name, role and the words say",
-        "never the picture's subject, species",      # a texture is material, not the subject
-        "neutral standing pose",                     # defaults
+        "carries a `tag` (its wire tag, already in the words)",
+        "`key_variant`",
+        "Take from each picture only what its role says",
+        "A donor is not a character",
+        "Never describe what a picture you are sending already shows",
         "plain light background",
-        "not photoreal",                             # the drawing's level of simplicity
-        "show it once, in the neutral pose",         # several poses, one character
-        "Never add a background scene",
-        "do not ask",                                # the UI cannot show needsUser yet
-        "Use only keys and names from `input.refs`", # shot_list names only refs that exist
-        "use its bare key",                           # a whole character by its key
+        "as given in `input.refs`, never invented",
+        "a bare key for a whole character",
     ):
         assert rule in text, rule
 
@@ -197,7 +209,7 @@ def test_v2_generate_follows_the_frame_text_and_names_every_ref():
     prompt = job["prompt"]
     assert "@in_1" in prompt and "@maya_texture" in prompt and "sketch provided" not in prompt
     assert "AI agent" in prompt and "material" in prompt and "2D illustration" in prompt
-    assert res.output["needsUser"] is None and res.agent_block["promptVersion"] == "director.v4"
+    assert res.output["question"] is None and res.agent_block["promptVersion"] == "director.v6"
 
 
 # --- failures are loud -------------------------------------------------------
@@ -299,7 +311,7 @@ def refuses(why, *args, **kw):
 def test_a_view_on_a_sheet_with_angles_sends_the_angle_the_prompt_maps():
     res = attempt("view_mock")
     assert res.output["providerJob"]["angle"] == {"horizontal": 90, "vertical": 0}
-    assert "front 0, three-quarter 45, side 90, back 180" in (PROMPTS / "director.v4.md").read_text()
+    assert "front 0, three-quarter 45, side 90, back 180" in (PROMPTS / "director.v6.md").read_text()
 
 
 def test_clip_edit_on_runway_needs_the_keyframe_the_relay_made():
@@ -364,11 +376,15 @@ def test_region_edit_needs_the_current_ref():
     ("generate_runway", job_edit(ratio="1920:1080"), "does not take ratio"),
     ("region_edit_runway", job_edit(ratio="512:512"), "does not take ratio"),  # a flash size; pro has none
     ("clip_runway", job_edit(ratio="1080:1350"), "does not take ratio"),
-    ("clip_runway", job_edit(prompt="x" * 1001), "over its 1000"),
     ("clip_runway", lambda r: r["providerJob"].pop("durationS"), "needs a durationS"),
 ])
 def test_provider_limits_the_sheet_cannot_say_raise(name, edit, why):
     refuses(why, name, edit)
+
+
+def test_a_clip_prompt_past_runways_1000_characters_is_refused():
+    # The person's own words do not count against the budget, so the provider's limit is what stops it.
+    refuses("over its 1000", "clip_runway", job_edit(prompt="x" * 1001), lambda p: p.update(text="x" * 950))
 
 
 def test_recorded_ratios_are_in_the_providers_lists():
@@ -391,23 +407,27 @@ def test_ref_and_edit_guards(name, edit, why):
 
 
 def test_one_answer_never_carries_a_job_and_a_question_or_stray_shots():
-    question = {"question": "Which colours?", "options": ["Eyes", "Palette"]}
-    refuses("a question and a job", "generate_runway", lambda r: r.update(needsUser=question))
+    question = {"kind": "ambiguity", "text": "Which colours?", "allow_text": False,
+                "options": [{"id": "eyes", "label": "Eyes", "value": "eyes"}, {"id": "palette", "label": "Palette", "value": "palette"}]}
+    refuses("a question and a job", "generate_runway", lambda r: r.update(question=question))
     refuses("belong to shot_list", "generate_runway", lambda r: r.update(shots=fixture("shot_list")["reply"]["shots"]))
 
 
 @pytest.mark.parametrize("edit, why", [
-    (lambda r: (r["shots"][0].update(order=1), r["shots"][1].update(order=3)), "run 1..n"),
     (lambda r: r["shots"][1].update(id=r["shots"][0]["id"]), "must be unique"),
+    (lambda r: r["shots"][0].update(duration_s=9), "add up to"),
+    (lambda r: r["shots"][0].update(refs=["nobody_front"]), "not an input ref"),
+    (lambda r: r["shots"][0].update(beats=[{"kind": "moment", "at_s": 9, "text": "late"}]), "past its"),
 ])
 def test_shot_numbering_and_ids_are_checked(edit, why):
     refuses(why, "shot_list", edit)
 
 
 def test_an_agent_block_that_breaks_the_schema_raises(tmp_path):
-    (tmp_path / "director.vx.md").write_text("You are the director.")
+    (tmp_path / "director.v6.md").write_text("You are the director.")
     d = Director(ModelPort(FakeWire(fixture("generate_runway")["reply"]), "claude-haiku-4-5", timeout=5),
-                 tmp_path, {"runway": load_sheet("runway")}, prompt_version="director.vx")
+                 tmp_path, {"runway": load_sheet("runway")}, prompt_version="director.v6")
+    d.prompt_version = "director.vx"  # a version the agent block's pattern refuses
     f = fixture("generate_runway")
     with pytest.raises(DirectorError, match="agent block"):
         d.run(f["op"], f["input"], f["provider"])
@@ -470,14 +490,12 @@ def test_a_reply_naming_another_model_runs_on_the_sheets():
 
 # --- character cards (features/character-cards.clan) --------------------------
 
-def test_v4_uses_cards_and_keeps_them_off_screen():
-    text = (PROMPTS / "director.v4.md").read_text()
+def test_v6_uses_cards_and_keeps_them_off_screen():
+    text = (PROMPTS / "director.v6.md").read_text()
     for rule in (
         "A ref may carry `card`",                     # what its picture shows, from one look
-        "describe characters and objects in words",   # identity holds where refs are dropped
-        "where a provider drops some refs",
-        "Never contradict a card",
-        "never put its text on screen",               # a card is for the director only
+        "A card is for choosing, never for copying",
+        "Never copy a card's words into the prompt",  # a card is for the director only
     ):
         assert rule in text, rule
 

@@ -42,12 +42,22 @@
   },
   "reply": {
     "op": "generate",
-    "needsUser": {
-      "question": "Which reference sets the colours?",
+    "question": {
+      "kind": "ambiguity",
+      "text": "Which reference sets the colours?",
       "options": [
-        "autumn",
-        "palette"
-      ]
+        {
+          "id": "autumn",
+          "label": "autumn",
+          "value": "autumn"
+        },
+        {
+          "id": "palette",
+          "label": "palette",
+          "value": "palette"
+        }
+      ],
+      "allow_text": true
     },
     "rationale": "Both references are colour refs and the text does not say which one 'the other one' is.",
     "confidence": 0.3

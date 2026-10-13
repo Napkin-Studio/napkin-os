@@ -190,7 +190,9 @@ class Harness:
         headers = {**({"Authorization": f"Bearer {token}"} if token else {}), **(headers or {})}
         raw = json.dumps(body).encode() if body is not None else None
         status, out, ctx = self.relay.http(method, path, headers, raw)
-        if status >= 400:
+        if status == 409 and path.endswith("/answer") and "answeredBy" in out:
+            assert not self.contracts.errors(api("AnswerConflict"), out), out
+        elif status >= 400:
             assert not self.contracts.errors(api("ErrorResponse"), out), out
         elif status == 204:
             assert out is None
@@ -198,7 +200,7 @@ class Harness:
             name = {"/me": "Me", "/uploads": "UploadResponse", "/library": "LibraryIndex",
                     "/projects": "ProjectList"}.get(path, "Job")
             if path.startswith("/library/"):
-                name = "LibraryEntry"
+                name = "LibraryIndex" if path.count("/") == 2 else "LibraryEntry"
             if path.startswith("/clan/"):
                 name = "ProjectCanvas" if path.endswith("/canvas") else None  # GET /clan/{project} is the bytes
             if path in ("/config", "/health"):
@@ -252,7 +254,18 @@ def job_request(op: str, job_id: str, **inp) -> dict:
             "shot_list": {"script": "A hero walks in. She smiles. The logo shows.", "targetS": 15},
             "stitch": {"clips": [{"asset": {**asset(4, "video/mp4"), "url": f"{CDN}/out/{asset(4)['sha256']}"}, "trimS": 4}]},
         }[op]
-    return {"contractVersion": "2", "jobId": job_id, "op": op, "parentIds": [], "input": inp}
+    return {**envelope(op, job_id), "input": inp}
+
+
+PROJECT = "proj_01K7A0000000000000000PR001"
+NODE_KIND = {"frame": "storyboard", "shot_list": "storyboard", "clip": "video", "clip_edit": "video", "stitch": "video"}
+
+
+def envelope(op: str, job_id: str) -> dict:
+    """A contract-3 JobRequest without its input: the project, the node it runs for, a nonce."""
+    kind = NODE_KIND.get(op, "sketch")
+    return {"contractVersion": "3", "jobId": job_id, "op": op, "projectId": PROJECT,
+            "nonce": "n_" + job_id[-12:], "node": {"kind": kind, "id": new_id(kind)}, "parentIds": []}
 
 
 @pytest.fixture

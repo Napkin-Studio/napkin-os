@@ -30,7 +30,7 @@
       },
       "outputs": 1
     },
-    "needsUser": null,
+    "question": null,
     "rationale": "The sheet has angles: side is horizontal 90, front is 0.",
     "confidence": 0.9
   }

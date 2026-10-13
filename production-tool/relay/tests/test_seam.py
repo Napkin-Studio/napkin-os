@@ -32,7 +32,7 @@ REPLY = {
                  {"sha256": C, "name": "in_2", "role": "object"}],
         "ratio": "896:1152", "outputs": 1,
     },
-    "needsUser": None, "rationale": "The drawing as the character; the eyes and the palette as object refs.", "confidence": 0.8,
+    "question": None, "rationale": "The drawing as the character; the eyes and the palette as object refs.", "confidence": 0.8,
 }
 OUT_URL = "https://dnznrvs05pmza.cloudfront.net/front.png?_jwt=x"
 
@@ -73,7 +73,7 @@ def generate_input() -> dict:
         return {"sha256": sha, "url": f"{CDN}/in/{sha}", "mime": mime}
     return {"text": "eyes from @maya_eyes, colours from the last picture", "chips": [], "ratio": "4:5",
             "refs": [{"id": "node_01K6XA6Z0000000000000000AA", "role": "character", "kind": "drawing", "asset": ref(A)},
-                     {"id": "ref_01K6XA6Z0000000000000000AB", "name": "maya_eyes", "role": "shape", "kind": "picture",
+                     {"id": "ref_01K6XA6Z0000000000000000AB", "name": "maya_eyes", "role": "composition", "kind": "picture",
                       "asset": ref(B, "image/jpeg")},
                      {"id": "node_01K6XA6Z0000000000000000AC", "role": "colour", "kind": "picture", "asset": ref(C)}]}
 
@@ -120,7 +120,7 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     (out,) = done["outputs"]
     assert out["url"].startswith(f"{CDN}/out/sha256:") and out["mime"] == "image/png"
     assert done["director"]["model"] == base_config()["director"]["perClickModel"]
-    assert done["director"]["promptVersion"] == "director.v5"
+    assert done["director"]["promptVersion"] == "director.v6"
 
 
 def test_director_wrapper_output_validates_against_the_contract():
@@ -129,7 +129,7 @@ def test_director_wrapper_output_validates_against_the_contract():
     sheet = types.load_sheet("runway")
     out = d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()}, sheet)
     assert out.pop("_model") == d.director.per_click_model
-    assert out.pop("_promptVersion") == "director.v5"
+    assert out.pop("_promptVersion") == "director.v6"
     assert Contracts().errors("director.schema.json", out) == []
 
 
@@ -169,7 +169,7 @@ def test_director_takes_model_ids_from_config():
     d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()},
              types.load_sheet("runway"))
     assert wire.calls[0]["model"] == "eu.anthropic.claude-test"
-    assert d.director.prompt_version == "director.v5"  # v9 is not bundled
+    assert d.director.prompt_version == "director.v6"  # v9 is not bundled
 
 
 def test_load_director_is_passthrough_without_a_model(monkeypatch):

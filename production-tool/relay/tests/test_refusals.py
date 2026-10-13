@@ -10,7 +10,7 @@ from providers.base import CapabilityMissing, ProviderError
 from service import sheet_refusal
 
 SHEET = {"refs": {"max": 14, "maxCharacter": 5}}
-SHOT = {"id": new_id("shot"), "order": 1, "duration_s": 3, "composition": "wide", "camera_move": "static",
+SHOT = {"id": new_id("shot"), "kind": "shot", "duration_s": 3, "camera": {"size": "wide", "movement": "static"},
         "action": "We see @uberto between the two buildings", "refs": ["uberto", "watchy"]}
 
 

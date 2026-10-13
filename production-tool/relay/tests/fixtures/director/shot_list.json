@@ -23,39 +23,45 @@
     "shots": [
       {
         "id": "shot_01K6XB000000000000000000A1",
-        "order": 1,
+        "kind": "shot",
         "duration_s": 4,
-        "composition": "wide",
+        "camera": {
+          "size": "wide",
+          "movement": "track"
+        },
         "action": "The hero walks into a rainy street, umbrella closed.",
-        "camera_move": "track",
         "refs": [
           "hero_front"
         ]
       },
       {
         "id": "shot_01K6XB000000000000000000A2",
-        "order": 2,
+        "kind": "shot",
         "duration_s": 4,
-        "composition": "medium",
+        "camera": {
+          "size": "medium",
+          "movement": "static"
+        },
         "action": "The hero stops and opens the umbrella.",
-        "camera_move": "static",
         "refs": [
           "hero_front"
         ]
       },
       {
         "id": "shot_01K6XB000000000000000000A3",
-        "order": 3,
+        "kind": "shot",
         "duration_s": 4,
-        "composition": "close",
+        "camera": {
+          "size": "close",
+          "movement": "push_in"
+        },
         "action": "The product logo shows on the open umbrella.",
-        "camera_move": "push_in",
         "refs": [
           "hero_front"
         ]
       }
     ],
-    "needsUser": null,
+    "question": null,
     "rationale": "Three 4 s shots for a 12 s script: establish, act, payoff.",
     "confidence": 0.75
   }

@@ -96,7 +96,7 @@ def test_invalid_job_request_is_rejected(h):
 
 def test_log_returns_204(h):
     token = h.as_person()
-    h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "stage": "character"}, token, expect=204)
+    h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "node": {"kind": "storyboard", "id": new_id("storyboard")}}, token, expect=204)
 
 
 def _clan_post(h, token, body, reason="accept", project=None):
@@ -174,7 +174,8 @@ def test_job_id_of_someone_else_is_refused(h):
     jid = new_id("job")
     h.post_job(h.as_person("alice"), job_id=jid, expect=200)
     assert h.post_job(h.as_person("bob"), job_id=jid, expect=409)[1]["error"]["code"] == "invalid_input"
-    assert h.poll(h.as_person("bob"), jid, expect=404)
+    assert h.poll(h.as_person("bob"), jid)["jobId"] == jid  # anyone in the agency reads it
+    assert h.poll(h.as_person("eve", "red"), jid, expect=404)  # another agency never sees it
 
 
 def test_submit_that_raises_is_never_resent_there_and_is_made_on_runway(h):
@@ -477,6 +478,6 @@ def test_stitch_rejects_clips_that_are_not_ours(h):
 
 def test_config_route_and_api_prefix(h):
     _, out = h.call("GET", "/config", expect=200)
-    assert out["contractVersion"] == "2"
+    assert out["contractVersion"] == "3"
     status, out, _ = h.relay.http("GET", "/api/me", {"Authorization": f"Bearer {h.as_person('zed')}"}, None)
     assert status == 200 and out["handle"] == "zed"

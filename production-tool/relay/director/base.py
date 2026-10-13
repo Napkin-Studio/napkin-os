@@ -1,9 +1,9 @@
 """The director hook (harness lane fills it in).
 
 `direct(job_request, sheet) -> dict` returns an object matching
-contracts/director.schema.json: for shot_list, {"op", "shots", "needsUser",
-"rationale", "confidence"}; for every other op a providerJob in the routed
-provider's syntax. `sheet` is the routed provider's capability sheet (None for
+contracts/director.schema.json: for shot_list, {"op", "shots", "question",
+"rationale", "confidence"} (planned shots); for every other op a providerJob in the routed
+provider's syntax; or, instead of either, a question (the job waits in needs_input). `sheet` is the routed provider's capability sheet (None for
 shot_list, which has no provider).
 
 The relay adds the agent block it logs: {"model", "promptVersion", "output",
@@ -34,13 +34,44 @@ def new_id(prefix: str, seed: str = "") -> str:
     return f"{prefix}_{''.join(reversed(chars))}"
 
 
+class PromptTooOld(Exception):
+    """Contract 3 runs director.v6 or later: an older prompt writes fields contract 3 refuses."""
+
+
+MIN_PROMPT = 6
+
+
+def prompt_number(version: str) -> int:
+    try:
+        return int(version.split(".v", 1)[1].split(".")[0])
+    except (IndexError, ValueError):
+        return 0
+
+
+def require_prompt(version: str) -> None:
+    if prompt_number(version) < MIN_PROMPT:
+        raise PromptTooOld(f"config.json names prompt {version}; contract 3 needs director.v{MIN_PROMPT} or later.")
+
+
 class Director(Protocol):
     def direct(self, job_request: dict, sheet: dict | None) -> dict: ...
 
 
 _VIDEO_OPS = {"clip", "clip_edit"}
-_COMPOSITIONS = ["wide", "medium", "close", "medium", "close", "wide", "insert", "medium"]
+_SIZES = ["wide", "medium", "close", "medium", "close", "wide", "insert", "medium"]
 _MOVES = ["static", "push_in", "pan", "static", "track", "pull_out", "static", "orbit"]
+# The dev hook: words that carry this make the passthrough ask before it works, so a Mock run (local.py,
+# tests) can exercise needs_input and the answer route without a model. Never in a real director.
+ASK_HOOK = "[ask]"
+
+
+def dev_question(op: str) -> dict:
+    """The passthrough's one question (a nudge, as ui-behaviour 3.5's 'Plan a storyboard first?')."""
+    return {"kind": "nudge", "text": "Plan a storyboard first?", "why": "Clips come out better from frames you've checked.",
+            "options": [{"id": "plan_first", "label": "Plan the storyboard first", "value": {"route": "plan_storyboard"},
+                         "detail": "6 shots", "cost": {"estimate": 1.2, "currency": "USD"}},
+                        {"id": "straight", "label": f"Go ahead with the {op.replace('_', ' ')}", "value": {"route": "go_ahead"}}],
+            "allow_text": False, "recommended_option_id": "plan_first"}
 # The camera angle of each turnaround view (director.v4: front 0, three-quarter 45, side 90, back 180).
 VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
 
@@ -85,6 +116,9 @@ class PassthroughDirector:
     def direct(self, job_request: dict, sheet: dict | None) -> dict:
         op = job_request["op"]
         inp = job_request.get("input", {})
+        if ASK_HOOK in (inp.get("text") or inp.get("script") or "") and not inp.get("answer"):
+            return {"op": op, "question": dev_question(op), "rationale": "passthrough: asked (the [ask] hook)",
+                    "confidence": 0.1}
         if op == "shot_list":
             return self._shot_list(job_request)
         provider = (sheet or {}).get("provider", "mock")
@@ -145,7 +179,7 @@ class PassthroughDirector:
                 spec = ((sheet or {}).get("ops") or {}).get(op) or {}
                 job["durationS"] = fit_duration(shot["duration_s"], spec) if op == "clip" else shot["duration_s"]
         job["outputs"] = 1
-        return {"op": op, "providerJob": job, "needsUser": None,
+        return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}
 
     def _shot_list(self, job_request: dict) -> dict:
@@ -156,7 +190,7 @@ class PassthroughDirector:
         keys = [n.split("_", 1)[0] for n in names if n.endswith("_front")]
         named = (keys + [n for n in names if n.split("_", 1)[0] not in keys])[:9]
         target = int(inp.get("targetS") or 15)
-        n = max(2, min(8, -(-target // 5)))
+        n = max(1, min(24, -(-target // 5)))
         sentences = [s.strip() for s in script.replace("!", ".").replace("?", ".").split(".") if s.strip()]
         base, extra = divmod(target, n)
         shots = []
@@ -164,13 +198,11 @@ class PassthroughDirector:
             action = sentences[i] if i < len(sentences) else (sentences[-1] if sentences else "The character")
             shots.append({
                 "id": new_id("shot", f"{job_request['jobId']}:{i}"),
-                "order": i + 1,
+                "kind": "shot",
                 "duration_s": base + (1 if i < extra else 0),
-                "composition": _COMPOSITIONS[i],
-                "action": action[:300],
-                "camera_move": _MOVES[i],
+                "camera": {"size": _SIZES[i % len(_SIZES)], "movement": _MOVES[i % len(_MOVES)]},
+                "action": action[:600],
                 "refs": named,
-                "status": "planned",
             })
-        return {"op": "shot_list", "shots": shots, "needsUser": None,
+        return {"op": "shot_list", "shots": shots, "question": None,
                 "rationale": f"passthrough: {n} even shots for {target} s", "confidence": 0.1}

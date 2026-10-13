@@ -10,34 +10,46 @@
     "shots": [
       {
         "id": "shot_01K6XB000000000000000000F1",
-        "order": 1,
+        "kind": "shot",
         "duration_s": 3,
-        "composition": "extreme_close",
+        "camera": {
+          "size": "extreme_close",
+          "movement": "static"
+        },
         "action": "In darkness, a chisel scrapes across walnut grain; one facet glints.",
-        "camera_move": "static",
-        "dialogue": "Every diamond starts as pressure.",
-        "refs": []
+        "refs": [],
+        "beats": [
+          {
+            "kind": "line",
+            "at_s": 0,
+            "text": "Every diamond starts as pressure."
+          }
+        ]
       },
       {
         "id": "shot_01K6XB000000000000000000F2",
-        "order": 2,
+        "kind": "shot",
         "duration_s": 4,
-        "composition": "medium",
+        "camera": {
+          "size": "medium",
+          "movement": "orbit"
+        },
         "action": "The finished walnut mask turns slowly on a pedestal, facets catching the light.",
-        "camera_move": "orbit",
         "refs": []
       },
       {
         "id": "shot_01K6XB000000000000000000F3",
-        "order": 3,
+        "kind": "shot",
         "duration_s": 3,
-        "composition": "close",
+        "camera": {
+          "size": "close",
+          "movement": "push_in"
+        },
         "action": "The mask rests facing the viewer on black. On screen: \"FACET\"",
-        "camera_move": "push_in",
         "refs": []
       }
     ],
-    "needsUser": null,
+    "question": null,
     "rationale": "Spoken line kept as dialogue (voice-over); the title card goes into shot 3's action as On screen text.",
     "confidence": 0.8
   },

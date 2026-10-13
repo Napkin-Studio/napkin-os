@@ -4,12 +4,13 @@
   "input": {
     "shot": {
       "id": "shot_01K6XB00000000000000000001",
-      "order": 1,
+      "kind": "shot",
       "duration_s": 5,
-      "composition": "wide",
+      "camera": {
+        "size": "wide",
+        "movement": "track"
+      },
       "action": "Rain starts to fall on a busy city street at dusk; our hero looks up.",
-      "camera_move": "track",
-      "status": "planned",
       "refs": [
         "hero_front",
         "hero_side"
@@ -58,7 +59,7 @@
       "ratio": "9:16",
       "outputs": 1
     },
-    "needsUser": null,
+    "question": null,
     "rationale": "Shot 1 establishes the rainy street from the action and script; front view for identity.",
     "confidence": 0.85
   },
