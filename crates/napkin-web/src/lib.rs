@@ -10,6 +10,8 @@
 //!     session, one workspace per tenant, events over SSE.
 //!   * `/s/{token}/…` — the app sandbox: the `clan://` table verbatim, reached
 //!     with a capability token instead of a custom URI scheme.
+//!   * `/production/…` — the Production Tool and its relay proxy, when one is
+//!     configured ([`production`]).
 //!
 //! Everything else is the built React app.
 
@@ -20,6 +22,7 @@ pub mod error;
 pub mod events;
 pub mod exports;
 pub mod meter;
+pub mod production;
 pub mod sandbox;
 pub mod state;
 pub mod store;
@@ -88,30 +91,48 @@ pub fn router_with(
     static_dir: Option<&Path>,
     identity: Arc<tenant::Identity>,
 ) -> Router {
-    Router::new()
+    router_full(ctx, static_dir, identity, None)
+}
+
+/// The service with the Production Tool at `/production` when `production` is
+/// given. It is mounted only with accounts: anonymous mode never reaches a
+/// relay that spends money (`main.rs` refuses that configuration outright).
+pub fn router_full(
+    ctx: Arc<AppCtx>,
+    static_dir: Option<&Path>,
+    identity: Arc<tenant::Identity>,
+    production: Option<Arc<production::Relay>>,
+) -> Router {
+    let production = production.filter(|_| matches!(identity.mode, tenant::Mode::Accounts { .. }));
+    let mut api = api::router()
+        // inside the tenant layer, so it knows the signed-in account
+        .layer(axum::middleware::from_fn_with_state(
+            ctx.clone(),
+            dogfood::capture_api,
+        ))
+        .layer(DefaultBodyLimit::max(UPLOAD_MAX))
+        .layer(axum::middleware::from_fn_with_state(
+            identity.clone(),
+            tenant::layer,
+        ))
+        .layer(axum::Extension(identity.clone()));
+    if production.is_some() {
+        api = api.layer(axum::Extension(production::Enabled));
+    }
+    let mut app = Router::new()
         // The shell API is the only part that runs on a cookie session.
-        .nest(
-            "/api",
-            api::router()
-                // inside the tenant layer, so it knows the signed-in account
-                .layer(axum::middleware::from_fn_with_state(
-                    ctx.clone(),
-                    dogfood::capture_api,
-                ))
-                .layer(DefaultBodyLimit::max(UPLOAD_MAX))
-                .layer(axum::middleware::from_fn_with_state(
-                    identity.clone(),
-                    tenant::layer,
-                ))
-                .layer(axum::Extension(identity)),
-        )
+        .nest("/api", api)
         // The sandbox authenticates with its token and nothing else, so the
         // session layer deliberately does not apply to it.
         .nest(
             "/s",
             sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
-        )
-        .merge(shell_service(static_dir))
+        );
+    if let Some(relay) = production {
+        // Not under dogfood::capture_api: the relay keeps the tool's own record.
+        app = app.merge(production::router(relay, identity));
+    }
+    app.merge(shell_service(static_dir))
         .layer(TraceLayer::new_for_http())
         .with_state(ctx)
 }
