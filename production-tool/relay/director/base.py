@@ -114,8 +114,9 @@ class PassthroughDirector:
 
     model = "passthrough"
     prompt_version = "director.v0"
+    sees_images = False  # never sent a picture (a frame_edit's frame goes only to a model that reads it)
 
-    def direct(self, job_request: dict, sheet: dict | None) -> dict:
+    def direct(self, job_request: dict, sheet: dict | None, images: list | None = None) -> dict:
         op = job_request["op"]
         inp = job_request.get("input", {})
         if ASK_HOOK in (inp.get("text") or inp.get("script") or "") and not inp.get("answer"):
@@ -123,6 +124,8 @@ class PassthroughDirector:
                     "confidence": 0.1}
         if op == "shot_list":
             return self._shot_list(job_request)
+        if op == "frame_edit":
+            return self._frame_edit(job_request, sheet)
         provider = (sheet or {}).get("provider", "mock")
         model = ((sheet or {}).get("ops", {}).get(op) or {}).get("model", "unknown")
         refs = []
@@ -183,6 +186,50 @@ class PassthroughDirector:
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}
+
+    def _frame_edit(self, job_request: dict, sheet: dict | None) -> dict:
+        """Change this frame with no model (features/frame-change-edit.clan): the cameraWords lexicon
+        reads the words (director/frame_edit.py), the person's answer settles an ask, and the words go
+        to the provider as they are (frameEdit.words_as_given), never with an image to a model."""
+        from . import frame_edit as fe
+        from .director import provider_ratio
+
+        op = "frame_edit"
+        inp = job_request.get("input", {})
+        text = inp.get("text") or ""
+        answer = (inp.get("answer") or {}).get("value")
+        reading, patch = fe.reading_of(text, (inp.get("shot") or {}).get("camera") or {}, answer)
+        if reading == "ask":
+            word = fe.size_word(text) or "bigger"
+            return {"op": op, "question": fe.question(word), "confidence": 0.1,
+                    "rationale": f"passthrough: \"{word}\" could mean the camera or the thing itself, so it asks"}
+        regioned = bool(inp.get("region") or inp.get("mask"))
+        run_as = fe.run_as(reading, patch, regioned)
+        edit = {"reading": reading, "runAs": run_as, **({"camera": patch} if patch else {}), "words_as_given": True}
+        if reading != "local" and regioned:
+            edit["maskUnused"] = True
+        said = f"read as a {reading} change" + (f" ({', '.join(sorted(patch))})" if patch else "")
+        if run_as == "none":
+            return {"op": op, "frameEdit": edit, "question": None, "confidence": 0.1,
+                    "rationale": f"passthrough: {said}; only the camera's move changes, so nothing is drawn"}
+        provider = (sheet or {}).get("provider", "mock")
+        model = ((sheet or {}).get("ops", {}).get(run_as) or {}).get("model", "unknown")
+        refs = [{"sha256": inp["image"]["sha256"], "name": "current", "role": "current"}] if inp.get("image") else []
+        for ref, role in ref_roles(inp, op, sheet):
+            if all(r["sha256"] != ref["asset"]["sha256"] for r in refs):
+                refs.append({"sha256": ref["asset"]["sha256"], "name": ref["tag"], "role": role})
+        job = {"provider": provider, "model": model, "prompt": text or "the frame", "refs": refs, "outputs": 1}
+        if run_as == "region_edit":
+            if inp.get("mask") and (sheet or {}).get("mask", "none") != "none":
+                job["mask"] = inp["mask"]["sha256"]
+            if inp.get("region"):
+                job["region"] = inp["region"]
+        masked = "mask" in job
+        ratio = None if masked else provider_ratio(provider, run_as, inp.get("ratio"), model, aspect=inp.get("aspect"))
+        if ratio:
+            job["ratio"] = ratio
+        return {"op": op, "frameEdit": edit, "providerJob": job, "question": None, "confidence": 0.1,
+                "rationale": f"passthrough: {said}; your words went as they are"}
 
     def _shot_list(self, job_request: dict) -> dict:
         inp = job_request.get("input", {})

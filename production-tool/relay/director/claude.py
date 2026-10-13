@@ -52,6 +52,10 @@ def settings_from_env() -> SimpleNamespace:
 
 
 class ClaudeDirector:
+    # The model looks at a frame_edit's current frame (features/frame-change-edit.clan): the relay
+    # fetches it only for a director that does.
+    sees_images = True
+
     def __init__(self, director: Director):
         self.director = director
         self.model = director.per_click_model
@@ -71,14 +75,14 @@ class ClaudeDirector:
             else:
                 log.warning("config names prompt %s, which is not bundled; keeping %s", version, d.prompt_version)
 
-    def direct(self, job_request: dict, sheet: dict | None) -> dict:
+    def direct(self, job_request: dict, sheet: dict | None, images: list | None = None) -> dict:
         op = job_request["op"]
         provider = sheet["provider"] if sheet else None
         if sheet:
             self.director.sheets[provider] = sheet  # the relay's copy is the one routing used
         try:
             result = self.director.run(op, job_request.get("input") or {}, provider_name=provider,
-                                       job_id=job_request.get("jobId", ""))
+                                       job_id=job_request.get("jobId", ""), images=images)
         except Exception as e:
             if op == "shot_list":  # a plan split by sentences would stand in for a real one unseen
                 raise

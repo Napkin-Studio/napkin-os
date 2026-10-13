@@ -15,7 +15,7 @@ from contracts_dir import contracts_dir
 from director import PassthroughDirector, new_id
 from identity import person, tenant_id
 from providers import Registry
-from providers.base import Status
+from providers.base import Status, job_op
 from service import Relay
 from store import MemoryStore
 
@@ -91,6 +91,7 @@ class FakeProvider:
     def __init__(self, name: str, sheet: dict, blobs: FakeBlobs):
         self.name, self.sheet, self.blobs = name, sheet, blobs
         self.submits: list[dict] = []
+        self.ops: list[str | None] = []  # the op each submit ran as (the relay's job context)
         self.status_calls: list[str] = []
         self.cancels: list[str] = []
         self.submit_effect = None       # an exception to raise
@@ -101,6 +102,7 @@ class FakeProvider:
 
     def submit(self, job):
         self.submits.append(job)
+        self.ops.append(job_op())
         if self.submit_effect is not None:
             raise self.submit_effect
         rid = f"{self.name}-{len(self.submits)}"

@@ -20,7 +20,7 @@ from typing import Optional
 # Two shapes are the same when their log ratios differ by no more than this (about 0.5%).
 TOLERANCE = 0.005
 # The image ops whose result is cropped to the job's shape; video ops are never touched.
-CROP_OPS = ("generate", "view", "frame", "region_edit")
+CROP_OPS = ("generate", "view", "frame", "region_edit", "frame_edit")
 _RATIO = re.compile(r"^(\d{1,6}):(\d{1,6})$")
 
 Shape = tuple[int, int]
