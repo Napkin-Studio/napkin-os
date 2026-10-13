@@ -44,8 +44,9 @@ export function hydrate(frag: Y.XmlFragment, prose: Prose | undefined) {
   prosemirrorJSONToYXmlFragment(textSchema(), { type: 'doc', content }, frag)
 }
 
-/** What a ref is called now, for flat text: key_variant. */
-export type RefNames = Record<string, { key: string; variant: string } | undefined>
+/** What a mention is called now, for flat text. */
+/** A ref is key_variant (one look); a key alone is the whole character (@maya). */
+export type RefNames = Record<string, { key: string; variant?: string } | undefined>
 
 function inlineText(nodes: PMNode[] | undefined, refs: RefNames, mentions: string[], unknown: string[]): string {
   let out = ''
@@ -56,7 +57,7 @@ function inlineText(nodes: PMNode[] | undefined, refs: RefNames, mentions: strin
       const id = String(n.attrs?.id ?? '')
       const ref = refs[id]
       if (ref) {
-        out += `@${ref.key}_${ref.variant}`
+        out += ref.variant ? `@${ref.key}_${ref.variant}` : `@${ref.key}`
         if (!mentions.includes(id)) mentions.push(id)
       } else {
         const label = String(n.attrs?.label ?? 'unknown')

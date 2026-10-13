@@ -916,12 +916,20 @@
         "refs": {
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^ref_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              {
+                "type": "string",
+                "pattern": "^key_[0-9A-HJKMNP-TV-Z]{26}$"
+              }
+            ]
           },
           "maxItems": 14,
           "uniqueItems": true,
-          "description": "The refs the shot's text mentions, by id. Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
+          "description": "What the shot's text mentions, by id: a ref (one look, @maya_laughing) or a key (the whole character, @maya: its front and up to 3 other views). Written only by checkpoint() from the entity's live-text fragment (contracts/collab.md); a patch to it is refused (owned_by_text)."
         },
         "text_problem": {
           "$ref": "#/$defs/textProblem"

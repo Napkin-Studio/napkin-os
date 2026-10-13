@@ -117,7 +117,10 @@ export class LocalTextBus implements TextBus, TextSide {
   pendingPatches(entityOf?: (map: string, id: string) => Entity | undefined): { patches: Patch[]; written: { kind: FragmentKind; id: string; writer: string }[] } {
     const doc = this.bus.doc() as unknown as Record<string, Record<string, Entity>>
     const lookup = entityOf ?? ((map: string, id: string) => doc[map]?.[id])
-    const refs: RefNames = Object.fromEntries(Object.entries(doc.refs ?? {}).map(([id, r]) => [id, { key: String(r.key), variant: String(r.variant) }]))
+    const refs: RefNames = {
+      ...Object.fromEntries(Object.entries(doc.keys ?? {}).map(([id, k]) => [id, { key: String(k.key) }])),
+      ...Object.fromEntries(Object.entries(doc.refs ?? {}).map(([id, r]) => [id, { key: String(r.key), variant: String(r.variant) }])),
+    }
     const patches: Patch[] = []
     const written: { kind: FragmentKind; id: string; writer: string }[] = []
     for (const [name, writer] of this.dirty) {
