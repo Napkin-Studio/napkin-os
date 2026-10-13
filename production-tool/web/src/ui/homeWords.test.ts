@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { emptySummary } from '../projects/projectIndex'
-import { displayName, edited, greeting, stageChip } from './homeWords'
+import { displayName, edited, greetName, greeting, menuName, stageChip } from './homeWords'
+
+describe('who Home names (features/os-sign-in.clan)', () => {
+  it('greets and lists the account name from Me.name, falling back to the handle', () => {
+    const shrey = { handle: 'engineer', name: 'Shrey' }
+    expect(greetName(shrey)).toBe('Shrey')
+    expect(menuName(shrey)).toBe('Shrey')
+    expect(greetName({ handle: 'engineer', name: '  ' })).toBe('Engineer')
+    expect(menuName({ handle: 'engineer' })).toBe('@engineer')
+    expect(greetName(null)).toBe('there')
+    expect(menuName(undefined)).toBe('@guest')
+  })
+})
 
 describe('a project card\'s words', () => {
   it('the stage chip: blue on its way, amber when behind, green with the ad', () => {
