@@ -14,7 +14,7 @@ describe('HttpRelay and who is signed in', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('reads GET /me', async () => {
-    const me: Me = { participantId: 'p_1a2b3c4d5e', handle: 'maya', team: 'napkin', workspace: 'p_1a2b3c4d5e', quotas: { image: 40, video: 6, render: 3 }, projects: 3 }
+    const me: Me = { participantId: 'p_1a2b3c4d5e', handle: 'maya', name: 'Maya', team: 'napkin', workspace: 'f283da90-07cd-59ec-b370-b23704a2bc91', tenant: { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 3 }
     const fetchFn = answer(200, me)
     vi.stubGlobal('fetch', fetchFn)
     expect(await new HttpRelay('http://relay.test/').me()).toEqual(me)
@@ -22,13 +22,40 @@ describe('HttpRelay and who is signed in', () => {
     expect(fetchFn.mock.calls[0][1]?.method).toBe('GET')
   })
 
-  it('maps a 401 on GET /me to signed out (null), and tells the app', async () => {
+  it('maps a relay 401 on GET /me to null, and tells the app it could not confirm who (no sign-in loop)', async () => {
     vi.stubGlobal('fetch', answer(401, REFUSED))
     const relay = new HttpRelay('http://relay.test')
     const onUnauthorised = vi.fn()
     relay.onUnauthorised = onUnauthorised
     expect(await relay.me()).toBeNull()
-    expect(onUnauthorised).toHaveBeenCalledOnce()
+    expect(onUnauthorised).toHaveBeenCalledExactlyOnceWith('unconfirmed')
+  })
+
+  it("maps napkin-web's signed-out 401 ({signin:true}) on GET /me to null and signed out", async () => {
+    vi.stubGlobal('fetch', answer(401, { ok: false, signin: true, password: false }))
+    const relay = new HttpRelay('/production/api')
+    const onUnauthorised = vi.fn()
+    relay.onUnauthorised = onUnauthorised
+    expect(await relay.me()).toBeNull()
+    expect(onUnauthorised).toHaveBeenCalledExactlyOnceWith('signed_out')
+  })
+
+  it('says the agency is not on when GET /me answers 403 flag_off', async () => {
+    vi.stubGlobal('fetch', answer(403, { error: { code: 'flag_off', message: 'The Production Tool is not on for your agency yet.', retryable: false } }))
+    const relay = new HttpRelay('/production/api')
+    const onUnauthorised = vi.fn()
+    relay.onUnauthorised = onUnauthorised
+    await expect(relay.me()).rejects.toMatchObject({ status: 403 })
+    expect(onUnauthorised).toHaveBeenCalledExactlyOnceWith('not_enabled')
+  })
+
+  it("does not treat a step's flag_off (a switched-off step) as the agency's", async () => {
+    vi.stubGlobal('fetch', answer(403, { error: { code: 'flag_off', message: 'Video is switched off for now.', retryable: false } }))
+    const relay = new HttpRelay('/production/api')
+    const onUnauthorised = vi.fn()
+    relay.onUnauthorised = onUnauthorised
+    await expect(relay.getJob('job_01K6XA7Q3M9V2D4R8T0B5C1E6F')).rejects.toMatchObject({ status: 403 })
+    expect(onUnauthorised).not.toHaveBeenCalled()
   })
 
   it('still throws when GET /me fails some other way', async () => {
@@ -42,7 +69,7 @@ describe('HttpRelay and who is signed in', () => {
     const onUnauthorised = vi.fn()
     relay.onUnauthorised = onUnauthorised
     await expect(relay.getJob('job_01K6XA7Q3M9V2D4R8T0B5C1E6F')).rejects.toThrow()
-    expect(onUnauthorised).toHaveBeenCalledOnce()
+    expect(onUnauthorised).toHaveBeenCalledExactlyOnceWith('unconfirmed')
   })
 
   it('sends no Authorization and no X-Own-Keys header', async () => {

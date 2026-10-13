@@ -6,6 +6,7 @@ import type {
   AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
   Me,
 } from '../contracts/types'
+import type { Access } from './access'
 
 export interface UploadResult extends AssetRef {
   exists: boolean
@@ -17,8 +18,9 @@ export interface Relay {
   /** GET /me: who is signed in. No token: the relay's identity seam knows (features/drop-hackathon-extras.clan).
    *  null when it answers 401 (no one is). */
   me(): Promise<Me | null>
-  /** Called when any route answers 401. The app forgets who was signed in and says to sign in through Napkin Studio. */
-  onUnauthorised?: () => void
+  /** Called when an answer says this person cannot use the tool (relay/access.ts): signed out of Napkin OS
+   *  (napkin-web's 401), not confirmed (the relay's 401), or the agency not on (403 flag_off on GET /me). */
+  onUnauthorised?: (why: Access) => void
   /** Hash in the browser, POST /uploads, PUT the bytes when the relay doesn't have them. */
   upload(blob: Blob, mime: InputMime): Promise<UploadResult>
   /** POST /jobs (idempotent on jobId) */

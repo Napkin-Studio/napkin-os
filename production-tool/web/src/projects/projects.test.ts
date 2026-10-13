@@ -44,7 +44,7 @@ function setup(opts: { clock?: () => number } = {}) {
   let t = Date.parse('2026-10-09T09:00:00Z')
   const now = () => new Date((t += 1000))
   const index = new ProjectIndex(storage, now)
-  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'p_maya01', quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'f283da90-07cd-59ec-b370-b23704a2bc91', tenant: { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
   const renderer: MockRenderer = { async render() { return [{ blob: new Blob([`pic-${Math.random()}`], { type: 'image/png' }), mime: 'image/png', w: 9, h: 16 }] } }
   let rt = 1_000_000
   const relay = new MockRelay({ renderer, now: opts.clock ?? (() => rt), delayMs: 2000, persistKey: null })
@@ -296,7 +296,7 @@ describe('the first load: the one project of before becomes the first in the lis
     await store.flush()
     store.clan.dispose()
     await storage.put(LEGACY.canvas, { elements: [{ id: 'old-canvas' }], files: {} } as unknown as CanvasSnapshot)
-    const ui: Partial<UiState> = { configChoice: 'remote', providerChoice: 'config', me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'p_maya01', quotas: { image: 40, video: 6, render: 3 }, projects: 0 }, scriptDraft: 'Maya opens the shop.', undo: { done: [{ label: 'name', ops: [], at: 1 } as never], undone: [] }, jobCtx: {} }
+    const ui: Partial<UiState> = { configChoice: 'remote', providerChoice: 'config', me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'f283da90-07cd-59ec-b370-b23704a2bc91', tenant: { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 }, scriptDraft: 'Maya opens the shop.', undo: { done: [{ label: 'name', ops: [], at: 1 } as never], undone: [] }, jobCtx: {} }
     await storage.put(LEGACY.ui, ui)
   }
 

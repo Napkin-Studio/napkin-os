@@ -86,6 +86,9 @@ export function mockShotList(script: string, targetS: number, names: string[] = 
   }))
 }
 
+/** The mock's agency: Napkin's own tenant, UUIDv5 of 'napkin:agency:napkin' (as napkin-web's TenantId::of_agency). */
+export const MOCK_TENANT = { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' } as const
+
 export class MockRelay implements Relay {
   readonly kind = 'mock' as const
   private readonly ledger = new Map<string, LedgerItem>()
@@ -123,13 +126,14 @@ export class MockRelay implements Relay {
     } catch { /* storage full or blocked */ }
   }
 
-  /** GET /me: always the same local person; the mock has no sign-in (features/drop-hackathon-extras.clan). */
+  /** GET /me: always the same local person, in Napkin's own agency; the mock has no sign-in (features/drop-hackathon-extras.clan). */
   async me(): Promise<Me> {
     return {
       participantId: this.participantId,
       handle: this.handle,
-      team: 'mock',
-      workspace: this.participantId,
+      team: MOCK_TENANT.agency,
+      workspace: MOCK_TENANT.id,
+      tenant: { ...MOCK_TENANT },
       quotas: { image: 40, video: 6, render: 3 },
       projects: 0, // nothing is saved to a server without the relay
     }

@@ -1,6 +1,6 @@
-// The relay over HTTP: the infra lane's local server (http://localhost:8787)
-// or the deployed /api. Routes and bodies per relay-api.schema.json. No token: who is
-// asking comes from the relay's identity seam (features/drop-hackathon-extras.clan).
+// The relay over HTTP: the local server (http://localhost:8787), or napkin-web's /production/api,
+// which proxies to the relay with the signed-in person (features/os-sign-in.clan). Routes and
+// bodies per relay-api.schema.json. No token: who is asking comes from the relay's identity seam.
 
 import type {
   AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output,
@@ -8,11 +8,12 @@ import type {
 } from '../contracts/types'
 import type { ShellEvent } from '../dogfood/recorder'
 import { sha256Of } from '../lib/hash'
+import { accessOf, type Access } from './access'
 import { RelayError, type Relay, type UploadResult } from './types'
 
 export class HttpRelay implements Relay {
   readonly kind = 'http' as const
-  onUnauthorised?: () => void
+  onUnauthorised?: (why: Access) => void
   private readonly base: string
 
   constructor(base: string) {
@@ -34,14 +35,19 @@ export class HttpRelay implements Relay {
       json = await res.json()
     } catch { /* empty or not JSON */ }
     if (!res.ok) {
-      if (res.status === 401) this.onUnauthorised?.()
+      const access = accessOf(res.status, json, path === '/me')
+      if (access) this.onUnauthorised?.(access)
       const err = (json as { error?: ContractError } | null)?.error
+      if (!err && access === 'signed_out') {
+        throw new RelayError({ code: 'unauthorised', message: 'Sign in to Napkin Studio to use Production.', retryable: false }, res.status)
+      }
       throw new RelayError(err ?? { code: 'internal', message: `The server answered ${res.status}.`, retryable: res.status >= 500 }, res.status)
     }
     return json as T
   }
 
-  /** Signed out (401) is an answer, not an error: null. */
+  /** Signed out or not confirmed (401) is an answer, not an error: null (onUnauthorised says which).
+   *  A 403 flag_off (the agency is not on) throws, after onUnauthorised('not_enabled'). */
   async me(): Promise<Me | null> {
     try {
       return await this.call<Me>('GET', '/me')

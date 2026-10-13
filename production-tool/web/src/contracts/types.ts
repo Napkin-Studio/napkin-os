@@ -365,10 +365,14 @@ export type CustomData =
 export interface Me {
   participantId: string
   handle: string
-  /** The person's agency: with the handle it makes the workspace unique. */
+  /** The person's display name, when Napkin Studio knows it. */
+  name?: string
+  /** The person's agency (the tenant's name). */
   team: string
-  /** The person's own workspace (its participantId): the library and saved projects are kept in it. */
+  /** The agency's workspace: the tenant id (a UUID). Its saved projects and library are shared by everyone in it. */
   workspace: string
+  /** The agency the person signed in under (features/os-sign-in.clan). */
+  tenant: { id: string; agency: string }
   /** Remaining today, per quota class. */
   quotas: { image: number; video: number; render: number }
   /** How many projects this person has saved on the relay. */

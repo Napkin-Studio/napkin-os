@@ -10,6 +10,7 @@ import { BetaTag } from '../dogfood/Dogfood'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
 import { homeItems, itemId } from '../projects/homeList'
+import { behindNapkinOs, signOut } from '../relay/access'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
 import { clock, displayName, edited, greeting, stageChip } from './homeWords'
@@ -180,6 +181,10 @@ function HomeBar() {
           {menu && (
             <span className="menu" role="menu">
               <span className="handle menu-head">@{ui.me?.handle ?? 'guest'}</span>
+              {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
+              {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
+                <button className="btn sm ghost" role="menuitem" onClick={() => void signOut()}>Sign out</button>
+              )}
             </span>
           )}
         </span>

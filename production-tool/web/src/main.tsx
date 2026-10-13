@@ -10,6 +10,7 @@ import { browserClan } from './projects/session'
 import { Shell } from './projects/shell'
 import { browserStorage } from './projects/storage'
 import { createRelay } from './relay'
+import { AccessStore, type Access } from './relay/access'
 import { Root } from './Root'
 
 async function boot() {
@@ -34,22 +35,29 @@ async function boot() {
   if (!hadUi && relay.kind === 'http') app.update((u) => { u.configChoice = 'remote'; u.providerChoice = 'config' })
 
   // Who is signed in, asked on every load: the relay's identity seam knows (GET /me), so there is no
-  // sign-in here; signed out shows Root's message (features/drop-hackathon-extras.clan). A 401 on any
-  // route later signs out the same way. The mock always names its local person.
-  relay.onUnauthorised = () => app.update((u) => { u.me = undefined })
+  // sign-in here. Behind Napkin OS, napkin-web's 401 means signed out (Root offers its Sign in, which
+  // comes back here), the relay's 401 means it could not confirm who, and 403 flag_off means the
+  // agency is not on (features/os-sign-in.clan, relay/access.ts). The same on any route later.
+  // The mock always names its local person.
+  const access = new AccessStore()
+  const refused = (why: Access) => {
+    access.set(why)
+    app.update((u) => { u.me = undefined })
+  }
+  relay.onUnauthorised = refused
   // Unreachable: keep who this browser last knew, so the projects here still open.
   try {
     const me = await relay.me()
     app.update((u) => { u.me = me ?? undefined })
   } catch (e) {
-    console.error('could not ask the relay who is signed in', e)
+    if (access.get() === 'ok') console.error('could not ask the relay who is signed in', e)
   }
   const remoteConfig = relay.kind === 'http' ? await relay.config() : null
 
   // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.
   const relayUrl = import.meta.env.VITE_RELAY_URL as string | undefined
-  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me }) : undefined
+  const server = relay.kind === 'http' && relayUrl ? new ProjectServer({ base: relayUrl, signedIn: () => !!app.get().me, onUnauthorised: refused }) : undefined
   const shell = new Shell({ relay, app, index, storage, remoteConfig, makeClan: browserClan, server })
   if (app.get().me) await shell.start().catch((e) => console.error('could not open the last project', e))
 
@@ -70,7 +78,7 @@ async function boot() {
   }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Root shell={shell} />
+      <Root shell={shell} access={access} />
     </StrictMode>,
   )
 }
