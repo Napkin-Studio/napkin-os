@@ -280,6 +280,6 @@ git diff --stat feature/studio-start -- app/templates app/src crates   # empty
 grep -rniE 'mock|8790' app/templates app/src crates                    # no line added by this work
 ```
 
-(The grep has 8 pre-existing hits — `advertising-studio`'s `mock` asset kind
-and a Brief Maker status string — none from here.) Removing the stand-in is
+(The grep's pre-existing hits — a Brief Maker status string among them — are
+none from here.) Removing the stand-in is
 deleting this directory and changing one endpoint; there is no code to unpick.

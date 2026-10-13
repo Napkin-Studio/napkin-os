@@ -333,7 +333,7 @@ app:
 
 1. `upstream` defaults to `false`. With `false` nothing in this section
    applies and the hop is the older graft — `map`, or the root fold — so
-   Advertising Studio's `map: brief` is unchanged.
+   an app that declares `map: brief` is unchanged.
 2. With `true`, `map` must be absent (declared or passed as the `/spinoff`
    override); a spin-off with both is refused (`422`): the source's data has
    one place, `upstream.<id>`.
@@ -503,7 +503,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
 
 `clan_sdk` re-exports `Carried` beside `Lineage`. Adding the two fields breaks
 the struct literals that name every field. `SpinoffSpec` in `library.rs`,
-`tests/routes.rs`, `examples/make_advertising_studio.rs` and `clan-cli` gains
+`tests/routes.rs` and `clan-cli` gains
 `upstream: false` and nothing else, and the hand-written
 `impl Default for SpinoffSpec` gains `upstream: false`. `Lineage` in
 `instantiate.rs` gains `carried: None` for `instantiate()` and the filled

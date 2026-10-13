@@ -5,7 +5,7 @@
 //!
 //! Defaults: `campaign-research.app.clan` and `campaign-research.example.clan`.
 //!
-//! Same shape as `make_advertising_studio`, with what this document adds:
+//! Same shape as `make_brief_maker`, with what this document adds:
 //!
 //! 1. Two members of its own, `shared/facts.yaml` (role `pinned-facts`) and
 //!    `shared/findings.yaml` (role `findings`), registered EMPTY in the

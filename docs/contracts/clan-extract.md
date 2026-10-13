@@ -524,9 +524,10 @@ A profile is chosen by `manifest.app.app_id`. A document whose app has no
 profile gets the generic profile in the agent version — `10-state-fields`
 with its top-level data keys in code point order, labelled by the humanised
 key, then `20-intake`, `28-upkeep`, `29-other`, `30-review` and `31-client` —
-and is refused for the corpus (`unsupported-app`). Advertising Studio is such
-an app today: its media hashes and per-beat approvals need a profile of their
-own before they go near a knowledge base (critic G7).
+and is refused for the corpus (`unsupported-app`). An app with media hashes
+and per-beat approvals is such an app: those need a profile of their own
+before they go near a knowledge base (critic G7). Advertising Studio, the app
+that raised it, was retired on 2026-10-13 (features/os-sign-in.clan).
 
 **Research Tool** (`ie.napkin.campaign-research`; stages from
 `app/pipeline.yaml:62`):
@@ -2315,7 +2316,7 @@ marked value survives in `corpus/`.
   The field is not hidden for citing it (OD8; the draft's CF4 rule is
   withdrawn). The brief's writers may see a confidential research value in
   the agent version (OD1).
-- **The older graft** (`upstream: false`, Advertising Studio's `map: brief`)
+- **The older graft** (`upstream: false`, an app's `map: brief`)
   moves the source's data under `map`. A carried mark is applied to the
   grafted path through `app.spinoff.map` and its `lift`; one that cannot be
   mapped refuses every version it would hide from
@@ -2884,7 +2885,7 @@ out.
 ### 9.3 The older graft
 
 A document spun off before carry-everything, or into an app that declares
-`upstream: false` (Advertising Studio's `map: brief`), has the source's data
+`upstream: false` (an app's `map: brief`), has the source's data
 grafted at `map` and carries no members. Cites into the source do not resolve
 inside it. In both versions such a cite is its bare id and `(not held in
 this document)`, with the flag `carried-cite-unresolved`; the citing record
@@ -4216,7 +4217,7 @@ owner decision (§0.2).
 | G4 | Names the view shows | Withdrawn: names come from the account (OD9) | 3.1.2 |
 | G5 | The cast drifted from the view | `whoOf` ported; pinned at `fe7fb03` | 3.1.3 |
 | G6 | Merge conflicts | Records and open items | 4.3, 9.4 |
-| G7 | Advertising Studio | The generic profile; the corpus refused | 1.6 |
+| G7 | Media apps (Advertising Studio, retired 2026-10-13) | The generic profile; the corpus refused | 1.6 |
 | G8 | No link from a brief to its research | Carry-everything landed; the upstream view feeds the engine's rows | 9.5, 11.2 |
 | G9 | "Any document" | A research `.clan` attached adds its rows; a character budget on the sections | 10.3, 11.2 |
 | G10 | Marks after a copy | No copies of research records; marks made upstream later are a known gap; P16 | 5.7 |
