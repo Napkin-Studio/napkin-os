@@ -15,7 +15,10 @@ const keyVisual: LinkEnd = { kind: 'picture', role: 'key_visual' }
 // [row, from, to, roles or the refusal's words]
 const CASES: Case[] = [
   ['Script → Storyboard', 'script', 'storyboard', ['drives']],
-  ['Script → Storyboard (refused)', 'script', 'video', 'Not a target for a script'],
+  ['Script → Storyboard (refused)', 'script', 'shot', 'Not a target for a script'],
+  // Owner ruling 2026-10-13: a script may drive a video straight.
+  ['Script → Video', 'script', 'video', ['drives']],
+  ['Script → Video (refused)', 'script', 'format_set', 'Not a target for a script'],
   ['Storyboard → Video', 'storyboard', 'video', ['renders']],
   ['Storyboard → Video (refused)', 'storyboard', 'script', 'Not a target for a storyboard'],
   ['Reference → generating node', 'picture', 'script', ['reference']],
@@ -58,9 +61,9 @@ describe('canLink: every row of 3.4', () => {
     else expect(got).toEqual({ ok: true, roles: want })
   })
 
-  it('the table is 3.4 as written: ten rows, three refusals', () => {
+  it('the table is 3.4 as written, plus the owner’s Script → Video row: eleven rows, three refusals', () => {
     expect(LINK_TABLE.map((r) => r.fromTo)).toEqual([
-      'Script → Storyboard', 'Storyboard → Video', 'Reference → any generating node, or a Shot', 'Board or group → any generating node',
+      'Script → Storyboard', 'Storyboard → Video', 'Script → Video', 'Reference → any generating node, or a Shot', 'Board or group → any generating node',
       'Note, ink group or Document → any generating node', 'Brand board → any generating node', 'Frame, key visual or Video → Format set',
       'Image, frame or generated picture → Shot', 'Sketch area → Frame', 'Ink group → Shot',
     ])
@@ -90,6 +93,15 @@ describe('checkLink: the limits', () => {
   it('one script per storyboard', () => {
     const g = graph([['s1', 'script'], ['s2', 'script'], ['sb', 'storyboard']], [['s1', 'sb', 'drives']])
     expect(checkLink(g, 's2', 'sb', 'drives')).toEqual({ ok: false, reason: 'This storyboard already has a script.' })
+  })
+
+  it('one script per video, and a script may drive a storyboard and a video at once', () => {
+    const g = graph([['s1', 'script'], ['s2', 'script'], ['sb', 'storyboard'], ['v', 'video']], [['s1', 'v', 'drives']])
+    expect(checkLink(g, 's2', 'v', 'drives')).toEqual({ ok: false, reason: 'This video already has a script.' })
+    expect(checkLink(g, 's1', 'sb', 'drives')).toEqual({ ok: true })
+    // The recommended path still works beside it: the storyboard renders the same video.
+    const both: LinkGraph = { ...g, links: [...g.links, { from: 's1', to: 'sb', role: 'drives' }] }
+    expect(checkLink(both, 'sb', 'v', 'renders')).toEqual({ ok: true })
   })
 
   it('one storyboard per video, while a storyboard renders many videos', () => {

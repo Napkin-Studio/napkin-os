@@ -61,6 +61,14 @@ export const LINK_TABLE: readonly LinkRow[] = [
     effect: 'One clip per shot, from each shot\'s selected frame.',
     sources: [{ kind: 'storyboard' }], targets: [{ kind: 'video' }], roles: ['renders'], limit: 'one-per-target',
   },
+  // Owner ruling (Shrey, 2026-10-13), closing the 3.4/3.5 gap: a script may drive a
+  // video straight. On Make video Dex asks "Plan a storyboard first?"; planning the
+  // storyboard first stays the recommended path, and each tool works on its own.
+  {
+    fromTo: 'Script → Video', roleLabel: '`drives`', allowed: 'One script per video',
+    effect: 'Make clips straight from the script. Make video asks first: "Plan a storyboard first?" (Plan the storyboard first is recommended).',
+    sources: [{ kind: 'script' }], targets: [{ kind: 'video' }], roles: ['drives'], limit: 'one-per-target',
+  },
   {
     fromTo: 'Reference → any generating node, or a Shot', roleLabel: 'its role (`character`, `location`, `lighting`, …)', allowed: 'Many',
     effect: 'The reference joins that node\'s `@` vocabulary and gets its own link with a "<name> · <role>" chip in the inputs strip. Dex words its role ("lighting reference: match its light only").',
@@ -190,7 +198,7 @@ export interface LinkGraph {
 
 /** The words for a limit that is already used, by role. */
 const LIMIT_REASON: Partial<Record<LinkRole, string>> = {
-  drives: 'This storyboard already has a script.',
+  // drives is worded by its target (a storyboard or a video), in checkLink.
   renders: 'This video already has a storyboard.',
   master: 'This set already has a master.',
   frame: 'This shot already has a frame.',
@@ -216,7 +224,7 @@ function reaches(graph: LinkGraph, start: string, goal: string): boolean {
  * - a loop is refused ("That would make a loop.");
  * - a target with a running job is refused with the job's line (`busy` gives it,
  *   e.g. "Wren is still making clip 4."), then "Link it when that's done.";
- * - each limit of 3.4: one script per storyboard, one storyboard per video, one
+ * - each limit of 3.4: one script per storyboard (and per video), one storyboard per video, one
  *   master per set, one frame and one layout per shot, one brand link, one input
  *   link per board or group, and otherwise one link per role on an input port
  *   unless the table says Many.
@@ -238,6 +246,7 @@ export function checkLink(
   if (graph.links.some((l) => l.from === fromId && l.to === toId && l.role === role)) return { ok: false, reason: 'These are already linked.' }
   const row = rowsFor(from, to).find((r) => (r.rolesBySource?.[from.kind] ?? r.roles).includes(role))!
   if (row.limit === 'one-per-target' && graph.links.some((l) => l.to === toId && l.role === role)) {
+    if (role === 'drives') return { ok: false, reason: `This ${nodeEntry(to.kind).label.toLowerCase()} already has a script.` }
     return { ok: false, reason: LIMIT_REASON[role] ?? `This already has a ${role.replace(/_/g, ' ')} link.` }
   }
   if (row.limit === 'one-per-source' && graph.links.some((l) => l.from === fromId && l.to === toId)) {
