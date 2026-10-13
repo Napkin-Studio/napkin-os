@@ -23,14 +23,27 @@ export interface Change {
 }
 
 const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v)
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+/** A value as the document keeps it: the store writes RFC 7396 merge patches, where a null inside an
+ * object means "remove", so an object's null fields never survive a write. Compared and written without
+ * them; otherwise a draft holding one (a director's `question: null`) differs from the store for ever and
+ * every later change writes that field again (a job's director re-set by another job's start). */
+export function stored(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(stored)
+  if (isObj(v)) {
+    const out: Obj = {}
+    for (const [k, x] of Object.entries(v)) if (x !== null && x !== undefined) out[k] = stored(x)
+    return out
+  }
+  return v
+}
+const same = (a: unknown, b: unknown) => JSON.stringify(stored(a)) === JSON.stringify(stored(b))
 const BUS_OWNED = new Set(['id', 'v', 'field_v'])
 const COMPOSITE = new Set(['camera', 'pick'])
 
 /** The leaf patches that turn entity `a` into `b` (both whole entities of map `entity`). */
 function leafSets(entity: string, id: string, a: Obj, b: Obj, base: number, out: Patch[]) {
   const owned = TEXT_OWNED[entity as keyof typeof TEXT_OWNED] ?? []
-  const set = (path: string, value: unknown) => out.push({ op: 'set', entity: entity as Patch['entity'], id, path, value: value === undefined ? null : structuredClone(value), base_version: base })
+  const set = (path: string, value: unknown) => out.push({ op: 'set', entity: entity as Patch['entity'], id, path, value: value === undefined || value === null ? null : stored(value), base_version: base })
   for (const f of new Set([...Object.keys(a), ...Object.keys(b)])) {
     if (BUS_OWNED.has(f) || owned.includes(f) || same(a[f], b[f])) continue
     if (COMPOSITE.has(f)) {
@@ -115,8 +128,8 @@ export function changeOf(before: Doc, after: Doc): Change {
     for (const [id, e] of Object.entries(b)) {
       if (!(id in a)) {
         const value: Obj = {}
-        for (const [k, v] of Object.entries(e)) if (!BUS_OWNED.has(k) && !owned.includes(k)) value[k] = structuredClone(v)
-        patches.push({ op: 'create', entity: map as Patch['entity'], id, value: map === 'assets' ? structuredClone(e) : value, base_version: 0 })
+        for (const [k, v] of Object.entries(e)) if (!BUS_OWNED.has(k) && !owned.includes(k)) value[k] = stored(v)
+        patches.push({ op: 'create', entity: map as Patch['entity'], id, value: map === 'assets' ? stored(e) : value, base_version: 0 })
         if (textKind && owned.some((f) => f !== 'last_writer' && e[f] !== undefined && f !== 'refs' && f !== 'text_problem')) {
           text.push({ kind: textKind, id, prose: (e.prose as Prose | undefined) ?? proseOfFields(after, textKind, e) })
         }
@@ -124,7 +137,7 @@ export function changeOf(before: Doc, after: Doc): Change {
       }
       if (same(a[id], e)) continue
       if (map === 'assets') {
-        patches.push({ op: 'delete', entity: 'assets', id, base_version: 0 }, { op: 'create', entity: 'assets', id, value: structuredClone(e), base_version: 0 })
+        patches.push({ op: 'delete', entity: 'assets', id, base_version: 0 }, { op: 'create', entity: 'assets', id, value: stored(e), base_version: 0 })
         continue
       }
       leafSets(map, id, a[id], e, Number(a[id].v ?? 0), patches)
@@ -140,7 +153,7 @@ export function changeOf(before: Doc, after: Doc): Change {
     const a = before.project as unknown as Obj
     const b = after.project as unknown as Obj
     for (const f of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      if (f !== 'id' && !same(a[f], b[f])) patches.push({ op: 'set', entity: 'project', id: before.project.id, path: f, value: b[f] === undefined ? null : structuredClone(b[f]), base_version: 0 })
+      if (f !== 'id' && !same(a[f], b[f])) patches.push({ op: 'set', entity: 'project', id: before.project.id, path: f, value: b[f] === undefined || b[f] === null ? null : stored(b[f]), base_version: 0 })
     }
   }
   return { patches, text }
