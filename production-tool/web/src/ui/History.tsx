@@ -9,7 +9,7 @@ import { useDoc, useUi } from '../app/context'
 import type { Kind } from '../model/lineage'
 import type { ModelStore } from '../model/store'
 import { download, exportClanFile } from '../export'
-import { entryKind, historyItems, type ChainLike } from './historyItems'
+import { entryKind, historyItems, projectEntries, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
 import './history.css'
 
@@ -53,7 +53,7 @@ export function HistoryPanel({ store, onClose }: { store: ModelStore | null; onC
     let alive = true
     let timer: ReturnType<typeof setTimeout> | null = null
     const load = () => {
-      store.chain().then((c) => alive && setEntries(c as ChainLike[])).catch((e) => alive && setError(e instanceof Error ? e.message : String(e)))
+      store.chain().then((c) => alive && setEntries(projectEntries(c as ChainLike[]))).catch((e) => alive && setError(e instanceof Error ? e.message : String(e)))
     }
     load()
     const off = store.onChain(() => {
@@ -95,7 +95,7 @@ export function HistoryPanel({ store, onClose }: { store: ModelStore | null; onC
             </select>
           </div>
           {error && <div role="alert" className="history-error">{error}</div>}
-          {entries ? <HistoryList entries={entries} me={ui.me?.participantId} item={item} kind={kind === 'all' ? undefined : kind} /> : <div className="history-empty faint">Reading the .clan…</div>}
+          {entries ? <HistoryList entries={entries} doc={doc} me={ui.me?.participantId} item={item} kind={kind === 'all' ? undefined : kind} /> : <div className="history-empty faint">Reading the .clan…</div>}
           <div className="history-foot">
             <button className="btn sm" onClick={async () => {
               const { blob, name } = await exportClanFile(store)

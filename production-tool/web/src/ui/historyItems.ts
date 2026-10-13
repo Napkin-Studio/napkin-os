@@ -30,7 +30,9 @@ export function historyItems(doc: ProductionDocument, docId: string): HistoryIte
   const at = (map: string, id: string | undefined) => (id ? [`${docId}#${map}[${id}]`] : [])
   const items: HistoryItem[] = []
   for (const r of refsList(doc)) {
-    items.push({ key: `ref:${r.id}`, label: `@${refName(r)}`, addresses: [...at('refs', r.id), ...at('keys', Object.values(doc.keys).find((k) => k.key === r.key)?.id)] })
+    // The ref, its key, and the Generate that made its picture (a generated node is named by its job).
+    const made = r.node && doc.jobs[r.node] ? r.node : undefined
+    items.push({ key: `ref:${r.id}`, label: `@${refName(r)}`, addresses: [...at('refs', r.id), ...at('keys', Object.values(doc.keys).find((k) => k.key === r.key)?.id), ...at('jobs', made)] })
   }
   for (const s of shotsOf(doc)) {
     const n = shotNumber(doc, s.id)
@@ -92,4 +94,63 @@ export function timeOf(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+const MAP_WORDS: Record<string, string> = {
+  scenes: 'the script', scripts: 'the script', storyboards: 'the storyboard', videos: 'the video', jobs: 'a job', refs: 'a reference',
+  keys: 'a character', reviews: 'a note', links: 'a link', asks: 'a question', checks: 'a check', suggestions: 'a suggestion',
+  renders: 'the ad', stale: 'an out-of-date mark', assets: 'a file', project: 'the project', boards: 'a board', beats: 'a moment',
+}
+const FIELD_WORDS: Record<string, string> = {
+  'pick.current': 'the version in use', 'pick.alternates': 'the versions kept', 'camera.size': 'framing', 'camera.movement': 'camera move',
+  'camera.angle': 'angle', 'camera.lens_mm': 'lens', duration_s: 'length', rank: 'order', status: 'status', state: 'state',
+  ratio: 'format', target_s: 'length', title: 'title', heading: 'heading', role: 'role', answers: 'the answer', hands_off: 'hands off',
+}
+const fieldWords = (f: string) => FIELD_WORDS[f] ?? f.replace(/[._]/g, ' ')
+
+/** An entity, in words: "shot 2", "frame v3 of shot 2", "@maya_front", "the script". */
+export function entityWords(doc: ProductionDocument, map: string, id: string): string {
+  switch (map) {
+    case 'shots': {
+      const n = shotNumber(doc, id)
+      return n ? `shot ${n}` : 'a shot'
+    }
+    case 'frames': {
+      const f = doc.frames[id]
+      return f ? `frame v${f.version}${f.shot_id ? ` of shot ${shotNumber(doc, f.shot_id)}` : ''}` : 'a frame'
+    }
+    case 'takes': {
+      const t = doc.takes[id]
+      return t ? `clip v${t.version} of shot ${shotNumber(doc, t.shot_id)}` : 'a clip'
+    }
+    case 'refs': {
+      const r = doc.refs[id]
+      return r ? `@${refName(r)}` : 'a reference'
+    }
+    default:
+      return MAP_WORDS[map] ?? map.replace(/_/g, ' ')
+  }
+}
+
+const PATH = /(?:[^#\s]+#)?([a-z_]+)\[([^\]\s]+)\]((?:\.[a-z_]+|\[[^\]\s]+\])*)/g
+
+/** Words a person reads, from an action or an address that names entities by id (spec §10: no raw paths). */
+export function plainWords(text: string, doc: ProductionDocument): string {
+  const out = text.replace(PATH, (_m, map: string, id: string, rest: string) => {
+    if (map === 'videos' && rest.startsWith('.edl[')) {
+      const item = /^\.edl\[([^\]]+)\]/.exec(rest)?.[1]
+      const shot = item ? doc.videos[id]?.edl[item]?.shot_id : undefined
+      const field = rest.replace(/^\.edl\[[^\]]+\]\.?/, '')
+      return `${shot ? `the cut's clip for shot ${shotNumber(doc, shot)}` : 'the cut'}${field ? `: ${fieldWords(field)}` : ''}`
+    }
+    const field = rest.replace(/^\./, '')
+    return `${entityWords(doc, map, id)}${field ? `: ${fieldWords(field)}` : ''}`
+  })
+  return out.replace(/^write (the script|shot \d+|a note|a moment)$/, 'wrote $1')
+}
+
+/** Decisions from before the project began (the app template's own) are not the project's history. */
+export function projectEntries<E extends ChainLike>(entries: E[]): E[] {
+  const start = entries.findIndex((e) => e.action === 'start the project')
+  return start < 0 ? entries.filter((e) => !e.agent.startsWith('clan-store')) : entries.slice(0, start + 1)
 }

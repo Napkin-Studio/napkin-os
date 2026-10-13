@@ -19,6 +19,8 @@ export interface Described {
   mirror?: boolean
   /** Consecutive writes with the same key fold into one entry (typing). */
   coalesce?: string
+  /** What the decision rests on (addresses), e.g. the refs a job sends. */
+  cites?: string[]
 }
 
 /** Written as data only: no decision-chain entry. */

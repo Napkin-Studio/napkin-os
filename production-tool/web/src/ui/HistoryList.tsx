@@ -4,11 +4,13 @@
 import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attribution'
 import { Thumbs } from '../dogfood/Dogfood'
 import type { Kind } from '../model/lineage'
-import { aboutItem, entryKind, kindOf, readable, timeOf, who, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
+import type { ProductionDocument } from '../contracts/types'
+import { aboutItem, entryKind, kindOf, plainWords, readable, timeOf, who, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
 
 const KIND_ICON: Record<AgentKind, string> = { person: '●', crew: '◆', other: '▲' }
 
-export function HistoryList({ entries, me, item, kind }: { entries: ChainLike[]; me?: string; item?: HistoryItem; kind?: Kind }) {
+export function HistoryList({ entries, me, item, kind, doc }: { entries: ChainLike[]; me?: string; item?: HistoryItem; kind?: Kind; doc?: ProductionDocument }) {
+  const words = (t: string) => readable(doc ? plainWords(t, doc) : t)
   const shown = entries.filter((e) => aboutItem(e, item) && (!kind || entryKind(e) === kind))
   if (!shown.length) return <div className="history-empty faint">{item || kind ? 'Nothing recorded about this yet.' : 'Nothing decided yet. Every choice you and the crew make lands here.'}</div>
   return (
@@ -32,7 +34,7 @@ export function HistoryList({ entries, me, item, kind }: { entries: ChainLike[];
               {e.pinned && <span className="history-pin" title="Pinned: never compressed">pinned</span>}
               <time className="faint" dateTime={e.timestamp} title={e.timestamp}>{timeOf(e.timestamp)}</time>
             </div>
-            <div className="history-action">{readable(e.action)}</div>
+            <div className="history-action" title={e.action}>{words(e.action)}</div>
             {why && <div className="history-why muted" title={why}>{readable(why)}</div>}
             {cards.length > 0 && (
               <details className="history-saw">
@@ -56,7 +58,10 @@ export function HistoryList({ entries, me, item, kind }: { entries: ChainLike[];
               </div>
             )}
             {fields.length > 0 && (
-              <div className="history-fields">{fields.map((f) => <span key={f} className="history-field">{readable(f)}</span>)}</div>
+              <details className="history-fields">
+                <summary>{[...new Set(fields.map((f) => words(f)))].join(' · ')}</summary>
+                {fields.map((f) => <span key={f} className="history-field">{readable(f)}</span>)}
+              </details>
             )}
           </li>
         )

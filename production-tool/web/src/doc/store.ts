@@ -161,6 +161,13 @@ function write(store: DocumentStore, fn: (draft: Doc) => void, action: string, r
   fn(draft)
   if (JSON.stringify(draft) === JSON.stringify(before)) return Promise.resolve(before)
   const said = describeWrite(action, before, draft)
+  // A job asked for cites the named refs it sends, so "why does @maya look like this" finds it.
+  const docId = action.startsWith('submit ') ? store.documentId?.() : undefined
+  if (said && docId) {
+    const job = Object.values(draft.jobs).find((j) => !before.jobs[j.id])
+    const refs = [...new Set((job?.inputs ?? []).filter((r) => r.kind === 'ref' && r.ref && draft.refs[r.ref]).map((r) => r.ref!))]
+    if (refs.length) said.cites = refs.map((r) => `${docId}#refs[${r}]`).slice(0, 32)
+  }
   const why: WriteWhy = said
     ? { ...said, rationale: [rationale, said.rationale].filter(Boolean).join(' · ') || undefined, undo: !system }
     : { action, quiet: true, undo: !system }

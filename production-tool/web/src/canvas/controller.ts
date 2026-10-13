@@ -18,6 +18,7 @@ import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
+import { landingWhy } from '../jobs/landing'
 import { keyNamed, refsList } from '../model/selectors'
 import {
   alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
@@ -603,6 +604,14 @@ export class CanvasController {
       fileId: fileIdFor(out.sha256), status: 'saved', height: h,
       customData: { ...c, state: 'completed', asset: out.sha256, ...(job.kind === 'mock' ? { mock: true } : {}) },
     }))
+    // The landing is the crew's decision, citing the job and the refs it used, as for frames and clips.
+    const why = landingWhy(this.s.doc, job.jobId, c.op === 'view' && c.view ? `the ${c.view} view on the canvas` : 'a picture on the canvas')
+    if (this.s.doc.record) {
+      const docId = this.s.doc.documentId?.()
+      await this.s.doc.record(why.action, why.rationale, {
+        agent: why.agent, cites: why.cites, ...(docId ? { targets: [`${docId}#jobs[${job.jobId}]`] } : {}),
+      }).catch((e) => console.warn('could not record the canvas landing', e))
+    }
     if (c.op === 'view' && c.view) {
       const source = this.nameOn(c.parentIds[0])
       const key = source?.key

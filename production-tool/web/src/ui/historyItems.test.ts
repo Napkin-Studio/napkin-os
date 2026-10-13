@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../doc/store'
-import { aboutItem, entryKind, historyItems, kindOf, readable, who, type ChainLike } from './historyItems'
+import { aboutItem, entryKind, historyItems, kindOf, plainWords, projectEntries, readable, who, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
 import { jobRationale, type DirectorCard, type JobEntry } from '../../../clan-store/src/attribution'
 
@@ -72,6 +72,18 @@ describe('History (contract 3)', () => {
     expect(html).toContain('@hero')
     const kindOnly = renderToStaticMarkup(createElement(HistoryList, { entries, kind: 'check' }))
     expect(kindOnly.match(/history-entry/g)).toHaveLength(1)
+  })
+
+  it('says entities and fields in words, not paths, and hides the template\'s decisions', () => {
+    const d = doc()
+    expect(plainWords(`write shots[${S1}]`, d)).toBe('wrote shot 1')
+    expect(plainWords(`${DOC}#shots[${S1}].pick.current`, d)).toBe('shot 1: the version in use')
+    expect(plainWords(`render frames[${F2}]`, d)).toBe('render frame v2 of shot 1')
+    expect(plainWords(`write scenes[scene_01K6XA7Q3M9V2D4R8T0B000001]`, d)).toBe('wrote the script')
+    const withTemplate: ChainLike[] = [...entries, { agent: 'human:p_maya001', action: 'start the project', timestamp: T(1) }, { agent: 'clan-store', action: 'Production Tool summary view', timestamp: T(0) }]
+    expect(projectEntries(withTemplate).map((e) => e.action).at(-1)).toBe('start the project')
+    const html = renderToStaticMarkup(createElement(HistoryList, { entries: [entries[0]], doc: d }))
+    expect(html).toContain('shot 1: the version in use')
   })
 
   it('shortens hashes and ids for reading', () => {
