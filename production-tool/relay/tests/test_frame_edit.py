@@ -298,6 +298,15 @@ def test_a_camera_reading_with_a_mask_redraws_the_whole_frame_and_says_the_mask_
     assert job["director"]["output"]["frameEdit"]["maskUnused"] is True
 
 
+def test_only_the_passthrough_marks_the_words_as_given():
+    h = harness()
+    answer = reply(camera={"angle": "overhead"})
+    answer["frameEdit"]["words_as_given"] = True  # a recorded v7 reply wrote it
+    dex(h, answer)
+    job = post(h, h.as_person(), edit_input())
+    assert job["director"]["model"] != "passthrough" and "words_as_given" not in job["director"]["output"]["frameEdit"]
+
+
 # ── asks: Bigger how? ─────────────────────────────────────────────────────────────────────────
 
 def test_bigger_asks_an_ambiguity_with_camera_local_both_no_recommendation_and_no_price():

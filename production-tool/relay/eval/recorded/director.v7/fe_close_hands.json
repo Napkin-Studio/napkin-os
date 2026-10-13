@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"camera\", \"runAs\": \"frame\", \"camera\": {\"size\": \"close\"}}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"go in close on her hands. Close-up on her hands, seen at eye level. @maya_front on the beach at sunset, scarf lifting in the wind. The people, place and light of @current, not its framing.\", \"refs\": [{\"sha256\": \"sha256:138064aac89f3ef36a12a386bf253919c9df1678e0468283a4c72c284bbf1487\", \"name\": \"current\", \"role\": \"current\"}, {\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"maya_front\", \"role\": \"character\"}], \"ratio\": \"1344:768\"}, \"rationale\": \"'Go in close' changes the shot's camera size, so the frame is redrawn as a close-up on her hands. I assumed the hands are the framing target and the eye-level angle stays.\", \"confidence\": 0.85}"
+}

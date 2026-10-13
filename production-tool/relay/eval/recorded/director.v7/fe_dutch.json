@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"camera\", \"runAs\": \"frame\", \"camera\": {\"angle\": \"dutch\"}}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"give it a dutch tilt. Seen at a dutch angle. The people, place and light of @current, not its framing. @maya_front walks home along a city street at dusk.\", \"refs\": [{\"sha256\": \"sha256:d70ef3340ec3d18a9c4f793db4bfc6c197a3a00f9cf9f7b4dfb6f961996bf0f0\", \"name\": \"current\", \"role\": \"current\"}, {\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"maya_front\", \"role\": \"character\"}], \"ratio\": \"1344:768\", \"op\": \"frame_edit\"}, \"rationale\": \"The words change how the frame is shot (dutch angle), so the whole frame is redrawn from the new camera, keeping Maya, the street and the light of the current frame.\", \"confidence\": 0.9}"
+}

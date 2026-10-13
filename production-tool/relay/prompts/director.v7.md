@@ -114,6 +114,7 @@ Change this frame. `input.text` is what the person wants changed. `input.image` 
   - `region_edit` for local when `input.region` or `input.mask` is given;
   - `frame` for local without them: an instruction edit of the whole picture;
   - `none` when the only change is `movement` or `movement_speed`: the still stays as it is (the clip takes the move), so send no `providerJob`.
+- Leave `frameEdit.words_as_given` out: it marks a job made without you.
 - The providerJob, written as for the op in `runAs`, on that op's model in the sheet:
   - The prompt starts with the person's words, exactly as written. Then, for a camera change, the new camera in plain words ("seen from directly above, wide"), then the shot's moment from its `action` in a few words.
   - Refs: `@current` (`input.image`, role `current`) first, then the shot's character and location refs. For a camera change, write "the people, place and light of @current, not its framing": the old framing must not come back. There is no anchor or previous frame here: never name one.

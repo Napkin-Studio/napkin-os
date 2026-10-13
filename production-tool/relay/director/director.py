@@ -531,6 +531,7 @@ class Director:
         if edit is None:
             raise DirectorError("a frame_edit answer needs frameEdit, its reading of the words")
         reading = edit["reading"]
+        edit.pop("words_as_given", None)  # the passthrough's mark ("Dex sent your words as they are"), never Dex's
         if chosen and reading != chosen:
             raise DirectorError(f"read the words as {reading}, but the person chose {chosen}")
         patch = edit.get("camera") or {}
