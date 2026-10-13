@@ -198,7 +198,12 @@ export class ClanDocumentStore implements DocumentStore {
       const h = await freshHost(this.wasm)
       try {
         h.newDocument(APP_ID, first.project.title)
-        route(h, '/patch-data', { patch: first, agent: `human:${init.person.id}`, action: 'start the project', rationale: '' })
+        const m = (parseYaml(h.entry('manifest.yaml')) ?? {}) as { document_id?: string; id?: string }
+        const docId = m.document_id || m.id
+        route(h, '/patch-data', {
+          patch: first, agent: `human:${init.person.id}`, action: 'start the project', rationale: '',
+          ...(docId ? { targets: [`${docId}#project`] } : {}),
+        })
       } catch (e) {
         h.free()
         throw e

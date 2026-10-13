@@ -1,0 +1,92 @@
+// What a job is for, kept in the document (contract 3: jobs[id].purpose, node
+// and inputs), so its result lands in the right place after a reload, in
+// another browser, or (later) on the server. It was ProjectUi.jobCtx.
+//
+//   purpose  the kind and how, in words: "frame next", "clip", "stitch"
+//   node     where it runs: the shot (frame, clip), the storyboard (shot_list),
+//            the video (stitch); a canvas Generate names its own canvas node
+//   inputs   what it builds on: the frame or take it is a new version of, the
+//            notes it fixes
+
+import type { DocJob, Id, JobInputRow, LinkEndpoint, ProductionDocument } from '../contracts/types'
+import { mainStoryboard, mainVideo } from './selectors'
+
+export type FrameHow = 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'
+
+export type JobPurpose =
+  | { for: 'canvas' }
+  | { for: 'shot_list' }
+  /** how: first (frame 1), next (Next frame →), rest (Draw the rest), chain (Draw the rest moving on),
+   *  again (Regenerate or a region edit), update (Update what follows). fixReviewIds: a "Fix it in the
+   *  shot" edit; when it lands, a clip is made from it for these notes (jobs/fix.ts). */
+  | { for: 'frame'; shotId: Id; parentFrameId?: Id; how?: FrameHow; fixReviewIds?: Id[] }
+  | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[] }
+  | { for: 'stitch' }
+
+export type Purpose = JobPurpose['for']
+
+const HOWS: readonly string[] = ['first', 'next', 'rest', 'chain', 'again', 'update']
+
+/** The words a purpose is kept as. */
+export function purposeWords(p: JobPurpose): string {
+  return p.for === 'frame' && p.how ? `frame ${p.how}` : p.for
+}
+
+/** The node a job runs for. */
+export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): LinkEndpoint {
+  switch (p.for) {
+    case 'frame':
+    case 'clip':
+      return { kind: 'shot', id: p.shotId }
+    case 'shot_list':
+      return { kind: 'storyboard', id: mainStoryboard(d)!.id }
+    case 'stitch':
+      return { kind: 'video', id: mainVideo(d)!.id }
+    default:
+      // A Generate on today's canvas runs for the selection; its result is the canvas node named by the job's id.
+      return { kind: 'group', id: jobId }
+  }
+}
+
+/** The input rows a purpose keeps (what the job is a new version of, the notes it fixes). */
+export function purposeInputs(p: JobPurpose): JobInputRow[] {
+  const rows: JobInputRow[] = []
+  if (p.for === 'frame' && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
+  if (p.for === 'clip' && p.parentTakeId) rows.push({ kind: 'take', ref: p.parentTakeId, used_as: 'new version of', included: true })
+  for (const r of (p.for === 'frame' ? p.fixReviewIds : p.for === 'clip' ? p.reviewIds : undefined) ?? []) {
+    rows.push({ kind: 'note', ref: r, used_as: 'note to fix', included: true })
+  }
+  return rows
+}
+
+/** What a job in the document was for; null for a job whose purpose this build does not know. */
+export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPurpose | null {
+  const [kind, how] = (j.purpose ?? '').split(' ')
+  const notes = (j.inputs ?? []).filter((r) => r.kind === 'note' && r.ref).map((r) => r.ref!)
+  const parent = (k: JobInputRow['kind']) => (j.inputs ?? []).find((r) => r.kind === k && r.used_as === 'new version of')?.ref
+  switch (kind) {
+    case 'canvas':
+    case 'shot_list':
+    case 'stitch':
+      return { for: kind }
+    case 'frame': {
+      if (j.node.kind !== 'shot') return null
+      const p: JobPurpose = { for: 'frame', shotId: j.node.id }
+      const pf = parent('frame')
+      if (pf) p.parentFrameId = pf
+      if (how && HOWS.includes(how)) p.how = how as FrameHow
+      if (notes.length) p.fixReviewIds = notes
+      return p
+    }
+    case 'clip': {
+      if (j.node.kind !== 'shot') return null
+      const p: JobPurpose = { for: 'clip', shotId: j.node.id }
+      const pt = parent('take')
+      if (pt) p.parentTakeId = pt
+      if (notes.length) p.reviewIds = notes
+      return p
+    }
+    default:
+      return null
+  }
+}

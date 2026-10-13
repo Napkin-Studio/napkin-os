@@ -1,34 +1,19 @@
-// The document: one participant's work, shaped exactly like
-// production-tool/contracts/document.schema.json. Behind `DocumentStore` so
-// the wiring step (after D9) can swap this for CLAN writes through napkin-wasm
-// without the panels changing.
+// The panels' writes, and the snapshot store that stands in when the .clan
+// engine cannot load (contract 3). The real store is model/store.ts
+// (ModelStore): napkin-wasm behind clan-store's buses.
 
+import { newProjectData, type Person } from '../../../clan-store/src'
 import type { ProductionDocument } from '../contracts/types'
 import { idbGet, idbPut } from '../lib/idb'
-import { applyMergePatch, createMergePatch } from './mergePatch'
-import { noteStep } from './undo'
-import type { Doc, DocumentStore, Verdict } from './types'
+import { newId } from '../lib/ulid'
+import { describeWrite } from './describe'
+import type { Doc, DocumentStore, WriteWhy } from './types'
 
 export type { DocumentStore } from './types'
 
-export function emptyDocument(participant = { id: 'p_local', handle: 'guest' }): ProductionDocument {
-  return {
-    contract_version: '2',
-    app: 'production-tool',
-    participant,
-    stage: { current: 'character', next_action: 'Draw, write or drop pictures anywhere, select them, then Generate.' },
-    assets: [],
-    keys: [],
-    refs: [],
-    script: { revisions: [] },
-    shots: [],
-    frames: [],
-    takes: [],
-    jobs: [],
-    reviews: [],
-    stale: [],
-    exports: [],
-  }
+/** A new project's data (one script, storyboard and video, linked), as clan-store's create() makes it. */
+export function emptyDocument(person: Person, title = 'Untitled ad'): ProductionDocument {
+  return newProjectData({ person, title, newId, now: new Date().toISOString() }) as unknown as ProductionDocument
 }
 
 /** Something that keeps a snapshot between reloads. */
@@ -56,7 +41,7 @@ export function memoryPersister<T>(): Persister<T> & { value?: T } {
   return p
 }
 
-/** A small observable value with a debounced snapshot. Used for the document and the UI state. */
+/** A small observable value with a debounced snapshot. Used for the UI state, and the fallback document. */
 export class SnapshotStore<T> {
   protected value: T
   private readonly listeners = new Set<() => void>()
@@ -121,39 +106,32 @@ export class SnapshotStore<T> {
     this.timer = setTimeout(() => void this.flush(), this.delay)
   }
 
-  private emit() {
+  protected emit() {
     for (const fn of this.listeners) fn()
   }
 }
 
 /**
- * The JSON document in memory, snapshotted to IndexedDB. Implements the shared
- * DocumentStore interface; the CLAN store (napkin-wasm) replaces it at wiring.
+ * The document as plain data in IndexedDB, with no decision chain: used only when the .clan engine
+ * cannot load ("Saving without history"). Changes apply as they are; there is no undo.
  */
 export class SnapshotDocumentStore extends SnapshotStore<ProductionDocument> implements DocumentStore {
-  /** Human verdicts; the CLAN store appends them to the decision chain. Kept in memory here. */
-  readonly verdicts: (Verdict & { at: string })[] = []
-
   async load(): Promise<Doc | null> {
-    return (await this.restore(normaliseDocument)) ? this.get() : null
+    return (await this.restore()) && this.get().contract_version === '3' ? this.get() : null
   }
 
-  async create(init: { participant: { id: string; handle: string } }): Promise<Doc> {
-    this.replace(emptyDocument(init.participant))
+  async create(person: Person, title?: string): Promise<Doc> {
+    this.replace(emptyDocument(person, title))
     return this.get()
   }
 
-  async patch(mergePatch: object, _why: { action: string; rationale?: string }): Promise<Doc> {
-    this.replace(applyMergePatch(this.value, mergePatch))
+  async change(fn: (draft: Doc) => void, _why: WriteWhy): Promise<Doc> {
+    this.update(fn)
     return this.get()
-  }
-
-  async verdict(v: Verdict): Promise<void> {
-    this.verdicts.push({ ...v, at: new Date().toISOString() })
   }
 
   async exportClan(): Promise<Uint8Array> {
-    throw new Error('not available until CLAN store is wired')
+    throw new Error('the .clan engine did not load in this browser')
   }
 
   onChange(cb: (d: Doc) => void): () => void {
@@ -161,50 +139,39 @@ export class SnapshotDocumentStore extends SnapshotStore<ProductionDocument> imp
   }
 }
 
-/**
- * Edit the document with a draft function; the change goes to the store as an
- * RFC 7396 merge patch, so this works the same on the CLAN store.
- */
-/** A person's change: written, and kept as an undo step (doc/undo.ts). */
-export function updateDoc(store: DocumentStore, fn: (draft: Doc) => void, action = 'edit', rationale?: string): Promise<Doc> {
+/** A person's change: one decision in the chain, named by describe.ts, and one undo step. */
+export function updateDoc(store: DocumentStore, fn: (draft: Doc) => void, action = 'set', rationale?: string): Promise<Doc> {
   return write(store, fn, action, rationale, false)
 }
 
-/** The app's own change (job bookkeeping, a result landing, sign in, the stage, the canvas sync): written,
- *  but never an undo step, so undo does not fight with jobs or Excalidraw's own undo. */
-export function systemUpdate(store: DocumentStore, fn: (draft: Doc) => void, action = 'edit', rationale?: string): Promise<Doc> {
+/** The app's own change (job bookkeeping, the canvas's sync): never an undo step, and written quietly
+ *  unless describe.ts names it a decision (a job asked for). */
+export function systemUpdate(store: DocumentStore, fn: (draft: Doc) => void, action = 'sync', rationale?: string): Promise<Doc> {
   return write(store, fn, action, rationale, true)
+}
+
+/** An agent's landing: one decision by the crew member, citing the job, not an undo step of anyone's. */
+export function landUpdate(store: DocumentStore, fn: (draft: Doc) => void, why: WriteWhy): Promise<Doc> {
+  return store.change(fn, { ...why, undo: why.undo ?? false })
 }
 
 function write(store: DocumentStore, fn: (draft: Doc) => void, action: string, rationale: string | undefined, system: boolean): Promise<Doc> {
   const before = store.get()
   const draft = structuredClone(before)
   fn(draft)
-  const mp = createMergePatch(before, draft)
-  if (mp === undefined) return Promise.resolve(before)
-  if (!system) noteStep(store, before, draft, action)
-  return store.patch(mp as object, rationale ? { action, rationale } : { action })
+  if (JSON.stringify(draft) === JSON.stringify(before)) return Promise.resolve(before)
+  const said = describeWrite(action, before, draft)
+  const why: WriteWhy = said
+    ? { ...said, rationale: [rationale, said.rationale].filter(Boolean).join(' · ') || undefined, undo: !system }
+    : { action, quiet: true, undo: !system }
+  // fn ran once, on `draft` (it may make ids): the store takes the draft as it is.
+  return store.change((d) => {
+    for (const k of Object.keys(d)) delete (d as unknown as Record<string, unknown>)[k]
+    Object.assign(d, draft)
+  }, why)
 }
 
 /** Subscribe in the shape useSyncExternalStore wants. */
 export function subscribeDoc(store: DocumentStore) {
   return (fn: () => void) => store.onChange(() => fn())
-}
-
-/** Fill in optional lists an older snapshot may lack, so panels can rely on them. Frame → next frame
- *  marks (the chain before 2026-10-09) no longer mean out of date, so they are dropped on open
- *  (features/one-to-one-updates.clan). */
-export function normaliseDocument(d: ProductionDocument): ProductionDocument {
-  return {
-    ...d,
-    keys: d.keys ?? [],
-    refs: d.refs ?? [],
-    script: d.script ?? { revisions: [] },
-    shots: d.shots ?? [],
-    frames: d.frames ?? [],
-    takes: d.takes ?? [],
-    reviews: d.reviews ?? [],
-    stale: (d.stale ?? []).filter((s) => !(s.target.kind === 'frame' && s.caused_by.kind === 'frame')),
-    exports: d.exports ?? [],
-  }
 }

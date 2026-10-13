@@ -1,50 +1,53 @@
-// UI state that is not part of the document but must survive a reload: what
-// each pending job is for (so its result lands in the right place after a
-// reload), the dev switch, drafts. Snapshotted next to the document.
+// UI state that is not part of the document but must survive a reload: the
+// panel that is open, what only this browser keeps about each job, frame
+// regions, undo steps, update runs. Snapshotted next to the document.
 //
 // Two parts (features/project-home.clan): the app's (AppUi: who is signed in,
 // the dev switch, which view and project are open) is kept once, under 'ui';
-// the rest (ProjectUi: job purposes, drafts, frame regions, undo steps, update
-// runs) is kept per project, under 'ui:<projectId>'. The panels see both as
-// one UiState (projects/uiStore.ts).
+// the rest (ProjectUi) is kept per project, under 'ui:<projectId>'. The panels
+// see both as one UiState (projects/uiStore.ts).
+//
+// Contract 3 moved what a job is for, the ratio, the target length and the
+// script's words into the document (features/contract-v3.clan).
 
-import type { DirectorCard, JobRequest, Me, ModelChoice, Ratio, Region } from '../contracts/types'
+import type { SerializedUndo } from '../../../clan-store/src'
+import type { DirectorCard, JobRequest, Me, ModelChoice, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
-import type { UndoState } from './undo'
+import type { JobPurpose } from '../model/purpose'
 
-export type JobPurpose =
-  | { for: 'canvas' }
-  | { for: 'shot_list'; revId: string }
-  /** how: first (frame 1), next (Next frame →), rest (the click on Draw the rest), chain (Draw the rest
-   *  moving on), again (Regenerate or a region edit), update (Update what follows); older jobs have none.
-   *  fixReviewIds: a "Fix it in the shot" region edit; when it lands, a clip is made from it for these notes (jobs/fix.ts),
-   *  on fixModelChoice when the participant picked a clip model in the menu.
-   *  followRun: started by that run of "Update what follows" (jobs/follow.ts). */
-  | { for: 'frame'; shotId: string; parentFrameId?: string; how?: 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'; fixReviewIds?: string[]; fixModelChoice?: ModelChoice; followRun?: string }
-  | { for: 'clip'; shotId: string; parentTakeId?: string; reviewIds?: string[]; followRun?: string }
-  | { for: 'stitch'; followRun?: string }
+export type { JobPurpose } from '../model/purpose'
 
-export type JobCtx = JobPurpose & {
+/** Today's three panels. Which one is open is the person's, not the project's. */
+export type StageName = 'character' | 'storyboard' | 'video'
+
+/** What only this browser keeps about a job. What the job is for (its purpose, node and inputs) is in
+ *  the document (model/purpose.ts); this is the rest: the request to send again or retry, and notices. */
+export interface JobLocal {
   request: JobRequest
-  /** Set when the user cleared a failed job, or it was retried as another job. */
+  /** Set when the person cleared a failed job, or it was retried as another job. */
   dismissed?: boolean
   retriedAs?: string
   /** The relay made it elsewhere: Job.fallbackFrom and fallbackReason (features/runway-fallback.clan). */
   fallbackFrom?: ModelChoice
   fallbackReason?: string
-  /** The "Napkin's got you" notice for this fallback was shown (and closed or timed out): once per job. */
+  /** The "Napkin's got you" notice for this fallback was shown: once per job. */
   fallbackShown?: boolean
-  /** The character cards the director was given (the relay's agent block), held here for the
-   *  director's History entry: the document's jobs[].agent leaves them out. */
+  /** The character cards the director was given: they go into the landing's rationale. */
   cards?: DirectorCard[]
+  /** Started by that run of "Update what follows" (jobs/follow.ts). */
+  followRun?: string
+  /** A "Fix it in the shot" edit: the clip model the person picked for the clip made after it lands. */
+  fixModelChoice?: ModelChoice
 }
+
+/** A job's purpose (from the document) with what this browser keeps about it: what handlers get. */
+export type JobCtx = JobPurpose & JobLocal
 
 /** Kept once for the app, whichever project is open. */
 export interface AppUi {
   configChoice: ConfigChoice
   providerChoice: ProviderChoice
-  /** Who is signed in (GET /me), asked again on every load; absent when signed out
-   *  (features/drop-hackathon-extras.clan). */
+  /** Who is signed in (GET /me), asked again on every load; absent when signed out. */
   me?: Me
   hintDismissed?: boolean
   /** Home, or the project `project` (features/project-home.clan). */
@@ -61,18 +64,18 @@ export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismiss
 
 /** Kept per project. */
 export interface ProjectUi {
-  jobCtx: Record<string, JobCtx>
-  ratio: Ratio
-  scriptDraft: string
-  targetS: 10 | 15 | 20
+  /** What only this browser keeps about each job (JobLocal). */
+  jobs: Record<string, JobLocal>
+  /** The panel that is open. */
+  stage: StageName
   /** Region drawn on each frame (by frame id) before Regenerate. */
   frameRegions: Record<string, Region | undefined>
   /** "Draw the rest" is under way: each finished frame starts the next shot (jobs/frames.ts). */
   drawingRest?: boolean
   /** "Update what follows" is under way (jobs/follow.ts). */
   following?: FollowRun
-  /** The person's undo and redo steps (doc/undo.ts), kept here so they survive a reload. */
-  undo?: UndoState
+  /** The person's undo and redo steps (clan-store LocalUndo), kept here so they survive a reload. */
+  undo?: SerializedUndo
 }
 
 /** What the panels see: the open project's UI with the app's. */
@@ -94,7 +97,7 @@ export interface FollowRun {
   adDone: boolean
   /** Stop after the job running now. */
   cancel?: boolean
-  /** Steered (the Update button): each item waits in the update box for the user's words, model and
+  /** Steered (the Update button): each item waits in the update box for the person's words, model and
    *  "Make it". Off: the run goes on by itself ("Do the rest as they are"). */
   steer?: boolean
   /** The update box shows the plan (items in order, cost) and nothing is sent until "Start". */
@@ -116,14 +119,14 @@ export function initialAppUi(): AppUi {
 }
 
 export function initialProjectUi(): ProjectUi {
-  return { jobCtx: {}, ratio: '9:16', scriptDraft: '', targetS: 15, frameRegions: {} }
+  return { jobs: {}, stage: 'character', frameRegions: {} }
 }
 
 export function initialUi(): UiState {
   return { ...initialProjectUi(), ...initialAppUi() }
 }
 
-/** A UiState (or an older single snapshot) split into the app's part and the project's. */
+/** A UiState split into the app's part and the project's. */
 export function splitUi(v: Partial<UiState>): { app: Partial<AppUi>; project: Partial<ProjectUi> } {
   const app: Record<string, unknown> = {}
   const project: Record<string, unknown> = {}
