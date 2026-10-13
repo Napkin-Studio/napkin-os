@@ -104,6 +104,7 @@
   },
   "models": {
     "gemini_image3_pro": {
+      "maker": "google",
       "endpoint": "POST /v1/text_to_image",
       "label": "Gemini 3 Pro",
       "ratios": [
@@ -150,6 +151,7 @@
       }
     },
     "gemini_image3.1_flash": {
+      "maker": "google",
       "endpoint": "POST /v1/text_to_image",
       "label": "Gemini 3.1 Flash",
       "ratios": [
@@ -224,6 +226,7 @@
       }
     },
     "ideogram_4_5": {
+      "maker": "ideogram",
       "endpoint": "POST /v1/text_to_image",
       "label": "Ideogram 4.5",
       "ratios": [
@@ -278,6 +281,7 @@
       }
     },
     "veo3.1": {
+      "maker": "google",
       "endpoint": "POST /v1/image_to_video",
       "label": "Veo 3.1",
       "ratios": [{"ratio": "1280:720"}, {"ratio": "720:1280"}, {"ratio": "1080:1920"}, {"ratio": "1920:1080"}],
@@ -294,6 +298,7 @@
       }
     },
     "veo3.1_fast": {
+      "maker": "google",
       "endpoint": "POST /v1/image_to_video",
       "label": "Veo 3.1 Fast",
       "ratios": [{"ratio": "1280:720"}, {"ratio": "720:1280"}, {"ratio": "1080:1920"}, {"ratio": "1920:1080"}],
@@ -310,6 +315,7 @@
       }
     },
     "aleph2": {
+      "maker": "runway",
       "endpoint": "POST /v1/video_to_video",
       "label": "Aleph 2",
       "inputS": {"min": 2, "max": 30, "maxFps": 30},
@@ -325,6 +331,7 @@
       }
     },
     "magnific_precision_upscaler_v2": {
+      "maker": "magnific",
       "endpoint": "POST /v1/image_upscale",
       "label": "Magnific Precision Upscaler v2",
       "scaleFactors": [2, 4, 8, 16],
@@ -337,6 +344,7 @@
       }
     },
     "magnific_video_upscaler_creative": {
+      "maker": "magnific",
       "endpoint": "POST /v1/video_upscale",
       "label": "Magnific Video Upscaler Creative",
       "resolutions": ["720p", "1k", "2k", "4k"],

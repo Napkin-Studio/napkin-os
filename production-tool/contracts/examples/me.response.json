@@ -7,11 +7,14 @@
     "id": "f283da90-07cd-59ec-b370-b23704a2bc91",
     "agency": "napkin"
   },
-  "workspace": "f283da90-07cd-59ec-b370-b23704a2bc91",
-  "quotas": {
-    "image": 40,
-    "video": 6,
-    "render": 3
+  "allow": {
+    "claude": true,
+    "makers": [
+      "runway",
+      "google"
+    ]
   },
+  "workspace": "f283da90-07cd-59ec-b370-b23704a2bc91",
+  "quotas": null,
   "projects": 3
 }

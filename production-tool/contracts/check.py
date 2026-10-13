@@ -123,6 +123,8 @@ def sheet_rules(sheet: dict) -> list[str]:
 CASES = [
     ("capabilities/*.json", "capabilities.schema.json", "", sheet_rules),
     ("cost-model.json", "cost-model.schema.json", "", None),
+    ("spend-policy.json", "spend-policy.schema.json", "", None),
+    ("subprocessors.json", "subprocessors.schema.json", "", None),
     ("examples/pricing-cases.json", "pricing-cases.schema.json", "", None),
     ("examples/config.*.json", "config.schema.json", "", None),
     ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest", None),
@@ -271,6 +273,27 @@ for sc in cost_model["scenarios"]:
     if total != cost_model["expected"].get(sc["id"]):
         fail(f"✗ cost-model.json: {sc['id']} is {total} credits at today's sheet; expected says {cost_model['expected'].get(sc['id'])}")
 print("✓ cost-model.json (totals)")
+
+# Every maker a sheet names is in the notice, and the default allowlist names only makers the notice
+# covers (features/tenant-limits.clan); subprocessors.md is what subprocessors.py renders.
+import subprocessors  # noqa: E402  (contracts/subprocessors.py, standard library only)
+
+policy = json.loads((HERE / "spend-policy.json").read_text())
+notice = json.loads((HERE / "subprocessors.json").read_text())
+noticed = {e["id"] for e in notice["entries"] if e["control"] == "maker"}
+for provider, sheet in sheets.items():
+    for name, model in sheet["models"].items():
+        if model["maker"] not in noticed and model["maker"] not in policy["alwaysAllowed"]:
+            fail(f"✗ capabilities/{provider}.json: {name}'s maker {model['maker']!r} is not in subprocessors.json")
+for maker in policy["allow"]["makers"]:
+    if maker not in noticed:
+        fail(f"✗ spend-policy.json: allows {maker!r}, which subprocessors.json does not list")
+for e in notice["entries"]:
+    if e.get("via") and e["via"] not in {x["id"] for x in notice["entries"]}:
+        fail(f"✗ subprocessors.json: {e['id']} goes via {e['via']!r}, which is not an entry")
+if (HERE / "subprocessors.md").read_text() != subprocessors.rendered():
+    fail("✗ subprocessors.md: not what subprocessors.json renders; run python production-tool/contracts/subprocessors.py --write")
+print("✓ subprocessors.json, subprocessors.md and the makers")
 
 # Tenant data never goes in config.json, which is public three ways (features/os-sign-in.clan).
 for f in sorted(HERE.glob("examples/config.*.json")):

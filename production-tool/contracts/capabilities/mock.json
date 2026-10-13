@@ -53,8 +53,8 @@
     }
   },
   "models": {
-    "mock": {"label": "Mock", "pricing": {"unit": "image", "credits": 0, "source": []}},
-    "mock-hq": {"label": "Mock HQ", "pricing": {"unit": "image", "credits": 0, "source": []}}
+    "mock": {"maker": "napkin", "label": "Mock", "pricing": {"unit": "image", "credits": 0, "source": []}},
+    "mock-hq": {"maker": "napkin", "label": "Mock HQ", "pricing": {"unit": "image", "credits": 0, "source": []}}
   },
   "tagSyntax": "at_tag",
   "refs": {"max": 14, "maxCharacter": 5},

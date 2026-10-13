@@ -100,6 +100,8 @@ jobs:
           cp -r production-tool/contracts/capabilities "$build/pkg/contracts/"
           # the one price function the relay reserves with (features/runway-sheet-sync.clan)
           cp production-tool/contracts/pricing.py "$build/pkg/contracts/"
+          # each agency's defaults (cap, daily quotas, allowlist) and the makers' names (features/tenant-limits.clan)
+          cp production-tool/contracts/spend-policy.json production-tool/contracts/subprocessors.json "$build/pkg/contracts/"
           (cd "$build/pkg" && zip -qr9 "$build/relay.zip" .)
           ls -lh "$build/relay.zip"
           prev=$(aws lambda get-alias --function-name "$RELAY_FN" --name live --query FunctionVersion --output text)

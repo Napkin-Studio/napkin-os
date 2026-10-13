@@ -24,8 +24,11 @@
           "description": "The agency's workspace: the tenant id. The library and the saved projects are kept in it and shared by everyone in the agency (features/os-sign-in.clan)."
         },
         "quotas": {
-          "type": "object",
-          "description": "Remaining today, per quota class.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Remaining today, per quota class, while the agency's daily quotas are on; null while they are off (the default: contracts/spend-policy.json, features/tenant-limits.clan).",
           "properties": {
             "image": {
               "type": "integer"
@@ -72,6 +75,10 @@
           ],
           "additionalProperties": false
         },
+        "allow": {
+          "$ref": "spend-policy.schema.json#/$defs/allow",
+          "description": "Where the agency's material may go (features/tenant-limits.clan): its tenant item's allow, else contracts/spend-policy.json's. The web hides models whose maker is off and steps with no model left."
+        },
         "dogfood": {
           "type": "object",
           "description": "Only while config.json's flags.dogfood is on (features/production-tool-dogfood.clan): whether this person has acknowledged the beta notice.",
@@ -93,10 +100,11 @@
         "quotas",
         "projects",
         "team",
-        "tenant"
+        "tenant",
+        "allow"
       ],
       "additionalProperties": false,
-      "description": "GET /me: who the identity seam says is asking, their tenant and its workspace, today's remaining quotas and the agency's saved projects. 401 when there is no identity; 403 flag_off when the agency is not turned on."
+      "description": "GET /me: who the identity seam says is asking, their tenant and its workspace, today's remaining quotas (null while off), its allowlist and the agency's saved projects. 401 when there is no identity; 403 flag_off when the agency is not turned on."
     },
     "UploadRequest": {
       "type": "object",
