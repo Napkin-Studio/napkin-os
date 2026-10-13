@@ -9,6 +9,9 @@
 // engine's skeletons. Expected amendments (from canvas-spikes): a pointer stream
 // (pointerType, pressure), a viewport-transform subscription and region export.
 
+import type { LinkRole } from './links'
+import type { NodeKind } from './nodes'
+
 /** The fields every engine element has, as the tool reads them. */
 export interface SceneElementBase {
   id: string
@@ -114,6 +117,27 @@ export interface FrameIntent {
 export interface ExportPngOptions {
   padding: number
   background: string
+}
+
+// ── what a tool commits: new nodes and links, applied as one undoable commit ──
+
+/** A node to create. `ref` names it within one commit, so a LinkSpec can point at it. */
+export interface NodeSpec {
+  ref: string
+  kind: NodeKind
+  at: Pt
+  size?: { w: number; h: number }
+  /** A board's purpose. */
+  purpose?: string
+  /** A sketch area's ratio ('16:9'). */
+  ratio?: string
+}
+
+/** A link to create, between existing node ids or the refs of NodeSpecs in the same commit. */
+export interface LinkSpec {
+  from: string
+  to: string
+  role: LinkRole
 }
 
 export interface CanvasAdapter<E extends SceneElementBase, F extends FileDataBase = FileDataBase> {
