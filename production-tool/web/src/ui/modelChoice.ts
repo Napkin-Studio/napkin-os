@@ -6,28 +6,34 @@ import { modelLabel, type ModelOption } from '../capabilities'
 import type { DocJob, ModelChoice, Provider, ProductionDocument } from '../contracts/types'
 import type { UiState } from '../doc/ui'
 
-export const PROVIDER_NAMES: Record<Provider, string> = { fal: 'fal', runway: 'Runway', heygen: 'HeyGen', mock: 'Mock' }
+export const PROVIDER_NAMES: Record<Provider, string> = { runway: 'Runway', mock: 'Mock' }
 
-/** "Made on Runway: HeyGen could not", when the relay made a job on another provider than the
- *  one it was meant for (Job.fallbackFrom; features/runway-fallback.clan). */
-export function fellBack(from: ModelChoice | undefined, made: Provider | undefined): string | undefined {
-  if (!from || !made || from.provider === made) return undefined
-  return `Made on ${PROVIDER_NAMES[made]}: ${PROVIDER_NAMES[from.provider]} could not`
+/** A provider's name. A document's madeBy can name one no longer routed
+ *  (features/drop-hackathon-extras.clan): as recorded, then. */
+export function providerName(p: string): string {
+  return PROVIDER_NAMES[p as Provider] ?? p
 }
 
-/** The notice when the relay made a job on Runway because the participant's own provider could not:
- *  "fal couldn't make frame 3, so we made it on Runway. Napkin's got you." */
-export function fallbackNotice(from: ModelChoice | undefined, made: Provider | undefined, what: string): string | undefined {
+/** "Made on Runway: Mock could not", when the relay made a job on another provider than the
+ *  one it was meant for (Job.fallbackFrom; features/runway-fallback.clan). */
+export function fellBack(from: ModelChoice | undefined, made: string | undefined): string | undefined {
   if (!from || !made || from.provider === made) return undefined
-  return `${PROVIDER_NAMES[from.provider]} couldn't make ${what}, so we made it on ${PROVIDER_NAMES[made]}. Napkin's got you.`
+  return `Made on ${providerName(made)}: ${providerName(from.provider)} could not`
+}
+
+/** The notice when the relay made a job on Runway, the floor, because the provider it was meant for
+ *  could not: "Mock couldn't make frame 3, so we made it on Runway. Napkin's got you." */
+export function fallbackNotice(from: ModelChoice | undefined, made: string | undefined, what: string): string | undefined {
+  if (!from || !made || from.provider === made) return undefined
+  return `${providerName(from.provider)} couldn't make ${what}, so we made it on ${providerName(made)}. Napkin's got you.`
 }
 
 export interface MadeWith {
-  /** The provider and model the job ran on, when the record has them. */
-  made?: ModelChoice
-  /** "Veo 3.1 Fast (fal)", or "Veo 3 (runway) · Made on Runway: HeyGen could not". */
+  /** The provider (as the document recorded it: madeBy) and model the job ran on, when the record has them. */
+  made?: { provider: string; model: string }
+  /** "Veo 3.1 Fast (runway)", or "Gen-4 Image (runway) · Made on Runway: Mock could not". */
   label?: string
-  /** "Made on Runway: HeyGen could not", when it fell back. */
+  /** "Made on Runway: Mock could not", when it fell back. */
   fallback?: string
 }
 

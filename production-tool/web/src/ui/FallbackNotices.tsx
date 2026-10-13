@@ -1,5 +1,5 @@
-// "Napkin's got you" (features/runway-fallback.clan): when the relay made a job on Runway because the
-// participant's own fal or HeyGen key could not, say so plainly, once per job. The card keeps a small
+// "Napkin's got you" (features/runway-fallback.clan): when the relay made a job on Runway, the floor,
+// because the provider it was meant for could not, say so plainly, once per job. The card keeps a small
 // "Made on Runway" chip with the reason on hover; this is the moment it happens.
 
 import { useEffect } from 'react'

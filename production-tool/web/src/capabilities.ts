@@ -101,16 +101,16 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
 
 // ── The regenerate menu (features/model-choice.clan) ──
 
-/** One model a participant may pick when they regenerate. */
+/** One model a person may pick when they regenerate. */
 export interface ModelOption extends ModelChoice {
   label: string
   note?: string
   estimateUsd: number | null
 }
 
-/** What the menu offers for an op: each routed provider in the order its jobs run (with own keys,
- *  withOwnKeys puts the key providers first; Runway, the floor, is always there), its own model
- *  first and then its alternates (features/runway-fallback.clan). The relay checks every pick again. */
+/** What the menu offers for an op: each routed provider in the order its jobs run (Runway, the floor,
+ *  is always there), its own model first and then its alternates (features/runway-fallback.clan).
+ *  The relay checks every pick again. */
 export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS): ModelOption[] {
   const out: ModelOption[] = []
   for (const provider of config.routing[op] ?? []) {
@@ -129,10 +129,11 @@ export function choiceToSend(op: Op, config: Config, choice: ModelChoice | undef
   return first && first.provider === choice.provider && first.model === choice.model ? undefined : { provider: choice.provider, model: choice.model }
 }
 
-/** A model's menu name on any sheet ("Veo 3.1 Fast"), else its id. */
-export function modelLabel(provider: Provider | undefined, model: string | undefined, sheets: Sheets = SHEETS): string | undefined {
+/** A model's menu name on any sheet ("Veo 3.1 Fast"), else its id. The provider may be a document's
+ *  madeBy, which can name one no longer routed (features/drop-hackathon-extras.clan): its id, then. */
+export function modelLabel(provider: string | undefined, model: string | undefined, sheets: Sheets = SHEETS): string | undefined {
   if (!model) return undefined
-  for (const spec of Object.values(sheets[provider ?? 'mock']?.ops ?? {})) {
+  for (const spec of Object.values(sheets[(provider ?? 'mock') as Provider]?.ops ?? {})) {
     if (spec?.model === model) return spec.label ?? model
     const alt = spec?.alternates?.find((a) => a.model === model)
     if (alt) return alt.label
@@ -142,13 +143,13 @@ export function modelLabel(provider: Provider | undefined, model: string | undef
 
 // ── The dev switch: pick a config and a provider set to see the UI change ──
 
-export type ConfigChoice = 'allon' | 'testing' | 'event' | 'remote'
-export type ProviderChoice = 'config' | 'mock' | 'runway' | 'fal' | 'heygen'
+export type ConfigChoice = 'allon' | 'testing' | 'live' | 'remote'
+export type ProviderChoice = 'config' | 'mock' | 'runway'
 
 export const CONFIG_CHOICES: { id: ConfigChoice; label: string }[] = [
   { id: 'allon', label: 'All flags on' },
   { id: 'testing', label: 'config.testing.json' },
-  { id: 'event', label: 'config.event.json' },
+  { id: 'live', label: 'config.live.json' },
   { id: 'remote', label: 'From the relay (GET /config)' },
 ]
 
@@ -156,13 +157,11 @@ export const PROVIDER_CHOICES: { id: ProviderChoice; label: string }[] = [
   { id: 'config', label: 'As routed in config' },
   { id: 'mock', label: 'Mock (everything)' },
   { id: 'runway', label: 'Runway' },
-  { id: 'fal', label: 'fal' },
-  { id: 'heygen', label: 'HeyGen video (images on Mock)' },
 ]
 
 const ALL_FLAGS_ON: Flags = {
   storyboard: true, video: true, stitch: true, regionEditFrames: true, regionEditCanvas: true,
-  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, ownKeys: true,
+  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true,
 }
 
 function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {
@@ -173,13 +172,8 @@ function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {
 
 /** Build the effective config for a dev-switch choice. */
 export function effectiveConfig(choice: ConfigChoice, providers: ProviderChoice, sheets: Sheets = SHEETS, remote?: Config | null): Config {
-  const from: Config = choice === 'remote' && remote ? remote : choice === 'event' ? CONFIGS.event : CONFIGS.testing
+  const from: Config = choice === 'remote' && remote ? remote : choice === 'live' ? CONFIGS.live : CONFIGS.testing
   const flags = choice === 'allon' ? ALL_FLAGS_ON : from.flags
-  let routing = from.routing
-  if (providers === 'mock' || providers === 'runway' || providers === 'fal') {
-    routing = routeAll(providers, sheets)
-  } else if (providers === 'heygen') {
-    routing = { ...routeAll('mock', sheets), clip: ['heygen'], clip_edit: ['heygen'], stitch: ['mock'] }
-  }
+  const routing = providers === 'config' ? from.routing : routeAll(providers, sheets)
   return { ...from, flags: { ...flags }, routing }
 }

@@ -14,7 +14,7 @@
 import type { ModelChoice, ProductionDocument, Review } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { clipText as cutText } from '../lib/guard'
-import { assetRef, boxMaskRef } from './assets'
+import { assetRef } from './assets'
 import { makeClip, selectedTake } from './clips'
 import { continuity, selectedFrame, type FrameDeps } from './frames'
 import { isActive } from './runner'
@@ -42,11 +42,9 @@ export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]
   const region = boxed.region
   // Like any frame region edit, it keeps the frame in its sequence: shot 1's frame and the one before go too.
   const anchors = await continuity(deps.relay, d, index)
-  // The box as a mask too: fal edits only inside a mask; a provider without masks goes by the box.
-  const mask = await boxMaskRef(deps.relay, frame.asset, region)
   return deps.runner.submit(
     'region_edit',
-    { image, region, text: cutText(boxed.comment, 1000), ...(mask ? { mask } : {}), ...anchors },
+    { image, region, text: cutText(boxed.comment, 1000), ...anchors },
     [frame.job_id],
     { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id), ...(modelChoice ? { fixModelChoice: modelChoice } : {}) },
   )

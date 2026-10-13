@@ -31,8 +31,11 @@ export type View = (typeof VIEWS)[number]
 
 export interface Region { x: number; y: number; w: number; h: number }
 
-export const PROVIDERS = ['mock', 'runway', 'fal', 'heygen'] as const
+export const PROVIDERS = ['mock', 'runway'] as const
 export type Provider = (typeof PROVIDERS)[number]
+/** madeBy: the provider that made an output, as recorded then. Free text, not Provider: projects saved
+ *  before features/drop-hackathon-extras.clan name providers that are no longer routed. */
+export type MadeBy = string
 
 export const OPS = ['generate', 'view', 'shot_list', 'frame', 'region_edit', 'clip', 'clip_edit', 'stitch'] as const
 export type Op = (typeof OPS)[number]
@@ -91,7 +94,7 @@ export interface OpSheet {
   /** The model's name in the regenerate menu, and one line on what it is good for. */
   label?: string
   note?: string
-  /** Vetted models a participant may pick when they regenerate (features/model-choice.clan). */
+  /** Vetted models a person may pick when they regenerate (features/model-choice.clan). */
   alternates?: OpAlternate[]
 }
 
@@ -119,8 +122,8 @@ export interface CapabilitySheet {
   provider: Provider
   checked: string
   ops: Partial<Record<Op, OpSheet>>
-  tagSyntax: 'at_tag' | 'at_image_n' | 'picture_n' | 'figure_n' | 'image_n' | 'none'
-  refs: { max: number; maxCharacter?: number; element?: boolean }
+  tagSyntax: 'at_tag' | 'none'
+  refs: { max: number; maxCharacter?: number }
   seed: boolean
   outputsPerCall?: number
   mask: 'none' | 'png_black_edit' | 'png_white_edit'
@@ -152,17 +155,13 @@ export interface Flags {
   feelEdit: boolean
   clickSelect: boolean
   moreOptions: boolean
-  /** Participants may send their own fal and HeyGen keys. Optional; absent means off. */
-  ownKeys?: boolean
   /** The beta's record: notice, Beta tag, thumbs, POST /dogfood/* (features/production-tool-dogfood.clan). Optional; absent means off. */
   dogfood?: boolean
 }
 
 export interface Config {
   contractVersion: ContractVersion
-  /** For the event every op routes to ['runway']: Runway is the floor of every job, and fal and
-   *  HeyGen come only from own keys (features/runway-fallback.clan). The schema's deprecated
-   *  fallbackOnly is no longer read. */
+  /** Runway is the floor of every job routed to it (features/runway-fallback.clan). */
   routing: Partial<Record<Op, Provider[]>>
   director: { promptVersion: string; perClickModel: string; shotListModel: string }
   quotas: { image: number; video: number; render: number }
@@ -173,7 +172,6 @@ export interface Config {
   spend: { capUsd: number; warnUsd: number }
   flags: Flags
   banner: string
-  eventName: string
 }
 
 // ── director.schema.json (only the parts the UI reads) ──────────────────────
@@ -279,7 +277,7 @@ export interface Take {
   job_id: Id
   parent?: Id
   kind: 'generated' | 'mock'
-  provider: Provider
+  provider: MadeBy
   model?: string
   duration_s?: number
   selected: boolean
@@ -289,7 +287,7 @@ export interface DocJob {
   id: Id
   op: Op
   state: JobState
-  provider?: Provider
+  provider?: MadeBy
   model?: string
   remote_id?: string
   parent_ids: Id[]
@@ -363,27 +361,20 @@ export type CustomData =
 
 // ── relay-api.schema.json ───────────────────────────────────────────────────
 
-/** team + handle make the workspace (features/personal-workspaces.clan); device is a random id this
- *  browser keeps, to warn when the same team and name signed in from another browser. */
-export interface SessionRequest { eventCode: string; team: string; handle: string; device?: string }
-
-export interface SessionResponse {
-  token: string
+/** GET /me: who the relay's identity seam says is asking; 401 when no one (features/drop-hackathon-extras.clan). */
+export interface Me {
   participantId: string
   handle: string
-  role: 'participant' | 'organiser'
-  /** The participant's own workspace (its participantId): the library and saved projects are kept in it. */
+  /** The person's agency: with the handle it makes the workspace unique. */
+  team: string
+  /** The person's own workspace (its participantId): the library and saved projects are kept in it. */
   workspace: string
-  expiresAt: string
+  /** Remaining today, per quota class. */
   quotas: { image: number; video: number; render: number }
-  /** Only while flags.dogfood is on: whether this participant has read the beta notice. */
-  dogfood?: { consented: boolean }
-  /** How many projects this name has saved on the relay ("Welcome back, Maya: 3 projects"). */
+  /** How many projects this person has saved on the relay. */
   projects: number
-  /** The team name as typed: with the handle it makes the workspace unique. */
-  team?: string
-  /** Another browser signed in with this team and name within 2 hours (probably a second person). */
-  elsewhere?: { at: string }
+  /** Only while flags.dogfood is on: whether this person has read the beta notice. */
+  dogfood?: { consented: boolean }
 }
 
 /** One of the person's saved projects (GET /projects, POST /clan with X-Project-Id). */
@@ -456,13 +447,11 @@ export interface Job {
   queuePosition?: number
   nextPollS?: number
   provider?: Provider
-  /** Whose key runs the job (the participant's X-Own-Keys, or the event's). */
-  keySource?: 'own' | 'event'
   model?: string
   /** Where this job was meant to run (a pick, or its chain's first provider), when it ran on
-   *  another provider instead: Runway, the floor, after HeyGen or fal could not make it. */
+   *  another provider instead: Runway, the floor, after a pick could not make it. */
   fallbackFrom?: ModelChoice
-  /** Why it left fallbackFrom, in a participant's words; says when that provider may still charge. */
+  /** Why it left fallbackFrom, in a person's words; says when that provider may still charge. */
   fallbackReason?: string
   requestId?: string
   inputHashes: Sha256[]

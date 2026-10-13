@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { CanvasDocSync, type SceneEl } from '../canvas/sync'
 import { effectiveConfig } from '../capabilities'
+import { SHEETS } from '../contracts/load'
 import type { CustomData, DocJob, ProductionDocument, Shot } from '../contracts/types'
 import { JobRunner } from '../jobs/runner'
 import { newId } from '../lib/ulid'
@@ -273,7 +274,7 @@ describe('cancel', () => {
       calls.push({ url: String(url), method: init?.method ?? 'GET' })
       return new Response(JSON.stringify({
         contractVersion: '2', jobId: decodeURIComponent(String(url).split('/').pop()!), participantId: 'p_maya01', op: 'clip', quotaClass: 'video', state: 'cancelled', inputHashes: [],
-        cost: { currency: 'USD', unknown: true }, kind: 'real', provider: 'heygen', model: 'avatar-iv', createdAt: T, updatedAt: T,
+        cost: { currency: 'USD', unknown: true }, kind: 'real', provider: 'runway', model: 'veo3.1', createdAt: T, updatedAt: T,
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }))
     const d = emptyDocument(maya)
@@ -287,12 +288,14 @@ describe('cancel', () => {
   })
 
   it('says "may still be charged" when the provider cannot cancel (results.cancel false)', () => {
-    const heygen = effectiveConfig('event', 'heygen')
-    expect(heygen.routing.clip?.[0]).toBe('heygen')
-    expect(mayStillCharge({ op: 'clip' }, heygen)).toMatch(/HeyGen .*may still be charged/)
-    expect(cancelText({ op: 'clip', provider: 'heygen' }, heygen, true)).toMatch(/^Stop making this and remove it\? HeyGen .*may still be charged/)
-    expect(mayStillCharge({ op: 'generate' }, heygen)).toBeNull()
-    expect(cancelText({ op: 'generate', provider: 'runway' }, heygen)).toBe('Stop making this?')
+    // No routed sheet says so today; a Runway that could not cancel stands in for one.
+    const sheets = { ...SHEETS, runway: { ...SHEETS.runway, results: { ...SHEETS.runway.results, cancel: false } } }
+    const runway = effectiveConfig('live', 'runway', sheets)
+    expect(runway.routing.clip?.[0]).toBe('runway')
+    expect(mayStillCharge({ op: 'clip' }, runway, sheets)).toMatch(/Runway .*may still be charged/)
+    expect(cancelText({ op: 'clip', provider: 'runway' }, runway, true, sheets)).toMatch(/^Stop making this and remove it\? Runway .*may still be charged/)
+    expect(mayStillCharge({ op: 'clip' }, runway)).toBeNull()
+    expect(cancelText({ op: 'generate', provider: 'mock' }, runway, false, sheets)).toBe('Stop making this?')
   })
 })
 

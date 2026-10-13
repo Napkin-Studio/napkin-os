@@ -25,14 +25,14 @@ describe('arrowCard: what the step behind an arrow did', () => {
   it('a generate with named inputs, a drawing and words', () => {
     const { doc, ui } = setup(
       {
-        id: 'job_g', op: 'generate', provider: 'fal', model: 'nano-banana-pro-edit',
+        id: 'job_g', op: 'generate', provider: 'runway', model: 'gemini_image3_pro',
         agent: { model: 'claude', promptVersion: 'director.v3', rationale: 'kept her coat', output: { op: 'generate', providerJob: { prompt: '@maya_front waving, pose from @image2' } } },
         cost: { confirmed: 0.15, currency: 'USD', unknown: false },
       },
       { text: 'make her wave', refs: [{ id: 'ref_maya', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('m') }, { id: 'node_draw', role: 'character', kind: 'drawing', asset: asset('d') }] },
     )
     const card = arrowCard(doc, ui, { from: 'node_draw', to: 'job_g' }, { kindOf, fmtTime })
-    expect(card.who).toBe('Dex · Nano Banana Pro (fal)')
+    expect(card.who).toBe('Dex · Gemini 3 Pro (runway)')
     expect(card.from).toEqual([{ label: '@maya_front', here: false }, { label: 'drawing', here: true }])
     expect(card.words).toBe('make her wave')
     expect(card.told).toBe('@maya_front waving, pose from @image2')
@@ -51,19 +51,19 @@ describe('arrowCard: what the step behind an arrow did', () => {
 
   it('a view says which view, from the front', () => {
     const { doc, ui } = setup(
-      { id: 'job_v', op: 'view', provider: 'fal', model: 'qwen-image-edit-2511-multiple-angles' },
+      { id: 'job_v', op: 'view', provider: 'runway', model: 'gemini_image3.1_flash' },
       { view: 'side', image: asset('m'), ratio: '4:5' },
     )
     const card = arrowCard(doc, ui, { from: 'node_maya', to: 'job_v' }, { fmtTime })
     expect(card.title).toBe('The side view')
     expect(card.changed).toBe('Turned @maya_front to the side view')
     expect(card.from).toEqual([{ label: '@maya_front', here: true }])
-    expect(card.who).toBe('Dex · Qwen multi-angle (fal)')
+    expect(card.who).toBe('Dex · Gemini 3.1 Flash (runway)')
   })
 
   it('a region edit names the box and its note', () => {
     const { doc, ui } = setup(
-      { id: 'job_r', op: 'region_edit', provider: 'fal', model: 'nano-banana-pro-edit', region: { x: 0.05, y: 0.05, w: 0.4, h: 0.25 }, text: 'a red hat' },
+      { id: 'job_r', op: 'region_edit', provider: 'runway', model: 'gemini_image3_pro', region: { x: 0.05, y: 0.05, w: 0.4, h: 0.25 }, text: 'a red hat' },
       { image: asset('m'), region: { x: 0.05, y: 0.05, w: 0.4, h: 0.25 }, text: 'a red hat' },
     )
     const card = arrowCard(doc, ui, { from: 'node_maya', to: 'job_r' })
@@ -73,16 +73,22 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(regionWords({ x: 0.3, y: 0.3, w: 0.4, h: 0.4 })).toBe('a box at the middle, about 40% × 40% of the picture')
   })
 
-  it('a job picked for fal that ran on Runway says so', () => {
+  it('a job picked for another provider that ran on Runway says so', () => {
     const { doc, ui } = setup(
       { id: 'job_f', op: 'generate', provider: 'runway', model: 'gemini_image3_pro' },
       { text: 'a cat', refs: [] },
-      { provider: 'fal', model: 'nano-banana-pro-edit' },
+      { provider: 'mock', model: 'mock-hq' },
     )
     const card = arrowCard(doc, ui, { from: 'node_note', to: 'job_f' }, { kindOf })
     expect(card.who).toBe('Dex · Gemini 3 Pro (runway)')
-    expect(card.fallback).toBe('Made on Runway: fal could not take Nano Banana Pro')
+    expect(card.fallback).toBe('Made on Runway: mock could not take Mock HQ')
     expect(cardLines(card)[2]).toBe(card.fallback)
+  })
+
+  it('a job a document recorded on a provider no longer routed names it as recorded', () => {
+    // madeBy is free text (features/drop-hackathon-extras.clan): older projects still load and say what made them.
+    const { doc, ui } = setup({ id: 'job_o', op: 'generate', provider: 'oldco', model: 'old-model' }, { text: 'a cat', refs: [] })
+    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_o' }, { kindOf }).who).toBe('Dex · old-model (oldco)')
   })
 
   it('a job with no director block went as written', () => {

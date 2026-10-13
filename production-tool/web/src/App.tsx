@@ -12,7 +12,6 @@ import { StudioMark } from './ui/Mark'
 import { HistoryPanel } from './ui/History'
 import { CLAN_DB } from './doc/clan'
 import { clanDbFor, INDEX_KEY } from './projects/storage'
-import { OwnKeysButton } from './keys/OwnKeysPanel'
 import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { FallbackNotices } from './ui/FallbackNotices'
@@ -71,11 +70,10 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
 }
 
 function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
-  const { doc: docStore, relay, ui: uiStore, project } = useServices()
+  const { doc: docStore, relay, project } = useServices()
   const shell = useShell()
   const doc = useDoc()
   const ui = useUi()
-  const { config } = useConfig()
   useJobsTick()
   const [exporting, setExporting] = useState(false)
   const [packing, setPacking] = useState<{ done: number; total: number } | null>(null)
@@ -118,15 +116,15 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
       <div className="topbar-right">
         {stage !== 'character' && <UpdateFollows />}
         <JobTray />
-        {config.flags.ownKeys && <OwnKeysButton />}
         <UndoButtons />
         <SaveButton />
         <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
-        {/* Export, the handle, Sign out, New project and All projects live in the menu: the bar keeps the run's state,
-            keys and History. Undo, Redo and Save sit just left of History. */}
+        {/* Export, the handle, New project and All projects live in the menu: the bar keeps the run's state
+            and History. Undo, Redo and Save sit just left of History. Signing in and out is Napkin Studio's
+            (features/drop-hackathon-extras.clan). */}
         <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
         <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
-          <div className="fhead handle">@{ui.session?.handle ?? doc.participant.handle}{ui.session?.team ? ` · ${ui.session.team}` : ''}</div>
+          <div className="fhead handle">@{ui.me?.handle ?? doc.participant.handle}{ui.me?.team ? ` · ${ui.me.team}` : ''}</div>
           <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
             setExporting(true)
             try {
@@ -155,14 +153,6 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
               setPacking(null)
             }
           }}>{packing ? (packing.total ? `Packing ${packing.done} of ${packing.total}…` : 'Packing…') : packNote ?? 'Download all media'}</MenuItem>
-          {relay.kind === 'http' && ui.session && (
-            <MenuItem icon="⎋" onSelect={() => {
-              closeMenu()
-              relay.useToken(null)
-              uiStore.update((u) => { u.session = undefined; u.sessionFor = undefined })
-              void shell.goHome()
-            }}>Sign out</MenuItem>
-          )}
           <div className="fsep" />
           {/* New project replaces Start over: this one is saved and stays on Home; nothing is overwritten. */}
           <MenuItem icon="＋" onSelect={() => { closeMenu(); void shell.newProject() }}>New project</MenuItem>

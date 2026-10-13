@@ -1,67 +1,53 @@
 import { describe, expect, it } from 'vitest'
 import { choiceToSend, modelChoicesFor, modelLabel } from './capabilities'
-import { CONFIGS, SHEETS } from './contracts/load'
+import { CONFIGS } from './contracts/load'
 import type { Config, DocJob, ProductionDocument } from './contracts/types'
 import type { UiState } from './doc/ui'
-import { withOwnKeys } from './keys/ownKeys'
 import { fellBack, madeWith, otherModels, price, startingChoice } from './ui/modelChoice'
 
-// features/model-choice.clan, features/runway-fallback.clan (2026-10-09): the regenerate menu always
-// offers Runway's models (the event's only provider, the floor of every job), and the key providers'
-// models first when the participant gave a fal or HeyGen key.
-const event: Config = CONFIGS.event
-const withKeys = (keys: { fal?: string; heygen?: string }) => withOwnKeys(event, keys, SHEETS)
+// features/model-choice.clan, features/runway-fallback.clan: the regenerate menu always offers
+// Runway's models (the floor of every job); a config that routes more providers lists them in order.
+const live: Config = CONFIGS.live
+const both: Config = { ...live, routing: { ...live.routing, frame: ['mock', 'runway'], clip: ['mock', 'runway'] } }
 const keys = (c: Config, op: 'frame' | 'clip') => modelChoicesFor(op, c).map((o) => `${o.provider}:${o.model}`)
 
 describe('the regenerate menu', () => {
-  it('with no keys offers Runway alone: its default, then its alternates', () => {
-    expect(keys(event, 'frame')).toEqual(['runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
-    expect(keys(event, 'clip')).toEqual(['runway:veo3.1', 'runway:veo3.1_fast'])
+  it('offers Runway alone on the live config: its default, then its alternates', () => {
+    expect(keys(live, 'frame')).toEqual(['runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
+    expect(keys(live, 'clip')).toEqual(['runway:veo3.1', 'runway:veo3.1_fast'])
   })
 
-  it('with keys puts the key providers first, as they run, and keeps Runway', () => {
-    expect(keys(withKeys({ fal: 'k' }), 'frame')).toEqual([
-      'fal:nano-banana-pro-edit', 'fal:kling-image-o3', 'fal:nano-banana-2-edit', 'runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
-    expect(keys(withKeys({ heygen: 'k', fal: 'k' }), 'clip')).toEqual([
-      'heygen:heygen-video-1', 'fal:veo3.1-fast-i2v', 'fal:kling-v3-pro-i2v', 'fal:veo3.1-i2v', 'runway:veo3.1', 'runway:veo3.1_fast'])
-    // a fal key alone makes clips too (Veo 3.1 Fast first since 2026-10-09), Runway behind it
-    expect(keys(withKeys({ fal: 'k' }), 'clip')).toEqual(['fal:veo3.1-fast-i2v', 'fal:kling-v3-pro-i2v', 'fal:veo3.1-i2v', 'runway:veo3.1', 'runway:veo3.1_fast'])
+  it('lists each routed provider as its jobs run, each model then its alternates', () => {
+    expect(keys(both, 'frame')).toEqual(['mock:mock', 'mock:mock-hq', 'runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
+    expect(keys(both, 'clip')).toEqual(['mock:mock', 'mock:mock-hq', 'runway:veo3.1', 'runway:veo3.1_fast'])
   })
 
-  it('carries labels, notes and estimates from the sheets', () => {
-    const pro = modelChoicesFor('frame', withKeys({ fal: 'k' })).find((o) => o.model === 'nano-banana-pro-edit')!
-    expect(pro).toMatchObject({ label: 'Nano Banana Pro', estimateUsd: 0.15 })
-    expect(pro.note).toBeTruthy()
-    expect(modelChoicesFor('clip', withKeys({ heygen: 'k' })).find((o) => o.provider === 'heygen')!.estimateUsd).toBeNull()
-    expect(modelChoicesFor('clip', event)[0]).toMatchObject({ label: 'Veo 3.1', estimateUsd: 1.2 })
+  it('carries labels and estimates from the sheets', () => {
+    expect(modelChoicesFor('frame', live).find((o) => o.model === 'gemini_image3.1_flash')).toMatchObject({ label: 'Gemini 3.1 Flash', estimateUsd: 0.07 })
+    expect(modelChoicesFor('clip', live)[0]).toMatchObject({ label: 'Veo 3.1', estimateUsd: 1.2 })
   })
 
   it('sends no pick for the routing default, so the job routes as before', () => {
-    expect(choiceToSend('clip', event, { provider: 'runway', model: 'veo3.1' })).toBeUndefined()
-    expect(choiceToSend('clip', event, undefined)).toBeUndefined()
-    expect(choiceToSend('clip', event, { provider: 'runway', model: 'veo3.1_fast' })).toEqual({ provider: 'runway', model: 'veo3.1_fast' })
-    const both = withKeys({ heygen: 'k' })
-    expect(choiceToSend('clip', both, { provider: 'heygen', model: 'heygen-video-1' })).toBeUndefined()
+    expect(choiceToSend('clip', live, { provider: 'runway', model: 'veo3.1' })).toBeUndefined()
+    expect(choiceToSend('clip', live, undefined)).toBeUndefined()
+    expect(choiceToSend('clip', live, { provider: 'runway', model: 'veo3.1_fast' })).toEqual({ provider: 'runway', model: 'veo3.1_fast' })
+    expect(choiceToSend('clip', both, { provider: 'mock', model: 'mock' })).toBeUndefined()
     expect(choiceToSend('clip', both, { provider: 'runway', model: 'veo3.1' })).toEqual({ provider: 'runway', model: 'veo3.1' })
   })
 
   it('starts on the model that made the version, else the default', () => {
-    const options = modelChoicesFor('clip', withKeys({ heygen: 'k', fal: 'k' }))
-    expect(startingChoice(options, { provider: 'fal', model: 'veo3.1-i2v' })).toEqual({ provider: 'fal', model: 'veo3.1-i2v' })
-    // a take made on Runway is offered now: start there
+    const options = modelChoicesFor('clip', both)
+    expect(startingChoice(options, { provider: 'mock', model: 'mock-hq' })).toEqual({ provider: 'mock', model: 'mock-hq' })
     expect(startingChoice(options, { provider: 'runway', model: 'veo3.1_fast' })).toEqual({ provider: 'runway', model: 'veo3.1_fast' })
-    // a take made with a key no longer given: start on the default
-    expect(startingChoice(modelChoicesFor('clip', event), { provider: 'fal', model: 'veo3.1-i2v' })).toEqual({ provider: 'runway', model: 'veo3.1' })
+    // a take made on a provider no longer offered (a project saved before features/drop-hackathon-extras.clan): the default
+    expect(startingChoice(modelChoicesFor('clip', live), { provider: 'gone', model: 'old-model' })).toEqual({ provider: 'runway', model: 'veo3.1' })
   })
 
   it('offers a failed job every other model, another provider first, the failed one left out', () => {
-    const options = modelChoicesFor('frame', withKeys({ fal: 'k' }))
-    const failed = { provider: 'fal', model: 'nano-banana-pro-edit' } as const
+    const options = modelChoicesFor('frame', both)
+    const failed = { provider: 'runway', model: 'gemini_image3_pro' } as const
     const others = otherModels(options, failed).map((o) => `${o.provider}:${o.model}`)
-    expect(others).not.toContain('fal:nano-banana-pro-edit')
-    expect(others[0].startsWith('fal:')).toBe(false)
-    expect(others.filter((k) => k.startsWith('fal:'))).toEqual(['fal:kling-image-o3', 'fal:nano-banana-2-edit'])
-    expect(others).toHaveLength(options.length - 1)
+    expect(others).toEqual(['mock:mock', 'mock:mock-hq', 'runway:gemini_image3.1_flash'])
   })
 
   it('shows prices plainly', () => {
@@ -74,19 +60,27 @@ describe('the regenerate menu', () => {
     const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'runway', model: 'veo3.1', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as DocJob
     const doc = { jobs: [job] } as unknown as ProductionDocument
     const request = { contractVersion: '2', jobId: 'job_1', op: 'clip', parentIds: [], input: {} }
-    // no pick: the relay's fallbackFrom says HeyGen could not
-    const ui = { jobCtx: { job_1: { for: 'clip', shotId: 's', request, fallbackFrom: { provider: 'heygen', model: 'heygen-video-1' } } } } as unknown as UiState
+    // no pick: the relay's fallbackFrom says the mock could not
+    const ui = { jobCtx: { job_1: { for: 'clip', shotId: 's', request, fallbackFrom: { provider: 'mock', model: 'mock' } } } } as unknown as UiState
     expect(madeWith(doc, ui, 'job_1')).toEqual({
       made: { provider: 'runway', model: 'veo3.1' },
-      label: 'Veo 3.1 (runway) · Made on Runway: HeyGen could not',
-      fallback: 'Made on Runway: HeyGen could not',
+      label: 'Veo 3.1 (runway) · Made on Runway: Mock could not',
+      fallback: 'Made on Runway: Mock could not',
     })
     // a pick from before fallbackFrom was kept
-    const picked = { jobCtx: { job_1: { for: 'clip', shotId: 's', request: { ...request, modelChoice: { provider: 'fal', model: 'veo3.1-i2v' } } } } } as unknown as UiState
-    expect(madeWith(doc, picked, 'job_1').fallback).toBe('Made on Runway: fal could not')
+    const picked = { jobCtx: { job_1: { for: 'clip', shotId: 's', request: { ...request, modelChoice: { provider: 'mock', model: 'mock-hq' } } } } } as unknown as UiState
+    expect(madeWith(doc, picked, 'job_1').fallback).toBe('Made on Runway: Mock could not')
     expect(madeWith(doc, { jobCtx: {} } as unknown as UiState, 'job_1')).toEqual({ made: { provider: 'runway', model: 'veo3.1' }, label: 'Veo 3.1 (runway)' })
     expect(madeWith(doc, ui, undefined)).toEqual({})
-    expect(modelLabel('fal', 'nano-banana-2-edit')).toBe('Nano Banana 2')
+    expect(modelLabel('runway', 'gemini_image3.1_flash')).toBe('Gemini 3.1 Flash')
     expect(fellBack({ provider: 'runway', model: 'veo3.1' }, 'runway')).toBeUndefined()
+  })
+
+  it('names a job a document recorded on a provider no longer routed as it was recorded', () => {
+    // madeBy is free text (common.schema.json): older projects keep the provider that made them.
+    const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'oldco', model: 'old-model', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as DocJob
+    const doc = { jobs: [job] } as unknown as ProductionDocument
+    expect(madeWith(doc, { jobCtx: {} } as unknown as UiState, 'job_1')).toEqual({ made: { provider: 'oldco', model: 'old-model' }, label: 'old-model (oldco)' })
+    expect(modelLabel('oldco', 'old-model')).toBe('old-model')
   })
 })

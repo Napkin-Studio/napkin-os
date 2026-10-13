@@ -46,8 +46,8 @@ export async function openDocument({ project, participant, ctxOf, make, storage 
     const clan = build()
     const loaded = await clan.load()
     if (loaded && loaded.contract_version !== CURRENT) {
-      // Made by an older build: its canvas and data do not fit this one. The organisers
-      // already have its .clan (mirrored on every lock and every five minutes).
+      // Made by an older build: its canvas and data do not fit this one. The relay
+      // already has its .clan (mirrored on every lock and every five minutes).
       await clan.create({ participant })
       await forgetCanvas()
     } else if (!loaded) {

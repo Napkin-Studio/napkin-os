@@ -1,6 +1,6 @@
 // Personal workspaces (features/personal-workspaces.clan): Home lists the relay's projects with this
 // browser's; opening one from another browser brings its .clan, canvas and every picture; a save
-// someone else got in before is never an overwrite, and the person chooses; sign-in says welcome back.
+// someone else got in before is never an overwrite, and the person chooses.
 // On the real .clan engine (napkin-wasm), against a fake relay that keeps the relay's rules.
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -14,13 +14,12 @@ import type { DocAsset, ProductionDocument, SavedProject } from '../contracts/ty
 import { ClanBackedStore } from '../doc/clan'
 import { SnapshotStore, updateDoc } from '../doc/store'
 import { initialAppUi, type AppUi } from '../doc/ui'
-import { OwnKeysStore } from '../keys/ownKeys'
 import { deleteBlob, getBlob, putBlob } from '../lib/blobs'
 import { hexOf, sha256Hex } from '../lib/hash'
 import { newId } from '../lib/ulid'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import type { Relay } from '../relay'
-import { homeItems, welcomeBack } from './homeList'
+import { homeItems } from './homeList'
 import { emptySummary, ProjectIndex, type ProjectEntry } from './projectIndex'
 import { ProjectServer, SaveConflict } from './server'
 import { describeAsset, forgetSent, MissingPictures } from './serverAssets'
@@ -36,13 +35,15 @@ const makeClan: MakeClan = (persistence, ctxOf) => new ClanBackedStore(new ClanD
 
 const CDN = 'https://cdn.test'
 
-/** The relay's project routes, kept the relay's way (relay/projects.py): one workspace per token. */
+/** The relay's project routes, kept the relay's way (relay/projects.py): one workspace per identity. */
 class FakeRelay {
   t = Date.parse('2026-10-10T10:00:00Z')
   projects = new Map<string, { row: SavedProject; bytes: Uint8Array; canvas?: unknown[] }>()
   uploads = new Map<string, Uint8Array>()
   saves: { id: string; ifMatch: string | null; name: string | null }[] = []
   failUploads = false
+  /** The identity seam knows who is asking (features/drop-hackathon-extras.clan); off, every route is 401. */
+  identity = true
 
   fetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
     const url = String(input)
@@ -53,7 +54,7 @@ class FakeRelay {
       return got ? new Response(got.slice()) : new Response('', { status: 404 })
     }
     const path = url.replace(/^\/api/, '')
-    if (h.get('Authorization') !== 'Bearer t') return this.json(401, { error: { code: 'unauthorised', message: 'Sign in again.', retryable: false } })
+    if (!this.identity || h.has('Authorization')) return this.json(401, { error: { code: 'unauthorised', message: 'Sign in again.', retryable: false } })
     if (method === 'GET' && path === '/projects') {
       return this.json(200, { projects: [...this.projects.values()].map((p) => p.row).sort((a, b) => b.savedAt.localeCompare(a.savedAt)) })
     }
@@ -105,13 +106,13 @@ function browser(fake: FakeRelay) {
   const storage = memoryStorage()
   let t = Date.parse('2026-10-10T09:00:00Z')
   const index = new ProjectIndex(storage, () => new Date((t += 1000)))
-  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), session: { participantId: 'p_maya01', handle: 'maya', token: 't', expiresAt: '2099-01-01T00:00:00Z' } as AppUi['session'] }, null)
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: 'p_maya01', handle: 'maya', team: 'napkin', workspace: 'p_maya01', quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
   const renderer: MockRenderer = { async render() { return [] } }
   const mock = new MockRelay({ renderer, now: () => 0, delayMs: 10, persistKey: null })
   // The real relay over HTTP, as far as saving is concerned.
   const relay = Object.assign(Object.create(mock) as Relay, { kind: 'http' as const, upload: fake.upload })
-  const server = new ProjectServer({ base: '/api', token: () => app.get().session?.token ?? null, fetchFn: fake.fetch as typeof fetch })
-  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, ownKeys: new OwnKeysStore(), makeClan, summaryDelayMs: 1, server })
+  const server = new ProjectServer({ base: '/api', signedIn: () => !!app.get().me, fetchFn: fake.fetch as typeof fetch })
+  const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1, server })
   return { storage, index, shell, app }
 }
 
@@ -161,12 +162,6 @@ describe('Home lists the relay\'s projects with this browser\'s', () => {
     expect(a.kind === 'local' && !a.newerThere && a.server?.id).toBe('prj_a')
     expect(homeItems(local, server, 'name').map((i) => (i.kind === 'local' ? i.p.name : i.name))).toEqual(['prj_a', 'prj_b', 'prj_c there'])
     expect(homeItems(local, server, 'recent', 'there').map((i) => i.kind)).toEqual(['server'])
-  })
-
-  it('says welcome back when the name already has saved work', () => {
-    expect(welcomeBack('Maya', 3)).toBe('Welcome back, Maya: 3 projects')
-    expect(welcomeBack('Maya', 1)).toBe('Welcome back, Maya: 1 project')
-    expect(welcomeBack('Maya', 0)).toBeNull()
   })
 })
 
@@ -301,15 +296,18 @@ describe('the relay client', () => {
       seen.push(new Headers(i?.headers))
       return fake.fetch(u, i)
     }) as typeof fetch
-    const server = new ProjectServer({ base: '/api/', token: () => 't', fetchFn })
+    const server = new ProjectServer({ base: '/api/', signedIn: () => true, fetchFn })
     const saved = await server.save('prj_x', new Uint8Array([80, 75, 3, 4]), { reason: 'manual', ifMatch: 'abc', name: 'Café ad' })
     expect(seen[0].get('If-Match')).toBe('"abc"')
     expect(seen[0].get('X-Project-Name')).toBe('Caf%C3%A9%20ad')
+    expect(seen[0].has('Authorization')).toBe(false)
     expect(saved.name).toBe('Café ad')
     const opened = await server.open('prj_x')
     expect(opened.etag).toBe(saved.etag)
     expect(hexOf(`sha256:${opened.etag}`)).toBe(await sha256Hex(opened.bytes))
     expect(await server.canvas('prj_x')).toBeNull()
-    await expect(new ProjectServer({ base: '/api', token: () => null, fetchFn }).list()).rejects.toThrow('Sign in again.')
+    await expect(new ProjectServer({ base: '/api', signedIn: () => false, fetchFn }).list()).rejects.toThrow('Sign in through Napkin Studio.')
+    fake.identity = false
+    await expect(server.list()).rejects.toMatchObject({ status: 401 })
   })
 })

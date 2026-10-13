@@ -148,7 +148,7 @@ describe('nameOf', () => {
   })
 
   it('never names a key field by its value', () => {
-    expect(nameOf(asEl(el('input', { type: 'password', value: 'fal-SECRET' })))).toBe('input: key')
+    expect(nameOf(asEl(el('input', { type: 'password', value: 'SECRET' })))).toBe('input: key')
   })
 })
 

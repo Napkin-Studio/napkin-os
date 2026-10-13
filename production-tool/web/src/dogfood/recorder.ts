@@ -1,6 +1,6 @@
 // The beta's recorder (features/production-tool-dogfood.clan), copied from Napkin OS's dogfood
 // build (app/src/dogfood/recorder.ts) and adapted: the relay takes the events (POST
-// /dogfood/events with the session's token), the screen is {stage, project}, and none of the
+// /dogfood/events, as whoever GET /me names), the screen is {stage, project}, and none of the
 // noise Napkin OS's first record had (features/dogfood-log-quality.clan):
 //
 // - only clicks and submits a person made (isTrusted), named the same way every day (nameOf);
@@ -137,7 +137,7 @@ export function subscribe(f: () => void): () => void {
   return () => { listeners.delete(f) }
 }
 
-/** Set by Root from config and the session. Capture starts once both say yes. */
+/** Set by DogfoodGate from config and GET /me. Capture starts once both say yes. */
 export function configureDogfood(next: DogfoodState, send?: Send) {
   if (send) transport = send
   if (next.on === state.on && next.consented === state.consented) return
