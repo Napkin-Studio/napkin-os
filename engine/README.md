@@ -104,6 +104,7 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `NAPKIN_AGENT_PORT` | agent server port (8787, the same slot as the mock agent: run one) |
 | `LABELSET_BRIEF_MODEL` / `LABELSET_JUDGE_MODEL` | label tool (`rag/labelset.py`): brief-pair extraction model (`claude-haiku-4-5-20251001`) / pre-label judge (`claude-sonnet-5`) |
 | `RAG_EMBED_LOCAL_MODEL` / `RAG_EMBED_LOCAL_DEVICE` | the local copy of the query embedder used when the hosted one fails (`nvidia/Nemotron-3-Embed-1B-BF16`) / `mps` or `cpu` (default: mps when available) |
+| `NAPKIN_WEIGHTS_MANIFEST` | the weights manifest `rag/weights_guard.py` reads (default: the repo's `licences/weights.toml`); a local model whose id or weight-file hash is not listed there never loads |
 | `RAG_SPARSE_AVG_LEN` | Qdrant sparse vectors: the corpus's average document length for BM25 weighting (191.2) |
 | `TEMPLATE_STORE_URL` | connection string for `store_template.py`, the starting point for a new store backend |
 

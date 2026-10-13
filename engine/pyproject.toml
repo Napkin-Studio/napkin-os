@@ -19,6 +19,9 @@ yaml = ["PyYAML>=6"]            # richer frontmatter parsing in the RAG build (s
 dotenv = ["python-dotenv>=1"]   # optional; parse_brief has a dependency-free .env fallback
 vision = ["PyMuPDF>=1.24"]      # scanned-PDF / image transcription path
 anthropic = ["anthropic>=0.39"] # optional Claude provider link
+# Local models in rag/ (embed_local.py, judge_local.py): the same embedder as the index
+# and the local reranker. Weights must be listed in licences/weights.toml (rag/weights_guard.py).
+rag-local = ["torch>=2.4", "sentence-transformers>=5.0", "huggingface_hub>=0.24"]
 all = ["PyYAML>=6", "python-dotenv>=1", "PyMuPDF>=1.24", "anthropic>=0.39"]
 
 [project.scripts]
