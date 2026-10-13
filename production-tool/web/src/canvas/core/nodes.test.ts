@@ -103,11 +103,18 @@ describe('classify', () => {
 
   it('the known divergence: a rectangle with an unknown or v3 tag is unknown here, a stroke to planSelection, not a drawing to isUserDrawing', () => {
     // planSelection's side is pinned in plan.test.ts; this is classify's and isUserDrawing's.
-    for (const kind of ['mystery', 'board', 'sketch']) {
+    for (const kind of ['mystery', 'board']) {
       const el: ElementLike = { id: 'r', type: 'rectangle', customData: { kind, id: 'x' } }
       expect(classify(el)).toBe('unknown')
       expect(isUserDrawing(el)).toBe(false)
     }
+  })
+
+  it('a sketch area is live since frame-aspect: a tagged rectangle, never a drawing', () => {
+    const el: ElementLike = { id: 'r', type: 'rectangle', customData: { kind: 'sketch', id: 'x' } }
+    expect(classify(el)).toBe('sketch')
+    expect(isUserDrawing(el)).toBe(false)
+    expect(classify({ ...el, type: 'frame' })).toBe('unknown')
   })
 })
 

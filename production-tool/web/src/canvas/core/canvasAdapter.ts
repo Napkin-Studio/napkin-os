@@ -1,4 +1,5 @@
-// CanvasAdapter v0 (features/canvas-core.clan): every call the tool makes on its
+// CanvasAdapter v1 (features/canvas-core.clan; v1 adds frame-aspect's region
+// export, sketch areas, pointer stream and viewport subscription): every call the tool makes on its
 // canvas engine, as one interface. The engine's own code lives behind it in
 // src/canvas/adapter/<engine>/; this file and the rest of src/canvas/core import
 // no engine, no sync library and no adapter (eslint.config.js enforces it).
@@ -39,6 +40,12 @@ export interface ElementLike {
   text?: string
   originalText?: string
   groupIds?: readonly string[]
+  /** Geometry, when the planner has it: a stroke that meets a sketch area belongs to it (frame-aspect). */
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  points?: readonly (readonly [number, number])[]
 }
 
 export type Pt = { x: number; y: number }
@@ -119,6 +126,46 @@ export interface ExportPngOptions {
   background: string
 }
 
+/** A sketch area (frame-aspect; ui-behaviour 3.7): a white rectangle tagged {kind:'sketch', id}. */
+export interface SketchAreaIntent {
+  x: number
+  y: number
+  w: number
+  h: number
+  sketchId: string
+}
+
+/**
+ * Export exactly a box of the scene: the canvas is the box's size whatever the elements' extent,
+ * elements crossing its edge are clipped to it, and nothing moves (core/sketch.ts exportPlan).
+ */
+export interface RegionExport {
+  rect: { x: number; y: number; w: number; h: number }
+  elementIds: readonly string[]
+  outW: number
+  outH: number
+  background: string
+}
+
+/** The largest export: 4096 x 4096 (Safari refuses canvases past about 16.7 MP). */
+export const MAX_EXPORT_PIXELS = 4096 * 4096
+
+/** One pointer event in scene coordinates (a pen's pressure, 0.5 for a mouse). */
+export interface PointerSample {
+  phase: 'down' | 'move' | 'up'
+  x: number
+  y: number
+  pointerType: 'mouse' | 'pen' | 'touch'
+  pressure: number
+}
+
+/** The viewport transform, whenever it changes (overlays follow it). */
+export interface ViewportTransform {
+  scrollX: number
+  scrollY: number
+  zoom: number
+}
+
 // ── what a tool commits: new nodes and links, applied as one undoable commit ──
 
 /** A node to create. `ref` names it within one commit, so a LinkSpec can point at it. */
@@ -155,6 +202,7 @@ export interface CanvasAdapter<E extends SceneElementBase, F extends FileDataBas
   /** Add an arrow to its endpoints' bound elements so the engine moves it with them. */
   bindArrow(els: readonly E[], arrow: E): E[]
   frameAround(intent: FrameIntent): E
+  sketchArea(intent: SketchAreaIntent): E
 
   // ── files ──
   files(): Record<string, F>
@@ -180,8 +228,14 @@ export interface CanvasAdapter<E extends SceneElementBase, F extends FileDataBas
   /** Re-measure the container (after it was hidden). */
   refresh(): void
   onScroll(cb: () => void): () => void
+  /** Every pointer down, move (while down) and up on the canvas, in scene coordinates. */
+  onPointer(cb: (p: PointerSample) => void): () => void
+  /** The viewport transform each time it changes (scroll or zoom). */
+  onViewport(cb: (v: ViewportTransform) => void): () => void
   /** Is the person in the middle of something: drawing, dragging, typing, another tool? */
   isBusy(): boolean
   setActiveTool(tool: ActiveToolSpec): void
   exportPng(els: readonly E[], files: Record<string, F>, opts: ExportPngOptions): Promise<Blob>
+  /** A PNG of exactly `rect` at outW x outH (frame-aspect). */
+  exportRegion(req: RegionExport, files: Record<string, F>): Promise<Blob>
 }

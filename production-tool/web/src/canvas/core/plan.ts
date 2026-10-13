@@ -12,11 +12,16 @@
 // - loose strokes and shapes become one new drawing (the controller wraps them);
 // - text is words for the instruction, and a node so it gets an arrow;
 // - a generated image still being made can't be used yet.
+//
+// Sketch areas (features/frame-aspect.clan): an area is a sketch input, and a
+// stroke whose box meets an area (core/sketch.ts membersOf) stands for that
+// area, never for a new drawing. A scene with no areas plans as before.
 
 import type { CustomData, Sha256 } from '../../contracts/types'
 import type { ElementLike } from './canvasAdapter'
 import type { LinkGraph } from './links'
 import { classify, type Classified } from './nodes'
+import { boxOf, intersects, type Boxed } from './sketch'
 
 export interface ImageInput {
   elId: string
@@ -35,7 +40,18 @@ export interface SelectionPlan {
   pending: string[]
 }
 
-export interface GraphPlan extends SelectionPlan {
+/** A sketch area to export and send (its element, and its sketches[id]). */
+export interface SketchInput {
+  elId: string
+  sketchId: string
+}
+
+/** planSelection's projection: today's plan, plus the sketch areas. */
+export interface CanvasPlan extends SelectionPlan {
+  sketches: SketchInput[]
+}
+
+export interface GraphPlan extends CanvasPlan {
   /** The selected nodes' element ids by kind, in selection order (a stroke in a drawing counts as its drawing). */
   nodes: Partial<Record<Classified, string[]>>
   /** What cannot be used, and why. */
@@ -56,7 +72,19 @@ function cdOf(e: ElementLike | undefined): CustomData | undefined {
  */
 export function planGraph(selection: { elements: readonly ElementLike[]; selectedIds: readonly string[] }, _graph: LinkGraph = EMPTY): GraphPlan {
   const live = new Map(selection.elements.filter((e) => !e.isDeleted).map((e) => [e.id, e]))
-  const plan: GraphPlan = { images: [], strokes: [], notes: [], pending: [], nodes: {}, refused: [] }
+  const plan: GraphPlan = { images: [], strokes: [], notes: [], pending: [], sketches: [], nodes: {}, refused: [] }
+  // The areas on the canvas, with their boxes (only elements with geometry can hold strokes).
+  const areas = [...live.values()].filter((e) => classify(e) === 'sketch')
+  const areaOf = (e: ElementLike): ElementLike | undefined => {
+    if (!hasBox(e) || classify(e) !== 'stroke') return undefined
+    const box = boxOf(e as Boxed)
+    return areas.find((a) => hasBox(a) && intersects(box, boxOf(a as Boxed)))
+  }
+  const addSketch = (a: ElementLike) => {
+    node('sketch', a.id)
+    if (plan.sketches.some((x) => x.elId === a.id)) return
+    plan.sketches.push({ elId: a.id, sketchId: (cdOf(a) as { id: string }).id })
+  }
   const counted = new Set<string>()
   const node = (kind: Classified, elId: string) => {
     if (counted.has(elId)) return
@@ -83,6 +111,10 @@ export function planGraph(selection: { elements: readonly ElementLike[]; selecte
     if (!e) continue
     const kind = classify(e)
     if (kind === 'provenance' || kind === 'pin') continue
+    if (kind === 'sketch') {
+      addSketch(e)
+      continue
+    }
     if (kind === 'picture' || kind === 'drawing' || kind === 'generated') {
       node(kind, e.id)
       addImage(e)
@@ -101,13 +133,20 @@ export function planGraph(selection: { elements: readonly ElementLike[]; selecte
     if (e.type === 'arrow' || e.type === 'frame' || e.type === 'magicframe' || e.type === 'image') continue
     // A stroke or shape: part of a drawing node, or loose.
     const frame = e.frameId ? live.get(e.frameId) : undefined
+    const area = frame ? undefined : areaOf(e)
     if (frame && cdOf(frame)?.kind === 'drawn') {
       node('drawing', frame.id)
       addImage(frame)
+    } else if (area) {
+      addSketch(area)
     } else {
       node(kind, e.id)
       plan.strokes.push(e.id)
     }
   }
   return plan
+}
+
+function hasBox(e: ElementLike): boolean {
+  return typeof e.x === 'number' && typeof e.y === 'number' && typeof e.width === 'number' && typeof e.height === 'number'
 }

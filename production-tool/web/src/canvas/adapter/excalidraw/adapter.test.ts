@@ -76,6 +76,14 @@ function fakeApi(state: Rec = {}) {
       return () => log.push({ method: 'unsubscribe', args: [] })
     },
     setActiveTool: rec('setActiveTool'),
+    onPointerDown: (cb: unknown) => {
+      log.push({ method: 'onPointerDown', args: [cb] })
+      return () => log.push({ method: 'offPointerDown', args: [] })
+    },
+    onPointerUp: (cb: unknown) => {
+      log.push({ method: 'onPointerUp', args: [cb] })
+      return () => log.push({ method: 'offPointerUp', args: [] })
+    },
   }
   return { api, log, appState }
 }
@@ -269,5 +277,75 @@ describe('the rest', () => {
       elements: els, files: { f: {} }, mimeType: 'image/png', exportPadding: 24,
       appState: { exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
     }]])
+  })
+})
+
+describe('frame-aspect amendments (CanvasAdapter v1)', () => {
+  it('sketchArea: a white, solid, borderless rectangle tagged {kind:"sketch", id}', () => {
+    const { adapter } = make()
+    const area = adapter.sketchArea({ x: 10, y: 20, w: 320, h: 180, sketchId: 'sketch_1' }) as unknown as Rec
+    expect(calls.convert).toEqual([[[{
+      type: 'rectangle', x: 10, y: 20, width: 320, height: 180,
+      backgroundColor: '#ffffff', fillStyle: 'solid', strokeColor: 'transparent', strokeWidth: 1, roughness: 0, roundness: null,
+      customData: { kind: 'sketch', id: 'sketch_1' },
+    }]]])
+    expect(area.customData).toEqual({ kind: 'sketch', id: 'sketch_1' })
+  })
+
+  it('exportRegion: a transient frame of exactly the box, cloned members in it, padding 0, the asked size', async () => {
+    const { adapter, api, log } = make()
+    const scene = [el({ id: 'in', type: 'freedraw' }), el({ id: 'cross', type: 'line', x: 150, width: 900 }), el({ id: 'other' })]
+    api.getSceneElements = (() => scene) as never
+    await adapter.exportRegion({ rect: { x: 0, y: 0, w: 320, h: 180 }, elementIds: ['in', 'cross'], outW: 1536, outH: 864, background: '#ffffff' }, { f: {} } as never)
+    expect(calls.convert).toEqual([[[{ type: 'frame', x: 0, y: 0, width: 320, height: 180, name: '', children: [] }]]])
+    const [[opts]] = calls.exportBlob as [Rec][]
+    const frame = (opts.elements as Rec[])[0]
+    expect(frame).toMatchObject({ id: 'made-id', type: 'frame', x: 0, y: 0, width: 320, height: 180 })
+    expect((opts.elements as Rec[]).slice(1).map((e) => [e.id, e.frameId])).toEqual([['in', 'made-id'], ['cross', 'made-id']])
+    expect(opts.exportingFrame).toBe(frame)
+    expect(opts.exportPadding).toBe(0)
+    expect(opts.files).toEqual({ f: {} })
+    expect((opts.getDimensions as (w: number, h: number) => Rec)(5000, 5000)).toEqual({ width: 1536, height: 864, scale: 4.8 })
+    expect(opts.appState).toEqual({
+      exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false,
+      frameRendering: { enabled: true, name: false, outline: false, clip: true },
+    })
+    // Nothing on the canvas moved: the scene was never written.
+    expect(log.some((l) => l.method === 'updateScene')).toBe(false)
+    expect(scene.map((e) => (e as unknown as Rec).frameId)).toEqual([undefined, undefined, undefined])
+  })
+
+  it('exportRegion refuses an export past 4096 x 4096', async () => {
+    const { adapter } = make()
+    await expect(adapter.exportRegion({ rect: { x: 0, y: 0, w: 10, h: 10 }, elementIds: [], outW: 5000, outH: 4000, background: '#fff' }, {} as never))
+      .rejects.toThrow('too large')
+    expect(calls.exportBlob).toEqual([])
+  })
+
+  it('onViewport: the scroll and the zoom value, with its unsubscribe', () => {
+    const { adapter, log } = make()
+    const cb = vi.fn()
+    const off = adapter.onViewport(cb)
+    ;(log.at(-1)!.args[0] as (x: number, y: number, z: { value: number }) => void)(5, -7, { value: 2 })
+    expect(cb).toHaveBeenCalledWith({ scrollX: 5, scrollY: -7, zoom: 2 })
+    off()
+    expect(log.at(-1)!.method).toBe('unsubscribe')
+  })
+
+  it('onPointer: down and up in scene coordinates, a pen’s pressure, a mouse at 0.5', () => {
+    const { adapter, log } = make()
+    const cb = vi.fn()
+    const off = adapter.onPointer(cb)
+    const down = log.find((l) => l.method === 'onPointerDown')!.args[0] as (t: unknown, s: unknown, e: Rec) => void
+    const up = log.find((l) => l.method === 'onPointerUp')!.args[0] as (t: unknown, s: unknown, e: Rec) => void
+    down({}, {}, { clientX: 1, clientY: 2, pointerType: 'pen', pressure: 0.8 })
+    up({}, {}, { clientX: 3, clientY: 4, pointerType: 'mouse', pressure: 0 })
+    expect(cb.mock.calls.map((c) => c[0])).toEqual([
+      { phase: 'down', x: 33, y: 44, pointerType: 'pen', pressure: 0.8 },
+      { phase: 'up', x: 33, y: 44, pointerType: 'mouse', pressure: 0.5 },
+    ])
+    expect(calls.toScene.map((c) => c[0])).toEqual([{ clientX: 1, clientY: 2 }, { clientX: 3, clientY: 4 }])
+    off()
+    expect(log.slice(-2).map((l) => l.method)).toEqual(['offPointerDown', 'offPointerUp'])
   })
 })

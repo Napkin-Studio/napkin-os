@@ -8,20 +8,21 @@
 // - a stroke or shape inside a drawn frame stands for that frame;
 // - loose strokes and shapes become one new drawing (the controller wraps them);
 // - text is words for the instruction, and a node so it gets an arrow;
-// - a generated image still being made can't be used yet.
+// - a generated image still being made can't be used yet;
+// - a sketch area, or a stroke that meets one, is that area (frame-aspect).
 
 import { clipText } from '../lib/guard'
 import type { ElementLike } from './core/canvasAdapter'
-import { planGraph, type SelectionPlan } from './core/plan'
+import { planGraph, type CanvasPlan } from './core/plan'
 
-export type { ImageInput, SelectionPlan } from './core/plan'
+export type { CanvasPlan, ImageInput, SelectionPlan, SketchInput } from './core/plan'
 
 /** The fields planSelection reads. */
 export type PlainEl = ElementLike
 
-export function planSelection(all: readonly PlainEl[], selectedIds: readonly string[]): SelectionPlan {
-  const { images, strokes, notes, pending } = planGraph({ elements: all, selectedIds })
-  return { images, strokes, notes, pending }
+export function planSelection(all: readonly PlainEl[], selectedIds: readonly string[]): CanvasPlan {
+  const { images, strokes, notes, pending, sketches } = planGraph({ elements: all, selectedIds })
+  return { images, strokes, notes, pending, sketches }
 }
 
 /** The instruction: what was typed, then the selected notes' words. At most 1000 characters (the contract). */
