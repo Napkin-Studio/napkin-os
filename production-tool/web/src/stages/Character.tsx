@@ -6,13 +6,12 @@
 // below lists the named references (solid keys), publishes them to the
 // person's library (their own, from any project), imports from it, and cleans up unused pictures.
 
-import { Excalidraw, getSceneVersion, sceneCoordsToViewportCoords, viewportCoordsToSceneCoords } from '@excalidraw/excalidraw'
-import '@excalidraw/excalidraw/index.css'
-import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
+import { CanvasView } from '../canvas/adapter/excalidraw/CanvasView'
+import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot } from '../canvas/controller'
-import { alive, bounds, cd, imageOf, isText, isUserDrawing, type El } from '../canvas/scene'
+import { alive, bounds, cd, imageOf, isText, isUserDrawing, type Canvas, type El } from '../canvas/scene'
 import type { CustomData, KeyEntry, LibraryIndex, ModelChoice, NamedRef, RefRole, View } from '../contracts/types'
 import { choiceToSend } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
@@ -39,11 +38,8 @@ import { mediaItem, viewsOnCanvas, type MediaItem } from '../media/names'
 
 type Pt = { x: number; y: number }
 interface ViewState {
-  scrollX: number
-  scrollY: number
-  zoom: AppState['zoom']
-  offsetLeft: number
-  offsetTop: number
+  /** The view as it was rendered (overlays convert coordinates with this snapshot). */
+  view: ViewSnapshot
   selected: string[]
   els: El[]
   version: number
@@ -59,9 +55,9 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   useJobsTick()
   const theme = useColorScheme()
   const { config, controls } = useConfig()
-  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
+  const [canvas, setCanvas] = useState<Canvas | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
-  const ctrl = useMemo(() => (api ? new CanvasController(api, services) : null), [api, services])
+  const ctrl = useMemo(() => (canvas ? new CanvasController(canvas, services) : null), [canvas, services])
   // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
   useEffect(() => {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
@@ -83,27 +79,21 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
 
-  const initialData = useMemo(() => {
-    if (initial?.elements?.length) return { elements: initial.elements, files: initial.files, scrollToContent: true }
-    return { elements: [], appState: { currentItemStrokeWidth: 2 } }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const refresh = useCallback(() => {
-    if (!api) return
+    if (!canvas) return
     if (raf.current) return
     raf.current = requestAnimationFrame(() => {
       raf.current = null
-      const st = api.getAppState()
-      const els = api.getSceneElements() as El[]
-      const version = getSceneVersion(els)
-      const selected = Object.keys(st.selectedElementIds).filter((k) => st.selectedElementIds[k])
-      const sig = `${st.scrollX}|${st.scrollY}|${st.zoom.value}|${st.offsetLeft}|${st.offsetTop}|${selected.join(',')}|${version}`
+      const st = canvas.view()
+      const els = canvas.elements()
+      const version = canvas.version(els)
+      const selected = st.selectedIds
+      const sig = `${st.scrollX}|${st.scrollY}|${st.zoom}|${st.offsetLeft}|${st.offsetTop}|${selected.join(',')}|${version}`
       if (sig === lastSig.current) return
       lastSig.current = sig
-      setVs({ scrollX: st.scrollX, scrollY: st.scrollY, zoom: st.zoom, offsetLeft: st.offsetLeft, offsetTop: st.offsetTop, selected, els, version })
+      setVs({ view: st, selected, els, version })
     })
-  }, [api])
+  }, [canvas])
 
   // Land canvas results; mirror job states into customData.
   useEffect(() => {
@@ -118,18 +108,18 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
 
   // Excalidraw measures its container; tell it when the stage comes back into view.
   useEffect(() => {
-    if (active && api) {
-      api.refresh()
+    if (active && canvas) {
+      canvas.refresh()
       refresh()
     }
-  }, [active, api, refresh])
+  }, [active, canvas, refresh])
 
   useEffect(() => {
-    if (!api) return
-    const off = api.onScrollChange(() => refresh())
+    if (!canvas) return
+    const off = canvas.onScroll(() => refresh())
     refresh()
     return off
-  }, [api, refresh])
+  }, [canvas, refresh])
 
   const onChange = useCallback(() => {
     ctrl?.onChange()
@@ -137,14 +127,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   }, [ctrl, refresh])
 
   const toView = useCallback((p: Pt): Pt => {
-    if (!vs) return p
-    const v = sceneCoordsToViewportCoords({ sceneX: p.x, sceneY: p.y }, { zoom: vs.zoom, offsetLeft: vs.offsetLeft, offsetTop: vs.offsetTop, scrollX: vs.scrollX, scrollY: vs.scrollY })
-    return { x: v.x - vs.offsetLeft, y: v.y - vs.offsetTop }
-  }, [vs])
+    if (!vs || !canvas) return p
+    const v = canvas.sceneToViewport(p, vs.view)
+    return { x: v.x - vs.view.offsetLeft, y: v.y - vs.view.offsetTop }
+  }, [vs, canvas])
 
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
   const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id)), [els, vs])
-  const zoom = vs?.zoom.value ?? 1
+  const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
   const doDelete = useCallback((ids: string[]) => {
@@ -174,7 +164,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   // Undo); plain drawings are Excalidraw's own. Escape leaves place mode.
   useEffect(() => {
     const el = wrap.current
-    if (!el || !ctrl) return
+    if (!el || !ctrl || !canvas) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && placing) {
         setPlacing(null)
@@ -183,9 +173,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
       const t = e.target as HTMLElement | null
       if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
-      const st = ctrl.api.getAppState()
-      const ids = Object.keys(st.selectedElementIds).filter((k) => st.selectedElementIds[k])
-      const sel = alive(ctrl.api.getSceneElements() as El[]).filter((x) => ids.includes(x.id))
+      const ids = canvas.view().selectedIds
+      const sel = alive(canvas.elements()).filter((x) => ids.includes(x.id))
       if (!sel.some((x) => imageOf(x))) return
       e.preventDefault()
       e.stopPropagation()
@@ -193,15 +182,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     }
     el.addEventListener('keydown', onKey, true)
     return () => el.removeEventListener('keydown', onKey, true)
-  }, [ctrl, requestDelete, placing])
+  }, [ctrl, canvas, requestDelete, placing])
 
   /** The click that places a result: the new node's top-left goes there. */
   const onPlace = useCallback(async (e: React.PointerEvent) => {
-    if (!placing || !ctrl || !api) return
+    if (!placing || !ctrl || !canvas) return
     e.preventDefault()
     e.stopPropagation()
-    const st = api.getAppState()
-    const p = viewportCoordsToSceneCoords({ clientX: e.clientX, clientY: e.clientY }, st)
+    const p = canvas.viewportToScene({ x: e.clientX, y: e.clientY }, canvas.view())
     const job = placing
     setPlacing(null)
     try {
@@ -209,7 +197,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     } catch (err) {
       setPlaceError(errText(err))
     }
-  }, [placing, ctrl, api, limits])
+  }, [placing, ctrl, canvas, limits])
 
   const hasMarks = els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e))
   const showHint = !ui.hintDismissed && !hasMarks && doc.refs.length === 0
@@ -217,17 +205,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   return (
     <div className="character">
       <div className="canvas-wrap" ref={wrap}>
-        <Excalidraw
-          excalidrawAPI={setApi}
-          initialData={initialData}
-          onChange={onChange}
-          theme={theme}
-          name="napkin-canvas"
-          UIOptions={{
-            canvasActions: { loadScene: false, export: false, saveToActiveFile: false, saveAsImage: false, toggleTheme: false, clearCanvas: true, changeViewBackgroundColor: true },
-            tools: { image: true },
-          }}
-        />
+        <CanvasView initial={initial} onReady={setCanvas} onChange={onChange} theme={theme} />
         <div className="overlay-layer">
           <FlowArrows els={els} toView={toView} />
           {els.map((e) => {
@@ -253,7 +231,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
               </Floating>
             )
           })()}
-          {api && !confirming && !placing && <ArrowCards api={api} wrap={wrap} selected={selected} toView={toView} />}
+          {canvas && !confirming && !placing && <ArrowCards canvas={canvas} wrap={wrap} selected={selected} toView={toView} />}
           {undo?.at && (() => {
             const p = toView(undo.at)
             return <UndoChip className="oncanvas" label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
@@ -458,7 +436,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
   // Download: each selected picture or result, named as in Download all media.
   const pictures = meaningful.map((e) => imageOf(e)?.asset).filter((a): a is string => !!a)
   if (pictures.length) {
-    const views = viewsOnCanvas(doc, ctrl.api.getSceneElements())
+    const views = viewsOnCanvas(doc, ctrl.liveElements())
     const items = pictures.map((a) => mediaItem(doc, project, a, undefined, views)).filter((m): m is MediaItem => !!m)
     if (items.length) groups.push(<DownloadButton key="dl" items={items} className="btn sm ghost" iconOnly={items.length === 1} />)
   }

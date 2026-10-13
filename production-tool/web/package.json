@@ -17,7 +17,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
+    "@excalidraw/excalidraw": "0.18.1",
     "fflate": "^0.8.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

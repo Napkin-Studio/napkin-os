@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@excalidraw/excalidraw', () => ({ serializeAsJSON: () => '{}' }))
+vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import type { DocAsset, ProductionDocument, SavedProject } from '../contracts/types'
 import { ClanBackedStore } from '../doc/clan'

@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
 
-// Excalidraw does not load in node; its export of the scene is all export.ts takes from it.
-vi.mock('@excalidraw/excalidraw', () => ({
-  serializeAsJSON: (elements: unknown[], _app: unknown, files: unknown) => JSON.stringify({ type: 'excalidraw', version: 2, source: 'test', elements, appState: {}, files }),
+// Excalidraw does not load in node; the adapter's serializeScene is all export.ts takes from it.
+vi.mock('../canvas/adapter/excalidraw/serialize', () => ({
+  serializeScene: (elements: unknown[], files: unknown) => JSON.stringify({ type: 'excalidraw', version: 2, source: 'test', elements, appState: {}, files }),
 }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import type { CanvasSnapshot } from '../canvas/controller'

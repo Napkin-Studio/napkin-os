@@ -2,7 +2,7 @@
 // napkin-wasm), canvas.excalidraw and assets/<sha256>.<ext>. Without the CLAN
 // store (the wasm did not load) it falls back to document.json in the zip.
 
-import { serializeAsJSON } from '@excalidraw/excalidraw'
+import { serializeScene } from './canvas/adapter/excalidraw/serialize'
 import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { buildExportZip, ClanBackedStore } from './doc/clan'
 import type { CanvasSnapshot } from './canvas/controller'
@@ -40,7 +40,7 @@ const fromBrowser: ReadCanvas = (key) => idbGet<CanvasSnapshot>('kv', key)
 
 async function canvasFile(canvasKey: string, read: ReadCanvas): Promise<Uint8Array> {
   const canvas = await read(canvasKey)
-  return strToU8(serializeAsJSON(canvas?.elements ?? [], {}, canvas?.files ?? {}, 'local'))
+  return strToU8(serializeScene(canvas?.elements ?? [], canvas?.files ?? {}))
 }
 
 /** `canvasKey`: where the project's canvas is kept (read with `read`). `title`: the project's name, for the zip's. */
