@@ -37,17 +37,58 @@ pinned (always sent, never dropped for a limit), and the director must keep its 
 
 **Planned (features/strict-refs.clan):** a "Make sheet" action that runs the three views and a look set in one go.
 
-## runway (sheet checked 2026-10-08)
+## runway (sheet checked 2026-10-13)
 
 | Step | Model | Price | We send | The provider accepts |
 |---|---|---|---|---|
-| Character (canvas generate) | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-|  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-| Views (turnaround) | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-|  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-| Storyboard frame | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-|  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-| Region edit | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | the image and a copy with the box drawn on it, each with its own @tag | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-08) |
-| Clip | **Veo 3.1** (`veo3.1`) default | $1.20 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-08) |
-|  | **Veo 3.1 Fast** (`veo3.1_fast`) | $0.60 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-08) |
-| Clip edit | **Aleph 2** (`aleph2`) default | $1.40 | the clip, the change in words and an optional keyframe; lengths: 2-30 s | prompt: at most 1000 characters (schema 2026-10-08) |
+| Character (canvas generate) | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+|  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+| Views (turnaround) | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+|  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+| Storyboard frame | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+|  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+| Region edit | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | the image and a copy with the box drawn on it, each with its own @tag | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+| Clip | **Veo 3.1** (`veo3.1`) default | $1.20 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-13) |
+|  | **Veo 3.1 Fast** (`veo3.1_fast`) | $0.60 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-13) |
+| Clip edit | **Aleph 2** (`aleph2`) default | $1.40 | the clip, the change in words and an optional keyframe; lengths: 2-30 s | prompt: at most 1000 characters (schema 2026-10-13) |
+
+### runway models catalogue
+
+Every model a step uses or a planned feature needs, held to the snapshots by
+`tests/test_runway_sheet.py`. Prices are computed from `pricing` by `contracts/pricing.py`;
+1 credit = $0.01.
+
+| Model | Endpoint | Limits | Published price |
+|---|---|---|---|
+| Gemini 3 Pro (`gemini_image3_pro`) | POST /v1/text_to_image | 30 ratios (1K, 2K, 4K); outputs 1, 4; prompt ≤ 5500 UTF-16 units; refs ≤ 14 | `gemini_image3_pro` · 20 credits per 1K or 2K image, 40 credits per 4K image |
+| Gemini 3.1 Flash (`gemini_image3.1_flash`) | POST /v1/text_to_image | 56 ratios (1K, 2K, 4K, 512); outputs 1, 4; prompt ≤ 5500 UTF-16 units; refs ≤ 14 | `gemini_image3.1_flash` · 5 credits per 512px image, 7 credits per 1K image, 11 credits per 2K image, 16 credits per 4K image |
+| Ideogram 4.5 (`ideogram_4_5`) | POST /v1/text_to_image | 27 ratios; outputs 1, 2, 3, 4, 5, 6, 7, 8; prompt ≤ 10000 UTF-16 units; refs ≤ 5; mask png_black_edit; preciseEdit | `ideogram_4_5` · 1–25 credits per image, by quality (see below)<br>`ideogram_4_5` and `ideogram_4_0` are billed as credits per image × `outputCount`, at any resolution. `ideogram_4_5` defaults to `medium` when generating from reference images and `high` otherwise, including `preciseEdit`; `very_low` requires reference images and is not available with `preciseEdit`. `ideogram_4_0` defaults to `medium`.<br>Quality `very_low`: 1<br>Quality `low`: 4<br>Quality `medium`: 8<br>Quality `high`: 25 |
+| Veo 3.1 (`veo3.1`) | POST /v1/image_to_video | 4 ratios; lengths 4, 6, 8 s; prompt ≤ 1000 UTF-16 units; firstLastFrame | `veo3.1 (audio)` · 40 credits per second<br>`veo3.1 (no audio)` · 20 credits per second |
+| Veo 3.1 Fast (`veo3.1_fast`) | POST /v1/image_to_video | 4 ratios; lengths 4, 6, 8 s; prompt ≤ 1000 UTF-16 units; firstLastFrame | `veo3.1_fast (audio)` · 15 credits per second<br>`veo3.1_fast (no audio)` · 10 credits per second |
+| Aleph 2 (`aleph2`) | POST /v1/video_to_video | expand to 16:9, 4:3, 3:2, 1:1, 2:3, 3:4, 9:16, 21:9; input 2-30 s; prompt ≤ 1000 UTF-16 units; keyframes ≤ 5 with range | `aleph2` · 28 credits per second (56 credit minimum per generation) |
+| Magnific Precision Upscaler v2 (`magnific_precision_upscaler_v2`) | POST /v1/image_upscale | scale 2, 4, 8, 16 | `magnific_precision_upscaler_v2` · 25 credits per image, or 150 credits when output exceeds 4096px |
+| Magnific Video Upscaler Creative (`magnific_video_upscaler_creative`) | POST /v1/video_upscale | resolutions 720p, 1k, 2k, 4k; input 30 s | `magnific_video_upscaler_creative` is billed per output frame, not per second of video. Credits = `ceil(USD / 0.01)`, where `USD = rate × fps × duration_seconds`. Minimum 1 credit per generation. When `fpsBoost` is enabled, output frame count may differ from input and affect cost. Frame-rate conversion on the same endpoint is billed separately — see [Enhance Frame Rate pricing](#enhance-frame-rate-pricing).<br>`720p`, `1k` · $0.007 · 210 credits<br>`2k` · $0.009 · 270 credits<br>`4k` · $0.012 · 360 credits |
+
+## What one ad costs
+
+At today's list prices, from `contracts/cost-model.json` priced by `scripts/ad_costs.py`. For Napkin's
+planning only: the tool shows no price to people; each job's cost is recorded and shown in History.
+
+| Scenario | Credits | USD |
+|---|---:|---:|
+| Typical ad, first pass (15 s, 6 shots, 1 character) | 1,089 | $10.89 |
+| Typical, 3 takes of every frame and clip | 2,769 | $27.69 |
+| Typical, Veo audio on, first pass | 1,809 | $18.09 |
+| Typical, audio on with 3 takes | 4,929 | $49.29 |
+| Heavy ad (2 characters, audio on, 8 s clips, 3 takes) | 8,863 | $88.63 |
+
+Not in the totals:
+- Claude on Bedrock (the director), per ad: $0.50 (placeholder, not measured)
+- billedFailureRate: failed and moderated tasks Runway bills, as a share of spend: 0% (placeholder, not measured)
+
+Fixed monthly infrastructure:
+- Fargate and ALB (napkin-web): not yet entered
+- S3: not yet entered
+- KMS: not yet entered
+- CloudFront egress: not yet entered
+- stitch Lambda: not yet entered

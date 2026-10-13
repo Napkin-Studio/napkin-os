@@ -19,6 +19,13 @@ Inputs, no redirects, with a Content-Type and Content-Length:
                 that is not https is fetched, shrunk and uploaded to Runway's ephemeral store, free;
                 a dry run uploads nothing)
   --video-url   clip_edit (https mp4, 2-30 s; blocked if it is not https)
+
+The two person-run live checks of features/runway-sheet-sync.clan (scripts/live_check_*.sh wrap them):
+  (a) Aleph 2 on our key:  --ops clip_edit --video-url <4 s https mp4> --input-s 4 --range 1-3
+                           --keyframe-url <https image>
+  (b) Is a stopped render charged?  --ops clip --model veo3.1_fast --duration 4 --cancel-after 15
+      submits, cancels after 15 s, and prints creditBalance from GET /v1/organization before and
+      after (a cancelled task cannot be read again, and /v1/organization/usage only totals a day).
 Exit status is non-zero if any op failed or was not run.
 """
 
@@ -37,6 +44,7 @@ from runway_common import (
     Runner, Tap, default_factory, estimate_usd, fetch_bytes, first_frame_ref, image_ref, is_https, key_status,
     make_client, make_job, prepare_image, region_edit,
 )
+from contracts_dir import pricing
 from providers import ProviderError, Ref, load_sheet
 
 OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
@@ -55,7 +63,48 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--image-url", help="public HTTPS image (a character or object)")
     p.add_argument("--video-url", help="public HTTPS mp4, 2-30 s, for clip_edit")
     p.add_argument("--max-usd", type=float, default=DEFAULT_MAX_USD, help="hard cap on spend (default %(default)s)")
+    p.add_argument("--model", help="run the op on this model (one of its alternates), e.g. veo3.1_fast")
+    p.add_argument("--duration", type=int, help="clip length in seconds (default 4)")
+    p.add_argument("--input-s", type=float, help="clip_edit: the input video's length, for the price (default the op's)")
+    p.add_argument("--range", help="clip_edit: the keyframe's edit window START-END in whole seconds, end exclusive")
+    p.add_argument("--keyframe-url", help="clip_edit: an image placed as a keyframe (in the middle of --range)")
+    p.add_argument("--cancel-after", type=float, help="submit, then cancel after this many seconds and compare "
+                   "creditBalance before and after (live check b)")
+    p.add_argument("--settle", type=float, default=90.0,
+                   help="seconds to wait after a cancel before reading the balance again (default %(default)s)")
     return p
+
+
+def window(text: Optional[str]) -> Optional[tuple[int, int]]:
+    """'1-3' -> (1, 3): whole seconds, end exclusive, as aleph2's keyframe range takes."""
+    if not text:
+        return None
+    start, _, end = text.partition("-")
+    try:
+        a, b = int(start), int(end)
+    except ValueError:
+        raise ValueError(f"--range {text}: needs START-END in whole seconds") from None
+    if not 0 <= a < b:
+        raise ValueError(f"--range {text}: needs START-END with START < END")
+    return a, b
+
+
+def settings_for(op: str, args) -> dict:
+    """The settings the job's price depends on, from the flags (contracts/pricing.py)."""
+    if op == "clip":
+        return {"durationS": args.duration or 4}
+    if op == "clip_edit" and args.input_s:
+        return {"inputS": args.input_s}
+    return {}
+
+
+def price(sheet: dict, op: str, args=None) -> float:
+    """One job's USD at the flags' settings; an unpriced job counts as $1 against the cap."""
+    if args is None:
+        return estimate_usd(sheet, op)
+    model = args.model if args.model and args.model != sheet["ops"][op]["model"] else None
+    usd = pricing().op_usd(sheet, op, model, settings_for(op, args))
+    return 1.0 if usd is None else usd
 
 
 def blocked_reason(op: str, urls: dict) -> Optional[str]:
@@ -65,10 +114,10 @@ def blocked_reason(op: str, urls: dict) -> Optional[str]:
     return None
 
 
-def plan_lines(sheet: dict, ops: list[str], urls: dict) -> tuple[list[str], float]:
+def plan_lines(sheet: dict, ops: list[str], urls: dict, args=None) -> tuple[list[str], float]:
     lines, total = [], 0.0
     for op in ops:
-        est, need = estimate_usd(sheet, op), NEEDS.get(op)
+        est, need = price(sheet, op, args), NEEDS.get(op)
         note = ""
         if need and not urls.get(need):
             note = f"   needs {FLAG[need]}"
@@ -77,22 +126,32 @@ def plan_lines(sheet: dict, ops: list[str], urls: dict) -> tuple[list[str], floa
         elif op == "clip" and urls.get("image") and not is_https(urls["image"]):
             note = f"   {UPLOAD_NOTE}"
         total += est
-        lines.append(f"  {op:<12} {sheet['ops'][op]['model']:<22} ~${est:.2f}{note}")
+        model = (args.model if args is not None and args.model else None) or sheet["ops"][op]["model"]
+        lines.append(f"  {op:<12} {model:<22} ~${est:.2f}{note}")
     return lines, total
 
 
 def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[[str], bytes],
-              first_frame: Callable[[str], str]):
+              first_frame: Callable[[str], str], args=None):
     """The request for one op. Returns the job, or None for region_edit (its own pipeline)."""
+    model = {"model": args.model} if args is not None and args.model else {}
     if op == "generate":
-        return make_job(sheet, op, "A red fox sitting in a snowy forest, photo.", ratio=IMAGE_RATIO)
+        return make_job(sheet, op, "A red fox sitting in a snowy forest, photo.", ratio=IMAGE_RATIO, **model)
     if op == "clip_edit":
         sha = assets.add_url(urls["video"], "video/mp4")
+        keyframe = None
+        if args is not None and args.keyframe_url:
+            span = window(args.range)
+            at = (span[0] + span[1]) / 2 if span else 1.0
+            keyframe = {"sha256": image_ref(assets, fetch, args.keyframe_url), "atS": at,
+                        **({"startS": span[0], "endS": span[1]} if span else {})}
         return make_job(sheet, op, "Make the lighting warmer, keep everything else the same.",
-                        refs=[Ref(sha, "source", "source")])
+                        refs=[Ref(sha, "source", "source")], keyframe=keyframe, **model)
     if op == "clip":  # an https URL as is, else uploaded to Runway: a data URI is no first frame
         sha = first_frame(urls["image"])
-        return make_job(sheet, op, "She turns and smiles.", ratio=CLIP_RATIO, duration_s=4, first_frame=sha)
+        seconds = args.duration if args is not None and args.duration else 4
+        return make_job(sheet, op, "She turns and smiles.", ratio=CLIP_RATIO, duration_s=seconds,
+                        first_frame=sha, **model)
     sha = image_ref(assets, fetch, urls["image"])  # an image op takes the bytes inline
     if op == "view":
         return make_job(sheet, op, "@hero seen from the side, full body, plain background.", ratio=IMAGE_RATIO,
@@ -104,16 +163,18 @@ def build_job(sheet: dict, op: str, assets: Assets, urls: dict, fetch: Callable[
 
 
 def run_op(op: str, runner: Runner, assets: Assets, urls: dict, fetch: Callable[[str], bytes],
-           first_frame: Callable[[str], str]) -> dict:
+           first_frame: Callable[[str], str], args=None) -> dict:
     sheet = runner.sheet
     if reason := blocked_reason(op, urls):
         return {"label": op, "op": op, "state": "blocked", "reason": reason}
     try:
-        job = build_job(sheet, op, assets, urls, fetch, first_frame)
+        job = build_job(sheet, op, assets, urls, fetch, first_frame, args)
     except Exception as exc:  # an unreachable image is this op's failure, not the run's
         return {"label": op, "op": op, "state": "failed", "error": {"code": "input", "message": f"{type(exc).__name__}: {exc}"}}
     if job:
-        return runner.run(op, job)
+        if args is not None and args.cancel_after is not None:
+            return cancel_check(op, job, runner, args, price(sheet, op, args))
+        return runner.run(op, job, est=price(sheet, op, args) if args is not None else None)
     try:
         png, ratio = prepare_image(fetch(urls["image"]))
         res = region_edit(runner, png, ratio, BOX, "Make whatever is inside the box a different colour.",
@@ -125,6 +186,33 @@ def run_op(op: str, runner: Runner, assets: Assets, urls: dict, fetch: Callable[
     # The provider answering is what the smoke test checks; whether the box held is the gate's business.
     return {"label": op, "op": op, "state": "done" if res.metrics else "failed",
             "inside_box_ok": res.ok, "reason": res.reason}
+
+
+def cancel_check(op: str, job, runner: Runner, args, est: float) -> dict:
+    """Live check (b): submit, cancel after --cancel-after seconds, and read creditBalance before and
+    after. Runway does not let a cancelled task be read again, so the balance is the only witness:
+    run it with nothing else running on the key, on a model nothing else used that UTC day."""
+    rec = {"label": f"{op} (stopped)", "op": op, "model": job.model}
+    provider = runner.provider
+    try:
+        before = provider.organization().get("creditBalance")
+        rid = runner.submit(job, est)
+        rec["request_id"] = rid
+        runner.sleep(args.cancel_after)
+        provider.cancel(rid)
+        runner.sleep(args.settle)
+        after = provider.organization().get("creditBalance")
+    except BudgetExceeded as exc:
+        return {**rec, "state": "skipped", "reason": str(exc)}
+    except ProviderError as exc:
+        return {**rec, "state": "failed", "error": exc.to_dict()}
+    charged = None if before is None or after is None else before - after
+    verdict = ("balance unreadable" if charged is None else "NOT charged" if charged == 0 else
+               f"CHARGED {charged} credits")
+    usd = None if charged is None else round(charged * runner.sheet["usdPerCredit"], 4)
+    return {**rec, "state": "done", "cost_usd": usd,
+            "reason": f"cancelled after {args.cancel_after:g} s; creditBalance {before} -> {after}: {verdict}",
+            "balance": {"before": before, "after": after, "charged": charged}}
 
 
 def show(rec: dict, out: Callable[[str], None]) -> None:
@@ -154,7 +242,12 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
     urls = {"image": args.image_url, "video": args.video_url}
 
     out(f"{KEY_ENV}: {key_status(env)}")
-    lines, total = plan_lines(sheet, ops, urls)
+    try:
+        window(args.range)
+    except ValueError as exc:
+        out(str(exc))
+        return 2
+    lines, total = plan_lines(sheet, ops, urls, args)
     out("plan:")
     out("  step 0       GET /v1/organization   free")
     for line in lines:
@@ -181,6 +274,8 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
         return 1
     out(f"step 0: tier {org['tier'].get('maxMonthlyCreditSpend')} credits/month max, "
         f"{org.get('creditBalance')} credits left")
+    for model, n in sorted(((org.get("ceilings") or {}).get("maxDailyGenerations") or {}).items()):
+        out(f"  {model:<24} daily generations {n if n is not None else 'no limit'}")
     for model, n in sorted(org["concurrency"].items()):
         out(f"  {model:<24} concurrency {n if n is not None else 'no limit'}")
     if not args.live:
@@ -194,7 +289,7 @@ def main(argv: Optional[list[str]] = None, env: Optional[dict] = None, out: Call
 
     failed = 0
     for op in ops:
-        rec = run_op(op, runner, assets, urls, fetch, first_frame)
+        rec = run_op(op, runner, assets, urls, fetch, first_frame, args)
         show(rec, out)
         failed += rec["state"] != "done"
         if rec["state"] == "skipped":

@@ -131,13 +131,12 @@ def sheets() -> dict:
 
 def front_sheet() -> dict:
     """The provider in front of the floor in these tests: the mock sheet, priced, slotted and polled
-    like a paid provider (0.15 an image, 2 slots, 2 s polls), so a chain has a first provider whose
-    failure sends the job to Runway (features/runway-fallback.clan)."""
+    like a paid provider (0.15 a job, 0.30 on mock-hq, 2 slots, 2 s polls), so a chain has a first
+    provider whose failure sends the job to Runway (features/runway-fallback.clan). Its prices are
+    the catalogue's, through contracts/pricing.py, like Runway's (features/runway-sheet-sync.clan)."""
     sheet = copy.deepcopy(sheets()["mock"])
-    for op, spec in sheet["ops"].items():
-        spec["estimateUsd"] = 0.9 if op in ("clip", "clip_edit") else 0.15
-        for alt in spec.get("alternates", []):
-            alt["estimateUsd"] = spec["estimateUsd"] * 2
+    sheet["models"]["mock"]["pricing"] = {"unit": "image", "credits": 15, "source": []}
+    sheet["models"]["mock-hq"]["pricing"] = {"unit": "image", "credits": 30, "source": []}
     sheet["concurrency"] = {"image": 2, "video": 2}
     sheet["results"]["minPollS"] = 2
     return sheet

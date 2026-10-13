@@ -391,6 +391,51 @@ def test_organization_reads_tier_and_concurrency(runway, server):
     assert server.requests[0].url.path == "/v1/organization"
     assert org["concurrency"] == {"gemini_image3.1_flash": 10, "veo3.1_fast": 10, "aleph2": None}
     assert org["tier"]["maxMonthlyCreditSpend"] == 2000000 and org["creditBalance"] == 98000
+    # The tier's ceilings, for the cost model (contracts/cost-model.json tier).
+    assert org["ceilings"] == {"maxMonthlyCreditSpend": 2000000, "maxDailyGenerations": {
+        "gemini_image3.1_flash": 5000, "veo3.1_fast": 5000, "aleph2": None}}
+
+
+# ── the sheet, not the adapter, holds the credit price and the prompt limits (features/runway-sheet-sync.clan)
+def test_the_credit_price_and_prompt_limits_are_not_constants():
+    import providers.runway as module
+    assert not hasattr(module, "USD_PER_CREDIT") and not hasattr(module, "MAX_PROMPT")
+
+
+def test_cost_is_credits_times_the_sheets_usd_per_credit(server):
+    sheet = load_sheet("runway")
+    sheet["usdPerCredit"] = 0.02
+    r = RunwayProvider("k", resolve, client=httpx.Client(transport=httpx.MockTransport(server)), sheet=sheet)
+    server.reply(200, fixture("task_succeeded_image"))
+    assert r.status("task_1").cost_usd == 0.28  # 14 credits
+
+
+@pytest.mark.parametrize("text,units", [("abc", 3), ("é", 1), ("😀", 2), ("a😀b", 4)])
+def test_prompts_are_counted_in_utf16_code_units(text, units):
+    from providers.types import utf16_units
+    assert utf16_units(text) == units
+
+
+def clip_with(prompt: str) -> ProviderJob:
+    return job("clip", refs=[], first_frame=SHA, ratio="1280:720", prompt=prompt)
+
+
+def test_a_clip_prompt_of_1000_units_passes(runway, server):
+    runway.submit(clip_with("x" * 1000))
+    assert len(server.body["promptText"]) == 1000
+
+
+def test_a_prompt_over_the_limit_by_one_emoji_is_refused_by_us_not_runway(runway, server):
+    # 999 units plus one emoji (2 units) is 1001: Runway would answer 400, so we refuse before the call.
+    with pytest.raises(CapabilityMissing, match="at most 1000"):
+        runway.submit(clip_with("x" * 999 + "😀"))
+    assert server.requests == []
+
+
+def test_the_prompt_limit_is_the_models_own(runway, server):
+    runway.submit(job(prompt="@hero " + "x" * 5000))  # Gemini 3 Pro takes 5500
+    with pytest.raises(CapabilityMissing, match="at most 5500"):
+        runway.submit(job(prompt="@hero " + "x" * 5500))
 
 
 def test_name_and_sheet():

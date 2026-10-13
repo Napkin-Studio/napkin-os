@@ -94,7 +94,7 @@ Branches are `feat/<slug>`. Pull requests go into `develop` and are squash-merge
   runs each step through the relay and the real Runway adapter against a stand-in of Runway, and checks every request against the provider's published schema.
 - **Refresh those schemas:** `uv run --frozen --python 3.12 python scripts/refresh_provider_schemas.py`
   in `production-tool/relay` (`--check` shows what changed).
-- **Cost per pathway:** `scripts/pathway_costs.py`.
+- **Cost per ad:** `scripts/ad_costs.py` (contracts/cost-model.json priced by contracts/pricing.py). Live checks a person runs: `scripts/live_check_aleph2.sh`, `scripts/live_check_stop_charge.sh`.
 - **A real run, with a spending cap:** `scripts/pathway_smoke.py --live --max-usd 1 --image-url
   <https picture>`. It's a dry run without `--live`, and reads keys only from your environment.
 - **The provider reference page:** regenerate it with `scripts/provider_reference.py` after a sheet

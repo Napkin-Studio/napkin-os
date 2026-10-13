@@ -22,7 +22,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RELAY = HERE.parent
 sys.path.insert(0, str(RELAY))
-from contracts_dir import contracts_dir  # noqa: E402
+from contracts_dir import contracts_dir, pricing  # noqa: E402
 
 OUT = RELAY.parents[1] / "docs" / "production-tool" / "provider-reference.md"
 SCHEMAS = RELAY / "tests" / "fixtures" / "schemas"
@@ -175,10 +175,59 @@ def render() -> str:
                 fetched, accepts = _accepts(provider, m["model"], m["endpoint"])
                 ours = _ours(sheet, {**spec, **m} if i else spec, op)
                 label = f"**{m.get('label', m['model'])}** (`{m['model']}`)" + (" default" if i == 0 else "")
-                parts.append(f"| {STEP[op] if i == 0 else ''} | {label} | {_usd(m.get('estimateUsd'))} | "
+                price = pricing().op_usd(sheet, op, m["model"] if i else None)
+                parts.append(f"| {STEP[op] if i == 0 else ''} | {label} | {_usd(price)} | "
                              f"{'; '.join(ours)} | {'; '.join(accepts) or '—'}" + (f" (schema {fetched[:10]})" if fetched else "") + " |")
         parts.append("")
+        parts += _catalogue(sheet)
+    parts += _cost_table()
     return "\n".join(parts).rstrip() + "\n"
+
+
+def _catalogue(sheet: dict) -> list[str]:
+    """The models catalogue: each model's checked limits and its published price rows."""
+    out = [f"### {sheet['provider']} models catalogue", "",
+           "Every model a step uses or a planned feature needs, held to the snapshots by",
+           "`tests/test_runway_sheet.py`. Prices are computed from `pricing` by `contracts/pricing.py`;",
+           f"1 credit = ${sheet['usdPerCredit']:g}.", "",
+           "| Model | Endpoint | Limits | Published price |", "|---|---|---|---|"]
+    for name, m in sheet.get("models", {}).items():
+        limits = []
+        if m.get("ratios"):
+            tiers = sorted({r["tier"] for r in m["ratios"] if r.get("tier")})
+            limits.append(f"{len(m['ratios'])} ratios" + (f" ({', '.join(tiers)})" if tiers else ""))
+        for key, words in (("durationsS", "lengths {} s"), ("outputs", "outputs {}"), ("scaleFactors", "scale {}"),
+                           ("resolutions", "resolutions {}"), ("targetAspectRatios", "expand to {}")):
+            if m.get(key):
+                limits.append(words.format(", ".join(str(x) for x in m[key])))
+        if m.get("inputS"):
+            limits.append("input " + "-".join(f"{m['inputS'][k]:g}" for k in ("min", "max") if k in m["inputS"]) + " s")
+        if m.get("promptMax"):
+            limits.append(f"prompt ≤ {m['promptMax']} UTF-16 units")
+        if m.get("refs"):
+            limits.append(f"refs ≤ {m['refs']['max']}")
+        if m.get("mask") and m["mask"] != "none":
+            limits.append(f"mask {m['mask']}")
+        for flag in ("preciseEdit", "firstLastFrame"):
+            if m.get(flag):
+                limits.append(flag)
+        if m.get("keyframes"):
+            limits.append(f"keyframes ≤ {m['keyframes']['max']}" + (" with range" if m["keyframes"].get("range") else ""))
+        rows = "<br>".join(r.replace("|", "·") for r in m["pricing"]["source"]) or "—"
+        out.append(f"| {m['label']} (`{name}`) | {m.get('endpoint', '—')} | {'; '.join(limits) or '—'} | {rows} |")
+    return out + [""]
+
+
+def _cost_table() -> list[str]:
+    """What one ad costs at list prices (contracts/cost-model.json through scripts/ad_costs.py)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("ad_costs", HERE / "ad_costs.py")
+    ad_costs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ad_costs)
+    return ["## What one ad costs", "",
+            "At today's list prices, from `contracts/cost-model.json` priced by `scripts/ad_costs.py`. For Napkin's",
+            "planning only: the tool shows no price to people; each job's cost is recorded and shown in History.", "",
+            ad_costs.table(), ""]
 
 
 def main(argv=None) -> int:

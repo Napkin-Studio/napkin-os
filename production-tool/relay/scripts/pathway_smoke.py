@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 RELAY = HERE.parent
 sys.path.insert(0, str(RELAY))
 
-from contracts_dir import contracts_dir  # noqa: E402
+from contracts_dir import contracts_dir, pricing  # noqa: E402
 from providers.types import effective_sheet  # noqa: E402
 
 PATHWAYS = ("runway",)
@@ -103,7 +103,7 @@ def plan(args, env: dict) -> list[dict]:
             why = ("" if KEYS[provider] in env else f"no {KEYS[provider]}") or ("" if inp[op] else
                    f"needs --{'mask' if op == 'region_edit' else 'video'}-url")
             rows.append({"pathway": name, "op": op, "provider": provider, "model": spec["model"],
-                         "estimateUsd": spec.get("estimateUsd"), "skip": why})
+                         "usd": pricing().op_usd(sheets[provider], op), "skip": why})
     return rows
 
 
@@ -144,7 +144,7 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
                 if row["skip"]:
                     results.append({**row, "state": "skipped"})
                     continue
-                cost = row["estimateUsd"] or 1.0  # an unpublished price counts as $1 against the cap
+                cost = row["usd"] if row["usd"] is not None else 1.0  # an unpublished price counts as $1 against the cap
                 if spent + cost > args.max_usd:
                     results.append({**row, "state": "skipped", "skip": f"over the ${args.max_usd} cap"})
                     continue
@@ -187,10 +187,10 @@ def main(argv=None, env=None) -> int:
     for provider, var in KEYS.items():
         print(f"{var}: {'set' if var in env else 'missing'}")
     rows = plan(args, env)
-    total = sum(r["estimateUsd"] or 0 for r in rows if not r["skip"])
+    total = sum(r["usd"] or 0 for r in rows if not r["skip"])
     for r in rows:
         print(f"  {r['pathway']:7} {r['op']:11} {r['provider']:7} {r['model']:38} "
-              f"{'unpublished' if r['estimateUsd'] is None else '$%.3f' % r['estimateUsd']:>11}  {r['skip']}")
+              f"{'unpublished' if r['usd'] is None else '$%.3f' % r['usd']:>11}  {r['skip']}")
     print(f"estimated ${total:.2f} for {sum(not r['skip'] for r in rows)} job(s); cap ${args.max_usd:.2f}")
     if not args.live:
         print("dry run: nothing sent (pass --live to spend)")

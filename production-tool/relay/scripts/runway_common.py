@@ -34,6 +34,7 @@ from providers import (  # noqa: E402
     AssetRef, CapabilityMissing, ProviderError, ProviderJob, Status, load_sheet, video_audio,
 )
 from providers.types import effective_sheet  # noqa: E402
+from contracts_dir import pricing  # noqa: E402
 from providers.runway import RunwayProvider, min_poll_s  # noqa: E402
 
 KEY_ENV = "RUNWAYML_API_SECRET"
@@ -94,8 +95,11 @@ def timeout_for(sheet: dict, op: str) -> int:
     return sheet["ops"][op].get("timeoutS") or TIMEOUT_S[kind]
 
 
-def estimate_usd(sheet: dict, op: str) -> float:
-    return sheet["ops"][op]["estimateUsd"]
+def estimate_usd(sheet: dict, op: str, settings: dict | None = None) -> float:
+    """One job of `op` at its defaults (or `settings`), from contracts/pricing.py. An unpriced op counts
+    as $1 against a budget, never as free."""
+    price = pricing().op_usd(sheet, op, None, settings)
+    return 1.0 if price is None else price
 
 
 def sheet_with_model(sheet: dict, op: str, model: str) -> dict:
@@ -108,7 +112,8 @@ def sheet_with_model(sheet: dict, op: str, model: str) -> dict:
 
 
 def make_job(sheet: dict, op: str, prompt: str, **kw) -> ProviderJob:
-    job = ProviderJob(op=op, provider="runway", model=sheet["ops"][op]["model"], prompt=prompt, **kw)
+    model = kw.pop("model", None) or sheet["ops"][op]["model"]
+    job = ProviderJob(op=op, provider="runway", model=model, prompt=prompt, **kw)
     if op in ("clip", "clip_edit"):
         job.audio = video_audio(job)
     return job

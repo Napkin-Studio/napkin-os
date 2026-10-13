@@ -18,16 +18,15 @@ import httpx
 
 from .types import (
     VIDEO_OPS, AssetResolver, CapabilityMissing, ProviderError, ProviderJob,
-    ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, video_audio,
+    ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, nearest_ratio, utf16_units,
+    video_audio,
 )
 from .tags import UnknownTag, rewrite_tags, unsent_in_words
 
 BASE_URL = "https://api.dev.runwayml.com"
 VERSION = "2024-11-06"
 MIN_POLL_S = 5  # sheet results.minPollS
-USD_PER_CREDIT = 0.01
-
-MAX_PROMPT = {"image": 5500, "clip": 1000, "clip_edit": 1000}
+# A credit's price and each model's prompt limit come from the sheet (usdPerCredit, models[m].promptMax).
 MAX_HUMAN, MAX_OBJECT = 5, 9
 MAX_SEED = 4294967295
 
@@ -136,11 +135,12 @@ class RunwayProvider:
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc), False) from exc
 
-    def _check(self, job: ProviderJob, kind: str, prompt: str) -> None:
+    def _check(self, job: ProviderJob, prompt: str) -> None:
         # The sheet's seed flag is false for the image models; both video models take one.
         check_capabilities(self._sheet, dataclasses.replace(job, seed=None) if job.op in VIDEO_OPS else job)
-        if len(prompt) > MAX_PROMPT[kind]:
-            raise CapabilityMissing(f"{job.op} prompt is at most {MAX_PROMPT[kind]} characters")
+        limit = (self._sheet.get("models", {}).get(self._model(job)) or {}).get("promptMax")
+        if limit is not None and utf16_units(prompt) > limit:
+            raise CapabilityMissing(f"{job.op} prompt is at most {limit} characters")
         if job.op in VIDEO_OPS and job.seed is not None and not 0 <= job.seed <= MAX_SEED:
             raise CapabilityMissing(f"seed must be 0-{MAX_SEED}")
 
@@ -204,7 +204,7 @@ class RunwayProvider:
                 job = dataclasses.replace(job, ratio=self._own_ratio(current))
             refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
             prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
-        self._check(job, "image", prompt)
+        self._check(job, prompt)
         if sum(r.role != "character" for r in refs) > MAX_OBJECT:
             raise CapabilityMissing(f"{self.name} takes at most {MAX_OBJECT} object refs")
         if job.outputs not in (None, 1, 4):
@@ -224,7 +224,7 @@ class RunwayProvider:
         return "/v1/text_to_image", body
 
     def _clip(self, job: ProviderJob) -> tuple[str, dict]:
-        self._check(job, "clip", job.prompt)
+        self._check(job, job.prompt)
         if not job.first_frame:
             raise CapabilityMissing("clip needs a first frame")
         if not job.ratio:
@@ -248,7 +248,7 @@ class RunwayProvider:
         return "/v1/image_to_video", body
 
     def _clip_edit(self, job: ProviderJob) -> tuple[str, dict]:
-        self._check(job, "clip_edit", job.prompt)
+        self._check(job, job.prompt)
         videos = [a for a in (self._assets(r.sha256) for r in job.refs) if a.mime == "video/mp4"]
         if not videos:
             raise CapabilityMissing("clip_edit needs the source video (video/mp4) among its refs")
@@ -299,7 +299,7 @@ class RunwayProvider:
             return Status("failed", error=ProviderError(
                 "provider_failed", f"unknown Runway task status {task.get('status')!r}", False))
         credits = (task.get("cost") or {}).get("credits")
-        cost = None if credits is None else round(credits * USD_PER_CREDIT, 4)
+        cost = None if credits is None else round(credits * self._sheet["usdPerCredit"], 4)
         if state == "failed":
             error, _ = failure(task.get("failureCode"), task.get("failure") or "Runway failed the task")
             return Status("failed", error=error, cost_usd=cost)  # a moderated task is billed too
@@ -314,12 +314,18 @@ class RunwayProvider:
             raise _http_error(resp)
 
     def organization(self) -> dict:
-        """Tier and per-model concurrency, for the smoke script (GET /v1/organization)."""
+        """Tier, per-model concurrency and the tier's ceilings, for the smoke script and the cost model
+        (GET /v1/organization; contracts/cost-model.json tier)."""
         org = self._ok(self._call("GET", "/v1/organization"))
         tier = org.get("tier") or {}
+        models = tier.get("models") or {}
         return {
             "tier": tier,
-            "concurrency": {m: v.get("maxConcurrentGenerations") for m, v in (tier.get("models") or {}).items()},
+            "concurrency": {m: v.get("maxConcurrentGenerations") for m, v in models.items()},
+            "ceilings": {
+                "maxMonthlyCreditSpend": tier.get("maxMonthlyCreditSpend"),
+                "maxDailyGenerations": {m: v.get("maxDailyGenerations") for m, v in models.items()},
+            },
             "creditBalance": org.get("creditBalance"),
         }
 

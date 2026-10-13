@@ -19,6 +19,7 @@ import runway_smoke  # noqa: E402
 import runway_testpack  # noqa: E402
 from runway_common import Assets, Budget, Runner, Tap, make_client  # noqa: E402
 
+from contracts_dir import pricing  # noqa: E402
 from providers import ProviderJob, ProviderOutput, Status, load_sheet  # noqa: E402
 from providers.runway import RunwayProvider  # noqa: E402
 
@@ -152,8 +153,9 @@ def test_dry_run_names_the_missing_inputs():
 def test_smoke_cost_estimate_comes_from_the_sheet():
     sheet = load_sheet("runway")
     _, text = run(runway_smoke, ["--ops", "clip,clip_edit"])
-    total = sheet["ops"]["clip"]["estimateUsd"] + sheet["ops"]["clip_edit"]["estimateUsd"]
-    assert f"estimated cost: ${total:.2f}" in text
+    # The smoke clip is 4 s (veo3.1, audio off: 80 credits); the clip edit is at its default 5 s input.
+    total = pricing().op_usd(sheet, "clip", None, {"durationS": 4}) + pricing().op_usd(sheet, "clip_edit")
+    assert total == 0.8 + 1.4 and f"estimated cost: ${total:.2f}" in text
 
 
 # --- the key and the live gate
@@ -230,6 +232,84 @@ def test_max_usd_stops_before_overspending(runtime):
                      factory=fake_factory(log, cost=0.2), fetch=lambda url: _gradient(), **runtime)
     assert len(log["jobs"]) == 1  # a second $0.20 Gemini 3 Pro job would pass $0.30
     assert code == 1 and "--max-usd" in text
+
+
+# --- the person-run live checks (features/runway-sheet-sync.clan); offline here, on fakes
+
+def test_live_check_a_sends_aleph2_with_a_ranged_keyframe(runtime):
+    bodies = []
+    code, text = run(runway_smoke, ["--live", "--max-usd", "2", "--ops", "clip_edit", "--video-url", VID,
+                                    "--input-s", "4", "--range", "1-3", "--keyframe-url", IMG],
+                     factory=real_adapter_factory(bodies), fetch=lambda url: _gradient(), **runtime)
+    assert code == 0, text
+    assert "~$1.12" in text  # 4 s x 28 credits
+    path, body = bodies[0]
+    assert path == "/v1/video_to_video" and body["model"] == "aleph2" and body["videoUri"] == VID
+    (frame,) = body["keyframes"]
+    assert frame["range"] == {"start_seconds": 1, "end_seconds": 3} and frame["seconds"] == 2
+    assert frame["uri"].startswith("data:image/")
+
+
+def test_live_check_a_refuses_a_bad_range():
+    code, text = run(runway_smoke, ["--ops", "clip_edit", "--range", "3-1"])
+    assert code == 2 and "--range 3-1" in text
+
+
+def test_live_check_b_stops_a_render_and_reads_the_balance(runtime):
+    log, cancelled, balances = new_log(), [], iter([500, 500, 460])  # step 0, before, after
+
+    class Stoppable(Fake):
+        def cancel(self, rid):
+            cancelled.append(rid)
+
+        def organization(self):
+            return {**super().organization(), "creditBalance": next(balances)}
+
+    code, text = run(runway_smoke, ["--live", "--max-usd", "2", "--ops", "clip", "--model", "veo3.1_fast",
+                                    "--duration", "4", "--image-url", IMG, "--cancel-after", "15"],
+                     factory=lambda k, a, t, s=None: Stoppable(log, s), fetch=lambda url: _gradient(), **runtime)
+    assert code == 0, text
+    (job, _), = log["jobs"]
+    assert (job.op, job.model, job.duration_s, job.audio) == ("clip", "veo3.1_fast", 4, False)
+    assert cancelled == ["task-1"]
+    assert "~$0.40" in text  # veo3.1_fast, 4 s, audio off: 40 credits
+    assert "creditBalance 500 -> 460: CHARGED 40 credits" in text
+
+
+def test_live_check_b_says_not_charged_when_the_balance_holds(runtime):
+    class Free(Fake):
+        def organization(self):
+            return {**super().organization(), "creditBalance": 500}
+
+    code, text = run(runway_smoke, ["--live", "--ops", "clip", "--model", "veo3.1_fast", "--duration", "4",
+                                    "--image-url", IMG, "--cancel-after", "15"],
+                     factory=lambda k, a, t, s=None: Free(new_log(), s), fetch=lambda url: _gradient(), **runtime)
+    assert code == 0 and "500 -> 500: NOT charged" in text
+
+
+def test_the_live_check_wrappers_run_the_smoke_script_live_under_two_dollars():
+    scripts = Path(runway_smoke.__file__).parent
+    a = (scripts / "live_check_aleph2.sh").read_text()
+    b = (scripts / "live_check_stop_charge.sh").read_text()
+    assert "--live --max-usd 2" in a and "--ops clip_edit" in a and "--range 1-3" in a and "--keyframe-url" in a
+    assert "--live --max-usd 2" in b and "--model veo3.1_fast --duration 4" in b and "--cancel-after" in b
+    for s in (a, b):
+        assert "source .env" not in s.split("set -euo pipefail")[1]  # the key comes from the environment only
+
+
+def test_no_reader_of_a_flat_estimate_is_left():
+    """estimateUsd is gone (features/runway-sheet-sync.clan): every price comes from contracts/pricing.py.
+    Code and data only: the schema's and README's history may name the field they replaced."""
+    root = Path(runway_smoke.__file__).resolve().parents[2]
+    left = []
+    for path in root.rglob("*"):
+        if (path.is_file() and (path.suffix in (".py", ".ts", ".tsx") or
+                                path.suffix == ".json" and not path.name.endswith(".schema.json"))
+                and not any(p in path.parts for p in ("node_modules", ".venv", "dist", "results", "pkg"))
+                and path.name != "test_scripts.py" and "estimateUsd" in path.read_text(errors="ignore")):
+            left.append(str(path.relative_to(root)))
+    # The invalid example exists to prove the schema refuses the field.
+    assert left == ["contracts/examples/invalid/capabilities.estimate-usd.json"], left
 
 
 def test_the_cap_counts_jobs_in_flight():
