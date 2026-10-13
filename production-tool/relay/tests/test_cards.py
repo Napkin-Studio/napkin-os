@@ -183,7 +183,7 @@ def test_the_director_gets_each_refs_card_and_the_block_logs_them():
     stored(h.blobs, 1, 2)
     h.relay.director = rec = Recording()
     h.relay.cards = maker(h.blobs, CardWire())
-    tok = h.sign_in()
+    tok = h.as_person()
     _, job = h.post_job(tok, "generate", text="@robo_front waves", refs=[ref(1, "robo_front"), ref(2, kind="drawing")])
     refs = rec.asked[0]["input"]["refs"]
     assert [r["card"] for r in refs] == [CARD["card"]] * 2 and [r["tag"] for r in refs] == ["robo_front", "in_1"]
@@ -204,8 +204,9 @@ def test_only_the_refs_that_go_get_cards():
     h.relay.cards = maker(h.blobs, wire)
     views = ("front", "side", "back", "three-quarter")
     refs = [ref(i + 1, f"ana_{v}") for i, v in enumerate(views)] + [ref(i + 5, f"bo_{v}") for i, v in enumerate(views)]
-    h.cfg["routing"]["generate"] = ["fal"]
-    tok = h.sign_in()
+    h.cfg["routing"]["generate"] = ["mock"]
+    h.providers["mock"].sheet["refs"]["maxCharacter"] = 4
+    tok = h.as_person()
     h.post_job(tok, "generate", text="@ana and @bo", refs=refs)
     sent = rec.asked[0]["input"]["refs"]
     assert len(wire.calls) == len(sent) and all(r.get("card") for r in sent)
@@ -216,7 +217,7 @@ def test_a_card_failure_never_fails_the_job():
     stored(h.blobs, 1)
     h.relay.director = rec = Recording()
     h.relay.cards = maker(h.blobs, CardWire(fail="timeout"))
-    tok = h.sign_in()
+    tok = h.as_person()
     _, job = h.post_job(tok, "generate", refs=[ref(1, "robo_front")], text="@robo_front")
     assert job["state"] == "submitted" and "cards" not in job["director"]
     assert "card" not in rec.asked[0]["input"]["refs"][0]
@@ -229,14 +230,14 @@ def test_a_card_maker_that_breaks_never_fails_the_job():
 
     h = Harness()
     h.relay.cards = Broken()
-    tok = h.sign_in()
+    tok = h.as_person()
     _, job = h.post_job(tok, "generate")
     assert job["state"] == "submitted"
 
 
 def test_without_a_model_the_job_runs_as_before():
     h = Harness()  # the passthrough, no card maker
-    tok = h.sign_in()
+    tok = h.as_person()
     _, job = h.post_job(tok, "generate")
     assert job["state"] == "submitted" and "cards" not in job["director"]
 
@@ -246,7 +247,7 @@ def test_shot_list_makes_no_cards():
     stored(h.blobs, 1)
     wire = CardWire()
     h.relay.cards = maker(h.blobs, wire)
-    tok = h.sign_in()
+    tok = h.as_person()
     h.post_job(tok, "shot_list", script="A robot waves. It smiles.", targetS=10, refs=[ref(1, "robo_front")])
     assert not wire.calls
 

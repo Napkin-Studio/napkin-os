@@ -91,7 +91,7 @@ def seam():
 
 
 def run_job(h):
-    token = h.sign_in()
+    token = h.as_person()
     _, job = h.post_job(token, "generate", **generate_input())
     return token, job
 
@@ -134,8 +134,8 @@ def test_director_wrapper_output_validates_against_the_contract():
 
 
 def test_a_director_answer_that_fails_its_checks_falls_back_to_the_passthrough():
-    # 2026-10-09: one stray field (a ratio on a fal clip) failed the whole job as internal.
-    bad = {**REPLY, "providerJob": {**REPLY["providerJob"], "provider": "fal"}}
+    # 2026-10-09: one stray field (a ratio on a clip that takes none) failed the whole job as internal.
+    bad = {**REPLY, "providerJob": {**REPLY["providerJob"], "provider": "mock"}}
     d = make_director(wire=FakeWire(bad, bad))
     sheet = types.load_sheet("runway")
     req = {"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": names.to_wire("generate", generate_input())}
@@ -189,11 +189,11 @@ def test_load_director_builds_the_bedrock_wire(monkeypatch):
 
 def test_registry_wraps_the_harness_adapters(monkeypatch):
     monkeypatch.setenv("RUNWAY_API_KEY", "rw-key")
-    monkeypatch.delenv("FAL_KEY", raising=False)
     reg = load_registry()
     assert isinstance(reg.get("runway"), Adapted) and isinstance(reg.get("mock"), Adapted)
-    assert reg.get("fal") is None  # no key, not registered
     assert isinstance(reg.get("runway"), base.Provider)
+    monkeypatch.delenv("RUNWAY_API_KEY")
+    assert load_registry().get("runway") is None  # no key, not registered
 
 
 # --- error mapping -------------------------------------------------------------
@@ -286,7 +286,7 @@ def test_deployed_urls_are_left_alone(monkeypatch):
 
 
 def test_a_large_inline_picture_goes_as_a_jpeg_and_a_mask_stays_exact():
-    # 2026-10-09: nine 1.5 MB PNGs inline made a 19 MB request that did not reach fal in time.
+    # 2026-10-09: nine 1.5 MB PNGs inline made a 19 MB request that did not reach the provider in time.
     import io
     import random
     from PIL import Image

@@ -48,8 +48,7 @@ def _build() -> Relay:
         name = os.environ["PUBLIC_BASE_URL_PARAM"]
         public_base = boto3.client("ssm").get_parameter(Name=name)["Parameter"]["Value"]
 
-    secrets = EnvSecrets()
-    secrets()  # keys into the environment before the adapters start
+    EnvSecrets()()  # keys into the environment before the adapters start
     blobs = S3Blobs(bucket, public_base, client=s3)
     director = load_director()
     return Relay(
@@ -60,7 +59,6 @@ def _build() -> Relay:
         # A Lambda freezes after it answers: a card late for one job is made on the next.
         cards=cards.make(director, blobs, background=False),
         config=CachedConfig(lambda: json.loads(s3.get_object(Bucket=bucket, Key=config_key)["Body"].read()), contracts),
-        secrets=secrets,
         contracts=contracts,
         stitch=start_stitch if stitch_fn else None,
     )

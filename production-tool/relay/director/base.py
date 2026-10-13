@@ -19,8 +19,6 @@ import os
 import time
 from typing import Protocol
 
-from names import ELEMENT_OPS as _ELEMENT_OPS
-
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
@@ -63,39 +61,16 @@ def fit_duration(seconds: float, spec: dict) -> float:
 
 
 def view_angle(op: str, inp: dict, sheet: dict | None) -> dict | None:
-    """The angle a view job needs where the provider takes angles (fal's multiple-angles endpoint
-    refuses a view without one); None where it does not (the view is said in words instead)."""
+    """The angle a view job needs where the provider takes angles (sheet "angles"); None where it
+    does not (the view is said in words instead)."""
     if op != "view" or not (sheet or {}).get("angles") or inp.get("view") not in VIEW_ANGLES:
         return None
     return {"horizontal": VIEW_ANGLES[inp["view"]], "vertical": 0.0}
-_MAX_ANGLES = 3  # Kling: a front plus 1-3 reference images per element
-
-
 def ref_roles(inp: dict, op: str, sheet: dict | None) -> list[tuple[dict, str]]:
-    """The input refs in send order, each with its provider role.
-
-    A character key with a front and other variants is one Kling element where the sheet has
-    elements (front first, then up to 3 other variants as angles); otherwise a character ref is
-    `character` and every other role is `object`. Refs carry wire tags (names.py) by now."""
+    """The input refs in send order, each with its provider role: a character ref is `character`
+    and every other role is `object`. Refs carry wire tags (names.py) by now."""
     refs = list(inp.get("refs") or [])
-    roles = {r["id"]: ("character" if r["role"] == "character" else "object") for r in refs}
-    if sheet and (sheet.get("refs") or {}).get("element") and op in _ELEMENT_OPS:
-        by_key: dict[str, list[dict]] = {}
-        for r in refs:
-            if r["role"] == "character" and r.get("name"):
-                by_key.setdefault(r["name"].split("_", 1)[0], []).append(r)
-        ordered: list[dict] = []
-        for group in by_key.values():
-            front = next((r for r in group if r["name"].split("_", 1)[1] == "front"), None)
-            angles = [r for r in group if r is not front][:_MAX_ANGLES]
-            if front and angles:
-                roles[front["id"]] = "element_front"
-                for r in angles:
-                    roles[r["id"]] = "element_angle"
-                ordered += [front, *angles]
-        in_element = {r["id"] for r in ordered}
-        refs = ordered + [r for r in refs if r["id"] not in in_element]
-    return [(r, roles[r["id"]]) for r in refs]
+    return [(r, "character" if r["role"] == "character" else "object") for r in refs]
 
 
 class PassthroughDirector:

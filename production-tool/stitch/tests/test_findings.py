@@ -18,7 +18,7 @@ def _run(tmp_path, files: dict[str, bytes], clips: list[dict], job="job_f"):
         (src / name).write_bytes(data)
     store = {}
     res = stitch.run(
-        {"jobId": job, "clips": clips, "eventName": "", "outKey": "ads/x.mp4", "resultKey": "ads/x.json"},
+        {"jobId": job, "clips": clips, "outKey": "ads/x.mp4", "resultKey": "ads/x.json"},
         get=lambda key, dest: shutil.copy(src / key, dest),
         put=lambda key, p, mime: store.__setitem__(key, Path(p).read_bytes()),
         put_json=lambda key, d: store.__setitem__(key, json.dumps(d)),

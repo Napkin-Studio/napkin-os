@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Remove people's workspaces after an event (features/personal-workspaces.clan).
+"""Remove people's workspaces (features/personal-workspaces.clan).
 
-Run it by hand, and only once the event's data has been studied: nothing expires on its own.
+Run it by hand, and only once their data has been studied: nothing expires on its own.
 A DRY RUN by default: it lists every object, job record and counter it would delete, and writes
 the same as a JSON report. Pass --yes to delete.
 
@@ -17,13 +17,13 @@ What goes, for each chosen workspace:
   clan/<pid>/…        its saved projects, every timed copy, latest.clan, canvases, projects.json
   library/<pid>/…     its library (index and every version)
   jobs                its job records (DynamoDB jobs table)
-  quotas              its counters: <pid>#<day>, inflight#<pid>, slots#<provider>#own#<pid>#<class>
+  quotas              its counters: <pid>#<day>, inflight#<pid>
   in/ out/ cards/     every upload, result and character card its projects, library or jobs use,
                       unless a workspace that stays uses the same picture (counted by sha256 across
                       every remaining project copy, library version and job)
   ads/<jobId>.*       the stitched ads of its jobs, unless a remaining workspace uses the same ad
 With --all, uploads and results nobody remaining uses go too, even ones no project names (with
---before, only those last written before that day). The shared counters (spend, the event's slots)
+--before, only those last written before that day). The shared counters (spend, the provider slots)
 and the blocked list are never touched. A workspace with a job still running is skipped.
 
 Where:
@@ -83,12 +83,9 @@ def workspace_of_key(key: str) -> str | None:
 
 
 def counter_owner(key: str) -> str | None:
-    """The participant a quota counter belongs to, or None for the event's own (spend, slots)."""
+    """The participant a quota counter belongs to, or None for the shared ones (spend, slots)."""
     if key.startswith("inflight#"):
         return key[len("inflight#"):]
-    if key.startswith("slots#"):
-        parts = key.split("#")  # slots#<provider>#own#<pid>#<class>
-        return parts[3] if len(parts) == 5 and parts[2] == "own" else None
     if key.startswith("p_") and "#" in key:
         return key.split("#", 1)[0]
     return None

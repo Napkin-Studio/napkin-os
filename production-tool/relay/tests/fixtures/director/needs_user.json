@@ -1,6 +1,6 @@
 {
   "op": "generate",
-  "provider": "fal",
+  "provider": "runway",
   "input": {
     "text": "use the colours from the other one",
     "chips": [],

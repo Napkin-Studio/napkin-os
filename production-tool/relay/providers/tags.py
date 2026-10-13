@@ -32,34 +32,22 @@ def unsent_in_words(prompt: str, names: Sequence[str]) -> str:
                    else "the image" if m.group(1) == "current" else m.group(1).replace("_", " "), prompt)
 
 
-def _render(syntax: str, name: str, n: int) -> str:
+def _render(syntax: str, name: str) -> str:
     if syntax == "at_tag":
         return f"@{name}"
-    if syntax == "at_image_n":
-        return f"@Image{n}"
-    if syntax == "picture_n":
-        return f"<Picture {n}>"
-    if syntax == "figure_n":
-        return f"Figure {n}"
-    if syntax == "image_n":
-        return f"image {n}"
     if syntax == "none":
         return name
     raise ValueError(f"unknown tagSyntax {syntax!r}")
 
 
 def rewrite_tags(prompt: str, names: Sequence[str], syntax: str) -> str:
-    """Replace each `@name` with the provider's form.
-
-    `names` lists the refs in the order they are sent to the provider; a ref's
-    position (1-based) is its number in the numbered syntaxes.
-    """
-    position = {name: i + 1 for i, name in enumerate(names)}
+    """Replace each `@name` with the provider's form. `names` lists the refs sent to the provider."""
+    known = set(names)
 
     def sub(m: re.Match) -> str:
         name = m.group(1)
-        if name not in position:
+        if name not in known:
             raise UnknownTag(f"@{name} is not one of the refs {list(names)}")
-        return _render(syntax, name, position[name])
+        return _render(syntax, name)
 
     return TAG.sub(sub, prompt)

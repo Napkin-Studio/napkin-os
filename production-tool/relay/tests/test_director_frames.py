@@ -52,7 +52,7 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
 def test_v5_is_the_default_and_the_configs_name_it():
     # director.v5 per click on Sonnet (features/director-v5.clan); the shot list still runs on v4's prompt.
     assert PROMPT_VERSION == "director.v5"
-    for name in ("config.testing.json", "config.event.json"):
+    for name in ("config.testing.json", "config.live.json"):
         director = json.loads((EXAMPLES / name).read_text())["director"]
         assert director["promptVersion"] == "director.v5"
         assert director["perClickModel"] == "eu.anthropic.claude-sonnet-5-5"

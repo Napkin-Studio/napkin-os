@@ -44,22 +44,10 @@ class CachedConfig:
             return self.value
 
 
-def parse_event_codes(raw: str) -> dict:
-    """{"participant": [...], "organiser": [...]} or a comma-separated list of participant codes.
-    Codes match in any case. A code no longer chooses a workspace: each name is its own
-    (features/personal-workspaces.clan), so any other key is ignored."""
-    raw = (raw or "").strip()
-    if raw.startswith("{"):
-        data = json.loads(raw)
-        return {"participant": list(data.get("participant", [])), "organiser": list(data.get("organiser", []))}
-    return {"participant": [c.strip() for c in raw.split(",") if c.strip()], "organiser": []}
-
-
 class EnvSecrets:
-    """EVENT_CODES and TOKEN_SECRET from the environment. On Lambda,
-    SECRET_ARNS ({"NAME": "arn", ...}) names Secrets Manager entries that are
-    copied into the environment and refreshed every 5 minutes, so the adapters
-    can read RUNWAY_API_KEY, FAL_KEY, ... from os.environ."""
+    """Provider keys into the environment. On Lambda, SECRET_ARNS ({"NAME": "arn", ...})
+    names Secrets Manager entries that are copied into os.environ (at most every 5 minutes),
+    so the adapters can read RUNWAY_API_KEY from it."""
 
     def __init__(self, sm_client=None, clock=time.monotonic):
         self.sm, self.clock = sm_client, clock
@@ -83,12 +71,8 @@ class EnvSecrets:
             if value and value != "PLACEHOLDER":
                 os.environ[name] = value
 
-    def __call__(self) -> dict:
+    def __call__(self) -> None:
         with self.lock:
             if self.clock() - self.at > SECRETS_TTL_S:
                 self.refresh()
                 self.at = self.clock()
-        secret = os.environ.get("TOKEN_SECRET", "")
-        if len(secret) < 16:
-            raise RuntimeError("TOKEN_SECRET is missing or shorter than 16 characters")
-        return {"event_codes": parse_event_codes(os.environ.get("EVENT_CODES", "")), "token_secret": secret}

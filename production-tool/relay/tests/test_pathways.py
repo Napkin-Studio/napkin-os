@@ -1,8 +1,9 @@
 """Every step on every provider pathway, end to end through the relay (features/harness-pathways.clan).
 
-The pathways are contracts/examples/config.pathway.{runway,fal,heygen,mix}.json. Each case posts a
-JobRequest to the Relay, which runs the director, names.py tags, the seam and the REAL fal, Runway
-and HeyGen adapters against in-process stand-ins of their APIs, then polls until the job ends.
+The pathways are contracts/examples/config.pathway.*.json (Runway alone since
+features/drop-hackathon-extras.clan). Each case posts a JobRequest to the Relay, which runs the
+director, names.py tags, the seam and the REAL Runway adapter against an in-process stand-in of its
+API, then polls until the job ends.
 Every request body an adapter sends is checked against the provider's own published schema
 (tests/fixtures/schemas). Nothing here touches the network or spends money.
 """
@@ -22,14 +23,11 @@ from contracts_dir import contracts_dir
 from director import new_id
 from providers import Registry
 from providers._seam import Adapted, Resolver
-from providers.fal import FalProvider
-from providers.heygen import HeyGenProvider
 from providers.runway import RunwayProvider
 from provider_schemas import errors as schema_errors
 
-PATHWAYS = ("runway", "fal", "heygen", "mix")
+PATHWAYS = ("runway",)
 PROVIDER_OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
-VIDEO_HINTS = ("video", "veo", "wan-vace", "ray", "sam2")
 ASSET_HOSTS = ("cdn.test", "hack.napkin.ie")  # ours in these tests, and in the recorded director fixtures
 
 
@@ -45,7 +43,7 @@ MP4 = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64
 
 # ── the provider stand-ins ──────────────────────────────────────────────────
 class StandIns:
-    """fal's queue, Runway and HeyGen as one httpx MockTransport handler. Records every body sent,
+    """Runway as an httpx MockTransport handler. Records every body sent,
     with the published-schema errors for it, and answers like the real APIs (submit, status, result).
     `refuse` maps a provider to the HTTP status (or 'down') its next submits get."""
 
@@ -54,7 +52,6 @@ class StandIns:
         self.sent: list[dict] = []
         self.refuse: dict[str, object] = {}
         self._n = itertools.count(1)
-        self._fal: dict[str, str] = {}      # request id -> endpoint
         self._runway: dict[str, str] = {}   # task id -> path
         self.submit_reply: dict[str, httpx.Response] = {}   # provider -> a canned submit answer
         self.status_reply: dict[str, httpx.Response] = {}   # provider -> a canned status answer
@@ -85,36 +82,9 @@ class StandIns:
             data = self.blobs.objects.get(key, (MP4 if key.endswith(".mp4") else PNG, ""))[0]
             return httpx.Response(200, content=data)
         body = json.loads(request.content) if request.content else None
-        if host == "queue.fal.run":
-            return self._fal_call(request.method, path.strip("/"), body)
         if host == "api.dev.runwayml.com":
             return self._runway_call(request.method, path, body)
-        if host == "api.heygen.com":
-            return self._heygen_call(request.method, path, body)
         raise AssertionError(f"unexpected call {request.method} {request.url}")
-
-    def _fal_call(self, method: str, path: str, body):
-        if method == "POST" and "/requests/" not in path:
-            refused = self._refused("fal")
-            if refused is not None:
-                return refused
-            self._record("fal", path, body)
-            rid = f"r{next(self._n)}"
-            self._fal[rid] = path
-            app = "/".join(path.split("/")[:2])
-            base = f"https://queue.fal.run/{app}/requests/{rid}"
-            return httpx.Response(200, json={"request_id": rid, "status_url": f"{base}/status",
-                                             "response_url": base, "cancel_url": f"{base}/cancel"})
-        rid = path.split("/requests/", 1)[1].split("/")[0]
-        if "fal" in self.status_reply:
-            return self.status_reply["fal"]
-        if path.endswith("/status"):
-            return httpx.Response(200, json={"status": "COMPLETED"})
-        endpoint = self._fal[rid]
-        if any(h in endpoint for h in VIDEO_HINTS):
-            return httpx.Response(200, json={"video": {"url": self._output(True), "content_type": "video/mp4"}})
-        return httpx.Response(200, json={"images": [{"url": self._output(False), "content_type": "image/png",
-                                                     "width": 64, "height": 48}]})
 
     def _runway_call(self, method: str, path: str, body):
         if method == "POST":
@@ -131,18 +101,6 @@ class StandIns:
         video = self._runway[tid] != "/v1/text_to_image"
         return httpx.Response(200, json={"id": tid, "status": "SUCCEEDED", "output": [self._output(video)],
                                          "cost": {"credits": 7}})
-
-    def _heygen_call(self, method: str, path: str, body):
-        if method == "POST":
-            refused = self._refused("heygen")
-            if refused is not None:
-                return refused
-            self._record("heygen", f"POST {path}", body)
-            return httpx.Response(200, json={"data": {"video_id": f"vid_{next(self._n)}"}})
-        if "heygen" in self.status_reply:
-            return self.status_reply["heygen"]
-        return httpx.Response(200, json={"data": {"status": "completed", "video_url": self._output(True),
-                                                  "width": 1280, "height": 720, "duration": 5}})
 
     def to(self, provider: str) -> list[dict]:
         return [s for s in self.sent if s["provider"] == provider]
@@ -163,10 +121,7 @@ def pathway(name: str, **cfg_over) -> tuple[Harness, StandIns]:
     stand = StandIns(h.blobs)
     client = httpx.Client(transport=httpx.MockTransport(stand))
     reg = Registry()
-    for adapter in (FalProvider("fal_test_key", Resolver(), client=client),
-                    RunwayProvider("rw_test_key", Resolver(), client=client),
-                    HeyGenProvider("hg_test_key", Resolver(), client=client)):
-        reg.register(Adapted(adapter))
+    reg.register(Adapted(RunwayProvider("rw_test_key", Resolver(), client=client)))
     h.relay.registry = reg
     return h, stand
 
@@ -202,7 +157,7 @@ def expected_provider(cfg: dict, h: Harness, op: str) -> str:
 
 def run(h: Harness, op: str, inp: dict, **req_over) -> dict:
     """POST the job, then poll as the browser does until it ends."""
-    token = h.sign_in()
+    token = h.as_person()
     req = {"contractVersion": "2", "jobId": new_id("job"), "op": op, "parentIds": [], "input": inp, **req_over}
     _, job = h.call("POST", "/jobs", req, token, expect=200)
     for _ in range(12):
@@ -251,33 +206,12 @@ def test_runway_frames_keep_each_reference_with_its_own_tag():
     assert "@maya_front" in body["promptText"]
 
 
-def test_fal_frames_default_to_nano_banana_pro_with_each_picture_numbered():
-    """features/default-models.clan: every picture is its own image n, so none is lost in an element."""
-    h, stand = pathway("fal")
-    run(h, "frame", INPUTS["frame"])
-    sent = stand.to("fal")[0]
-    assert sent["endpoint"] == "fal-ai/nano-banana-pro/edit" and not sent["errors"]
-    urls = sent["body"]["image_urls"]
-    assert [u.rsplit("/", 1)[1] for u in urls[:2]] == [r["asset"]["sha256"] for r in INPUTS["frame"]["refs"]]
-    assert "image 1" in sent["body"]["prompt"] and "elements" not in sent["body"]
-
-
-def test_fal_frames_picked_on_kling_send_a_character_as_one_element():
-    h, stand = pathway("fal")
-    run(h, "frame", INPUTS["frame"], modelChoice={"provider": "fal", "model": "kling-image-o3"})
-    body = stand.to("fal")[0]["body"]
-    assert body["elements"][0]["frontal_image_url"].endswith(INPUTS["frame"]["refs"][0]["asset"]["sha256"])
-    assert len(body["elements"][0]["reference_image_urls"]) == 1
-    assert "@Element1" in body["prompt"]
-
-
-@pytest.mark.parametrize("name,provider", [("runway", "runway"), ("heygen", "heygen")])
-def test_clips_that_cannot_take_refs_send_the_frame_and_name_the_character_in_words(name, provider):
-    h, stand = pathway(name)
+def test_clips_that_cannot_take_refs_send_the_frame_and_name_the_character_in_words():
+    h, stand = pathway("runway")
     run(h, "clip", INPUTS["clip"])
-    body = stand.to(provider)[0]["body"]
-    assert "referenceImages" not in body and "reference_images" not in body
-    assert "@" not in (body.get("promptText") or body.get("prompt"))
+    body = stand.to("runway")[0]["body"]
+    assert "referenceImages" not in body
+    assert "@" not in body["promptText"]
 
 
 def test_runway_region_edits_send_the_image_and_a_copy_with_the_box_drawn():
@@ -289,73 +223,19 @@ def test_runway_region_edits_send_the_image_and_a_copy_with_the_box_drawn():
 
 
 # ── when something goes wrong ───────────────────────────────────────────────
-@pytest.mark.parametrize("how", ["503", "429", "down"])
-def test_mix_moves_to_the_next_provider_when_fal_cannot_take_the_job(how):
-    h, stand = pathway("mix")
-    stand.refuse["fal"] = how
-    image = run(h, "frame", INPUTS["frame"])
-    clip = run(h, "clip", INPUTS["clip"])
-    assert (image["state"], image["provider"]) == ("completed", "runway")
-    assert (clip["state"], clip["provider"]) == ("completed", "heygen")
-
-
-@pytest.mark.parametrize("name,provider,op", [("runway", "runway", "frame"), ("fal", "fal", "clip"), ("heygen", "heygen", "clip")])
-def test_a_single_provider_pathway_fails_clearly_with_nothing_to_fall_back_to(name, provider, op):
-    h, stand = pathway(name)
-    stand.refuse[provider] = "down"
+@pytest.mark.parametrize("op", ["frame", "clip"])
+def test_a_single_provider_pathway_fails_clearly_with_nothing_to_fall_back_to(op):
+    h, stand = pathway("runway")
+    stand.refuse["runway"] = "down"
     job = run(h, op, INPUTS[op])
     assert job["state"] == "failed" and job["error"]["code"] == "provider_unavailable" and job["error"]["retryable"]
 
 
-def test_a_pick_runs_its_model_and_falls_back_to_runway_default_on_the_mix():
-    h, stand = pathway("mix")
-    pick = {"provider": "fal", "model": "kling-image-o3"}
-    job = run(h, "frame", INPUTS["frame"], modelChoice=pick)
-    assert (job["provider"], job["model"]) == ("fal", "kling-image-o3")
-    assert stand.to("fal")[-1]["endpoint"] == "fal-ai/kling-image/o3/image-to-image" and not stand.to("fal")[-1]["errors"]
-    stand.refuse["fal"] = "503"
-    job = run(h, "frame", INPUTS["frame"], modelChoice=pick)
-    assert (job["provider"], job["model"], job["fallbackFrom"]) == ("runway", "gemini_image3_pro", pick)
-
-
-def test_a_clip_heygen_may_already_have_is_made_on_runway_and_says_heygen_may_charge():
-    # Was "is never sent anywhere else": Runway is the floor since 2026-10-09 (features/runway-fallback.clan).
-    # HeyGen is never sent it again; Runway makes it, and the job says HeyGen may still charge.
-    h, stand = pathway("mix", routing={**pathway_config("mix")["routing"], "clip": ["heygen", "runway"]})
-    stand.submit_reply["heygen"] = httpx.Response(409, json={"error": {"message": "in progress"}})
-    job = run(h, "clip", INPUTS["clip"])
-    assert (job["state"], job["provider"], job["fallbackFrom"]["provider"]) == ("completed", "runway", "heygen")
-    assert "HeyGen may still charge" in job["fallbackReason"]
-    assert len(stand.to("runway")) == 1
-
-
-def test_a_clip_heygen_may_already_have_is_never_sent_anywhere_else_without_a_floor():
-    h, stand = pathway("heygen")
-    stand.submit_reply["heygen"] = httpx.Response(409, json={"error": {"message": "in progress"}})
-    job = run(h, "clip", INPUTS["clip"])
-    assert job["state"] == "uncertain"
-    assert not stand.to("runway")
-
-
-@pytest.mark.parametrize("name", ["fal", "mix"])
-def test_moderated_content_is_never_sent_to_another_provider(name):
-    h, stand = pathway(name)
-    stand.submit_reply["fal"] = httpx.Response(422, json={"detail": [{"type": "content_policy_violation", "msg": "flagged"}]})
-    job = run(h, "frame", INPUTS["frame"])
-    assert job["state"] == "failed" and job["error"]["code"] == "moderated"
-    assert not stand.to("runway")
-
-
-@pytest.mark.parametrize("name,provider,reply", [
-    ("runway", "runway", httpx.Response(404, json={"error": "no such task"})),
-    ("heygen", "heygen", httpx.Response(200, json={"data": {"status": "completed"}})),  # done, no video
-    ("fal", "fal", httpx.Response(200, json={"status": "WEIRD"})),
-])
-def test_a_permanent_status_error_ends_the_job_at_once_not_at_the_timeout(name, provider, reply):
-    h, stand = pathway(name)
-    stand.status_reply[provider] = reply
-    op = "clip" if name == "heygen" else "frame"
-    token = h.sign_in()
+@pytest.mark.parametrize("op", ["frame", "clip"])
+def test_a_permanent_status_error_ends_the_job_at_once_not_at_the_timeout(op):
+    h, stand = pathway("runway")
+    stand.status_reply["runway"] = httpx.Response(404, json={"error": "no such task"})
+    token = h.as_person()
     req = {"contractVersion": "2", "jobId": new_id("job"), "op": op, "parentIds": [], "input": INPUTS[op]}
     _, job = h.call("POST", "/jobs", req, token, expect=200)
     h.clock.tick(10)
@@ -364,17 +244,10 @@ def test_a_permanent_status_error_ends_the_job_at_once_not_at_the_timeout(name, 
     assert job["error"]["code"] != "timeout"
 
 
-def test_masked_clip_edits_on_fal_run_the_segment_then_inpaint_chain():
-    h, stand = pathway("fal")
-    job = run(h, "clip_edit", {"video": asset(8, "video/mp4"), "region": BOX, "mask": asset(7), "atS": 1,
-                               "text": "make the car red"})
-    assert job["state"] == "completed", (job.get("error"), stand.sent)
-    assert [s["endpoint"] for s in stand.to("fal")] == ["fal-ai/sam2/video", "fal-ai/wan-vace-14b/inpainting"]
-    assert all(not s["errors"] for s in stand.to("fal"))
-
-
 # ── the real director, replayed ─────────────────────────────────────────────
-DIRECTOR_FIXTURES = sorted(p.stem for p in (contracts_dir().parent / "relay" / "tests" / "fixtures" / "director").glob("*.json"))
+# The recorded answers for a routed provider (the mock sheet's are the director's own tests).
+DIRECTOR_FIXTURES = sorted(p.stem for p in (contracts_dir().parent / "relay" / "tests" / "fixtures" / "director").glob("*.json")
+                           if json.loads(p.read_text())["provider"] != "mock")
 
 
 # Fixtures the relay cannot reach yet, with why. They stay listed so they show in every run.
@@ -397,9 +270,8 @@ def test_the_recorded_director_output_runs_on_its_pathway(fixture_name):
     from test_director import FakeWire, fixture
 
     f = fixture(fixture_name)
-    name = f["provider"] if f["provider"] in ("runway", "fal") else "fal"
-    h, stand = pathway(name)
-    sheets = {n: load_sheet(n) for n in ("mock", "runway", "fal", "heygen")}
+    h, stand = pathway("runway")
+    sheets = {n: load_sheet(n) for n in ("mock", "runway")}
     h.relay.director = ClaudeDirector(Director(ModelPort(FakeWire(f["reply"]), "claude-haiku-4-5", timeout=5),
                                                PROMPTS, sheets))
     job = run(h, f["op"], f["input"])
@@ -425,22 +297,19 @@ def test_the_cost_of_a_reference_production_per_pathway_is_pinned():
     """A price change in a capability sheet shows up here, so it is seen in review."""
     costs = {c["pathway"]: (c["totalUsd"], c["bestTotalUsd"], c["unknown"]) for c in
              (_script("pathway_costs").costs(n) for n in PATHWAYS)}
-    assert costs == {  # features/default-models.clan: a good model always
-        "runway": (11.0, 11.0, []),
-        "fal": (7.575, 16.575, []),
-        "heygen": (2.175, 2.175, ["clip on heygen"]),
-        "mix": (7.575, 16.575, []),
-    }
+    assert costs == {"runway": (11.0, 11.0, [])}  # features/default-models.clan: a good model always
 
 
 def test_the_smoke_script_sends_nothing_without_live(monkeypatch, capsys):
     def no_network(*a, **k):
         raise AssertionError("the dry run made a network call")
     monkeypatch.setattr(httpx.Client, "send", no_network)
-    assert _script("pathway_smoke").main(["--video"], env={"FAL_KEY": "x"}) == 0
+    assert _script("pathway_smoke").main(["--video"], env={"RUNWAY_API_KEY": "secret-x"}) == 0
     out = capsys.readouterr().out
-    assert "dry run: nothing sent" in out and "FAL_KEY: set" in out and "x" not in out.split("FAL_KEY: set")[0]
-    assert "no RUNWAY_API_KEY" in out and "needs --mask-url" in out
+    assert "dry run: nothing sent" in out and "RUNWAY_API_KEY: set" in out and "secret-x" not in out
+    assert "needs --mask-url" in out
+    assert _script("pathway_smoke").main([], env={}) == 0
+    assert "no RUNWAY_API_KEY" in capsys.readouterr().out
 
 
 def test_the_smoke_script_runs_only_the_steps_asked_for(capsys):

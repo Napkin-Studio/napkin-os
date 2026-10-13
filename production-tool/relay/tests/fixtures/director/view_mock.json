@@ -1,6 +1,6 @@
 {
   "op": "view",
-  "provider": "fal",
+  "provider": "mock",
   "input": {
     "text": "",
     "chips": [],
@@ -14,8 +14,8 @@
   "reply": {
     "op": "view",
     "providerJob": {
-      "provider": "fal",
-      "model": "qwen-image-edit-2511-multiple-angles",
+      "provider": "mock",
+      "model": "mock",
       "prompt": "The character in @current seen from the side.",
       "refs": [
         {

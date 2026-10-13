@@ -14,9 +14,9 @@ acknowledged the notice (POST /dogfood/consent). Modelled on Napkin OS's dogfood
   grows), the web app folds before it sends, and `fold_lines` folds again when the record is
   read, so runs split across Lambdas or batches still read as one.
 
-Where (the hackathon bucket, through the relay's Blobs):
+Where (the relay's bucket, through its Blobs):
   dogfood/events/<yyyy-mm-dd>/<participantId>/<HHMMSS.mmm>-<source>-<rand>.jsonl
-  dogfood/consent/<participantId>.json      {participantId, handle, team?, workspace, role, at}
+  dogfood/consent/<participantId>.json      {participantId, handle, team?, workspace, at}
 
 The participant id is the workspace, so a person's record is one prefix per day, and their name
 lives only in the consent object. Read and prune with scripts/dogfood_record.py (a person with AWS
@@ -184,13 +184,12 @@ class Dogfood:
 
     def consent(self, who: dict) -> None:
         pid = who["pid"]
-        record = {"participantId": pid, "handle": who.get("h"), "workspace": who.get("w") or pid,
-                  "role": who.get("r", "participant"), "at": iso(self.clock())}
+        record = {"participantId": pid, "handle": who.get("h"), "workspace": pid, "at": iso(self.clock())}
         if who.get("t"):
             record["team"] = who["t"]
         self.blobs.put(f"{CONSENT}{safe_id(pid)}.json", json.dumps(record).encode(), "application/json")
         self._consented[pid] = self.clock()
-        self.record(pid, "consent", "dogfood notice acknowledged", {"role": record["role"]})
+        self.record(pid, "consent", "dogfood notice acknowledged", {})
 
     # ── writing ────────────────────────────────────────────────────────────
     def _key(self, pid: str, ts: float, source: str, suffix: str = "") -> str:

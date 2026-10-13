@@ -1,11 +1,11 @@
-"""Follow the hackathon deploy as it happens: the relay's and the stitch's request and job lines from
+"""Follow the Production Tool's deploy as it happens: the relay's and the stitch's request and job lines from
 CloudWatch, and the beta's record for a person, one readable line each, failures marked.
 
   AWS_PROFILE=napkin uv run --frozen --python 3.12 python scripts/live_log.py --name "Blue Herons/Maya"
   AWS_PROFILE=napkin uv run --frozen --python 3.12 python scripts/live_log.py --all --errors
   AWS_PROFILE=napkin uv run --frozen --python 3.12 python scripts/live_log.py --name "Blue Herons/Maya" --since 30m --no-follow
 
-Only the hackathon deploy (infra/envs/hackathon): its two Lambda log groups and its bucket's dogfood/
+Only that deploy (infra/envs/hackathon; NAPKIN_ENV names another): its two Lambda log groups and its bucket's dogfood/
 record. It reads; it never writes. Keys and tokens are never in these lines (relay/service.py logs
 none; dogfood.py records none).
 """
@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-ENV = os.environ.get("NAPKIN_ENV", "hackathon")
+ENV = os.environ.get("NAPKIN_ENV", "hackathon")  # the stack's name (infra/envs/hackathon), not renamed
 GROUPS = [f"/aws/lambda/napkin-{ENV}-relay", f"/aws/lambda/napkin-{ENV}-stitch"]
 FAILED = {"failed", "cancelled", "uncertain"}
 RED, YELLOW, DIM, RESET = "\033[31m", "\033[33m", "\033[2m", "\033[0m"

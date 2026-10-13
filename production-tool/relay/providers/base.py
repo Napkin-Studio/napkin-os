@@ -7,7 +7,7 @@ and mapping the provider's errors onto ours.
 Writing an adapter (harness lane): add `providers/<name>.py` with a function
 `make() -> Provider`. The registry (providers/__init__.py) imports it and pairs
 it with `contracts/capabilities/<name>.json`. Keys come from environment
-variables (RUNWAY_API_KEY, FAL_KEY, HEYGEN_API_KEY); on Lambda the relay loads
+variables (RUNWAY_API_KEY); on Lambda the relay loads
 them from Secrets Manager into the environment at cold start.
 
 Asset URLs: a provider job names assets by sha256 only. Call `asset_url(sha)`
@@ -59,8 +59,7 @@ class CapabilityMissing(ProviderError):
 
 
 class Moderated(ProviderError):
-    """The provider refused the content (Runway SAFETY.INPUT.*, fal
-    content_policy_violation). Never retried, never routed elsewhere."""
+    """The provider refused the content (Runway SAFETY.INPUT.*). Never retried, never routed elsewhere."""
 
     def __init__(self, message: str = "The provider refused this content.", *,
                  provider_code: str | None = None):
@@ -92,7 +91,7 @@ class Status:
 
 @runtime_checkable
 class Provider(Protocol):
-    name: str  # mock | runway | fal | heygen
+    name: str  # mock | runway
 
     def capabilities(self) -> dict:
         """contracts/capabilities/<name>.json"""

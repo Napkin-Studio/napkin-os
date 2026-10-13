@@ -1,6 +1,6 @@
 {
   "op": "region_edit",
-  "provider": "fal",
+  "provider": "mock",
   "input": {
     "text": "make the hat red",
     "chips": [],
@@ -24,8 +24,8 @@
   "reply": {
     "op": "region_edit",
     "providerJob": {
-      "provider": "fal",
-      "model": "ideogram-v4.5-edit",
+      "provider": "mock",
+      "model": "mock",
       "prompt": "A red hat, same shape and shading as the original, nothing else changed.",
       "refs": [
         {
@@ -44,7 +44,7 @@
       "outputs": 2
     },
     "needsUser": null,
-    "rationale": "The region is 3% of the image and fal takes masks: a masked inpaint on the current image.",
+    "rationale": "The region is 3% of the image and the sheet takes masks: a masked inpaint on the current image.",
     "confidence": 0.9
   }
 }

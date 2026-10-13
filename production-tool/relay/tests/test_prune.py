@@ -70,7 +70,7 @@ def fill(blobs, store):
     if store is not None:
         for j in (job("job_a", MAYA, inputs=[sha(1)], outputs=[sha(8)]), job("job_ad", MAYA), job("job_s", SAM, inputs=[sha(5)])):
             store.create_job(j)
-        for key in (f"{MAYA}#2026-10-10", f"inflight#{MAYA}", f"slots#fal#own#{MAYA}#image", f"{SAM}#2026-10-10", "spend", "slots#runway#image"):
+        for key in (f"{MAYA}#2026-10-10", f"inflight#{MAYA}", f"{SAM}#2026-10-10", "spend", "slots#runway#image"):
             store.incr(key, "n", 1)
 
 
@@ -111,7 +111,7 @@ def test_a_name_is_removed_and_a_shared_picture_is_kept(local):
     assert p["keptShared"] == [{"sha256": f"sha256:{sha(2)}", "usedBy": [f"clan/{SAM}/{P1}/latest.clan"]}]
     # Pictures nobody's saved work names (7) and the old team library stay: --name never guesses.
     assert {f"in/sha256:{sha(7)}", "library/event/index.json"} <= left
-    # Her jobs, her stitched ad and her counters; never Sam's, the spend or the event's slots.
+    # Her jobs, her stitched ad and her counters; never Sam's, the spend or the provider slots.
     assert "ads/job_ad.mp4" not in left and "ads/job_ad.json" not in left
     assert {j["jobId"] for j in store.all_jobs()} == {"job_s"}
     assert store.counter_keys() == sorted([f"{SAM}#2026-10-10", "spend", "slots#runway#image"])

@@ -1,8 +1,8 @@
 """A person's saved projects (features/personal-workspaces.clan): what POST /clan keeps, listed and
 read back, so the work follows the name to any browser.
 
-Everything lives in the relay's bucket under the participant, beside the copies POST /clan has
-always kept for the organisers:
+Everything lives in the relay's bucket under the person, beside the copies POST /clan has
+always kept:
 
   clan/<participantId>/projects.json                       ProjectIndex: one row per project, the
                                                            latest save of each (written with If-Match
@@ -10,7 +10,7 @@ always kept for the organisers:
   clan/<participantId>/<projectId>/<UTC time>-<etag8>-<reason>.clan
                                                            every save, never overwritten; the index row
                                                            names the one that is the project now
-  clan/<participantId>/<projectId>/latest.clan             the newest bytes, for the organisers
+  clan/<participantId>/<projectId>/latest.clan             the newest bytes
   clan/<participantId>/<projectId>/canvas.json             the canvas that goes with them (PUT .../canvas)
 
 A project's ETag is the SHA-256 (hex) of its .clan bytes. A save that names the ETag it started from

@@ -26,13 +26,11 @@ from contracts_dir import contracts_dir  # noqa: E402
 
 OUT = RELAY.parents[1] / "docs" / "production-tool" / "provider-reference.md"
 SCHEMAS = RELAY / "tests" / "fixtures" / "schemas"
-PROVIDERS = ("fal", "runway", "heygen")
+PROVIDERS = ("runway",)
 OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
 STEP = {"generate": "Character (canvas generate)", "view": "Views (turnaround)", "frame": "Storyboard frame",
         "region_edit": "Region edit", "clip": "Clip", "clip_edit": "Clip edit"}
-TAGS = {"at_tag": "`@tag` (its own name)", "at_image_n": "`@Image1…` by position, `@Element1…` for a character element",
-        "picture_n": "`<Picture 1>` by position", "figure_n": "`Figure 1` by position", "image_n": "`image 1` by position",
-        "none": "not named (by order only)"}
+TAGS = {"at_tag": "`@tag` (its own name)", "none": "not named (by order only)"}
 INTERESTING = ("aspect_ratio", "ratio", "resolution", "duration", "image_size", "num_images", "outputCount",
                "result_type", "edit_strength", "horizontal_angle")
 
@@ -45,28 +43,22 @@ plus up to three other pictures, views first. Each line is proven by a case in
 
 | Where | What the provider receives |
 |---|---|
-| fal, characters and frames (Nano Banana Pro, the default) | Every picture as its own image, named `image 1`, `image 2`… in the prompt. |
-| fal, frames picked on Kling O3 | The front and up to three other pictures of one character as one **Kling element** (`@Element1`); other pictures as `@Image1…`. A pose picture inside the element is not told apart from the front. |
-| fal, clips (Kling v3 Pro) | The storyboard frame as the first frame, plus each character as an element (front + 1-3 other pictures). A character with only a front cannot be an element. |
-| fal, clips on Veo 3.1 (a pick) | The storyboard frame only; characters are named in words. |
 | Runway, images (Gemini 3 Pro) | Every picture with its own `@tag` (`@maya_front`, `@maya_jumping`), as `human` (characters, at most 5) or `object`. |
 | Runway, clips (Veo 3.1) | The storyboard frame only; characters are named in words. |
-| HeyGen, clips | The storyboard frame only (image-to-video); characters are named in words. |
-| Region edits | fal: the image, a mask (converted to black = edit) and up to 3 refs. Runway: the image and a copy with the box drawn on it. |
+| Runway, region edits | The image and a copy with the box drawn on it. |
 
 In a clip, the pose and look come from the storyboard frame, so a frame made strictly from the
-right pictures is what keeps a character consistent on every provider.
+right pictures is what keeps a character consistent.
 
 **Planned (features/strict-refs.clan, not approved yet):** a named look such as `@maya_jumping` is
-pinned (always sent, never dropped for a limit), goes outside the Kling element as its own picture,
-and the director must keep its pose and expression.
+pinned (always sent, never dropped for a limit), and the director must keep its pose and expression.
 
 ## Character sheets
 
-| Part | fal | Runway |
-|---|---|---|
-| Views (front, three-quarter, side, back) | Qwen multi-angle: the exact camera angle (0, 45, 90, 180°) from the front | Gemini 3 Pro: the view described in words, the front sent as a reference |
-| A set of looks (expressions, poses) | One Nano Banana call with up to 4 outputs, or Kling O3 `series` (2-9 consistent frames) on a pick | One Gemini call with 4 outputs |
+| Part | Runway |
+|---|---|
+| Views (front, three-quarter, side, back) | Gemini 3 Pro: the view described in words, the front sent as a reference |
+| A set of looks (expressions, poses) | One Gemini call with 4 outputs |
 
 **Planned (features/strict-refs.clan):** a "Make sheet" action that runs the three views and a look set in one go.
 """
@@ -85,8 +77,6 @@ def _snapshot(provider: str, endpoint: str) -> dict | None:
 def _input(provider: str, model: str, snap: dict) -> dict:
     """The properties of the request body this model takes, from the provider's own schema."""
     schema = snap["schema"]
-    if provider == "fal":
-        return schema["$defs"][schema["$ref"].split("/")[-1]] if "$ref" in schema else schema
     branches = schema.get("oneOf") or [schema]
     for b in branches:
         props = b.get("properties", {})
@@ -133,16 +123,10 @@ def _usd(v) -> str:
 # Where the adapter sends something other than named references, say what it sends
 # (production-tool/relay/providers/*.py; proven in tests/test_pathways.py).
 SENDS = {
-    ("fal", "qwen-image-edit-2511-multiple-angles"): "the source picture only, with the exact camera angle",
-    ("fal", "ideogram-v4.5-edit"): "the image, a mask (converted to black = edit) and up to 3 unnamed references",
-    ("fal", "veo3.1-fast-i2v"): "the storyboard frame only; characters named in words",
-    ("fal", "veo3.1-i2v"): "the storyboard frame only; characters named in words",
-    ("fal", "luma-ray-3.2-v2v"): "the clip and the change in words; a boxed region goes to SAM 2 then Wan VACE inpainting",
     ("runway", "gemini_image3_pro@region_edit"): "the image and a copy with the box drawn on it, each with its own @tag",
     ("runway", "veo3.1"): "the storyboard frame (and a last frame) only; characters named in words",
     ("runway", "veo3.1_fast"): "the storyboard frame (and a last frame) only; characters named in words",
     ("runway", "aleph2"): "the clip, the change in words and an optional keyframe",
-    ("heygen", "heygen-video-1"): "the storyboard frame only (image to video); characters named in words",
 }
 
 
@@ -165,10 +149,8 @@ def _lengths(spec: dict) -> list[str]:
 def _named(sheet: dict, spec: dict) -> list[str]:
     refs = spec.get("refs") or sheet["refs"]
     tag = spec.get("tagSyntax") or sheet["tagSyntax"]
-    out = [f"refs: up to {refs['max']}" + (f", {refs['maxCharacter']} characters" if refs.get("maxCharacter") is not None else "")
-           + ("; characters as elements" if refs.get("element") else ""),
-           f"named {TAGS.get(tag, tag)}"]
-    return out
+    limit = f"refs: up to {refs['max']}" + (f", {refs['maxCharacter']} characters" if refs.get("maxCharacter") is not None else "")
+    return [limit, f"named {TAGS.get(tag, tag)}"]
 
 
 def render() -> str:

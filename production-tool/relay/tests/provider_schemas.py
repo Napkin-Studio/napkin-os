@@ -12,27 +12,14 @@ from jsonschema import Draft202012Validator
 SCHEMAS = Path(__file__).parent / "fixtures" / "schemas"
 
 
-def _closed(schema: dict) -> dict:
-    """fal's input schemas allow unknown fields, and fal ignores them silently, so a misspelt
-    field would pass unnoticed. Our bodies may only use fields the provider documents."""
-    schema = json.loads(json.dumps(schema))
-    target = schema
-    ref = schema.get("$ref", "")
-    if ref.startswith("#/$defs/"):
-        target = schema["$defs"][ref.split("/")[-1]]
-    if "properties" in target:
-        target.setdefault("additionalProperties", False)
-    return schema
-
-
 @lru_cache(maxsize=None)
 def _validator(provider: str, name: str) -> Draft202012Validator:
     snap = json.loads((SCHEMAS / provider / f"{name}.json").read_text())
-    return Draft202012Validator(_closed(snap["schema"]) if provider == "fal" else snap["schema"])
+    return Draft202012Validator(snap["schema"])
 
 
 def schema_name(provider: str, endpoint: str) -> str:
-    """'fal-ai/kling-image/o3/image-to-image' or 'POST /v1/text_to_image' -> its snapshot's file stem."""
+    """'POST /v1/text_to_image' -> its snapshot's file stem."""
     path = endpoint.split(" ", 1)[-1].strip("/")
     return path.replace("/", "__")
 

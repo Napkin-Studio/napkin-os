@@ -9,7 +9,7 @@ regenerates), six clips of the default length and one clip edit. Prices are each
 sheet's estimateUsd for one job at its default settings (contracts/capabilities/*.json, which say
 where each figure came from). Two columns: the routing's default models, and the best alternate
 the regenerate menu offers for each step (features/model-choice.clan). A step whose model has no
-published price (HeyGen) is counted as unknown, never as free.
+published price is counted as unknown, never as free.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from contracts_dir import contracts_dir  # noqa: E402
 
-PATHWAYS = ("runway", "fal", "heygen", "mix")
+PATHWAYS = ("runway",)
 # step -> how many jobs the reference production runs
 PRODUCTION = {"generate": 1, "view": 3, "frame": 8, "region_edit": 0, "clip": 6, "clip_edit": 1}
 
