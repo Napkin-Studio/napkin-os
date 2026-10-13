@@ -7,7 +7,17 @@
 .askcard-why { font-size: 12px; }
 .askcard-options { display: flex; flex-wrap: wrap; gap: 6px; }
 .askcard-rec { font-weight: 600; }
-.askcard-detail { font-size: 11px; }
+.askcard-detail { font-size: 11px; font-weight: 500; color: var(--ink2); }
+/* The recommended option: dark orange text on a light orange tint, not white or orange on --create
+   (white on #FF4F2E is 3.3:1). Light: #B8321A on #FFF1EC is 5.4:1 (hover #FFE4DA 5.0:1); dark:
+   #FF9A85 on #3A1E17 is 7.4:1. The label, Recommended and the detail all clear WCAG AA. */
+.askcard { --ask-rec-bg: #FFF1EC; --ask-rec-bg-hover: #FFE4DA; --ask-rec-fg: #B8321A; }
+@media (prefers-color-scheme: dark) {
+  .askcard { --ask-rec-bg: #3A1E17; --ask-rec-bg-hover: #4A251B; --ask-rec-fg: #FF9A85; }
+}
+.askcard .btn.askcard-opt.rec { background: var(--ask-rec-bg); border-color: #e8590c; color: var(--ask-rec-fg); }
+.askcard .btn.askcard-opt.rec:hover:not(:disabled) { background: var(--ask-rec-bg-hover); }
+.askcard .btn.askcard-opt.rec .askcard-detail { color: var(--ask-rec-fg); }
 .askcard-text { display: flex; gap: 6px; }
 .askcard-text .input { flex: 1; }
 .askcard-foot { display: flex; justify-content: flex-end; }

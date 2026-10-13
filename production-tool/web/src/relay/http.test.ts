@@ -40,6 +40,25 @@ describe('HttpRelay and who is signed in', () => {
     expect(onUnauthorised).toHaveBeenCalledExactlyOnceWith('signed_out')
   })
 
+  it('takes a 401 from GET /me and GET /config quietly: signed out, not an error, nothing logged', async () => {
+    vi.stubGlobal('fetch', answer(401, { ok: false, signin: true, password: false }))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const relay = new HttpRelay('/production/api')
+      const onUnauthorised = vi.fn()
+      relay.onUnauthorised = onUnauthorised
+      expect(await relay.me()).toBeNull()
+      expect(await relay.config()).toBeNull()
+      expect(onUnauthorised).toHaveBeenCalledWith('signed_out')
+      expect(error).not.toHaveBeenCalled()
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      error.mockRestore()
+      warn.mockRestore()
+    }
+  })
+
   it('says the agency is not on when GET /me answers 403 flag_off', async () => {
     vi.stubGlobal('fetch', answer(403, { error: { code: 'flag_off', message: 'The Production Tool is not on for your agency yet.', retryable: false } }))
     const relay = new HttpRelay('/production/api')

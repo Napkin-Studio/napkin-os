@@ -10,6 +10,7 @@ import type { CanvasSnapshot } from '../canvas/controller'
 import type { ProductionDocument, SavedProject } from '../contracts/types'
 import { CURRENT } from '../doc/open'
 import { exportBundle } from '../export'
+import { RelayError } from '../relay/types'
 import { putBlobAs } from '../lib/blobs'
 import { copyName, newProjectId, type ProjectEntry, type ServerMark } from './projectIndex'
 import { NotAProject, unpackFile, type Unpacked } from './openFile'
@@ -57,6 +58,8 @@ export class Shell {
       } catch (e) {
         // Back on Home, saying why (the project stays in the list, untouched).
         if (e instanceof ProjectRefused) return this.say(e.message)
+        // Signed out (a 401): a state, not an error. onUnauthorised has said so, and the page offers Sign in.
+        if (e instanceof RelayError && e.status === 401) return this.goHome()
         throw e
       }
     }

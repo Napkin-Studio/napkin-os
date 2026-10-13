@@ -23,6 +23,7 @@ import { purposeOf } from '../model/purpose'
 import { mainScript, mainVideo, scenesOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
+import { RelayError } from '../relay/types'
 import { addShots, id, job, MAYA, SHA, T, v2Clan, wasm } from '../test/model'
 import { LEGACY, migrateSingleProject } from './migrate'
 import { NotAProject } from './openFile'
@@ -236,6 +237,24 @@ describe('switching between projects', () => {
     await again.start()
     expect(again.get().session!.id).toBe(a.id)
     expect(keys(open(again).doc.get())).toEqual(['maya'])
+  })
+})
+
+describe('a reload while signed out', () => {
+  it('a 401 opening the last project is the signed-out state: Home, nothing thrown, nothing logged', async () => {
+    const { shell, index, app } = setup()
+    const entry = await index.create({ name: 'Signed out' })
+    app.update((a) => { a.view = 'project'; a.project = entry.id })
+    const opened = vi.spyOn(shell, 'open').mockRejectedValue(new RelayError({ code: 'unauthorised', message: 'Sign in.', retryable: false }, 401))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(shell.start()).resolves.toBeUndefined()
+      expect(shell.get()).toMatchObject({ view: 'home', session: null })
+      expect(error).not.toHaveBeenCalled()
+    } finally {
+      opened.mockRestore()
+      error.mockRestore()
+    }
   })
 })
 

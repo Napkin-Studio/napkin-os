@@ -78,6 +78,14 @@ describe('the ask card', () => {
     expect(html).toContain('aria-label="Your answer"') // allow_text: the box for own words
   })
 
+  it('marks the recommended option with the readable tint, not the orange primary button', () => {
+    const html = renderToStaticMarkup(createElement(AskOptions, { q: ASK.question, disabled: false, onPick: () => {} }))
+    expect(html).not.toContain('primary') // white or orange text on --create fails WCAG AA
+    expect(html).toMatch(/class="btn sm askcard-opt rec"[^>]*>Red/)
+    expect(html).toMatch(/class="btn sm askcard-opt"[^>]*>Yellow/)
+    expect(html).toContain('<span class="askcard-detail"> · Matches the logo</span>')
+  })
+
   it('an option clicked answers the job through the runner', async () => {
     const runner = fakeRunner()
     const sent: Promise<string | null>[] = []

@@ -52,7 +52,8 @@ async function boot() {
   } catch (e) {
     if (access.get() === 'ok') console.error('could not ask the relay who is signed in', e)
   }
-  const remoteConfig = relay.kind === 'http' ? await relay.config() : null
+  // Signed out (or not confirmed): nothing to configure, so not asked (a 401 is a state, not an error).
+  const remoteConfig = relay.kind === 'http' && access.get() === 'ok' ? await relay.config() : null
 
   // The person's projects on the relay (features/personal-workspaces.clan): saved from here, listed
   // on Home and opened from any browser under the same name. Not on the in-browser mock relay.

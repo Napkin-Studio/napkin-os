@@ -20,10 +20,10 @@ export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boo
   return (
     <div className="askcard-options">
       {q.options.filter((o) => o.value !== undefined).map((o) => (
-        <button key={o.id} className={`btn sm ${o.id === q.recommended_option_id ? 'primary' : ''}`} disabled={disabled} onClick={() => onPick(o.id)}>
+        <button key={o.id} className={`btn sm askcard-opt${o.id === q.recommended_option_id ? ' rec' : ''}`} disabled={disabled} onClick={() => onPick(o.id)}>
           {o.label}
           {o.id === q.recommended_option_id && <span className="askcard-rec"> · Recommended</span>}
-          {(o.detail || o.cost) && <span className="askcard-detail faint"> · {o.detail ?? (o.cost ? money(o.cost.estimate) : '')}</span>}
+          {(o.detail || o.cost) && <span className="askcard-detail"> · {o.detail ?? (o.cost ? money(o.cost.estimate) : '')}</span>}
         </button>
       ))}
     </div>
