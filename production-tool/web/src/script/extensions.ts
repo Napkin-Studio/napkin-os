@@ -287,7 +287,11 @@ function keysExtension(opts: EditorOptions) {
           if (kind === 'beat' || kind === 'review') return insertBreak(editor)
           if (kind === 'scene' && !opts.compact && atEnd()) {
             const next = ENTER_NEXT[t] ?? 'action'
-            return editor.chain().splitBlock().setNode(next).run()
+            const { state, view } = editor
+            const tr = state.tr.deleteSelection()
+            tr.split(tr.selection.from, 1, [{ type: state.schema.nodes[next] }])
+            view.dispatch(tr.scrollIntoView())
+            return true
           }
           return false
         },

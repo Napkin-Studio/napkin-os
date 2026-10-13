@@ -16,7 +16,6 @@ import type { Ask, CameraSize, ProductionDocument, Scene, Shot } from '../contra
 import { updateDoc } from '../doc/store'
 import { deleteFrom, removeShot } from '../doc/remove'
 import { askedShot, planOrJoin, runningPlan } from '../jobs/plan'
-import { editShot } from '../jobs/stale'
 import { LOCAL_PERSON } from '../jobs/runner'
 import type { ModelStore } from '../model/store'
 import { openAsks, scriptText, staleList } from '../model/selectors'
@@ -29,12 +28,15 @@ import { JobSlot } from '../ui/JobSlot'
 import { UndoButtons } from '../ui/UndoButtons'
 import { CaretChain, caretKey } from './caret'
 import { composeScript, roughSeconds, storyboardsOf, type ComposedScript, type ScriptRow } from './compose'
-import { addBeat, addScene, importFountain, insertShot, moveShotTo, setHeading, splitScene } from './edits'
+import { addBeat, addScene, importFountain, insertShot, moveShotTo, setHeading, setShotSeconds, splitScene } from './edits'
 import { refNames, TAB_NEXT, type KeyHooks } from './extensions'
 import { FragmentEditor } from './FragmentEditor'
 import { parseFountain } from './fountain'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
+import { AVView } from './AVView'
+import { TimePill } from './TimePill'
+import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
 import { scriptMentionHooks } from './mentionHooks'
 import type { MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
@@ -137,6 +139,12 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
     if ((route.shot ?? undefined) !== current) router.replace(scriptRoute(route.projectId, route.scriptId, current))
   }, [current, route, router])
 
+  // Switching views keeps the caret's shot, and brings it into view.
+  useEffect(() => {
+    if (!current) return
+    document.querySelector(`[data-shot="${current}"]`)?.scrollIntoView?.({ block: 'center' })
+  }, [view, current])
+
   // ⌘[ / Ctrl+[ goes back; Esc never leaves (ui-behaviour 2.3).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -215,15 +223,18 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
         e.preventDefault()
         void doImport(f)
       }}>
-      {!phone && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} />}
+      {!phone && view === 'screenplay' && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say} />}
       {empty && !phone && <EmptyScript store={store} scriptId={scriptId} chain={chain} setActive={setActive} />}
-      <div className="sp-rows">
+      {view === 'av' && !phone ? (
+        <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
+          mentions={mentions} say={say} onError={setError} disabled={!!planning} />
+      ) : <div className="sp-rows">
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
             current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions}
             hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} />
         ))}
-      </div>
+      </div>}
       {!phone && <KeysLegend />}
     </main>
   )
@@ -238,7 +249,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
         {!phone && (
           <span className="se-switch" role="group" aria-label="View">
             <button className={`chip ${view === 'screenplay' ? 'on' : ''}`} aria-pressed={view === 'screenplay'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'screenplay' } } })}>Screenplay</button>
-            <button className={`chip ${view === 'av' ? 'on' : ''}`} aria-pressed={view === 'av'} disabled title="Video · Audio comes next" onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
+            <button className={`chip ${view === 'av' ? 'on' : ''}`} aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
           </span>
         )}
         {storyboardsOf(doc, scriptId).length > 1 && (
@@ -372,6 +383,10 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
       return true
     },
     lineBeat: () => false,
+    moment: () => {
+      say(UNPLANNED_MOMENT)
+      return true
+    },
   })
   return (
     <section className="sp-scene" aria-label={`Scene ${number}`}>
@@ -442,7 +457,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
   const docStore = useServices().doc
   if (!open || readOnly) {
     return (
-      <div className={`sp-shot collapsed ${end ? 'end' : ''}`}>
+      <div className={`sp-shot collapsed ${end ? 'end' : ''}`} data-shot={shot.id}>
         {!readOnly && <MountOnFocus chain={chain} chainKey={key} />}
         <button className="sp-shotline" onClick={() => { if (!readOnly) { setCurrent(shot.id); chain.focus(key, 'end') } }} aria-label={`Shot ${number}: open`}>
           <span className="sp-shotno">{end ? 'END CARD' : `SHOT ${number}`}</span>
@@ -454,14 +469,20 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
       </div>
     )
   }
+  const addMoment = () => void addBeat(store, shot.id, 'moment', { at_s: nextMomentTime(store.get(), shot.id) })
+    .then((id) => chain.focus(caretKey('beat', id), 'start'), (e) => onError(e instanceof Error ? e.message : 'That moment could not be added.'))
   const shotHooks = hooksFor(key, {
+    moment: () => {
+      addMoment()
+      return true
+    },
     lineBeat: () => {
       void addBeat(store, shot.id, 'line', { at_s: 0 }).then((id) => chain.focus(caretKey('beat', id), 'start'), (e) => onError(e instanceof Error ? e.message : 'That line could not be added.'))
       return true
     },
   })
   return (
-    <div className={`sp-shot open ${end ? 'end' : ''}`}>
+    <div className={`sp-shot open ${end ? 'end' : ''}`} data-shot={shot.id}>
       <div className="sp-shothead">
         <span className="sp-shotno">{end ? 'END CARD' : `SHOT ${number}`}</span>
         <span className="sp-chip" title="Camera: change it in the storyboard">{cameraWords(shot)}</span>
@@ -469,13 +490,14 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
         <span className="spacer" />
         <label className="sp-dur">
           <input className="input xs" type="number" min={1} max={10} step={0.5} aria-label={`Shot ${number} seconds`} value={shot.duration_s}
-            onChange={(e) => void updateDoc(docStore, (d) => editShot(d, shot.id, { duration_s: Math.max(1, Math.min(10, Number(e.target.value) || 1)) }), 'edit shot')} />
+            onChange={(e) => void setShotSeconds(docStore, shot.id, Number(e.target.value) || 1)} />
           <span className="faint">s</span>
         </label>
       </div>
       <ShotEditor store={store} shotId={shot.id} name={`Shot ${number}`} chain={chain} chainKey={key} keys={shotHooks}
         onEditor={focusOn(key)} mentions={mentions} />
       <div className="sp-beatadd">
+        <button className="linkbtn" onClick={addMoment}>+ Moment <kbd>⌥M</kbd></button>
         <button className="linkbtn" onClick={() => void addBeat(store, shot.id, 'line', { at_s: 0 }).then((id) => chain.focus(caretKey('beat', id), 'start'), (e) => onError(e instanceof Error ? e.message : 'That line could not be added.'))}>+ Line</button>
       </div>
     </div>
@@ -489,10 +511,11 @@ function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, 
   const [speaker, setSpeaker] = useState<string | null>(null)
   if (!beat) return null
   const key = caretKey('beat', beatId)
-  const at = `at 0:${String(Math.floor(beat.at_s)).padStart(2, '0')}${beat.at_s % 1 ? '.5' : ''}`
+  const shot = doc.shots[beat.shot_id]
   return (
     <div className={`sp-beat kind-${beat.kind}`}>
-      <span className="sp-pill" title="When it happens, in the shot">{at}</span>
+      <TimePill at={beat.at_s} duration={shot?.duration_s ?? 0} readOnly={readOnly}
+        onSet={(t) => void Promise.resolve().then(() => updateDoc(docStore, (d) => setBeatTime(d, beatId, t), `move beats[${beatId}]`)).catch((e) => say(e instanceof Error ? e.message : 'That time could not be kept.'))} />
       {beat.kind === 'line' && (
         <input className="sp-speaker" aria-label="Who speaks" placeholder="WHO" readOnly={readOnly}
           value={speaker ?? beat.speaker ?? ''}
@@ -511,7 +534,7 @@ function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, 
 }
 
 /** The element bar (Trelby's): Scene, Action, Character, Dialogue, Shot, with a hint for the next one. */
-function ElementBar({ focus, composed, store, chain, onError }: { focus: Focus; composed: ComposedScript; store: ModelStore; chain: CaretChain; onError: (m: string | null) => void }) {
+function ElementBar({ focus, composed, store, chain, onError, say }: { focus: Focus; composed: ComposedScript; store: ModelStore; chain: CaretChain; onError: (m: string | null) => void; say: (m: string) => void }) {
   useEditorTick(focus?.editor ?? null)
   const editor = focus?.editor && !focus.editor.isDestroyed ? focus.editor : null
   const [kind, id] = (focus?.key ?? ':').split(':')
@@ -521,7 +544,7 @@ function ElementBar({ focus, composed, store, chain, onError }: { focus: Focus; 
   const next = kind === 'scene' && block ? TAB_NEXT[block] : kind === 'shot' && block === 'action' ? 'direction' : undefined
   const run = (fn: () => Promise<unknown>) => {
     onError(null)
-    fn().catch((e) => onError(e instanceof Error ? e.message : 'That did not work.'))
+    Promise.resolve().then(fn).catch((e) => onError(e instanceof Error ? e.message : 'That did not work.'))
   }
   const sceneOf = () => (kind === 'scene' ? id : kind === 'shot' ? store.get().shots[id]?.scene_id : undefined)
   const setType = (t: string) => {
@@ -548,6 +571,11 @@ function ElementBar({ focus, composed, store, chain, onError }: { focus: Focus; 
         const last = composed.shots.filter((s) => s.kind !== 'end_card').at(-1)
         if (last) run(() => insertShot(store, { afterShotId: last.id }).then((sid) => chain.focus(caretKey('shot', sid), 'start')))
       }
+    } },
+    { t: 'moment', label: 'Moment', act: () => {
+      const shotId = kind === 'shot' ? id : kind === 'beat' ? store.get().beats[id]?.shot_id : undefined
+      if (!shotId) return say(UNPLANNED_MOMENT)
+      run(() => addBeat(store, shotId, 'moment', { at_s: nextMomentTime(store.get(), shotId) }).then((b) => chain.focus(caretKey('beat', b), 'start')))
     } },
   ]
   return (
@@ -678,6 +706,7 @@ function KeysLegend({ compact }: { compact?: boolean }) {
     <div className={`se-keys ${compact ? 'compact' : ''}`} aria-label="Keys">
       <span><kbd>Tab</kbd> next element</span>
       <span><kbd>@</kbd> a reference</span>
+      <span><kbd>⌥M</kbd> a moment</span>
     </div>
   )
 }

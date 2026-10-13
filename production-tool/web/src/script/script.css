@@ -152,3 +152,51 @@
 @media (prefers-reduced-motion: reduce) {
   .se-outline, .se-facts { transition: none; }
 }
+
+/* Video · Audio */
+.av { padding: 0 28px 24px; font-size: 13px; }
+.av-strip { position: sticky; top: 49px; z-index: 1; display: flex; align-items: center; gap: 10px; padding: 10px 0; background: var(--paper); }
+.av-strip-bar { flex: 1; display: flex; gap: 2px; height: 10px; }
+.av-strip-bar .seg { flex-basis: 0; background: var(--learn); border-radius: 3px; min-width: 3px; }
+.av-strip-bar .seg.cur { background: var(--tool); }
+.av-strip-bar .seg.moving { background: transparent; outline: 1.5px dashed var(--ink3); outline-offset: -1px; }
+.av-strip-words { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink2); white-space: nowrap; }
+.av-table { display: flex; flex-direction: column; gap: 4px; }
+.av-row { position: relative; display: grid; grid-template-columns: 170px minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--card); }
+.av-row.av-headrow { border: 0; background: transparent; padding-top: 0; padding-bottom: 0; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink3); }
+.av-row.open { border-color: var(--tool); box-shadow: var(--shadow-soft); }
+.av-row.slot { outline: 1.5px dashed var(--line); opacity: 0.55; }
+.av-row.drop-before::before, .av-row.drop-after::after { content: ""; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 2px; background: var(--tool); }
+.av-row.drop-before::before { top: -4px; }
+.av-row.drop-after::after { bottom: -4px; }
+.av-gutter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; align-content: flex-start; }
+.av-no { border: 0; background: transparent; font: inherit; font-weight: 700; color: var(--tool-ink); cursor: pointer; padding: 0 2px; }
+.av-tc, .av-len { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
+.av-camera { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; width: 100%; }
+.av-camera.editing { flex-direction: column; align-items: stretch; }
+.av-camera label { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--ink2); }
+.av-line { border: 0; background: transparent; font: inherit; text-align: left; color: inherit; cursor: pointer; padding: 0; width: 100%; }
+.av-refs { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.av-ref { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border-radius: var(--r-pill); background: var(--soft-2); font-size: 11.5px; }
+.av-ref img, .av-noimg { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: var(--learn); }
+.av-moments { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.av-track { position: relative; height: 26px; margin: 4px 24px 6px 0; border-radius: 6px; background: var(--soft-2); touch-action: none; }
+.av-marker { position: absolute; top: 2px; transform: translateX(-50%); border: 0; border-radius: var(--r-pill); background: var(--create); color: var(--create-fg); font-size: 10.5px; padding: 3px 6px; cursor: grab; min-height: 22px; }
+.av-marker.dragging { cursor: grabbing; box-shadow: var(--shadow-pop); }
+.av-marker:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+.av-audio { display: flex; flex-direction: column; gap: 6px; }
+.av-audiorow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.av-audiorow .sp-beattext { flex: 1 1 100%; }
+.av-kind { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink2); }
+.av-add { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
+.av-empty { padding: 20px; }
+input.sp-pill { width: 72px; border: 1px solid var(--tool); }
+button.sp-pill { border: 0; cursor: pointer; font: inherit; font-size: 11px; }
+.sp-pillproblem { color: var(--warn); font-weight: 600; }
+.sp-beatadd { display: flex; gap: 12px; }
+.sp-beatadd kbd { font-family: var(--f-mono); font-size: 10px; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; }
+@media (max-width: 1179px) {
+  .av { padding-left: 52px; padding-right: 52px; }
+  .av-row { grid-template-columns: 120px minmax(0, 1fr); }
+  .av-audio { grid-column: 2; }
+}

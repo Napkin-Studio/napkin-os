@@ -122,6 +122,33 @@ describe('the Script editor page', () => {
     expect(el.querySelector('.sp-shot.open')!.textContent).toContain('Shot words.')
   })
 
+  it('Video · Audio shows the same shots as a table; the open shot has camera fields, moments and audio rows', async () => {
+    const { services, el, render } = await open()
+    await act(async () => {
+      await updateDoc(services.doc, (d) => { addShots(d, 2, { status: 'planned', action: 'Shot words.', duration_s: 3 }) }, 'add shots')
+      await services.doc.flush()
+    })
+    render()
+    await settle()
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === 'Video · Audio')!.click() })
+    await settle()
+    expect(services.ui.get().script).toBeDefined()
+    expect(el.querySelectorAll('.av-row:not(.av-headrow)')).toHaveLength(2)
+    expect(el.querySelector('.av-strip-words')?.textContent).toBe('6.0 of 15 s')
+    await act(async () => { (el.querySelector('.av-no') as HTMLButtonElement).click() })
+    await settle()
+    const row = el.querySelector('.av-row.open')!
+    expect(row.textContent).toContain('Edit camera')
+    expect(row.textContent).toContain('+ VO')
+    expect(row.textContent).toContain('+ Sound')
+    await act(async () => { [...row.querySelectorAll('button')].find((b) => b.textContent === '+ Moment')!.click() })
+    await settle()
+    await act(async () => { await services.doc.flush() })
+    await settle()
+    expect(el.querySelectorAll('.av-row.open .av-marker')).toHaveLength(1)
+    expect(el.querySelector('.av-row.open .av-marker')?.textContent).toBe('0:00')
+  })
+
   it('← Storyboard leaves the route and opens the Storyboard stage', async () => {
     const { el, router, services } = await open()
     await settle()

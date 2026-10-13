@@ -10,6 +10,10 @@ import { proseFromText } from '../model/diff'
 import { currentTake, scenesOf, shotNumber } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { checkSizes, droppedLine, sceneFlat, type FountainScript } from './fountain'
+import { keepBeatsInside } from './moments'
+import { updateDoc } from '../doc/store'
+import type { DocumentStore } from '../doc/types'
+import { editShot } from '../jobs/stale'
 
 type Doc = ProductionDocument
 
@@ -276,4 +280,12 @@ export async function importFountain(store: ModelStore, scriptId: string, parsed
   }, { label: why.action, joinStep: true })
   await store.flush()
   return { scenes: parsed.scenes.length, dropped: droppedLine(parsed.dropped) }
+}
+
+/** A shot's seconds: its clip is marked, and beats past its new end come back inside it, one step. */
+export function setShotSeconds(docStore: DocumentStore, shotId: string, seconds: number) {
+  return updateDoc(docStore, (d) => {
+    editShot(d, shotId, { duration_s: Math.max(1, Math.min(10, seconds)) })
+    keepBeatsInside(d, shotId)
+  }, 'edit shot')
 }
