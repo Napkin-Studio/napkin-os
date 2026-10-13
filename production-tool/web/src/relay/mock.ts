@@ -23,7 +23,6 @@ import { AGENCY_SHELF } from '../contracts/types'
 import { quotaClassOf } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
 import { hexOf } from '../lib/hash'
-import { splitTarget } from '../lib/shots'
 import type { AnswerResult, Relay, UploadResult } from './types'
 import { RelayError } from './types'
 
@@ -85,37 +84,114 @@ function collectHashes(v: unknown, out: Set<string>) {
 const SIZES: CameraSize[] = ['wide', 'medium', 'close', 'medium', 'insert', 'close']
 const MOVES: CameraMovement[] = ['track', 'push_in', 'static', 'orbit', 'pan', 'pull_out']
 
-/** The mock director: split the script into sentences, one shot each, seconds summing to the target;
- * each shot shows every character it was given, by its bare key when it has a front (the real
- * director picks a variant only when the moment needs one). A re-plan (`existing`, the shots the
- * request sent) keeps their ids in order, so the web merges by id. */
-export function mockShotList(script: string, targetS: number, names: string[] = [], existing: Pick<JobShot, 'id'>[] = []): PlannedShot[] {
-  const keys = names.filter((n) => n.endsWith('_front')).map((n) => n.split('_')[0])
-  names = [...keys, ...names.filter((n) => !keys.includes(n.split('_')[0]))]
-  const durations = splitTarget(targetS)
-  // A scene heading line (INT. … / EXT. …) is where, not a moment: the shots after it are in that scene.
-  const HEADING = /^(INT|EXT|INT\/EXT|I\/E)[. ]/i
+/** A shot already there, as the request sends it (JobShot): its id and words, and what a re-plan keeps. */
+export type ExistingShot = Pick<JobShot, 'id' | 'action'> & Partial<Pick<JobShot, 'kind' | 'camera' | 'refs'>>
+
+const HEADING = /^(INT|EXT|INT\/EXT|I\/E)[. ]/i
+const CLAUSE = /,\s+|\s+(?:and|then)\s+/g
+const norm = (t: string) => t.toLowerCase().split(/\s+/).filter(Boolean).join(' ').replace(/[.!?\s]+$/, '')
+const sentencesOf = (line: string) => line.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter((x) => x.replace(/[.!?\s]/g, ''))
+
+/** A sentence in two at the clause boundary nearest its middle, or undefined. */
+function splitClause(text: string): [string, string] | undefined {
+  const cuts = [...text.matchAll(CLAUSE)].filter((m) => m.index! > 0 && m.index! + m[0].length < text.length)
+  if (!cuts.length) return undefined
+  const m = cuts.reduce((a, b) => (Math.abs(b.index! - text.length / 2) < Math.abs(a.index! - text.length / 2) ? b : a))
+  const a = text.slice(0, m.index).trim()
+  const b = text.slice(m.index! + m[0].length).trim()
+  return a && b ? [a, b[0].toUpperCase() + b.slice(1)] : undefined
+}
+
+/**
+ * What a plan is made of (the same rule as the passthrough director, relay/director/base.py plan_pieces):
+ * the shots already there that keep their id, with their words (a script line, or a sentence, that is a
+ * shot's action keeps that shot, in its order; a shot with no words takes the next new sentence), and the
+ * new shots' words after them, each sentence used once. Fewer sentences than shots make fewer shots (a
+ * sentence splits at a clause only to reach the fewest shots the length needs, 10 s each at most); more
+ * sentences than shots share them.
+ */
+export function planPieces(script: string, existing: ExistingShot[], targetS: number): {
+  kept: { shot: ExistingShot; action: string }[]
+  pieces: { text: string; heading?: string }[]
+} {
+  const used = new Set<number>()
+  const find = (words: string) => existing.findIndex((s, k) => !used.has(k) && !!s.id && !!norm(s.action ?? '') && norm(s.action ?? '') === norm(words))
+  let pieces: { text: string; heading?: string }[] = []
   let heading: string | undefined
-  const sentences: { text: string; heading?: string }[] = []
   for (const line of script.split('\n').map((l) => l.trim()).filter(Boolean)) {
+    // A scene heading line (INT. … / EXT. …) is where, not a moment: the shots after it are in that scene.
     if (HEADING.test(line)) {
       heading = line.slice(0, 200)
       continue
     }
-    for (const t of line.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)) sentences.push({ text: t, heading })
+    for (const words of find(line) >= 0 ? [line] : sentencesOf(line)) {
+      const k = find(words)
+      if (k >= 0) used.add(k)
+      else pieces.push({ text: words, ...(heading ? { heading } : {}) })
+    }
   }
-  return durations.map((d, i): PlannedShot => {
-    const camera = { size: SIZES[i % SIZES.length], movement: MOVES[i % MOVES.length] }
-    const said = sentences[i] ?? sentences[sentences.length - 1]
+  const kept: { shot: ExistingShot; action: string }[] = []
+  existing.forEach((s, k) => {
+    if (used.has(k)) kept.push({ shot: s, action: s.action })
+    else if (s.id && !(s.action ?? '').trim() && pieces.length) kept.push({ shot: s, action: pieces.shift()!.text }) // a shot with no words takes the next new words
+  })
+  const fewest = Math.max(2, Math.ceil(targetS / 10))
+  const most = Math.max(fewest, Math.ceil(targetS / 5))
+  while (pieces.length && kept.length + pieces.length < fewest) {
+    const i = pieces.reduce((best, p, j) => (p.text.length > pieces[best].text.length ? j : best), 0)
+    const cut = splitClause(pieces[i].text)
+    if (!cut) break
+    pieces.splice(i, 1, { ...pieces[i], text: cut[0] }, { ...pieces[i], text: cut[1] })
+  }
+  const slots = pieces.length ? Math.max(1, most - kept.length) : 0
+  if (pieces.length > slots) {
+    const size = Math.floor(pieces.length / slots)
+    const rest = pieces.length % slots
+    const grouped: typeof pieces = []
+    let at = 0
+    for (let g = 0; g < slots; g++) {
+      const part = pieces.slice(at, at + size + (g < rest ? 1 : 0))
+      at += part.length
+      grouped.push({ text: part.map((p) => p.text).join(' '), ...(part[0].heading ? { heading: part[0].heading } : {}) })
+    }
+    pieces = grouped
+  }
+  return { kept, pieces }
+}
+
+/** The mock director: each sentence of the script once (planPieces), seconds summing to the target; each
+ * new shot shows every character it was given, by its bare key when it has a front (the real director
+ * picks a variant only when the moment needs one). A re-plan (`existing`, the shots the request sent)
+ * keeps the shots whose words are still in the script, by id and camera, so the web merges by id; the
+ * new words come after them. */
+export function mockShotList(script: string, targetS: number, names: string[] = [], existing: ExistingShot[] = []): PlannedShot[] {
+  const keys = names.filter((n) => n.endsWith('_front')).map((n) => n.split('_')[0])
+  names = [...keys, ...names.filter((n) => !keys.includes(n.split('_')[0]))]
+  const { kept, pieces } = planPieces(script, existing, targetS)
+  if (!kept.length && !pieces.length) pieces.push({ text: 'Our hero looks at the camera.' })
+  const n = Math.min(24, kept.length + pieces.length)
+  const base = Math.floor(targetS / n)
+  const extra = targetS - base * n
+  return Array.from({ length: n }, (_, i): PlannedShot => {
+    const duration_s = Math.max(1, base + (i < extra ? 1 : 0))
+    const k = kept[i]
+    const camera = k?.shot.camera ?? { size: SIZES[i % SIZES.length], movement: MOVES[i % MOVES.length] }
+    const beats = [{ kind: 'camera' as const, at_s: 0, text: `${(camera.movement ?? 'static').replace('_', ' ')} on a ${camera.size} shot` }]
+    if (k) {
+      return {
+        id: k.shot.id, kind: k.shot.kind ?? 'shot', duration_s, camera, action: k.action.slice(0, 300),
+        refs: (k.shot.refs?.length ? k.shot.refs : names).slice(0, 9), beats,
+      }
+    }
+    const said = pieces[i - kept.length]
     return {
-      ...(existing[i] ? { id: existing[i].id } : {}),
       kind: 'shot',
-      ...(said?.heading ? { scene_heading: said.heading } : {}),
-      duration_s: d,
+      ...(said.heading ? { scene_heading: said.heading } : {}),
+      duration_s,
       camera,
-      action: (said?.text ?? 'Our hero looks at the camera.').slice(0, 300),
+      action: said.text.slice(0, 300),
       refs: names.slice(0, 9),
-      beats: [{ kind: 'camera', at_s: 0, text: `${camera.movement.replace('_', ' ')} on a ${camera.size} shot` }],
+      beats,
     }
   })
 }

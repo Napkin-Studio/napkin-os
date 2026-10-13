@@ -9,18 +9,22 @@
 // (clan-store landPlan), on the CLAN store. A re-plan is a merge keyed by shot
 // id: a planned shot with an existing id updates that shot's camera and length,
 // and its words only when a person did not write them last; new shots are
-// added after the others; a shot the plan leaves out goes, unless a person
-// wrote it last. On the snapshot store (no live text) the same entities are
+// added after the others; a shot whose words or camera the plan changes gets a
+// 'Script changed' mark on its frame (framing, words) or its clip (move, length);
+// a shot the plan leaves out goes, unless a person wrote it last or something
+// was made from it (frames, clips): then Dex asks first (an ask on the
+// storyboard, Keep / Remove, answered in the Storyboard panel). Kept shots keep
+// their status, frames and picks. On the snapshot store (no live text) the same entities are
 // written with their words as flat text.
 
 import { EMPTY_PROSE, landPlan, newUlidId, ranksBetween, type Patch, type PlanLanding, type Prose } from '../../../clan-store/src'
-import type { BeatKind, Camera, DirectorCard, Job, JobInput, PlannedShot, ProductionDocument, Shot } from '../contracts/types'
+import type { Ask, BeatKind, Camera, DirectorCard, Job, JobInput, PlannedShot, ProductionDocument, Shot, StaleMark } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { proseFromText } from '../model/diff'
 import { ModelStore } from '../model/store'
-import { beatsOf, keyNamed, mainStoryboard, refNamed, scenesOf, scriptText, shotsOf } from '../model/selectors'
+import { beatsOf, currentFrame, currentTake, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
 import type { Relay } from '../relay'
 import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
@@ -72,10 +76,69 @@ interface BeatRow { id: string; fields: { shot_id: string; rank: string; at_s: n
 export interface ShotListPlan {
   shots: ShotRow[]
   beats: BeatRow[]
-  /** Shots the plan leaves out that no person wrote last, and the beats that go with them or are replaced. */
+  /** Shots the plan leaves out that no person wrote last and nothing was made from, and the beats that go
+   *  with them or are replaced. */
   dropShots: string[]
   dropBeats: string[]
+  /** 'Script changed' marks on the frames and clips of the shots the plan changes. */
+  stale: StaleMark[]
+  /** Dex's questions about the shots the plan leaves out that have frames or clips: keep or remove? */
+  asks: Ask[]
 }
+
+/** The reason on the marks a re-plan leaves. */
+export const SCRIPT_CHANGED = 'Script changed'
+/** The routes of the Keep / Remove options of a left-out shot's ask (answered by keepOrRemove, stages/storyboardEdits.ts). */
+export const KEEP_SHOT = 'keep_shot'
+export const REMOVE_SHOT = 'remove_shot'
+
+/** The shot a left-out shot's ask is about, if it is one. */
+export function askedShot(a: Ask): string | undefined {
+  for (const o of a.question.options) {
+    const v = o.value as { route?: string; node?: { kind: string; id: string } } | undefined
+    if ((v?.route === KEEP_SHOT || v?.route === REMOVE_SHOT) && v.node?.kind === 'shot') return v.node.id
+  }
+  return undefined
+}
+
+/** Dex's question about a shot the new plan leaves out that something was made from. */
+function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot): Ask {
+  const id = newUlidId('q')
+  const n = shotNumber(d, shot.id)
+  const node = { kind: 'shot' as const, id: shot.id }
+  return {
+    id, v: 1, field_v: {}, node: { kind: 'storyboard', id: storyboardId }, crew: 'dex', state: 'open', answers: [],
+    question: {
+      id, kind: 'block', text: `Shot ${n} no longer has a scene. Keep it or remove it?`,
+      why: 'The new plan leaves it out, but it has frames or clips.',
+      options: [
+        { id: 'keep', label: 'Keep', value: { route: KEEP_SHOT, node } },
+        { id: 'remove', label: 'Remove', value: { route: REMOVE_SHOT, node } },
+      ],
+      allow_text: false,
+    },
+  }
+}
+
+/** What in a shot's frame and clip a re-plan changes: framing or words → its frame; move or length → its clip. */
+function replanMarks(d: ProductionDocument, was: Shot, p: PlannedShot, wordsChange: boolean, now: string): StaleMark[] {
+  const cam = (c: Camera, k: keyof Camera) => JSON.stringify(c[k] ?? null)
+  const framing = (['size', 'angle', 'lens_mm', 'macro'] as const).some((k) => cam(was.camera, k) !== cam(p.camera, k))
+  const move = (['movement', 'movement_speed'] as const).some((k) => cam(was.camera, k) !== cam(p.camera, k)) || was.duration_s !== p.duration_s
+  const out: StaleMark[] = []
+  const marked = (kind: 'frame' | 'take', id: string) => staleList(d).some((m) => m.target.kind === kind && m.target.id === id && m.caused_by.kind === 'shot' && m.caused_by.id === was.id)
+  const frame = currentFrame(d, was)
+  if (frame && (framing || wordsChange) && !marked('frame', frame.id)) {
+    out.push({ id: newUlidId('stale'), v: 1, field_v: {}, target: { kind: 'frame', id: frame.id }, caused_by: { kind: 'shot', id: was.id }, reason: SCRIPT_CHANGED, marked_at: now })
+  }
+  const take = currentTake(d, was.id)
+  if (take && move && !marked('take', take.id)) {
+    out.push({ id: newUlidId('stale'), v: 1, field_v: {}, target: { kind: 'take', id: take.id }, caused_by: { kind: 'shot', id: was.id }, reason: SCRIPT_CHANGED, marked_at: now })
+  }
+  return out
+}
+
+const sameWords = (a: string | undefined, b: string | undefined) => (a ?? '').trim().replace(/\s+/g, ' ') === (b ?? '').trim().replace(/\s+/g, ' ')
 
 /** The names a planned shot shows that its words do not mention yet: said in its direction, so they are
  *  mentions in its text (a shot's refs are the names its text mentions). Only names the document has. */
@@ -102,8 +165,9 @@ function beatRows(shotId: string, p: PlannedShot): BeatRow[] {
 /** The plan a shot_list job's result makes of the document as it is now (see the top of this file). */
 export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>): ShotListPlan {
   const sb = mainStoryboard(d)
-  const out: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [] }
+  const out: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [], stale: [], asks: [] }
   if (!sb) return out
+  const now = new Date().toISOString()
   const planned = job.shots ?? []
   const existing = shotsOf(d, sb.id)
   const byId = new Map(existing.map((s) => [s.id, s]))
@@ -116,6 +180,7 @@ export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>): ShotList
     const direction = directionOf(d, p)
     if (was) {
       const writeText = !isPerson(was.last_writer)
+      out.stale.push(...replanMarks(d, was, p, writeText && !(sameWords(was.action, p.action) && sameWords(was.direction, direction)), now))
       out.shots.push({ id: was.id, existing: was, fields: { camera: p.camera, duration_s: p.duration_s }, action: p.action, ...(direction ? { direction } : {}), writeText })
       if (writeText) {
         out.dropBeats.push(...beatsOf(d, was.id).filter((b) => !isPerson(b.last_writer)).map((b) => b.id))
@@ -138,8 +203,14 @@ export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>): ShotList
     out.beats.push(...beatRows(id, p))
   }
   const named = new Set(planned.map((p) => p.id).filter(Boolean))
+  const asked = new Set(openAsks(d).map(askedShot).filter(Boolean))
   for (const s of existing) {
     if (named.has(s.id) || isPerson(s.last_writer)) continue
+    // Never silently: a shot something was made from stays until a person says Remove.
+    if (framesOf(d, s.id).length || takesOf(d, s.id).length) {
+      if (!asked.has(s.id)) out.asks.push(leftOutAsk(d, sb.id, s))
+      continue
+    }
     out.dropShots.push(s.id)
     out.dropBeats.push(...beatsOf(d, s.id).map((b) => b.id))
   }
@@ -181,6 +252,8 @@ export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, _c
     d.shots[row.id] = { id: row.id, v: 1, field_v: {}, ...(row.fields as Omit<Shot, 'id' | 'v' | 'field_v'>), ...text }
   }
   for (const b of plan.beats) d.beats[b.id] = { id: b.id, v: 1, field_v: {}, ...b.fields, text: b.text, last_writer: 'dex' }
+  for (const m of plan.stale) d.stale[m.id] = m
+  for (const a of plan.asks) d.asks[a.id] = a
   // The words moved into the shots: nothing stays in the scenes (one owner per span).
   for (const sc of scenesOf(d)) if (sc.text) sc.text = ''
   return plan
@@ -206,7 +279,7 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   const cards: DirectorCard[] | undefined = job.director?.cards ?? ctx?.cards
   if (!(store instanceof ModelStore)) {
     const n = job.shots?.length ?? 0
-    let plan: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [] }
+    let plan: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [], stale: [], asks: [] }
     await landUpdate(store, (x) => { plan = applyShotList(x, job) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
     return plan
   }
@@ -223,6 +296,9 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   }
   for (const id of plan.dropBeats) patches.push({ op: 'delete', entity: 'beats', id, base_version: d.beats[id].v })
   for (const id of plan.dropShots) patches.push({ op: 'delete', entity: 'shots', id, base_version: d.shots[id].v })
+  // The marks and the questions are part of the same step: undo takes the plan back with them.
+  for (const m of plan.stale) patches.push({ op: 'create', entity: 'stale', id: m.id, value: m, base_version: 0 })
+  for (const a of plan.asks) patches.push({ op: 'create', entity: 'asks', id: a.id, value: a, base_version: 0 })
   const landing: PlanLanding = {
     scenes: scenesOf(d).map((s) => ({ id: s.id, remainder: EMPTY_PROSE })),
     shots: plan.shots.filter((r) => !r.existing).map((r) => ({ id: r.id, value: r.fields, prose: shotProse(d, r) })),

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import re
 import time
 from typing import Protocol
 
@@ -67,10 +68,11 @@ ASK_HOOK = "[ask]"
 
 def dev_question(op: str) -> dict:
     """The passthrough's one question (a nudge, as ui-behaviour 3.5's 'Plan a storyboard first?')."""
-    return {"kind": "nudge", "text": "Plan a storyboard first?", "why": "Clips come out better from frames you've checked.",
-            "options": [{"id": "plan_first", "label": "Plan the storyboard first", "value": {"route": "plan_storyboard"},
+    return {"kind": "nudge", "text": f"Dev check: ask before the {op.replace('_', ' ')}?",
+            "why": "The [ask] dev hook (Mock runs and tests only): a real director never asks this.",
+            "options": [{"id": "plan_first", "label": "Dev: plan first", "value": {"route": "plan_storyboard"},
                          "detail": "6 shots", "cost": {"estimate": 1.2, "currency": "USD"}},
-                        {"id": "straight", "label": f"Go ahead with the {op.replace('_', ' ')}", "value": {"route": "go_ahead"}}],
+                        {"id": "straight", "label": "Dev: go ahead", "value": {"route": "go_ahead"}}],
             "allow_text": False, "recommended_option_id": "plan_first"}
 # The camera angle of each turnaround view (director.v4: front 0, three-quarter 45, side 90, back 180).
 VIEW_ANGLES = {"front": 0.0, "three-quarter": 45.0, "side": 90.0, "back": 180.0}
@@ -190,19 +192,109 @@ class PassthroughDirector:
         keys = [n.split("_", 1)[0] for n in names if n.endswith("_front")]
         named = (keys + [n for n in names if n.split("_", 1)[0] not in keys])[:9]
         target = int(inp.get("targetS") or 15)
-        n = max(1, min(24, -(-target // 5)))
-        sentences = [s.strip() for s in script.replace("!", ".").replace("?", ".").split(".") if s.strip()]
+        # A re-plan keeps the shots already there (input.shots) by their words; the new words come after.
+        kept, pieces = plan_pieces(script, inp.get("shots") or [], target)
+        if not kept and not pieces:
+            pieces = [("The character", None)]
+        n = min(24, len(kept) + len(pieces))
         base, extra = divmod(target, n)
         shots = []
         for i in range(n):
-            action = sentences[i] if i < len(sentences) else (sentences[-1] if sentences else "The character")
+            seconds = max(1, base + (1 if i < extra else 0))
+            if i < len(kept):
+                was, action = kept[i]
+                shots.append({"id": was["id"], "kind": was.get("kind", "shot"), "duration_s": seconds,
+                              "camera": was.get("camera") or {"size": "medium"}, "action": action[:600],
+                              "refs": [r for r in was.get("refs") or [] if isinstance(r, str)][:9] or named})
+                continue
+            action, heading = pieces[i - len(kept)]
             shots.append({
                 "id": new_id("shot", f"{job_request['jobId']}:{i}"),
                 "kind": "shot",
-                "duration_s": base + (1 if i < extra else 0),
+                **({"scene_heading": heading} if heading else {}),
+                "duration_s": seconds,
                 "camera": {"size": _SIZES[i % len(_SIZES)], "movement": _MOVES[i % len(_MOVES)]},
                 "action": action[:600],
                 "refs": named,
             })
         return {"op": "shot_list", "shots": shots, "question": None,
-                "rationale": f"passthrough: {n} even shots for {target} s", "confidence": 0.1}
+                "rationale": f"passthrough: {n} shots for {target} s, {len(kept)} kept", "confidence": 0.1}
+
+
+# ── the passthrough's plan: each sentence once; the shots already there kept by their words ──
+
+_HEADING = re.compile(r"^(INT|EXT|INT/EXT|I/E)[. ]", re.I)
+_CLAUSE = re.compile(r",\s+|\s+(?:and|then)\s+")
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.lower().split()).rstrip(".!? ")
+
+
+def _sentences(line: str) -> list[str]:
+    return [t.strip() for t in re.split(r"(?<=[.!?])\s+", line) if t.strip(" .!?")]
+
+
+def _split_clause(text: str) -> tuple[str, str] | None:
+    """A sentence in two at the clause boundary nearest its middle, or None."""
+    cuts = [m for m in _CLAUSE.finditer(text) if m.start() > 0 and m.end() < len(text)]
+    if not cuts:
+        return None
+    m = min(cuts, key=lambda c: abs(c.start() - len(text) / 2))
+    a, b = text[:m.start()].strip(), text[m.end():].strip()
+    return (a, b[:1].upper() + b[1:]) if a and b else None
+
+
+def plan_pieces(script: str, existing: list[dict], target: int) -> tuple[list[tuple[dict, str]], list[tuple[str, str | None]]]:
+    """What a passthrough plan is made of: the shots already there that keep their id, with their words
+    (a script line that is a shot's action keeps that shot, in its order; a shot with no words takes the
+    next new sentence), and the new shots' words and scene headings, each sentence used once. Fewer
+    sentences than shots make fewer shots (a sentence splits at a clause only to reach the fewest shots
+    the length needs: 10 s each at most); more sentences than shots share them."""
+    used: set[int] = set()
+    pieces: list[tuple[str, str | None]] = []
+    heading = None
+
+    def keeps(words: str, take: bool = False) -> bool:
+        """Whether an unused shot already there says these words (and, with take, use it)."""
+        k = next((k for k, s in enumerate(existing) if k not in used and s.get("id")
+                  and _norm(s.get("action") or "") and _norm(s.get("action") or "") == _norm(words)), None)
+        if k is not None and take:
+            used.add(k)
+        return k is not None
+
+    for line in (x.strip() for x in script.split("\n")):
+        if not line:
+            continue
+        if _HEADING.match(line):
+            heading = line[:200]
+            continue
+        # A shot's whole action is one line of the script (the web sends them so); a line that is not
+        # one is matched sentence by sentence.
+        for words in ([line] if keeps(line) else _sentences(line)):
+            if not keeps(words, take=True):
+                pieces.append((words, heading))
+    kept: list[tuple[dict, str]] = []
+    for k, s in enumerate(existing):
+        if k in used:
+            kept.append((s, s["action"]))
+        elif s.get("id") and not (s.get("action") or "").strip() and pieces:
+            kept.append((s, pieces.pop(0)[0]))  # a shot with no words takes the next new words
+    fewest = max(2, -(-target // 10))
+    most = max(fewest, -(-target // 5))
+    while pieces and len(kept) + len(pieces) < fewest:
+        i = max(range(len(pieces)), key=lambda j: len(pieces[j][0]))
+        cut = _split_clause(pieces[i][0])
+        if not cut:
+            break
+        pieces[i:i + 1] = [(cut[0], pieces[i][1]), (cut[1], pieces[i][1])]
+    slots = max(1, most - len(kept)) if pieces else 0
+    if len(pieces) > slots:
+        size, rest = divmod(len(pieces), slots)
+        grouped, at = [], 0
+        for g in range(slots):
+            part = pieces[at:at + size + (1 if g < rest else 0)]
+            at += len(part)
+            grouped.append((" ".join(t for t, _ in part), part[0][1]))
+        pieces = grouped
+    return kept, pieces

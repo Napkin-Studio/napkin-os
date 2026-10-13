@@ -310,7 +310,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .place-error { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 9; padding: 6px 10px; border-radius: 10px; background: var(--danger-bg); color: var(--danger); font-size: 12.5px; font-weight: 600; }
 
 .taghint.static { cursor: default; border-style: solid; }
-.taghint.whole { border-style: solid; border-color: var(--create); color: var(--create); font-weight: 700; }
+.taghint.whole { border-style: solid; font-weight: 600; }
 .taghint.static:hover { border-color: var(--line); color: var(--ink2); }
 .taghint.missing { border-color: var(--danger); color: var(--danger); }
 .taghint .x { border: 0; background: none; padding: 0 0 0 4px; color: inherit; cursor: pointer; font-size: 12px; }
@@ -323,6 +323,9 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .shotrow .num { width: 26px; height: 26px; border-radius: 8px; background: var(--plan); color: var(--paper); display: grid; place-items: center; font-weight: 700; font-size: 12px; margin-top: 4px; }
 .shotrow .textarea { min-height: 38px; padding: 6px 8px; font-size: 13px; }
 .shotrow .select, .shotrow .input { padding: 6px 8px; font-size: 13px; }
+/* The "+ ref" pick under a shot's words: a chip-sized select, legible, its arrow clear of the label. */
+.shotrow .select.xs { height: 24px; min-width: 76px; padding: 0 24px 0 8px; font-family: var(--f-mono); font-size: 11.5px; line-height: 22px; color: var(--ink2); background-color: var(--card); border-radius: 6px; }
+.shotrow .select.xs:hover, .shotrow .select.xs:focus-visible { border-color: var(--ink3); color: var(--ink); }
 .sum { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .sum.ok { color: var(--success); }
 .sum.bad { color: var(--danger); }
@@ -523,6 +526,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .cardstate.drift .linkbtn { color: var(--ink2); font-weight: 500; }
 .oldwords { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--warn); }
 .oldwords .linkbtn { color: var(--warn); }
+/* Dex's question under a shot a re-plan left out: keep it or remove it. */
+.shotask { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink); }
 .ub-plan { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
 .ub-plan li { padding-left: 2px; }
 .ub-plan li b { margin-right: 6px; font-size: 12.5px; }

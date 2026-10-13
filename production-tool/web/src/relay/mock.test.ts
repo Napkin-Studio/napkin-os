@@ -3,7 +3,7 @@ import type { JobRequest } from '../contracts/types'
 import { sha256Of } from '../lib/hash'
 import { newId } from '../lib/ulid'
 import { makeAjv, SCHEMA } from '../test/schemas'
-import { MOCK_TENANT, MockRelay, type MockRenderer } from './mock'
+import { MOCK_TENANT, MockRelay, mockShotList, type MockRenderer } from './mock'
 
 function setup() {
   let t = 1_000_000
@@ -136,6 +136,25 @@ describe('mock relay', () => {
     const job = await relay.getJob(req.jobId)
     expect(job.shots![0].id).toBe(shots[0].id)
     expect(job.shots![1].id).toBeUndefined()
+  })
+
+  it('uses each sentence once: fewer sentences make fewer shots, one sentence splits at a clause, more share shots', () => {
+    const two = mockShotList('@maya_front walks into a sunny kitchen and smiles. She tastes the soup and nods.', 15)
+    expect(two.map((s) => s.action)).toEqual(['@maya_front walks into a sunny kitchen and smiles.', 'She tastes the soup and nods.'])
+    expect(two.reduce((a, s) => a + s.duration_s, 0)).toBe(15)
+    expect(mockShotList('She tastes the soup and nods.', 15).map((s) => s.action)).toEqual(['She tastes the soup', 'Nods.'])
+    expect(mockShotList('One. Two. Three. Four. Five.', 10).map((s) => s.action)).toEqual(['One. Two. Three.', 'Four. Five.'])
+  })
+
+  it('a re-plan with new words keeps the shots whose words are still there, in order, and adds the new ones after', () => {
+    const first = mockShotList('A. B. B.', 15).map((s, i) => ({ ...s, id: `shot_01K6XA7Q3M9V2D4R8T0B5C1E6${i}` }))
+    expect(first.map((s) => s.action)).toEqual(['A.', 'B.', 'B.'])
+    const script = ['She waves goodbye at the door.', ...first.map((s) => s.action)].join('\n')
+    const again = mockShotList(script, 15, [], first.map((s) => ({ id: s.id!, action: s.action, camera: s.camera, kind: s.kind, refs: [] })))
+    expect(again.slice(0, 3).map((s) => [s.id, s.action, s.camera])).toEqual(first.map((s) => [s.id, s.action, s.camera]))
+    expect(again[3]).toMatchObject({ action: 'She waves goodbye at the door.' })
+    expect(again[3].id).toBeUndefined()
+    expect(again.reduce((a, s) => a + s.duration_s, 0)).toBe(15)
   })
 
   it('the stitch leaves out clips marked endCard', async () => {

@@ -40,8 +40,11 @@ import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
-import { currentFrame, framesOf, jobsList, mainStoryboard, refsList, scriptText, shotSubjects, shotsOf, staleList, takesOf, unplannedText } from '../model/selectors'
-import { addShot, setRatio, setTarget, withMention, withoutMention, wordsPatch, writeScript } from './storyboardEdits'
+import { currentFrame, framesOf, jobsList, mainStoryboard, openAsks, refsList, scriptText, shotSubjects, shotsOf, staleList, takesOf, unplannedText } from '../model/selectors'
+import { askedShot } from '../jobs/plan'
+import { LOCAL_PERSON } from '../jobs/runner'
+import type { Ask, CrewId } from '../contracts/types'
+import { addShot, answerShotAsk, setRatio, setTarget, withMention, withoutMention, wordsPatch, writeScript } from './storyboardEdits'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
@@ -69,6 +72,14 @@ export function Storyboard() {
   const anyFrameRunning = shots.some((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   const noFrames = !shots.some((s) => framesOf(doc, s.id).length > 0)
   const deps = { relay, doc: docStore, ui: uiStore, runner }
+  // Dex's questions about shots a re-plan left out that have frames or clips (jobs/plan.ts): Keep or Remove.
+  const shotAsks = new Map(openAsks(doc).flatMap((a) => { const id = askedShot(a); return id ? [[id, a] as const] : [] }))
+  const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const answerAsk = (a: Ask, shotId: string, option: 'keep' | 'remove') => attempt(async () => {
+    if (option === 'keep') return updateDoc(docStore, (d) => answerShotAsk(d, a.id, 'keep', person), `answer ${a.question.text}`)
+    // One write: the answer and the shot with its frames and clips (Undo in the top bar puts it back).
+    return deleteFrom(docStore, (d) => { answerShotAsk(d, a.id, 'remove', person); return removeShot(d, shotId) })
+  })
 
   // Dex plans from the whole script: the scenes' words and the planned shots' action (jobs/plan.ts).
   const plan = async () => {
@@ -200,6 +211,15 @@ export function Storyboard() {
                   <button className="btn icon sm ghost" aria-label="Delete shot" title={shots.length <= 2 ? 'A storyboard needs at least 2 shots' : 'Delete this shot'} disabled={shots.length <= 2}
                     onClick={() => setConfirmShot(s.id)}>✕</button>
                   <OldWords shot={s} index={i} />
+                  {shotAsks.has(s.id) && (
+                    <div className="shotask" role="group" aria-label={`Shot ${i + 1}: keep or remove`}>
+                      <AgentFigure agent="dex" size={22} decorative />
+                      <span><b>Shot {i + 1} no longer has a scene.</b> Keep it or remove it?</span>
+                      <span className="spacer" />
+                      <button className="btn xs" onClick={() => void answerAsk(shotAsks.get(s.id)!, s.id, 'keep')}>Keep</button>
+                      <button className="btn xs ghost" onClick={() => void answerAsk(shotAsks.get(s.id)!, s.id, 'remove')}>Remove</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -436,7 +456,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             </div>
           </div>
           <div className="framecard-foot">
-            <span className="faint" title={made.label}>{made.made ? `Made by Dex · ${made.label}` : ''}</span>
+            <span className="faint" title={made.label}>{made.made ? `${madeBy(current.crew)} · directed by Dex · ${made.label}` : ''}</span>
             <Thumbs key={current.id} compact target={{
               kind: 'frame', id: current.id, jobId: current.job_id, shot: index + 1, asset: current.asset,
               provider: current.job_id ? doc.jobs[current.job_id]?.provider : undefined, model: current.job_id ? doc.jobs[current.job_id]?.model : undefined,
@@ -451,6 +471,11 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
       )}
     </div>
   )
+}
+
+/** Who made a frame, from its own crew: Wren renders, Rhea retouches (Dex directs every one). */
+function madeBy(crew: CrewId): string {
+  return crew === 'rhea' ? 'Retouched by Rhea' : crew === 'wren' ? 'Rendered by Wren' : `Made by ${crew[0].toUpperCase()}${crew.slice(1)}`
 }
 
 /** Under a shot whose own frame or clip still uses what the shot said before an edit: "Frame 3 uses the

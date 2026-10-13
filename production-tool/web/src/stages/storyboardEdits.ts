@@ -90,6 +90,15 @@ export function withMention(shot: Shot, name: string): string {
   return action ? `${action} @${name}` : `@${name}`
 }
 
+/** A person's answer to Dex's "Shot N no longer has a scene. Keep it or remove it?" (jobs/plan.ts): the ask
+ *  is answered; with Remove, the caller removes the shot in the same write (doc/remove.ts removeShot). */
+export function answerShotAsk(d: Doc, askId: string, optionId: 'keep' | 'remove', by: string, at = new Date().toISOString()) {
+  const a = d.asks[askId]
+  if (!a || a.state !== 'open') return
+  a.answers = [...a.answers, { option_id: optionId, by, at }].slice(-16)
+  a.state = 'answered'
+}
+
 /** The shot's words with every @name mention taken out. */
 export function withoutMention(text: string, name: string): string {
   const esc = name.replace(/[-]/g, '\\-')

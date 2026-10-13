@@ -101,7 +101,7 @@ def test_the_first_answer_wins_and_a_second_gets_409_with_the_winner(h):
     answer(h, bob, job, optionId="straight")
     out = answer(h, alice, job, expect=409, optionId="plan_first")
     assert out["answeredBy"] == f"human:{h.people[bob]['pid']}" and out["answer"] == {"option_id": "straight"}
-    assert out["error"]["code"] == "conflict" and "Go ahead" in out["error"]["message"]
+    assert out["error"]["code"] == "conflict" and "Dev: go ahead" in out["error"]["message"]
     assert h.store.get_job(job["jobId"])["answer"] == {"option_id": "straight"}
 
 
@@ -158,7 +158,7 @@ def test_change_is_a_follow_up_job_that_names_its_parent_and_the_director_hears_
                         "answer": {"contractVersion": "3", "questionId": job["question"]["id"], "optionId": "plan_first"}}}
     _, out = h.call("POST", "/jobs", change, token, expect=200)
     assert out["jobId"] != job["jobId"] and out["state"] == "submitted"
-    assert seen[0]["answer"]["question"] == "Plan a storyboard first?" and seen[0]["answer"]["chose"] == "Plan the storyboard first"
+    assert seen[0]["answer"]["question"].startswith("Dev check:") and seen[0]["answer"]["chose"] == "Dev: plan first"
     assert h.store.get_job(out["jobId"])["_req"]["parentIds"] == [job["jobId"]]
 
 
