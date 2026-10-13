@@ -13,7 +13,7 @@ import { homeItems, itemId } from '../projects/homeList'
 import { behindNapkinOs, signOut } from '../relay/access'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
-import { clock, displayName, edited, greeting, refusalNotice, stageChip } from './homeWords'
+import { clock, edited, greetName, greeting, menuName, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
 import { sayer, type CastKey } from './agents/cast'
 import { useBlobUrl } from './hooks'
@@ -49,7 +49,7 @@ export function Home() {
   }, [shell, signedIn])
   const all = homeItems(projects, saved)
   const shown = homeItems(projects, saved, ui.homeSort, query)
-  const who = displayName(ui.me?.handle)
+  const who = greetName(ui.me)
   const first = all.length === 0
 
   const act = (what: string, p: Promise<unknown>) => {
@@ -180,7 +180,7 @@ function HomeBar() {
           <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
           {menu && (
             <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.me?.handle ?? 'guest'}</span>
+              <span className="handle menu-head">{menuName(ui.me)}</span>
               {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
               {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
                 <button className="btn sm ghost" role="menuitem" onClick={() => void signOut()}>Sign out</button>

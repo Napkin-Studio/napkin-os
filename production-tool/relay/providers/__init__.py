@@ -18,6 +18,7 @@ import logging
 import pkgutil
 
 from contracts_dir import contracts_dir
+from providers._seam import KeyMissing
 from providers.types import (  # noqa: F401  the harness adapters' types
     AssetRef, CapabilityMissing, Provider, ProviderError, ProviderJob, ProviderOutput, Ref, Status,
     check_capabilities, load_sheet, video_audio,
@@ -72,6 +73,9 @@ def load_registry() -> Registry:
             continue
         try:
             provider = make()
+        except KeyMissing as e:  # no key here (local dev): one line, not a traceback
+            log.warning("provider %s is off: %s", mod.name, e)
+            continue
         except Exception:
             log.exception("provider %s failed to start", mod.name)
             continue

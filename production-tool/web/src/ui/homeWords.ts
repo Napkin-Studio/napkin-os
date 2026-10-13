@@ -45,3 +45,19 @@ export function refusalNotice(message: string): string {
   const t = message.trim()
   return /[.!?]$/.test(t) ? t : `${t}.`
 }
+
+/** The person's own name from their Napkin OS account (Me.name), when they have one; else the handle. */
+function ownName(me: { name?: string } | null | undefined): string | null {
+  const name = me?.name?.trim()
+  return name ? name : null
+}
+
+/** Who Home greets: "Shrey" from Me.name, else the handle as displayName says it. */
+export function greetName(me: { handle?: string; name?: string } | null | undefined): string {
+  return ownName(me) ?? displayName(me?.handle)
+}
+
+/** Who the ⋯ menu says is signed in: Me.name, else "@handle" ("@guest" with nobody). */
+export function menuName(me: { handle?: string; name?: string } | null | undefined): string {
+  return ownName(me) ?? `@${me?.handle ?? 'guest'}`
+}
