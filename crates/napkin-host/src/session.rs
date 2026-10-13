@@ -823,6 +823,115 @@ mod tests {
         assert_eq!(newest.rationale, "");
     }
 
+    // Contract 3 (features/contract-v3.clan): /patch-data records the
+    // decision's targets and cites, so a decision tree can tell versions apart
+    // without parsing the action's words.
+    #[test]
+    fn patch_data_records_targets_and_cites() {
+        let (_dir, session, id) = open_temp_clan();
+        let doc_id = ClanFile::open(id.as_str())
+            .unwrap()
+            .document_id()
+            .to_string();
+        let body = serde_json::json!({
+            "patch": {"shots": {"shot_A": {"rank": "a1"}}},
+            "agent": "dex",
+            "action": "plan shot 1",
+            "targets": [format!("{doc_id}#shots[shot_A]"), format!("{doc_id}#shots[shot_A].rank")],
+            "cites": [format!("{doc_id}#jobs[job_B]"), "other_doc#findings[f_1]", "d_01K7ABCDEF0123456789"],
+        });
+        session.patch_data(&body.to_string()).unwrap();
+        let chain = ClanFile::open(id.as_str())
+            .unwrap()
+            .read_entry("agent/decision-chain.yaml")
+            .unwrap();
+        let newest = &clan_sdk::DecisionChain::from_yaml(&chain)
+            .unwrap()
+            .decisions[0];
+        assert_eq!(
+            newest.targets,
+            vec![
+                format!("{doc_id}#shots[shot_A]"),
+                format!("{doc_id}#shots[shot_A].rank")
+            ]
+        );
+        assert_eq!(newest.cites.len(), 3);
+        assert_eq!(
+            newest.kind.as_deref(),
+            Some("edit"),
+            "the kind stays edit; the verb is the contract"
+        );
+    }
+
+    // A body without targets and cites records the same decision it always
+    // did: no targets or cites keys appear in the chain.
+    #[test]
+    fn patch_data_without_targets_writes_the_decision_as_before() {
+        let (_dir, session, id) = open_temp_clan();
+        session
+            .patch_data(
+                r#"{"patch":{"tone":"warm"},"agent":"human","action":"set tone","rationale":"r"}"#,
+            )
+            .unwrap();
+        let chain = ClanFile::open(id.as_str())
+            .unwrap()
+            .read_entry_string("agent/decision-chain.yaml")
+            .unwrap();
+        assert!(!chain.contains("targets"), "{chain}");
+        assert!(!chain.contains("cites"), "{chain}");
+        let parsed = clan_sdk::DecisionChain::from_yaml(chain.as_bytes()).unwrap();
+        let newest = &parsed.decisions[0];
+        let mut expected = newest.clone();
+        expected.targets = Vec::new();
+        expected.cites = Vec::new();
+        assert_eq!(
+            serde_yaml::to_string(newest).unwrap(),
+            serde_yaml::to_string(&expected).unwrap()
+        );
+    }
+
+    #[test]
+    fn patch_data_refuses_bad_targets_and_cites() {
+        let (_dir, session, id) = open_temp_clan();
+        let doc_id = ClanFile::open(id.as_str())
+            .unwrap()
+            .document_id()
+            .to_string();
+        let bad = |extra: serde_json::Value| {
+            let mut body =
+                serde_json::json!({"patch": {"tone": "x"}, "agent": "dex", "action": "set"});
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            session.patch_data(&body.to_string()).unwrap_err().status
+        };
+        assert_eq!(bad(serde_json::json!({"targets": "not-a-list"})), 400);
+        assert_eq!(bad(serde_json::json!({"targets": [7]})), 400);
+        assert_eq!(bad(serde_json::json!({"targets": ["no-hash"]})), 400);
+        assert_eq!(
+            bad(serde_json::json!({"targets": [format!("{doc_id}#shots[0]")]})),
+            400,
+            "positional"
+        );
+        assert_eq!(
+            bad(serde_json::json!({"targets": [format!("{doc_id}#shots[a.b]")]})),
+            400
+        );
+        assert_eq!(
+            bad(serde_json::json!({"targets": ["another_doc#shots[shot_A]"]})),
+            400,
+            "not this document"
+        );
+        assert_eq!(bad(serde_json::json!({"cites": ["x_123"]})), 400);
+        // Targets with no agent have no decision to sit on.
+        let body =
+            serde_json::json!({"patch": {"tone": "y"}, "targets": [format!("{doc_id}#tone")]});
+        assert_eq!(
+            session.patch_data(&body.to_string()).unwrap_err().status,
+            400
+        );
+    }
+
     #[test]
     fn patch_data_rejects_non_object_patch() {
         let (_dir, session, _id) = open_temp_clan();

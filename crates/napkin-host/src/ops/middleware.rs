@@ -626,7 +626,7 @@ fn target_paths(d: &Value, doc_id: &str) -> Vec<String> {
 /// bracket, a bracket not following a segment, or a key that is empty or holds
 /// `.`, `[`, `]` or `#`. Map keys in this schema are id-like, so anything else
 /// is not guessed at.
-fn normalise_target(target: &str, doc_id: &str) -> Option<String> {
+pub(crate) fn normalise_target(target: &str, doc_id: &str) -> Option<String> {
     let (doc, path) = target.split_once('#')?;
     if doc != doc_id || path.is_empty() {
         return None;

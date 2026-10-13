@@ -145,6 +145,17 @@ Existing fields (`agent`, `action`, `timestamp`, `fields_changed`, `pinned`,
 `trace_ref`) stay. Every new field is optional, so every existing file still
 validates. Struct work is W1P-I5.
 
+**`targets` and `cites` on `/patch-data`** (2026-10-13, features/contract-v3).
+An app's attributed write may name what it changed and what it rests on: the
+body's optional `targets[]` (addresses on the open document) and `cites[]`
+(addresses on any document, or decision ids `d_…`) are recorded on the `edit`
+decision as given. Each is checked with the same address reader the layer
+uses everywhere (`normalise_target`); a malformed address, a positional index
+(`shots[0]`), a target on another document, or either field without an
+`agent` is a 400. A body without them writes exactly the decision it always
+did. The kind stays `edit`; an app that needs finer kinds says them in its
+`action` (the Production Tool's verbs, production-tool/contracts/collab.md §8).
+
 **What came first is the chain's order** (owner, 2026-09-30). The chain is
 newest first; a decision nearer the head came after one further down, and no
 rule anywhere — host, SDK, middleware or view — compares `timestamp`s to

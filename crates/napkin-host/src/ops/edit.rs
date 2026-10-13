@@ -169,6 +169,70 @@ pub struct PatchData {
     /// The body's structured `reasoning`, when it gives one (optional: a
     /// person's edit usually has none). Recorded only with a claim.
     reasoning: Option<Reasoning>,
+    /// Addresses on this document the decision is about (Contract 3 §2.4),
+    /// recorded on the decision as given. Optional; checked against the open
+    /// document in [`patch_data`].
+    targets: Vec<String>,
+    /// What the decision rests on: addresses on any document, or decision
+    /// ids (`d_…`). Optional.
+    cites: Vec<String>,
+}
+
+/// At most this many targets, and this many cites, on one write.
+const MAX_TARGETS: usize = 512;
+const MAX_CITES: usize = 64;
+const MAX_ADDRESS_LEN: usize = 512;
+
+/// An optional array of address strings in the body: absent is empty; any
+/// other shape, a value that is not a string, or more than `max` is a 400.
+fn addresses(json: &Value, key: &str, max: usize) -> HostResult<Vec<String>> {
+    let Some(v) = json.get(key) else {
+        return Ok(Vec::new());
+    };
+    if v.is_null() {
+        return Ok(Vec::new());
+    }
+    let arr = v
+        .as_array()
+        .ok_or_else(|| HostError::bad_request(format!("'{key}' must be an array of strings")))?;
+    if arr.len() > max {
+        return Err(HostError::bad_request(format!(
+            "'{key}' holds {} entries; at most {max}",
+            arr.len()
+        )));
+    }
+    arr.iter()
+        .map(|x| {
+            x.as_str()
+                .filter(|s| !s.is_empty() && s.len() <= MAX_ADDRESS_LEN)
+                .map(String::from)
+                .ok_or_else(|| {
+                    HostError::bad_request(format!(
+                        "'{key}' must hold non-empty strings of at most {MAX_ADDRESS_LEN} characters"
+                    ))
+                })
+        })
+        .collect()
+}
+
+/// A decision id: `d_` and then the id's own characters.
+fn is_decision_id(s: &str) -> bool {
+    s.strip_prefix(clan_sdk::decision::DECISION_ID_PREFIX)
+        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
+/// `<doc-id>#<path>` that `normalise_target` can read, on whatever document it
+/// names, keyed by entity and never by position: `shots[shot_X]`, not `shots[0]`
+/// (an index names whatever sits there now, not the thing the decision was about).
+fn is_address(s: &str) -> bool {
+    let positional = s.split('[').skip(1).any(|seg| {
+        seg.split(']')
+            .next()
+            .is_some_and(|k| k.chars().all(|c| c.is_ascii_digit()))
+    });
+    !positional
+        && s.split_once('#')
+            .is_some_and(|(doc, _)| super::middleware::normalise_target(s, doc).is_some())
 }
 
 impl PatchData {
@@ -223,12 +287,31 @@ impl PatchData {
                 Some(r)
             }
         };
+        let targets = addresses(&json, "targets", MAX_TARGETS)?;
+        if let Some(bad) = targets.iter().find(|t| !is_address(t)) {
+            return Err(HostError::bad_request(format!(
+                "target {bad:?} is not an address (<doc-id>#<entity-keyed path>)"
+            )));
+        }
+        let cites = addresses(&json, "cites", MAX_CITES)?;
+        if let Some(bad) = cites.iter().find(|c| !is_address(c) && !is_decision_id(c)) {
+            return Err(HostError::bad_request(format!(
+                "cite {bad:?} is neither an address nor a decision id"
+            )));
+        }
+        if claim.is_none() && !(targets.is_empty() && cites.is_empty()) {
+            return Err(HostError::bad_request(
+                "targets and cites are recorded on the decision; name an agent",
+            ));
+        }
         Ok(Self {
             patch,
             keys,
             append_keys,
             claim,
             reasoning,
+            targets,
+            cites,
         })
     }
 }
@@ -270,9 +353,22 @@ pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Out
         }
     }
 
+    // Targets name what this write changed, so they are on this document.
+    let doc_id = doc.clan().document_id().to_string();
+    if let Some(bad) = input
+        .targets
+        .iter()
+        .find(|t| super::middleware::normalise_target(t, &doc_id).is_none())
+    {
+        return Err(HostError::bad_request(format!(
+            "target {bad:?} is not on this document ({doc_id})"
+        )));
+    }
+
     // Attribution over exactly the patched keys (F15). The name is the app's
     // claim; who actually asked comes from `ctx`.
     let reasoning = input.reasoning;
+    let (targets, cites) = (input.targets, input.cites);
     let decision = input.claim.map(|(agent, action, rationale, pinned)| {
         let rationale = match (&reasoning, rationale.trim().is_empty()) {
             (Some(r), true) => r.summary(),
@@ -288,6 +384,8 @@ pub fn patch_data(ctx: &Ctx, doc: &Document, input: PatchData) -> HostResult<Out
         );
         if let Some(typed) = entry.typed.as_mut() {
             typed.reasoning = reasoning;
+            typed.targets = targets;
+            typed.cites = cites;
         }
         entry
     });
