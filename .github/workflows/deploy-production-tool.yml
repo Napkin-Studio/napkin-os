@@ -182,7 +182,15 @@ jobs:
           (cd production-tool/stitch && zip -q9 "$build/stitch.zip" stitch.py endcard/*/*.png)
           layers=$(aws lambda get-function-configuration --function-name "$STITCH_FN" --query 'length(Layers || `[]`)' --output text)
           if [ "$layers" = "0" ] || [ "${{ inputs.rebuild_ffmpeg_layer }}" = "true" ]; then
-            production-tool/stitch/build-layer.sh "$build/ffmpeg-layer.zip"
+            # The pinned ffmpeg (licences/binaries.toml): upstream first, then our mirror.
+            mirror_path=$(grep -oP '^FFMPEG_MIRROR_PATH="\K[^"]+' production-tool/stitch/build-layer.sh)
+            ffmpeg_version=$(grep -oP '^FFMPEG_VERSION=\K\S+' production-tool/stitch/build-layer.sh)
+            mirror_path=${mirror_path//\$\{FFMPEG_VERSION\}/$ffmpeg_version}
+            FFMPEG_MIRROR="s3://$BUCKET/$mirror_path" production-tool/stitch/build-layer.sh "$build/ffmpeg-layer.zip"
+            # Seed the mirror with the verified tarball the first time.
+            if ! aws s3 ls "s3://$BUCKET/$mirror_path" >/dev/null 2>&1; then
+              aws s3 cp --only-show-errors "$build/$(basename "$mirror_path")" "s3://$BUCKET/$mirror_path"
+            fi
             aws s3 cp "$build/ffmpeg-layer.zip" "s3://$BUCKET/build/ffmpeg-layer.zip"
             arn=$(aws lambda publish-layer-version --layer-name "$LAYER" \
               --content "S3Bucket=$BUCKET,S3Key=build/ffmpeg-layer.zip" \
