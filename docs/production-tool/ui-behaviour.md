@@ -16,7 +16,7 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 2. **Meaning lives in the `.clan`; the canvas holds only where things are.** Boards, shots, references, links, jobs, notes and versions are document entities, and each is written by one server as a validated patch. Excalidraw holds geometry and ids only. If the screen and the document ever disagree, the document is right and the screen redraws.
 3. **Nothing is silent.** Every running job is visible, along with who started it. Every fallback, passthrough, splice, condensation, crop and failure is said in words where it happened. A tool never quietly drops an `@name`, truncates text, changes a ratio or switches model.
 4. **Every cost is shown before it is spent, and you see what is sent.** Anything that calls Runway shows its price in dollars on the button or next to it before you press it. Every paid generation opens the send tray, "What Dex will send" (3.16), which lists each input, the model and the price. Nothing goes to Runway until you press the tray's **Generate**. Batches and large runs open the tray expanded (section 5.4). Free work says "free". Work that runs on your device says "on your device".
-5. **Nothing changes until you choose.** Agent proposals arrive as previews with a diff: Wren's rewrites, Dex's camera changes, Ellis's reading of your ink, fuzzy `@` matches, Tess's crops of a character sheet, a spin-in from Brief Maker. The canvas or the document changes only on Apply, Keep, Link it, Confirm or Bring in, and one undo reverses that step.
+5. **Nothing changes until you choose.** Agent proposals arrive as previews with a diff: Skye's rewrites, Dex's camera changes, Ellis's reading of your ink, fuzzy `@` matches, Rhea's crops of a character sheet, a spin-in from Brief Maker. The canvas or the document changes only on Apply, Keep, Link it, Confirm or Bring in, and one undo reverses that step.
 6. **Each tool works on its own; agents ask when the input is thin.** This is an owner decision from 2026-10-13. The flow (references → script → storyboard → video) gives the best results, but any node can run alone. When an input is ambiguous or missing, the agent asks a question with options instead of guessing (section 3.17, artboard 4c). The job waits in `needs_input`. An ask blocks only when no option can proceed; otherwise at least one option proceeds. Asks never time out into a guess. Asks are shared: anyone in the project can answer, and History records who did.
 7. **Scope is what you link.** A generating node uses only what is linked to it: boards, groups, single references, notes and documents (3.16). Nothing nearby is used because it is nearby.
 8. **Plain words.** Use short sentences from your side of the screen ("Make video", "Insert a shot here"). Name the agent doing the work. Name a model as "<model> on Runway". No jargon, no percentages for certainty, no rationale text in the UI. Section 10 has the rules.
@@ -71,7 +71,7 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 - **On a deep link with no history,** back goes to the surface that owns the item: a frame returns to its Storyboard editor, and everything else returns to the canvas fitted to its node.
 - **Leaving never asks "save?"** Edits are live (plan 2.5). Work that is not applied is kept per person across back and forward for the session:
   - an Image editor op list that has not been applied;
-  - a Wren suggestion still open;
+  - a Skye suggestion still open;
   - a note window still being dragged.
 
   The top bar counts it ("3 edits not applied"). Coming back restores it.
@@ -118,7 +118,7 @@ The bar is 48px tall. From left to right:
 ### 3.2 Boards and jump navigation (review item 1)
 
 **Boards.** A board is an Excalidraw frame, written as `boards[id]{title, purpose, rank}`.
-- **Ad template.** A new project starts from it with seven empty, dashed boards: Script, Characters, Locations, References, Products, Storyboard, Video. A Wren card on the Script board reads "Start with the script", with **Write the script** (primary) and **Add pictures** (artboard 12).
+- **Ad template.** A new project starts from it with seven empty, dashed boards: Script, Characters, Locations, References, Products, Storyboard, Video. A Skye card on the Script board reads "Start with the script", with **Write the script** (primary) and **Add pictures** (artboard 12).
 - **Sketches board: not in the template.** Artboards 4 and 5 show one; Q2 in section 12.2 has the decision.
 
 - **Brand board.** Not in the template. Dropping a brand book creates one (3.18). Its purpose is `brand`.
@@ -148,7 +148,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 
 | Kind | Card shows | Primary actions |
 |---|---|---|
-| Script | Title, target length, excerpt with blue `@refs`, "4 scenes · 6 shots · edited by Maya 2 min ago", Wren's last change ("Wren tightened scene 3 · see change"), inputs strip | Open |
+| Script | Title, target length, excerpt with blue `@refs`, "4 scenes · 6 shots · edited by Maya 2 min ago", Skye's last change ("Skye tightened scene 3 · see change"), inputs strip | Open |
 | Storyboard | Title, ratio, shot count, length, frame strip, "2 behind the script" when stale, inputs strip | Open |
 | Video | Poster, length, "Clips 3 of 6 ready", last ad render, estimate to finish, inputs strip | Open |
 | Reference | Picture, `@name`, role pill, library version when it came from the team library ("v4") | Role chip, Name |
@@ -175,7 +175,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 
 **Delete.** The Delete or Backspace key on a selected node:
 - If nothing is running, it deletes at once with an undo toast.
-- If a job is still running on it, it first asks "Kai is still making clip 4. Stop it and delete?". This is today's Character stage behaviour (`stages/Character.tsx:157`).
+- If a job is still running on it, it first asks "Wren is still making clip 4. Stop it and delete?". This is today's Character stage behaviour (`stages/Character.tsx:157`).
 
 ### 3.4 Ports and the linking rules
 
@@ -204,7 +204,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 - **Pointer:** a dashed blue line follows it, and the Link tool shows as pressed (`aria-pressed`).
 - **Compatible input ports glow blue.** Over one, a tooltip at the pointer reads "Drop to link · drives".
 - **Incompatible nodes dim to 40%** and refuse the drop. Only the nearest dimmed node shows its reason, for example "A script cannot feed a product" or "Not a target for a script".
-- **A node with a running job is never dimmed during a link drag** (decided 2026-10-13), so its status stays readable. It still refuses the drop while the job runs ("Kai is still making clip 4. Link it when that's done."). Other people's selections, cursors and name tags are never dimmed.
+- **A node with a running job is never dimmed during a link drag** (decided 2026-10-13), so its status stays readable. It still refuses the drop while the job runs ("Wren is still making clip 4. Link it when that's done."). Other people's selections, cursors and name tags are never dimmed.
 - **The selection bar hides during the drag** and comes back on drop (artboard 2 keeps it up only to fit one frame).
 
 **Dropping a link:**
@@ -297,7 +297,7 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 - **Look:** it stays in the text with a wavy warn underline. Use one colour on every surface, warn #b45309; artboard 3's red is changed (Q7).
 - **Hover or focus:** shows "No reference called @maya_runing. Did you mean @maya_laughing?", with **Use @maya_laughing** and **Name a new picture**.
 - **"Closest":** the reference with the smallest Damerau–Levenshtein distance (at most 2) on the whole name, then the best prefix match on the key, then the closest label. If nothing is that close, only **Name a new picture** is offered. At most one suggestion is shown.
-- **Wren** lists unknown names in the script panel ("Make @jogger a character, or cut him").
+- **Skye** lists unknown names in the script panel ("Make @jogger a character, or cut him").
 - **Generation never drops an unknown name silently.** The send tray shows "1 name isn't a reference: @jogger", with **Fix it** (3.16). Plan shots, which is free and has no tray, asks the same with **Fix it** and **Plan anyway**.
 
 ### 3.7 Sketch areas and ratio (review item 10)
@@ -313,8 +313,8 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 - **The picker sets the ratio of the next area only.** An existing area's ratio never changes. Its resize handles keep the ratio.
 - **A sketch area is not an Excalidraw frame**, because frames don't nest. Strokes that intersect it belong to it for export (plan 2.2).
 - **Generate** (the area's button, as on artboards 4b and 4c) opens the send tray (3.16) with the sketch, its linked inputs and any handwriting Ellis read. The tray's **Generate** sends a ratio-true export to Runway and returns a frame at that ratio:
-  - Kai renders, with the cost on the button.
-  - A sketch with no words and no linked references gets Kai's ask, "What is this sketch of?", with **Use it as a layout only** (proceeds) and **Describe it** (3.17).
+  - Wren renders, with the cost on the button.
+  - A sketch with no words and no linked references gets Wren's ask, "What is this sketch of?", with **Use it as a layout only** (proceeds) and **Describe it** (3.17).
   - When the model's output size isn't exactly the ratio, it is centre-cropped.
   - The frame says so: "1344×756 · cropped to 16:9".
 - **The new frame:** it appears to the right of the area with a `made from` link, and offers **Use in shot N**, which sets it as that shot's frame (one step). "Make another frame" makes a new version beside it.
@@ -382,7 +382,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 - **Single-value fields:** camera fields, duration and rank are single-value fields written as patches.
 
 **Top bar:**
-- "← Canvas", Wren's mark and "Script · First Light", then "Saved".
+- "← Canvas", Skye's mark and "Script · First Light", then "Saved".
 - The view switch.
 - Presence ("Sai is in shot 2 · Maya is reading").
 - Undo and Redo.
@@ -402,8 +402,8 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 
 **Outline rail (left):**
 - Scenes and shots in order, with drag handles, thumbnails and lengths. The current item is blue.
-- A coral dot marks a scene with a pending Wren suggestion.
-- A warn-coloured length marks the longest shot, or one Wren flagged.
+- A coral dot marks a scene with a pending Skye suggestion.
+- A warn-coloured length marks the longest shot, or one Skye flagged.
 - The keys list sits at the foot: Tab, @, #, ⌥M.
 
 **Reordering shots** (outline or AV table):
@@ -429,7 +429,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 - **Insert between rows:** hover a gap (or focus it with Tab) to show **+ Insert shot here** and **Bridge 1 → 2** (section 3.11).
 - **Unknown `@names`** are underlined as in 3.6.
 
-**Wren panel (right; close it with ×; reopen with Ask Wren):**
+**Skye panel (right; close it with ×; reopen with Ask Skye):**
 - **Length meter:** "15 s target · 14.2 s estimated".
   - The estimate is the sum of shot durations, with segments in proportion.
   - The current shot is blue. The longest or flagged shot is coral.
@@ -438,8 +438,8 @@ A floating frosted bar sits above the current selection. Its contents depend on 
   - **Apply** (primary) changes the text in one undo step, and the card turns into "Applied. The ad now runs 13.1 s." with **Undo**.
   - **Show in script** scrolls to the scene. **Not now** hides the card for you.
 - **Other suggestions** are one line each ("Make @jogger a character, or cut him").
-- **Wren at work:** the loader in the writing colour (Wren coral), with what she is doing ("Timing scene 4 against the end card").
-- **Ask Wren:** a text box with send. ⌘Enter sends. The answer arrives as a suggestion card, never as a direct edit.
+- **Skye at work:** the loader in the writing colour (Skye coral), with what she is doing ("Timing scene 4 against the end card").
+- **Ask Skye:** a text box with send. ⌘Enter sends. The answer arrives as a suggestion card, never as a direct edit.
 
 **Plan shots / Update storyboard:**
 - Dex plans the shots from the script. A free planning step runs at once. When a paid step follows, its price shows first.
@@ -449,7 +449,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
   - removed scenes are asked about ("Shot 6 no longer has a scene. Keep it or remove it?").
 
 **States:**
-- **Empty script:** Wren's card "Paste a script, or tell Wren the idea."
+- **Empty script:** Skye's card "Paste a script, or tell Skye the idea."
 - **Import:** a Fountain file dropped on the page imports, with Fountain's `@` character syntax remapped.
 - **Offline:** typing continues and is queued.
 - **Two people typing in one shot:** both carets show, and the text merges live.
@@ -465,7 +465,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 
 **Sub bar:**
 - "6 shots · 15.0 s of 15 s", with a length chip. It is ok when the total matches the ad length, and warn otherwise ("0.6 s over · Rebalance").
-- Crew status lines, each with the loader, a mono tag (PLANNING, RENDERING), the line, and "started by" ("Kai is rendering clip 1 · about 0:40 left · started by Shrey").
+- Crew status lines, each with the loader, a mono tag (PLANNING, RENDERING), the line, and "started by" ("Wren is rendering clip 1 · about 0:40 left · started by Shrey").
 - A stale count chip ("1 clip out of date"), then **+ Add shot**.
 
 **Shot cards:**
@@ -547,7 +547,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 | Hand | H, or Space-drag |
 
 - Brackets `[ ]` change the brush size.
-- **The brush strip** holds: mask name, Size, Soft, Add/Subtract, **Snap to cut-out** (fits the mask to Tess's cut-out edge) and **Clear mask**.
+- **The brush strip** holds: mask name, Size, Soft, Add/Subtract, **Snap to cut-out** (fits the mask to Rhea's cut-out edge) and **Clear mask**.
 - **Mask paint** is translucent tool blue with marching ants: "Mask: blue paint marks what changes".
 
 **Edits are a non-destructive list:**
@@ -563,10 +563,10 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 
 | Action | Who | Cost | Notes |
 |---|---|---|---|
-| Remove background | Tess | free, on your device | Uses the relay automatically when WebGPU is missing or memory is low, and then says "ran on our server". |
-| Fill area | Tess (Runway generates) | from the sheet | Runs on the selected mask only: "Only the blue area changes". "Keep the label exactly as it is" is on by default (maps to `preciseEdit`, to verify, Q13). The run button is dark, not orange. |
-| Change whole frame | Tess | from the sheet | A prompt redraws the whole frame. |
-| Upscale | Tess | from the sheet | 2× or 4×, showing the output size ("→ 3840 × 2160"). |
+| Remove background | Rhea | free, on your device | Uses the relay automatically when WebGPU is missing or memory is low, and then says "ran on our server". |
+| Fill area | Rhea (Runway generates) | from the sheet | Runs on the selected mask only: "Only the blue area changes". "Keep the label exactly as it is" is on by default (maps to `preciseEdit`, to verify, Q13). The run button is dark, not orange. |
+| Change whole frame | Rhea | from the sheet | A prompt redraws the whole frame. |
+| Upscale | Rhea | from the sheet | 2× or 4×, showing the output size ("→ 3840 × 2160"). |
 
 - The panel footer shows the project's spend ("$12.40 of $200").
 - Paid actions go through the send tray (3.16), which lists the frame, the mask and the words, and names the model ("<model> on Runway").
@@ -580,13 +580,13 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 
 **Before / After** toggles the view. Before hides masks, cut-out outlines and text, and labels the frame "Before · v3 as saved".
 
-**Pointer during a running action:** the busy pointer (section 6) in the retouching colour (Tess mint). The masked area shows the pending stripes.
+**Pointer during a running action:** the busy pointer (section 6) in the retouching colour (Rhea mint). The masked area shows the pending stripes.
 
 ### 3.13 Video editor (artboard 10; review items 7, 8)
 
 **Top bar:**
 - "← Canvas", "Video · First Light" and "16:9 · 15 s".
-- The running-job pill ("Kai · renders: shot 5, take 2 · about 0:40 left · started by Sai").
+- The running-job pill ("Wren · renders: shot 5, take 2 · about 0:40 left · started by Sai").
 - Presence.
 - Ad versions (v1, v2), with **Compare**.
 - **Render ad** (primary, with its price in the confirm).
@@ -624,7 +624,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
    - Selecting a note widens it on the timeline into a shaded window with blue handles. The shading runs down through every row.
    - Drag the handles (they snap to seconds), or use the From/To fields (m:ss) and the mini strip in the right panel. All of them move the same window.
 4. **Still at the moment:** the panel shows "Still at 0:03. The fix aims for this frame." **Edit still** opens it in the Image editor before the fix runs.
-5. **Fix this moment** (primary in the panel) shows "Edie · cuts: regenerates only 0:02-0:04 on Aleph 2 on Runway and splices it back · about $0.56".
+5. **Fix this moment** (primary in the panel) shows "Edie · edits: regenerates only 0:02-0:04 on Aleph 2 on Runway and splices it back · about $0.56".
    - The result is a **new take** (v3, parent v2) that replaces its parent in the cut.
    - The seams get short crossfades.
    - Jude checks both seams ("v3's seams at 0:02 and 0:04 match the take around them").
@@ -636,7 +636,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 **Takes for a shot:** a list of v1, v2 and v3, each with the model ("Veo 3.1 on Runway"), length, who made it and when. **Use** puts a take in the cut (one undo step). **Another take** shows its price.
 
 **Render ad:** a free render runs at once ("Render the ad · 15 s · free"). A render that remakes clips opens the send tray with the cost (5.4).
-- Edie cuts. The result is a new ad version.
+- Edie edits. The result is a new ad version.
 - A render with stale clips asks first: "2 clips are out of date. Render anyway, or remake them first?"
 
 ### 3.14 Phone review (artboard 11; review item 8 on phone)
@@ -729,7 +729,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 **The ask card:**
 - Anchored to its node, not modal. The node shows "Waiting for you · Make video".
 - Orange needs-you border, the Research tool's rule.
-- Signed by the agent who owns the step: Dex for planning and direction, Kai for renders.
+- Signed by the agent who owns the step: Dex for planning and direction, Wren for renders.
 - The question, one line of why, the options as buttons with their cost or detail, and the text box when `allow_text` is true. `@` works in the text box.
 - **Later** hides the card. The job keeps waiting and the node keeps "Waiting for you". Asks never time out into a guess.
 
@@ -768,7 +768,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 - **A brand book (PDF)** creates a **Brand board** at once ("Brand board · Rules here guide every frame"), which fills in as Ellis reads: "Ellis · reads: page 14 of 32", with a page strip and "Pages 15 to 32 still to read".
   - It holds Logo variants, Palette, Fonts, Tone of voice, and Do / Don't. Each item is a reference with the role `logo`, `palette`, `typography` or `brand_rule`, and can be edited.
   - **Font files are never taken from a PDF.** Fonts show their name and use with "no file", and the line "Font files are not taken from the PDF. Upload the fonts you are licensed to use.", with **Upload fonts**.
-- **A character sheet** (one image with several views, such as `maya_sheet.png`): Tess proposes view crops ("@maya_front, @maya_side, @maya_back") and asks "Are these crops right?", with **Adjust** (move the crop boxes) and **Confirm**. The references are created only on Confirm, as one undo step.
+- **A character sheet** (one image with several views, such as `maya_sheet.png`): Rhea proposes view crops ("@maya_front, @maya_side, @maya_back") and asks "Are these crops right?", with **Adjust** (move the crop boxes) and **Confirm**. The references are created only on Confirm, as one undo step.
 - **A DOCX** becomes a Document node ("client_notes.docx · 2 pages"). Ellis reads the text. It is used as context only once linked ("Link to use as context").
 - **Fonts** go to the linked Brand board's Fonts.
 
@@ -777,8 +777,8 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 - Jude checks each result against them and flags a break on the result, naming the rule: "Jude · checks: the logo sits too close to the edge (clear space rule, Brand board)", with **Fix in image editor** (3.12) and **Ignore**.
 - Brand rules never block. Ignore is recorded on the result, with who ignored it.
 
-**Spin-in from Brief Maker or Research.** A card arrives on the canvas: "From Brief Maker: Lumen 'First Light' brief", listing what it will create ("Script: Wren drafts from the proposition and tone", "References: 4 from the research").
-- Nothing happens until **Bring in**. Bring in creates the nodes and links as one undo step; Wren's draft then runs as her job.
+**Spin-in from Brief Maker or Research.** A card arrives on the canvas: "From Brief Maker: Lumen 'First Light' brief", listing what it will create ("Script: Skye drafts from the proposition and tone", "References: 4 from the research").
+- Nothing happens until **Bring in**. Bring in creates the nodes and links as one undo step; Skye's draft then runs as her job.
 - **Not now** closes the card and leaves the spin-in under the From Napkin tab.
 
 **Export** (top bar menu):
@@ -798,17 +798,17 @@ Exports are free. A large export shows its progress in a toast and lands as a do
 
 **Make all sizes** works on a selected key visual (a frame or picture) or on the film (a Video). It is one button in the selection bar (3.9).
 1. You pick a pack, or keep the last one used for this client.
-2. Kai adapts the master to every format in the pack:
+2. Wren adapts the master to every format in the pack:
    - crops where the picture has room;
    - extends on Runway where it doesn't;
    - for extreme ratios, generates at the nearest ratio Runway supports, then crops or extends;
    - keeps the logo and copy inside each format's safe area, by the Brand board's rules when it is linked.
-3. When the subject is unclear, Kai asks first: "What must stay in every size?" (3.17).
+3. When the subject is unclear, Wren asks first: "What must stay in every size?" (3.17).
 4. The send tray lists every size with its method and price (a plain crop is free) and the total. You can untick sizes.
 5. The results land as a **Format set** node linked to the master (`master`), one tile per size. Jude flags brand-rule breaks per size, with Fix in image editor and Ignore.
 6. **Export zip** downloads one zip with every file named by format and size.
 
-- **Video cut-downs** are part of the first release: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. Kai makes them the same way, and they land as a Format set of the film.
+- **Video cut-downs** are part of the first release: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. Wren makes them the same way, and they land as a Format set of the film.
 - **When the master changes,** the set goes out of date ("Master changed · 3 sizes out of date"), with **Update sizes** and its price.
 - **Undo:** Make all sizes is a job, so undo never cancels it (4.5); Stop does. Deleting the set is one undo step, as for any node.
 
@@ -854,7 +854,7 @@ Exports are free. A large export shows its progress in a toast and lands as a do
   - Apply in any editor;
   - Convert ink (Keep);
   - a reorder;
-  - accepting a Wren suggestion.
+  - accepting a Skye suggestion.
 - **If someone changed the same thing after you,** your undo of that step is skipped with a notice: "Sai changed this after you, so undo skipped it." Undo then moves to your next step.
 - **Not undo steps:** answering an ask (use Change, 3.17), sending from the tray (use Stop), publishing to the team library (publish again).
 - **Undo never cancels a running job** (that is Stop) and never refunds money. Undoing the step that used a paid result puts the previous version back as current. The paid version stays in Versions or Takes, and the toast says "v2 is back. v3 stays in Versions."
@@ -891,10 +891,10 @@ Exports are free. A large export shows its progress in a toast and lands as a do
 | Agent | Sign-off | Appears for | Where |
 |---|---|---|---|
 | Dex | Dex · directs | planning shots, writing prompts (with brand rules), the send tray, camera changes, Bridge, condensing direction, asks about planning and direction | Storyboard node and editor, camera fields, the insert menu, the send tray |
-| Wren | Wren · writes; Wren · researches | script drafts (including from a spin-in), rewrites, length fixes, unknown-name suggestions; looking up looks and references | Script node and editor, the Wren panel, References board |
-| Kai | Kai · renders | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders | empty frames and clips, Video board, Format sets, jobs |
-| Tess | Tess · retouches | cut-out, fill, change whole frame, upscale, character-sheet crops | Image editor, character sheets |
-| Edie | Edie · cuts | splicing moments, rendering the ad | Video editor, phone player |
+| Skye | Skye · scripts; Skye · scripts | script drafts (including from a spin-in), rewrites, length fixes, unknown-name suggestions; looking up looks and references | Script node and editor, the Skye panel, References board |
+| Wren | Wren · renders | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders | empty frames and clips, Video board, Format sets, jobs |
+| Rhea | Rhea · retouches | cut-out, fill, change whole frame, upscale, character-sheet crops | Image editor, character sheets |
+| Edie | Edie · edits | splicing moments, rendering the ad | Video editor, phone player |
 | Ellis | Ellis · reads | reading notes and handwriting, extracting text from files, briefs, brand books and documents | ink, notes, Convert to text, Brand board, Document nodes, the send tray's "confirm" rows |
 | Jude | Jude · checks | checking each result, seams, retries, brand-rule breaks (per size in a Format set) | check marks and brand flags on frames, clips and sizes |
 
@@ -903,7 +903,7 @@ Exports are free. A large export shows its progress in a toast and lands as a do
   - **Working:** an arc in the agent's colour.
   - **Needs you:** one orange dot at the top right.
 - **The figure says who. The loader (section 6) says what kind of work.** The two are separate signals.
-- **This crew replaces today's three-member `ui/agents/cast.ts`.** Today Dex is shown for every make. In the new crew, Kai is shown while Runway renders.
+- **This crew replaces today's three-member `ui/agents/cast.ts`.** Today Dex is shown for every make. In the new crew, Wren is shown while Runway renders.
 
 ### 5.2 Asking (needs_input)
 
@@ -921,7 +921,7 @@ Job states extend `JOB_STATES` in `contracts/types.ts` with `needs_input`. "Refu
 |---|---|---|---|---|
 | queued | In the queue | "In the queue, 2 ahead · about 1:30" | Cancel | no |
 | submitting | Sending | "Sending to Runway…" | Cancel | no |
-| submitted / fetching | Rendering | "Kai · renders · about 0:40 left" (progress bar when Runway reports it) | Stop | yes, when it completes |
+| submitted / fetching | Rendering | "Wren · renders · about 0:40 left" (progress bar when Runway reports it) | Stop | yes, when it completes |
 | validating | Checking | "Jude · checks @maya matches" | — | — |
 | needs_input | Waiting for you | the agent's question | the options · Later | no |
 | completed | Done | "Checked by Jude · 1 min ago" | Download · Open | yes, cost shown ("$1.20") |
@@ -929,7 +929,7 @@ Job states extend `JOB_STATES` in `contracts/types.ts` with `needs_input`. "Refu
 | failed (moderation) | Refused | "Runway refused this picture. Change the words or the picture." | Change the picture · Edit the words | "Not charged" |
 | uncertain | Unsure | "Checking with Runway…" | — | "not charged twice": reconciled by task id, never resent blindly |
 | cancelled | Stopped | "Stopped by Maya." | Make again | as the relay reports it (Q14) |
-| (take) patched | Patched | "Edie · cuts · 2 s replaced" | Compare | yes |
+| (take) patched | Patched | "Edie · edits · 2 s replaced" | Compare | yes |
 
 - **Shared jobs** add "Started by Maya" with her avatar, and "On Maya's budget".
 - **Errors** say what happened and what to do, never a code alone. The code is in smaller mono under the message, as today's `.errnode .code`.
@@ -985,10 +985,10 @@ Artboards 2, 5, 6 and 8 draw 8 sectors, artboard 12 draws 12, and artboard 10 dr
 |---|---|---|---|
 | Reading | Ellis ink #14161B | Ellis | notes, handwriting, files, briefs, brand books, documents |
 | Planning | Dex cobalt #2F64F5 | Dex | shot plans, prompts, the send tray, camera changes, Bridge, condensing direction |
-| Rendering | Kai marigold #FFC023 | Kai | frames, clips, Make all sizes, video cut-downs |
-| Retouching | Tess mint #6CD3A2 | Tess | cut-outs, fills, change whole frame, upscale, character-sheet crops |
+| Rendering | Wren marigold #FFC023 | Wren | frames, clips, Make all sizes, video cut-downs |
+| Retouching | Rhea mint #6CD3A2 | Rhea | cut-outs, fills, change whole frame, upscale, character-sheet crops |
 | Cutting | Edie iris #7D52F4 | Edie | splicing moments, rendering the ad |
-| Writing and researching | Wren coral #FF6A55 | Wren | script drafts and rewrites; looking up looks and references |
+| Writing and researching | Skye coral #FF6A55 | Skye | script drafts and rewrites; looking up looks and references |
 
 - **Checking** (Jude) has no colour of its own in the mapping. It uses the reading ink, which is also Jude's figure colour (artboard 13), next to "Jude · checks". Q16 asks the owner to confirm.
 - **Artboard 14's legend pairs each kind with its agent's figure,** whose shape differs per agent, so a legend never relies on colour alone.
@@ -1010,11 +1010,11 @@ Artboards 2, 5, 6 and 8 draw 8 sectors, artboard 12 draws 12, and artboard 10 dr
 | Size | Where | Next to it |
 |---|---|---|
 | 14px | busy pointer badge; presence cursors | hover-hold label |
-| 20px | status pills, toasts, crew status lines, frame and clip badges, inline lines ("Kai is drawing frame 6") | the line |
+| 20px | status pills, toasts, crew status lines, frame and clip badges, inline lines ("Wren is drawing frame 6") | the line |
 | 32px | job cards, node status, the masked area in the Image editor | agent sign-off, time left, Stop |
 | 64px | a page or panel loading for the first time | a title |
 
-- **Accessibility.** Loader SVGs are `aria-hidden`. The words beside them live in a `role="status"` `aria-live="polite"` region ("Kai is rendering clip 4"). On iPad, a loader on a node has `role="img"` and a label such as "Kai is drawing frame 6".
+- **Accessibility.** Loader SVGs are `aria-hidden`. The words beside them live in a `role="status"` `aria-live="polite"` region ("Wren is rendering clip 4"). On iPad, a loader on a node has `role="img"` and a label such as "Wren is drawing frame 6".
 
 ### 6.4 Reduced motion
 
@@ -1035,7 +1035,7 @@ Either one switches every loader to the full disc, still, in the work colour, wi
   - It is a DOM element with `pointer-events: none`, positioned with `transform` on `pointermove` (CSS cursors can't animate).
   - `cursor: progress` is the fallback when the element can't render.
 - **Several jobs at once:** the badge shows the kind of your most recently started job, with a small count when more than one is running ("2").
-- **Label:** after the pointer is still for 0.6 s, or on keyboard focus of the badge's status, a dark pill appears: "Kai is rendering frame 3 · started by you". It hides on the next move.
+- **Label:** after the pointer is still for 0.6 s, or on keyboard focus of the badge's status, a dark pill appears: "Wren is rendering frame 3 · started by you". It hides on the next move.
 - **It hides:**
   - during a pen stroke, a drag, a port drag or brush painting, and reappears on release;
   - when the pointer leaves the window;
@@ -1070,7 +1070,7 @@ Either one switches every loader to the full disc, still, in the work colour, wi
 | Script | Tab / Enter | Next element type |
 | Script | @ / # | Mention a reference / link a shot |
 | Script | ⌥M / Alt+M | Add a moment at the caret (Q9) |
-| Script | ⌘Enter in Ask Wren | Send |
+| Script | ⌘Enter in Ask Skye | Send |
 | Lists (outline, AV, storyboard, timeline) | Space, ↑↓, Space or Esc | Lift, move, drop or cancel a shot |
 | Image editor | V A B L E T C H, [ ], Space-drag | Tools, brush size, pan |
 | Image editor | ⌘Enter | Apply as new version |
@@ -1228,9 +1228,9 @@ Either one switches every loader to the full disc, still, in the work colour, wi
 | Asks, shared | Anchored ask cards signed by the step's owner; hard block only when nothing can proceed; Recommended on nudges, no default on ambiguity; Later; questions pill; "You chose … · in History" with Change; anyone can answer | 3.17, 4.7, 5.2; artboard 4c | Make video from a script alone: Dex asks "Plan a storyboard first?" with Plan first marked Recommended. Sai answers from her laptop: History shows "Sai chose: plan the storyboard first". |
 | Assets and team library | Assets drawer in the rail's place; shelves per client shared across the agency; items with version and publisher; publish replaces for everyone, projects keep their copy | 3.18, 4.8; artboard 4d | Publish @ext_beach v5: the library shows v5 for everyone; an open project still uses v4 and offers Update. |
 | Brand rules | Brand book becomes a Brand board as Ellis reads; no font files from a PDF; Dex writes rules into prompts; Jude flags with Fix in image editor / Ignore; never blocks | 3.18; artboard 4d | Drop a brand PDF: the Brand board appears at once and fills page by page; fonts show "no file". A frame with the logo at the edge gets Jude's clear-space flag and still lands. |
-| Character sheets, documents, spin-in, export | Tess proposes crops (Confirm/Adjust); DOCX becomes a Document node used once linked; spin-in card waits for Bring in; Export menu | 3.18; artboard 4d | Drop maya_sheet.png: no reference exists until Confirm. Not now on a spin-in leaves it under From Napkin. |
+| Character sheets, documents, spin-in, export | Rhea proposes crops (Confirm/Adjust); DOCX becomes a Document node used once linked; spin-in card waits for Bring in; Export menu | 3.18; artboard 4d | Drop maya_sheet.png: no reference exists until Confirm. Not now on a spin-in leaves it under From Napkin. |
 | Scamp sheets | Sheets opens the pack picker; a pack drops a board of labelled, ratio-locked sketch areas | 3.19; artboard 4e | Pick Social: a sheet lands with one area per format, each labelled with format and size. |
-| Make all sizes, cut-downs | Kai adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size and total, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size and the total; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
+| Make all sizes, cut-downs | Wren adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size and total, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size and the total; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
 
 ---
 
@@ -1249,7 +1249,7 @@ Either one switches every loader to the full disc, still, in the work colour, wi
 
 Each question has a recommendation. The build follows the recommendation unless the owner says otherwise. Questions marked **(redraw)** need artboards changed either way.
 
-Answered on 2026-10-13 and removed: the loader colour model (crew tones, 6.2), who researches (Wren, as artboard 14 signs it), the role set (3.6), a running node during a link drag (never dimmed, 3.4), model names ("<model> on Runway"), whether asks are shared (yes, 4.7), and artboards 4b and 4c (drawn).
+Answered on 2026-10-13 and removed: the loader colour model (crew tones, 6.2), who researches (Skye, as artboard 14 signs it), the role set (3.6), a running node during a link drag (never dimmed, 3.4), model names ("<model> on Runway"), whether asks are shared (yes, 4.7), and artboards 4b and 4c (drawn).
 
 1. **Finish settle.** Should the loader settle into the full brand mark for 0.6 s when a job finishes? Recommended: yes, except under reduced motion.
 2. **Sketches board.** Artboards 4 and 5 add a "Sketches" board, which the plan doesn't define. Recommended: sketch areas live on any board, and the Ad template gets no Sketches board. People can add one with the "sketches" purpose. Scamp sheets (3.19) are their own `formats` boards either way.
