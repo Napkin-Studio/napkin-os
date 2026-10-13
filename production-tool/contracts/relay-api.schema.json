@@ -145,7 +145,7 @@
     },
     "JobRequest": {
       "type": "object",
-      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. The job runs on the first provider of its op's routing (or the pick); Runway, the floor, makes it again once on its default model for the op when that provider fails for a provider or account reason before or after submit (Job.fallbackFrom and fallbackReason say so; features/runway-fallback.clan). Moderated or invalid input never falls back.",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. The job runs on the first provider of its op's routing (or the pick); Runway, the floor, makes it again once on its default model for the op when that provider fails for a provider or account reason before or after submit (Job.fallbackFrom and fallbackReason say so; features/runway-fallback.clan). Moderated or invalid input never falls back. frame_edit (Change this frame) needs the current frame (input.image), the shot with its camera and the words, may carry a region or mask, and takes no anchorFrame, previousFrame or modelChoice: Dex reads the words against the frame and the relay runs the op it resolves (features/frame-change-edit.clan). A Redo is a new frame_edit job with parentIds [the earlier job].",
       "properties": {
         "contractVersion": {
           "$ref": "common.schema.json#/$defs/contractVersion"
@@ -199,7 +199,51 @@
         "nonce",
         "node"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "frame_edit"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "required": [
+                  "image",
+                  "shot",
+                  "text"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "anchorFrame"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "previousFrame"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "modelChoice"
+              ]
+            }
+          }
+        }
+      ]
     },
     "ModelChoice": {
       "type": "object",
@@ -226,7 +270,7 @@
         "text": {
           "type": "string",
           "maxLength": 1000,
-          "description": "The user's words: the Generate instruction (with the text of any selected notes), the text box under a frame or clip, the region note, the feel change."
+          "description": "The user's words: the Generate instruction (with the text of any selected notes), the text box under a frame or clip, the region note, the feel change, the Change this frame words."
         },
         "chips": {
           "type": "array",
@@ -309,14 +353,14 @@
         },
         "image": {
           "$ref": "common.schema.json#/$defs/assetRef",
-          "description": "region_edit: the image being edited. view: the source image. clip: the storyboard frame."
+          "description": "region_edit, frame_edit: the image being edited (frame_edit: the shot's current frame). view: the source image. clip: the storyboard frame."
         },
         "region": {
           "$ref": "common.schema.json#/$defs/region"
         },
         "mask": {
           "$ref": "common.schema.json#/$defs/assetRef",
-          "description": "region_edit, clip_edit: a PNG mask (white = change, our convention); the adapter converts it per provider. Absent when the user drew only a box."
+          "description": "region_edit, frame_edit, clip_edit: a PNG mask (white = change, our convention); the adapter converts it per provider. Absent when the user drew only a box. A frame_edit Dex reads as a camera change redraws the whole frame and does not use it."
         },
         "video": {
           "$ref": "common.schema.json#/$defs/assetRef",

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/director.schema.json",
   "title": "Director output",
-  "description": "What the director model returns for one job, enforced as strict JSON (structured output, validated, one retry, then a loud failure). It sees the job input (with the role lines, brand rules and context of contract 3) and the routed provider's capability sheet, never a chat history. For shot_list it returns planned shots; for every other op one provider job in that provider's syntax; for any op it may instead ask one question (prompt director.v6).",
+  "description": "What the director model returns for one job, enforced as strict JSON (structured output, validated, one retry, then a loud failure). It sees the job input (with the role lines, brand rules and context of contract 3) and the routed provider's capability sheet, never a chat history. For shot_list it returns planned shots; for every other op one provider job in that provider's syntax; for any op it may instead ask one question (prompt director.v6). frame_edit adds frameEdit, Dex's reading of the words; a change of camera movement only comes without a providerJob (director.v7).",
   "type": "object",
   "properties": {
     "op": {
@@ -19,6 +19,9 @@
         "$ref": "#/$defs/plannedShot"
       },
       "description": "shot_list only. duration_s sums to the target length. A shot that keeps an existing id re-plans that shot (a merge keyed by shot id)."
+    },
+    "frameEdit": {
+      "$ref": "#/$defs/frameEdit"
     },
     "rationale": {
       "type": "string",
@@ -76,9 +79,49 @@
           }
         },
         "else": {
-          "required": [
-            "providerJob"
-          ]
+          "if": {
+            "properties": {
+              "op": {
+                "const": "frame_edit"
+              },
+              "frameEdit": {
+                "properties": {
+                  "runAs": {
+                    "const": "none"
+                  }
+                }
+              }
+            },
+            "required": [
+              "frameEdit"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "providerJob"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "providerJob"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "frameEdit"
+        ]
+      },
+      "then": {
+        "properties": {
+          "op": {
+            "const": "frame_edit"
+          }
         }
       }
     }
@@ -523,6 +566,40 @@
           }
         }
       ]
+    },
+    "frameEdit": {
+      "type": "object",
+      "description": "frame_edit only (Change this frame, features/frame-change-edit.clan): how Dex read the words and what the relay runs. reading: camera (the shot's camera changes, so the whole frame is redrawn), local (something in the frame changes; the camera stays) or both. runAs: the op the provider job runs as (frame: a redraw, or an instruction edit for a local change with no box; region_edit: a boxed or masked edit), or none when only the camera's movement changes, which needs no new picture. camera: the leaves that change, each with its new value. maskUnused: a box or mask was sent but a camera change redraws the whole frame. words_as_given: the person's words went to the model as they are (the passthrough).",
+      "properties": {
+        "reading": {
+          "enum": [
+            "camera",
+            "local",
+            "both"
+          ]
+        },
+        "runAs": {
+          "enum": [
+            "frame",
+            "region_edit",
+            "none"
+          ]
+        },
+        "camera": {
+          "$ref": "common.schema.json#/$defs/cameraPatch"
+        },
+        "maskUnused": {
+          "type": "boolean"
+        },
+        "words_as_given": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reading",
+        "runAs"
+      ],
+      "additionalProperties": false
     }
   }
 }

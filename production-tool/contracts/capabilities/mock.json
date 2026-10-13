@@ -27,6 +27,11 @@
       "endpoint": "mock://image",
       "estimateUsd": 0
     },
+    "frame_edit": {
+      "model": "mock",
+      "endpoint": "mock://image",
+      "estimateUsd": 0
+    },
     "clip": {
       "model": "mock",
       "endpoint": "mock://video",
