@@ -2,15 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShell, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
-import type { StageName } from './contracts/types'
-import { systemUpdate } from './doc/store'
+import type { StageName } from './doc/ui'
+import { refsList, storyboardReady } from './model/selectors'
+import { personOf } from './projects/session'
 import { download, exportBundle } from './export'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
 import { StudioMark } from './ui/Mark'
 import { HistoryPanel } from './ui/History'
-import { CLAN_DB } from './doc/clan'
+import { CLAN_DB } from './model/store'
 import { clanDbFor, INDEX_KEY } from './projects/storage'
 import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
@@ -34,9 +35,8 @@ const STAGES: { id: StageName; n: number; label: string }[] = [
 
 export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null }) {
   const { clan, storeNote, project } = useServices()
-  const doc = useDoc()
   const { config } = useConfig()
-  const stage = doc.stage.current
+  const stage = useUi().stage
   const [history, setHistory] = useState(false)
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
@@ -70,7 +70,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
 }
 
 function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
-  const { doc: docStore, relay, project } = useServices()
+  const { doc: docStore, ui: uiStore, relay, project } = useServices()
   const shell = useShell()
   const doc = useDoc()
   const ui = useUi()
@@ -81,9 +81,11 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
   const menuRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = useCallback(() => { setMenuOpen(false); setPackNote(null) }, [])
-  const stage = doc.stage.current
+  const stage = ui.stage
+  const hasRefs = refsList(doc).length > 0
+  // The Video stage opens once every shot is locked or waits for review (storyboardReady), as before.
   const reachable = (s: StageName) =>
-    s === 'character' || (s === 'storyboard' && doc.refs.length > 0) || (s === 'video' && doc.refs.length > 0 && (doc.shots ?? []).length > 0 && (doc.shots ?? []).every((x) => x.status === 'locked' || x.status === 'needs_review'))
+    s === 'character' || (s === 'storyboard' && hasRefs) || (s === 'video' && hasRefs && storyboardReady(doc))
   const order = STAGES.findIndex((s) => s.id === stage)
 
   return (
@@ -105,7 +107,7 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
               className={`rail-step ${s.id === stage ? 'current' : ''} ${i < order ? 'done' : ''}`}
               disabled={!reachable(s.id)}
               aria-current={s.id === stage ? 'step' : undefined}
-              onClick={() => systemUpdate(docStore, (d) => { d.stage.current = s.id }, 'stage')}
+              onClick={() => uiStore.update((u) => { u.stage = s.id })}
             >
               <span className="n">{i < order ? '✓' : s.n}</span>
               {s.label}
@@ -124,7 +126,7 @@ function TopBar({ history, onHistory }: { history: boolean; onHistory: () => voi
             (features/drop-hackathon-extras.clan). */}
         <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
         <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
-          <div className="fhead handle">@{ui.me?.handle ?? doc.participant.handle}{ui.me?.team ? ` · ${ui.me.team}` : ''}</div>
+          <div className="fhead handle">@{ui.me?.handle ?? personOf(ui.me).handle}{ui.me?.team ? ` · ${ui.me.team}` : ''}</div>
           <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
             setExporting(true)
             try {

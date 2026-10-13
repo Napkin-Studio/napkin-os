@@ -15,10 +15,12 @@ import { selectedTake } from '../jobs/clips'
 import { beginFollow, cancelFollow, followState, makeAwaited, planSummary, planWords, restAsTheyAre } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { frameStale, takeStale } from '../jobs/stale'
+import { ctxReader, jobCtx } from '../jobs/runner'
+import { shotFrameAsset, shotNumber, shotsOf } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { behindLabel } from './behind'
 import { useBlobUrl } from './hooks'
-import { JobNode } from './JobNode'
+import { JobSlot } from './JobSlot'
 import { ModelPick } from './ModelPick'
 
 const keyOf = (c: ModelChoice) => `${c.provider}:${c.model}`
@@ -30,7 +32,7 @@ export function UpdateBox() {
   // Minimised to a pill; held here, not in Box, so it stays minimised from one item to the next.
   const [min, setMin] = useState(false)
   const run = ui.following
-  const state = followState(doc, (id) => ui.jobCtx[id], run)
+  const state = followState(doc, ctxReader(doc, ui), run)
   if (!run || !state || run.cancel) return null
   if (run.reviewing) {
     if (min) {
@@ -45,11 +47,11 @@ export function UpdateBox() {
     return <Plan onMinimise={() => setMin(true)} />
   }
   // The item on show: the one waiting for the user, else the steered one being made now.
-  const runningCtx = state.running ? ui.jobCtx[state.running.id] : undefined
+  const runningCtx = state.running ? jobCtx(doc, ui, state.running.id) : undefined
   const making: FollowItem | undefined = runningCtx?.for === 'frame' || runningCtx?.for === 'clip' ? { kind: runningCtx.for, shotId: runningCtx.shotId } : undefined
   const item = run.awaiting ?? (run.steer ? making : undefined)
   if (!item) return null
-  const shot = (doc.shots ?? []).find((s) => s.id === item.shotId)
+  const shot = doc.shots[item.shotId]
   if (min) {
     const waiting = !!run.awaiting && !state.running
     return (
@@ -58,7 +60,7 @@ export function UpdateBox() {
         <AgentFigure agent="dex" state={state.running ? 'working' : 'idle'} size={22} decorative />
         <b>Update</b>
         <span className="faint">{Math.min(state.done + (run.awaiting ? 1 : 0), run.total ?? 99)} of {run.total ?? '…'}</span>
-        {shot && <span className="faint">· Shot {shot.order} {item.kind}{waiting ? ' · waiting for you' : state.running ? ' · making' : ''}</span>}
+        {shot && <span className="faint">· Shot {shotNumber(doc, shot.id)} {item.kind}{waiting ? ' · waiting for you' : state.running ? ' · making' : ''}</span>}
       </button>
     )
   }
@@ -76,15 +78,15 @@ function Plan({ onMinimise }: { onMinimise: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const plan = { frames: run.frameShots ?? [], clips: run.clipShots, ad: run.ad }
-  const shots = doc.shots ?? []
+  const shots = shotsOf(doc)
   const rows: { key: string; what: string; why: string }[] = [
     ...shots.filter((s) => plan.frames.includes(s.id)).map((s) => {
       const mark = frameStale(doc, s.id)
-      return { key: `f:${s.id}`, what: `Frame ${s.order}`, why: mark ? behindLabel(doc, mark) : selectedFrame(doc, s.id) ? 'Carries the look forward' : 'Not made yet' }
+      return { key: `f:${s.id}`, what: `Frame ${shotNumber(doc, s.id)}`, why: mark ? behindLabel(doc, mark) : selectedFrame(doc, s.id) ? 'Carries the look forward' : 'Not made yet' }
     }),
     ...shots.filter((s) => plan.clips.includes(s.id)).map((s) => {
       const mark = takeStale(doc, s.id)
-      return { key: `c:${s.id}`, what: `Clip ${s.order}`, why: mark ? behindLabel(doc, mark) : plan.frames.includes(s.id) ? 'Follows its new frame' : selectedTake(doc, s.id) ? 'Carries forward' : 'Not made yet' }
+      return { key: `c:${s.id}`, what: `Clip ${shotNumber(doc, s.id)}`, why: mark ? behindLabel(doc, mark) : plan.frames.includes(s.id) ? 'Follows its new frame' : selectedTake(doc, s.id) ? 'Carries forward' : 'Not made yet' }
     }),
     ...(plan.ad ? [{ key: 'ad', what: 'The ad', why: 'Follows the new clips' }] : []),
   ]
@@ -135,14 +137,14 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const shot = (doc.shots ?? []).find((s) => s.id === item.shotId)
-  const thumb = useBlobUrl(shot ? selectedFrame(doc, shot.id)?.asset ?? shot.storyboard_frame : undefined)
+  const shot = doc.shots[item.shotId]
+  const thumb = useBlobUrl(shot ? shotFrameAsset(doc, shot) : undefined)
   if (!shot) return null
   const options = modelChoicesFor(item.kind, config)
   const sent = run.models?.[item.kind]
   const choice = pick ?? (sent && options.find((o) => keyOf(o) === keyOf(sent))) ?? options[0]
   const mark = item.kind === 'frame' ? frameStale(doc, shot.id) : takeStale(doc, shot.id)
-  const job = jobId ? doc.jobs.find((j) => j.id === jobId) : undefined
+  const job = jobId ? doc.jobs[jobId] : undefined
   const making = !!job && !['completed', 'failed', 'cancelled'].includes(job.state)
   const why = making ? (mark ? 'Updating…' : 'Making it…') : mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'
   const n = Math.min(run.framesDone.length + run.clipsDone.length + (run.awaiting ? 1 : 0), run.total ?? 99)
@@ -173,11 +175,11 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
       <div className="row ub-item">
         {thumb ? <img src={thumb} alt="" /> : <span className="ub-empty" />}
         <div className="stack" style={{ gap: 2 }}>
-          <b>Shot {shot.order} · {item.kind === 'frame' ? 'frame' : 'clip'}</b>
+          <b>Shot {shotNumber(doc, shot.id)} · {item.kind === 'frame' ? 'frame' : 'clip'}</b>
           <span className={`behind ${making ? 'updating' : ''}`} title={mark?.reason}>{why}</span>
         </div>
       </div>
-      {job && <div className="ub-job"><JobNode jobId={job.id} /></div>}
+      {job && <div className="ub-job"><JobSlot jobId={job.id} /></div>}
       {!making && (
         <>
           <textarea className="textarea" rows={2} maxLength={1000} value={words} onChange={(e) => setWords(e.target.value)}

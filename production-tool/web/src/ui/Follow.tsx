@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { cancelFollow, followState, planSize, planWords, type FollowScope } from '../jobs/follow'
+import { ctxReader } from '../jobs/runner'
 import { behindCount, notMadeCount } from './behind'
 import { SplitButton } from './SplitButton'
 import { useUpdate } from './useUpdate'
@@ -20,7 +21,7 @@ export function UpdateFollows() {
   useJobsTick()
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const run = ui.following
-  const state = followState(doc, (id) => ui.jobCtx[id], run)
+  const state = followState(doc, ctxReader(doc, ui), run)
   if (!run || !state) return null
   const label = run.cancel ? 'Stopping…' : run.reviewing ? 'Update · check the plan' : state.failed ? 'Update paused' : run.awaiting && !state.running ? 'Update · your turn' : `Updating · ${Math.min(state.done + 1, run.total ?? state.done + 1)} of ${run.total ?? '…'}`
   return (

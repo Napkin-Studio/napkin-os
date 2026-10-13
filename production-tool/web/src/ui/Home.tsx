@@ -13,7 +13,7 @@ import { homeItems, itemId } from '../projects/homeList'
 import { behindNapkinOs, signOut } from '../relay/access'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
-import { clock, displayName, edited, greeting, stageChip } from './homeWords'
+import { clock, displayName, edited, greeting, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
 import { sayer, type CastKey } from './agents/cast'
 import { useBlobUrl } from './hooks'
@@ -83,7 +83,7 @@ export function Home() {
 
           {state.notice && (
             <div className="hm-notice" role="status">
-              <span>☁ {state.notice}. <span className="faint">Not you? Sign out and pick another name.</span></span>
+              <span>{refusalNotice(state.notice)} <span className="faint">It was left as it was.</span></span>
               <button className="btn xs ghost" onClick={() => shell.say(null)}>OK</button>
             </div>
           )}

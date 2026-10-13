@@ -2,6 +2,9 @@
 // or all of them in order as the stitched preview), Frame.io-style comments
 // pinned to a timecode (typing pauses the player; draw a box on the paused
 // frame), a "change the feel" box, and Render / Export.
+//
+// Contract 3: the clips of a shot are its takes; the one in the cut is the main video's edl item pick;
+// notes are reviews with a window; the ad is the video's picked render.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
@@ -14,11 +17,10 @@ import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, takeStale } from '../jobs/stale'
 import { adBehindLabel, behindLabel } from '../ui/behind'
 import { rectToRegion } from '../lib/region'
-import { newId } from '../lib/ulid'
 import { fmtTime, useBlobUrl, useSending } from '../ui/hooks'
 import { clipText } from '../lib/guard'
-import { JobNode } from '../ui/JobNode'
-import { systemUpdate, updateDoc } from '../doc/store'
+import { JobSlot } from '../ui/JobSlot'
+import { updateDoc } from '../doc/store'
 import { deleteFrom, removeNote, removeTake } from '../doc/remove'
 import { ModelItems, ModelPick } from '../ui/ModelPick'
 import { Float, MenuItem } from '../ui/Float'
@@ -33,16 +35,16 @@ import { Thumbs } from '../dogfood/Dogfood'
 import { DownloadButton } from '../ui/Download'
 import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
+import { ctxReader } from '../jobs/runner'
+import { personOf } from '../projects/session'
+import { currentRender, currentTake, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
+import { addTakeNote, pickTake } from './videoEdits'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
   { id: 'flex', label: 'Flex', hint: 'Noticeable change' },
   { id: 'reimagine', label: 'Reimagine', hint: 'Big change' },
 ]
-
-function takesOf(takes: Take[], shotId: string) {
-  return takes.filter((t) => t.shot_id === shotId)
-}
 
 export function Video() {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
@@ -51,21 +53,20 @@ export function Video() {
   const { controls, config } = useConfig()
   useJobsTick()
   const deps = { relay, doc: docStore, ui: uiStore, runner }
-  const shots = doc.shots ?? []
-  const takes = doc.takes ?? []
+  const shots = shotsOf(doc)
   const [shotId, setShotId] = useState<string | null>(shots[0]?.id ?? null)
   const [mode, setMode] = useState<'shot' | 'all'>('shot')
   const [error, setError] = useState<string | null>(null)
   const shot = shots.find((s) => s.id === shotId) ?? shots[0]
-  const take = shot ? takesOf(takes, shot.id).find((t) => t.selected) : undefined
+  const take = shot ? currentTake(doc, shot.id) : undefined
   const clipJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id)
   // An "uncertain" job is waiting on the participant (Stop waiting / Try again on its card), not on
   // the relay: it locks nothing (features/video-stage-findings.clan).
   const anyRunning = shots.some((s) => isMoving(doc, clipJob(s.id)))
-  const taken = shots.filter((s) => takesOf(takes, s.id).some((t) => t.selected)).length
+  const taken = shots.filter((s) => !!currentTake(doc, s.id)).length
   const allTaken = shots.length > 0 && taken === shots.length
   const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch')
-  const latestAd = (doc.exports ?? []).filter((e) => e.kind === 'ad_mp4').at(-1)
+  const latestAd = currentRender(doc)
   // One send per click burst: a double click paid twice (2026-10-09).
   const [makingAll, sendAll] = useSending()
   const [rendering, sendRender] = useSending()
@@ -78,7 +79,7 @@ export function Video() {
     setError(null)
     const failed: string[] = []
     for (const [i, s] of shots.entries()) {
-      if (takesOf(takes, s.id).length || isRunning(doc, clipJob(s.id))) continue
+      if (takesOf(doc, s.id).length || isRunning(doc, clipJob(s.id))) continue
       try {
         await makeClip(s, { modelChoice: choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)) })
       } catch (e) {
@@ -111,7 +112,7 @@ export function Video() {
         <AgentFigure agent="dex" size={64} decorative />
         <span className="sayer">{sayer('dex')}</span>
         <b>No shots yet.</b>Plan your shots and draw the frames first; I make one clip per frame.
-        <div style={{ marginTop: 14 }}><button className="btn" onClick={() => systemUpdate(docStore, (d) => { d.stage.current = 'storyboard' })}>← Back to Storyboard</button></div>
+        <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.stage = 'storyboard' })}>← Back to Storyboard</button></div>
       </div></div>
     )
   }
@@ -148,7 +149,7 @@ export function Video() {
 
         <div style={{ marginTop: 20 }}>
           <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}>
-            {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobNode jobId={stitchJob} /></div>}
+            {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobSlot jobId={stitchJob} /></div>}
             {latestAd && <AdResult sha={latestAd.asset} />}
             {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
           </Player>
@@ -198,16 +199,16 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
   const [making, setMaking] = useState(false)
   const { doc: docStore } = useServices()
   const doc = useDoc()
-  const takes = takesOf(doc.takes ?? [], shot.id)
-  const sel = takes.find((t) => t.selected)
-  const thumb = useBlobUrl(shot.storyboard_frame)
+  const takes = takesOf(doc, shot.id)
+  const sel = currentTake(doc, shot.id)
+  const thumb = useBlobUrl(shotFrameAsset(doc, shot))
   const showMock = useShowMock()
-  const open = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && !r.resolved).length
-  const selIdx = sel ? takes.indexOf(sel) : -1
+  const open = reviewsList(doc).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && r.state !== 'resolved').length
+  const selIdx = sel ? takes.findIndex((t) => t.id === sel.id) : -1
   const ui = useUi()
   const selMade = madeWith(doc, ui, sel?.job_id)
   // A fix that is redoing this shot's clip replaces it: not "out of date" meanwhile.
-  const stale = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(shot.id) ? undefined : takeStale(doc, shot.id)
+  const stale = shotsBeingFixed(doc, ctxReader(doc, ui)).has(shot.id) ? undefined : takeStale(doc, shot.id)
   // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
   const update = useUpdate()
   const [error, setError] = useState<string | null>(null)
@@ -234,21 +235,17 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
     }}>
       <div className="thumb">
         {thumb && <img src={thumb} alt="" />}
-        {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobNode jobId={jobId} compact /></div>}
+        {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobSlot jobId={jobId} compact /></div>}
       </div>
       {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} />}
       <div className="meta">
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         <div className="row wrap" style={{ gap: 4 }}>
           {takes.map((t, i) => (
-            <button key={t.id} className={`vchip ${t.selected ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
+            <button key={t.id} className={`vchip ${t.id === sel?.id ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
               onClick={(e) => {
                 e.stopPropagation()
-                updateDoc(docStore, (d) => {
-                  for (const x of d.takes ?? []) if (x.shot_id === shot.id) x.selected = x.id === t.id
-                  const s = d.shots?.find((y) => y.id === shot.id)
-                  if (s) s.selected_take = t.id
-                }, 'pick take')
+                void updateDoc(docStore, (d) => pickTake(d, shot.id, t.id), 'pick take')
               }}>v{i + 1}</button>
           ))}
           {!takes.length && !jobId && <button ref={makeRef} className="btn xs" aria-haspopup="dialog" aria-expanded={making} onClick={(e) => { e.stopPropagation(); setMaking(!making) }}>Make clip</button>}
@@ -256,7 +253,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
             {making && <MakeClipBox index={index} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
           </Float>
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
-          {selMade.fallback && <span className="madeon" title={`${selMade.fallback}. ${ui.jobCtx[sel?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
+          {selMade.fallback && <span className="madeon" title={`${selMade.fallback}. ${ui.jobs[sel?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
         </div>
         {(stale || open > 0) && (
           <div className="badges">
@@ -314,17 +311,17 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
   }
   return (
     <>
-      <button ref={ref} className={`shotmore ${open ? 'open' : ''}`} aria-label={`Shot ${shot.order} options`} aria-haspopup="menu" aria-expanded={!!open}
+      <button ref={ref} className={`shotmore ${open ? 'open' : ''}`} aria-label={`Shot ${shotNumber(doc, shot.id)} options`} aria-haspopup="menu" aria-expanded={!!open}
         onClick={(e) => { e.stopPropagation(); setOpen(open ? false : 'main') }}>⋯</button>
-      <Float anchor={ref} open={!!open} onClose={close} align="end" label={`Shot ${shot.order}, clip v${n}`} className={open === 'models' ? 'modelmenu' : ''}>
+      <Float anchor={ref} open={!!open} onClose={close} align="end" label={`Shot ${shotNumber(doc, shot.id)}, clip v${n}`} className={open === 'models' ? 'modelmenu' : ''}>
         {open === 'models' ? (
           <>
-            <div className="fhead">New take of shot {shot.order} with</div>
+            <div className="fhead">New take of shot {shotNumber(doc, shot.id)} with</div>
             <ModelItems options={options} current={start} onPick={(o) => newTake(o)} />
           </>
         ) : (
           <>
-            <div className="fhead">Shot {shot.order} · clip v{n}</div>
+            <div className="fhead">Shot {shotNumber(doc, shot.id)} · clip v{n}</div>
             <MenuItem icon="▶" disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : 'New take'}</MenuItem>
             {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
             {clip && (
@@ -348,14 +345,14 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const { config, controls } = useConfig()
   const video = useRef<HTMLVideoElement>(null)
   const stageBox = useRef<HTMLDivElement>(null)
-  const shots = useMemo(() => doc.shots ?? [], [doc.shots])
-  const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: (doc.takes ?? []).find((t) => t.shot_id === s.id && t.selected) })).filter((x) => x.take) as { shot: Shot; take: Take }[], [shots, doc.takes])
+  const shots = useMemo(() => shotsOf(doc), [doc])
+  const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: currentTake(doc, s.id) })).filter((x) => x.take) as { shot: Shot; take: Take }[], [shots, doc])
   const [idx, setIdx] = useState(0)
   const cur = mode === 'all' ? playlist[idx] : take && shot ? { shot, take } : undefined
   // Not in this browser (another device, cleared storage): the relay's copy (2026-10-09).
   const url = useBlobUrl(cur?.take.asset) ?? remoteUrl(doc, cur?.take.asset)
   // The relay's mock makes a still for a clip, not a video: it shows as the picture it is.
-  const still = !!doc.assets.find((a) => a.sha256 === cur?.take.asset)?.mime.startsWith('image/')
+  const still = !!(cur && doc.assets[cur.take.asset]?.mime.startsWith('image/'))
   const stillS = cur ? cur.take.duration_s ?? cur.shot.duration_s : 0
   useEffect(() => {
     if (!still || mode !== 'all' || !stillS) return
@@ -386,9 +383,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
     setError(null)
   }
 
-  const reviews = (doc.reviews ?? []).filter((r) => r.target.kind === 'take' && cur && takesOf(doc.takes ?? [], cur.shot.id).some((x) => x.id === r.target.id))
+  const reviews = reviewsList(doc).filter((r) => r.target.kind === 'take' && cur && takesOf(doc, cur.shot.id).some((x) => x.id === r.target.id))
     .sort((a, b) => (a.at_s ?? 0) - (b.at_s ?? 0))
-  const openNotes = reviews.filter((r) => !r.resolved && r.target.id === cur?.take.id)
+  const openNotes = reviews.filter((r) => r.state !== 'resolved' && r.target.id === cur?.take.id)
   const fixJob = cur ? jobAt(doc, ui, (c) => (c.for === 'clip' || (c.for === 'frame' && !!c.fixReviewIds?.length)) && c.shotId === cur.shot.id) : undefined
   const fixing = isRunning(doc, fixJob)
   // A shot's first clip, being made or failed: its card (Cancel, Retry, Model) in the empty player.
@@ -428,11 +425,12 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
 
   const addNote = () => {
     if (!cur || !note.trim()) return
-    const r: Review = { id: newId('pin'), target: { kind: 'take', id: cur.take.id }, comment: clipText(note.trim(), 1000), at_s: Math.round((video.current?.currentTime ?? t) * 100) / 100, resolved: false, created_at: new Date().toISOString() }
-    if (region) r.region = region
-    updateDoc(docStore, (d) => {
-      d.reviews ??= []
-      d.reviews.push(r)
+    const atS = Math.round((video.current?.currentTime ?? t) * 100) / 100
+    const by = `human:${personOf(ui.me).id}`
+    const take = cur.take
+    const shotS = take.duration_s || cur.shot.duration_s
+    void updateDoc(docStore, (d) => {
+      addTakeNote(d, { takeId: take.id, shotId: cur.shot.id, shotS, atS, text: clipText(note.trim(), 1000), region, by })
     }, 'comment')
     setNote('')
     setRegion(null)
@@ -442,9 +440,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   const boxedOpen = openNotes.filter((r) => r.region)
   // A note with a box is fixed in the shot (jobs/fix.ts): the storyboard frame first, then a new clip from it.
   const fixesInShot = boxedOpen.length > 0 && controls.fixInShot
-  const progress = cur ? fixProgress(doc, (id) => ui.jobCtx[id], reviews.filter((r) => r.target.id === cur.take.id).map((r) => r.id)) : undefined
+  const progress = cur ? fixProgress(doc, ctxReader(doc, ui), reviews.filter((r) => r.target.id === cur.take.id).map((r) => r.id)) : undefined
   // The fix's frame already landed and only its clip failed: Fix makes only the clip, from the fixed frame.
-  const fixedFrame = cur && fixesInShot ? fixFrameLanded(doc, (id) => ui.jobCtx[id], openNotes.map((r) => r.id)) : undefined
+  const fixedFrame = cur && fixesInShot ? fixFrameLanded(doc, ctxReader(doc, ui), openNotes.map((r) => r.id)) : undefined
 
   const fix = () => send(async () => {
     if (!cur || !openNotes.length) return
@@ -458,9 +456,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
         await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice))
       } else if (one?.region && controls.videoRegionEdit) {
         const v = await assetRef(relay, cur.take.asset, docStore.get())
-        await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.comment }, [cur.take.job_id], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
+        await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.text ?? '' }, [cur.take.job_id], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
       } else {
-        const text = clipText(openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.comment}`).join('\n'), 1000)
+        const text = clipText(openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.text ?? ''}`).join('\n'), 1000)
         await submitClip(deps, cur.shot.id, { text, reviewIds: ids, parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice) })
       }
     } catch (e) {
@@ -469,11 +467,9 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
   })
 
   const jump = (r: Review) => {
-    const target = (doc.takes ?? []).find((x) => x.id === r.target.id)
+    const target = r.target.kind === 'take' ? doc.takes[r.target.id] : undefined
     if (target && cur && target.id !== cur.take.id) {
-      updateDoc(docStore, (d) => {
-        for (const x of d.takes ?? []) if (x.shot_id === target.shot_id) x.selected = x.id === target.id
-      })
+      void updateDoc(docStore, (d) => pickTake(d, target.shot_id, target.id), 'pick take')
     }
     if (target && mode === 'all') onPickShot(target.shot_id)
     pendingSeek.current = r.at_s ?? 0
@@ -508,7 +504,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
       <div className="player">
         {cur && url && still ? (
           <div className="stagebox still" style={{ height: '100%' }}>
-            <img src={url} alt={`Shot ${cur.shot.order}`} style={{ height: '100%' }} />
+            <img src={url} alt={`Shot ${shotNumber(doc, cur.shot.id)}`} style={{ height: '100%' }} />
             <div className="stillnote">A still from the mock: no video was made for this shot.</div>
           </div>
         ) : cur && url ? (
@@ -545,13 +541,13 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           </div>
         ) : (
           <div className="empty">
-            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobNode jobId={(fixJob ?? firstJob)!} /></div> : 'No clip for this shot yet. Press Make clip.'}
+            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobSlot jobId={(fixJob ?? firstJob)!} /></div> : 'No clip for this shot yet. Press Make clip.'}
           </div>
         )}
         {/* The clip on show, as one file (in All shots: the one playing). */}
         {cur && url && playing && !drawing && (
           <div className="player-dl">
-            <DownloadButton items={[playing]} className="btn xs" title={`Download shot ${cur.shot.order}, v${takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1} (${playing.name})`} />
+            <DownloadButton items={[playing]} className="btn xs" title={`Download shot ${shotNumber(doc, cur.shot.id)}, v${takesOf(doc, cur.shot.id).findIndex((x) => x.id === cur.take.id) + 1} (${playing.name})`} />
           </div>
         )}
       </div>
@@ -559,7 +555,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
       {mode === 'all' && segs.length > 0 ? (
         <div className="timeline" title="Click a shot to jump">
           {playlist.map((p, i) => (
-            <div key={p.take.id} className={`seg ${i === idx ? 'cur' : ''}`} style={{ width: `${(segs[i] / segTotal) * 100}%` }} onClick={() => setIdx(i)}>Shot {p.shot.order}</div>
+            <div key={p.take.id} className={`seg ${i === idx ? 'cur' : ''}`} style={{ width: `${(segs[i] / segTotal) * 100}%` }} onClick={() => setIdx(i)}>Shot {shotNumber(doc, p.shot.id)}</div>
           ))}
         </div>
       ) : cur && dur > 0 ? (
@@ -569,7 +565,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
         }}>
           <div className="head" style={{ left: `${(t / dur) * 100}%` }} />
           {reviews.filter((r) => r.target.id === cur.take.id).map((r) => (
-            <span key={r.id} className={`mark ${r.resolved ? 'done' : ''}`} style={{ left: `${Math.min(100, ((r.at_s ?? 0) / dur) * 100)}%` }} title={r.comment} onClick={(e) => { e.stopPropagation(); jump(r) }} />
+            <span key={r.id} className={`mark ${r.state === 'resolved' ? 'done' : ''}`} style={{ left: `${Math.min(100, ((r.at_s ?? 0) / dur) * 100)}%` }} title={r.text} onClick={(e) => { e.stopPropagation(); jump(r) }} />
           ))}
         </div>
       ) : null}
@@ -580,12 +576,12 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
         <div className="card section stack notes-panel">
           <div className="row">
             <h2>Notes</h2>
-            <span className="faint" style={{ fontSize: 12 }}>Shot {cur.shot.order} · v{takesOf(doc.takes ?? [], cur.shot.id).indexOf(cur.take) + 1}</span>
+            <span className="faint" style={{ fontSize: 12 }}>Shot {shotNumber(doc, cur.shot.id)} · v{takesOf(doc, cur.shot.id).findIndex((x) => x.id === cur.take.id) + 1}</span>
             <Thumbs key={cur.take.id} compact target={{
-              kind: 'clip', id: cur.take.id, jobId: cur.take.job_id, shot: cur.shot.order, provider: cur.take.provider, model: cur.take.model,
+              kind: 'clip', id: cur.take.id, jobId: cur.take.job_id, shot: shotNumber(doc, cur.shot.id), provider: cur.take.provider, model: cur.take.model,
             }} />
             {(() => {
-              const st = shotsBeingFixed(doc, (id) => ui.jobCtx[id]).has(cur.shot.id) ? undefined : takeStale(doc, cur.shot.id)
+              const st = shotsBeingFixed(doc, ctxReader(doc, ui)).has(cur.shot.id) ? undefined : takeStale(doc, cur.shot.id)
               return st && st.target.id === cur.take.id ? <span className="behind" title={st.reason}>{behindLabel(doc, st)}</span> : null
             })()}
           </div>
@@ -614,21 +610,21 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           {progress?.running && (
             <div className="faint" role="status" style={{ fontSize: 12.5, fontWeight: 600 }}>{progress.step === 'frame' ? 'Fixing the frame…' : 'Making the clip…'}</div>
           )}
-          {fixJob && <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden', display: 'flex' }}><JobNode jobId={fixJob} /></div>}
+          {fixJob && <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden', display: 'flex' }}><JobSlot jobId={fixJob} /></div>}
           <div className="comments">
             {reviews.flatMap((r) => {
-              const v = takesOf(doc.takes ?? [], cur.shot.id).findIndex((x) => x.id === r.target.id) + 1
+              const v = takesOf(doc, cur.shot.id).findIndex((x) => x.id === r.target.id) + 1
               const row = (
                 <div key={r.id} className="comment" onClick={() => jump(r)} style={focusPin === r.id ? { borderColor: 'var(--create)' } : undefined}>
                   <div className="row">
-                    <span className="tc">{fmtTime(r.at_s ?? 0)}</span><span className="faint" style={{ fontSize: 11 }}>v{v}{r.region ? ' · box' : ''}</span><span className="spacer" />{r.resolved && <span className="ok">✓ Addressed</span>}
+                    <span className="tc">{fmtTime(r.at_s ?? 0)}</span><span className="faint" style={{ fontSize: 11 }}>v{v}{r.region ? ' · box' : ''}</span><span className="spacer" />{r.state === 'resolved' && <span className="ok">✓ Addressed</span>}
                     <button className="btn xs icon ghost iconbtn-del del" aria-label="Delete note" title="Delete note" onClick={async (e) => {
                       e.stopPropagation()
                       if (focusPin === r.id) setFocusPin(null)
                       await deleteFrom(docStore, (d) => removeNote(d, r.id)) // Undo in the top bar puts it back
                     }}>🗑</button>
                   </div>
-                  <div>{r.comment}</div>
+                  <div>{r.text}</div>
                 </div>
               )
               return [row]
@@ -690,7 +686,7 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
   return (
     <div className="card section stack">
       <h2>Change the feel</h2>
-      <div className="faint" style={{ fontSize: 12.5 }}>Changes the whole clip for shot {shot.order}.</div>
+      <div className="faint" style={{ fontSize: 12.5 }}>Changes the whole clip for shot {shotNumber(doc, shot.id)}.</div>
       <textarea className="textarea" rows={3} maxLength={1000} placeholder="e.g. golden hour, slower, more dreamy" value={text} onChange={(e) => setText(e.target.value)} />
       {controls.feelStrength && (
         <div className="strengths" role="radiogroup" aria-label="How much to change">
@@ -712,7 +708,7 @@ function AdResult({ sha }: { sha: string }) {
   const doc = useDoc()
   const url = useBlobUrl(sha) ?? remoteUrl(doc, sha)
   const showMock = useShowMock()
-  const asset = doc.assets.find((a) => a.sha256 === sha)
+  const asset = doc.assets[sha]
   // Named like every other download (media/names.ts): <project>-ad.mp4.
   const ad = mediaItem(doc, useProjectName(), sha, 'ad')
   const status = adStatus(doc)
@@ -722,7 +718,7 @@ function AdResult({ sha }: { sha: string }) {
       <div className="row">
         <h2>Your ad</h2>
         {len ? <span className="faint" style={{ fontSize: 12 }}>{Math.round(len * 10) / 10} s</span> : null}
-        <Thumbs key={sha} compact target={{ kind: 'ad', id: sha, asset: sha, jobId: (doc.exports ?? []).find((e) => e.asset === sha)?.job_id }} />
+        <Thumbs key={sha} compact target={{ kind: 'ad', id: sha, asset: sha, jobId: Object.values(doc.renders).find((x) => x.asset === sha)?.job_id }} />
         <span className="spacer" />
         {status.stale && <span className="behind" title={status.reason}>{adBehindLabel(status.reason)}</span>}
         {showMock && asset?.origin === 'mock' && <span className="mockbadge">MOCK</span>}

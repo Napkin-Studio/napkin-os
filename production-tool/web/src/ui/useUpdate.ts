@@ -5,13 +5,14 @@
 
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { planCostShort, planFor, planSize, shotsInTheMaking, startFollow, type FollowScope } from '../jobs/follow'
+import { ctxReader } from '../jobs/runner'
 
 export function useUpdate() {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
   const { config } = useConfig()
-  const busy = shotsInTheMaking(doc, (id) => ui.jobCtx[id])
+  const busy = shotsInTheMaking(doc, ctxReader(doc, ui))
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const plan = (scope: FollowScope) => planFor(doc, scope, busy.clips, busy.frames)
   return {

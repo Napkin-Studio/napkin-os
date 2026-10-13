@@ -41,7 +41,10 @@ export class LocalTextBus implements TextBus, TextSide {
   private readonly windowMs: number
   private hydrating = false
 
-  constructor(private readonly bus: LocalPatchBus, opts: { ydoc?: Y.Doc; clock?: () => number; windowMs?: number } = {}) {
+  private readonly bus: LocalPatchBus
+
+  constructor(bus: LocalPatchBus, opts: { ydoc?: Y.Doc; clock?: () => number; windowMs?: number } = {}) {
+    this.bus = bus
     this.ydoc = opts.ydoc ?? new Y.Doc()
     this.clock = opts.clock ?? (() => Date.now())
     this.windowMs = opts.windowMs ?? 60_000

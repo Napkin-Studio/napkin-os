@@ -5,6 +5,8 @@
 import { useEffect } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
 import { jobWhat } from './agents/cast'
+import { jobCtx } from '../jobs/runner'
+import { shotNumber } from '../model/selectors'
 import { fallbackNotice } from './modelChoice'
 
 const SHOW_MS = 9000
@@ -13,15 +15,16 @@ export function FallbackNotices() {
   const { ui: uiStore } = useServices()
   const ui = useUi()
   const doc = useDoc()
-  const order = (shotId: string | undefined) => (shotId ? (doc.shots ?? []).findIndex((s) => s.id === shotId) + 1 || undefined : undefined)
-  const pending = Object.entries(ui.jobCtx).flatMap(([id, c]) => {
-    if (!c.fallbackFrom || c.fallbackShown || c.dismissed) return []
-    const job = doc.jobs.find((j) => j.id === id)
-    if (!job?.provider) return [] // not made yet: say it when it lands on Runway
+  const order = (shotId: string | undefined) => shotNumber(doc, shotId) || undefined
+  const pending = Object.entries(ui.jobs).flatMap(([id, local]) => {
+    if (!local.fallbackFrom || local.fallbackShown || local.dismissed) return []
+    const job = doc.jobs[id]
+    const c = jobCtx(doc, ui, id)
+    if (!job?.provider || !c?.fallbackFrom) return [] // not made yet: say it when it lands on Runway
     const words = fallbackNotice(c.fallbackFrom, job.provider, jobWhat(job, c, 'shotId' in c ? order(c.shotId) : undefined))
     return words ? [{ id, words, reason: c.fallbackReason }] : []
   })
-  const close = (id: string) => uiStore.update((u) => { const c = u.jobCtx[id]; if (c) c.fallbackShown = true })
+  const close = (id: string) => uiStore.update((u) => { const c = u.jobs[id]; if (c) c.fallbackShown = true })
   const first = pending[0]?.id
   useEffect(() => {
     if (!first) return

@@ -5,22 +5,23 @@
 
 import type { ProductionDocument, StaleMark } from '../contracts/types'
 import { shotChange } from '../jobs/stale'
+import { refName, shotNumber } from '../model/selectors'
 
 export function behindLabel(d: ProductionDocument, mark: Pick<StaleMark, 'caused_by'> & Partial<Pick<StaleMark, 'reason'>>): string {
   const { kind, id } = mark.caused_by
-  const order = (shotId: string | undefined) => (d.shots ?? []).find((s) => s.id === shotId)?.order
+  const order = (shotId: string | undefined) => shotNumber(d, shotId) || undefined
   switch (kind) {
     case 'frame': {
-      const n = order((d.frames ?? []).find((f) => f.id === id)?.shot_id)
+      const n = order(d.frames[id]?.shot_id)
       return n ? `Behind frame ${n}` : 'Behind a frame'
     }
     case 'take': {
-      const n = order((d.takes ?? []).find((t) => t.id === id)?.shot_id)
+      const n = order(d.takes[id]?.shot_id)
       return n ? `Behind clip ${n}` : 'Behind a clip'
     }
     case 'ref': {
-      const r = d.refs.find((x) => x.id === id)
-      return r ? `Behind @${r.key}_${r.variant}` : 'Behind a reference'
+      const r = d.refs[id]
+      return r ? `Behind @${refName(r)}` : 'Behind a reference'
     }
     case 'shot': {
       const what = mark.reason ? shotChange({ reason: mark.reason }) : undefined

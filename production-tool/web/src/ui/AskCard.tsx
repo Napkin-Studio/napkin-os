@@ -7,15 +7,27 @@
 
 import { useState } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
-import type { Ask, Id } from '../contracts/types'
+import type { Ask, Question } from '../contracts/types'
+import type { AnswerChoice } from '../jobs/runner'
+import { sendAnswer } from './asks'
 import { AgentFigure } from './agents/AgentFigure'
 import './askcard.css'
 
 const money = (n: number) => `about $${n < 1 ? n.toFixed(2) : n.toFixed(2)}`
 
-/** The ask on a job, if it has one. */
-export function askOfJob(asks: Record<Id, Ask>, jobId: Id): Ask | undefined {
-  return Object.values(asks).find((a) => a.job_id === jobId)
+/** The question's options as buttons, the recommended one marked. */
+export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boolean; onPick: (optionId: string) => void }) {
+  return (
+    <div className="askcard-options">
+      {q.options.filter((o) => o.value !== undefined).map((o) => (
+        <button key={o.id} className={`btn sm ${o.id === q.recommended_option_id ? 'primary' : ''}`} disabled={disabled} onClick={() => onPick(o.id)}>
+          {o.label}
+          {o.id === q.recommended_option_id && <span className="askcard-rec"> · Recommended</span>}
+          {(o.detail || o.cost) && <span className="askcard-detail faint"> · {o.detail ?? (o.cost ? money(o.cost.estimate) : '')}</span>}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 export function AskCard({ ask }: { ask: Ask }) {
@@ -35,18 +47,14 @@ export function AskCard({ ask }: { ask: Ask }) {
   const chose = last?.option_id ? q.options.find((o) => o.id === last.option_id)?.label ?? last.option_id : last?.text
   const job = ask.job_id ? doc.jobs[ask.job_id] : undefined
 
-  const send = async (answer: { optionId: string } | { text: string }) => {
+  const send = async (answer: AnswerChoice) => {
     if (!ask.job_id) return
     setBusy(true)
     setNote(null)
     try {
-      if (changing) {
-        await runner.change(ask.job_id, answer)
-        setChanging(false)
-      } else {
-        const r = await runner.answer(ask.job_id, answer)
-        if (r?.conflict) setNote(`${byWords(r.conflict.answeredBy)} answered first. Their answer stands; use Change to choose again.`)
-      }
+      const said = await sendAnswer(runner, ask, answer, changing, byWords)
+      if (changing) setChanging(false)
+      if (said) setNote(said)
     } catch (e) {
       setNote(e instanceof Error ? e.message : String(e))
     } finally {
@@ -74,15 +82,7 @@ export function AskCard({ ask }: { ask: Ask }) {
         </div>
       ) : (
         <>
-          <div className="askcard-options">
-            {q.options.filter((o) => o.value !== undefined).map((o) => (
-              <button key={o.id} className={`btn sm ${o.id === q.recommended_option_id ? 'primary' : ''}`} disabled={busy || !ask.job_id} onClick={() => void send({ optionId: o.id })}>
-                {o.label}
-                {o.id === q.recommended_option_id && <span className="askcard-rec"> · Recommended</span>}
-                {(o.detail || o.cost) && <span className="askcard-detail faint"> · {o.detail ?? (o.cost ? money(o.cost.estimate) : '')}</span>}
-              </button>
-            ))}
-          </div>
+          <AskOptions q={q} disabled={busy || !ask.job_id} onPick={(optionId) => void send({ optionId })} />
           {q.allow_text && (
             <form className="askcard-text" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void send({ text: text.trim() }) }}>
               <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder={q.options.find((o) => o.value === undefined)?.label ?? 'Say it in your words'} aria-label="Your answer" />

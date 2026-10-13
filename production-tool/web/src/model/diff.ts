@@ -69,7 +69,6 @@ export function proseFromText(d: Doc, lines: { type: string; text: string }[]): 
   for (const { type, text } of lines) {
     for (const line of text.split('\n')) {
       const inline: PMNode[] = []
-      let rest = line
       const re = /@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
       let last = 0
       let m: RegExpExecArray | null
@@ -83,7 +82,7 @@ export function proseFromText(d: Doc, lines: { type: string; text: string }[]): 
         inline.push({ type: 'mention', attrs: { id: target.id, label: name } })
         last = m.index + m[0].length
       }
-      rest = line.slice(last)
+      const rest = line.slice(last)
       if (rest) inline.push({ type: 'text', text: rest })
       content.push(inline.length ? { type, content: inline } : { type })
     }

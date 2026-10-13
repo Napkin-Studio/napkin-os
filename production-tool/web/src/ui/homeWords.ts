@@ -38,3 +38,10 @@ export function displayName(handle: string | undefined) {
   if (!handle || handle === 'guest') return 'there'
   return handle.slice(0, 1).toUpperCase() + handle.slice(1)
 }
+
+/** Home's notice when a project cannot be opened (made under another contract, projects/session.ts
+ *  ProjectRefused): the reason as one sentence. */
+export function refusalNotice(message: string): string {
+  const t = message.trim()
+  return /[.!?]$/.test(t) ? t : `${t}.`
+}

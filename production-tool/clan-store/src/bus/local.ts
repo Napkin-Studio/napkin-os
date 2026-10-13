@@ -50,7 +50,11 @@ export class LocalPatchBus implements PatchBus {
   private readonly listeners = new Set<(r: PatchResult, batch: PatchBatch) => void>()
   undo: LocalUndo | null = null
 
-  constructor(readonly store: ClanDocumentStore) {}
+  readonly store: ClanDocumentStore
+
+  constructor(store: ClanDocumentStore) {
+    this.store = store
+  }
 
   doc(): Doc {
     return this.store.get()

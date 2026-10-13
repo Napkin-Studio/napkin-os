@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../contracts/types'
 import { adBehindLabel, behindCount, behindLabel, driftLabel, notMadeCount, oldWordsLine } from './behind'
 
+// Shot numbers come from rank on the storyboard, not from the ids.
 const d = {
-  shots: [{ id: 's1', order: 1 }, { id: 's2', order: 2 }, { id: 's3', order: 3 }],
-  frames: [{ id: 'f2', shot_id: 's2' }],
-  takes: [{ id: 't3', shot_id: 's3' }],
-  refs: [{ id: 'r1', key: 'maya', variant: 'front' }],
+  storyboards: { sb: { id: 'sb' } },
+  videos: {},
+  links: {},
+  shots: {
+    s3: { id: 's3', storyboard_id: 'sb', rank: 'c' },
+    s1: { id: 's1', storyboard_id: 'sb', rank: 'a' },
+    s2: { id: 's2', storyboard_id: 'sb', rank: 'b' },
+  },
+  frames: { f2: { id: 'f2', shot_id: 's2' } },
+  takes: { t3: { id: 't3', shot_id: 's3' } },
+  refs: { r1: { id: 'r1', key: 'maya', variant: 'front' } },
 } as unknown as ProductionDocument
 
 describe('what an out-of-date item is behind', () => {

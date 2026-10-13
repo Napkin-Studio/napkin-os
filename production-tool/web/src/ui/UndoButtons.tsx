@@ -3,16 +3,16 @@
 // leave typing alone, and the canvas, whose Excalidraw keeps its own undo.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useServices, useUi } from '../app/context'
-import { redo, stepWords, undo } from '../doc/undo'
+import { useDoc, useServices, useUi } from '../app/context'
+import { redo, stepWords, undo, undoLabels } from '../doc/undo'
 import { keepsItsOwnUndo } from './undoKeys'
 
 export function UndoButtons() {
   const { doc } = useServices()
-  const ui = useUi()
-  const state = ui.undo ?? { done: [], undone: [] }
-  const last = state.done.at(-1)
-  const next = state.undone.at(-1)
+  // Read again on every document or UI change: a write or an undo moves the steps.
+  useDoc()
+  useUi()
+  const { undo: last, redo: next } = undoLabels(doc)
   const [note, setNote] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -20,7 +20,11 @@ export function UndoButtons() {
     const r = await (way === 'undo' ? undo(doc) : redo(doc))
     if (!r) return
     if (timer.current) clearTimeout(timer.current)
-    setNote(`${way === 'undo' ? 'Undid' : 'Redid'}${r.partial ? ' part of it (some of what it changed is gone)' : ''}: ${r.label}`)
+    // A step someone changed since is skipped with the spec's notice (LocalUndo).
+    if (!r.done) {
+      if (!r.notice) return
+      setNote(r.notice)
+    } else setNote(`${way === 'undo' ? 'Undid' : 'Redid'}${r.label ? `: ${stepWords(r.label)}` : ''}${r.notice ? ` · ${r.notice}` : ''}`)
     timer.current = setTimeout(() => setNote(null), 4000)
   }, [doc])
 
@@ -41,9 +45,9 @@ export function UndoButtons() {
   return (
     <span className="undobtns" role="group" aria-label="Undo and redo">
       <button className="btn sm icon" disabled={!last} onClick={() => void run('undo')}
-        aria-label={last ? `Undo: ${stepWords(last.label)}` : 'Nothing to undo'} title={last ? `Undo: ${stepWords(last.label)} (Ctrl+Z)` : 'Nothing to undo'}>↶</button>
+        aria-label={last ? `Undo: ${stepWords(last)}` : 'Nothing to undo'} title={last ? `Undo: ${stepWords(last)} (Ctrl+Z)` : 'Nothing to undo'}>↶</button>
       <button className="btn sm icon" disabled={!next} onClick={() => void run('redo')}
-        aria-label={next ? `Redo: ${stepWords(next.label)}` : 'Nothing to redo'} title={next ? `Redo: ${stepWords(next.label)} (Shift+Ctrl+Z)` : 'Nothing to redo'}>↷</button>
+        aria-label={next ? `Redo: ${stepWords(next)}` : 'Nothing to redo'} title={next ? `Redo: ${stepWords(next)} (Shift+Ctrl+Z)` : 'Nothing to redo'}>↷</button>
       {note && <span className="undonote" role="status">{note}</span>}
     </span>
   )
