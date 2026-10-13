@@ -554,3 +554,15 @@ def test_repo_tree_passes():
     files = [f for f in changed.splitlines() if f] if changed is not None else None
     rep = check.run(REPO, files, out=lambda *_: None)
     assert not rep.failures, "licence gate failures:\n" + "\n".join(rep.failures)
+
+
+def test_notices_list_client_packages_and_every_attribution_licence():
+    """--notices: the client tier, then every CC-BY package (any tier) and font to credit."""
+    pkgs = [pkg("react", "MIT", "client"), pkg("caniuse-lite", "CC-BY-4.0", "build"),
+            pkg("pypdfium2", "BSD-3-Clause AND CC-BY-4.0", "server", "pypi"), pkg("srv", "MIT", "server", "pypi")]
+    fonts = {"family": [{"name": "Odd", "shipped_by": "x@1", "licence": "CC-BY-4.0"},
+                        {"name": "Geist", "shipped_by": "fonts.googleapis.com", "licence": "OFL-1.1"}]}
+    client, credit = check.notices(pkgs, policy(), fonts).split("# Attribution required")
+    assert "react" in client and "srv" not in client
+    assert "caniuse-lite" in credit and "pypdfium2" in credit and "Odd" in credit
+    assert "react" not in credit and "Geist" not in credit

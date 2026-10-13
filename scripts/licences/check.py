@@ -600,22 +600,62 @@ def fill_pypi_licences(pkgs: list[Pkg], policy: "Policy",
 
 
 # ==== judging ======================================================================
+class _HttpRange(io.RawIOBase):
+    """A seekable read-only view of a URL through HTTP Range requests, so a licence file
+    can be read out of a large wheel (CUDA wheels are hundreds of MB) without downloading
+    it: zipfile reads the central directory and then just that member."""
+
+    def __init__(self, url: str):
+        super().__init__()
+        self.url, self.pos = url, 0
+        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=60) as r:
+            self.size = int(r.headers["Content-Length"])
+
+    def seekable(self):
+        return True
+
+    def readable(self):
+        return True
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, off, whence=0):
+        self.pos = off if whence == 0 else self.pos + off if whence == 1 else self.size + off
+        return self.pos
+
+    def readinto(self, b):
+        n = min(len(b), self.size - self.pos)
+        if n <= 0:
+            return 0
+        req = urllib.request.Request(self.url, headers={"Range": f"bytes={self.pos}-{self.pos + n - 1}"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = r.read()
+        b[:len(data)] = data
+        self.pos += len(data)
+        return len(data)
+
+
 def _archive_member(url: str, member: str) -> bytes:
-    """One file from a package archive (npm .tgz, .crate, wheel, sdist), cached."""
-    path = CACHE / "archives" / hashlib.sha256(url.encode()).hexdigest()
-    if not path.is_file():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(url, timeout=60) as r:
-            path.write_bytes(r.read())
-    data = path.read_bytes()
+    """One file from a package archive (npm .tgz, .crate, wheel, sdist), cached by URL
+    and member. Wheels are read by HTTP range; other archives are downloaded."""
+    path = CACHE / "archives" / hashlib.sha256(f"{url}\0{member}".encode()).hexdigest()
+    if path.is_file():
+        return path.read_bytes()
     if url.endswith(".whl") or url.endswith(".zip"):
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
-            return z.read(member)
-    with tarfile.open(fileobj=io.BytesIO(data)) as t:
-        f = t.extractfile(member)
-        if f is None:
-            raise KeyError(member)
-        return f.read()
+        with zipfile.ZipFile(io.BufferedReader(_HttpRange(url), buffer_size=1 << 16)) as z:
+            data = z.read(member)
+    else:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            blob = r.read()
+        with tarfile.open(fileobj=io.BytesIO(blob)) as t:
+            f = t.extractfile(member)
+            if f is None:
+                raise KeyError(member)
+            data = f.read()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return data
 
 
 @dataclass
@@ -674,7 +714,7 @@ def judge(pkgs: list[Pkg], policy: Policy, report: Report,
                                 f"{got}, not {c['licence_file_sha256']}; re-read the licence")
                     break
                 report.used_clarifications.add(i)
-                lic = c["licence"]
+                lic = p.licence = c["licence"]      # the effective licence, for --notices too
                 break
         if not lic or not str(lic).strip():
             report.fail(f"{where}: no licence in its metadata\n    fix (after reading the package's "
@@ -1221,6 +1261,29 @@ def policy_diff_markdown(repo: Path, base: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+ATTRIBUTION = ("CC-BY-*",)
+
+
+def notices(pkgs: list[Pkg], policy: Policy, fonts: dict) -> str:
+    """Third-party notices: every client-tier package, then every package in any tier
+    (and every font) whose licence requires attribution (CC-BY-*), which must be credited
+    wherever that work reaches people."""
+    def needs_credit(lic: str | None) -> bool:
+        try:
+            return bool(lic) and any(_match_any(i.split(" WITH ")[0], ATTRIBUTION)
+                                     for i in leaves(parse_spdx(lic, policy.aliases)))
+        except SpdxError:
+            return False
+    lines = ["# Client-tier third-party packages", "ecosystem\tname\tversion\tlicence"]
+    lines += [f"{p.ecosystem}\t{p.name}\t{p.version}\t{p.licence}" for p in pkgs if p.tier == "client"]
+    lines += ["", "# Attribution required (CC-BY): credit these in the notices of whatever ships or serves them",
+              "tier\tecosystem\tname\tversion\tlicence"]
+    lines += [f"{p.tier}\t{p.ecosystem}\t{p.name}\t{p.version}\t{p.licence}" for p in pkgs if needs_credit(p.licence)]
+    lines += [f"font\t-\t{f['name']}\t{f.get('shipped_by', '')}\t{f['licence']}"
+              for f in fonts.get("family", []) if needs_credit(f.get("licence"))]
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--changed", nargs="*", default=None, metavar="FILE")
@@ -1238,9 +1301,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     rep = run(REPO, a.changed, readers=True if a.notices else None)
     if a.notices:
-        for p in getattr(rep, "pkgs", []):
-            if p.tier == "client":
-                print(f"{p.ecosystem}\t{p.name}\t{p.version}\t{p.licence}")
+        print(notices(getattr(rep, "pkgs", []), Policy.load(REPO / "licences" / "policy.toml"),
+                      load_toml(REPO / "licences" / "fonts.toml")), end="")
         return 0
     for n in rep.notes:
         print(f"licences: {n}")
