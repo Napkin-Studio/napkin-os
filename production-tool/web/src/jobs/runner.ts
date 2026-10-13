@@ -241,13 +241,40 @@ export class JobRunner {
     return jobId
   }
 
+  /** How many of this person's jobs the relay runs at once (config inFlightPerParticipant; the session sets it). */
+  inFlightLimit: () => number = () => Infinity
+  /** Jobs the relay holds a place for now (queued or running there), by id. */
+  private readonly atRelay = new Set<string>()
+  /** Requests waiting in this browser for a place, oldest first: never sent past the limit (it was a 429). */
+  private held: JobRequest[] = []
+
+  /** Keep the count of places the relay holds for this person, and send what waits when one frees. */
+  private track(jobId: string, relayState: JobState | null) {
+    const holds = relayState !== null && ['queued', 'submitting', 'submitted', 'fetching', 'validating'].includes(relayState)
+    if (holds) this.atRelay.add(jobId)
+    else this.atRelay.delete(jobId)
+    while (this.held.length && this.atRelay.size < this.inFlightLimit() && !this.stopped) {
+      const next = this.held.shift()!
+      void this.send(next)
+    }
+  }
+
   private async send(request: JobRequest) {
+    if (!this.atRelay.has(request.jobId) && this.atRelay.size >= this.inFlightLimit()) {
+      // Wait here, "In the queue", until one of this person's jobs at the relay finishes.
+      if (!this.held.some((r) => r.jobId === request.jobId)) this.held.push(request)
+      this.live.set(request.jobId, { state: 'queued' })
+      this.emit()
+      return
+    }
+    this.atRelay.add(request.jobId)
     try {
       const job = await this.relay.createJob(request)
       if (this.stopped) return
       this.apply(job)
     } catch (e) {
       const err = asContractError(e)
+      this.atRelay.delete(request.jobId)
       // Too many of this person's jobs are running (relay inFlightPerParticipant). The relay did not
       // record this one, so wait for a free slot and send the same request again (idempotent jobId).
       if (err.code === 'queue_full' && err.retryable) {
@@ -305,6 +332,15 @@ export class JobRunner {
     // Its result is already downloading: it lands as it is (a cancel then landed it twice, 2026-10-09).
     if (this.completing.has(jobId)) return
     this.stopPolling(jobId)
+    const waiting = this.held.findIndex((r) => r.jobId === jobId)
+    if (waiting >= 0) {
+      // Never sent: nothing to stop at the relay.
+      this.held.splice(waiting, 1)
+      this.patchDocJob(jobId, { state: 'cancelled' })
+      this.live.set(jobId, { state: 'cancelled' })
+      this.emit()
+      return
+    }
     try {
       const job = await this.relay.cancelJob(jobId)
       this.apply(job)
@@ -349,6 +385,7 @@ export class JobRunner {
     for (const j of jobsList(this.doc.get())) {
       if (isActive(j.state)) {
         this.live.set(j.id, { state: j.state })
+        if (j.state !== 'needs_input' && j.state !== 'uncertain') this.atRelay.add(j.id)
         if (j.state !== 'uncertain') this.schedule(j.id, 0.2) // the relay never moves an uncertain job
       }
     }
@@ -501,6 +538,7 @@ export class JobRunner {
     this.patchDocJob(jobId, { state: 'failed', error })
     this.live.set(jobId, { state: 'failed' })
     this.emit()
+    this.track(jobId, null)
   }
 
   /** How long since the job was asked for, for the record. */
@@ -560,6 +598,7 @@ export class JobRunner {
     this.noteAsk(job)
     this.noteFallback(job)
     this.emit()
+    this.track(job.jobId, job.state)
     if (done) void this.complete(job)
     // Waiting on a question: keep asking, someone else may answer it (ui-behaviour 5.2).
     else if (job.state === 'needs_input') this.schedule(job.jobId, ASK_POLL_S)

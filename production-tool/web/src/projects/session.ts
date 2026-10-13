@@ -14,6 +14,7 @@ import { isRefused, openDocument } from '../doc/open'
 import { SnapshotStore } from '../doc/store'
 import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
 import { JobRunner } from '../jobs/runner'
+import { CONFIGS } from '../contracts/load'
 import { resumeChains, wireJobs } from '../jobs/wire'
 import { ModelStore, type ModelStoreOptions } from '../model/store'
 import type { Relay } from '../relay'
@@ -100,6 +101,8 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
   const { doc, clan, storeNote } = opened
 
   const runner = new JobRunner(relay, doc, ui)
+  // Never send past the relay's per-person limit: the rest wait here, "In the queue" (it answered 429 before).
+  runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
   const frameDeps = { relay, doc, ui, runner }
   wireJobs(frameDeps)

@@ -35,6 +35,32 @@ describe('a job refused because too many are running', () => {
     vi.useRealTimers()
   })
 
+  it('never sends past the limit: the third of three waits here, in the queue, until one ends (smoke test 2026-10-13)', async () => {
+    const ok = { contractVersion: '3', op: 'clip', quotaClass: 'video', inputHashes: [], cost: { currency: 'USD', unknown: true }, createdAt: '', updatedAt: '', participantId: 'p_x', nextPollS: 600 }
+    let first = ''
+    const relay = {
+      kind: 'http',
+      createJob: vi.fn(async (req: { jobId: string }) => ({ ...ok, state: 'submitted', jobId: req.jobId })),
+      getJob: vi.fn(async (id: string) => ({ ...ok, jobId: id, state: id === first ? 'failed' : 'submitted', ...(id === first ? { error: { code: 'provider_failed', message: 'x', retryable: true } } : {}) })),
+      cancelJob: vi.fn(),
+    }
+    const doc = snapshotDoc()
+    const ui = new SnapshotStore<UiState>(initialUi())
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const runner = new JobRunner(relay as any, doc, ui)
+    runner.inFlightLimit = () => 2
+    first = await runner.submit('view', { view: 'back', ratio: '4:5' }, [], { for: 'canvas' })
+    await runner.submit('view', { view: 'side', ratio: '4:5' }, [], { for: 'canvas' })
+    const third = await runner.submit('view', { view: 'front', ratio: '4:5' }, [], { for: 'canvas' })
+    expect(relay.createJob).toHaveBeenCalledTimes(2)
+    expect(runner.liveInfo(third)?.state).toBe('queued')
+    await runner.pollNow()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(relay.createJob).toHaveBeenCalledTimes(3)
+    expect(relay.createJob.mock.calls[2][0]).toMatchObject({ jobId: third })
+    runner.stop()
+  })
+
   it('sends it again when a reload polls it before the relay ever recorded it', async () => {
     vi.useFakeTimers()
     const JOB = 'job_01K6XA7Q3M9V2D4R8T0B5C1E6F'
