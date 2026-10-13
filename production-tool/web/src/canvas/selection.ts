@@ -62,7 +62,7 @@ export function planSelection(all: readonly PlainEl[], selectedIds: readonly str
     const e = live.get(id)
     if (!e) continue
     const c = cdOf(e)
-    if (c?.kind === 'provenance' || c?.kind === 'pin') continue
+    if (c?.kind === 'provenance') continue
     if (c?.kind === 'pic' || c?.kind === 'drawn' || c?.kind === 'gen') {
       addImage(e)
       continue

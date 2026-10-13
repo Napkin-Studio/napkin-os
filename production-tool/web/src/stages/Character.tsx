@@ -13,11 +13,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot } from '../canvas/controller'
 import { alive, bounds, cd, imageOf, isText, isUserDrawing, type El } from '../canvas/scene'
-import type { CustomData, KeyEntry, LibraryIndex, ModelChoice, NamedRef, RefRole, View } from '../contracts/types'
+import { AGENCY_SHELF, REF_ROLES, type CustomData, type KeyEntry, type LibraryIndex, type ModelChoice, type NamedRef, type RefRole, type View } from '../contracts/types'
+import { REF_ROLE_TABLE } from '../contracts/load'
+import { keyNamed, keysList, refsList } from '../model/selectors'
 import { choiceToSend } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
-import { REF_ROLES } from '../contracts/types'
 import { systemUpdate } from '../doc/store'
 import { sweep, unused } from '../doc/gc'
 import { isActive } from '../jobs/runner'
@@ -161,7 +162,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     if (!targets.length) return
     const ids = targets.map((e) => e.id)
     const running = targets.map((e) => cd(e)).filter((c): c is Extract<CustomData, { kind: 'gen' }> => c?.kind === 'gen')
-      .map((c) => docStore.get().jobs.find((j) => j.id === c.id)).filter((j) => j && isActive(runner.liveInfo(j.id)?.state ?? j.state))
+      .map((c) => docStore.get().jobs[c.id]).filter((j) => j && isActive(runner.liveInfo(j.id)?.state ?? j.state))
     if (running.length) {
       const b = bounds(targets)
       setConfirming({ ids, text: cancelText(running[0], config, true), at: { x: b.minX + b.w / 2, y: b.minY } })
@@ -212,7 +213,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   }, [placing, ctrl, api, limits])
 
   const hasMarks = els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e))
-  const showHint = !ui.hintDismissed && !hasMarks && doc.refs.length === 0
+  const showHint = !ui.hintDismissed && !hasMarks && Object.keys(doc.refs).length === 0
 
   return (
     <div className="character">
@@ -233,7 +234,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           {els.map((e) => {
             const img = imageOf(e)
             const c = cd(e)
-            const named = img ? doc.refs.find((r) => r.node === img.id) : undefined
+            const named = img ? refsList(doc).find((r) => r.node === img.id) : undefined
             return (
               <span key={e.id}>
                 {named && <NameChip r={named} at={toView({ x: e.x, y: e.y })} />}
@@ -295,13 +296,13 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   const doc = useDoc()
   const ui = useUi()
   const showMock = useShowMock()
-  const job = doc.jobs.find((j) => j.id === c.id)
+  const job = doc.jobs[c.id]
   const live = runner.liveInfo(c.id)
   const state = live?.state ?? job?.state ?? c.state
   const tl = toView({ x: el.x, y: el.y })
   const w = el.width * zoom
   const h = el.height * zoom
-  const dismissed = ui.jobCtx[c.id]?.dismissed
+  const dismissed = ui.jobs[c.id]?.dismissed
   const showNode = (isActive(state) || state === 'failed' || state === 'cancelled') && !dismissed && state !== 'completed'
   return (
     <>
@@ -340,7 +341,7 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
   for (const a of els) {
     const c = cd(a)
     if (c?.kind !== 'provenance' || a.type !== 'arrow') continue
-    const job = doc.jobs.find((j) => j.id === c.to)
+    const job = doc.jobs[c.to]
     const state = runner.liveInfo(c.to)?.state ?? job?.state
     if (!state || !isActive(state)) continue
     const pts = (a as El & { points: readonly [number, number][] }).points.map(([x, y]) => toView({ x: a.x + x, y: a.y + y }))
@@ -410,7 +411,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
   const usable = preview.inputs.length + preview.drawings + preview.notes.length > 0
   const single = meaningful.length === 1 ? imageOf(meaningful[0]) : undefined
   const singleImage = single?.asset ? single : undefined
-  const named = singleImage ? doc.refs.find((r) => r.node === singleImage.id) : undefined
+  const named = singleImage ? ctrl.nameOn(singleImage.id, doc) : undefined
 
   if (open === 'generate') {
     return <GeneratePopover ctrl={ctrl} ids={ids} at={at} limits={limits} onClose={() => setOpen(null)} onPlace={onPlace} />
@@ -449,7 +450,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
   // The beta's thumbs on a picture the tool made (features/production-tool-dogfood.clan).
   const made = singleImage?.kind === 'gen' ? cd(meaningful[0]) : undefined
   if (made?.kind === 'gen' && singleImage?.asset) {
-    const job = doc.jobs.find((j) => j.id === made.id)
+    const job = doc.jobs[made.id]
     groups.push(<Thumbs key={`thumbs-${made.id}`} compact target={{
       kind: made.op === 'view' ? 'view' : 'picture', id: singleImage.asset, jobId: made.id, op: made.op, view: made.view,
       provider: job?.provider, model: job?.model,
@@ -485,6 +486,10 @@ function Floating({ className, anchor, children }: { className: string; anchor: 
   const { ref, style } = useFloating<HTMLDivElement>(anchor)
   return <div ref={ref} className={className} style={style} onPointerDown={(e) => e.stopPropagation()}>{children}</div>
 }
+
+/** The ten main role pills of the Name dialog (the rest under More…), as the contract's role table sorts them. */
+const MAIN_ROLES = REF_ROLES.filter((r) => REF_ROLE_TABLE[r].picker === 'main')
+const roleWord = (r: RefRole) => (r === 'brand_rule' ? 'brand rule' : r)
 
 const KIND_WORD = { pic: 'picture', drawn: 'drawing', gen: 'result' } as const
 
@@ -541,12 +546,12 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
         {preview.drawings > 0 && <span className="taghint static">new drawing</span>}
         {preview.notes.map((n, i) => <span key={`n${i}`} className="taghint static" title={n}>“{n.length > 24 ? `${n.slice(0, 23)}…` : n}”</span>)}
       </div>
-      {doc.refs.length > 0 && (
+      {refsList(doc).length > 0 && (
         <>
           <div className="faint" style={{ fontSize: 12.5 }}>Tap a name to use it in your words. A bare name is the whole character.</div>
           <div className="taghints">
             {wholeKeys(doc).map((k) => <button key={k} className="taghint whole" title={`${k}: its front and other views`} onClick={() => insert(k)}>@{k}</button>)}
-            {doc.refs.map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
+            {refsList(doc).map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
           </div>
         </>
       )}
@@ -586,13 +591,14 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   onClose: () => void
 }) {
   const doc = useDoc()
-  const [key, setKey] = useState(current?.key ?? doc.keys[0]?.key ?? '')
+  const [key, setKey] = useState(current?.key ?? keysList(doc)[0]?.key ?? '')
   const [variant, setVariant] = useState(presetVariant ?? current?.variant ?? '')
   const [role, setRole] = useState<RefRole>('character')
+  const [moreRoles, setMoreRoles] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const ck = cleanKey(key)
   const cv = cleanVariant(variant)
-  const isNewKey = !!ck && !doc.keys.some((k) => k.key === ck)
+  const isNewKey = !!ck && !keyNamed(doc, ck)
   const taken = ck && cv ? refByName(doc, `${ck}_${cv}`) : undefined
   const movesName = taken && taken.node !== nodeId
   const problem = ck || cv ? nameProblem(ck, cv) : null
@@ -617,13 +623,18 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
             if (e.key === 'Enter' && !problem && ck && cv) save()
             if (e.key === 'Escape') onClose()
           }} />
-        <datalist id="napkin-keys">{doc.keys.map((k) => <option key={k.key} value={k.key} />)}</datalist>
+        <datalist id="napkin-keys">{keysList(doc).map((k) => <option key={k.key} value={k.key} />)}</datalist>
       </div>
       {isNewKey && (
-        <div className="row" style={{ gap: 6, marginTop: 8 }}>
-          <span className="faint" style={{ fontSize: 12 }}>{ck} is</span>
-          <button className={`btn xs ${role === 'character' ? 'on' : ''}`} onClick={() => setRole('character')}>a character</button>
-          <button className={`btn xs ${role !== 'character' ? 'on' : ''}`} onClick={() => setRole('prop')}>an object</button>
+        <div style={{ marginTop: 8 }}>
+          <div className="row rolepills" role="radiogroup" aria-label={`What ${ck} is`}>
+            <span className="faint" style={{ fontSize: 12 }}>{ck} is</span>
+            {(moreRoles ? REF_ROLES : MAIN_ROLES).map((r) => (
+              <button key={r} role="radio" aria-checked={role === r} className={`btn xs ${role === r ? 'on' : ''}`} onClick={() => setRole(r)}>{roleWord(r)}</button>
+            ))}
+            {!moreRoles && <button className="btn xs ghost" onClick={() => setMoreRoles(true)}>More…</button>}
+          </div>
+          <div className="faint roleline">{REF_ROLE_TABLE[role].ui_line}</div>
         </div>
       )}
       {ck && cv && <div className="mono" style={{ marginTop: 8 }}>@{ck}_{cv}</div>}
@@ -642,7 +653,8 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
 
 function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
   const doc = useDoc()
-  const { doc: docStore, project } = useServices()
+  const { doc: docStore, project, ui: uiStore } = useServices()
+  const named = refsList(doc).length > 0
   const { controls } = useConfig()
   const [library, setLibrary] = useState(false)
   const [cleaning, setCleaning] = useState<string[] | null>(null)
@@ -667,9 +679,9 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
     <div className="dock refsdock">
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="eyebrow" style={{ marginBottom: 6 }}>References</div>
-        {doc.keys.length === 0 && <span className="faint" style={{ fontSize: 12.5 }}>Name an image (select it, then Name…) to keep it as a reference for your script.</span>}
+        {keysList(doc).length === 0 && <span className="faint" style={{ fontSize: 12.5 }}>Name an image (select it, then Name…) to keep it as a reference for your script.</span>}
         <div className="keys">
-          {doc.keys.map((k) => <KeyRow key={k.key} k={k} ctrl={ctrl} views={controls.views} />)}
+          {keysList(doc).map((k) => <KeyRow key={k.key} k={k} ctrl={ctrl} views={controls.views} />)}
         </div>
       </div>
       <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
@@ -679,8 +691,8 @@ function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
         </div>
         {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void cleanUp(cleaning)} onNo={() => setCleaning(null)} />}
         {note && <span className="faint" style={{ fontSize: 12 }}>{note}</span>}
-        <button className="btn primary" disabled={!doc.refs.length} title={doc.refs.length ? undefined : 'Name at least one image first'}
-          onClick={() => systemUpdate(docStore, (d) => { d.stage = { current: 'storyboard', next_action: 'Write a short script and plan the shots.' } }, 'stage')}>
+        <button className="btn primary" disabled={!named} title={named ? undefined : 'Name at least one image first'}
+          onClick={() => uiStore.update((u) => { u.stage = 'storyboard' }, 'stage')}>
           Go to Storyboard →
         </button>
       </div>
@@ -693,7 +705,7 @@ function KeyRow({ k, ctrl, views }: { k: KeyEntry; ctrl: CanvasController | null
   const doc = useDoc()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const refs = doc.refs.filter((r) => r.key === k.key)
+  const refs = refsList(doc).filter((r) => r.key === k.key)
   const front = refs.find((r) => r.variant === 'front')
   const missingViews = OTHER_VIEWS.filter((v: View) => !refs.some((r) => r.variant === v))
   const run = async (label: string, fn: () => Promise<void>) => {
@@ -711,7 +723,7 @@ function KeyRow({ k, ctrl, views }: { k: KeyEntry; ctrl: CanvasController | null
     <div className="keyrow">
       <b className="mono">{k.key}</b>
       <select className="select xs" aria-label={`What ${k.key} is`} value={k.role} onChange={(e) => ctrl?.setRole(k.key, e.target.value as RefRole)}>
-        {REF_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        {REF_ROLES.map((r) => <option key={r} value={r}>{roleWord(r)}</option>)}
       </select>
       <div className="variants">
         {refs.map((r) => <Variant key={r.id} r={r} onShow={() => r.node && ctrl?.scrollTo(r.node)} />)}
@@ -743,13 +755,13 @@ function LibraryPanel({ ctrl, onClose }: { ctrl: CanvasController; onClose: () =
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   useEffect(() => {
-    relay.library().then(setIndex, (e) => setError(errText(e)))
+    relay.library(AGENCY_SHELF).then(setIndex, (e) => setError(errText(e)))
   }, [relay])
   const importKey = async (key: string) => {
     setBusy(key)
     setError(null)
     try {
-      await ctrl.importEntry(await relay.libraryEntry(key))
+      await ctrl.importEntry(await relay.libraryEntry(key, undefined, AGENCY_SHELF))
     } catch (e) {
       setError(errText(e))
     } finally {
@@ -769,13 +781,13 @@ function LibraryPanel({ ctrl, onClose }: { ctrl: CanvasController; onClose: () =
       {index && !index.keys.length && <span className="faint" style={{ fontSize: 12.5 }}>Nothing yet. Publish a key from References to use it in your other projects.</span>}
       <div className="grid">
         {index?.keys.map((k) => {
-          const mine = doc.keys.find((x) => x.key === k.key)
+          const mine = keyNamed(doc, k.key)
           const newer = mine?.library && mine.library.ver < k.ver
           return (
             <div key={k.key} className="stack libkey" style={{ gap: 4 }}>
-              <LibraryCover url={k.cover.url} sha={k.cover.sha256} />
+              <LibraryCover url={k.cover?.url} sha={k.cover?.sha256} />
               <b className="mono">{k.key}</b>
-              <span className="faint" style={{ fontSize: 11.5 }}>v{k.ver} · @{k.by} · {k.variants.join(', ')}</span>
+              <span className="faint" style={{ fontSize: 11.5 }}>v{k.ver} · @{k.by}{k.variants?.length ? ` · ${k.variants.join(', ')}` : ''}</span>
               <button className="btn xs" disabled={!!busy || (!!mine?.library && !newer)} onClick={() => void importKey(k.key)}>
                 {busy === k.key ? 'Importing…' : mine?.library ? (newer ? `Update to v${k.ver}` : 'Up to date') : mine ? 'Import (replaces yours)' : 'Import'}
               </button>
@@ -787,7 +799,7 @@ function LibraryPanel({ ctrl, onClose }: { ctrl: CanvasController; onClose: () =
   )
 }
 
-function LibraryCover({ url, sha }: { url: string; sha: string }) {
+function LibraryCover({ url, sha }: { url?: string; sha?: string }) {
   const local = useBlobUrl(sha)
   return <div className="cand">{(local ?? url) && <img src={local ?? url} alt="" />}</div>
 }

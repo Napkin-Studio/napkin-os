@@ -76,7 +76,7 @@ async function setup(shotCount = 3) {
       await land()
     }
   }
-  const inputOf = (jobId: string): JobInput => ui.get().jobs[jobId].request.input
+  const inputOf = (jobId: string): JobInput => ui.get().jobs[jobId].request!.input
   const shots = () => shotsOf(doc.get())
   const shotId = (i: number) => shots()[i].id
   const frameOf = (i: number) => selectedFrame(doc.get(), shotId(i))!
@@ -148,7 +148,7 @@ describe('a new take', () => {
     await s.makeAll(false)
     const pick = { provider: 'runway' as const, model: 'veo3.1_fast' }
     const id = await makeClip(s.deps, s.shotId(0), { parentTake: s.takeOf(0), modelChoice: pick })
-    const request = s.ui.get().jobs[id].request
+    const request = s.ui.get().jobs[id].request!
     expect(request.input.refs?.map((r) => r.name)).toEqual(['hero_front'])
     expect(request.input.shot?.refs).toEqual(['hero'])
     expect(request.modelChoice).toEqual(pick)
@@ -196,14 +196,14 @@ describe('Fix it in the shot', () => {
     const n = await addNote(s, 1, { region: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } })
     const editId = await fixInShot(s.deps, s.shotId(1), [n], pick)
     expect(s.ui.get().jobs[editId]).toMatchObject({ fixModelChoice: pick })
-    expect(s.ui.get().jobs[editId].request.modelChoice).toBeUndefined() // the pick is for the clip, not the frame
+    expect(s.ui.get().jobs[editId].request!.modelChoice).toBeUndefined() // the pick is for the clip, not the frame
     await s.land()
     const clip = await vi.waitFor(() => {
       const c = s.all().find((j) => j.op === 'clip' && j.ctx.for === 'clip' && j.ctx.reviewIds?.includes(n.id))
       expect(c).toBeDefined()
       return c!
     }, { timeout: 2000, interval: 5 })
-    expect(s.ui.get().jobs[clip.id].request.modelChoice).toEqual(pick)
+    expect(s.ui.get().jobs[clip.id].request!.modelChoice).toEqual(pick)
   })
 
   it('once its frame landed and only its clip failed, Fix makes only the clip, not a second frame edit', async () => {
@@ -227,8 +227,8 @@ describe('Fix it in the shot', () => {
     const again = await remakeFixClip(s.deps, editId, pick)
     expect(s.all().filter((j) => j.op === 'region_edit')).toHaveLength(1) // the fixed frame is not edited again
     expect(ctxOf(again)).toMatchObject({ for: 'clip', reviewIds: [n.id] })
-    expect(ctxOf(again)!.request.modelChoice).toEqual(pick)
-    expect(ctxOf(again)!.request.input.image?.sha256).toBe(s.frameOf(1).asset) // from the fixed frame
+    expect(ctxOf(again)!.request!.modelChoice).toEqual(pick)
+    expect(ctxOf(again)!.request!.input.image?.sha256).toBe(s.frameOf(1).asset) // from the fixed frame
   })
 
   it('sends the box as the region, with no mask (features/drop-hackathon-extras.clan)', async () => {
@@ -575,7 +575,7 @@ describe('Update what follows', () => {
     expect(s.doc.get().frames[oldFrame.id]).toBeUndefined() // replaced, not stacked
 
     const clipId = (await makeAwaited(s.deps, { modelChoice: veo }))!
-    expect(s.ui.get().jobs[clipId].request.modelChoice).toEqual(veo)
+    expect(s.ui.get().jobs[clipId].request!.modelChoice).toEqual(veo)
     expect(s.ui.get().following?.models?.clip).toEqual(veo) // the box's pick is kept for the rest
   })
 
@@ -595,7 +595,7 @@ describe('Update what follows', () => {
     const veo = { provider: 'runway' as const, model: 'veo3.1_fast' }
     const second = (await makeAwaited(s.deps, { modelChoice: veo }))!
     expect(s.ui.get().jobs[first].dismissed).toBe(true)
-    expect(s.ui.get().jobs[second].request.modelChoice).toEqual(veo)
+    expect(s.ui.get().jobs[second].request!.modelChoice).toEqual(veo)
   })
 
   it('"Do the rest as they are" makes this and every later item on the box\'s models, then renders the ad by itself', async () => {
@@ -690,13 +690,13 @@ describe('Update what follows', () => {
     await s.runner.cancel(id) // like a provider out of credit: the step ended without a clip
     const veo = { provider: 'runway' as const, model: 'veo3.1_fast' }
     const again = (await s.runner.retry(id, veo))!
-    expect(s.ui.get().jobs[again].request.modelChoice).toEqual(veo)
+    expect(s.ui.get().jobs[again].request!.modelChoice).toEqual(veo)
     expect(s.runner.ctx(again)).toMatchObject({ for: 'clip', parentTakeId: s.takeOf(0).id })
     expect(s.ui.get().jobs[id]).toMatchObject({ dismissed: true, retriedAs: again })
     expect(s.doc.get().jobs[again].nonce).not.toBe(s.doc.get().jobs[id].nonce) // another take, never deduped
     await s.runner.cancel(again)
     const routed = (await s.runner.retry(again, null))! // the routed default this time
-    expect(s.ui.get().jobs[routed].request.modelChoice).toBeUndefined()
+    expect(s.ui.get().jobs[routed].request!.modelChoice).toBeUndefined()
   })
 
   it('carrying forward runs frames one at a time in order, then the clips, then the ad, and writes one chain entry', async () => {
@@ -787,12 +787,12 @@ describe('Update what follows', () => {
 
     // Frame 3's request fails: the run waits (it does not skip it), and a retry moves it on.
     const failing = s.running()[0]
-    s.ui.update((u) => { u.jobs[failing.id].request.input.text = '#fail' })
+    s.ui.update((u) => { u.jobs[failing.id].request!.input.text = '#fail' })
     await s.runner.cancel(failing.id)
     await continueFollow(s.deps)
     expect(s.running()).toHaveLength(0)
     expect(s.ui.get().following).toBeDefined()
-    s.ui.update((u) => { delete u.jobs[failing.id].request.input.text })
+    s.ui.update((u) => { delete u.jobs[failing.id].request!.input.text })
     await s.runner.retry(failing.id)
     await s.settle()
     expect(s.ui.get().following).toBeUndefined()

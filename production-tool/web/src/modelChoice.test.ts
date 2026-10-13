@@ -57,20 +57,20 @@ describe('the regenerate menu', () => {
   })
 
   it('names the model a job ran on, and says when it was made on Runway instead', () => {
-    const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'runway', model: 'veo3.1', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as DocJob
-    const doc = { jobs: [job] } as unknown as ProductionDocument
-    const request = { contractVersion: '2', jobId: 'job_1', op: 'clip', parentIds: [], input: {} }
+    const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'runway', model: 'veo3.1', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as unknown as DocJob
+    const doc = { jobs: { job_1: job } } as unknown as ProductionDocument
+    const request = { contractVersion: '3', jobId: 'job_1', op: 'clip', parentIds: [], input: {} }
     // no pick: the relay's fallbackFrom says the mock could not
-    const ui = { jobCtx: { job_1: { for: 'clip', shotId: 's', request, fallbackFrom: { provider: 'mock', model: 'mock' } } } } as unknown as UiState
+    const ui = { jobs: { job_1: { request, fallbackFrom: { provider: 'mock', model: 'mock' } } } } as unknown as UiState
     expect(madeWith(doc, ui, 'job_1')).toEqual({
       made: { provider: 'runway', model: 'veo3.1' },
       label: 'Veo 3.1 (runway) · Made on Runway: Mock could not',
       fallback: 'Made on Runway: Mock could not',
     })
     // a pick from before fallbackFrom was kept
-    const picked = { jobCtx: { job_1: { for: 'clip', shotId: 's', request: { ...request, modelChoice: { provider: 'mock', model: 'mock-hq' } } } } } as unknown as UiState
+    const picked = { jobs: { job_1: { request: { ...request, modelChoice: { provider: 'mock', model: 'mock-hq' } } } } } as unknown as UiState
     expect(madeWith(doc, picked, 'job_1').fallback).toBe('Made on Runway: Mock could not')
-    expect(madeWith(doc, { jobCtx: {} } as unknown as UiState, 'job_1')).toEqual({ made: { provider: 'runway', model: 'veo3.1' }, label: 'Veo 3.1 (runway)' })
+    expect(madeWith(doc, { jobs: {} } as unknown as UiState, 'job_1')).toEqual({ made: { provider: 'runway', model: 'veo3.1' }, label: 'Veo 3.1 (runway)' })
     expect(madeWith(doc, ui, undefined)).toEqual({})
     expect(modelLabel('runway', 'gemini_image3.1_flash')).toBe('Gemini 3.1 Flash')
     expect(fellBack({ provider: 'runway', model: 'veo3.1' }, 'runway')).toBeUndefined()
@@ -78,9 +78,9 @@ describe('the regenerate menu', () => {
 
   it('names a job a document recorded on a provider no longer routed as it was recorded', () => {
     // madeBy is free text (common.schema.json): older projects keep the provider that made them.
-    const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'oldco', model: 'old-model', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as DocJob
-    const doc = { jobs: [job] } as unknown as ProductionDocument
-    expect(madeWith(doc, { jobCtx: {} } as unknown as UiState, 'job_1')).toEqual({ made: { provider: 'oldco', model: 'old-model' }, label: 'old-model (oldco)' })
+    const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'oldco', model: 'old-model', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as unknown as DocJob
+    const doc = { jobs: { job_1: job } } as unknown as ProductionDocument
+    expect(madeWith(doc, { jobs: {} } as unknown as UiState, 'job_1')).toEqual({ made: { provider: 'oldco', model: 'old-model' }, label: 'old-model (oldco)' })
     expect(modelLabel('oldco', 'old-model')).toBe('old-model')
   })
 })

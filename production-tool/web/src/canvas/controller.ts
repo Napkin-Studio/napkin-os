@@ -8,7 +8,7 @@
 import { CaptureUpdateAction, convertToExcalidrawElements, getVisibleSceneBounds, newElementWith } from '@excalidraw/excalidraw'
 import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
-import type { CustomData, Job, JobInputRef, Key, LibraryEntry, ProductionDocument, RefRole, Variant, View, ModelChoice } from '../contracts/types'
+import { AGENCY_SHELF, type CustomData, type Job, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef, type ProductionDocument, type RefRole, type Variant, type View, type ModelChoice } from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
@@ -18,6 +18,7 @@ import { systemUpdate } from '../doc/store'
 import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
+import { keyNamed, refsList } from '../model/selectors'
 import {
   alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
   imageOf, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
@@ -95,7 +96,7 @@ export class CanvasController {
       && !files[(e as ExcalidrawImageElement).fileId!] && !this.restoreTried.has((e as ExcalidrawImageElement).fileId!)) as ExcalidrawImageElement[]
     if (!lacking.length) return 0
     for (const el of lacking) this.restoreTried.add(el.fileId!)
-    const byFileId = new Map(this.doc().assets.map((a) => [fileIdFor(a.sha256) as string, a.sha256]))
+    const byFileId = new Map(Object.keys(this.doc().assets).map((sha) => [fileIdFor(sha) as string, sha]))
     const add: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
     for (const el of lacking) {
       const c = cd(el) as { asset?: string } | undefined
@@ -181,8 +182,8 @@ export class CanvasController {
 
   private addAsset(sha: string, blob: Blob, origin: 'uploaded' | 'drawn', size?: { w: number; h: number }) {
     systemUpdate(this.s.doc, (d) => {
-      if (!d.assets.some((a) => a.sha256 === sha)) {
-        d.assets.push({ sha256: sha, kind: 'image', mime: blob.type || 'image/png', bytes: blob.size, ...(size ?? {}), origin, locations: [idbLocation(sha)] })
+      if (!d.assets[sha]) {
+        d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, ...(size ?? {}), origin, locations: [idbLocation(sha)] }
       }
     }, 'add picture')
   }
@@ -248,7 +249,7 @@ export class CanvasController {
       this.addAsset(sha, blob, 'drawn')
       // A name on the drawing follows its new picture.
       systemUpdate(this.s.doc, (d) => {
-        for (const r of d.refs) if (r.node === c.id) r.asset = sha
+        for (const r of Object.values(d.refs)) if (r.node === c.id) r.asset = sha
       }, 'name')
     }
   }
@@ -271,7 +272,7 @@ export class CanvasController {
     const plan = planSelection(this.els(), elIds)
     return {
       inputs: plan.images.map((i) => {
-        const r = doc.refs.find((x) => x.node === i.nodeId)
+        const r = this.nameOn(i.nodeId, doc)
         return { nodeId: i.nodeId, kind: i.kind, ...(r ? { name: nameOf(r) } : {}) }
       }),
       drawings: plan.strokes.length ? 1 : 0,
@@ -316,7 +317,7 @@ export class CanvasController {
     }
     const refs: JobInputRef[] = []
     for (const i of plan.images) {
-      const named = this.doc().refs.find((r) => r.node === i.nodeId)
+      const named = this.nameOn(i.nodeId)
       if (named) {
         refs.push(await namedInput(this.s.relay, this.doc(), named))
         continue
@@ -351,8 +352,8 @@ export class CanvasController {
   // ── names: key_variant on any image ──
 
   /** The name on a node, if it has one. */
-  nameOn(nodeId: string) {
-    return this.doc().refs.find((r) => r.node === nodeId)
+  nameOn(nodeId: string, doc = this.doc()): NamedRef | undefined {
+    return refsList(doc).find((r) => r.node === nodeId)
   }
 
   /**
@@ -369,35 +370,44 @@ export class CanvasController {
     const name = `${key}_${variant}`
     systemUpdate(this.s.doc, (d) => {
       const now = new Date().toISOString()
-      const mine = d.refs.find((r) => r.node === nodeId)
-      const other = d.refs.find((r) => nameOf(r) === name && r !== mine)
+      const refs = Object.values(d.refs)
+      const mine = refs.find((r) => r.node === nodeId)
+      const other = refs.find((r) => nameOf(r) === name && r !== mine)
+      // A ref has its key's role; a new key gets `role`.
+      let k = keyNamed(d, key)
+      if (!k) {
+        const id = newId('key')
+        k = d.keys[id] = { id, v: 1, field_v: {}, key, role }
+      }
       if (other) {
         // The name moves here: one image per name.
-        if (other.asset !== asset) markStale(d, other.asset, other.id, `@${name} now shows another image.`, now)
-        if (mine) d.refs = d.refs.filter((r) => r !== mine)
+        if (other.asset && other.asset !== asset) markStale(d, other.asset, other.id, `@${name} now shows another image.`, now)
+        if (mine) delete d.refs[mine.id]
         Object.assign(other, { asset, node: nodeId, named_at: now })
       } else if (mine) {
-        Object.assign(mine, { key, variant, named_at: now })
+        Object.assign(mine, { key, variant, role: k.role, named_at: now })
       } else {
-        d.refs.push({ id: newId('ref'), key, variant, asset, node: nodeId, named_at: now })
+        const id = newId('ref')
+        d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
       }
-      if (!d.keys.some((k) => k.key === key)) d.keys.push({ key, role })
-      d.keys = d.keys.filter((k) => d.refs.some((r) => r.key === k.key) || k.library)
+      dropUnusedKeys(d)
     }, 'name')
   }
 
   /** Take the name off a node. The key goes too when nothing else uses it and it was never published. */
   unname(nodeId: string) {
     systemUpdate(this.s.doc, (d) => {
-      d.refs = d.refs.filter((r) => r.node !== nodeId)
-      d.keys = d.keys.filter((k) => d.refs.some((r) => r.key === k.key) || k.library)
+      for (const r of Object.values(d.refs)) if (r.node === nodeId) delete d.refs[r.id]
+      dropUnusedKeys(d)
     }, 'name')
   }
 
+  /** A key's role, and its refs' with it. */
   setRole(key: Key, role: RefRole) {
     systemUpdate(this.s.doc, (d) => {
-      const k = d.keys.find((x) => x.key === key)
+      const k = keyNamed(d, key)
       if (k) k.role = role
+      for (const r of Object.values(d.refs)) if (r.key === key) r.role = role
     }, 'name')
   }
 
@@ -409,10 +419,11 @@ export class CanvasController {
     const front = refByName(doc, `${key}_front`)
     if (!front) throw new Error(`Set an image as ${key}'s front first.`)
     const frontEl = front.node ? this.nodeEl(front.node) : undefined
+    if (!front.asset) throw new Error(`${key}'s front has no picture.`)
     const image = await assetRef(this.s.relay, front.asset)
     // Other variants of the key keep the identity (up to 3, KEY_EXTRAS in lib/names.ts).
     const refs: JobInputRef[] = []
-    for (const r of doc.refs.filter((x) => x.key === key && x.id !== front.id).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
+    for (const r of refsList(doc).filter((x) => x.key === key && x.id !== front.id && x.asset).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
     const els = this.els()
     const anchor = frontEl ? bounds([frontEl]) : { maxX: 0, minY: 0 }
     // A row to the right of the front, clear of anything already there.
@@ -444,15 +455,16 @@ export class CanvasController {
   /** Publish a key's refs as the next library version. */
   async publish(key: Key) {
     const doc = this.doc()
-    const k = doc.keys.find((x) => x.key === key)
-    const refs = doc.refs.filter((r) => r.key === key)
+    const k = keyNamed(doc, key)
+    const refs = refsList(doc).filter((r) => r.key === key && r.asset)
     if (!k || !refs.length) throw new Error(`Name at least one image ${key}_… first.`)
     const out = []
-    for (const r of refs) out.push({ variant: r.variant, asset: await assetRef(this.s.relay, r.asset) })
-    const entry = await this.s.relay.publish(key, { role: k.role, baseVer: k.library?.ver ?? 0, refs: out })
+    for (const r of refs) out.push({ variant: r.variant, asset: await assetRef(this.s.relay, r.asset!) })
+    const shelf = k.library?.shelf ?? AGENCY_SHELF
+    const entry = await this.s.relay.publish(key, { kind: 'key', role: k.role, baseVer: k.library?.ver ?? 0, refs: out }, shelf)
     systemUpdate(this.s.doc, (d) => {
-      const kk = d.keys.find((x) => x.key === key)
-      if (kk) kk.library = { workspace: entry.workspace, ver: entry.ver, by: entry.by, at: entry.at }
+      const kk = keyNamed(d, key)
+      if (kk) kk.library = libraryCopy(entry)
     }, 'publish')
   }
 
@@ -464,7 +476,7 @@ export class CanvasController {
   async importEntry(entry: LibraryEntry) {
     const files: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
     const got: { variant: Variant; sha: string; w: number; h: number }[] = []
-    for (const r of entry.refs) {
+    for (const r of entry.refs ?? []) {
       const blob = await this.s.relay.fetchOutput(r.asset)
       const sha = await putBlob(blob)
       await putBlobAs(r.asset.sha256, blob)
@@ -492,19 +504,23 @@ export class CanvasController {
     this.setEls([...this.els(), ...added])
     systemUpdate(this.s.doc, (d) => {
       const now = new Date().toISOString()
+      const lib = libraryCopy(entry)
+      let k = keyNamed(d, entry.key)
+      if (!k) {
+        const id = newId('key')
+        k = d.keys[id] = { id, v: 1, field_v: {}, key: entry.key, role: entry.role ?? 'character' }
+      }
+      Object.assign(k, { ...(entry.role ? { role: entry.role } : {}), library: lib })
       for (const n of nodes) {
-        const existing = d.refs.find((r) => r.key === entry.key && r.variant === n.variant)
+        const existing = Object.values(d.refs).find((r) => r.key === entry.key && r.variant === n.variant)
         if (existing) {
-          if (existing.asset !== n.sha) markStale(d, existing.asset, existing.id, `@${entry.key}_${n.variant} was replaced from the library.`, now)
-          Object.assign(existing, { asset: n.sha, node: n.nodeId, named_at: now })
+          if (existing.asset && existing.asset !== n.sha) markStale(d, existing.asset, existing.id, `@${entry.key}_${n.variant} was replaced from the library.`, now)
+          Object.assign(existing, { asset: n.sha, node: n.nodeId, role: k.role, named_at: now })
         } else {
-          d.refs.push({ id: newId('ref'), key: entry.key, variant: n.variant, asset: n.sha, node: n.nodeId, named_at: now })
+          const id = newId('ref')
+          d.refs[id] = { id, v: 1, field_v: {}, key: entry.key, variant: n.variant, role: k.role, asset: n.sha, node: n.nodeId, named_at: now }
         }
       }
-      const lib = { workspace: entry.workspace, ver: entry.ver, by: entry.by, at: entry.at }
-      const k = d.keys.find((x) => x.key === entry.key)
-      if (k) Object.assign(k, { role: entry.role, library: lib })
-      else d.keys.push({ key: entry.key, role: entry.role, library: lib })
     }, 'import')
     this.reveal(added.map((e) => e.id))
   }
@@ -561,7 +577,7 @@ export class CanvasController {
     const next = this.els().map((e) => {
       const c = cd(e)
       if (c?.kind !== 'gen' || e.isDeleted) return e
-      const j = doc.jobs.find((x) => x.id === c.id)
+      const j = doc.jobs[c.id]
       if (j && j.state !== c.state && j.state !== 'completed') {
         changed = true
         return newElementWith(e, { customData: { ...c, state: j.state } })
@@ -588,7 +604,7 @@ export class CanvasController {
       customData: { ...c, state: 'completed', asset: out.sha256, ...(job.kind === 'mock' ? { mock: true } : {}) },
     }))
     if (c.op === 'view' && c.view) {
-      const source = this.doc().refs.find((r) => r.node === c.parentIds[0])
+      const source = this.nameOn(c.parentIds[0])
       const key = source?.key
       if (key && !refByName(this.doc(), `${key}_${c.view}`)) this.name(job.jobId, key, c.view)
     }
@@ -604,6 +620,17 @@ export class CanvasController {
     const el = this.els().find((e) => e.id === elId)
     return el ? textOf(el) : ''
   }
+}
+
+/** What a document keeps of the library version it copied (key.library). */
+function libraryCopy(entry: LibraryEntry) {
+  return { shelf: entry.shelf, key: entry.key, ver: entry.ver, by: entry.by, at: entry.at }
+}
+
+/** Keys no ref uses and never published go. */
+function dropUnusedKeys(d: ProductionDocument) {
+  const used = new Set(Object.values(d.refs).map((r) => r.key))
+  for (const k of Object.values(d.keys)) if (!used.has(k.key) && !k.library) delete d.keys[k.id]
 }
 
 export function viewLabel(v: View): string {

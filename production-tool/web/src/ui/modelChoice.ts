@@ -37,13 +37,13 @@ export interface MadeWith {
   fallback?: string
 }
 
-export function madeWith(doc: ProductionDocument, ui: UiState, jobId: string | undefined): MadeWith {
-  const job = jobId ? doc.jobs.find((j) => j.id === jobId) : undefined
+export function madeWith(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, jobId: string | undefined): MadeWith {
+  const job = jobId ? doc.jobs[jobId] : undefined
   if (!job?.provider || !job.model) return {}
   const made = { provider: job.provider, model: job.model }
-  const ctx = jobId ? ui.jobCtx[jobId] : undefined
+  const local = jobId ? ui.jobs[jobId] : undefined
   // The relay's record of it, else the pick it was sent with (jobs from before fallbackFrom was kept).
-  const fallback = fellBack(ctx?.fallbackFrom ?? ctx?.request.modelChoice, made.provider)
+  const fallback = fellBack(local?.fallbackFrom ?? local?.request?.modelChoice, made.provider)
   const label = `${modelLabel(made.provider, made.model)} (${made.provider})${fallback ? ` · ${fallback}` : ''}`
   return fallback ? { made, label, fallback } : { made, label }
 }

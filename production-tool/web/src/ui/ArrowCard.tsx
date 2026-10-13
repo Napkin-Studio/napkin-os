@@ -124,8 +124,9 @@ function CardView({ arrow, at, pinned = false, api }: { arrow: El; at: Pt; pinne
     const kindOf = (nodeId: string): NodeKind | undefined => {
       const el = byOwnId(els, nodeId)
       const c = cd(el)
-      if (!el || !c || c.kind === 'provenance' || c.kind === 'pin') return undefined
-      return c.kind === 'note' ? { kind: 'note', text: textOf(el) } : { kind: c.kind }
+      if (!el || !c) return undefined
+      if (c.kind === 'note') return { kind: 'note', text: textOf(el) }
+      return c.kind === 'pic' || c.kind === 'drawn' || c.kind === 'gen' ? { kind: c.kind } : undefined
     }
     return arrowCard(doc, ui, link, { kindOf })
   }, [doc, ui, link?.from, link?.to, api]) // eslint-disable-line react-hooks/exhaustive-deps

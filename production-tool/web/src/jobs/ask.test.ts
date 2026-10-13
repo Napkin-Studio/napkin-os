@@ -135,7 +135,7 @@ describe('a job that asks', () => {
     expect(next).not.toBe(id)
     const [was, now] = [s.doc.get().jobs[id], s.doc.get().jobs[next]]
     expect(now).toMatchObject({ op: 'shot_list', node: was.node, purpose: was.purpose, parent_ids: [id], crew: 'dex' })
-    const request = s.ui.get().jobs[next].request
+    const request = s.ui.get().jobs[next].request!
     expect(request.parentIds).toEqual([id])
     expect(request.input.answer).toEqual({ contractVersion: '3', questionId: q.id, text: 'Open on the umbrella' })
     expect(makeAjv().compile({ $ref: SCHEMA('relay-api') + '#/$defs/JobRequest' })(request)).toBe(true)

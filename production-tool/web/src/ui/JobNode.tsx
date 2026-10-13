@@ -1,12 +1,15 @@
 // A job in place: where its output will land, it shows the queue position and
 // elapsed time; when it fails, the error and one floating bar: Retry, Try another model (a menu),
-// Report, Clear. Never a toast.
+// Report, Clear. Never a toast. A job waiting for an answer (needs_input) shows its ask card
+// instead: no loader, no busy pointer (ui-behaviour 5.2).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import type { DocJob } from '../contracts/types'
-import { isActive } from '../jobs/runner'
+import { askOf, isActive, jobCtx } from '../jobs/runner'
+import { shotNumber } from '../model/selectors'
+import { AskCard } from './AskCard'
 import { cancelText, mayStillCharge } from './cancel'
 import { AgentFigure } from './agents/AgentFigure'
 import { whoIsWorking } from './agents/cast'
@@ -32,11 +35,12 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   const { runner } = useServices()
   const doc = useDoc()
   useJobsTick()
-  const job = doc.jobs.find((j) => j.id === jobId)
+  const job = doc.jobs[jobId] as DocJob | undefined
   const live = runner.liveInfo(jobId)
   const ui = useUi()
   const state = live?.state ?? job?.state ?? 'queued'
-  const running = isActive(state)
+  const waiting = state === 'needs_input'
+  const running = isActive(state) && !waiting
   const elapsed = useElapsed(job?.created_at, running)
   const [reported, setReported] = useState<'no' | 'sending' | 'yes' | 'failed'>('no')
   const [confirming, setConfirming] = useState(false)
@@ -47,10 +51,23 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   }, [failed, jobId, job?.op, job?.provider])
 
   if (!job) return null
-  const ctx = ui.jobCtx[jobId]
+  const ctx = jobCtx(doc, ui, jobId)
   const shotId = ctx && 'shotId' in ctx ? ctx.shotId : undefined
-  const order = shotId ? (doc.shots ?? []).find((x) => x.id === shotId)?.order : undefined
+  const order = shotId ? shotNumber(doc, shotId) || undefined : undefined
   const who = whoIsWorking(job, state, ctx, order)
+  const ask = askOf(doc, jobId)
+
+  if (waiting) {
+    // The agent asked instead of guessing: the question, not a loader.
+    return ask
+      ? <AskCard ask={ask} />
+      : (
+        <div className={`pending waiting ${compact ? 'compact' : ''}`} role="status">
+          <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+          <div className="state">{who.line}</div>
+        </div>
+      )
+  }
 
   if (state === 'failed' || state === 'cancelled') {
     const err = job.error
@@ -117,6 +134,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   const q = live?.queuePosition
   const model = job.model ? modelLabel(job.provider, job.model) : undefined
   return (
+    <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
       <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
@@ -129,6 +147,9 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
         ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
         : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)}
     </div>
+    {/* Answered and back at work: who chose what, with Change. */}
+    {!compact && ask && <AskCard ask={ask} />}
+    </>
   )
 }
 

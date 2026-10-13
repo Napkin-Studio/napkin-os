@@ -55,7 +55,7 @@ async function setup(shotCount = 3) {
     await flush()
   }
   const requests = () => jobsList(doc.get()).map((j) => ({ id: j.id, state: j.state, ctx: runner.ctx(j.id)! }))
-  const inputOf = (jobId: string): JobInput => ui.get().jobs[jobId].request.input
+  const inputOf = (jobId: string): JobInput => ui.get().jobs[jobId].request!.input
   const shotId = (i: number) => shotsOf(doc.get())[i].id
   const frameOf = (i: number) => selectedFrame(doc.get(), shotId(i))!
   const running = () => requests().filter((r) => !['completed', 'failed', 'cancelled'].includes(r.state))

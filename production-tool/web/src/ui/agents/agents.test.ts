@@ -44,8 +44,18 @@ describe('who is shown for a job', () => {
   })
   it('names clips, plans and the ad', () => {
     expect(whoIsWorking({ op: 'clip' }, 'fetching', { for: 'clip', shotId: 's3' }, 3).line).toBe('Dex is making the clip for shot 3')
-    expect(whoIsWorking({ op: 'shot_list' }, 'submitted', { for: 'shot_list', revId: 'r' }).line).toBe('Dex is planning the shots')
+    expect(whoIsWorking({ op: 'shot_list' }, 'submitted', { for: 'shot_list' }).line).toBe('Dex is planning the shots')
     expect(whoIsWorking({ op: 'stitch' }, 'submitted', { for: 'stitch' }).line).toBe('Dex is putting together the ad')
+  })
+  it('shows the job\'s crew member where the cast has a figure, Dex for planning and the rest', () => {
+    expect(whoIsWorking({ op: 'check', crew: 'jude' }, 'submitted', undefined)).toMatchObject({ agent: 'jude', state: 'working' })
+    expect(whoIsWorking({ op: 'read', crew: 'ellis' }, 'completed', undefined)).toEqual({ agent: 'ellis', state: 'idle', line: 'Ellis made a picture' })
+    expect(whoIsWorking({ op: 'frame', crew: 'wren' }, 'submitted', ctx, 2).agent).toBe('dex')
+    expect(whoIsWorking({ op: 'shot_list', crew: 'jude' }, 'submitted', { for: 'shot_list' }).agent).toBe('dex')
+  })
+  it('a job waiting for an answer waits for you, with no loader', () => {
+    expect(whoIsWorking({ op: 'shot_list', crew: 'dex' }, 'needs_input', { for: 'shot_list' }))
+      .toEqual({ agent: 'dex', state: 'needs-you', line: 'Waiting for you: Dex has a question about the shots' })
   })
   it('says when a job was made on Runway because its pick could not (features/runway-fallback.clan)', () => {
     const ctx = { for: 'clip' as const, shotId: 's3', fallbackFrom: { provider: 'mock' as const, model: 'mock-hq' } }

@@ -552,6 +552,11 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .framecard-foot .faint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .framecard-error { color: var(--danger); font-size: 12px; font-weight: 600; padding: 0 12px 12px; }
 .pending.idle { animation: none; background: var(--soft); }
+/* The Name dialog's role pills (the contract's ten main roles, More… for the rest) and the chosen role's line. */
+.rolepills { gap: 4px; flex-wrap: wrap; max-width: 360px; }
+.roleline { font-size: 12px; margin-top: 4px; }
+/* Waiting for an answer (needs_input): no loader, no busy pointer (ui-behaviour 5.2). */
+.pending.waiting { animation: none; background: var(--soft); cursor: default; }
 .hoverbar .hb-label { display: none; }
 .hoverbar .btn.on .hb-label { display: inline; }
 .framecard .head .faint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

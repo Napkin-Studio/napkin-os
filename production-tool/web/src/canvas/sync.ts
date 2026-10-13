@@ -65,7 +65,7 @@ export class CanvasDocSync {
 
   private async removeGen(id: string) {
     const store = this.deps.doc
-    const job = store.get().jobs.find((j) => j.id === id)
+    const job = store.get().jobs[id]
     if (job && !TERMINAL_STATES.includes(job.state)) this.deps.cancel(id)
     this.removals.set(id, await deleteFrom(store, (d) => removeGen(d, id), { system: true }))
   }
