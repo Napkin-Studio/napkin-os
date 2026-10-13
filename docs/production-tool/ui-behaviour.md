@@ -5,8 +5,9 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 - **Baseline.** `docs/production-tool/overhaul-plan.md`, approved 2026-10-13. Its "Owner decisions" section wins wherever this spec and the plan differ. This spec adds the interaction detail the plan leaves open.
 - **Mockups.** 1 Main · 2 CanvasLinking · 3 CanvasReferences · 4 SketchInk · 4b Scope · 4c Asks · 4d Assets · 4e Formats · 5 TabletCanvas · 6 ScriptScreenplay · 7 ScriptAV · 8 Storyboard · 9 ImageEditor · 10 VideoEditor · 11 PhoneReview · 12 States · 13 Crew · 14 Loader · 15 DecisionTree. In this spec, "artboard N" means the board with that number in `canvas.json`.
 - **Owner decisions folded in on 2026-10-13:** inputs and scope, the send tray, asks (shared), assets and the team library by client, brand rules, spin-in, scamp sheets, and Make all sizes with video cut-downs. Also decided that day: model names always read "<model> on Runway", the reference roles are one open set (3.6), and a node with a running job is never dimmed during a link drag (3.4).
-- **Owner answers of 2026-10-13 (second round):** the contrast tokens (9, 10), the loader's 0.6 s finish (6.4), the spend confirm threshold and where the cap defaults come from (5.4), and format packs from industry standards (3.19). The remaining recommendations were adopted because the owner did not object: the warn underline for unknown names (3.6), ⌥M for a moment (3.10), one note-window rule everywhere (3.13, 3.14), no Sketches board in the Ad template (3.2), editable board name prefixes (3.6), the selection bar hidden during a port drag (3.4), tap outside closes the iPad board sheet (3.2), and per-role lines in contract-v3 (3.6). Section 12 now lists only facts still to check.
+- **Owner answers of 2026-10-13 (second round):** the contrast tokens (9, 10), the loader's 0.6 s finish (6.4), the spend confirm threshold and where the cap defaults come from (5.4; both since superseded by the fourth round), and format packs from industry standards (3.19). The remaining recommendations were adopted because the owner did not object: the warn underline for unknown names (3.6), ⌥M for a moment (3.10), one note-window rule everywhere (3.13, 3.14), no Sketches board in the Ad template (3.2), editable board name prefixes (3.6), the selection bar hidden during a port drag (3.4), tap outside closes the iPad board sheet (3.2), and per-role lines in contract-v3 (3.6). Section 12 now lists only facts still to check.
 - **Owner edits of 2026-10-13 (third round):** the loader is the Napkin logo in its own four colours, and the department of the work picks the leading card (section 6; this replaces the crew-tone loader); the crew are the house figures, named for their work (5.1); no chat anywhere in the tool, agents act in place (principle 10, 3.10); and every project has a decision tree (3.20, artboard 15).
+- **Owner decision of 2026-10-13 (fourth round, supersedes every earlier spend rule):** no prices or costs anywhere in the UI; costs are recorded per job and shown only in the decision tree (3.20); the send tray stays, without prices, collapsed by default (3.16); spend caps and per-person quotas are built but off, and each agency will choose its own cap later (5.4); failed or refused attempts that Runway bills are charged and recorded with no wording in the UI (5.3).
 - **When a mockup and this spec disagree,** this spec wins. Section 12.1 lists the redraws made to match it; all are done.
 - **Words.** "You" is the person at the screen. "Someone else" is another person in the same project. "Agent" is a crew member (section 5).
 
@@ -17,7 +18,7 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 1. **The canvas is the project.** All of an ad lives on one canvas: script, pictures, storyboard, video, sketches, notes. Editors open over the canvas and close back onto it. The canvas stays mounted underneath, so results keep landing while an editor is open. No feature adds a separate page of project content.
 2. **Meaning lives in the `.clan`; the canvas holds only where things are.** Boards, shots, references, links, jobs, notes and versions are document entities, and each is written by one server as a validated patch. Excalidraw holds geometry and ids only. If the screen and the document ever disagree, the document is right and the screen redraws.
 3. **Nothing is silent.** Every running job is visible, along with who started it. Every fallback, passthrough, splice, condensation, crop and failure is said in words where it happened. A tool never quietly drops an `@name`, truncates text, changes a ratio or switches model.
-4. **Every cost is shown before it is spent, and you see what is sent.** Anything that calls Runway shows its price in dollars on the button or next to it before you press it. Every paid generation opens the send tray, "What Dex will send" (3.16), which lists each input, the model and the price. Nothing goes to Runway until you press the tray's **Generate**. Batches and large runs open the tray expanded (section 5.4). Free work says "free". Work that runs on your device says "on your device".
+4. **Costs live in the decision tree, and you see what is sent.** No price, cost or credit count appears anywhere in the UI: not on buttons, menus, model picks, the send tray, toasts, job cards, asks or admin views. Every job records what it cost, and the decision tree (History, 3.20) is the one place that shows it. Every Runway generation opens the send tray, "What Dex will send" (3.16), which lists each input and the model. Nothing goes to Runway until you press the tray's **Generate**. Batches open the tray expanded (section 5.4). Work that runs on your device says "on your device".
 5. **Nothing changes until you choose.** Agent proposals arrive as previews with a diff: Skye's rewrites, Dex's camera changes, Ellis's reading of your ink, fuzzy `@` matches, Rhea's crops of a character sheet, a spin-in from Brief Maker. The canvas or the document changes only on Apply, Keep, Link it, Confirm or Bring in, and one undo reverses that step.
 6. **Each tool works on its own; agents ask when the input is thin.** This is an owner decision from 2026-10-13. The flow (references → script → storyboard → video) gives the best results, but any node can run alone. When an input is ambiguous or missing, the agent asks a question with options instead of guessing (section 3.17, artboard 4c). The job waits in `needs_input`. An ask blocks only when no option can proceed; otherwise at least one option proceeds. Asks never time out into a guess. Asks are shared: anyone in the project can answer, and History records who did.
 7. **Scope is what you link.** A generating node uses only what is linked to it: boards, groups, single references, notes and documents (3.16). Nothing nearby is used because it is nearby.
@@ -113,12 +114,11 @@ The bar is 48px tall. From left to right:
 - the project name ("Lumen Water · First Light");
 - the questions pill, only while asks are open ("2 questions waiting", with ‹ › and its position "1 of 2"; section 3.17);
 - presence avatars, with "Sai and Maya are here";
-- the spend pill ("$12.40 of $200 this month");
 - **History** (opens the decision tree panel, 3.20), **Assets** (opens the Assets drawer, 3.18), **Export** (a menu, 3.18), **Share** and the account button.
 
 Every editor's top bar also carries **History**, before its primary button.
 
-- **The spend pill** opens a sheet with this month's spend by person and by kind of work. The sheet also shows the cap and who can raise it (the tenant admin). At 80% of the cap the pill turns warn. At 100% it turns danger, and every paid button says "Monthly limit reached" (section 5.4).
+- **No spend pill.** The top bar shows no spend, cost or limit (principle 4). What each job cost is in the decision tree (3.20).
 - **Presence avatars:** click one to follow that person's viewport. Section 4.2 covers following.
 
 ### 3.2 Boards and jump navigation (review item 1)
@@ -158,7 +158,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 | Storyboard | Title, ratio, shot count, length, frame strip, "2 behind the script" when stale, inputs strip | Open |
 | Video | Poster, length, "Clips 3 of 6 ready", last ad render, estimate to finish, inputs strip | Open |
 | Reference | Picture, `@name`, role pill, library version when it came from the team library ("v4") | Role chip, Name |
-| Frame (made from a sketch) | Picture, version, ratio badge, the model that made it ("Gemini 3 Pro on Runway"), its cost | Open, Use in shot N, Make all sizes |
+| Frame (made from a sketch) | Picture, version, ratio badge, the model that made it ("Gemini 3 Pro on Runway") | Open, Use in shot N, Make all sizes |
 | Sketch area | White, ratio-locked rectangle, "16:9 locked", "drawn by Shrey", inputs strip | Generate |
 | Ink group | Strokes inside a dashed group box | Convert to text |
 | Document | File name, pages, an excerpt Ellis read ("client_notes.docx · 2 pages") | Link to use as context |
@@ -231,7 +231,7 @@ How a stale link shows:
 - A badge on the link reads "Script changed · 2 shots out of date", with **Update shots**.
 - The affected shots get an amber outline and an "out of date" pill.
 
-A new `drives` link to a storyboard planned from an older script is stale at once. **Update shots** runs FollowScope and UpdateBox: the affected shots are re-planned as a merge, and the price shows first if any paid step follows.
+A new `drives` link to a storyboard planned from an older script is stale at once. **Update shots** runs FollowScope and UpdateBox: the affected shots are re-planned as a merge, and any Runway step that follows goes through the send tray first (3.16).
 
 ### 3.5 Make video
 
@@ -241,12 +241,12 @@ A new `drives` link to a storyboard planned from an older script is stale at onc
    - a `drives` link, only if it is missing;
    - a `renders` link.
 
-   No paid job starts. The node shows "6 clips to make · 15 s · est. $4.80 · waits for 2 shots".
+   No paid job starts. The node shows "6 clips to make · 15 s · waits for 2 shots".
 3. A toast reads "Video made from Script and Storyboard · 2 links", with **Undo ⌘Z**. Undo removes the node, both links and the toast. Redo, or Make video again, brings them back.
 
 Other selections:
 - **A Storyboard alone:** Make video makes the node and the `renders` link.
-- **A Script alone:** Make video makes the Video node with a `drives` link from the script, and Dex asks on it before anything is spent (3.17, artboard 4c): "Plan a storyboard first? Clips come out better from frames you've checked." The options are **Plan the storyboard first** (marked Recommended, "6 shots · about $1.20 for frames") and **Make clips straight from the script** ("6 clips · about $7.20"), with "You can always switch later." and **Later**.
+- **A Script alone:** Make video makes the Video node with a `drives` link from the script, and Dex asks on it before anything is spent (3.17, artboard 4c): "Plan a storyboard first? Clips come out better from frames you've checked." The options are **Plan the storyboard first** (marked Recommended, "6 shots, with frames you check first") and **Make clips straight from the script** ("6 clips"), with "You can always switch later." and **Later**.
 - **Nothing linked** (a Video made from + Node): Dex asks "What should this video be?" This is the one hard block: the options are **Describe it**, **Link a script** and **Link a storyboard**, and nothing runs until one is done.
 - **Two scripts, or anything ambiguous:** Dex asks which one drives, with no default.
 
@@ -362,11 +362,11 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 |---|---|
 | Script + Storyboard | **Make video** · Plan shots · Group · More |
 | Script | Open · Plan shots · More |
-| Storyboard | Open · Make clips… (with price) · More |
-| Video | Open · Render ad… (with price) · Make all sizes… · More |
+| Storyboard | Open · Make clips… · More |
+| Video | Open · Render ad… · Make all sizes… · More |
 | Reference picture | Role chip · Rename · Use in shot… · More (adds Publish to team library) |
 | Frame or key visual | Open · Use in shot N · Make all sizes… · Make another · More |
-| Sketch area | Generate (with price) · More |
+| Sketch area | Generate · More |
 | Ink group | Convert to text · Ungroup · Move to board · Delete |
 | Document | Link to… · More |
 | Format set | Open · Export zip · More |
@@ -445,7 +445,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
   - **Keep mine** drops the draft. The line becomes "Kept yours. Skye will leave this shot alone.", with **Undo**.
   - **Why** opens that decision in the decision tree (3.20), filtered to the shot.
   - Nothing changes until Keep (principle 5). An open suggestion is kept per person across back and forward (2.3).
-- **Floating options on a selection.** Selecting a phrase shows a small bar signed with Skye's figure: **Tighten**, **Make it 10 s**, **Add a beat**, **Write the VO**, **Say it another way**. Each runs Skye on just the selected text and comes back as an inline suggestion. The bar shows the cost ("No cost" for script work).
+- **Floating options on a selection.** Selecting a phrase shows a small bar signed with Skye's figure: **Tighten**, **Make it 10 s**, **Add a beat**, **Write the VO**, **Say it another way**. Each runs Skye on just the selected text and comes back as an inline suggestion.
 - **Who-wrote-it marks.** Every scene and shot shows who last wrote it: "You", a person's avatar (Sai), or a crew figure (Skye), with **why?** beside it. The mark changes on each write. **why?** opens the decision tree filtered to that item (3.20).
 - **Asks, not chat.** Ambiguity becomes an ask card anchored to the text (3.17), shared with everyone in the project:
   - Screenplay: "Skye · scripts: Who is the jogger? There's no ref called @jogger, so I can't tell Dex how to show him.", quoting the line ("Shot 2 · 'A @jogger runs past far behind @maya…'"), with **A character**, **An extra**, **Cut him**.
@@ -466,7 +466,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 In the **Video · Audio view** the table takes the full width. The length strip sits in the header ("15 s target · 15.0 s estimated", one segment per shot), and asks and suggestions sit on their rows.
 
 **Plan shots / Update storyboard:**
-- Dex plans the shots from the script. A free planning step runs at once. When a paid step follows, its price shows first.
+- Dex plans the shots from the script. A free planning step runs at once. When a Runway step follows, it goes through the send tray first (3.16).
 - Re-planning is a merge keyed by `shotId`:
   - shots you edited keep your edits;
   - new shots are added;
@@ -483,7 +483,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 **Top bar:**
 - "← Canvas", "Storyboard · First Light", the ratio pill and the project.
 - Presence.
-- The estimate ("est. $8.00 for 5 clips").
+- What is left to make ("5 clips to make").
 - **Make clips** (primary).
 - The account button.
 
@@ -500,15 +500,14 @@ In the **Video · Audio view** the table takes the full width. The length strip 
   - four camera chips (size, angle, movement, lens);
   - two lines of action with blue `@refs`;
   - Direction.
-- **Clip badges:** "Clip ready" (ok), "Clip out of date · frame changed" (warn) with **Remake clip** and its price, "Rendering clip" (loader), "No clip yet" (grey).
+- **Clip badges:** "Clip ready" (ok), "Clip out of date · frame changed" (warn) with **Remake clip**, "Rendering clip" (loader), "No clip yet" (grey).
 - **Hovering a frame** dims it and shows "Open in image editor". A click opens the Image editor (review item 4). Badges stay readable above the dimming.
 
 **Insert between shots** (review item 3):
 - A "+" sits at the midpoint of every gap. Hover or focus shows a dashed blue guide and a menu headed "Insert between 1 and 2":
   - **Empty shot:** "A blank card you fill in". Free, one undo step.
-  - **Bridge:** "Dex draws a shot that links 1 and 2 · starts on the last frame of 1, ends on the first of 2 · about $1.60".
+  - **Bridge:** "Dex draws a shot that links 1 and 2 · starts on the last frame of 1, ends on the first of 2".
 - **How Bridge is made:** veo3.1 runs with first = the last frame of shot N and last = the first frame of shot N+1, at a minimum of 4 s.
-  - The price comes from the capability sheet.
   - The menu opens on the side away from the left card's Direction field.
   - Bridge needs both neighbours to have frames. Otherwise the option is disabled: "Shot 2 needs a frame first".
 - **+ Add a shot at the end** is a tile after the last card.
@@ -523,13 +522,13 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 **Change this frame** (review item 5), in the card's More menu or the Image editor:
 1. Type the change ("Make this an overhead aerial shot"). **Redo** lets you reword it after reading Dex's answer.
 2. Dex classifies the words as a **camera change** or a **local change**. The answer always names which: "Dex read this as a camera change".
-   - **When the words could be either** ("make the bottle bigger"), Dex asks "Bigger how?" on the card, with a camera option and an edit option, each with its price (artboard 4c). This is an ambiguity ask, so no option is preselected or marked Recommended (3.17).
+   - **When the words could be either** ("make the bottle bigger"), Dex asks "Bigger how?" on the card, with a camera option and an edit option (artboard 4c). This is an ambiguity ask, so no option is preselected or marked Recommended (3.17).
 3. **Camera change:**
    - The card's affected chips keep their current values with dashed amber outlines.
    - The result shows a field-by-field diff ("angle: eye level → overhead", "size: close → wide"), "Movement and lens stay", and a "v2 new" thumbnail.
    - **Apply** writes the camera fields and makes the new frame version current, as one step, and marks the clip stale ("Apply puts clip 4 out of date").
    - **Keep both** keeps the new frame as an extra version without touching the fields.
-   - **Discard** drops it. The money is already spent; the card says what it cost.
+   - **Discard** drops it. The card says nothing about cost; the render it took is recorded, with its cost, in the decision tree (3.20).
 4. **Local change:** Dex sends you to the Image editor with the words in Fill area, or applies the change as an instruction edit. Either way the result returns as a new version with Apply, Keep both and Discard.
 5. **When Dex used the words as given** without restructuring them (passthrough), the result says so: "Dex sent your words as they are."
 
@@ -539,8 +538,8 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - The same field as in the Script editor.
 
 **Make clips:**
-- Opens the send tray (3.16), expanded, for every shot without a ready, current clip. The tray lists each clip with its inputs and price, and you can untick any. This is the spend confirm of 5.4.
-- Remaking one stale clip from its badge shows the price on the button and opens the tray for that clip, collapsed to one line if you collapsed it before.
+- Opens the send tray (3.16), expanded, for every shot without a ready, current clip. The tray lists each clip with its inputs, and you can untick any (5.4).
+- Remaking one stale clip from its badge opens the tray for that clip, collapsed to one line if you collapsed it before.
 
 ### 3.12 Image editor (artboard 9; review items 4, 5 local, 10)
 
@@ -575,24 +574,23 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - **Mask paint** is translucent tool blue with marching ants: "Mask: blue paint marks what changes".
 
 **Edits are a non-destructive list:**
-- The panel is titled "Edits · not applied yet" and says "Nothing is spent until you run an action. v3 is never changed."
-- Each edit is numbered and has its own undo. "Next: Fill Mask 1 · est. $0.08" names the next paid step.
+- The panel is titled "Edits · not applied yet" and says "Nothing is sent until you run an action. v3 is never changed."
+- Each edit is numbered and has its own undo. "Next: Fill Mask 1" names the next Runway step.
 
 **Layers (front first):** Text, masks, cut-outs and Frame (the locked input version).
 - Each layer can be hidden.
 - A cut-out offers **Save as reference**, which opens Name this picture with the role preselected.
 - Upstream inputs arrive as locked layers.
 
-**Actions** (each shows its cost before you run it):
+**Actions** (none shows a price; each Runway action goes through the send tray):
 
-| Action | Who | Cost | Notes |
+| Action | Who | Runs | Notes |
 |---|---|---|---|
-| Remove background | Rhea | free, on your device | Uses the relay automatically when WebGPU is missing or memory is low, and then says "ran on our server". |
-| Fill area | Rhea (Runway generates) | from the sheet | Runs on the selected mask only: "Only the blue area changes". "Keep the label exactly as it is" is on by default (maps to `preciseEdit`, still to check, 12.2). The run button is dark, not primary. |
-| Change whole frame | Rhea | from the sheet | A prompt redraws the whole frame. |
-| Upscale | Rhea | from the sheet | 2× or 4×, showing the output size ("→ 3840 × 2160"). |
+| Remove background | Rhea | on your device | Uses the relay automatically when WebGPU is missing or memory is low, and then says "ran on our server". |
+| Fill area | Rhea (Runway generates) | on Runway | Runs on the selected mask only: "Only the blue area changes". "Keep the label exactly as it is" is on by default (maps to `preciseEdit`, still to check, 12.2). The run button is dark, not primary. |
+| Change whole frame | Rhea | on Runway | A prompt redraws the whole frame. |
+| Upscale | Rhea | on Runway | 2× or 4×, showing the output size ("→ 3840 × 2160"). |
 
-- The panel footer shows the project's spend ("$12.40 of $200").
 - Paid actions go through the send tray (3.16), which lists the frame, the mask and the words, and names the model ("<model> on Runway").
 - A result lands as a new layer in the op list. Nothing changes the stored version until Apply.
 - **Arriving from Jude's brand flag** ("Fix in image editor", 3.18), the editor opens on that frame with the rule shown at the top of the Edits panel ("Logo clear space: one bottle-cap height"). Nothing runs until you choose an action.
@@ -613,7 +611,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - The running-job pill ("Wren · renders: shot 5, take 2 · about 0:40 left · started by Sai").
 - Presence.
 - Ad versions (v1, v2), with **Compare**.
-- **Render ad** (primary, with its price in the confirm).
+- **Render ad** (primary).
 
 **Preview:**
 - A 16:9 player on the current shot, with the shot caption and take ("Shot 4 · Close · take v3 patched").
@@ -648,18 +646,18 @@ In the **Video · Audio view** the table takes the full width. The length strip 
    - Selecting a note widens it on the timeline into a shaded window with blue handles. The shading runs down through every row.
    - Drag the handles (they snap to seconds), or use the From/To fields (m:ss) and the mini strip in the right panel. All of them move the same window.
 4. **Still at the moment:** the panel shows "Still at 0:03. The fix aims for this frame." **Edit still** opens it in the Image editor before the fix runs.
-5. **Fix this moment** (primary in the panel) shows "Edie · edits: regenerates only 0:02-0:04 on Aleph 2 on Runway and splices it back · about $0.56".
+5. **Fix this moment** (primary in the panel) shows "Edie · edits: regenerates only 0:02-0:04 on Aleph 2 on Runway and splices it back".
    - The result is a **new take** (v3, parent v2) that replaces its parent in the cut.
    - The seams get short crossfades.
    - Jude checks both seams ("v3's seams at 0:02 and 0:04 match the take around them").
 6. **The note stays open** after a fix. Running Fix again makes v4. **Resolve** closes the note.
-7. **Fallback** when Aleph 2 isn't available: Veo 3.1 first/last frame over the window, generated at 4 s and trimmed. The panel says so before you run it ("Aleph 2 on Runway isn't available. Veo 3.1 on Runway will make 4 s and we'll keep the 2 s you need · about $1.60").
+7. **Fallback** when Aleph 2 isn't available: Veo 3.1 first/last frame over the window, generated at 4 s and trimmed. The panel says so before you run it ("Aleph 2 on Runway isn't available. Veo 3.1 on Runway will make 4 s and we'll keep the 2 s you need").
 
 **Make all sizes** (in the top bar's More, and on the Video node) makes the cut-downs of the film: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. They are part of the first release. Section 3.19 has the flow.
 
-**Takes for a shot:** a list of v1, v2 and v3, each with the model ("Veo 3.1 on Runway"), length, who made it and when. **Use** puts a take in the cut (one undo step). **Another take** shows its price.
+**Takes for a shot:** a list of v1, v2 and v3, each with the model ("Veo 3.1 on Runway"), length, who made it and when. **Use** puts a take in the cut (one undo step). **Another take** makes a new take.
 
-**Render ad:** a free render runs at once ("Render the ad · 15 s · free"). A render that remakes clips opens the send tray with the cost (5.4).
+**Render ad:** a render from ready clips runs at once ("Render the ad · 15 s"). A render that remakes clips opens the send tray (5.4).
 - Edie edits. The result is a new ad version.
 - A render with stale clips asks first: "2 clips are out of date. Render anyway, or remake them first?"
 
@@ -720,7 +718,7 @@ From top to bottom:
 
 **Show all links** (View, at the foot of the board rail) draws every link at once. It is off by default, and the choice is remembered per person (local preference). Off, you see only the links of what you select.
 
-**The send tray, "What Dex will send".** Every paid generation opens it: Generate on a sketch area, Make clips, Remake clip, Bridge, Change this frame, Fill area, Change whole frame, Upscale, Fix this moment, Make all sizes, and a Render ad that remakes clips. Free and on-device work has no tray.
+**The send tray, "What Dex will send".** Every Runway generation opens it: Generate on a sketch area, Make clips, Remake clip, Bridge, Change this frame, Fill area, Change whole frame, Upscale, Fix this moment, Make all sizes, and a Render ad that remakes clips. Free and on-device work has no tray.
 - **Where:** anchored to the button that opened it, signed "Dex · directs". It is not modal; the canvas stays live behind it.
 - **Rows,** each with a checkbox and what it is used as:
   - "Sketch · 16:9 layout";
@@ -734,19 +732,19 @@ From top to bottom:
 - **Unticking** a row leaves it out of this send only. The link stays.
 - **Nearby notes that aren't linked** are listed last, unticked: "2 notes nearby aren't included", with **Include**. Include links the note to the node (one undo step) and ticks it, so the scope stays what you linked.
 - **Unknown names** show as a row: "1 name isn't a reference: @jogger", with **Fix it**. Generate still works; the name goes as plain text.
-- **Footer:** the model, ratio and price ("Gemini 3 Pro on Runway · 16:9 · about $0.20"), **Cancel** and **Generate** (primary).
-- **Collapsed** it is one line: "Sketch, 4 inputs, 1 note · $0.20", with **Generate** and an expand control. ("Note" counts handwriting or notes Ellis read.) The collapsed state is remembered per person. Batches and anything over the confirm threshold always open expanded (5.4).
-- **Nothing is sent until the tray's Generate.** Cancel or Esc closes it; nothing is spent and nothing on the canvas changes. Generate starts a job, which Stop ends (undo never cancels a job, 4.5).
-- **States:** offline, Generate is disabled with "Needs a connection". At the cap, "Monthly limit reached". While the inputs are still loading, rows show the pending stripes and Generate waits.
+- **Footer:** the model and ratio ("Gemini 3 Pro on Runway · 16:9"), **Cancel** and **Generate** (primary). No price.
+- **Collapsed by default.** It opens as one line: "Sketch, 4 inputs, 1 note", with **Generate** and an expand control. ("Note" counts handwriting or notes Ellis read.) Expanding shows the rows above, where you can untick any input. If you expand it, that choice is remembered per person. Batches always open expanded (5.4).
+- **Nothing is sent until the tray's Generate.** Cancel or Esc closes it; nothing is sent and nothing on the canvas changes. Generate starts a job, which Stop ends (undo never cancels a job, 4.5).
+- **States:** offline, Generate is disabled with "Needs a connection". While the inputs are still loading, rows show the pending stripes and Generate waits.
 
 ### 3.17 Asks (artboard 4c)
 
 An ask is how an agent gets an answer instead of guessing (principle 6).
 
-**Shape.** The same as the Research tool's clan Ask: `question{id, text, options[{id, label, value?}], allow_text, address}`. The job waits in `needs_input`. Two fields are new and go into contract-v3: `recommended` (an option id, or none) and, per option, `cost` and `detail` ("6 shots · about $1.20 for frames"). The answer is the person's confirmed choice, written as `by: human:<id>` to the node it settles and appended to History.
+**Shape.** The same as the Research tool's clan Ask: `question{id, text, options[{id, label, value?}], allow_text, address}`. The job waits in `needs_input`. Two fields are new and go into contract-v3: `recommended` (an option id, or none) and, per option, `detail` ("6 shots, with frames you check first"). Options carry no cost; what the chosen option's jobs cost is recorded and shown in the decision tree (3.20). The answer is the person's confirmed choice, written as `by: human:<id>` to the node it settles and appended to History.
 
 **Three kinds:**
-- **Hard block,** only when no option can proceed. Example: a Video with nothing linked or described. "What should this video be? Nothing is linked to it yet, so I have nothing to direct from." Options: **Describe it** (a text box: "Describe it in a line or two. Type @ to pull in a character, place or product."), **Link a script**, **Link a storyboard**. The primary button shows the price ("15 s · about $7.20 · Make it").
+- **Hard block,** only when no option can proceed. Example: a Video with nothing linked or described. "What should this video be? Nothing is linked to it yet, so I have nothing to direct from." Options: **Describe it** (a text box: "Describe it in a line or two. Type @ to pull in a character, place or product."), **Link a script**, **Link a storyboard**. The primary button reads "15 s · Make it".
 - **Nudge.** At least one option proceeds, and one may be marked **Recommended**. Examples: "Plan a storyboard first?" (3.5); a sketch with nothing to go on, "What is this sketch of?", with **Use it as a layout only** and **Describe it** (3.7).
 - **Ambiguity.** The words could mean two things ("Bigger how?" in Change this frame, 3.11). No option is preselected or recommended.
 
@@ -754,7 +752,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 - Anchored to its node, not modal. The node shows "Waiting for you · Make video".
 - Orange needs-you border, the Research tool's rule.
 - Signed by the agent who owns the step, with its figure in the needs-you state: Dex for planning and direction, Skye for the script, Wren for renders.
-- The question, one line of why, the options as buttons with their cost or detail, and the text box when `allow_text` is true. `@` works in the text box.
+- The question, one line of why, the options as buttons with their detail, and the text box when `allow_text` is true. `@` works in the text box.
 - **Later** hides the card. The job keeps waiting and the node keeps "Waiting for you". Asks never time out into a guess.
 
 | Trigger | Result | Undo |
@@ -767,7 +765,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 **Asks are shared** (owner confirmed 2026-10-13). Anyone in the project can answer, and History records who: "Sai chose: plan the storyboard first".
 - While someone is typing an answer, others see "Sai is answering" on the card.
 - If two answers cross, the first one wins. The other person's card turns into "Sai chose: … · in History", with Change. Their pick is not applied.
-- The questions pill counts every open ask in the project, not only the ones you caused. An ask raised by someone else's job still charges that job's starter (4.3).
+- The questions pill counts every open ask in the project, not only the ones you caused. An ask raised by someone else's job still belongs to that job's starter (4.3).
 
 ### 3.18 Assets, the team library and brand (artboard 4d)
 
@@ -835,12 +833,12 @@ Exports are free. A large export shows its progress in a toast and lands as a do
    - for extreme ratios, generates at the nearest ratio Runway supports, then crops or extends;
    - keeps the logo and copy inside each format's safe area, by the Brand board's rules when it is linked.
 3. When the subject is unclear, Wren asks first: "What must stay in every size?" (3.17).
-4. The send tray lists every size with its method and price (a plain crop is free) and the total. You can untick sizes.
+4. The send tray lists every size with its method (crop, extend or generate). You can untick sizes. No prices and no total.
 5. The results land as a **Format set** node linked to the master (`master`), one tile per size. Jude flags brand-rule breaks per size, with Fix in image editor and Ignore.
 6. **Export zip** downloads one zip with every file named by format and size.
 
 - **Video cut-downs** are part of the first release: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. Wren makes them the same way, and they land as a Format set of the film.
-- **When the master changes,** the set goes out of date ("Master changed · 3 sizes out of date"), with **Update sizes** and its price.
+- **When the master changes,** the set goes out of date ("Master changed · 3 sizes out of date"), with **Update sizes**.
 - **Undo:** Make all sizes is a job, so undo never cancels it (4.5); Stop does. Deleting the set is one undo step, as for any node.
 
 
@@ -874,7 +872,7 @@ The decision tree is how you read that chain. It replaces today's flat History p
 - what happened, in one line ("Dex planned shot 3 from the line"; "Skye drafted line 2.1, Maya kept it");
 - the time ("10:04") and the kind (decision, check, ask, pick);
 - the fields it changed, in mono ("shots[3]: size, angle, lens, prompt"; "shots[3].size: insert → extreme close");
-- for a render, the model and cost ("Gen-4 Image on Runway · 1920×1080 · $0.08");
+- for a job, the model and what it cost ("Gen-4 Image on Runway · 1920×1080 · $0.08"). This is the one place in the tool a cost appears (principle 4). Every job's cost is recorded, including a failed or refused attempt that Runway billed, which is its own node with its cost;
 - for a check, the verdict ("failed · logo_clear_space");
 - **Why**, which expands the rationale in place:
   - **Decided:** "An insert on the bottle: high angle, 100 mm macro, static, 2 s".
@@ -919,7 +917,7 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 
 - Every job records `started_by` and shows it to everyone else: "started by Sai". Your own jobs say "started by you" only in the busy pointer's label.
 - **A job belongs to its starter.**
-  - Its cost goes to the starter's budget ("On Maya's budget").
+  - Its cost is recorded against the starter in the decision tree (3.20). No budget line shows on the job.
   - Anyone can stop it, but stopping someone else's job asks first: "Stop…" opens "Maya started this. Stop it anyway?"
 - **Pressing a button whose job is already running** (same node, operation and inputs) starts nothing. The button shows "Running, started by Maya" (in-flight dedupe).
   - **Another take** is never deduped, because it sends a client nonce.
@@ -961,7 +959,7 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 
 - **Any collaborator in the project can answer any ask** (owner confirmed 2026-10-13). History records who answered and what they chose.
 - Someone typing an answer shows as "Sai is answering" on the card. The first answer wins; the rest is in 3.17.
-- The person whose job raised the ask is still its starter: its cost stays on their budget.
+- The person whose job raised the ask is still its starter: its cost is recorded against them.
 
 ### 4.8 The team library is shared across the agency
 
@@ -1012,37 +1010,38 @@ Five make the ad; two house agents, who work in every Napkin tool, read and chec
 
 Job states extend `JOB_STATES` in `contracts/types.ts` with `needs_input`. "Refused" is `failed` with a moderation code.
 
-| State | Card pill | Line (exact copy, values vary) | Actions | Charged |
+| State | Card pill | Line (exact copy, values vary) | Actions | Charged (recorded in the decision tree, never said on the card) |
 |---|---|---|---|---|
 | queued | In the queue | "In the queue, 2 ahead · about 1:30" | Cancel | no |
 | submitting | Sending | "Sending to Runway…" | Cancel | no |
 | submitted / fetching | Rendering | "Wren · renders · about 0:40 left" (progress bar when Runway reports it) | Stop | yes, when it completes |
 | validating | Checking | "Jude · checks @maya matches" | — | — |
 | needs_input | Waiting for you | the agent's question | the options · Later | no |
-| completed | Done | "Checked by Jude · 1 min ago" | Download · Open | yes, cost shown ("$1.20") |
-| failed | Failed | "Runway is busy. Try again." (the reason in plain words) | Retry | "Not charged" |
-| failed (moderation) | Refused | "Runway refused this picture. Change the words or the picture." | Change the picture · Edit the words | "Not charged" |
-| uncertain | Unsure | "Checking with Runway…" | — | "not charged twice": reconciled by task id, never resent blindly |
+| completed | Done | "Checked by Jude · 1 min ago" | Download · Open | yes |
+| failed | Failed | "Runway is busy. Try again." (the reason in plain words) | Retry | as Runway bills it |
+| failed (moderation) | Refused | "Runway refused this picture. Change the words or the picture." | Change the picture · Edit the words | as Runway bills it |
+| uncertain | Unsure | "Checking with Runway…" | — | never twice: reconciled by task id, never resent blindly |
 | cancelled | Stopped | "Stopped by Maya." | Make again | as the relay reports it (still to check, 12.2) |
 | (take) patched | Patched | "Edie · edits · 2 s replaced" | Compare | yes |
 
-- **Shared jobs** add "Started by Maya" with her avatar, and "On Maya's budget".
+- **Shared jobs** add "Started by Maya" with her avatar.
+- **No cost and no charge wording on any card.** A failed or refused attempt that Runway bills is charged and recorded, with its cost, in the decision tree (3.20). The card says only what happened and what to do.
 - **Errors** say what happened and what to do, never a code alone. The code is in smaller mono under the message, as today's `.errnode .code`.
 
-### 5.4 Spend confirmations and caps
+### 5.4 Spend: recorded per job, shown only in the decision tree; caps built but off
 
-- **Prices on buttons.** Every paid button shows its estimate from the capability sheet ("Bridge · about $1.60", "Fill area · $0.08"). Prices are never hard-coded in the UI.
-- **The send tray is the spend confirm.** Every paid generation goes through it (3.16). It always opens expanded, even if you collapsed it before:
-  - for any batch (more than one paid job at once: Make clips, Make all sizes, Render ad with remakes, Update shots with frames);
-  - for any single action estimated above **$2.00** (decided 2026-10-13).
+Owner decision 2026-10-13 (fourth round). It supersedes the earlier prices on buttons, the $2.00 confirm and the cap warnings.
 
-  Expanded for a batch it reads "Make 6 clips · about $7.20 · you have $187.60 left this month", with the cost line "6 clips × 3 s · Veo 3.1 Fast on Runway · $1.20 each" and "Not charged if Runway refuses or fails". The buttons are **Cancel** and **Generate** (primary). Items in a batch can be unticked, and the total follows.
-- **Caps.**
-  - The monthly per-tenant cap is set by Napkin. Tenant admins can lower it (D16).
-  - **The default cap, and so where the 80% warning falls, comes from the per-ad cost model** (decided 2026-10-13). That model is still to be written (12.2). A rough figure for now: a 15 s ad costs about $20 before retakes. Until the model exists, the cap is a setting, never a number in the UI code.
-  - At 80% the spend pill turns warn.
-  - At 100%, paid buttons are disabled with "Monthly limit reached. Your admin can raise it."
-  - A batch that would cross the cap asks to run only what fits ("4 of 6 clips fit your limit").
+- **No prices in the UI.** No button, menu, model pick, send tray, toast, job card, ask, format size, warning, or admin or tenant view shows a price, an estimate, a credit count or a cost line. A button names its action only: "Make 6 clips", "Bridge", "Fill area".
+- **Every job records what it cost,** from the relay's report, against the job and its starter. The decision tree (3.20) is the only place that shows it: each job node there may show its cost.
+- **Failed or refused attempts that Runway bills** are charged and recorded in the decision tree like any other job. The UI says nothing about charges: no "Not charged", no "may still be charged".
+- **The send tray is the confirm before anything goes to Runway** (3.16), without prices. It opens collapsed to one line by default. It opens expanded for any batch (more than one Runway job at once: Make clips, Make all sizes, Render ad with remakes, Update shots with frames), so each item can be seen and unticked. Expanded for a batch it reads "Make 6 clips", with the line "6 clips × 3 s · Veo 3.1 Fast on Runway". The buttons are **Cancel** and **Generate** (primary). Nothing forces it open because of cost.
+- **Caps are built but off.**
+  - The monthly per-tenant cap exists and is switched off. Each agency will choose its own cap later (tenant admins, D16).
+  - While it is off there is no cap line, no 80% warning, no confirm above an amount, no "left this month" and no "Monthly limit reached". When an agency switches its cap on, its copy is designed then, under the no-prices rule.
+- **Per-person daily quotas:** the mechanism is kept and switched off. No quota shows anywhere.
+- **The global spend stop** stays on as an invisible safety backstop. It has no UI of its own; if it ever trips, a job fails with a plain reason and no amount (5.3).
+- **Admin and tenant views** show no spend, cost or cap figures. Costs are read per project in its decision tree.
 - **Free and on-device work** never asks.
 
 ### 5.5 Fallbacks
@@ -1269,11 +1268,11 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 - **Point of view.** Write from the user's side, in the imperative, for buttons: "Make video", "Insert a shot here", "Leave note at 0:07". Write in the first person for agents ("I will mark clips 2 and 5 to check"), signed "Dex · directs".
 - **Short sentences.** Most lines are under 12 words. No jargon (no "EDL", "inpaint" or "token" in the UI), no lorem ipsum, no rationale text.
 - **Models.** Always "<model> on Runway" ("Gemini 3 Pro on Runway", "Veo 3.1 Fast on Runway"), from the capability sheet's `display_name`. Never a raw model id.
-- **Money.** Always dollars ("$0.08", "about $1.60"). Credits are shown only next to dollars where Runway's credits matter ("8 cr · $0.08"). Use "about" for estimates.
+- **Money.** No prices, costs, estimates or credits anywhere in the UI. The one exception is the decision tree (3.20), where a job node may show what it cost, in dollars ("$0.08").
 - **Time.** m:ss (or m:ss.s) in Geist Mono. Shot time always names the shot (3.13).
 - **Names.** `@names`, `#shots`, versions (v3) and timecodes are mono. `@refs` are blue.
 - **Certainty.** In words ("sure of it"), never percentages.
-- **Errors.** Say what happened and what to do next ("Runway is busy. Try again."). Say whether you were charged.
+- **Errors.** Say what happened and what to do next ("Runway is busy. Try again."). Never say whether you were charged.
 - **No exclamation marks** except in quoted script lines. **No emoji.**
 - **Capitals.** Sentence case everywhere. Mono tags (PLANNING, RENDERING) are uppercase.
 
@@ -1315,10 +1314,10 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Ink group | Handwriting or scribbles that move as one. |
 | Out of date (stale) | Made from something that has since changed. |
 | To check (drift mark) | A neighbour whose cut may need a look after a move. |
-| Started by | The person whose action began a job and whose budget pays for it. |
+| Started by | The person whose action began a job. Its cost is recorded against them in the decision tree. |
 | Scope | What a generating node uses: only what is linked to it. |
 | Inputs strip | The row of chips on a generating node naming each linked input. |
-| Send tray | "What Dex will send": every input, the model and the price, shown before anything goes to Runway. |
+| Send tray | "What Dex will send": every input and the model, shown before anything goes to Runway. No prices; collapsed to one line by default. |
 | Ask | A question an agent puts to the project instead of guessing. Anyone in the project can answer. |
 | History | The decision tree: the project's decision chain (decisions, checks, asks and picks), with who made each and why (3.20). |
 | Decision chain | The record in the project's `.clan` of every decision: who, what changed, why and when. |
@@ -1344,12 +1343,12 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 |---|---|---|---|---|
 | 1 | Art boards with jump nav | Board rail by rank; click to fit; ⌥1–9 and ⌥0; iPad pill and sheet; Ad template boards | 3.2; artboards 1, 3, 5 | Open a template project and press ⌥3: the canvas fits Locations and the rail marks it current. |
 | 2 | Open reference roles | Drop on a board takes the board's role, with an inline chip and no dialog; Name this picture with the one open role set (ten pills + More, incl. logo, palette, typography, brand rule, document) + free label; per-role line on what Dex takes | 3.6; artboard 3 | Drop a picture on Locations: it becomes `@loc_<file>` with role location, and no dialog opens. Drop one outside boards, pick Wardrobe and label it: the prompt says "match the clothes only". |
-| 3 | Insert a shot between frames, drag reorder, Bridge | "+" in every gap with Empty shot and Bridge (priced); dnd-kit drag with a drop line and drift marks; the same in the outline, the AV table and the timeline | 3.10, 3.11, 3.13; artboards 6, 7, 8 | Insert a Bridge between 1 and 2: a new shot 2 starts on 1's last frame and ends on old 2's first. Drag shot 5 between 2 and 3: frames are kept, and clips 2 and 5 are marked to check. |
+| 3 | Insert a shot between frames, drag reorder, Bridge | "+" in every gap with Empty shot and Bridge; dnd-kit drag with a drop line and drift marks; the same in the outline, the AV table and the timeline | 3.10, 3.11, 3.13; artboards 6, 7, 8 | Insert a Bridge between 1 and 2: a new shot 2 starts on 1's last frame and ends on old 2's first. Drag shot 5 between 2 and 3: frames are kept, and clips 2 and 5 are marked to check. |
 | 4 | Full-screen frame editing | Click a frame to open the Image editor route; zoom and pan; tools, layers, masks; Apply as new version | 3.12; artboards 8, 9 | Click frame 3, paint a mask, fill it, Apply: v4 exists, v3 is unchanged, shot 3 shows v4. |
 | 5 | "Change this frame" understood | Dex classifies the words. A camera change gives a field diff on the shot's camera chips (dashed until Apply). A local change goes to the mask and fill in the Image editor. Passthrough is said. Words that could be either ("bigger") get Dex's "Bigger how?" ask, with no default. | 3.11, 3.12; artboards 8, 9 | Type "make this an overhead aerial shot" on shot 4: the diff shows angle → overhead and size → wide, and Apply writes both fields and marks clip 4 out of date. |
 | 6 | Long performance direction | Direction up to 4,000 with a live counter from the capability sheet; "Veo 3.1 on Runway uses the first 1,000, Dex condenses"; See Dex's 1,000 | 3.10, 3.11; artboards 6, 7, 8 | Paste 1,240 characters: all are kept, the counter reads 1,240 / 4,000, and the clip prompt carries Dex's ≤1,000 version. |
 | 7 | Timed moments inside a shot | Inline Moment pill (⌥M) in the screenplay; moments track and Line tied to a moment in AV; Beats row in the Video editor | 3.10, 3.13; artboards 6, 7, 10 | Add "at 0:02 her eyes open; she says 'It's perfect!'" in shot 4: a beat at 0:02 and a line at 0:03 appear on the timeline, and the clip prompt carries the timestamps. |
-| 8 | A note patches only ~2 s | A note becomes a whole-second window, shown on the timeline and phone scrubber; Edit still; Fix this moment (Aleph 2 on Runway, priced) makes a patched take spliced with crossfades; Jude checks the seams | 3.13, 3.14; artboards 10, 11, 12 | Leave a note at shot 4, 0:03: the window is 0:02–0:04, the fix costs about $0.56, and v3's frames outside 0:02–0:04 match v2's exactly. |
+| 8 | A note patches only ~2 s | A note becomes a whole-second window, shown on the timeline and phone scrubber; Edit still; Fix this moment (Aleph 2 on Runway) makes a patched take spliced with crossfades; Jude checks the seams | 3.13, 3.14; artboards 10, 11, 12 | Leave a note at shot 4, 0:03: the window is 0:02–0:04, and v3's frames outside 0:02–0:04 match v2's exactly. |
 | 9 | @ autocomplete with thumbnails by role, unknown names underlined | Shared MentionInput: grouped popover with thumbnails, label matching, `#` shots; each row names its board; picking an unlinked reference links its board or group, with Undo; unknown names get a warn underline, "Did you mean" and "Name a new picture"; nothing is dropped at generation | 3.6, 3.10; artboards 3, 6, 7 | Type "@ma": Characters group first with thumbnails. Type "@maya_runing": underlined, with "Did you mean @maya_laughing?". |
 | 10 | Ratio-locked 16:9 sketch area returns 16:9 | Sketch area tool with a ratio picker; the ghost keeps the ratio; Generate goes through the send tray; the export is the area; the result is cropped to the ratio and says so; the Image editor crop keeps the ratio | 3.7, 3.12; artboards 4, 5, 9 | Draw a 16:9 area, sketch, Generate, then Generate in the tray: the frame is exactly 16:9 and says "cropped to 16:9". Repeat for 9:16. The send tray listed the sketch and its inputs before anything was sent. Split (owner, 2026-10-13; features/frame-aspect.clan): **now**, on today's canvas, draw a 16:9 frame, sketch in it (one stroke crossing its edge), Generate from the popover: the frame becomes a sketch area, the result is exactly 16:9 and says "cropped to 16:9"; repeat for 9:16. **With canvas-nodes**: the Sketch area tool, its picker and ghost. **With send-tray**: the tray listed the sketch and its inputs. **With image-editor**: the crop keeps the ratio. |
 | 11 | Handwriting to editable text; scribbles move as one group | Strokes cluster into an ink group; Convert to text opens Ellis's preview with editable text and @ chips; Keep replaces the ink, which is kept for Back to ink and undo | 3.8, 8; artboards 4, 5 | Write "more golden light, she should laugh", Convert, Link it, Keep: text with @maya_laughing appears, and one undo restores the strokes. |
@@ -1360,13 +1359,13 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Decision | The interaction | Where | Acceptance test |
 |---|---|---|---|
 | Inputs and scope | Links set scope (one per board or group, one per single reference); inputs strip; focus on select dims the unlinked; "Used by" card; Show all links | 3.4, 3.16; artboard 4b | Select the Storyboard: Loc1 · Coast glows, @loc1_beach shows "shots 1, 2", Loc2 · City dims. Pick @loc2_rooftop in `@`: Loc2 · City is linked with an Undo toast; Undo unlinks it and underlines the mention. |
-| Send tray | "What Dex will send" on every paid generation, rows with checkboxes, Ellis's reading marked confirm, nearby notes unticked with Include, "<model> on Runway" and price | 3.16, 5.4; artboard 4b | Generate on a sketch area: the tray lists the sketch, 4 inputs and 1 note at $0.20; nothing reaches Runway until the tray's Generate. |
+| Send tray | "What Dex will send" on every paid generation, rows with checkboxes, Ellis's reading marked confirm, nearby notes unticked with Include, "<model> on Runway", no price, collapsed by default | 3.16, 5.4; artboard 4b | Generate on a sketch area: the tray opens as one line, "Sketch, 4 inputs, 1 note", with no price; expanded, it lists the sketch, 4 inputs and 1 note; nothing reaches Runway until the tray's Generate. |
 | Asks, shared | Anchored ask cards signed by the step's owner; hard block only when nothing can proceed; Recommended on nudges, no default on ambiguity; Later; questions pill; "You chose … · in History" with Change; anyone can answer | 3.17, 4.7, 5.2; artboard 4c | Make video from a script alone: Dex asks "Plan a storyboard first?" with Plan first marked Recommended. Sai answers from her laptop: History shows "Sai chose: plan the storyboard first". |
 | Assets and team library | Assets drawer in the rail's place; shelves per client shared across the agency; items with version and publisher; publish replaces for everyone, projects keep their copy | 3.18, 4.8; artboard 4d | Publish @ext_beach v5: the library shows v5 for everyone; an open project still uses v4 and offers Update. |
 | Brand rules | Brand book becomes a Brand board as Ellis reads; no font files from a PDF; Dex writes rules into prompts; Jude flags with Fix in image editor / Ignore; never blocks | 3.18; artboard 4d | Drop a brand PDF: the Brand board appears at once and fills page by page; fonts show "no file". A frame with the logo at the edge gets Jude's clear-space flag and still lands. |
 | Character sheets, documents, spin-in, export | Rhea proposes crops (Confirm/Adjust); DOCX becomes a Document node used once linked; spin-in card waits for Bring in; Export menu | 3.18; artboard 4d | Drop maya_sheet.png: no reference exists until Confirm. Not now on a spin-in leaves it under From Napkin. |
 | Scamp sheets | Sheets opens the pack picker; a pack drops a board of labelled, ratio-locked sketch areas | 3.19; artboard 4e | Pick Social: a sheet lands with one area per format, each labelled with format and size. |
-| Make all sizes, cut-downs | Wren adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size and total, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size and the total; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
+| Make all sizes, cut-downs | Wren adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size, with no prices; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
 | The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; the same loader on the pointer | 6; artboard 14 | Generate a frame: the loader leads with the orange create card, the pointer badge shows it at (+11, +15), and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
 | The crew as house figures | Dex, Skye, Wren, Rhea, Edie, Ellis and Jude drawn from `AgentFigure`, with idle, working and needs-you states; signed speech bubbles | 5.1; artboard 13 | Raise an ask: the agent's figure shows the "!" bubble, and no loader uses its colour. |
 | No chat | Inline suggestions with Keep / Keep mine / Why, floating options on a selection, who-wrote-it marks, anchored asks | principle 10, 3.10; artboards 6, 7 | Select a line and press Tighten: Skye's rewrite appears struck and underlined in place, with a signed bubble; nothing changes until Keep. No chat box exists on any surface. |
@@ -1378,7 +1377,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 
 ### 12.1 Redraws (all done)
 
-R1 to R9 are drawn. Where an artboard still shows a value that the 2026-10-13 answers changed (button orange, ⌘M, a red underline, the phone's 0..15 clamp), this spec wins.
+R1 to R9 are drawn. Where an artboard still shows a value that the 2026-10-13 answers changed (button orange, ⌘M, a red underline, the phone's 0..15 clamp), this spec wins. The same holds for any price, credit count, spend pill, cap line or tray total an artboard still shows (fourth round, principle 4).
 
 - **R1 Loader (done).** Every artboard that shows work running uses the `napkin-loader` of artboard 14: the logo in its own four colours, the department's card leading (section 6). The sector sweeps and the crew-tone loader are gone.
 - **R2 Model names (done).** Every model name reads "<model> on Runway": artboard 4, artboard 4b's tray footer, and every take, chip and toast that names a model.
@@ -1392,14 +1391,14 @@ R1 to R9 are drawn. Where an artboard still shows a value that the 2026-10-13 an
 
 ### 12.2 Facts still to check
 
-The owner answered every design question on 2026-10-13. What is left are facts about Runway and two documents to write. None of them changes a screen; they change prices and a few lines of copy. The UI reads every price from the capability sheet, so the answers land as data.
+The owner answered every design question on 2026-10-13. What is left are facts about Runway and two documents to write. None of them changes a screen. The cost facts now feed the costs recorded per job and shown in the decision tree (3.20), not the UI, which shows no prices. They come from the capability sheet and the relay, so the answers land as data.
 
 | # | What to check | Why it matters | Who checks |
 |---|---|---|---|
-| 1 | **Runway prices and the credit value.** Artboard 9's prices (Fill $0.08, Change $0.12, Upscale $0.10), artboard 8's Veo 3.1 rate (40 credits a second) and the tray's $0.20 a frame are placeholders. Is 1 credit $0.01? | Every price on a button and in the send tray. | Whoever refreshes `capabilities/runway.json`, against Runway's current pricing and API docs. |
+| 1 | **Runway prices and the credit value.** Artboard 9's prices (Fill $0.08, Change $0.12, Upscale $0.10), artboard 8's Veo 3.1 rate (40 credits a second) and the $0.20 a frame for sketch renders are placeholders. Is 1 credit $0.01? | The cost recorded for each job and shown in the decision tree. No price appears elsewhere in the UI. | Whoever refreshes `capabilities/runway.json`, against Runway's current pricing and API docs. |
 | 2 | **`preciseEdit` and mask polarity.** Does "Keep the label exactly as it is" map to `ideogram_4_5`'s `preciseEdit`? Does Runway read white or black as the area to change? (Plan open question 2.) | Fill area in the Image editor (3.12). | The same person, against Runway's OpenAPI, then one test call. |
-| 3 | **Charge on a stopped render.** Does Runway charge for a task stopped mid-render? | The Stopped card's charge line (5.3). | The relay owner, by stopping a test task and reading the bill. |
+| 3 | **Charge on a stopped render.** Does Runway charge for a task stopped mid-render? | The cost recorded for a stopped job in the decision tree (5.3). The card says nothing about it. | The relay owner, by stopping a test task and reading the bill. |
 | 4 | **Aleph 2 access.** Is Aleph 2 available on our key? | Fix this moment's main path (3.13). The Veo 3.1 fallback copy is ready for either answer. | Shrey (already checking). |
-| 5 | **Extend and subject tracking.** Which Runway models extend a picture and reframe a film with subject tracking, at what price, and which ratios they support. | Make all sizes and the video cut-downs (3.19): methods, prices and the "nearest supported ratio" list. | Whoever refreshes `capabilities/runway.json`. |
-| 6 | **The per-ad cost model.** Write it: what a typical ad costs, by step, before and after retakes (a 15 s ad is about $20 before retakes). | The default monthly cap and where the 80% warning falls (5.4). | To be written; the owner signs it off. |
+| 5 | **Extend and subject tracking.** Which Runway models extend a picture and reframe a film with subject tracking, at what price, and which ratios they support. | Make all sizes and the video cut-downs (3.19): methods, the costs recorded for them in the decision tree, and the "nearest supported ratio" list. | Whoever refreshes `capabilities/runway.json`. |
+| 6 | **The per-ad cost model.** Write it: what a typical ad costs, by step, before and after retakes (a 15 s ad is about $20 before retakes). | A reference for the costs the decision tree records, and a starting point when an agency chooses its own cap (5.4). Caps are off, so no warning depends on it now. | To be written; the owner signs it off. |
 | 7 | **Format packs review.** Review the draft `format-packs.json` and its unverified rows. | Every scamp sheet and Make all sizes (3.19). | The owner. |
