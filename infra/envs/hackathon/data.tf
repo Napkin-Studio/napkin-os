@@ -54,8 +54,8 @@ resource "aws_dynamodb_table" "quotas" {
 
 # Which agencies (tenants) may use the Production Tool, and their policy
 # (features/os-sign-in.clan): pk tenantId (TenantId::of_agency), agency,
-# enabled, updatedAt, by; reserved for tenant-limits: capUsdMonthly, allow,
-# adminOverride. Private: never in config.json, which is public. The relay
+# enabled, updatedAt, by; and from tenant-limits capUsdMonthly, dailyQuotas and
+# allow {claude, makers}. Private: never in config.json, which is public. The relay
 # only reads it; a person writes it with production-tool/relay/scripts/tenants.py.
 resource "aws_dynamodb_table" "tenants" {
   name         = "${local.name}-tenants"

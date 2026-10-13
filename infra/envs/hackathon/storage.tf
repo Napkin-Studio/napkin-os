@@ -45,7 +45,9 @@ resource "aws_s3_bucket_cors_configuration" "site" {
     allowed_methods = ["PUT"]
     # studio_origins: the tool at <studio>/production (features/os-sign-in.clan)
     allowed_origins = concat(["https://${aws_cloudfront_distribution.site.domain_name}"], [for d in var.domain_aliases : "https://${d}"], var.cors_origins, var.studio_origins)
-    allowed_headers = ["Content-Type", "Content-Length"]
+    # x-amz-checksum-sha256: the presigned PUT is bound to the bytes' hash, so nobody who knows a
+    # hash can put other bytes under it (features/tenant-limits.clan). Apply before the relay deploy.
+    allowed_headers = ["Content-Type", "Content-Length", "x-amz-checksum-sha256"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
   }

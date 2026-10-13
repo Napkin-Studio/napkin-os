@@ -160,6 +160,10 @@ run "allows_the_studio_origin" {
     error_message = "the studio's browsers PUT uploads straight to S3"
   }
   assert {
+    condition     = contains(one(aws_s3_bucket_cors_configuration.site.cors_rule).allowed_headers, "x-amz-checksum-sha256")
+    error_message = "a presigned upload carries its checksum header across origins (features/tenant-limits.clan)"
+  }
+  assert {
     condition     = one(one(one(aws_cloudfront_response_headers_policy.studio_cors).cors_config).access_control_allow_origins).items == toset(["https://studio.example.com"])
     error_message = "the CORS response-headers policy allows the studio origin"
   }
