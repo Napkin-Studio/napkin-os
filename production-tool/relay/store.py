@@ -16,6 +16,9 @@ Tables (infra/envs/hackathon):
           "inflight#<participantId>" (n), "slots#<provider>#<class>" (n),
           "spend" (usd: reserved + confirmed)
   blocked pk handle (lowercase)
+  tenants pk tenantId (features/os-sign-in.clan): agency, enabled, updatedAt, by. Reserved for
+          tenant-limits: capUsdMonthly, allow {claude, models}, adminOverride. The relay only reads
+          it (GetItem); scripts/tenants.py writes it with a person's credentials.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ class MemoryStore:
         self._jobs: dict[str, dict] = {}
         self._counters: dict[str, dict] = {}
         self.blocked: set[str] = set()
+        self.tenants: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     def get_job(self, job_id: str) -> dict | None:
@@ -76,6 +80,20 @@ class MemoryStore:
     def is_blocked(self, handle: str) -> bool:
         return handle.lower() in self.blocked
 
+    # ── tenants (features/os-sign-in.clan) ──
+    def tenant(self, tenant_id: str) -> dict | None:
+        with self._lock:
+            item = self.tenants.get(tenant_id)
+            return copy.deepcopy(item) if item else None
+
+    def put_tenant(self, item: dict) -> None:
+        with self._lock:
+            self.tenants[item["tenantId"]] = copy.deepcopy(item)
+
+    def all_tenants(self) -> list[dict]:
+        with self._lock:
+            return [copy.deepcopy(t) for t in self.tenants.values()]
+
     # ── for scripts/prune_workspaces.py ──
     def all_jobs(self) -> list[dict]:
         with self._lock:
@@ -95,13 +113,15 @@ class MemoryStore:
 
 
 class DynamoStore:
-    def __init__(self, jobs_table: str, quotas_table: str, blocked_table: str, client=None):
+    def __init__(self, jobs_table: str, quotas_table: str, blocked_table: str, client=None,
+                 tenants_table: str | None = None):
         import boto3
 
         self.ddb = client or boto3.client("dynamodb")
         self.jobs_table = jobs_table
         self.quotas_table = quotas_table
         self.blocked_table = blocked_table
+        self.tenants_table = tenants_table
 
     # The whole job is one JSON string; only what conditions and indexes need
     # is a top-level attribute.
@@ -181,6 +201,24 @@ class DynamoStore:
     def is_blocked(self, handle: str) -> bool:
         r = self.ddb.get_item(TableName=self.blocked_table, Key={"handle": {"S": handle.lower()}})
         return "Item" in r
+
+    # ── tenants (features/os-sign-in.clan): the whole item is one JSON string, as jobs are ──
+    def tenant(self, tenant_id: str) -> dict | None:
+        """The tenant's item, or None (also with no TENANTS_TABLE: nobody is on, fail closed)."""
+        if not self.tenants_table:
+            return None
+        r = self.ddb.get_item(TableName=self.tenants_table, Key={"tenantId": {"S": tenant_id}}, ConsistentRead=True)
+        item = r.get("Item")
+        return json.loads(item["body"]["S"]) if item else None
+
+    def put_tenant(self, item: dict) -> None:
+        self.ddb.put_item(TableName=self.tenants_table, Item={
+            "tenantId": {"S": item["tenantId"]}, "agency": {"S": item["agency"]},
+            "enabled": {"BOOL": bool(item.get("enabled"))},
+            "body": {"S": json.dumps(item, separators=(",", ":"))}})
+
+    def all_tenants(self) -> list[dict]:
+        return [json.loads(i["body"]["S"]) for i in self._scan(self.tenants_table)]
 
     # ── for scripts/prune_workspaces.py (a person's credentials, not the relay's role) ──
     def _scan(self, table: str, **kw) -> list[dict]:

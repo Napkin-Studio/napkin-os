@@ -1,10 +1,14 @@
-"""The workspace library: solid reference keys shared by everyone signed in to one workspace.
+"""The agency library: solid reference keys shared by everyone in one agency (the tenant,
+features/os-sign-in.clan). The workspace is the tenant id.
 
 A key's versions are immutable JSON files; an index lists the latest of each. Both live in the
 relay's bucket, so there is no table to run:
 
-  library/<workspace>/index.json        LibraryIndex, written with If-Match on its ETag (claims a version)
-  library/<workspace>/<key>/<ver>.json  LibraryEntry, written once the index names it
+  tenants/<tenantId>/library/index.json        LibraryIndex, written with If-Match on its ETag (claims a version)
+  tenants/<tenantId>/library/<key>/<ver>.json  LibraryEntry, written once the index names it
+
+Client shelves (owner, 2026-10-13) will be a field on the index row, not a level in these keys, so
+renaming or archiving a shelf never moves data. The hackathon's library/<workspace>/ is left as it is.
 
 Publishing names the version the document holds (baseVer). When the index already has a newer one
 someone else published first, the publish is a conflict, never an overwrite. Images are not copied:
@@ -16,8 +20,8 @@ from __future__ import annotations
 import json
 from typing import Callable
 
-INDEX = "library/{w}/index.json"
-ENTRY = "library/{w}/{key}/{ver}.json"
+INDEX = "tenants/{w}/library/index.json"
+ENTRY = "tenants/{w}/library/{key}/{ver}.json"
 RETRIES = 5
 
 
@@ -50,7 +54,7 @@ class Library:
         if ver is None:
             row = next((k for k in self.index(workspace)["keys"] if k["key"] == key), None)
             if not row:
-                raise Missing(f"There is no {key} in your workspace's library.")
+                raise Missing(f"There is no {key} in your agency's library.")
             ver = row["ver"]
         data = self.blobs.get_json(ENTRY.format(w=workspace, key=key, ver=ver))
         if not data:

@@ -1,23 +1,25 @@
-"""A person's saved projects (features/personal-workspaces.clan): what POST /clan keeps, listed and
-read back, so the work follows the name to any browser.
+"""An agency's saved projects (features/os-sign-in.clan; personal-workspaces.clan before it): what
+POST /clan keeps, listed and read back, so the work follows the agency to any browser. Everyone in
+the agency (the tenant) sees the same list. The workspace is the tenant id.
 
-Everything lives in the relay's bucket under the person, beside the copies POST /clan has
-always kept:
+Everything lives in the relay's bucket under the tenant, in the layout the plan keeps for good
+(overhaul-plan.md, tenants/{t}/projects/{p}/):
 
-  clan/<participantId>/projects.json                       ProjectIndex: one row per project, the
+  tenants/<tenantId>/projects/index.json                   ProjectIndex: one row per project, the
                                                            latest save of each (written with If-Match
                                                            on its ETag, so two saves never both win)
-  clan/<participantId>/<projectId>/<UTC time>-<etag8>-<reason>.clan
+  tenants/<tenantId>/projects/<projectId>/<UTC time>-<etag8>-<reason>.clan
                                                            every save, never overwritten; the index row
                                                            names the one that is the project now
-  clan/<participantId>/<projectId>/latest.clan             the newest bytes
-  clan/<participantId>/<projectId>/canvas.json             the canvas that goes with them (PUT .../canvas)
+  tenants/<tenantId>/projects/<projectId>/latest.clan      the newest bytes
+  tenants/<tenantId>/projects/<projectId>/canvas.json      the canvas that goes with them (PUT .../canvas)
 
 A project's ETag is the SHA-256 (hex) of its .clan bytes. A save that names the ETag it started from
-(If-Match) is refused when someone saved the project since (Stale): nothing is overwritten without the
-person choosing. A save without If-Match is taken as before.
+(If-Match) is refused when someone saved the project since (Stale): two colleagues saving one project
+never overwrite each other without choosing. A save without If-Match is taken as before.
 
-The index needs only GetObject and PutObject under clan/, which the relay already has: no listing.
+The index needs only GetObject and PutObject under tenants/: no listing. The hackathon's clan/<pid>/
+copies are left where they are and never listed.
 """
 
 from __future__ import annotations
@@ -26,9 +28,9 @@ import hashlib
 import json
 from typing import Callable
 
-INDEX = "clan/{w}/projects.json"
-BASE = "clan/{w}/{project}"
-CANVAS = "clan/{w}/{project}/canvas.json"
+INDEX = "tenants/{w}/projects/index.json"
+BASE = "tenants/{w}/projects/{project}"
+CANVAS = "tenants/{w}/projects/{project}/canvas.json"
 CLAN_MIME = "application/vnd.clan+zip"
 RETRIES = 5
 

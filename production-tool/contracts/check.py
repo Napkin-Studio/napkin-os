@@ -91,4 +91,33 @@ for provider, sheet in sheets.items():
             failures += 1
             print(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
 
+# Tenant data never goes in config.json, which is public three ways (features/os-sign-in.clan).
+for f in sorted(HERE.glob("examples/config.*.json")):
+    if "tenants" in json.loads(f.read_text()):
+        failures += 1
+        print(f"✗ {f.relative_to(HERE)}: carries tenants; tenant items live in the private tenants table")
+
+# The X-Napkin-Identity v1 vector (docs/contracts/production-tool-identity.md): the claims, key and body
+# give exactly the assertion, which napkin-web's cargo test and the relay's pytest also check.
+import base64, hashlib, hmac, uuid  # noqa: E401,E402
+
+vec = json.loads((HERE / "examples" / "identity-assertion.vector.json").read_text())
+claims_json = json.dumps(vec["claims"], separators=(",", ":"), ensure_ascii=False)
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
+head = "v1." + b64(claims_json.encode())
+want = head + "." + b64(hmac.new(vec["key"].encode(), head.encode(), hashlib.sha256).digest())
+c = vec["claims"]
+problems = [
+    claims_json != vec["claimsJson"] and "claimsJson is not the compact claims",
+    want != vec["assertion"] and "the assertion does not match its claims and key",
+    c["bh"] != hashlib.sha256(vec["body"].encode()).hexdigest() and "bh is not the body's SHA-256",
+    c["t"] != str(uuid.uuid5(uuid.NAMESPACE_URL, "napkin:agency:" + c["a"])) and "t is not the agency's tenant id",
+    (c["m"], c["p"]) != (vec["method"], vec["pathAndQuery"]) and "m and p do not name the request",
+]
+for p in filter(None, problems):
+    failures += 1
+    print(f"✗ examples/identity-assertion.vector.json: {p}")
+if not any(problems):
+    print("✓ examples/identity-assertion.vector.json")
+
 sys.exit(1 if failures else 0)

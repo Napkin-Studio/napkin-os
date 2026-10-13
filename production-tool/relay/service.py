@@ -18,7 +18,10 @@ provider or account reason, before or after submit, sends the job to Runway's de
 the op, once (Job.fallbackFrom and fallbackReason say so). Moderation and invalid input never move.
 
 Every route but GET /health and GET /config takes its person from the identity seam (identity.py,
-features/drop-hackathon-extras.clan); no person is a 401.
+features/drop-hackathon-extras.clan); no person is a 401. The person's agency is their tenant
+(features/os-sign-in.clan): a tenant that is missing from the tenants table or not enabled is a 403
+flag_off, saved projects and the library are the tenant's (shared by everyone in the agency), and
+every job carries the internal _tenant.
 
 Each request only ever advances its own job, and the scheduled sweep advances
 jobs nobody is polling, so no worker is needed.
@@ -93,7 +96,12 @@ NO_FALLBACK = {"moderated", "invalid_input"}  # the floor would refuse the same
 UNKNOWN_PRICE_USD = 1.0      # reserved for an op whose sheet has no price
 # How long a queued job may wait for a free provider slot, per class, when config.json sets no queueTimeoutS.
 QUEUE_TIMEOUT_S = {"image": 1800, "video": 1800}
-CLAN_MAX_BYTES = 5 * 1024 * 1024
+# What napkin-web's proxy and a Function URL both take (binary bodies arrive base64-encoded, and a
+# Lambda request is at most 6 MB): features/os-sign-in.clan.
+CLAN_MAX_BYTES = 4_500_000
+CLAN_TOO_BIG = "This project is too big to save online (over 4.5 MB). Export it instead."
+NOT_ON = "The Production Tool is not on for your agency yet."
+TENANT_TTL_S = 30
 CLAN_MIME = "application/vnd.clan+zip"
 CLAN_REASONS = {"interval", "accept", "manual"}
 # X-Project-Id on POST /clan: a project's id, made by the web app like every id (common.schema.json#/$defs/id).
@@ -200,7 +208,8 @@ class Relay:
         """config: () -> config.json dict (cached by the caller).
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
         cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards).
-        who: (headers) -> {"pid", "h", "t"} or None, the identity seam (identity.py)."""
+        who: (method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"} or None,
+        the identity seam (identity.py)."""
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
         self.config, self.who = config, who
         self.contracts = contracts or Contracts()
@@ -208,14 +217,18 @@ class Relay:
         self.stitch = stitch
         self.cards = cards
         self.dogfood = dogfood.Dogfood(blobs, clock)
+        self._tenants: dict[str, tuple[float, dict | None]] = {}
 
     # ── HTTP ────────────────────────────────────────────────────────────────
-    def http(self, method: str, path: str, headers: dict, body: bytes | None) -> tuple[int, dict | Raw | None, dict]:
-        """Returns (status, body, log fields); the body is a JSON dict, Raw bytes, or None. Never raises."""
+    def http(self, method: str, path: str, headers: dict, body: bytes | None,
+             query: str = "") -> tuple[int, dict | Raw | None, dict]:
+        """Returns (status, body, log fields); the body is a JSON dict, Raw bytes, or None. Never raises.
+        path is the raw path the relay received, query its raw query string (no '?')."""
         start = self.clock()
         ctx: dict = {"method": method, "route": path}
         try:
-            status, out = self._route(method.upper(), path, {k.lower(): v for k, v in headers.items()}, body, ctx)
+            status, out = self._route(method.upper(), path, {k.lower(): v for k, v in headers.items()}, body, ctx,
+                                      query)
         except ApiError as e:
             status, out = e.status, e.body()
             ctx["error"] = e.code
@@ -242,7 +255,8 @@ class Relay:
             self._dog_request(who, method.upper(), path, headers, body, status, out, ctx)
         return status, out, ctx
 
-    def _route(self, method, path, headers, body, ctx):
+    def _route(self, method, path, headers, body, ctx, query=""):
+        signed = path + (f"?{query}" if query else "")  # what napkin-web's assertion names
         if path.startswith("/api/"):
             path = path[4:]
         path = path.rstrip("/") or "/"
@@ -250,8 +264,10 @@ class Relay:
             return 200, self.config()
         if method == "GET" and path == "/health":
             return 200, {"ok": True}
-        who = self._auth(headers)
+        who = self._auth(method, signed, headers, body)
         ctx["participant"] = who["pid"]
+        ctx["tenant"] = who["tenant"]["id"]
+        self._tenant_on(who)
         ctx["_who"] = who
         if method == "GET" and path == "/me":
             return 200, self.me(who)
@@ -282,7 +298,7 @@ class Relay:
             saved = self.mirror_clan(who, headers, body, ctx)
             return (200, saved) if saved else (204, None)
         if method == "GET" and path == "/projects":
-            return 200, {"projects": [projects.public_row(r) for r in self._projects().list(who["pid"])]}
+            return 200, {"projects": [projects.public_row(r) for r in self._projects().list(self._workspace(who))]}
         if path.startswith("/clan/"):
             return self.project_route(who, method, path[len("/clan/"):], body, ctx)
         if method == "POST" and path == "/log":
@@ -309,12 +325,34 @@ class Relay:
             raise ApiError("invalid_input", f"Invalid {schema}: {errors[0]}")
         return data
 
-    def _auth(self, headers: dict) -> dict:
+    def _auth(self, method: str, signed: str, headers: dict, body: bytes | None) -> dict:
         """The person from the identity seam; fails closed (features/drop-hackathon-extras.clan)."""
-        who = self.who(headers)
+        who = self.who(method, signed, headers, body)
         if not who:
             raise ApiError("unauthorised", "Sign in to use the Production Tool.")
         return who
+
+    def _tenant(self, tenant_id: str) -> dict | None:
+        """The tenant's item from the tenants table, cached for 30 s (features/os-sign-in.clan).
+        tenant-limits reads its cap and allowlist through here too."""
+        now = self.clock()
+        hit = self._tenants.get(tenant_id)
+        if hit and now - hit[0] < TENANT_TTL_S:
+            return hit[1]
+        item = self.store.tenant(tenant_id)
+        self._tenants[tenant_id] = (now, item)
+        return item
+
+    def _tenant_on(self, who: dict) -> None:
+        """Only the agencies Napkin has turned on (fail closed: a missing item is off)."""
+        item = self._tenant(who["tenant"]["id"])
+        if not item or not item.get("enabled"):
+            raise ApiError("flag_off", NOT_ON)
+
+    @staticmethod
+    def _workspace(who: dict) -> str:
+        """Where the person's saved projects and library live: their agency's (tenants/{id}/)."""
+        return who["tenant"]["id"]
 
     def _not_blocked(self, who: dict) -> None:
         if any(self.store.is_blocked(k) for k in blocked_keys(who.get("t"), who["h"])):
@@ -428,10 +466,15 @@ class Relay:
 
     # ── the person and uploads ──────────────────────────────────────────────
     def me(self, who: dict) -> dict:
-        """GET /me (relay-api.schema.json#/$defs/Me): who the seam says is asking, and their workspace."""
+        """GET /me (relay-api.schema.json#/$defs/Me): who the seam says is asking, their tenant, and
+        the agency's workspace."""
         pid = who["pid"]
-        out = {"participantId": pid, "handle": who["h"], "team": who.get("t") or "", "workspace": pid,
-               "quotas": self.remaining(pid), "projects": self._projects().count(pid)}
+        workspace = self._workspace(who)
+        out = {"participantId": pid, "handle": who["h"], "team": who.get("t") or "", "workspace": workspace,
+               "tenant": dict(who["tenant"]), "quotas": self.remaining(pid),
+               "projects": self._projects().count(workspace)}
+        if who.get("name"):
+            out["name"] = who["name"]
         if self._dog_on():
             out["dogfood"] = {"consented": self.dogfood.consented(pid)}
         return out
@@ -463,7 +506,7 @@ class Relay:
         Without it, the participant's own latest copy and a timestamped one, as before (None: 204)."""
         data = body or b""
         if len(data) > CLAN_MAX_BYTES:
-            raise ApiError("invalid_input", "The document is larger than 5 MB.", status=413)
+            raise ApiError("invalid_input", CLAN_TOO_BIG, status=413)
         if not data.startswith(b"PK\x03\x04"):
             raise ApiError("invalid_input", "The body is not a .clan file.")
         reason = headers.get("x-clan-reason", "manual")
@@ -482,7 +525,7 @@ class Relay:
             return None
         ctx["project"] = project
         try:
-            row = self._projects().save(who["pid"], project, data, reason,
+            row = self._projects().save(self._workspace(who), project, data, reason,
                                         if_match=projects.parse_if_match(headers.get("if-match")),
                                         name=project_name(headers.get("x-project-name")))
         except projects.Stale as e:
@@ -498,21 +541,22 @@ class Relay:
             raise ApiError("invalid_input", f"No route {method} /clan/{rest}.", status=404)
         ctx["project"] = project
         store = self._projects()
+        workspace = self._workspace(who)
         try:
             if method == "GET" and not sub:
-                data, row = store.read(who["pid"], project)
+                data, row = store.read(workspace, project)
                 if len(data) > OPEN_MAX_BYTES:
                     raise ApiError("invalid_input", "This project is too large to open from the server. "
                                    "Export it in the browser that made it, and open the file here.", status=413)
                 return 200, Raw(data, CLAN_MIME, {"ETag": f'"{row["etag"]}"', "X-Saved-At": row["savedAt"]})
             if method == "GET":
-                return 200, store.canvas(who["pid"], project)
+                return 200, store.canvas(workspace, project)
             if method == "PUT" and sub:
                 self._not_blocked(who)
                 if len(body or b"") > CANVAS_MAX_BYTES:
                     raise ApiError("invalid_input", "The canvas is larger than 4 MB.", status=413)
                 canvas = self._json(body, "ProjectCanvas")
-                store.put_canvas(who["pid"], project, {**canvas, "savedAt": iso(self.clock())})
+                store.put_canvas(workspace, project, {**canvas, "savedAt": iso(self.clock())})
                 return 204, None
         except projects.Missing as e:
             raise ApiError("invalid_input", str(e), status=404) from None
@@ -520,7 +564,7 @@ class Relay:
 
     # ── the workspace library ───────────────────────────────────────────────
     def library_route(self, who: dict, method: str, path: str, body: bytes | None, ctx: dict) -> dict:
-        workspace = who["pid"]  # each name is its own workspace
+        workspace = self._workspace(who)  # the agency's library, shared by everyone in it
         lib = library.Library(self.blobs, lambda: iso(self.clock()))
         if method == "GET" and path == "/library":
             return lib.index(workspace)
@@ -667,7 +711,7 @@ class Relay:
             "quotaClass": qclass, "state": "queued", "inputHashes": sorted({a["sha256"] for a in asset_refs(req["input"])}),
             "cost": {"estimate": estimate, "reserved": estimate, "currency": "USD", "unknown": unknown},
             "createdAt": iso(now), "updatedAt": iso(now),
-            "_req": req, "_day": day, "_counted": counted, "_queue": "q",
+            "_req": req, "_day": day, "_counted": counted, "_queue": "q", "_tenant": who["tenant"]["id"],
             "_released": False, "_tried": [],
         }
         if pick:  # where the job meant to run, for fallbackFrom

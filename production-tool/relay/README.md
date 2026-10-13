@@ -6,7 +6,7 @@ Implements `production-tool/contracts/relay-api.schema.json` (v1, locked).
 | File | What |
 |---|---|
 | `service.py` | Routes, job ledger, quotas, fair-share queue, spend stop, the Runway floor, output copy |
-| `identity.py` | Who is asking: `who(headers) -> {"pid", "h", "t"}` or `None` (then 401) |
+| `identity.py` | Who is asking: `who(method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"}` or `None` (then 401) |
 | `store.py` | `MemoryStore` (tests, local) and `DynamoStore` (Lambda) |
 | `blobs.py` | `LocalBlobs` and `S3Blobs` (`in/`, `out/`, `ads/` keys) |
 | `runtime.py` | `config.json` cache (30 s, keeps the last good one), provider keys from Secrets Manager |
@@ -22,16 +22,19 @@ cd production-tool/relay
 uv run python -m local            # http://localhost:8787
 ```
 
-- Every request is the local person: `NAPKIN_LOCAL_USER="handle@agency"`, else
-  `local@napkin`. There is no sign-in; the startup line says who it runs as.
-  Each name is its own workspace: the same name on any browser finds its projects
-  and library.
+- Standalone (no `TOKEN_SECRET`), every request is the local person:
+  `NAPKIN_LOCAL_USER="handle@agency"`, else `local@napkin`. The startup line says who it runs as.
+- Behind napkin-web (the full stack), set `TOKEN_SECRET` to the same dev value (32 bytes or more)
+  as napkin-web's `NAPKIN_PRODUCTION_RELAY_SECRET`: every request must then carry napkin-web's
+  signed `X-Napkin-Identity`, as on AWS.
+- Tenants on: `NAPKIN_LOCAL_TENANTS="napkin,acme"`, else `napkin` and the local person's agency.
+  Everyone in an agency shares its projects and library; other agencies get "not on for your agency".
 - `--port` and `--data <dir>` (default `.local-data/`) choose where it listens and keeps files.
 - Routes answer both bare (`/jobs`) and under `/api` (`/api/jobs`). CORS is open.
 - `GET /me` says who the relay takes the caller to be (`relay-api.schema.json#/$defs/Me`):
   participant id, handle, team, workspace, today's remaining quotas and saved projects.
-- `POST /clan` takes the person's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, max 5 MiB). With `X-Project-Id: <project id>` it is a saved project (`projects.py`): kept under `clan/<participantId>/<projectId>/` (every save, plus `latest.clan`) and listed in `clan/<participantId>/projects.json`; it answers the save's ETag, and with `If-Match` a save someone else got in before is a 409. Without the header it keeps `clan/<participantId>/latest.clan` plus a timestamped copy and answers 204.
-- `GET /projects` lists the caller's saved projects; `GET /clan/<projectId>` answers the newest `.clan` with its `ETag`; `PUT`/`GET /clan/<projectId>/canvas` keep the canvas that goes with it.
+- `POST /clan` takes the person's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, at most 4.5 MB). With `X-Project-Id: <project id>` it is a saved project of the agency (`projects.py`): kept under `tenants/<tenantId>/projects/<projectId>/` (every save, plus `latest.clan`) and listed in `tenants/<tenantId>/projects/index.json`; it answers the save's ETag, and with `If-Match` a save someone else got in before is a 409. Without the header it keeps `clan/<participantId>/latest.clan` plus a timestamped copy and answers 204.
+- `GET /projects` lists the agency's saved projects; `GET /clan/<projectId>` answers the newest `.clan` with its `ETag`; `PUT`/`GET /clan/<projectId>/canvas` keep the canvas that goes with it.
 - Pruning, once the data has been studied: `scripts/prune_workspaces.py` (dry run unless `--yes`; see its docstring).
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.
@@ -50,12 +53,21 @@ uv run python -m local            # http://localhost:8787
 
 ## Who is asking
 
-Every route but `GET /health` and `GET /config` takes its person from `identity.who(headers)`
-(features/drop-hackathon-extras.clan). It fails closed: with no identity source, every other
-route answers 401 `unauthorised`. Today the only source is the local person (`local.py`); on
-Lambda the relay refuses everyone until Napkin OS sign-in implements the seam. The person's
-team and handle make their workspace (`participant_id`); a blocked name or team/name is refused
-on every write ("This name has been blocked.").
+Every route but `GET /health` and `GET /config` takes its person from `identity.who(...)`
+(features/drop-hackathon-extras.clan, features/os-sign-in.clan). It fails closed: with no identity,
+every other route answers 401 `unauthorised`.
+
+- On Lambda the source is napkin-web's `X-Napkin-Identity` v1 assertion
+  (`docs/contracts/production-tool-identity.md`), signed with `TOKEN_SECRET` (Secrets Manager,
+  re-read at most every 5 minutes; `new,old` during a rotation) and bound to the method, path,
+  query and body. Browsers reach the relay only through napkin-web's `/production/api`.
+- The person's agency is their tenant. Only agencies with `enabled: true` in the tenants table
+  (`TENANTS_TABLE`) may use the tool; anyone else gets 403 `flag_off`. Turn one on or off with
+  `scripts/tenants.py` (a person's credentials). Every job carries the internal `_tenant`, and
+  request logs carry `tenant`.
+- Projects and the library are the agency's (`tenants/<tenantId>/…`). Quotas and in-flight
+  limits stay per person (`participant_id` of agency and handle). A blocked name or team/name is
+  refused on every write ("This name has been blocked.").
 
 ## Tests
 

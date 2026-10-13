@@ -11,7 +11,7 @@ def allowed() -> set[str]:
 
 
 def test_preflight_allows_the_headers_the_web_sends():
-    assert {"authorization", "content-type", "x-clan-reason", "x-project-id", "x-project-name", "if-match"} <= allowed()
+    assert {"content-type", "x-clan-reason", "x-project-id", "x-project-name", "if-match"} <= allowed()
 
 
 def test_the_default_local_config_runs_on_mock_and_is_valid():
@@ -22,11 +22,38 @@ def test_the_default_local_config_runs_on_mock_and_is_valid():
 
 
 def test_the_local_server_runs_as_the_local_person(tmp_path, monkeypatch):
-    monkeypatch.setenv("NAPKIN_LOCAL_USER", "shrey@napkin")
+    monkeypatch.setenv("NAPKIN_LOCAL_USER", "shrey@acme")
+    monkeypatch.delenv("TOKEN_SECRET", raising=False)
+    monkeypatch.delenv("NAPKIN_LOCAL_TENANTS", raising=False)
     try:
         relay, _ = local.build(8798, tmp_path)
         status, me, _ = relay.http("GET", "/me", {}, None)
     finally:
         identity.use_local(None)
-    assert status == 200 and (me["handle"], me["team"]) == ("shrey", "napkin")
-    assert identity.who({}) is None  # off again: nothing else runs as anyone
+    assert status == 200 and (me["handle"], me["team"]) == ("shrey", "acme")
+    assert me["tenant"] == {"id": identity.tenant_id("acme"), "agency": "acme"}  # the local agency is on
+    assert identity.who("GET", "/me", {}, None) is None  # off again: nothing else runs as anyone
+
+
+def test_behind_napkin_web_the_local_server_checks_assertions(tmp_path, monkeypatch):
+    """The full-stack dev path: TOKEN_SECRET set, so no local person; napkin enabled, others not."""
+    import hashlib
+    import time
+
+    key = "dev-secret-" + "x" * 32
+    monkeypatch.setenv("TOKEN_SECRET", key)
+    monkeypatch.delenv("NAPKIN_LOCAL_TENANTS", raising=False)
+    monkeypatch.setattr(identity, "_refresh", None)
+    relay, _ = local.build(8799, tmp_path)
+    assert relay.http("GET", "/me", {}, None)[0] == 401
+
+    def signed(agency):
+        now = int(time.time())
+        claims = {"u": f"engineer@{agency}", "a": agency, "t": identity.tenant_id(agency), "aud": "relay",
+                  "iat": now, "exp": now + 60, "m": "GET", "p": "/api/me", "bh": hashlib.sha256(b"").hexdigest()}
+        return {"X-Napkin-Identity": identity.sign(claims, key)}
+
+    status, me, _ = relay.http("GET", "/api/me", signed("napkin"), None)
+    assert status == 200 and (me["handle"], me["tenant"]["agency"]) == ("engineer", "napkin")
+    status, out, _ = relay.http("GET", "/api/me", signed("otheragency"), None)
+    assert status == 403 and out["error"]["code"] == "flag_off"

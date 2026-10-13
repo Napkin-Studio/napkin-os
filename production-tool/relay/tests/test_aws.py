@@ -1,7 +1,9 @@
 """DynamoStore and S3Blobs against moto (no network), and the Lambda handler end to end."""
 
 import base64
+import hashlib
 import json
+import time
 
 import boto3
 import pytest
@@ -28,6 +30,9 @@ def make_tables(ddb):
     ddb.create_table(TableName="blocked", BillingMode="PAY_PER_REQUEST",
                      AttributeDefinitions=[{"AttributeName": "handle", "AttributeType": "S"}],
                      KeySchema=[{"AttributeName": "handle", "KeyType": "HASH"}])
+    ddb.create_table(TableName="tenants", BillingMode="PAY_PER_REQUEST",
+                     AttributeDefinitions=[{"AttributeName": "tenantId", "AttributeType": "S"}],
+                     KeySchema=[{"AttributeName": "tenantId", "KeyType": "HASH"}])
 
 
 @pytest.fixture
@@ -99,6 +104,17 @@ def test_dynamo_blocked(aws):
     assert st.is_blocked("Mallory") and not st.is_blocked("alice")
 
 
+def test_dynamo_tenants(aws):
+    ddb, _ = aws
+    st = DynamoStore("jobs", "quotas", "blocked", client=ddb, tenants_table="tenants")
+    assert st.tenant("t-1") is None
+    st.put_tenant({"tenantId": "t-1", "agency": "napkin", "enabled": True, "by": "shrey"})
+    assert st.tenant("t-1") == {"tenantId": "t-1", "agency": "napkin", "enabled": True, "by": "shrey"}
+    assert [t["agency"] for t in st.all_tenants()] == ["napkin"]
+    # No TENANTS_TABLE: nobody is on (fail closed).
+    assert DynamoStore("jobs", "quotas", "blocked", client=ddb).tenant("t-1") is None
+
+
 def test_s3_blobs(aws):
     _, s3 = aws
     b = S3Blobs("napkin-test", "https://cdn.test", client=s3)
@@ -119,8 +135,10 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     s3.put_object(Bucket="napkin-test", Key="config.json", Body=json.dumps(cfg).encode())
     for k, v in {"BUCKET": "napkin-test", "PUBLIC_BASE_URL_PARAM": "/napkin-test/public-base-url", "JOBS_TABLE": "jobs",
-                 "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked"}.items():
+                 "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked", "TENANTS_TABLE": "tenants"}.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.delenv("TOKEN_SECRET", raising=False)
+    monkeypatch.delenv("SECRET_ARNS", raising=False)
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     boto3.client("ssm", region_name="eu-west-1").put_parameter(
         Name="/napkin-test/public-base-url", Value="https://cdn.test", Type="String")
@@ -129,21 +147,45 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
 
     monkeypatch.setattr(handler, "_relay", None)
 
-    def http(method, path, body=None):
-        event = {"rawPath": path, "requestContext": {"http": {"method": method}},
-                 "headers": {"authorization": "Bearer anything"},
-                 "body": json.dumps(body) if body is not None else None, "isBase64Encoded": False}
+    key = "k" * 40
+    monkeypatch.setattr(identity, "_refresh", None)
+
+    def assertion(method, path, query, raw, agency="blue"):
+        now = int(time.time())
+        return identity.sign({"u": f"alice@{agency}", "a": agency, "t": identity.tenant_id(agency), "aud": "relay",
+                              "iat": now, "exp": now + 60, "m": method, "p": path + (f"?{query}" if query else ""),
+                              "bh": hashlib.sha256(raw).hexdigest()}, key)
+
+    def http(method, path, body=None, query="", sign=True):
+        raw = json.dumps(body).encode() if body is not None else b""
+        headers = {"authorization": "Bearer anything"}
+        if sign:
+            headers["x-napkin-identity"] = assertion(method, path, query, raw)
+        event = {"rawPath": path, "rawQueryString": query, "requestContext": {"http": {"method": method}},
+                 "headers": headers, "body": raw.decode() if body is not None else None, "isBase64Encoded": False}
         r = handler.handler(event, None)
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
-    # No identity source on Lambda yet: every route but health and config is a 401 (fails closed).
+    # No TOKEN_SECRET on the Lambda: every route but health and config is a 401 (fails closed), signed or not.
     for method, path in (("GET", "/api/me"), ("POST", "/api/jobs"), ("GET", "/api/projects")):
         status, out = http(method, path, {} if method == "POST" else None)
         assert status == 401 and out["error"]["code"] == "unauthorised", path
     assert http("GET", "/api/health")[0] == 200
+    assert http("GET", "/api/config")[0] == 200
 
-    # The rest of the Lambda's wiring, as a person the seam names.
-    monkeypatch.setattr(identity, "_local", identity.person("alice", "blue"))
+    # With the key: no assertion is still a 401; a signed person whose agency is not on is a 403.
+    monkeypatch.setenv("TOKEN_SECRET", key)
+    assert http("GET", "/api/me", sign=False)[0] == 401
+    status, out = http("GET", "/api/me", query="a=1")
+    assert status == 403 and out["error"]["code"] == "flag_off" and "not on for your agency" in out["error"]["message"]
+
+    # Turn the agency on (scripts/tenants.py's write), with a fresh relay (the tenant cache is 30 s).
+    DynamoStore("jobs", "quotas", "blocked", tenants_table="tenants").put_tenant(
+        {"tenantId": identity.tenant_id("blue"), "agency": "blue", "enabled": True})
+    monkeypatch.setattr(handler, "_relay", None)
+    status, me = http("GET", "/api/me", query="a=1")
+    assert status == 200 and me["tenant"] == {"id": identity.tenant_id("blue"), "agency": "blue"}
+    assert me["workspace"] == identity.tenant_id("blue")
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5})
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
     # no adapters exist yet in this lane: routing finds no provider
@@ -155,13 +197,14 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
 
     # A saved project comes back as its bytes (base64, as a Function URL wants them) with its ETag.
     project, data = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", b"PK\x03\x04" + bytes(range(256))
-    headers = {"x-project-id": project}
+    headers = {"x-project-id": project, "x-napkin-identity": assertion("POST", "/api/clan", "", data)}
     r = handler.handler({"rawPath": "/api/clan", "requestContext": {"http": {"method": "POST"}}, "headers": headers,
                          "body": base64.b64encode(data).decode(), "isBase64Encoded": True}, None)
     assert r["statusCode"] == 200
     etag = json.loads(r["body"])["project"]["etag"]
     status, listed = http("GET", "/api/projects")
     assert status == 200 and [p["id"] for p in listed["projects"]] == [project]
+    headers = {"x-napkin-identity": assertion("GET", f"/api/clan/{project}", "", b"")}
     r = handler.handler({"rawPath": f"/api/clan/{project}", "requestContext": {"http": {"method": "GET"}},
                          "headers": headers}, None)
     assert r["statusCode"] == 200 and r["isBase64Encoded"] is True
@@ -169,6 +212,8 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     assert r["headers"]["Content-Type"] == "application/vnd.clan+zip" and r["headers"]["ETag"] == f'"{etag}"'
     status, me = http("GET", "/api/me")
     assert status == 200 and me["projects"] == 1
+    saved = s3.list_objects_v2(Bucket="napkin-test", Prefix=f"tenants/{identity.tenant_id('blue')}/projects/")
+    assert saved["KeyCount"] >= 3  # index.json, the timed copy and latest.clan
 
 
 def test_s3_blobs_get_list_and_delete(aws):

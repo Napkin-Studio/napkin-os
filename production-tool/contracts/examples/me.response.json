@@ -1,8 +1,17 @@
 {
   "participantId": "p_1a2b3c4d5e",
-  "handle": "maya",
+  "handle": "visionary",
+  "name": "Laurance",
   "team": "napkin",
-  "workspace": "p_1a2b3c4d5e",
-  "quotas": { "image": 40, "video": 6, "render": 3 },
+  "tenant": {
+    "id": "f283da90-07cd-59ec-b370-b23704a2bc91",
+    "agency": "napkin"
+  },
+  "workspace": "f283da90-07cd-59ec-b370-b23704a2bc91",
+  "quotas": {
+    "image": 40,
+    "video": 6,
+    "render": 3
+  },
   "projects": 3
 }

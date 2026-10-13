@@ -3,9 +3,15 @@ queue; uploads and outputs in .local-data/ (served at /in/, /out/, /ads/).
 
     cd production-tool/relay && uv run python -m local [--port 8787]
 
-Every request is the local person (identity.py): NAPKIN_LOCAL_USER="handle@agency",
-else local@napkin. Routes are served both bare (/jobs) and under /api (/api/jobs),
-as CloudFront does.
+Who is asking (identity.py, features/os-sign-in.clan):
+- Standalone (no TOKEN_SECRET): every request is the local person, NAPKIN_LOCAL_USER="handle@agency",
+  else local@napkin. `npm run dev:relay` in production-tool/web uses this.
+- Behind napkin-web (TOKEN_SECRET set to the same dev value as NAPKIN_PRODUCTION_RELAY_SECRET):
+  every request must carry napkin-web's X-Napkin-Identity assertion, as on AWS.
+Tenants on (in memory): NAPKIN_LOCAL_TENANTS="napkin,acme" (agencies), else napkin and the local
+person's agency. Any other agency gets "not on for your agency".
+
+Routes are served both bare (/jobs) and under /api (/api/jobs), as CloudFront does.
 
 Config: LOCAL_CONFIG=<file> (re-read every 30 s), otherwise
 contracts/examples/config.testing.json with every step routed to mock.
@@ -42,7 +48,7 @@ from store import MemoryStore
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser.
-CORS_ALLOW_HEADERS = "Authorization, Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name"
+CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name"
 # Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
 CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
 log = logging.getLogger("relay.local")
@@ -115,8 +121,21 @@ def local_stitch(blobs: LocalBlobs):
     return run
 
 
+def local_tenants(store: MemoryStore, agencies: list[str]) -> None:
+    """Turn these agencies on in the in-memory tenants table."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    for agency in agencies:
+        store.put_tenant({"tenantId": identity.tenant_id(agency), "agency": agency, "enabled": True,
+                          "updatedAt": now, "by": "local.py"})
+
+
 def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
-    identity.use_local(identity.local_person())  # this dev server only: every request is the local person
+    signed = bool(identity.keys())
+    # Standalone, every request is the local person; behind napkin-web, its signed assertion says who.
+    identity.use_local(None if signed else identity.local_person())
+    agencies = [a.strip() for a in os.environ.get("NAPKIN_LOCAL_TENANTS", "").split(",") if a.strip()]
+    if not agencies:
+        agencies = sorted({"napkin", identity.local_person()["t"]})
     contracts = Contracts(relaxed=True)  # http://localhost URLs pass
     cfg_file = os.environ.get("LOCAL_CONFIG")
     load = (lambda: json.loads(Path(cfg_file).read_text())) if cfg_file else default_config
@@ -129,7 +148,9 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         registry.register(StubMock(sheet), sheet)
         log.warning("providers/mock.py not found: using the local stub")
     director = load_director()
-    relay = Relay(store=MemoryStore(), blobs=blobs, registry=registry, director=director,
+    store = MemoryStore()
+    local_tenants(store, agencies)
+    relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
                   stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
     return relay, blobs
@@ -182,14 +203,14 @@ def serve(port: int, data_dir: Path) -> None:
             self._send(200, b"{}")
 
         def _relay(self):
-            path = self.path.split("?", 1)[0]
+            path, _, query = self.path.partition("?")
             if self.command == "GET" and path.lstrip("/").split("/", 1)[0] in ("in", "out", "ads"):
                 return self._file()
             if self.command == "GET" and path == "/config.json":
                 path = "/config"
             n = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(n) if n else None
-            status, out, ctx = relay.http(self.command, path, dict(self.headers), body)
+            status, out, ctx = relay.http(self.command, path, dict(self.headers), body, query)
             print(json.dumps({k: v for k, v in ctx.items() if v is not None}, default=str), flush=True)
             if isinstance(out, Raw):
                 return self._send(status, out.data, out.mime, headers=out.headers)
@@ -210,8 +231,9 @@ def serve(port: int, data_dir: Path) -> None:
 
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    me = identity.who({})
-    print(f"relay (local) on http://localhost:{port}  as {me['h']}@{me['t']} ({me['pid']})  data: {data_dir}", flush=True)
+    me = identity.who("GET", "/me", {}, None)
+    who = f"as {me['h']}@{me['t']} ({me['pid']})" if me else "verifying napkin-web's X-Napkin-Identity (TOKEN_SECRET)"
+    print(f"relay (local) on http://localhost:{port}  {who}  data: {data_dir}", flush=True)
     server.serve_forever()
 
 

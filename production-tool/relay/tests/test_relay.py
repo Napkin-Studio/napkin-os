@@ -4,15 +4,17 @@ import pytest
 
 from conftest import Harness, base_config, job_request
 from director import new_id
+from identity import person, tenant_id
 from providers.base import Moderated, ProviderError, Status
 from service import QUEUE_TIMEOUT_S
 
 
 # ── the person and uploads ──────────────────────────────────────────────────
 def test_me_says_who_the_seam_names_with_quotas(h):
-    token = h.as_person("Alice")
+    token = h.as_person("Alice", name="Alice Ng")
     _, out = h.call("GET", "/me", None, token, expect=200)
-    assert out["participantId"].startswith("p_") and out["workspace"] == out["participantId"]
+    assert out["participantId"].startswith("p_") and out["workspace"] == out["tenant"]["id"]
+    assert out["tenant"] == {"id": tenant_id("blue"), "agency": "blue"} and out["name"] == "Alice Ng"
     assert (out["handle"], out["team"]) == ("Alice", "blue") and out["projects"] == 0
     assert out["quotas"] == {"image": 40, "video": 6, "render": 3}
     assert "dogfood" not in out
@@ -53,6 +55,7 @@ def test_the_local_person_answers_me_against_the_contract(h, monkeypatch):
 
     monkeypatch.setenv("NAPKIN_LOCAL_USER", "maya@Blue Herons")
     identity.use_local(identity.local_person())
+    h.tenant("Blue Herons")
     try:
         relay = Relay(store=h.store, blobs=h.blobs, registry=h.relay.registry, director=h.relay.director,
                       config=lambda: h.cfg, clock=h.clock)
@@ -120,15 +123,16 @@ def test_clan_mirror_keeps_one_copy_per_project(h):
     a, b = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N9"
     _clan_post(h, token, b"PK\x03\x04" + b"a" * 10, project=a)
     _clan_post(h, token, b"PK\x03\x04" + b"b" * 10, reason="manual", project=b)
-    keys = sorted(k for k in h.blobs.objects if k.startswith("clan/"))
-    pid = keys[0].split("/")[1]
-    assert f"clan/{pid}/{a}/latest.clan" in keys and f"clan/{pid}/{b}/latest.clan" in keys
-    assert h.blobs.objects[f"clan/{pid}/{a}/latest.clan"][0].endswith(b"a" * 10)
-    assert h.blobs.objects[f"clan/{pid}/{b}/latest.clan"][0].endswith(b"b" * 10)
-    assert any(k.startswith(f"clan/{pid}/{a}/") and k.endswith("-accept.clan") for k in keys)
-    assert any(k.startswith(f"clan/{pid}/{b}/") and k.endswith("-manual.clan") for k in keys)
-    # Without the header: today's path, next to the projects.
+    base = f"tenants/{tenant_id('blue')}/projects"  # the agency's projects (features/os-sign-in.clan)
+    keys = sorted(k for k in h.blobs.objects if k.startswith(base))
+    assert f"{base}/{a}/latest.clan" in keys and f"{base}/{b}/latest.clan" in keys
+    assert h.blobs.objects[f"{base}/{a}/latest.clan"][0].endswith(b"a" * 10)
+    assert h.blobs.objects[f"{base}/{b}/latest.clan"][0].endswith(b"b" * 10)
+    assert any(k.startswith(f"{base}/{a}/") and k.endswith("-accept.clan") for k in keys)
+    assert any(k.startswith(f"{base}/{b}/") and k.endswith("-manual.clan") for k in keys)
+    # Without the header: the person's own copy, as before.
     _clan_post(h, token, b"PK\x03\x04" + b"c" * 10)
+    pid = person("alice", "blue")["pid"]
     assert h.blobs.objects[f"clan/{pid}/latest.clan"][0].endswith(b"c" * 10)
 
 
@@ -137,18 +141,21 @@ def test_clan_mirror_refuses_a_bad_project_id(h):
     for bad in ("", "../other", "prj_short", "PRJ_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8/x"):
         status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"x" * 10, project=bad)
         assert status == 400 and out["error"]["code"] == "invalid_input", bad
-    assert not [k for k in h.blobs.objects if k.startswith("clan/")]
+    assert not [k for k in h.blobs.objects if k.startswith(("clan/", "tenants/"))]
 
 
 def test_clan_mirror_refuses_bad_bodies(h):
     token = h.as_person()
     status, out, _ = _clan_post(h, token, b"not a zip")
     assert status == 400 and out["error"]["code"] == "invalid_input"
-    status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"0" * (5 * 1024 * 1024))
-    assert status == 413
+    # 4.5 MB is what napkin-web's proxy and a Function URL take (features/os-sign-in.clan).
+    status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"0" * (4_500_000 - 3))
+    assert status == 413 and "Export it instead" in out["error"]["message"]
     status, out, _ = h.relay.http("POST", "/clan", {}, b"PK\x03\x04")
     assert status == 401
-    assert not [k for k in h.blobs.objects if k.startswith("clan/")]
+    assert not [k for k in h.blobs.objects if k.startswith(("clan/", "tenants/"))]
+    status, _, _ = _clan_post(h, token, b"PK\x03\x04" + b"0" * (4_500_000 - 4))  # exactly 4.5 MB
+    assert status == 204
 
 
 # ── the ledger ──────────────────────────────────────────────────────────────

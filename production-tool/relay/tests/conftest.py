@@ -13,7 +13,7 @@ import pytest
 from contracts import Contracts, api
 from contracts_dir import contracts_dir
 from director import PassthroughDirector, new_id
-from identity import person
+from identity import person, tenant_id
 from providers import Registry
 from providers.base import Status
 from service import Relay
@@ -172,10 +172,18 @@ class Harness:
                            config=lambda: self.cfg, clock=self.clock, stitch=self.stitched.append,
                            contracts=self.contracts, who=self.who)
 
-    def who(self, headers: dict) -> dict | None:
-        """The test's identity source: "Authorization: Bearer <key>" names a person from as_person()."""
+    def who(self, method: str, path_and_query: str, headers: dict, body: bytes | None) -> dict | None:
+        """The test's identity source: "Authorization: Bearer <key>" names a person from as_person().
+        (The real seam's assertion is tested in test_identity.py.)"""
         auth = headers.get("authorization", "")
         return self.people.get(auth[7:]) if auth.startswith("Bearer ") else None
+
+    def tenant(self, agency: str, enabled: bool = True) -> str:
+        """Turn an agency on (or off) in the tenants table; its tenant id. The relay caches 30 s."""
+        tid = tenant_id(agency)
+        self.store.put_tenant({"tenantId": tid, "agency": agency, "enabled": enabled})
+        self.relay._tenants.pop(tid, None)
+        return tid
 
     # every response is checked against relay-api.schema.json
     def call(self, method, path, body=None, token=None, expect=None, headers=None):
@@ -205,10 +213,13 @@ class Harness:
             assert status == expect, (status, out)
         return status, out
 
-    def as_person(self, handle="alice", team="blue") -> str:
-        """A key the harness's identity source maps to this person (who sends it is them)."""
+    def as_person(self, handle="alice", team="blue", name=None, enable=True) -> str:
+        """A key the harness's identity source maps to this person (who sends it is them).
+        Their agency is turned on unless enable=False (test_tenants.py turns it off itself)."""
         key = f"{team}/{handle}"
-        self.people[key] = person(handle, team)
+        self.people[key] = person(handle, team, name)
+        if enable and not self.store.tenant(tenant_id(team)):
+            self.tenant(team)
         return key
 
     def post_job(self, token, op="generate", job_id=None, expect=None, **inp):
