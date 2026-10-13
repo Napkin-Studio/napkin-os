@@ -9,7 +9,7 @@
 //            notes it fixes
 
 import type { DocJob, Id, JobInputRow, LinkEndpoint, ProductionDocument } from '../contracts/types'
-import { mainStoryboard, mainVideo } from './selectors'
+import { mainScript, mainStoryboard, mainVideo } from './selectors'
 
 export type FrameHow = 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'
 
@@ -22,6 +22,8 @@ export type JobPurpose =
   | { for: 'frame'; shotId: Id; parentFrameId?: Id; how?: FrameHow; fixReviewIds?: Id[] }
   | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[] }
   | { for: 'stitch' }
+  /** Skye drafts or rewrites one item of a script (features/script-editor.clan). */
+  | { for: 'write'; scriptId?: Id }
 
 export type Purpose = JobPurpose['for']
 
@@ -42,6 +44,8 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
       return { kind: 'storyboard', id: mainStoryboard(d)!.id }
     case 'stitch':
       return { kind: 'video', id: mainVideo(d)!.id }
+    case 'write':
+      return { kind: 'script', id: p.scriptId ?? mainScript(d)!.id }
     default:
       // A Generate on today's canvas runs for the selection; its result is the canvas node named by the job's id.
       return { kind: 'group', id: jobId }
@@ -69,6 +73,8 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
     case 'shot_list':
     case 'stitch':
       return { for: kind }
+    case 'write':
+      return j.node.kind === 'script' ? { for: 'write', scriptId: j.node.id } : { for: 'write' }
     case 'frame': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'frame', shotId: j.node.id }

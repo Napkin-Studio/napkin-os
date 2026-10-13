@@ -158,3 +158,19 @@ export function changeOf(before: Doc, after: Doc): Change {
   }
   return { patches, text }
 }
+
+/** The fragments whose words a change made (before → after): new entities with words, or a changed
+ *  action, direction or text. Only these are written as live text (model/store.ts). */
+export function textTouched(before: Doc, after: Doc): Set<string> {
+  const out = new Set<string>()
+  for (const [map, kind] of Object.entries(KIND_OF_MAP)) {
+    const a = ((before as unknown as Record<string, Record<string, Obj>>)[map]) ?? {}
+    const b = ((after as unknown as Record<string, Record<string, Obj>>)[map]) ?? {}
+    for (const [id, e] of Object.entries(b)) {
+      const was = a[id]
+      if (was === e) continue
+      if (['action', 'direction', 'text', 'prose'].some((f) => !was ? e[f] !== undefined : (was[f] ?? '') !== (e[f] ?? '') && f !== 'prose')) out.add(`${kind}/${id}`)
+    }
+  }
+  return out
+}

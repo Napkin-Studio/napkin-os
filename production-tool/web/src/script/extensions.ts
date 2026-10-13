@@ -86,6 +86,8 @@ export interface KeyHooks {
   lineBeat?(editor: Editor): boolean
   /** Escape: close the innermost popover first. True when one closed. */
   escape?(): boolean
+  /** Enter, before the element rules: true when the page took it (an empty script's one line drafts). */
+  enter?(editor: Editor): boolean
   /** A paste of several lines into unplanned scene text (a script): true when the page took it. */
   pasteScript?(text: string, editor: Editor): boolean
 }
@@ -278,6 +280,7 @@ function keysExtension(opts: EditorOptions) {
           return false
         },
         Enter: () => {
+          if (opts.keys?.enter?.(editor)) return true
           const t = blockType()
           if (kind === 'scene' && !opts.compact && t === 'action' && opts.keys?.sceneHeading) {
             const h = headingOf(editor.state.selection.$from.parent.textContent)
@@ -413,6 +416,7 @@ export class HookRelay {
       moment: (e) => this.hooks?.moment?.(e) ?? false,
       lineBeat: (e) => this.hooks?.lineBeat?.(e) ?? false,
       escape: () => this.hooks?.escape?.() ?? false,
+      enter: (e) => this.hooks?.enter?.(e) ?? false,
       pasteScript: (t, e) => this.hooks?.pasteScript?.(t, e) ?? false,
     }
   }

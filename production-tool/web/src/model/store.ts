@@ -17,7 +17,7 @@ import { TypingBursts } from '../script/typing'
 import type { ProductionDocument } from '../contracts/types'
 import { record as recordEvent } from '../dogfood/recorder'
 import type { Doc, DocumentStore, UndoResult, WriteWhy } from '../doc/types'
-import { changeOf } from './diff'
+import { changeOf, textTouched } from './diff'
 
 export type { ChainEntry } from '../../../clan-store/src'
 
@@ -27,6 +27,8 @@ export const CLAN_DB = 'napkin-production-tool-clan'
 interface Pending {
   why: WriteWhy
   after: Doc
+  /** The document the change was made on: only text it changed from this is written. */
+  base: Doc
 }
 
 export interface ModelStoreOptions {
@@ -142,7 +144,7 @@ export class ModelStore implements DocumentStore {
     const folds = last && last !== this.current && (
       (why.quiet && last.why.quiet) || (why.coalesce && last.why.coalesce === why.coalesce))
     if (folds) last!.after = after
-    else this.pending.push({ why, after })
+    else this.pending.push({ why, after, base: before })
     this.emit()
     this.schedule()
     return Promise.resolve(after)
@@ -320,7 +322,11 @@ export class ModelStore implements DocumentStore {
       const item = this.pending[0]
       this.current = item
       try {
-        const { patches, text } = changeOf(this.bus.doc() as unknown as ProductionDocument, item.after)
+        const { patches, text: written } = changeOf(this.bus.doc() as unknown as ProductionDocument, item.after)
+        // Live text the change itself did not touch is left alone: a panel's draft made before an editor's
+        // words reached the buses must never write the older words back (features/script-editor.clan).
+        const touched = textTouched(item.base as unknown as ProductionDocument, item.after as unknown as ProductionDocument)
+        const text = written.filter((t) => touched.has(`${t.kind}/${t.id}`))
         const why = item.why
         const agentLanding = !!why.agent && !why.agent.startsWith('human:')
         const undoable = why.undo ?? (!why.quiet && !agentLanding)

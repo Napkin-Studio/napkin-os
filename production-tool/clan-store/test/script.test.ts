@@ -3,9 +3,41 @@
 // and moveShot as one batch and one undo step.
 import { describe, expect, it } from 'vitest'
 import {
-  checkpoint, flatLength, hydrate, integrity, LIMITS, LocalPatchBus, LocalTextBus, LocalUndo, moveShot, proseFromLines, unknownNames, type Prose,
+  checkpoint, flatLength, hydrate, integrity, keepSuggestion, LIMITS, LocalPatchBus, LocalTextBus, LocalUndo, moveShot, proseFromLines, proseHash,
+  unknownNames, type Prose,
 } from '../src/index'
-import { MAYA, defaults, id, shotValue, store } from './fixtures'
+import { MAYA, defaults, id, jobValue, shotValue, store } from './fixtures'
+
+describe('keepSuggestion with a length and new beats', () => {
+  it("writes Skye's words as Skye, decided by the person, with the length and the beats, as one undo step", async () => {
+    const { bus, text, undo, storyboard, script } = await project()
+    const shot = id('shot', 1)
+    await bus.apply({ patches: [{ op: 'create', entity: 'shots', id: shot, value: shotValue(storyboard, 'a0', { duration_s: 3 }), base_version: 0 }], why: { action: 'create shot' } })
+    await text.replace('shot', shot, proseFromLines('action', ['She walks the length of the beach, slowly.']), `human:${MAYA.id}`)
+    const job = id('job', 9)
+    const sug = id('sug', 9)
+    await bus.apply({ patches: [
+      { op: 'create', entity: 'jobs', id: job, value: jobValue(9, { op: 'write', crew: 'skye', node: { kind: 'script', id: script } }), base_version: 0 },
+      { op: 'create', entity: 'suggestions', id: sug, value: {
+        target: { kind: 'shot', id: shot }, crew: 'skye', job_id: job, for: `human:${MAYA.id}`, base_hash: await proseHash(text.prose('shot', shot)),
+        proposed: { prose: proseFromLines('action', ['She walks.']), text: 'She walks.', duration_s: 1.6,
+          new_beats: [{ kind: 'moment', at_s: 2.5, prose: proseFromLines('action', ['A gull.']) }] },
+        note: 'I tightened it to fit 1.6 s.', state: 'open' }, base_version: 0 },
+    ], why: { action: 'write a suggestion', agent: 'skye' } }, { undo: false })
+    let n = 0
+    await keepSuggestion(bus, text, sug, { newId: () => id('beat', ++n) })
+    const d = bus.doc()
+    expect(d.shots[shot]).toMatchObject({ action: 'She walks.', duration_s: 1.6, last_writer: 'skye' })
+    expect(d.suggestions[sug]).toMatchObject({ state: 'kept', decided_by: `human:${MAYA.id}` })
+    const [beat] = Object.values(d.beats)
+    expect(beat).toMatchObject({ shot_id: shot, kind: 'moment', at_s: 1.5, text: 'A gull.', last_writer: 'skye' })
+    expect(integrity(d as never)).toEqual([])
+    await undo.undo()
+    expect(bus.doc().shots[shot]).toMatchObject({ action: 'She walks the length of the beach, slowly.', duration_s: 3 })
+    expect(Object.values(bus.doc().beats)).toEqual([])
+    expect(bus.doc().suggestions[sug].state).toBe('open')
+  })
+})
 
 async function project() {
   const s = store()

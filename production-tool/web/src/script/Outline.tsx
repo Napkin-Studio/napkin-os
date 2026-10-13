@@ -23,7 +23,7 @@ export interface OutlineProps {
   onShot(shotId: string): void
   onScene(sceneId: string): void
   onMove(shotId: string, place: ShotPlace): void
-  writer(lastWriter: string | undefined): ReactNode
+  writer(lastWriter: string | undefined, item: { kind: 'scene' | 'shot'; id: string; label: string }): ReactNode
   disabled?: boolean
   footer?: ReactNode
 }
@@ -78,7 +78,7 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
                     <button className="ol-btn" onClick={() => onScene(r.id)} title={r.scene.heading || `Scene ${r.number}`}>
                       <span className="ol-n">{r.number}</span>
                       <span className="ol-heading">{r.scene.heading || 'Scene with no heading'}</span>
-                      {writer(r.scene.last_writer)}
+                      {writer(r.scene.last_writer, { kind: 'scene', id: r.id, label: r.scene.heading || `Scene ${r.number}` })}
                     </button>
                   </li>
                 )
@@ -91,7 +91,7 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
                     <span className="ol-n">{r.number}</span>
                     <span className="ol-words">{(r.shot.action ?? '').split('\n')[0] || words(r.shot.camera.size)}</span>
                     <span className={`ol-len ${r.id === longest && shotRows.length > 2 ? 'warn' : ''}`}>{r.shot.duration_s.toFixed(1)} s</span>
-                    {writer(r.shot.last_writer)}
+                    {writer(r.shot.last_writer, { kind: 'shot', id: r.id, label: `Shot ${r.number}` })}
                   </ShotItem>
                 )
               }

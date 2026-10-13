@@ -12,7 +12,7 @@ import type { Editor } from '@tiptap/core'
 import { useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
 import { formatRoute, scriptRoute } from '../app/route'
 import type { PMNode as PMNodeLike } from '../../../clan-store/src'
-import type { Ask, CameraSize, ProductionDocument, Scene, Shot } from '../contracts/types'
+import type { Ask, CameraSize, ProductionDocument, Scene, Shot, WriteIntent, WriteTarget } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { deleteFrom, removeShot } from '../doc/remove'
 import { askedShot, planOrJoin, runningPlan } from '../jobs/plan'
@@ -23,7 +23,8 @@ import { answerShotAsk } from '../stages/storyboardEdits'
 import { AgentAvatar } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { Float, MenuItem } from '../ui/Float'
-import { HistoryPanel } from '../ui/History'
+import { HistoryPanel, type HistoryFocus } from '../ui/History'
+import { AskOptions } from '../ui/AskCard'
 import { JobSlot } from '../ui/JobSlot'
 import { UndoButtons } from '../ui/UndoButtons'
 import { CaretChain, caretKey } from './caret'
@@ -34,6 +35,9 @@ import { FragmentEditor } from './FragmentEditor'
 import { parseFountain } from './fountain'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
+import { SkyeBar, SuggestionCard } from './SkyeUI'
+import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeState, startWrite } from './skye'
+import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
@@ -109,6 +113,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
   const [active, setActive] = useState<string | null>(null)
   const [focus, setFocus] = useState<Focus>(null)
   const [history, setHistory] = useState(false)
+  const [historyFocus, setHistoryFocus] = useState<HistoryFocus | undefined>(undefined)
   const [sheet, setSheet] = useState<'outline' | 'facts' | null>(null)
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -138,6 +143,19 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
     if (route.kind !== 'script') return
     if ((route.shot ?? undefined) !== current) router.replace(scriptRoute(route.projectId, route.scriptId, current))
   }, [current, route, router])
+
+  // An unknown @name becomes Skye's ask once the caret has left its shot, or after 3 s idle.
+  const left = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const prev = left.current
+    left.current = current
+    if (prev && prev !== current) void settleNameAsks(store, scriptId, prev).catch(() => {})
+  }, [current, store, scriptId])
+  useEffect(() => {
+    if (!current) return
+    const t = setTimeout(() => void settleNameAsks(store, scriptId, current).catch(() => {}), 3000)
+    return () => clearTimeout(t)
+  }, [doc, current, store, scriptId])
 
   // Switching views keeps the caret's shot, and brings it into view.
   useEffect(() => {
@@ -173,6 +191,29 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
   const sb = composed?.storyboard
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const planning = runningPlan(doc)
+  const skye = skyeState(doc, scriptId)
+  const skyeDeps = { relay, doc: docStore, ui: uiStore, runner }
+  const ask = (target: WriteTarget, intent: WriteIntent, opts: Parameters<typeof startWrite>[5] = {}) =>
+    attempt(() => startWrite(skyeDeps, store, scriptId, target, intent, opts))
+  const openWhy = useCallback((f: HistoryFocus) => {
+    setHistoryFocus(f)
+    setHistory(true)
+  }, [])
+  const docId = (() => {
+    try {
+      return store.documentId()
+    } catch {
+      return ''
+    }
+  })()
+  const whyOf = (kind: 'scene' | 'shot', id: string, label: string) => () => openWhy({ label, addresses: [`${docId}#${kind}s[${id}]`] })
+  // Skye's drafts on each item, for the person they are for (others see her figure).
+  const drafts = (kind: WriteTarget['kind'], id: string) => Object.values(doc.suggestions)
+    .filter((x) => x.target.kind === kind && x.target.id === id && (x.state === 'open' || x.state === 'stale'))
+    .map((x) => (
+      <SuggestionCard key={x.id} sug={x} store={store} me={person} currentProse={() => store.text.prose(kind, id)} onWhy={openWhy} say={say}
+        askAgain={() => void ask(x.target, ui.jobs[x.job_id]?.request?.input.write?.intent ?? 'tighten')} />
+    ))
   const behind = !!sb && (staleList(doc).some((m) => m.target.kind === ('storyboard' as string) && m.target.id === sb.id)
     || (composed!.shots.length > 0 && Object.values(doc.scenes).some((s) => s.script_id === scriptId && !!s.text?.trim())))
   const plan = () => attempt(async () => {
@@ -211,6 +252,10 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
     if (e) setFocus({ key, editor: e })
   }
 
+  const focusTarget: WriteTarget | null = (() => {
+    const [k, id] = (focus?.key ?? ':').split(':')
+    return k === 'scene' || k === 'shot' || k === 'beat' ? { kind: k, id } : null
+  })()
   const empty = !composed.shots.length && Object.values(doc.scenes).every((s) => s.script_id !== scriptId || (!s.heading.trim() && !s.text?.trim()))
   const title = composed.script.title || 'Untitled script'
 
@@ -231,11 +276,17 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
       ) : <div className="sp-rows">
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
-            current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions}
+            current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions} drafts={drafts} whyOf={whyOf}
+            onDraft={empty ? (sceneId) => void attempt(() => draftFromLine(skyeDeps, store, scriptId, sceneId)) : undefined}
             hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} />
         ))}
       </div>}
       {!phone && <KeysLegend />}
+      {!phone && (
+        <SkyeBar editor={focus?.editor ?? null} target={focusTarget} seconds={focusTarget ? fitSeconds(doc, scriptId, focusTarget) : 0}
+          handsOff={!!focusTarget && handsOff(doc, focusTarget)} off={skye.off} quota={skye.quota} working={!!skye.working}
+          onStart={(intent, opts) => focusTarget && void ask(focusTarget, intent, opts)} />
+      )}
     </main>
   )
 
@@ -260,7 +311,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
           </label>
         )}
         {!phone && <UndoButtons />}
-        <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} onClick={() => setHistory((h) => !h)} title="Every step, who made it and why">History</button>
+        <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} onClick={() => { setHistoryFocus(undefined); setHistory((h) => !h) }} title="Every step, who made it and why">History</button>
         <button ref={menuRef} className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="More" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
         <Float anchor={menuRef} open={menu} onClose={() => setMenu(false)} align="end" label="More">
           {!phone && <MenuItem icon="⇪" onSelect={() => { setMenu(false); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
@@ -297,7 +348,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
               onShot={(id) => { setCurrent(id); setSheet(null); chain.focus(caretKey('shot', id), 'end') }}
               onScene={(id) => { setSheet(null); chain.focus(caretKey('heading', id), 'end') }}
               onMove={(id, place) => void attempt(() => moveShotTo(store, id, place))}
-              writer={(w) => <WriterMark writer={w} person={person} />}
+              writer={(w, item) => <WriterMark writer={w} person={person} onWhy={whyOf(item.kind, item.id, item.label)} />}
               footer={<KeysLegend compact />} />
           </>
         )}
@@ -305,10 +356,12 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
         {!phone && (
           <>
             <button className="se-handle right" aria-expanded={sheet === 'facts'} onClick={() => setSheet(sheet === 'facts' ? null : 'facts')}>Facts</button>
-            <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError} />
+            <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError}
+              skyeWorking={skye.working} skyeOff={skye.off}
+              onNameAnswer={(askId, option) => void attempt(() => answerLocalAsk(store, askId, option, person, (shotId, name) => startWrite(skyeDeps, store, scriptId, { kind: 'shot', id: shotId }, 'cut_name', { name })))} />
           </>
         )}
-        {history && <HistoryPanel store={store} onClose={() => setHistory(false)} />}
+        {history && <HistoryPanel key={historyFocus?.addresses.join() ?? 'all'} store={store} focus={historyFocus} onClose={() => { setHistory(false); setHistoryFocus(undefined) }} />}
       </div>
     </div>
   )
@@ -341,6 +394,9 @@ interface RowProps {
   say(m: string): void
   onError(m: string | null): void
   mentions: MentionHooks
+  drafts(kind: WriteTarget['kind'], id: string): ReactNode
+  whyOf(kind: 'scene' | 'shot', id: string, label: string): () => void
+  onDraft?: (sceneId: string) => void
 }
 
 function Row(p: RowProps) {
@@ -352,7 +408,7 @@ function Row(p: RowProps) {
 }
 
 /** A scene: its heading (one line, a field) and the text no shot owns yet (live text). */
-function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions }: RowProps & { scene: Scene; number: number }) {
+function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions, drafts, onDraft }: RowProps & { scene: Scene; number: number }) {
   const key = caretKey('scene', scene.id)
   const headingKey = caretKey('heading', scene.id)
   const input = useRef<HTMLInputElement>(null)
@@ -383,6 +439,15 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
       return true
     },
     lineBeat: () => false,
+    enter: (editor) => {
+      // An empty script's one line: Enter asks Skye for a draft from it, in place.
+      if (!onDraft) return false
+      const blocks = editor.state.doc.childCount
+      const atEnd = editor.state.selection.$from.parentOffset === editor.state.selection.$from.parent.content.size
+      if (blocks !== 1 || !atEnd || !editor.state.doc.textContent.trim()) return false
+      void store.checkpointText().then(() => onDraft(scene.id))
+      return true
+    },
     moment: () => {
       say(UNPLANNED_MOMENT)
       return true
@@ -424,6 +489,7 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
           )}
         </>
       )}
+      {drafts('scene', scene.id)}
     </section>
   )
 }
@@ -451,7 +517,7 @@ function StaticProse({ prose, doc }: { prose?: { content?: PMNodeLike[] }; doc: 
 }
 
 /** A shot: one line when collapsed; the current shot expands to its action and Direction, then its beats. */
-function ShotRow({ shot, number, start, end, store, chain, readOnly, current, setCurrent, hooksFor, focusOn, onError, mentions }: RowProps & { shot: Shot; number: number; start: number; end: boolean }) {
+function ShotRow({ shot, number, start, end, store, chain, readOnly, current, setCurrent, hooksFor, focusOn, onError, mentions, drafts }: RowProps & { shot: Shot; number: number; start: number; end: boolean }) {
   const key = caretKey('shot', shot.id)
   const open = current === shot.id
   const docStore = useServices().doc
@@ -466,6 +532,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
           <span className="sp-len">{secs(shot.duration_s)}</span>
         </button>
         {readOnly && (shot.direction || shot.action) && <div className="sp-static"><p data-type="action">{shot.action}</p>{shot.direction && <p data-type="direction">{shot.direction}</p>}</div>}
+        {!readOnly && drafts('shot', shot.id)}
       </div>
     )
   }
@@ -496,6 +563,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
       </div>
       <ShotEditor store={store} shotId={shot.id} name={`Shot ${number}`} chain={chain} chainKey={key} keys={shotHooks}
         onEditor={focusOn(key)} mentions={mentions} />
+      {drafts('shot', shot.id)}
       <div className="sp-beatadd">
         <button className="linkbtn" onClick={addMoment}>+ Moment <kbd>⌥M</kbd></button>
         <button className="linkbtn" onClick={() => void addBeat(store, shot.id, 'line', { at_s: 0 }).then((id) => chain.focus(caretKey('beat', id), 'start'), (e) => onError(e instanceof Error ? e.message : 'That line could not be added.'))}>+ Line</button>
@@ -505,7 +573,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
 }
 
 /** A beat of the current shot: a line (speaker, then the words) or another kind, with its time. */
-function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, mentions }: RowProps & { beatId: string }) {
+function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, mentions, drafts }: RowProps & { beatId: string }) {
   const beat = doc.beats[beatId]
   const docStore = useServices().doc
   const [speaker, setSpeaker] = useState<string | null>(null)
@@ -529,6 +597,7 @@ function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, 
       <FragmentEditor store={store} kind="beat" id={beatId} label={beat.kind === 'line' ? 'Line' : `${beat.kind} beat`} className="sp-beattext"
         chain={chain} chainKey={key} keys={hooksFor(key)} onEditor={focusOn(key)} onNotice={say} readOnly={readOnly} mentions={mentions}
         placeholder={beat.kind === 'line' ? 'What they say…' : 'What happens…'} />
+      {drafts('beat', beatId)}
     </div>
   )
 }
@@ -611,17 +680,23 @@ function EmptyScript({ store, scriptId, chain, setActive }: { store: ModelStore;
 }
 
 /** Who last wrote an item: You, a person's initials, or a crew figure. */
-function WriterMark({ writer, person }: { writer?: string; person: string }) {
+function WriterMark({ writer, person, onWhy }: { writer?: string; person: string; onWhy: () => void }) {
   if (!writer) return null
-  if (writer === person) return <span className="wmark you" title="You wrote this last">You</span>
-  if (writer === 'dex') return <span className="wmark" title={`${sayer('dex')} wrote this last`}><AgentAvatar agent="dex" size={20} decorative /></span>
-  if (!writer.startsWith('human:')) return <span className="wmark crew" title={`${writer[0].toUpperCase()}${writer.slice(1)} wrote this last`}>{writer[0].toUpperCase()}</span>
-  const who = writer.slice('human:'.length).replace(/^p_/, '')
-  return <span className="wmark person" title="Someone else wrote this last">{who.slice(0, 2).toUpperCase()}</span>
+  const why = <span role="link" tabIndex={0} className="wmark-why" onClick={(e) => { e.stopPropagation(); onWhy() }}
+    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onWhy() } }}>why?</span>
+  let mark: ReactNode
+  if (writer === person) mark = <span className="wmark you" title="You wrote this last">You</span>
+  else if (writer === 'dex' || writer === 'skye') mark = <span className="wmark" title={`${sayer(writer)} wrote this last`}><AgentAvatar agent={writer} size={20} decorative /></span>
+  else if (!writer.startsWith('human:')) mark = <span className="wmark crew" title={`${writer[0].toUpperCase()}${writer.slice(1)} wrote this last`}>{writer[0].toUpperCase()}</span>
+  else mark = <span className="wmark person" title="Someone else wrote this last">{writer.slice('human:'.length).replace(/^p_/, '').slice(0, 2).toUpperCase()}</span>
+  return <span className="wmarks">{mark}{why}</span>
 }
 
 /** The right-hand area: only facts about the script. */
-function Facts({ composed, doc, current, planning, person, onError }: { composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void }) {
+function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeOff, onNameAnswer }: {
+  composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void
+  skyeWorking?: string; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
+}) {
   const { doc: docStore } = useServices()
   const sb = composed.storyboard
   const shots = composed.shots
@@ -672,6 +747,21 @@ function Facts({ composed, doc, current, planning, person, onError }: { composed
           <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden' }}><JobSlot jobId={planning} compact /></div>
         </section>
       )}
+      {skyeWorking && (
+        <section aria-label="Skye at work">
+          <div className="eyebrow">{SKYE}</div>
+          <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden' }}><JobSlot jobId={skyeWorking} compact /></div>
+        </section>
+      )}
+      {skyeOff && <section className="faint" role="status">{NOT_HERE}</section>}
+      {nameAsks(doc, composed.script.id).filter((a) => a.state === 'open').map((a) => (
+        <section key={a.id} className="askcard open" role="group" aria-label={`${SKYE} asks: ${a.question.text}`} data-ask={a.id}>
+          <div className="askcard-head"><AgentAvatar agent="skye" size={22} decorative /><span className="askcard-who">{SKYE}</span></div>
+          <div className="askcard-q">{a.question.text}</div>
+          {a.question.why && <div className="askcard-why faint">{a.question.why}</div>}
+          <AskOptions q={a.question} disabled={false} onPick={(o) => onNameAnswer(a.id, o as 'character' | 'extra' | 'cut')} />
+        </section>
+      ))}
       {asks.length > 0 && (
         <section aria-label="Open asks">
           <div className="eyebrow">Open asks</div>
