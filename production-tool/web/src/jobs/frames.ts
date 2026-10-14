@@ -14,7 +14,7 @@ import { updateDoc, type DocumentStore } from '../doc/store'
 import type { UiState } from '../doc/ui'
 import type { FrameHow, JobPurpose } from '../model/purpose'
 import { purposeOf } from '../model/purpose'
-import { currentFrame, jobsList, mainStoryboard, scriptText as wholeScript, shotsOf } from '../model/selectors'
+import { currentFrame, jobsList, mainStoryboard, openStoryboard, scriptOfStoryboard, scriptText as wholeScript, shotsOf } from '../model/selectors'
 import type { UiStore } from '../projects/uiStore'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
@@ -36,11 +36,14 @@ export function selectedFrame(d: ProductionDocument, shotId: string | undefined)
   return shotId ? currentFrame(d, shotId) : undefined
 }
 
-/** anchorFrame and previousFrame for the shot at `index` (0-based, on the main storyboard). Shot 1 has
- *  neither. `strict`: a later shot without a frame before it cannot be drawn yet. */
-export async function continuity(relay: Relay, d: ProductionDocument, index: number, strict = false): Promise<Pick<JobInput, 'anchorFrame' | 'previousFrame'>> {
+/** The storyboard a frame call is on: this one when it is in the document, else the main one. */
+const boardOf = (d: ProductionDocument, storyboardId?: string) => (storyboardId && d.storyboards[storyboardId]) || mainStoryboard(d)
+
+/** anchorFrame and previousFrame for the shot at `index` (0-based, on `storyboardId`, else the main
+ *  storyboard). Shot 1 has neither. `strict`: a later shot without a frame before it cannot be drawn yet. */
+export async function continuity(relay: Relay, d: ProductionDocument, index: number, strict = false, storyboardId?: string): Promise<Pick<JobInput, 'anchorFrame' | 'previousFrame'>> {
   if (index <= 0) return {}
-  const shots = shotsOf(d)
+  const shots = shotsOf(d, boardOf(d, storyboardId)?.id)
   const first = selectedFrame(d, shots[0]?.id)
   const prev = selectedFrame(d, shots[index - 1]?.id)
   if (strict && (!first || !prev)) throw new Error(`Draw shot ${index} first.`)
@@ -55,35 +58,41 @@ export async function continuity(relay: Relay, d: ProductionDocument, index: num
 export const SCRIPT_MAX = 1500
 export const FRAME_SCRIPT_MAX = 600
 
-/** The script the shots came from (the main script's words), cut for a frame's setting. */
-export function scriptText(d: ProductionDocument): string | undefined {
-  const text = wholeScript(d)
+/** The script the shots came from (the words of the script driving the storyboard; the main script's by
+ *  default), cut for a frame's setting. */
+export function scriptText(d: ProductionDocument, storyboardId?: string): string | undefined {
+  const sb = boardOf(d, storyboardId)
+  const script = sb ? scriptOfStoryboard(d, sb.id) : undefined
+  const text = script ? wholeScript(d, script.id) : ''
   return text ? text.slice(0, FRAME_SCRIPT_MAX) : undefined
 }
 
-/** The whole frame request for the shot at `index` of the main storyboard. */
-export async function frameInput(relay: Relay, d: ProductionDocument, index: number, text?: string, strict = true): Promise<JobInput> {
-  const shot = shotsOf(d)[index]
+/** The whole frame request for the shot at `index` of a storyboard (absent: the main one). */
+export async function frameInput(relay: Relay, d: ProductionDocument, index: number, text?: string, strict = true, storyboardId?: string): Promise<JobInput> {
+  const sb = boardOf(d, storyboardId)
+  const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
   const refs = await refsFor(relay, d, shot, text)
-  const script = scriptText(d)
-  const ratio = mainStoryboard(d)?.ratio
+  const script = scriptText(d, sb?.id)
+  const ratio = sb?.ratio
   return {
     shot: jobShot(d, shot),
     ...(refs.length ? { refs } : {}),
     ...(ratio ? { ratio } : {}),
     ...(script ? { script } : {}),
     ...(text?.trim() ? { text: text.trim() } : {}),
-    ...(await continuity(relay, d, index, strict)),
+    ...(await continuity(relay, d, index, strict, sb?.id)),
   }
 }
 
-/** Draw the frame for the shot at `index`: a first version, or a new one of `parent`. */
-export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice } = {}): Promise<string> {
+/** Draw the frame for the shot at `index` (of `opts.storyboardId`, else the main storyboard): a first
+ *  version, or a new one of `parent`. */
+export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, opts: { text?: string; parent?: Frame; followRun?: string; modelChoice?: ModelChoice; storyboardId?: string } = {}): Promise<string> {
   const d = deps.doc.get()
-  const shot = shotsOf(d)[index]
+  const sb = boardOf(d, opts.storyboardId)
+  const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
-  const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent)
+  const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent, sb?.id)
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}) }
   const parents = opts.parent?.job_id ? [opts.parent.job_id] : []
   return deps.runner.submit('frame', input, parents, purpose, undefined, opts.modelChoice, opts.followRun ? { local: { followRun: opts.followRun } } : {})
@@ -102,9 +111,9 @@ export function frameJobRunning(d: ProductionDocument): boolean {
   return jobsList(d).some((j) => isActive(j.state) && purposeOf(j)?.for === 'frame')
 }
 
-/** The first shot (0-based, main storyboard) with no frame yet, or -1. */
-export function firstUndrawn(d: ProductionDocument): number {
-  return shotsOf(d).findIndex((s) => !currentFrame(d, s))
+/** The first shot (0-based, on `storyboardId`, else the main storyboard) with no frame yet, or -1. */
+export function firstUndrawn(d: ProductionDocument, storyboardId?: string): number {
+  return shotsOf(d, boardOf(d, storyboardId)?.id).findIndex((s) => !currentFrame(d, s))
 }
 
 /** Start "Draw the rest" (from the first shot with no frame). */
@@ -124,16 +133,18 @@ export async function continueDrawing(deps: FrameDeps, how: FrameHow = 'chain'):
   const d = deps.doc.get()
   if (frameJobRunning(d)) return
   const stop = () => deps.ui.update((u) => { u.drawingRest = false })
-  const i = firstUndrawn(d)
+  // The storyboard open in the Storyboard panel (the node opened on the canvas), else the main one.
+  const sbId = openStoryboard(d, ui.openNode)?.id
+  const i = firstUndrawn(d, sbId)
   if (i < 0) return stop()
-  const shotId = shotsOf(d)[i].id
+  const shotId = shotsOf(d, sbId)[i].id
   const lastTry = [...jobsList(d)].reverse().find((j) => {
     const p = purposeOf(j)
     return p?.for === 'frame' && p.shotId === shotId
   })
   if (lastTry && (lastTry.state === 'failed' || lastTry.state === 'cancelled') && how === 'chain') return stop()
   try {
-    await drawFrame(deps, i, i === 0 && how === 'rest' ? 'first' : how)
+    await drawFrame(deps, i, i === 0 && how === 'rest' ? 'first' : how, { storyboardId: sbId })
   } catch (e) {
     stop()
     throw e

@@ -16,7 +16,8 @@ export type FrameHow = 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'
 
 export type JobPurpose =
   | { for: 'canvas' }
-  | { for: 'shot_list' }
+  /** storyboardId: the storyboard it plans (absent: the main one; features/canvas-nodes.clan, more than one storyboard). */
+  | { for: 'shot_list'; storyboardId?: Id }
   /** how: first (frame 1), next (Next frame →), rest (Draw the rest), chain (Draw the rest moving on),
    *  again (Regenerate or a region edit), update (Update what follows). fixReviewIds: a "Fix it in the
    *  shot" edit; when it lands, a clip is made from it for these notes (jobs/fix.ts). */
@@ -48,7 +49,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
     case 'frame_edit':
       return { kind: 'shot', id: p.shotId }
     case 'shot_list':
-      return { kind: 'storyboard', id: mainStoryboard(d)!.id }
+      return { kind: 'storyboard', id: (p.storyboardId && d.storyboards[p.storyboardId] ? p.storyboardId : mainStoryboard(d)!.id) }
     case 'stitch':
       return { kind: 'video', id: mainVideo(d)!.id }
     case 'sketch':
@@ -78,8 +79,9 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
   const notes = (j.inputs ?? []).filter((r) => r.kind === 'note' && r.ref).map((r) => r.ref!)
   const parent = (k: JobInputRow['kind']) => (j.inputs ?? []).find((r) => r.kind === k && r.used_as === 'new version of')?.ref
   switch (kind) {
-    case 'canvas':
     case 'shot_list':
+      return j.node?.kind === 'storyboard' && j.node.id ? { for: 'shot_list', storyboardId: j.node.id } : { for: 'shot_list' }
+    case 'canvas':
     case 'stitch':
       return { for: kind }
     case 'write':
