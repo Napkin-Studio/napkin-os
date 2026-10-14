@@ -342,6 +342,15 @@ function keysExtension(opts: EditorOptions) {
   })
 }
 
+/** The top-level block at `pos`, for a placeholder. Tiptap's Placeholder passes positions in the
+ *  document it is decorating, which can be ahead of editor.state while a transaction applies (a
+ *  synced fragment loading several blocks): a position past the old document threw and blanked the
+ *  page. The first block is position 0 in any document; past the end, the index is unknown (-1). */
+function blockIndex(editor: Editor, pos: number): number {
+  if (pos === 0) return 0
+  return pos <= editor.state.doc.content.size ? editor.state.doc.resolve(pos).index(0) : -1
+}
+
 /** The extension list for one fragment editor. */
 export function editorExtensions(opts: EditorOptions): AnyExtension[] {
   const keys = keysExtension(opts)
@@ -366,7 +375,7 @@ export function editorExtensions(opts: EditorOptions): AnyExtension[] {
   if (placeholder) {
     out.push(Placeholder.configure({
       showOnlyCurrent: false,
-      placeholder: ({ node, pos, editor }) => (typeof placeholder === 'string' ? placeholder : placeholder(node.type.name, editor.state.doc.resolve(pos).index(0))),
+      placeholder: ({ node, pos, editor }) => (typeof placeholder === 'string' ? placeholder : placeholder(node.type.name, blockIndex(editor, pos))),
     }))
   }
   return out

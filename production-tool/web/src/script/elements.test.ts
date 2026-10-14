@@ -26,6 +26,19 @@ function editor(kind: 'scene' | 'shot', keys: KeyHooks = {}) {
 const press = (e: Editor, key: string, extra: KeyboardEventInit = {}) => e.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }))
 const types = (e: Editor) => (e.getJSON().content ?? []).map((b) => b.type)
 
+describe('placeholders', () => {
+  it('a transaction that adds empty blocks past the old end does not throw, and only the first block gets the first line', () => {
+    const element = document.createElement('div')
+    document.body.appendChild(element)
+    const seen: number[] = []
+    const e = new Editor({ element, extensions: editorExtensions({ kind: 'shot', placeholder: (_t, i) => { seen.push(i); return i === 0 ? 'first' : 'later' } }) })
+    editors.push(e)
+    const action = e.schema.nodes.action ?? e.schema.nodes.paragraph
+    expect(() => e.view.dispatch(e.state.tr.insert(e.state.doc.content.size, [action.create(), action.create(), action.create()]))).not.toThrow()
+    expect(e.view.dom.querySelector('[data-placeholder="first"]')).not.toBeNull()
+  })
+})
+
 describe('the element cycle', () => {
   it('Tab cycles Action → Character → Dialogue → Action; Enter after a Character makes Dialogue, after Dialogue Action', () => {
     const e = editor('scene')
