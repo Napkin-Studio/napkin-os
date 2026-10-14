@@ -9,6 +9,8 @@
 
 import * as Y from 'yjs'
 import { drawDpr, liveOutline, Renderer, type Bitmap, type Intent, type RawPointer } from '../../../../../canvas-engine/src'
+import { aspectLabel } from '../../core/sketch'
+import { RATIOS, type Ratio } from '../../../contracts/types'
 import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } from '../../core/canvasAdapter'
 import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
@@ -25,7 +27,7 @@ export function probeCapabilities(): InputCapabilities {
 }
 
 /** Single-key tools on the canvas until the toolbar offers them (ui-behaviour 7). */
-const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter' }
+const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter', s: 'sketch' }
 
 /**
  * The canvas's surface from the chrome's tokens on the host (styles.css: --line, --tool, --ink2,
@@ -134,6 +136,26 @@ export const ownEngine: CanvasEngine = {
         lctx.fill()
         lctx.stroke()
       }
+      // The sketch area ghost: dashed, locked to its ratio, its size label above and the hint under it (ui-behaviour 3.7).
+      const g = adapter.sketch.ghost
+      if (g && g.w > 0) {
+        lctx.setTransform(dpr * v.zoom, 0, 0, dpr * v.zoom, dpr * v.zoom * v.scrollX, dpr * v.zoom * v.scrollY)
+        lctx.strokeStyle = '#2F64F5'
+        lctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+        lctx.lineWidth = 1.5 / v.zoom
+        lctx.setLineDash([6 / v.zoom, 4 / v.zoom])
+        lctx.fillRect(g.x, g.y, g.w, g.h)
+        lctx.strokeRect(g.x, g.y, g.w, g.h)
+        lctx.setLineDash([])
+        const [w, h] = g.ratio.split(':').map(Number)
+        const label = (RATIOS as readonly string[]).includes(g.ratio) ? aspectLabel({ w, h }) : g.ratio
+        lctx.font = `${11 / v.zoom}px 'Geist Mono', monospace`
+        lctx.fillStyle = '#1E4ED8'
+        lctx.fillText(label, g.x, g.y - 6 / v.zoom)
+        lctx.font = `${12 / v.zoom}px Geist, sans-serif`
+        lctx.fillStyle = '#6B7180'
+        lctx.fillText(`Drag to draw · keeps ${g.ratio as Ratio}`, g.x, g.y + g.h + 16 / v.zoom)
+      }
       if (hover) {
         lctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         lctx.strokeStyle = '#4a7fd4'
@@ -215,14 +237,14 @@ export const ownEngine: CanvasEngine = {
           hover = null
           break
         case 'press':
-          adapter.selector.press(toScene(i.x, i.y), { shift, by: i.by })
+          adapter.press(toScene(i.x, i.y), { shift, by: i.by })
           break
         case 'drag':
-          adapter.selector.drag(toScene(i.x, i.y))
+          adapter.drag(toScene(i.x, i.y))
           break
         case 'release':
           try {
-            adapter.selector.release(toScene(i.x, i.y))
+            adapter.release(toScene(i.x, i.y))
           } catch (e) {
             console.warn('the move was not kept', e)
           }
@@ -299,10 +321,18 @@ export const ownEngine: CanvasEngine = {
       } else if (mod && key === 'y') {
         e.preventDefault()
         adapter.undoScene('redo')
+      } else if (mod && key === 'g') {
+        // Group / ungroup (ui-behaviour 7), each one step of this person's.
+        e.preventDefault()
+        if (e.shiftKey) adapter.ungroup()
+        else adapter.group()
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && adapter.selector.selected.size) {
         e.preventDefault()
         adapter.selector.deleteSelected()
-      } else if (e.key === 'Escape') adapter.selector.cancel()
+      } else if (e.key === 'Escape') {
+        adapter.selector.cancel()
+        adapter.sketch.cancel()
+      }
       else if (!mod && !e.altKey && TOOL_KEYS[key]) adapter.setActiveTool({ type: 'native', id: TOOL_KEYS[key] })
       else return
       draw()

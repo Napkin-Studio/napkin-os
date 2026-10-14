@@ -12,7 +12,7 @@
 
 import * as Y from 'yjs'
 import {
-  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type BoardLook, type InkTool, type LinkLook, type Intent, type Renderer,
+  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardLook, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -89,6 +89,8 @@ export class OwnAdapter implements CanvasAdapter {
   /** This person's scene steps (the scene part of the UndoCoordinator; engine-select). */
   readonly undo: SceneUndo
   readonly selector: SelectTool
+  /** The sketch area tool (S): ratio-locked areas (ui-behaviour 3.7). */
+  readonly sketch: SketchTool
   /** The ink tool the drawing tools use (freedraw is the pen). */
   inkTool: InkTool = 'pen'
   inkStyle = { color: '#1e1e1e', width: 3 }
@@ -126,6 +128,7 @@ export class OwnAdapter implements CanvasAdapter {
     this.undo = new SceneUndo(this.scene)
     this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y))
     this.selector.onChange(() => this.changed())
+    this.sketch = new SketchTool(this.scene)
     this.scene.onChange((ids) => {
       this.cache = null
       for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
@@ -425,6 +428,7 @@ export class OwnAdapter implements CanvasAdapter {
   setActiveTool(tool: ActiveToolSpec) {
     this.tool = tool
     const id = tool.type === 'native' ? tool.id : ''
+    if (id !== 'sketch') this.sketch.cancel()
     if (id === 'freedraw' || id === 'pen') {
       this.router.tool = 'ink'
       this.inkTool = 'pen'
@@ -436,6 +440,70 @@ export class OwnAdapter implements CanvasAdapter {
   }
 
   private image = (sha: string) => this.decoded.get(sha)
+
+  // ── select, group and the sketch area tool (features/canvas-edit-tools.clan) ──
+
+  /** The router's press, drag and release: the sketch area tool's while it is the tool, else the select tool's. */
+  press(p: Pt, opts: { shift?: boolean; by?: 'mouse' | 'pen' | 'touch' } = {}) {
+    if (this.sketching()) this.sketch.press(p)
+    else this.selector.press(p, { ...opts, zoom: this.vp.zoom })
+    this.changed()
+  }
+
+  drag(p: Pt) {
+    if (this.sketching()) this.sketch.drag(p)
+    else this.selector.drag(p)
+    this.changed()
+  }
+
+  release(p: Pt) {
+    if (!this.sketching()) {
+      this.selector.release(p)
+      return
+    }
+    const area = this.sketch.release(p)
+    // As a drawn shape: back to Select, with the new area selected.
+    if (area) {
+      this.setActiveTool({ type: 'native', id: 'selection' })
+      this.selector.set([area.id])
+    }
+    this.changed()
+  }
+
+  private sketching() {
+    return this.tool.type === 'native' && this.tool.id === 'sketch'
+  }
+
+  /** The ratio of the next sketch area (the picker's; ui-behaviour 3.7). An existing area's never changes. */
+  setSketchRatio(ratio: string) {
+    this.sketch.ratio = ratio
+  }
+
+  /** Group the selection (Ctrl/Cmd+G), one step of the person's. Returns the group id, or null. */
+  group(): string | null {
+    return this.selector.group()
+  }
+
+  /** Ungroup the outermost group of the selection (Ctrl/Cmd+Shift+G), one step. */
+  ungroup(): boolean {
+    return this.selector.ungroup()
+  }
+
+  /** What the selection is, for the selection bar (ui-behaviour 3.9). */
+  selectionKind() {
+    return this.selector.selectionKind()
+  }
+
+  /** The selection's frame: dashed round a group, with handles when it can be scaled, the ink group's label. */
+  selectionFrame(): SelectionFrame | null {
+    const f = this.selector.frame()
+    if (!f) return null
+    const k = this.selector.selectionKind()
+    const dashed = k.kind === 'group'
+    const label = k.kind === 'group' && k.ink ? `Ink · ${k.count} ${k.count === 1 ? 'stroke' : 'strokes'} · one group` : undefined
+    if (!dashed && !f.scalable) return null
+    return { box: f.box, dashed, handles: f.scalable, ...(label ? { label } : {}) }
+  }
 
   /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
@@ -549,6 +617,8 @@ export class OwnAdapter implements CanvasAdapter {
     if (this.renderer) {
       this.renderer.selected = this.selector.selected
       this.renderer.moving = this.selector.preview
+      this.renderer.scaling = this.selector.scaling
+      this.renderer.frame = this.selectionFrame()
       if (this.surfaceFor && this.surface?.theme !== this.theme) this.surface = { theme: this.theme, s: this.surfaceFor(this.theme) }
       this.renderer.boardLook = this.surface?.s.board ?? null
       this.renderer.linkLook = this.surface?.s.link ?? null
