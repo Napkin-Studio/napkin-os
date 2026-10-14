@@ -182,9 +182,12 @@ export class CanvasController {
     const gone = this.deletionOf(ids)
     if (!gone.length) return null
     const els = this.els()
-    const shown = alive(els).filter((e) => gone.includes(e.id) && cd(e)?.kind !== 'provenance' && !e.frameId)
+    // What the person picked: not the strokes, arrows and links that went along with it.
+    const shown = alive(els).filter((e) => gone.includes(e.id) && (ids.includes(e.id) || cd(e)?.kind !== 'link') && cd(e)?.kind !== 'provenance' && !e.frameId)
+    const node = shown.length === 1 ? cd(shown[0])?.kind : undefined
+    const NODE_WORD: Record<string, string> = { script: 'Script deleted', storyboard: 'Storyboard deleted', video: 'Video deleted', gen: 'Image deleted' }
     const b = bounds(shown.length ? shown : alive(els).filter((e) => gone.includes(e.id)))
-    const label = shown.length === 1 ? (cd(shown[0])?.kind === 'gen' ? 'Image deleted' : 'Deleted') : `${shown.length} deleted`
+    const label = shown.length === 1 ? NODE_WORD[node ?? ''] ?? 'Deleted' : `${shown.length} deleted`
     this.setEls(els.map((e) => (gone.includes(e.id) ? this.canvas.patch(e, { isDeleted: true }) : e)))
     this.canvas.select([])
     this.syncNow()

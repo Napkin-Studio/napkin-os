@@ -15,7 +15,10 @@ import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chro
 import { boardFrames, boardRows, type BoardRow } from '../canvas/chrome/boards'
 import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
 import { PRODUCTION_CARD_CHROME } from '../canvas/chrome/cardChrome'
-import { cardOf } from '../canvas/nodes/nodes'
+import { cardOf, linkIdOf } from '../canvas/nodes/nodes'
+import { SelectionBar } from '../canvas/selbar/SelectionBar'
+import { busyQuestion, type CardKind, type SelInfo } from '../canvas/selbar/selbar'
+import { runningOn } from '../canvas/sync'
 import { CardChromeContext } from '../canvas/nodes/cardChrome'
 import { boardKey, boardsByRank, isBoard, jumpTo } from '../canvas/boards/boards'
 import type { CanvasChrome } from '../canvas/chrome/controls'
@@ -62,6 +65,14 @@ interface ViewState {
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'That did not work. Try again.')
 
+/** What our own engine adds for its selection (features/canvas-edit-tools.clan): grouping and the next sketch area's ratio. */
+type OwnEdit = Partial<{
+  selectionKind(): { kind: 'none' } | { kind: 'one' } | { kind: 'group'; ink: boolean } | { kind: 'several'; count: number }
+  group(): string | null
+  ungroup(): boolean
+  setSketchRatio(ratio: string): void
+}>
+
 export function Character({ initial, active }: { initial: CanvasSnapshot | null; active: boolean }) {
   const services = useServices()
   const { runner, doc: docStore, ui: uiStore, project } = services
@@ -94,7 +105,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const lastSig = useRef('')
   const wrap = useRef<HTMLDivElement>(null)
   const [undo, offerUndo, runUndo] = useUndo()
-  const [confirming, setConfirming] = useState<{ ids: string[]; text: string; at: Pt } | null>(null)
+  const [confirming, setConfirming] = useState<{ ids: string[]; text: string; at: Pt; yes?: string } | null>(null)
   /** Waiting for a click that says where the next result goes. */
   const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
@@ -171,6 +182,20 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
   // Nodes and boards (our own engine) have their own handles: the floating toolbar is for marks and pictures.
   const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id) && !cardOf(e) && !isBoard(e)), [els, vs])
+  // Our own engine's bar for nodes, links and groups (ui-behaviour 3.9); pictures, marks and sketch areas keep the Generate bar.
+  const ownEdit = canvas?.engine === 'own' ? (canvas as unknown as OwnEdit) : null
+  const ownSel = useMemo((): { info: SelInfo; els: El[] } | null => {
+    if (!ownEdit || !vs) return null
+    const all = els.filter((e) => vs.selected.includes(e.id) && !isBoard(e))
+    if (!all.length) return null
+    const kind = ownEdit.selectionKind?.() ?? { kind: 'none' as const }
+    const cards = all.map(cardOf).filter((c): c is NonNullable<ReturnType<typeof cardOf>> => !!c).map((c) => c.kind as CardKind)
+    const links = all.filter((e) => linkIdOf(e)).length
+    const group = kind.kind === 'group' ? { ink: kind.ink } : null
+    if (!cards.length && !links && !group) return null
+    const units = kind.kind === 'several' ? kind.count : kind.kind === 'none' ? 0 : 1
+    return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked) }, els: all }
+  }, [ownEdit, vs, els])
   const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
@@ -193,6 +218,15 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     if (made) {
       const b = bounds(targets)
       setConfirming({ ids, text: sketchDeleteText(made), at: { x: b.minX + b.w / 2, y: b.minY } })
+      return
+    }
+    // A node with a job still running on it (or on its shots) asks first (ui-behaviour 3.3 Delete).
+    const d = docStore.get()
+    const busy = targets.map((e) => cardOf(e)).flatMap((c) => (c ? runningOn(d, c.kind, c.id) : []))
+      .map((id) => d.jobs[id]).filter((j) => j && isActive(runner.liveInfo(j.id)?.state ?? j.state))
+    if (busy.length) {
+      const b = bounds(targets)
+      setConfirming({ ids, text: busyQuestion(d, busy[0]), at: { x: b.minX + b.w / 2, y: b.minY }, yes: 'Stop and delete' })
       return
     }
     const running = targets.map((e) => cd(e)).filter((c): c is Extract<CustomData, { kind: 'gen' }> => c?.kind === 'gen')
@@ -220,7 +254,10 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
       if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
       const ids = canvas.view().selectedIds
       const sel = alive(canvas.elements()).filter((x) => ids.includes(x.id))
-      if (!sel.some((x) => imageOf(x) || cd(x)?.kind === 'sketch')) return
+      // On our own engine every delete but a board's comes here (the confirm, the Undo chip, the
+      // document's cascade; canvas-edit-tools); boards keep their own.
+      const ownPath = canvas.engine === 'own' && sel.length > 0 && !sel.some(isBoard)
+      if (!ownPath && !sel.some((x) => imageOf(x) || cd(x)?.kind === 'sketch')) return
       e.preventDefault()
       e.stopPropagation()
       requestDelete(sel)
@@ -324,6 +361,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     open(kind)
   }, [chrome, open])
   const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
+  // The next sketch area's shape on our own engine: the storyboard's ratio (ui-behaviour 3.7).
+  useEffect(() => { ownEdit?.setSketchRatio?.(ratio) }, [ownEdit, ratio])
   // ⌥0: everything, the boards drawn over the canvas included.
   const fitEverything = () => {
     if (own && canvas) {
@@ -376,15 +415,32 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
               </span>
             )
           })}
-          {ctrl && selected.length > 0 && !confirming && !placing && (
+          {ctrl && canvas && ownSel && !confirming && !placing && (() => {
+            const b = bounds(ownSel.els)
+            const top = toView({ x: b.minX + b.w / 2, y: b.minY })
+            return (
+              <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y }} actions={{
+                open: () => { const c = ownSel.els.map(cardOf).find(Boolean); if (c) open(c.kind) },
+                group: () => { ownEdit?.group?.() },
+                ungroup: () => { ownEdit?.ungroup?.() },
+                lock: (locked) => {
+                  const ids = new Set(ownSel.els.map((e) => e.id))
+                  canvas.transact((all) => all.map((e) => (ids.has(e.id) ? canvas.patch(e, { locked } as Partial<El>) : e)), { undoable: true })
+                },
+                remove: () => requestDelete(ownSel.els),
+              }} />
+            )
+          })()}
+          {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits}
+              onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
           {confirming && (() => {
             const p = toView(confirming.at)
             return (
               <Floating className="toolbar confirming" anchor={{ x: p.x, top: p.y, bottom: p.y }}>
-                <InlineConfirm text={confirming.text} yes={confirming.text.startsWith('Delete this sketch area') ? 'Delete' : 'Stop and remove'} onYes={() => doDelete(confirming.ids)} onNo={() => setConfirming(null)} />
+                <InlineConfirm text={confirming.text} yes={confirming.yes ?? (confirming.text.startsWith('Delete this sketch area') ? 'Delete' : 'Stop and remove')} onYes={() => doDelete(confirming.ids)} onNo={() => setConfirming(null)} />
               </Floating>
             )
           })()}
@@ -508,11 +564,13 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
 
 type Popover = null | 'generate' | 'name'
 
-function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: {
+function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup }: {
   ctrl: CanvasController
   selected: El[]
   toView: (p: Pt) => Pt
   onDelete: (sel: El[]) => void
+  /** Group the selection (our own engine; ui-behaviour 3.9's "Several mixed things"). */
+  onGroup?: () => void
   onPlace: (ids: string[], text: string, more: boolean, modelChoice?: ModelChoice) => void
   limits: { max: number; characters: number }
 }) {
@@ -612,6 +670,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
     const items = pictures.map((a) => mediaItem(doc, project, a, undefined, views)).filter((m): m is MediaItem => !!m)
     if (items.length) groups.push(<DownloadButton key="dl" items={items} className="btn sm ghost" iconOnly={items.length === 1} />)
   }
+  if (onGroup) groups.push(<button key="group" className="btn sm ghost" title="Group (Ctrl+G)" onClick={onGroup}>Group</button>)
   if (ctrl.deletable(meaningful).length) {
     groups.push(<button key="del" className="btn sm icon ghost iconbtn-del" aria-label="Delete" title="Delete (Undo for a few seconds, or Ctrl+Z)" onClick={() => onDelete(meaningful)}>🗑</button>)
   }

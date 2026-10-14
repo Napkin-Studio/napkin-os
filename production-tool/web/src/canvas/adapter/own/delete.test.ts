@@ -31,6 +31,7 @@ describe('delete on the own engine', () => {
     const { a, ctrl, sc, sb, link } = setup()
     const r = ctrl.deleteElements([sb.id])!
     expect(r.ids.sort()).toEqual([sb.id, link.id].sort())
+    expect(r.label).toBe('Storyboard deleted')
     expect(a.elements().map((e) => e.id)).toEqual([sc.id])
     expect(a.undo.depth().undo).toBe(1)
     a.undoScene('undo')
