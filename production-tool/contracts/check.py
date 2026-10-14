@@ -230,6 +230,29 @@ for provider, sheet in sheets.items():
         if o["frame_edit"]["model"] != o["frame"]["model"]:
             fail(f"✗ capabilities/{provider}.json: frame_edit runs on frame's model ({o['frame']['model']})")
 
+# Fix this moment is billed by the second (features/clip-moment-edit.clan): its estimate is its minimum,
+# derived from usdPerS and minS, never typed apart from them.
+for provider, sheet in sheets.items():
+    spec = sheet["ops"].get("clip_patch")
+    if spec:
+        if "usdPerS" not in spec or "minS" not in spec:
+            fail(f"✗ capabilities/{provider}.json: clip_patch needs usdPerS and minS (it is billed by the second)")
+        elif round(spec["minS"] * spec["usdPerS"], 4) != spec["estimateUsd"]:
+            fail(f"✗ capabilities/{provider}.json: clip_patch estimateUsd is {spec['estimateUsd']}; "
+                 f"it is minS x usdPerS ({round(spec['minS'] * spec['usdPerS'], 4)})")
+        for alt in spec.get("alternates", []):
+            if "usdPerS" not in alt and alt.get("mode") != "first_last":
+                fail(f"✗ capabilities/{provider}.json: clip_patch alternate {alt['model']} needs usdPerS or mode first_last")
+
+# The clip_patch reservations in examples/patches.json are the runway sheet's arithmetic.
+_cp = sheets["runway"]["ops"]["clip_patch"]
+for case in json.loads((HERE / "examples" / "patches.json").read_text())["estimates"]["cases"]:
+    import math  # noqa: E402
+    want = round(max(_cp["minS"], math.ceil(case["seconds"] - 1e-9)) * _cp["usdPerS"], 4)
+    if want != case["usd"]:
+        fail(f"✗ examples/patches.json: a {case['seconds']} s cut reserves {want}, not {case['usd']}")
+print("✓ examples/patches.json estimates")
+
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():
     for op, spec in sheet["ops"].items():

@@ -145,7 +145,7 @@
     },
     "JobRequest": {
       "type": "object",
-      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. The job runs on the first provider of its op's routing (or the pick); Runway, the floor, makes it again once on its default model for the op when that provider fails for a provider or account reason before or after submit (Job.fallbackFrom and fallbackReason say so; features/runway-fallback.clan). Moderated or invalid input never falls back. frame_edit (Change this frame) needs the current frame (input.image), the shot with its camera and the words, may carry a region or mask, and takes no anchorFrame, previousFrame or modelChoice: Dex reads the words against the frame and the relay runs the op it resolves (features/frame-change-edit.clan). A Redo is a new frame_edit job with parentIds [the earlier job].",
+      "description": "POST /jobs. The client makes jobId; sending the same jobId again returns the existing job and never pays twice. The job runs on the first provider of its op's routing (or the pick); Runway, the floor, makes it again once on its default model for the op when that provider fails for a provider or account reason before or after submit (Job.fallbackFrom and fallbackReason say so; features/runway-fallback.clan). Moderated or invalid input never falls back. frame_edit (Change this frame) needs the current frame (input.image), the shot with its camera and the words, may carry a region or mask, and takes no anchorFrame, previousFrame or modelChoice: Dex reads the words against the frame and the relay runs the op it resolves (features/frame-change-edit.clan). A Redo is a new frame_edit job with parentIds [the earlier job]. clip_patch (Fix this moment) needs the parent take (input.video), the note's window and atS in take time and the note's words; it regenerates only the window and splices it back (features/clip-moment-edit.clan).",
       "properties": {
         "contractVersion": {
           "$ref": "common.schema.json#/$defs/contractVersion"
@@ -240,6 +240,30 @@
               "required": [
                 "modelChoice"
               ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "clip_patch"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "required": [
+                  "video",
+                  "window",
+                  "atS",
+                  "text"
+                ]
+              }
             }
           }
         }
@@ -364,12 +388,12 @@
         },
         "video": {
           "$ref": "common.schema.json#/$defs/assetRef",
-          "description": "clip_edit: the clip being changed. stitch: not used (see clips)."
+          "description": "clip_edit: the clip being changed. clip_patch: the parent take being patched (features/clip-moment-edit.clan). stitch: not used (see clips)."
         },
         "atS": {
           "type": "number",
           "minimum": 0,
-          "description": "clip_edit: the paused time of a region comment."
+          "description": "clip_edit: the paused time of a region comment. clip_patch: the note's moment, in seconds of TAKE time (clan-store noteToTakeWindow), inside window."
         },
         "feel": {
           "type": "object",
@@ -466,6 +490,29 @@
             ],
             "additionalProperties": false
           }
+        },
+        "window": {
+          "type": "object",
+          "description": "clip_patch: the note's window in whole seconds of TAKE time (clan-store noteToTakeWindow maps a shot-time note onto the take): only these seconds are regenerated, the rest of the take is kept. At least 2 s wide.",
+          "properties": {
+            "from_s": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "to_s": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "from_s",
+            "to_s"
+          ],
+          "additionalProperties": false
+        },
+        "still": {
+          "$ref": "common.schema.json#/$defs/assetRef",
+          "description": "clip_patch: the edited still at atS (the review's still, from Edit still). Absent: no keyframe is sent at the default context 0, so an unedited frame never anchors the edit."
         }
       },
       "additionalProperties": false
@@ -596,6 +643,130 @@
         },
         "answer": {
           "$ref": "common.schema.json#/$defs/answer"
+        },
+        "patch": {
+          "type": "object",
+          "description": "clip_patch only (features/clip-moment-edit.clan): what was patched and how. window: the note's window in take time. cut: the seconds cut from the parent and sent to the model (the window, plus contextS each side). range: the keyframe's whole-second range inside the cut, when one was sent. keyframe: none (the whole cut is the edit), still (the frame at atS) or edited (the review's edited still). model: what made the window. exact: every parent GOP away from the window was copied untouched (false: the whole take was re-encoded once). seams: Jude's check of both seams (relative SSIM; ok when at or above clipPatch.seamMin). rawOutput: the model's own output, kept when the splice failed.",
+          "properties": {
+            "window": {
+              "type": "object",
+              "properties": {
+                "from_s": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_s": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "from_s",
+                "to_s"
+              ],
+              "additionalProperties": false
+            },
+            "cut": {
+              "type": "object",
+              "properties": {
+                "from_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "to_s": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "from_s",
+                "to_s"
+              ],
+              "additionalProperties": false
+            },
+            "range": {
+              "type": "object",
+              "properties": {
+                "start_s": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end_s": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "start_s",
+                "end_s"
+              ],
+              "additionalProperties": false
+            },
+            "keyframe": {
+              "enum": [
+                "none",
+                "still",
+                "edited"
+              ]
+            },
+            "model": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "exact": {
+              "type": "boolean"
+            },
+            "seams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at_s": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "score": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "at_s",
+                  "score",
+                  "ok"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 2
+            },
+            "rawOutput": {
+              "$ref": "common.schema.json#/$defs/output"
+            }
+          },
+          "required": [
+            "window",
+            "cut",
+            "keyframe",
+            "model"
+          ],
+          "additionalProperties": false
+        },
+        "handoff": {
+          "type": "object",
+          "description": "clip_patch only: the person chose to remake the whole clip when asked, so this job was cancelled (free, the quota back) and the client sends the op named here through the send tray.",
+          "properties": {
+            "op": {
+              "const": "clip"
+            }
+          },
+          "required": [
+            "op"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

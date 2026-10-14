@@ -26,3 +26,8 @@ export { landPlan, keepSuggestion, keepMine, markStale, StaleSuggestion, type Pl
 export { integrity, canLink, linkRuleFor, makesLoop, LINK_RULE, ENDPOINT_MAP } from './integrity'
 export { rankBetween, ranksBetween, isValidRank, validateRank, byRank, RankError } from './rank'
 export { noteWindow, windowProblem, MIN_WINDOW_S, type NoteWindow } from './time'
+// Fix this moment (features/clip-moment-edit.clan)
+export {
+  noteToTakeWindow, patchPlan, spliceSegments, patchedRanges, applyPatchTake, KEYFRAME_EPS_S, MAX_SEGMENTS, MAX_ALTERNATES,
+  type TakeWindow, type PatchPlan, type KeyframeKind, type Segment, type PatchTake, type PatchDoc, type PatchJob, type NoteLike, type CutItemLike,
+} from './patch'

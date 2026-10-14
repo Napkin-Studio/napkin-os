@@ -516,7 +516,7 @@
     },
     "window": {
       "type": "object",
-      "description": "A note's time window in whole seconds of shot time (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped to the shot, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json).",
+      "description": "A note's time window in whole seconds (ui-behaviour 3.13): default [floor(t)-1, ceil(t)+1], clamped, at least 2 s, never across a cut. noteWindow() in clan-store/src/time.ts and relay/time_rules.py (examples/windows.json). The time basis follows the note's target: take time for a note on a take (target.kind take, written from the take player), shot time otherwise; clan-store noteToTakeWindow maps either onto the take (features/clip-moment-edit.clan).",
       "properties": {
         "from_s": {
           "type": "integer",

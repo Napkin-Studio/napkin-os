@@ -39,6 +39,11 @@
             "description": "Cost of one job at our default settings, for the reserved amount. null when the provider does not publish a price.",
             "minimum": 0
           },
+          "usdPerS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "The price per second of input, for an op billed by length (clip_patch: the cut sent to Aleph 2). The relay reserves max(minS, ceil(seconds)) x usdPerS; estimateUsd is that at minS. Added 2026-10-14 (additive, features/clip-moment-edit.clan)."
+          },
           "maxS": {
             "type": "number"
           },
@@ -95,6 +100,8 @@
                 "model": { "type": "string" },
                 "endpoint": { "type": "string" },
                 "estimateUsd": { "type": ["number", "null"], "minimum": 0, "description": "One job at the op's default length, on the same basis as the op's own estimate." },
+                "usdPerS": { "type": "number", "minimum": 0, "description": "As the op's usdPerS, for this model. Added 2026-10-14 (additive)." },
+                "mode": { "enum": ["first_last"], "description": "clip_patch only: the alternate makes the window from its first and last frames (Veo 3.1 image_to_video) instead of editing the cut. Added 2026-10-14 (additive, features/clip-moment-edit.clan)." },
                 "label": { "type": "string", "maxLength": 40 },
                 "note": { "type": "string", "maxLength": 80 },
                 "maxS": { "type": "number" },

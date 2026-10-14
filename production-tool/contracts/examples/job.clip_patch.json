@@ -1,0 +1,56 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7F00000000000000000CP01",
+  "participantId": "p_a1b2c3",
+  "tenantId": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "startedBy": "human:p_a1b2c3",
+  "crew": "edie",
+  "node": {
+    "kind": "shot",
+    "id": "shot_01K7B00000000000000000SH04"
+  },
+  "nonce": "n_clippatch01",
+  "purpose": "fix shot 4 at 0:02-0:04",
+  "op": "clip_patch",
+  "quotaClass": "video",
+  "state": "completed",
+  "provider": "runway",
+  "model": "aleph2",
+  "requestId": "7c1d2e3f-0000-4000-8000-000000000000",
+  "inputHashes": [
+    "sha256:6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+  ],
+  "outputs": [
+    {
+      "sha256": "sha256:d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+      "url": "https://cdn.napkin.test/ads/patch/job_01K7F00000000000000000CP01.mp4",
+      "mime": "video/mp4",
+      "bytes": 1843200,
+      "w": 1280,
+      "h": 720,
+      "durationS": 6
+    }
+  ],
+  "kind": "generated",
+  "patch": {
+    "window": { "from_s": 2, "to_s": 4 },
+    "cut": { "from_s": 2, "to_s": 4 },
+    "keyframe": "none",
+    "model": "aleph2",
+    "exact": true,
+    "seams": [
+      { "at_s": 2, "score": 0.93, "ok": true },
+      { "at_s": 4, "score": 0.91, "ok": true }
+    ]
+  },
+  "cost": {
+    "estimate": 0.56,
+    "reserved": 0.56,
+    "confirmed": 0.56,
+    "currency": "USD",
+    "unknown": false
+  },
+  "createdAt": "2026-10-14T10:12:03Z",
+  "updatedAt": "2026-10-14T10:13:31Z"
+}
