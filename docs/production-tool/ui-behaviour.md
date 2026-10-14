@@ -3,11 +3,12 @@
 What every screen in the overhauled Production Tool does. The owner approves this file together with the mockups in `project/*.dc.html`. Feature records (`features/<slug>.clan`) build to it and cite its section numbers.
 
 - **Baseline.** `docs/production-tool/overhaul-plan.md`, approved 2026-10-13. Its "Owner decisions" section wins wherever this spec and the plan differ. This spec adds the interaction detail the plan leaves open.
-- **Mockups.** 1 Main · 2 CanvasLinking · 3 CanvasReferences · 4 SketchInk · 4b Scope · 4c Asks · 4d Assets · 4e Formats · 5 TabletCanvas · 6 ScriptScreenplay · 7 ScriptAV · 8 Storyboard · 9 ImageEditor · 10 VideoEditor · 11 PhoneReview · 12 States · 13 Crew · 14 Loader · 15 DecisionTree. In this spec, "artboard N" means the board with that number in `canvas.json`.
+- **Mockups.** 1 Main · 2 CanvasLinking · 3 CanvasReferences · 4 SketchInk · 4b Scope · 4c Asks · 4d Assets · 4e Formats · 5 TabletCanvas · 6 ScriptScreenplay · 7 ScriptAV · 8 Storyboard · 9 ImageEditor · 10 VideoEditor · 10b SoundEditor · 11 PhoneReview · 12 States · 13 Crew · 13b Voices · 14 Loader · 15 DecisionTree. In this spec, "artboard N" means the board with that number in `canvas.json`.
 - **Owner decisions folded in on 2026-10-13:** inputs and scope, the send tray, asks (shared), assets and the team library by client, brand rules, spin-in, scamp sheets, and Make all sizes with video cut-downs. Also decided that day: model names always read "<model> on Runway", the reference roles are one open set (3.6), and a node with a running job is never dimmed during a link drag (3.4).
 - **Owner answers of 2026-10-13 (second round):** the contrast tokens (9, 10), the loader's 0.6 s finish (6.4), the spend confirm threshold and where the cap defaults come from (5.4; both since superseded by the fourth round), and format packs from industry standards (3.19). The remaining recommendations were adopted because the owner did not object: the warn underline for unknown names (3.6), ⌥M for a moment (3.10), one note-window rule everywhere (3.13, 3.14), no Sketches board in the Ad template (3.2), editable board name prefixes (3.6), the selection bar hidden during a port drag (3.4), tap outside closes the iPad board sheet (3.2), and per-role lines in contract-v3 (3.6). Section 12 now lists only facts still to check.
 - **Owner edits of 2026-10-13 (third round):** the loader is the Napkin logo in its own four colours, and the department of the work picks the leading card (section 6; this replaces the crew-tone loader); the crew are the house figures, named for their work (5.1); no chat anywhere in the tool, agents act in place (principle 10, 3.10); and every project has a decision tree (3.20, artboard 15).
 - **Owner decision of 2026-10-13 (fourth round, supersedes every earlier spend rule):** no prices or costs anywhere in the UI; costs are recorded per job and shown only in the decision tree (3.20); the send tray stays, without prices, collapsed by default (3.16); spend caps and per-person quotas are built but off, and each agency will choose its own cap later (5.4); failed or refused attempts that Runway bills are charged and recorded with no wording in the UI (5.3).
+- **Sound, added 2026-10-14 for the owner's review** (owner request: "integrate these changes into the product"). It folds in the model and audio research: `docs/production-tool/model-research-2026-10-13.md`, `pathway-tests-2026-10-13.md`, `hackathon-remakes-2026-10-13.md` and `audio-and-models-plan.md`. It adds a path per shot, sound in layers with takes, character voices, Jude's coherence checks R1–R6, loudness targets and a radio cut (3.21, 3.22, artboards 10b and 13b). It keeps every earlier owner rule: no costs anywhere, no chat, and the crew drawn as the house figures. Sound adds one provider beside Runway: ElevenLabs, named "<model> on ElevenLabs"; Runway stays the floor every sound job falls back to (5.5). The audio crew member in 5.1 is only an open question.
 - **When a mockup and this spec disagree,** this spec wins. Section 12.1 lists the redraws made to match it; all are done.
 - **Words.** "You" is the person at the screen. "Someone else" is another person in the same project. "Agent" is a crew member (section 5).
 
@@ -18,7 +19,7 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 1. **The canvas is the project.** All of an ad lives on one canvas: script, pictures, storyboard, video, sketches, notes. Editors open over the canvas and close back onto it. The canvas stays mounted underneath, so results keep landing while an editor is open. No feature adds a separate page of project content.
 2. **Meaning lives in the `.clan`; the canvas holds only where things are.** Boards, shots, references, links, jobs, notes and versions are document entities, and each is written by one server as a validated patch. Excalidraw holds geometry and ids only. If the screen and the document ever disagree, the document is right and the screen redraws.
 3. **Nothing is silent.** Every running job is visible, along with who started it. Every fallback, passthrough, splice, condensation, crop and failure is said in words where it happened. A tool never quietly drops an `@name`, truncates text, changes a ratio or switches model.
-4. **Costs live in the decision tree, and you see what is sent.** No price, cost or credit count appears anywhere in the UI: not on buttons, menus, model picks, the send tray, toasts, job cards, asks or admin views. Every job records what it cost, and the decision tree (History, 3.20) is the one place that shows it. Every Runway generation opens the send tray, "What Dex will send" (3.16), which lists each input and the model. Nothing goes to Runway until you press the tray's **Generate**. Batches open the tray expanded (section 5.4). Work that runs on your device says "on your device".
+4. **Costs live in the decision tree, and you see what is sent.** No price, cost or credit count appears anywhere in the UI: not on buttons, menus, model picks, the send tray, toasts, job cards, asks or admin views. Every job records what it cost, and the decision tree (History, 3.20) is the one place that shows it. Every paid generation, on Runway or on ElevenLabs (sound, 3.21), opens the send tray, "What Dex will send" (3.16), which lists each input and the model. Nothing goes to a provider until you press the tray's **Generate**. Batches open the tray expanded (section 5.4). Work that runs on your device says "on your device".
 5. **Nothing changes until you choose.** Agent proposals arrive as previews with a diff: Skye's rewrites, Dex's camera changes, Ellis's reading of your ink, fuzzy `@` matches, Rhea's crops of a character sheet, a spin-in from Brief Maker. The canvas or the document changes only on Apply, Keep, Link it, Confirm or Bring in, and one undo reverses that step.
 6. **Each tool works on its own; agents ask when the input is thin.** This is an owner decision from 2026-10-13. The flow (references → script → storyboard → video) gives the best results, but any node can run alone. When an input is ambiguous or missing, the agent asks a question with options instead of guessing (section 3.17, artboard 4c). The job waits in `needs_input`. An ask blocks only when no option can proceed; otherwise at least one option proceeds. Asks never time out into a guess. Asks are shared: anyone in the project can answer, and History records who did.
 7. **Scope is what you link.** A generating node uses only what is linked to it: boards, groups, single references, notes and documents (3.16). Nothing nearby is used because it is nearby.
@@ -40,7 +41,8 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 | Script editor | `/production/p/:project/script/:scriptId` | desktop, iPad | 6, 7 |
 | Storyboard editor | `/production/p/:project/storyboard/:storyboardId` | desktop, iPad | 8 |
 | Image editor | `/production/p/:project/frame/:frameId` | desktop, iPad | 9 |
-| Video editor | `/production/p/:project/video/:videoId` | desktop, iPad | 10 |
+| Video editor (Picture and Sound views) | `/production/p/:project/video/:videoId` (`?view=sound` for the Sound view) | desktop, iPad | 10, 10b |
+| Character card (Views, Voice, Wardrobe, Used in) | over the canvas, from the Assets drawer (`?assets=<tab>&ref=<refId>&card=voice`) | desktop, iPad | 13b |
 | Phone review | the same video route, below 600px wide | phone | 11 |
 | Decision tree (History panel) | a right-side panel over the canvas or any editor | desktop, iPad | 15 |
 | Signed out | `/production` without a session | all | 12 |
@@ -52,6 +54,8 @@ What every screen in the overhauled Production Tool does. The owner approves thi
   - `?board=<boardId>` or `?node=<id>` fits the canvas to that board or node.
   - `?ask=<askId>` fits the canvas to the node that asks and opens its ask card.
   - `?assets=project|library|upload|napkin` opens the Assets drawer on that tab.
+  - `?view=picture|sound` opens the Video editor in that view (3.21). `?line=<lineId>` or `?cue=<cueId>` selects a voice line or a sound cue in the Sound view.
+  - `?ref=<refId>&card=views|voice|wardrobe|used` opens a character's card on that tab (3.22).
 - **Ids in URLs are document ids.** Shot numbers are never used, because they change when shots move.
 - **The plan writes routes as `/p/:project/...`.** They live under `/production` because of owner decision D5 (same origin as Napkin OS).
 
@@ -324,7 +328,7 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
   - When the model's output size isn't exactly the ratio, it is centre-cropped.
   - The frame says so: "1344×756 · cropped to 16:9".
 - **The new frame:** it appears to the right of the area with a `made from` link, and offers **Use in shot N**, which sets it as that shot's frame (one step). "Make another frame" makes a new version beside it.
-- **The model name** always reads "<model> on Runway" ("Gemini 3 Pro on Runway"), built from a `display_name` field in the capability sheet (decided 2026-10-13). This holds on every surface: buttons, tray rows, cards, takes, toasts.
+- **The model name** always reads "<model> on Runway" ("Gemini 3 Pro on Runway"), built from a `display_name` field in the capability sheet (decided 2026-10-13). This holds on every surface: buttons, tray rows, cards, takes, toasts. Sound models made directly on ElevenLabs read "<model> on ElevenLabs" ("Eleven v3 on ElevenLabs"), from the same field in `capabilities/elevenlabs.json` (3.21).
 - **A sketch area on a format sheet** (3.19) keeps its format and size label, and its frame comes back at that format's ratio.
 
 ### 3.8 Ink, grouping and Convert to text (review item 11)
@@ -435,6 +439,8 @@ A floating frosted bar sits above the current selection. Its contents depend on 
   - **Moments in this shot:** a track from 0 to the shot's length, with markers and beat pills ("0:02 eyes open", "0:03 line: 'It's perfect!'"), and **+ Moment**.
 - **Audio rows:** four kinds, VO, Line, Music and Sound, each with a time relative to the shot. Add them with "+ VO / + Line / + Music / + Sound".
   - A Line can be tied to a moment ("tied to moment 0:03"). Moving either one moves both.
+  - **Every VO and Line names its speaker:** a character (`@maya`) or the Narrator. A Line also says whether it is **on screen** (the speaker is seen saying it) or off screen. An on-screen line is what makes Dex give the shot Path 1 (3.21).
+  - These rows are the script side of the sound. Dex's audio plan reads them, and the Video editor's Sound view (3.21) shows the same lines with their takes. Editing a line's words here marks its takes out of date ("Words changed · redo this line").
 - **Insert between rows:** hover a gap (or focus it with Tab) to show **+ Insert shot here** and **Bridge 1 → 2** (section 3.11).
 - **Unknown `@names`** are underlined as in 3.6.
 
@@ -603,13 +609,18 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes.
 
-### 3.13 Video editor (artboard 10; review items 7, 8)
+### 3.13 Video editor (artboards 10 and 10b; review items 7, 8)
+
+**Two views, one editor.** A **Picture | Sound** switch sits in the top bar, after the title (artboard 10b). Picture is this section; Sound is 3.21. Both views share the playhead, the selected shot, notes and the top bar. Switching keeps the playhead and the selection. The choice is remembered per person and per video (local preference), and `?view=` opens either one.
 
 **Top bar:**
 - "← Canvas", "Video · First Light" and "16:9 · 15 s".
-- The running-job pill ("Wren · renders: shot 5, take 2 · about 0:40 left · started by Sai").
+- The **Picture | Sound** switch.
+- The running-job pill ("Wren · renders: shot 5, take 2 · about 0:40 left · started by Sai"; in the Sound view while the mix rebuilds, "Edie · edits: mixing your changes into mix v4 · started by you").
 - Presence.
 - Ad versions (v1, v2), with **Compare**.
+- **History** (3.20).
+- **Export** (a menu: the film and its sound deliverables, 3.21).
 - **Render ad** (primary).
 
 **Preview:**
@@ -626,14 +637,18 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - Anything inside a shot uses **shot time** and always names the shot: moments, beats, note windows, patch ranges, take segments. For example: "shot 4 at 0:03".
 - Where both help, show both: "shot 4 at 0:03 · ad 0:09".
 
-**Timeline rows:** Notes, Shots (the magnetic main track), Beats, Voice-over, Music.
+**Preview sound.** The player always plays the current mix (3.21), never the clips' raw sound. Its mute button mutes your speakers only, not the mix.
+
+**Timeline rows:** Notes, Shots (the magnetic main track), Beats, Voice, Music.
+- In the Picture view, **Voice** and **Music** are summary rows: one block per line and per music section, read-only, with "Edit in Sound" on hover. Every layer, take, level and check lives in the Sound view (3.21).
+- Each shot on the main track carries its path tag ("P1" or "P2", 3.21).
 - **Toolbar:** Magnetic, Split at playhead, + Beat, "Fits 15 s exactly" (or warn), "2 open notes", and zoom.
 - **Main track:** drag a clip to reorder, and the track closes gaps itself. Same rank write and drift marks as the storyboard.
   - A clip shows its take ("4 · Close · v3").
   - A spliced range is marked with a crossfade edge and a label ("patched 0:02-0:04").
   - A clip being rendered shows the loader ("take 2 rendering").
 - **Beats:** diamonds at exact times, with labels. Beats move with their shot.
-- **End card:** the last clip, edited like any shot.
+- **End card:** the last clip, edited like any shot. A shot that is mostly text (an end card, a tagline card) is never sent to a video model, because the words would garble: it is a still with sound layers, "end card + layers" (3.21).
 
 **Notes to windows** (review item 8):
 1. **+ Note at <playhead>**, or N, adds a note at the playhead on the shot under it, written as `reviews[id]{range}`.
@@ -650,15 +665,18 @@ In the **Video · Audio view** the table takes the full width. The length strip 
    - The seams get short crossfades.
    - Jude checks both seams ("v3's seams at 0:02 and 0:04 match the take around them").
 6. **The note stays open** after a fix. Running Fix again makes v4. **Resolve** closes the note.
-7. **Fallback** when Aleph 2 isn't available: Veo 3.1 first/last frame over the window, generated at 4 s and trimmed. The panel says so before you run it ("Aleph 2 on Runway isn't available. Veo 3.1 on Runway will make 4 s and we'll keep the 2 s you need").
+   - **Sound on a patched take.** Aleph 2 keeps the clip's own sound, so a Path 1 line inside the window still plays as it was. When the change alters what should be heard (heavier rain, a door that now slams), Jude flags the layers in that window: "Jude · checks: the picture changed at shot 4, 0:02–0:04. The rain effect may not match now", with **Redo this cue** and **It's fine**.
+   - **A note about the sound** ("the music is too loud here") is the same note. In the Sound view its window shades every lane, and the fixes are the sound ones (redo a line, cue or section, or a level; 3.21). Fix this moment stays the picture fix.
+7. **Fallback** when Aleph 2 isn't available: Veo 3.1 first/last frame over the window, generated at 4 s and trimmed. The panel says so before you run it ("Aleph 2 on Runway isn't available. Veo 3.1 on Runway will make 4 s and we'll keep the 2 s you need"). On a Path 1 shot the fallback makes new sound for the window, so the panel adds "Her line in this window will be said again. Check it after." An extend (Gemini Omni Flash on Runway) remakes the sound of the whole clip, and says the same for the whole shot.
 
 **Make all sizes** (in the top bar's More, and on the Video node) makes the cut-downs of the film: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. They are part of the first release. Section 3.19 has the flow.
 
-**Takes for a shot:** a list of v1, v2 and v3, each with the model ("Veo 3.1 on Runway"), length, who made it and when. **Use** puts a take in the cut (one undo step). **Another take** makes a new take.
+**Takes for a shot:** a list of v1, v2 and v3, each with the model ("Veo 3.1 on Runway"), length, who made it and when. **Use** puts a take in the cut (one undo step). **Another take** makes a new take. On a Path 1 shot a take brings its own sound; using another take swaps the shot's sound with it, and the lines it carries come in as new line takes (3.21).
 
-**Render ad:** a render from ready clips runs at once ("Render the ad · 15 s"). A render that remakes clips opens the send tray (5.4).
-- Edie edits. The result is a new ad version.
-- A render with stale clips asks first: "2 clips are out of date. Render anyway, or remake them first?"
+**Render ad:** a render from ready clips runs at once ("Render the ad · 15 s"). A render that remakes clips or sound opens the send tray (5.4).
+- Edie edits. The result is a new ad version: the picture and the current mix, at the loudness target picked in the Sound view (Online −14 LUFS unless you picked another).
+- A render with stale clips asks first: "2 clips are out of date. Render anyway, or remake them first?" Stale sound (a line whose words changed, a voice that changed) is counted in the same question.
+- Open sound checks (3.21) never block a render. The render's done line says "2 sound checks still open", with **Show**.
 
 ### 3.14 Phone review (artboard 11; review item 8 on phone)
 
@@ -679,6 +697,8 @@ From top to bottom:
 **Rules:**
 - **Seeking:** tapping a marker, a shot or a note row seeks there and pauses. The playhead, window, timecode, composer label and button label all update together.
 - **The phone window** uses the same rule as 3.13: `[floor(t) − 1, ceil(t) + 1]` in shot time, clamped to the shot (not the ad), at least 2 s, never crossing a cut. Artboard 11's "clamped to 0..15" no longer applies.
+- **The phone plays the mix.** The player plays the render version's own mix, with every layer, at the Online target (−14 LUFS), because that is how the ad is heard on a phone. There are no lanes, levels, takes or checks on the phone; its only sound control is mute. A note about the sound ("music too loud at 0:09") is an ordinary note, and is fixed in the Sound view on a laptop or iPad (3.21).
+- **A radio cut** of the version, when one exists, sits under the player as "Radio cut · 30 s", audio only, with its own play button and the same composer.
 - **Notes belong to a render version.** A note turns Done when a later version patches it.
 - **Presence** shows who is editing. There are no cursors.
 - **When the ad is rendering,** the player shows the loader with the produce card leading, with "Edie is cutting v3 · about 1 min".
@@ -717,7 +737,8 @@ From top to bottom:
 
 **Show all links** (View, at the foot of the board rail) draws every link at once. It is off by default, and the choice is remembered per person (local preference). Off, you see only the links of what you select.
 
-**The send tray, "What Dex will send".** Every Runway generation opens it: Generate on a sketch area, Make clips, Remake clip, Bridge, Change this frame, Fill area, Change whole frame, Upscale, Fix this moment, Make all sizes, and a Render ad that remakes clips. Free and on-device work has no tray.
+**The send tray, "What Dex will send".** Every paid generation opens it: Generate on a sketch area, Make clips, Remake clip, Bridge, Change this frame, Fill area, Change whole frame, Upscale, Fix this moment, Make all sizes, a Render ad that remakes clips, and every sound generation (Redo this line, Re-voice, Redo this cue, Redo this section, Rewrite music to the cut, Make 3 previews, a voice change and a radio cut; 3.21, 3.22). Free and on-device work has no tray; rebuilding the mix is free.
+- **Sound rows** name the words, the speaker and the voice ("Line · 'It's perfect!' · @maya · Aoife v2"), the timing kept ("Keeps shot 4's timing, so her lips still match"), any direction you typed ("softer"), and the brand names it will say from the pronunciation list ("Lumen · LOO-men"). The footer names the model ("Eleven v3 on ElevenLabs").
 - **Where:** anchored to the button that opened it, signed "Dex · directs". It is not modal; the canvas stays live behind it.
 - **Rows,** each with a checkbox and what it is used as:
   - "Sketch · 16:9 layout";
@@ -777,6 +798,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 **Team library.**
 - One shelf per client ("Client shelf · Napkin Studio": Lumen Water, Harbour Bank, Kettle & Co). Everyone in the agency shares it: "Shared with everyone at Napkin Studio". **Manage shelves** adds, renames and archives client shelves.
 - A shelf holds a **Brand kit** ("v2 · published by Maya": Logo · 3, Palette · 5, Fonts · 2, Tone · 6), then Characters, Locations, Products and the rest by role.
+- **Voices** (artboard 13b). Each character row names its voice ("@maya · Aoife · designed"). Below the characters the shelf lists its **Voices**, each with a play button and how it was made (library, designed, cloned). A cloned voice carries a "Consent on file" pill. The brand names the voices say are listed as chips (Lumen, Velto, Vorr). Opening a character opens its card; its Voice tab is 3.22.
 - Every item shows its version and who published it ("@maya · character · 3 views · v4 · published by Sai").
 - **Dragging an item onto a board** lands it with its role and views ("Drag onto a board · arrives with its role and views"). One undo step. The project now holds its own copy.
 - **Publishing.** **Publish to team library** (a reference's More menu, or Export) opens "Publish to team library · Lumen Water / Locations · v5 · replaces v4 for everyone; projects keep their copy until they update", with **Cancel** and **Publish v5**.
@@ -808,6 +830,8 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 - Script as PDF; Script as Fountain;
 - Storyboard as PDF · "6 frames";
 - Publish selected to team library.
+
+The film's own deliverables (online film, TV master, stems, cue sheet, radio cut) are in the Video editor's **Export** menu (3.21).
 
 Exports are free. A large export shows its progress in a toast and lands as a download.
 
@@ -896,6 +920,153 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 - **Live:** new decisions arrive at the end while the panel is open. A filtered panel shows only those that match.
 - **Offline:** the panel shows what was loaded, with "Reconnecting…". Restore is disabled with "Needs a connection".
 
+### 3.21 Sound: the Video editor's Sound view (artboard 10b)
+
+Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.md` and the three documents it draws on). **Sound is chosen per shot, on one shared sound system.** Every shot takes a path; every path feeds the same layers, the same mix and the same checks.
+- **No costs anywhere in sound** (principle 4). No path, model pick, take, Redo button, voice, preview, send-tray row, loudness card or export shows a price, credit count or estimate, and choosing a path never mentions what it costs. Every sound job's cost is recorded and shown only in the decision tree (3.20), with the path picks, takes used, voice changes and Jude's checks.
+- **No chat** (principle 10). Agents act on the items: Dex's signed line on the shot list, Wren's and Edie's lines on the items they work, Jude's checks with fix buttons, Skye's asks and inline suggestions. The only text boxes belong to an item (a line's words, how to say a take, a cue's description, a voice description).
+
+**The paths:**
+
+| Path | Shown as | Used when | How the sound is made |
+|---|---|---|---|
+| **Path 1** | "Path 1 · speaks on camera · Veo 3.1 Fast on Runway" | A character speaks on camera in the shot | The clip model speaks the line itself, so the lips match. The clip's own sound becomes the shot's **Native** layer, and its line becomes a line in **Voice**. It can be re-voiced into the character's voice, keeping the timing. |
+| **Path 2** | "Path 2 · silent · Gen-4.5 on Runway + layers" | Nobody speaks on camera: action, product, b-roll, voice-over | A silent clip. All its sound comes from layers made on their own, so each can be redone alone. |
+| **Path 2 for text shots** | "silent · end card + layers" | The shot is mostly text (end card, tagline card) | No clip is made: a still, with layers. Text never goes to a video model. |
+| **Radio** (the research's Path 3) | the **Radio cut** export, not a shot path | You want the ad as a radio spot | The same voices and stems, cut to a booked length, at the radio target (below). |
+
+**How a path is chosen.**
+- **Dex picks it per shot,** when he plans the audio from the script's VO and Line rows (3.10). The rule: a shot with an on-screen line gets Path 1; every other shot gets Path 2; a text shot is a still. He signs it under the shot list: "Dex · directs: Maya speaks in shots 4 and 5, so they make their own sound."
+- **Dex also picks the model by shot,** from the capability sheet. A product close-up with a readable label prefers Path 2 (the label stays crisp); a robot or a designed character who must stay the same prefers Path 1. He writes which and why into the decision (3.20); the screen shows only the result.
+- **You can change it.** Each shot row has a path button. It opens a menu: **Path 1 · speaks on camera** and **Path 2 · silent + layers**, each with its model, and **Why** (3.20). Changing the path:
+  - writes the shot's path (one undo step) and marks its clip out of date ("Path changed · new clip needed");
+  - remakes nothing on its own. **Remake clip** goes through the send tray as any clip does;
+  - **Path 2 on a shot with an on-screen line** says first: "Maya speaks on camera here. A silent clip needs a lip-sync step, or her line becomes a voice-over." with **Lip-sync it** (the tray adds the step), **Make it a voice-over** (the line goes off screen) and **Cancel**.
+- **A refused clip falls back per shot,** inside the path (5.5): Veo 3.1 Fast refused, H3 Max on Runway takes it, and Path 1 stays Path 1. A refusal never silently moves a shot to Path 2.
+
+**Where it shows.**
+- **Shot list** (left, "Shots and their sound · 2 speak on camera · 4 silent"): one row per shot with its thumbnail, name, length and path button. The selected shot is blue.
+- **Picture row of the timeline:** each shot block carries "P1" or "P2" and a motion curve under it (the picture motion that times hits, R5).
+- Everywhere else a path is a tag on the shot ("P1"), never a colour alone.
+
+**The layers.** The Sound view's timeline (55px a second at the default zoom, the ad-time ruler shared with Picture) has one lane per layer, top to bottom:
+
+| Lane | Holds | Notes |
+|---|---|---|
+| Picture | the shots, their path tags and the motion curve | Not a sound lane; it is there to time against. A shot growing shows a dashed extension ("+0.6 s"). |
+| Native | each Path 1 shot's own sound, as one block per shot ("Shot 4 · room and Maya") | Silent shots have none ("Silent shots have no shot sound"). Words in it that nobody wrote are muted (R6). |
+| Voice | every line, in two sub-rows: on-screen lines (camera icon and `@maya`) and voice-over (`@maya`, or Narrator) | On-screen lines also live inside Native; the Voice item is that line, so it can be redone or re-voiced alone. |
+| Effects | hits ("Cap twist", "Glass clink") and beds ("Gulls, far", "Footsteps in sand", "Fizz") | Hits snap to the shot's biggest motion (R5), with dashed snap guides to the peak. |
+| Ambience | room tone and loops ("Dawn surf · loop 4 s") | |
+| Music | one section per scene, plus the end-card sting | A line on the lane shows where the music dips under speech. |
+
+- **Lane controls,** at the head of every lane: **Mute**, **Solo**, a level slider and its value in dB ("−4 dB").
+  - **Level and Mute are part of the mix:** shared, single-value fields (4.4), one undo step each. The mix rebuilds.
+  - **Solo is for listening only:** per person, not saved, not part of the mix, and nobody else hears it.
+  - A muted lane says "muted" in words, and its blocks fade (artboard 10b shows Ambience muted).
+- **Moving things.** Drag a cue, a voice-over line or a music section along its lane (one undo step). An on-screen line can't be dragged off its shot's lips: it moves only with its shot ("On-screen lines move with their shot"). A hit dragged near a motion peak snaps to it; hold ⌥ to place it freely, and the hit is then marked "placed by hand", which R5 leaves alone.
+- **Toolbar:** **+ Line**, **+ Effect**, **Snap hits to motion**, **Rewrite music to the cut**, the open-checks count ("2 checks to look at") and zoom.
+  - **+ Line** adds a line at the playhead; you pick the speaker and on or off screen, and type the words. It is the same line as in the script's AV rows (3.10).
+  - **+ Effect** adds a cue at the playhead; you describe it ("glass clink") and pick hit or bed.
+  - **Snap hits to motion** moves every hit that isn't placed by hand onto its shot's biggest motion (one undo step).
+  - **Rewrite music to the cut** has the music written again from the finished picture ("music from the cut"), section by section. It goes through the send tray.
+
+**Takes.** Every line, cue and music section has its own takes (v1…vN), as a shot has. The mix is always rebuilt from whichever take is **In the mix**; it is never edited by hand.
+- **Selecting an item** opens its panel (right column): what it is ("Line · shot 4 at 0:03.1 · On screen · @maya says, lips synced, from the shot's own sound"), the player looping it (**Loop this line**), and its takes.
+- **Each take** shows how it was made and its timing: "v1 · as shot, Veo's voice · 1.25 s · with the clip"; "v2 · redone, brighter · 1.25 s · same timing"; "v3 · redone, softer · In the mix". **Use** puts a take in the mix (one undo step; the mix rebuilds). Older takes are never deleted.
+- **A line that came with a Path 1 clip** has v1 "as shot". Using another clip take (3.13) brings that take's line in as a new line take.
+
+**Redoing one line, cue or section.** Only the selected item is remade. Nothing else in the mix changes.
+- **Redo this line** (the panel's primary button) makes a new take of the line in the same voice. A short text box beside it takes how to say it ("brighter", "slower, a smile in it"); it belongs to the line, not a conversation (principle 10). On-screen lines keep their timing exactly, so the lips still match; voice-over lines may come back a little longer or shorter, and the checks below run on the result.
+- **Re-voice to Maya's voice** (on-screen lines from a Path 1 shot) turns the clip model's voice into the character's own voice, speech to speech. It keeps the timing to the hundredth of a second: "Both keep the timing, so her lips still match."
+- **Redo this cue** remakes an effect or ambience from its description, which you can edit first. A hit keeps its place on the motion.
+- **Redo this section** remakes one music section and blends it into the sections on either side. The rest of the music stays.
+- Each goes through the send tray (3.16), collapsed to one line by default. **Wren · renders** makes the take (her figure and the create loader on the item); then **Edie · edits** rebuilds the mix (produce loader, top-bar pill "Edie · edits: mixing your changes into mix v4").
+- **Words changed in the script** mark the line out of date ("Words changed · redo this line"). It keeps playing the old take until you redo it.
+
+**Character voices.** Every character has one voice, used for every line it says, in every shot and in the radio cut (3.22). A voice-over by nobody on screen uses the project's **Narrator** voice. A line's speaker is set in the script (3.10) or in the line's panel. Changing who says a line marks it out of date.
+
+**Jude's checks: the coherence rules R1–R6.** They come from the hackathon remakes, where they took lines heard from 0.06–0.43 to 0.73–1.00 with no voice overlap. Edie builds every mix by them. Jude checks the mix after each change and lists what breaks in the **Jude · checks** card ("2 to look at"). Each check is a quiet line with the fix as a button, plus **Show** (seeks and selects). When everything passes, the card says so in one line: "Hits on the motion. No stray words."
+
+| Rule | Jude checks | Says when it breaks | Fix (one undo step, then the mix rebuilds) |
+|---|---|---|---|
+| **R1 Dialogue sets the shot length** | A shot with a line runs at least to the end of the speech plus 0.25 s. The last spoken shot also leaves room for the tagline. | "Line runs past the shot: shot 4 grows 0.6 s" | **Grow it, shot 1 gives 0.6 s**: the dialogue shot grows and the time comes from a neighbouring action shot, so the ad keeps its length. It never shortens the line. If the clip has no spare frames, the fix says "Shot 4 needs a longer take" and goes through the send tray. |
+| **R2 Every on-screen line is lip-synced** | Each on-screen line is on a Path 1 shot, or has a lip-sync step. | "Maya speaks in shot 2, but nobody's lips move" | **Make it Path 1**, **Lip-sync it**, or **Make it a voice-over**. |
+| **R3 One voice at a time** | No two voices overlap. The tagline goes after the last line and may be sped up by at most 15% to fit. | "Two voices overlap at 0:12" | **Start the tagline after her line**. If it can't fit even sped up: "The tagline doesn't fit after her line. Shorten a line or grow the end card." |
+| **R4 Speech comes first** | No vocal effects (sighs, laughs) on a line; under speech, effects dip 8 dB and music 12 dB, and shot sound dips under any voice-over; every word of every line can be heard. | "2 words of the tagline are hard to hear under the music" | **Dip the music more**, or **Show**. |
+| **R5 Hits land on the picture** | Each hit's loudest moment sits on the frame with the most motion in its shot. | "Cap twist is 0.4 s off the motion" | **Snap it to the motion**. Hits placed by hand are left alone. |
+| **R6 No stray words** | Words in a shot's own sound that nobody wrote are muted, and that shot gets our effects instead. | (said, not asked) "Shot 3's own sound had words nobody wrote. I muted them and used our effects." | **Hear them**, and **Keep them** if they were wanted (recorded with who kept them). |
+
+- **Checks never block.** You can render and export with checks open; the Export menu and the render's done line say how many ("2 checks to look at"). Keeping something a check flagged is recorded on it, with who, as brand flags are (3.18).
+- **What is applied without asking:** the dips under speech (R4) and the muting of stray words (R6) are how Edie builds every mix, and R6 is always said where it happened (principle 3). Fixes that change a shot's length, path or timing (R1, R2, R3, R5) are buttons; nothing moves until you press one (principle 5).
+- **Words heard** are said in words, never as a score: "Every word of 'It's perfect!' is heard", "2 words are hard to hear".
+- **Jude can't judge lips on a drawn face.** The lip-sync check reads real faces only. On a stylised or cartoon character it says "I can't judge lips on a drawn face. Watch shot 4 yourself.", with **Looks right**.
+- **Picture changes reach the sound.** A patched take (3.13), a new clip take or a grown shot re-runs the checks for that shot.
+
+**Loudness.** The **Mix** card (right column) holds Edie's working figure and line, the **Loudness target** picker and the meter.
+- **Targets** (a radio group): **Online −14 LUFS** (the default), **TV −23 LUFS** (true peak −1 dB, EBU R128), **Radio −18 LUFS** (or the station's own figure, below). The target sets the preview mix and Render ad; each export item has its own fixed target.
+- **The meter** shows the whole ad's loudness ("−14.2 LUFS, whole ad"), its true peak ("−1.4 dB true peak"), a short-term bar with the target marked, and a pill: "On target" (ok) or "1.2 dB too loud" (warn).
+- **Under speech** lists the dips as levels per layer: "Effects −8 dB · Ambience −6 dB · Music −12 dB". Each can be changed (a single-value field, one undo step).
+- Edie normalises every export to its target and measures it. If a file misses its target after that, it is not delivered as on target: its report says "Measured −14.9 LUFS, target −18", in warn.
+
+**Export menu** (Video editor top bar). No item shows a price or a size estimate.
+- **Film for online** · "MP4 · −14 LUFS".
+- **TV master** · "−23 LUFS · true peak −1 dB".
+- **Stems** · "One file per layer".
+- **Cue sheet** · "Every line, cue and section, with times". Its shape is Napkin Radio's manifest (`assets`, `clips{track, startSec, durationSec}`) plus a native track, so it opens in Radio as it is.
+- A divider, then **Radio cut (Napkin Radio)** · "30 s, same voices and stems · −18 LUFS".
+- Each export lands as a download with a loudness report beside it (target, measured loudness, true peak, length). The report says plainly when a check failed ("Length: 31.2 s, booked 30 s").
+
+**Radio cut.** One brief gives a film and a radio spot with the same voices.
+- **Radio cut** opens a sheet: booked length (**20 s** or **30 s**), the station profile (a list; "Confirm with the station" under it, as out of home says for media owners), and **Make radio cut** (primary).
+- It is built from the same voices and stems, edited to the booked length. Layers are cut to the length before mixing, so the file is never longer than booked.
+- **Lines that only work with the picture** ("It's perfect!" with no smile to see) are raised by Skye as an ask on the radio cut (3.17): "Shot 4's line needs the picture. Keep it, cut it, or let me write a line for radio?". When the booked length is longer than the ad, Skye drafts the extra words in place as an inline suggestion (3.10), with Keep, Keep mine and Why.
+- The voice lines go through the send tray; the mix and the loudness pass are Edie's (produce loader). The result lands on the Video node as "Radio cut · 30 s · v1", plays on the phone (3.14), and is listed in Export.
+
+**States:**
+- **No sound yet** (clips made, no audio plan): the lanes show "Dex hasn't planned the sound yet", with **Plan the sound** (primary). Planning is free; the takes it needs go through the send tray as one batch, expanded.
+- **Partial:** items not made yet show the pending stripes in their lane ("Music · section 2 coming"). The mix plays what exists.
+- **Mixing:** the top-bar pill and Edie's working figure in the Mix card. The player keeps playing the last mix until the new one lands.
+- **ElevenLabs unavailable:** see 5.5. Lanes still edit and the mix still rebuilds from existing takes.
+- **Offline:** levels, mutes and moves queue as edits (4.6); Redo buttons are disabled with "Needs a connection".
+- **iPad:** the right column becomes a sheet below 1180px; lane controls are 44px; drag with finger or Pencil.
+
+### 3.22 Character voices (artboard 13b)
+
+**A voice belongs to a character.** It lives on the character's card, in the **Voice** tab, beside Views, Wardrobe and "Used in · 6". The card opens from the Assets drawer (3.18) or from any `@maya` (More → **Open card**). **Why this voice?** opens the decision in the decision tree (3.20).
+
+**Current voice strip:** play, "Aoife v2 · designed from a description", a waveform, and "Hear her say 'To the first light.'" (a line from this project) with **Play**.
+
+**Three ways to change the voice,** side by side. Whichever made the current voice is marked "Maya's voice came from here".
+- **Pick from the library:** a search box, filter pills (accent, gender, age, use: "Irish", "Woman", "30s", "Narration", "Conversational"), and voices, each with **Play** and **Use**.
+- **Design one from a description:**
+  - a description box ("A warm Irish woman, mid thirties…"), 20 to 1,000 characters, with its counter ("146 / 1,000");
+  - an audition text box, 100 to 400 characters ("158 · 100 to 400"), pre-filled with the character's own lines;
+  - **Make 3 previews**, the screen's only primary button. It goes through the send tray. Rounds are numbered ("round 2"), and earlier rounds stay listed;
+  - three previews, each with Play and **Use**; the one in use says "In use";
+  - Jude listens to each round and says which previews say the brand names right: "Jude · checks: I listened to all three. Only 2 keeps the accent on 'Lumen'."
+- **Clone from a sample:**
+  - a sample file ("maya_read_take3.wav · 1:24 · 1 to 2 minutes works best");
+  - **Whose voice is this?**, the speaker's name, required;
+  - a consent checkbox, unticked by default and in warn until ticked: "I have this person's written agreement to clone their voice for this work";
+  - **Attach the signed form** (optional);
+  - **Clone voice**, disabled until a name is given and the box is ticked: "Tick the agreement first."
+  - A cloned voice shows "Consent on file" wherever it is listed, and the decision records who ticked it and when.
+
+**Everywhere Maya speaks.** The card lists every line the character says, with its shot and whether it is on camera: "Shot 1 · voice-over", "Shot 4 · 'It's perfect!' · on camera", "Shot 5 · 'To the first light.' · on camera", "Radio cut · 30 s".
+- **Changing the voice remakes every one of those lines** in the new voice, the radio cut included. The pictures stay.
+- **Re-voice her on-camera lines into Aoife** (ticked by default): on-camera lines are turned into the new voice speech to speech, so the timing and the lip sync hold. Untick it to keep the clip model's own voice on screen.
+- Use opens the send tray expanded, as a batch (5.4): one row per line, each can be unticked. Nothing changes until Generate. The voice field itself is one undo step; the new takes stay in each line's takes if you undo.
+
+**Say brand names right** (the pronunciation list). One list for the whole agency, used by every voice.
+- Each entry has the word, how to say it (a respelling, "LOO-men", or IPA, "/vɔːr/"), a note of how it was misheard before ("was said 'Veltor'"), and **Test**, which plays it in this character's voice.
+- **+ Add a word** takes the word and a spelling or IPA.
+- **Changing an entry** marks every line that says the word out of date ("Lumen changed · 3 lines to redo"), with **Redo them** (send tray, batch).
+
+**Who it belongs to** (a radio group): **This project only**, **Lumen Water shelf** (the default), or **All of Napkin Studio**. Below: "Designed by Shrey · 13 Oct · v2". A voice on a shelf is shared like any library item (3.18, 4.8): a new version replaces the old one for everyone, and projects keep their copy until Update.
+
+**States:** making previews shows Wren working on the previews column (create loader); a voice that can't be made says why in plain words ("ElevenLabs couldn't make a voice from this description. Say more about the voice."); offline, Use, Make 3 previews and Clone voice are disabled with "Needs a connection".
+
 ---
 
 ## 4 Collaboration
@@ -924,7 +1095,7 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 ### 4.4 Conflicts
 
 - **Shared live text never conflicts.** Script body, shot action, direction, beat text, dialogue and note text are shared live text: both people type at once and see each other's carets.
-- **Single-value fields** (camera fields, duration, names, roles, ratio, window edges, the selected take or version):
+- **Single-value fields** (camera fields, duration, names, roles, ratio, window edges, the selected take or version, a shot's path, a lane's level and mute, the take in the mix, the loudness target, a character's voice):
   - Concurrent changes to different fields both apply.
   - When two changes to the same field cross, the field shows a conflict notice to the person whose change lost: "Sai changed this field while you were typing", with both values side by side.
   - **Keep yours** (ink, the default) re-applies your value. **Take Sai's** accepts theirs. Nothing is overwritten until you choose.
@@ -976,13 +1147,22 @@ Five make the ad; two house agents, who work in every Napkin tool, read and chec
 
 | Agent | Sign-off | Figure | Appears for | Where |
 |---|---|---|---|---|
-| Dex | Dex · directs | cobalt hex, viewfinder mark | planning shots, writing prompts (with brand rules), the send tray, camera changes, Bridge, condensing direction, asks about planning and direction | Storyboard node and editor, camera fields, the insert menu, the send tray |
-| Skye | Skye · scripts | coral column, page mark | script drafts (including from a spin-in), rewrites, length fixes, asks about unknown names; looking up looks and references | Script node and editor (drafts in place, the VO column), References board |
-| Wren | Wren · renders | marigold star, spark mark | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders | empty frames and clips, Video board, Format sets, jobs |
+| Dex | Dex · directs | cobalt hex, viewfinder mark | planning shots, writing prompts (with brand rules), the send tray, camera changes, Bridge, condensing direction, asks about planning and direction; each shot's sound path and the sound plan | Storyboard node and editor, camera fields, the insert menu, the send tray, the Sound view's shot list |
+| Skye | Skye · scripts | coral column, page mark | script drafts (including from a spin-in), rewrites, length fixes, asks about unknown names; looking up looks and references; lines and voice-over, the radio cut's words | Script node and editor (drafts in place, the VO column), References board, the radio cut |
+| Wren | Wren · renders | marigold star, spark mark | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders; voicing lines and making every sound take and voice preview | empty frames and clips, Video board, Format sets, jobs, the Sound view's lanes, the Voice tab |
 | Rhea | Rhea · retouches | mint dome, dots mark | cut-out, fill, change whole frame, upscale, character-sheet crops | Image editor, character sheets |
-| Edie | Edie · edits | iris stack, bars mark | splicing moments, rendering the ad | Video editor timeline, patch windows, phone player |
-| Ellis (house) | Ellis · reads | ink triangle, page mark | reading notes and handwriting, extracting text from files, briefs, brand books and documents | ink, notes, Convert to text, Brand board, Document nodes, the send tray's "confirm" rows |
-| Jude (house) | Jude · checks | ink card, tick mark | checking each result, seams, retries, brand-rule breaks (per size in a Format set) | check marks and brand flags on frames, clips and sizes |
+| Edie | Edie · edits | iris stack, bars mark | splicing moments, rendering the ad; **mixing**: building the mix from the takes in it, the dips under speech, hits snapped to motion, muting stray words, loudness to target, stems, cue sheet and the radio cut | Video editor timeline, patch windows, the Sound view's Mix card and job pill, phone player |
+| Ellis (house) | Ellis · reads | ink triangle, page mark | reading notes and handwriting, extracting text from files, briefs, brand books and documents; **writing down what a shot's own sound says**, which Jude's word checks use | ink, notes, Convert to text, Brand board, Document nodes, the send tray's "confirm" rows |
+| Jude (house) | Jude · checks | ink card, tick mark | checking each result, seams, retries, brand-rule breaks (per size in a Format set); **the sound checks R1–R6**, lips on dialogue shots, brand names said right in voice previews | check marks and brand flags on frames, clips and sizes; the Sound view's checks card; voice previews |
+
+**Who does the sound** (3.21, 3.22). No new crew member is added; the sound work is spread over the crew by what each already does:
+- **Dex · directs** picks each shot's path and model and plans the sound: the lines with their speakers, the cues, a music brief per scene.
+- **Skye · scripts** writes the lines and the voice-over, and the radio cut's extra or replacement words, in place.
+- **Wren · renders voices the lines** and makes every sound take: lines, re-voicing, effects, ambience, music sections, voice previews. In the Sound view her signed line names the line ("Wren · renders: saying 'It's perfect!' softer").
+- **Edie · edits mixes.** She never makes a take; she builds and measures the mix.
+- **Ellis · reads** writes down the words in a shot's own sound; **Jude · checks** runs R1–R6 on them and on the mix.
+
+**Open question for the owner:** should sound get its own crew member, for example a "voices" agent who voices the lines, designs the character voices and keeps the pronunciation list, in place of Wren for sound? It would need a name that echoes the work, a shape and colour that fit the crew, and a loader department (sound would most likely lead with create). Until the owner decides, Wren voices and Edie mixes.
 
 **The figures are the house figures** (artboard 13), the same design language as the agents in every other Napkin tool:
 - A flat, bold body in the agent's shape and colour, thin ink legs with feet, a ground shadow, two pill eyes and one mark.
@@ -1045,7 +1225,10 @@ Owner decision 2026-10-13 (fourth round). It supersedes the earlier prices on bu
 
 ### 5.5 Fallbacks
 
-- **Fallback stays inside Runway's models** (Runway is the only paid generator in this overhaul).
+- **Fallback for pictures stays inside Runway's models.** Runway makes every frame and clip in this overhaul. Sound adds ElevenLabs (3.21), and Runway is its floor: a sound job never fails because ElevenLabs is down.
+- **When ElevenLabs can't make a sound take,** Wren makes it on Runway's ElevenLabs models and says so:
+  - Lines: "ElevenLabs didn't answer, so I voiced shot 1's line on Eleven v4 on Runway in a stand-in voice. Redo it when ElevenLabs is back." The take is marked "stand-in voice", because a character's designed or cloned voice lives on ElevenLabs.
+  - Effects and music: made on Runway's sound models, with the same kind of line and a "Made on <model> on Runway" chip.
 - **When the chosen model can't make something,** the relay makes it on another Runway model and says so:
   - A toast reads "Veo 3.1 on Runway couldn't make clip 4, so we made it on Gen-4 Turbo on Runway. Napkin's got you." It closes after 9 s, as today's `FallbackNotices.tsx` does.
   - The card keeps a "Made on Gen-4 Turbo on Runway" chip whose hover gives the reason.
@@ -1082,10 +1265,10 @@ The leading card says what kind of work is running. The trailing cards are alway
 
 | Leading card | Department | Kinds of work | Usually |
 |---|---|---|---|
-| Orange #FF4F2E | create | generating, rendering frames and clips, retouching | Wren · renders, Rhea · retouches |
-| Ink #14161B | plan | planning, directing, scripting | Dex · directs, Skye · scripts |
-| Light grey #DADDE3 | learn | reading, researching, checking | Ellis · reads, Jude · checks, Skye when she looks things up |
-| Grey #8B919E | produce | editing, rendering the ad, all sizes, exporting | Edie · edits; Make all sizes and cut-downs; exports |
+| Orange #FF4F2E | create | generating, rendering frames and clips, retouching, voicing lines and making sound takes and voice previews | Wren · renders, Rhea · retouches |
+| Ink #14161B | plan | planning, directing, scripting, planning the sound and paths | Dex · directs, Skye · scripts |
+| Light grey #DADDE3 | learn | reading, researching, checking, writing down a shot's own sound, the sound checks | Ellis · reads, Jude · checks, Skye when she looks things up |
+| Grey #8B919E | produce | editing, rendering the ad, mixing, loudness, the radio cut, all sizes, exporting | Edie · edits; Make all sizes and cut-downs; exports |
 
 - **The department follows the work, not the agent.** Skye scripting leads with plan; Skye researching leads with learn. Make all sizes leads with produce even though Wren makes the sizes.
 - **Colour is never the only signal.**
@@ -1148,10 +1331,10 @@ Either one switches every loader to the full logo, still, with only the leading 
 One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14. Only `width`, `height`, `data-work` and `data-state` change.
 
 - **`data-work`** picks the leading card:
-  - `create` (the default): also `generating`, `rendering`, `retouching`;
+  - `create` (the default): also `generating`, `rendering`, `retouching`, `voicing`;
   - `plan`: also `planning`, `writing`, `directing` (Skye's scripting uses `writing`);
   - `learn`: also `reading`, `researching`, `checking`;
-  - `produce`: also `cutting`, `producing`, `exporting`, `sizes`.
+  - `produce`: also `cutting`, `producing`, `exporting`, `sizes`, `mixing`.
 - **`data-state`:** `run` (the default, the loop), `finish` (the full logo, still; hold it 0.6 s, then show the done state), `queued` (the full logo, still).
 - **`data-motion="still"`** on any ancestor gives the reduced-motion form (6.6).
 - **`nl-flat`** class: the full logo, still, no pulse, for legends and swatches.
@@ -1191,7 +1374,18 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Video editor | , / . | Back / forward one frame |
 | Video editor | N | Note at the playhead |
 | Video editor | [ / ] with a note selected | Move the window start / end by 1 s |
-| Video editor | S | Split at playhead |
+| Video editor | S | Split at playhead (Picture view) |
+| Video editor | ⌥P / ⌥S (Alt+P / Alt+S) | Picture view / Sound view (read from `event.code`; ⌥ types a symbol on a Mac) |
+| Sound view | ↑ ↓ | Move focus between lanes |
+| Sound view | Tab / ⇧Tab | Move between the items on the focused lane |
+| Sound view | M / ⇧M | Mute / solo the focused lane (solo is for your ears only) |
+| Sound view | − / = | Lower / raise the focused lane's level by 1 dB |
+| Sound view | ⌥← / ⌥→ | Nudge the selected cue, voice-over line or section by 0.1 s (on-screen lines don't move) |
+| Sound view | R | Redo the selected line, cue or section (opens the send tray) |
+| Sound view | Enter on a take | Use it: put it in the mix |
+| Sound view | Space / K, J / L, N | As in the Picture view: play, step, note at the playhead |
+| Sound view, checks card | Tab, Enter | Each check's fix and Show are buttons, fix first |
+| Character card, Voice tab | Tab, Space, Enter | Play, Use and Test are buttons; the scope and filters are radio groups and toggles |
 
 **No global keydown on the phone.**
 
@@ -1255,6 +1449,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
   - Popovers trap focus until closed and return it to their trigger, as today's `ui/Float.tsx` does.
 - **The canvas for screen readers.** The board rail and a "Nodes on this board" list give a non-spatial way to reach everything. Selecting from the list selects on the canvas.
 - **Motion:** section 6.6. Nothing flashes more than three times a second.
+- **Sound.** Nothing about sound is shown by colour or waveform alone. Lanes have names; every level shows its dB; mute says "muted"; the meter shows its number and an "On target" or "too loud" pill; line blocks show their words; on-screen lines have a camera icon and "on screen" in their label. Lane sliders are real range inputs with labels ("Music level, −8 dB"). Nothing plays on its own: audio starts only from a play button or Space. Takes and previews announce "Playing v3" in the status region.
 - **Live regions.**
   - Job completions are announced politely ("Frame 3 is ready").
   - Failures are announced assertively, once.
@@ -1266,7 +1461,8 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 **Rules:**
 - **Point of view.** Write from the user's side, in the imperative, for buttons: "Make video", "Insert a shot here", "Leave note at 0:07". Write in the first person for agents ("I will mark clips 2 and 5 to check"), signed "Dex · directs".
 - **Short sentences.** Most lines are under 12 words. No jargon (no "EDL", "inpaint" or "token" in the UI), no lorem ipsum, no rationale text.
-- **Models.** Always "<model> on Runway" ("Gemini 3 Pro on Runway", "Veo 3.1 Fast on Runway"), from the capability sheet's `display_name`. Never a raw model id.
+- **Models.** Always "<model> on Runway" ("Gemini 3 Pro on Runway", "Veo 3.1 Fast on Runway"), or "<model> on ElevenLabs" for sound made there ("Eleven v3 on ElevenLabs"), from the capability sheet's `display_name`. Never a raw model id.
+- **Sound words.** Say "dips under speech", not "ducking"; "the shot's own sound", not "native audio" (the lane is labelled "Native"); "says it on camera", not "lip-synced dialogue" in buttons. Loudness is written as a number with its unit in mono ("−14 LUFS", "−1 dB true peak"), and only on the Mix card, the Export menu and loudness reports.
 - **Money.** No prices, costs, estimates or credits anywhere in the UI. The one exception is the decision tree (3.20), where a job node may show what it cost, in dollars ("$0.08").
 - **Time.** m:ss (or m:ss.s) in Geist Mono. Shot time always names the shot (3.13).
 - **Names.** `@names`, `#shots`, versions (v3) and timecodes are mono. `@refs` are blue.
@@ -1333,6 +1529,26 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Loader | The Napkin logo at work, in its own four colours. The leading card names the department of the work: create, plan, learn or produce (section 6). |
 | Inline suggestion | An agent's draft shown in place, old words struck and new words underlined, with Keep, Keep mine and Why. |
 | Who-wrote-it mark | The avatar or crew figure on a scene or shot naming who last wrote it, with why?. |
+| Path | How a shot gets its sound, chosen per shot by Dex. **Path 1:** the clip model speaks the on-camera line, so the lips match. **Path 2:** a silent clip (or a still for a text shot) with sound made in layers. |
+| Sound view | The Video editor's second view (⌥S): the layers, takes, mix, loudness and Jude's checks (3.21). |
+| Layer (lane) | One kind of sound in the mix: Native, Voice, Effects, Ambience, Music. Each has mute, solo and a level. |
+| Shot sound (Native) | The sound a Path 1 clip came with. Words in it that nobody wrote are muted (R6). |
+| Line | One spoken line, with its speaker and whether it is on screen. It has takes. |
+| Cue | One effect or ambience: a **hit** (a single sound placed on the motion) or a **bed** (a sound under a stretch). |
+| Music section | The music for one scene, or the end-card sting. It can be redone alone. |
+| Take (sound) | One version of a line, cue or music section. One take of each is in the mix. |
+| In the mix | The take the mix uses. The mix is always rebuilt from these. |
+| Mix | Every layer's takes in the mix, with levels, dips and loudness, built by Edie. It has versions (mix v4). |
+| Re-voice | Turning a line into another voice, speech to speech, with the same timing, so the lips still match. |
+| Character voice | The one voice a character speaks in everywhere, designed, picked from the library or cloned (3.22). |
+| Narrator | The voice for voice-over that no character says. |
+| Pronunciation list | How the voices say brand names (a respelling or IPA), shared across the agency. |
+| Sound checks (R1–R6) | Jude's checks on the sound: dialogue sets the shot length, lips on every on-screen line, one voice at a time, speech first, hits on the motion, no stray words (3.21). |
+| Dips under speech | How far effects, ambience and music drop while someone speaks. |
+| Loudness target | How loud the finished ad must be: Online −14 LUFS, TV −23 LUFS, Radio −18 LUFS (or the station's figure). |
+| Stems | The mix exported as one file per layer. |
+| Cue sheet | Every line, cue and section with its times, in Napkin Radio's shape. |
+| Radio cut | The ad as a radio spot, 20 or 30 s, made from the same voices and stems. |
 
 ---
 
@@ -1370,6 +1586,21 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | No chat | Inline suggestions with Keep / Keep mine / Why, floating options on a selection, who-wrote-it marks, anchored asks | principle 10, 3.10; artboards 6, 7 | Select a line and press Tighten: Skye's rewrite appears struck and underlined in place, with a signed bubble; nothing changes until Keep. No chat box exists on any surface. |
 | Decision tree | History panel with List and Tree, filters by item, who and kind; Why on any item; versions branch; Restore adds a new decision; pinned decisions | 3.20; artboard 15 | On frame 3 press "Why does this look like this?": the tree opens filtered to frame 3 and shows v2 and v3 as branches. Restore v2: a new decision by you appears at the end, and the older nodes are unchanged. |
 
+### 11.2 Sound (2026-10-14), and what solves each
+
+| Decision | The interaction | Where | Acceptance test |
+|---|---|---|---|
+| A path per shot | Dex picks Path 1 for on-camera lines, Path 2 otherwise, a still for text shots; path button per shot; switching to Path 2 on a spoken shot asks first | 3.21; artboard 10b | Plan the sound for First Light: shots 4 and 5 read "Path 1 · speaks on camera", shots 1–3 "Path 2", the end card "silent · end card + layers". Set shot 4 to Path 2: the lip-sync question appears and nothing changes until you pick. |
+| Layers and takes | Native, Voice, Effects, Ambience, Music lanes with mute, solo and level; takes per line, cue and section, one In the mix | 3.21; artboard 10b | Redo "It's perfect!" softer: a v3 take lands with the same timing, Use puts it in the mix, and no other item gets a new take. Solo Music: nobody else hears it and the mix is unchanged. |
+| Re-voice keeps the lips | Re-voice to the character's voice, speech to speech | 3.21, 3.22; artboards 10b, 13b | Re-voice shot 4's line to Aoife: the new take's speech starts and ends at the same hundredth of a second as v1. |
+| Character voices | Voice tab with library, design (20–1,000 / 100–400, three previews a round) and clone (name and consent required); changing a voice remakes every line through one batch tray; scope project, shelf or agency | 3.22; artboard 13b | Change Maya's voice: the tray lists her four lines, the radio cut included; the pictures are untouched. Clone voice stays disabled until a name is given and the consent box is ticked. |
+| Brand names said right | The agency-wide pronunciation list with Test; changing an entry marks the lines that say it | 3.22; artboard 13b | Add "Vorr · /vɔːr/": Test says it right in Aoife's voice, and the lines that say "Vorr" show "to redo". |
+| Jude's checks R1–R6 | Quiet checks with fixes; R4 dips and R6 muting built into the mix and said; checks never block | 3.21; artboard 10b | Make shot 4's line 0.6 s longer than the shot: Jude says "Line runs past the shot", and "Grow it, shot 1 gives 0.6 s" keeps the ad at 15 s. Put the tagline over her line: "Two voices overlap at 0:12", and the fix moves it after. |
+| Loudness | Online −14, TV −23 (true peak −1 dB), Radio −18 LUFS; meter with whole-ad loudness, true peak and target | 3.21; artboard 10b | Export the TV master: its report reads within 1 dB of −23 LUFS and true peak at or below −1 dB. |
+| Radio cut | Export item; booked 20 or 30 s; same voices and stems; Skye asks about picture-only lines | 3.21, 3.14; artboard 10b | Make a 30 s radio cut: the file is exactly 30 s at −18 LUFS, uses Aoife for Maya, and plays on the phone. |
+| Phone plays the mix | The phone player plays the version's mix at −14 LUFS; sound notes are ordinary notes | 3.14 | Leave "music too loud" at 0:09 on the phone: it opens in the Sound view with its window over every lane. |
+| No costs in sound | No price on any sound button, tray, take, voice or export; costs in the decision tree only | principle 4, 3.21, 3.22 | Redo a line and make 3 previews: no screen shows a price; the decision tree shows each job's cost. |
+
 ---
 
 ## 12 Redraws and facts still to check
@@ -1387,10 +1618,11 @@ R1 to R9 are drawn. Where an artboard still shows a value that the 2026-10-13 an
 - **R7 Crew figures (done).** Every agent figure, avatar and mark on every artboard is the house figure from `AgentFigure`, with the names and sign-offs of 5.1. No simplified shapes remain.
 - **R8 Script editor without chat (done).** Artboards 6 and 7 have no Skye panel and no chat box. They show inline suggestions with Keep / Keep mine / Why, the floating options, who-wrote-it marks and anchored asks (3.10).
 - **R9 Decision tree (done).** Artboard 15 shows the History panel over the Storyboard editor, opened from "Why does this look like this?" on frame 3 (3.20).
+- **R10 Sound (drawn 2026-10-14).** Artboard 10b shows the Video editor's Sound view: the Picture | Sound switch, the shot list with paths, the lanes, the selected line with its takes, the Mix card with the loudness meter, Jude's checks and the open Export menu with the radio cut. Artboard 13b shows Maya's card on the Voice tab with the three ways to make a voice, every line she says, the pronunciation list and the voice's scope. Neither shows a price or a chat. Where they differ from this spec, the spec wins: neither artboard 10 nor 10b draws the **History** button every editor carries (3.1, 3.13); artboard 10 (the Picture view) has no **Picture | Sound** switch or **Export** menu yet, and still labels its summary row "Voice-over" (now **Voice**).
 
 ### 12.2 Facts still to check
 
-The owner answered every design question on 2026-10-13. What is left are facts about Runway and two documents to write. None of them changes a screen. The cost facts now feed the costs recorded per job and shown in the decision tree (3.20), not the UI, which shows no prices. They come from the capability sheet and the relay, so the answers land as data.
+The owner answered every design question on 2026-10-13. What is left are facts about Runway, ElevenLabs and Napkin Radio, and two documents to write. Items 1–7 change no screen. Items 8–10 (sound, 2026-10-14) decide which routes the sound screens can offer; the screens already carry copy for either answer. The cost facts now feed the costs recorded per job and shown in the decision tree (3.20), not the UI, which shows no prices. They come from the capability sheet and the relay, so the answers land as data.
 
 | # | What to check | Why it matters | Who checks |
 |---|---|---|---|
@@ -1401,3 +1633,6 @@ The owner answered every design question on 2026-10-13. What is left are facts a
 | 5 | **Extend and subject tracking.** Which Runway models extend a picture and reframe a film with subject tracking, at what price, and which ratios they support. | Make all sizes and the video cut-downs (3.19): methods, the costs recorded for them in the decision tree, and the "nearest supported ratio" list. | Whoever refreshes `capabilities/runway.json`. |
 | 6 | **The per-ad cost model.** Write it: what a typical ad costs, by step, before and after retakes (a 15 s ad is about $20 before retakes). | A reference for the costs the decision tree records, and a starting point when an agency chooses its own cap (5.4). Caps are off, so no warning depends on it now. | To be written; the owner signs it off. |
 | 7 | **Format packs review.** Review the draft `format-packs.json` and its unverified rows. | Every scamp sheet and Make all sizes (3.19). | The owner. |
+| 8 | **ElevenLabs key permissions.** Our key designs voices but returns 401 on everything else: it lacks `text_to_speech`, `speech_to_speech`, `sound_generation`, `music_generation`, `forced_alignment` (and `user_read`). Its name in `.env` is `ELEVELLABS_API_KEY`; the code should read `ELEVENLABS_API_KEY`. Then re-run the direct tests: designed-voice speech with timestamps, music from the cut, alignment and Aurora. | Redo this line, Re-voice, every cue and music section, Rewrite music to the cut, the voice previews, and the word checks (3.21, 3.22). Until then every sound take falls back to Runway with a stand-in voice (5.5). | Shrey, in the ElevenLabs dashboard; the key reaches AWS as a Terraform-applied secret, applied by a person. |
+| 9 | **Lip-sync quality on silent shots.** Which route does **Lip-sync it** (R2) use, and is it good enough? WAN 3 on Runway with the frame and our voice-over used our exact line, but the mouth followed it only loosely and continuity drifted (a second robot appeared). The Runway avatar speaks our line word for word but crops to a talking head, and its sync was weak. ElevenLabs Aurora and Sync Labs are untested. Jude's mouth-sync score fails on stylised faces. | Whether **Lip-sync it** is offered on a Path 2 shot at all, and on which framings (3.21). If no route passes, R2's fixes are only **Make it Path 1** and **Make it a voice-over**. | The relay owner, with paid test calls, judged by eye. |
+| 10 | **Napkin Radio's loudness bug,** and the radio pieces. Asked for −18 LUFS, Radio's export took a quiet mix from −21.3 to −14.9 LUFS (twice). It also never trims to the booked length, has no auth, and its own ElevenLabs key was rejected (`/voices` returned 502). We need repo access (`larryob78/napkin-radio`), the fix, and a licence to reuse its parser, scorer and station data. | The radio cut (3.21). Our own mix does the loudness pass and measures it, so a miss shows in the report instead of shipping; but the station profiles and the cue-sheet round trip depend on Radio. | Laurence, asked by Shrey. |
