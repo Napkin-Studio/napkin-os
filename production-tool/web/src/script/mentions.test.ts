@@ -52,6 +52,24 @@ const key = (editor: Editor, k: string) => editor.view.dom.dispatchEvent(new Key
 const settle = () => new Promise((r) => setTimeout(r, 30))
 
 describe('@ in a shot', () => {
+  it('in a screenplay scene, Enter at the end of the line picks from an open popover instead of starting the next element', async () => {
+    const { store, laughing, scriptId } = await project()
+    const element = document.createElement('div')
+    document.body.appendChild(element)
+    const hooks = scriptMentionHooks(store, scriptId, () => {})
+    const editor = new Editor({ element, extensions: editorExtensions({ kind: 'scene', mentions: () => hooks }) })
+    editors.push(editor)
+    editor.commands.focus('end')
+    editor.commands.insertContent('She laughs @stitch')
+    await settle()
+    expect(document.querySelector('.caretfloat')).not.toBeNull()
+    key(editor, 'Enter')
+    await settle()
+    const json = editor.getJSON()
+    expect(JSON.stringify(json)).toContain(`"id":"${laughing}"`)
+    expect((json.content ?? []).map((b) => b.type)).toEqual(['action'])
+  })
+
   it('opens the popover by label too, keeps the focus, and Enter inserts the mention and links the ref; Undo leaves it unknown', async () => {
     const { store, shot, laughing, scriptId } = await project()
     const linked: string[] = []

@@ -348,10 +348,12 @@ export function editorExtensions(opts: EditorOptions): AnyExtension[] {
   const placeholder = opts.placeholder
   const mentions = opts.mentions ? mentionExtensions(opts.mentions) : []
   const nodes = mentions.length ? TEXT_EXTENSIONS.map((e) => (e.name === 'mention' ? mentions[0] : e)) : TEXT_EXTENSIONS
+  // The @ popover comes after the keys: Tiptap runs later extensions' plugins first, so Enter, Tab and
+  // the arrows reach an open popover before the screenplay's element cycle takes them.
   const out: AnyExtension[] = [
     ...nodes,
-    ...mentions.slice(1),
     keys,
+    ...mentions.slice(1),
     Extension.create({
       name: 'napkinGuards',
       addProseMirrorPlugins() {
