@@ -6,26 +6,23 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useServices, useShell, useUi } from '../../app/context'
 import type { Me } from '../../contracts/types'
 import { Float } from '../Float'
+import { StudioMark } from '../Mark'
 import { initials } from './panels'
 import { CrewSheet } from '../agents/CrewSheet'
 import './chrome.css'
 
-/** "Home: your projects": a dark tile with the Home triangle (the mocks' mark). */
+/** "Home: your projects": the Napkin logo, as the shell's bar draws it (StudioLogo size 15: a 20px mark). */
 export function HomeMark({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" className="pt-home" aria-label="Home: your projects" title="Home: your projects" onClick={onClick}>
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+      <StudioMark size={20} />
     </button>
   )
 }
 
-/** The same tile where it goes nowhere (Home itself, the signed-out page). */
+/** The same logo where it goes nowhere (Home itself, the signed-out page). */
 export function MarkTile() {
-  return (
-    <span className="pt-home" aria-hidden="true" style={{ cursor: 'default' }}>
-      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-    </span>
-  )
+  return <span className="pt-home static" aria-hidden="true"><StudioMark size={20} /></span>
 }
 
 /** "Napkin Studio", "Production" in tool blue, and the project's name in grey. */
