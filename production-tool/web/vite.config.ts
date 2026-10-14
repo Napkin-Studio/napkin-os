@@ -26,6 +26,8 @@ export default defineConfig({
     'process.env.IS_PREACT': JSON.stringify('false'),
   },
   build: { chunkSizeWarningLimit: 4000 },
+  // The store Worker (src/store/worker.ts, features/engine-store.clan) is a module Worker: it imports napkin-wasm and zstd by URL.
+  worker: { format: 'es' },
   server: {
     fs: { allow: ['..'] },
   },
