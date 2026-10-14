@@ -71,6 +71,9 @@ export interface ProjectUi {
   jobs: Record<string, JobLocal>
   /** The panel that is open. */
   stage: StageName
+  /** Which storyboard and which video the Storyboard and Video panels show, when the project has more
+   *  than one (the node opened on the canvas; features/canvas-nodes.clan). Absent: the main ones. */
+  openNode?: { storyboard?: string; video?: string }
   /** Region drawn on each frame (by frame id) before Regenerate. */
   frameRegions: Record<string, Region | undefined>
   /** "Draw the rest" is under way: each finished frame starts the next shot (jobs/frames.ts). */

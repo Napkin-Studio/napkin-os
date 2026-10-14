@@ -42,6 +42,40 @@ export function mainScript(d: Doc): Script | undefined {
   return (link && d.scripts[link.from.id]) || first(d.scripts)
 }
 
+/** The storyboard the Storyboard panel shows: the node opened on the canvas, else the main one. */
+export function openStoryboard(d: Doc, open?: { storyboard?: Id }): Storyboard | undefined {
+  return (open?.storyboard && d.storyboards[open.storyboard]) || mainStoryboard(d)
+}
+
+/** The video the Video panel shows: the node opened on the canvas, else the main one. */
+export function openVideo(d: Doc, open?: { video?: Id }): Video | undefined {
+  return (open?.video && d.videos[open.video]) || mainVideo(d)
+}
+
+/** The storyboard that renders a video (its `renders` link); the main video falls back to the main storyboard. */
+export function storyboardOfVideo(d: Doc, videoId: Id | undefined): Storyboard | undefined {
+  if (!videoId) return undefined
+  const link = values(d.links).find((l) => l.role === 'renders' && l.to.kind === 'video' && l.to.id === videoId)
+  if (link) return d.storyboards[link.from.id]
+  return videoId === mainVideo(d)?.id ? mainStoryboard(d) : undefined
+}
+
+/** The script that drives a storyboard (its `drives` link); the main storyboard falls back to the main script. */
+export function scriptOfStoryboard(d: Doc, storyboardId: Id | undefined): Script | undefined {
+  if (!storyboardId) return undefined
+  const link = values(d.links).find((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === storyboardId && l.from.kind === 'script')
+  if (link) return d.scripts[link.from.id]
+  return storyboardId === mainStoryboard(d)?.id ? mainScript(d) : undefined
+}
+
+/** The storyboard a script drives (its `drives` link); the main script falls back to the main storyboard. */
+export function storyboardOfScript(d: Doc, scriptId: Id | undefined): Storyboard | undefined {
+  if (!scriptId) return undefined
+  const link = values(d.links).find((l) => l.role === 'drives' && l.from.kind === 'script' && l.from.id === scriptId && l.to.kind === 'storyboard')
+  if (link) return d.storyboards[link.to.id]
+  return scriptId === mainScript(d)?.id ? mainStoryboard(d) : undefined
+}
+
 /** A storyboard's shots in rank order (the main storyboard's by default). */
 export function shotsOf(d: Doc, storyboardId = mainStoryboard(d)?.id): Shot[] {
   return values(d.shots).filter((s) => s.storyboard_id === storyboardId).sort(byRank)
