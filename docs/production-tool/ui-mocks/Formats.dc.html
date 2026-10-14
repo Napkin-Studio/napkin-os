@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scamp sheets and Make all sizes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+.grid{background-color:#FAFAFB;background-image:radial-gradient(#D6DAE2 1px, transparent 1px);background-size:24px 24px}
+button{font:inherit;cursor:pointer;color:#14161B}
+.mono{font-family:'Geist Mono',monospace}
+.cap{font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6B7180}
+.pending{background:repeating-linear-gradient(-45deg,#F5F6F8 0 6px,#FFFFFF 6px 12px);background-size:17px 17px;animation:lm-drift 1.6s linear infinite}
+@keyframes lm-drift{to{background-position:17px 0}}
+@media (prefers-reduced-motion: reduce){.pending{animation:none}}
+.chip:hover{border-color:#6B7180}
+.packcard:hover{border-color:#B9BEC9}
+.cell:hover .cellbox{border-color:#B9BEC9}
+.cell:focus-visible{outline:2px solid #2F64F5;outline-offset:2px}
+
+/* napkin-loader */
+/* The Napkin loader: the Napkin logo (ui/Mark.tsx) at work. Copy this whole
+   block, and the <svg class="napkin-loader"> pattern marked "copy verbatim",
+   as they are; change only width/height, data-work and data-state.
+   The logo: a disc of four quadrants turned -45deg, always in the Napkin
+   colours: create #FF4F2E (top), produce #8B919E (right), learn #DADDE3
+   (bottom), plan #14161B (left). A centre pin (ink dot, white ring) is the
+   axis everything turns on.
+   The markup has four card slots, painted back to front (.nl-c3 ... .nl-c0),
+   so the leading card .nl-c0 is always on top and each trailing card lies
+   UNDER the one ahead of it. data-work picks which quadrant leads; the
+   trailing cards are the logo's others in its fixed order (counter-clockwise
+   from the leader), each card always sits at its own logo position.
+   One 4 s loop (--nl-t):
+     0.0-0.2 s  only the pin and the leading card
+     0.2-1.8 s  the leader revolves one turn clockwise round the pin; the
+                cards behind it fan out one after another, each sliding out
+                from under the one ahead, until the circle closes (the logo)
+     1.8-2.8 s  the whole logo spins one turn round the pin
+     2.8-4.0 s  the cards fold back, each sliding under the one ahead, until
+                only the leader is left; repeat
+   data-work (who leads):
+     create  (orange) generating | rendering | retouching | create (default)
+     plan    (ink)    planning | writing | directing | plan
+     learn   (light)  reading | researching | checking | learn
+     produce (grey)   cutting | producing | exporting | sizes | produce
+   data-state: run (default) | finish (the full logo, still: hold it 0.6 s,
+               then show the done state) | queued (the full logo, still)
+   Reduced motion (prefers-reduced-motion, or [data-motion="still"] on any
+   ancestor): the full logo, still; the leading quadrant pulses in opacity.
+   .nl-flat: the full logo, still, no pulse (legends, swatches).
+   .nl-at + style="--nl-at:-1.2s": a paused poster frame at that point. */
+.napkin-loader{display:block;flex-shrink:0;overflow:visible;--nl-t:4s;--nl-h:0deg;--nl-f0:#FF4F2E;--nl-f1:#14161B;--nl-f2:#DADDE3;--nl-f3:#8B919E}
+.napkin-loader[data-work="plan"],.napkin-loader[data-work="planning"],.napkin-loader[data-work="writing"],.napkin-loader[data-work="directing"]{--nl-h:270deg;--nl-f0:#14161B;--nl-f1:#DADDE3;--nl-f2:#8B919E;--nl-f3:#FF4F2E}
+.napkin-loader[data-work="learn"],.napkin-loader[data-work="reading"],.napkin-loader[data-work="researching"],.napkin-loader[data-work="checking"]{--nl-h:180deg;--nl-f0:#DADDE3;--nl-f1:#8B919E;--nl-f2:#FF4F2E;--nl-f3:#14161B}
+.napkin-loader[data-work="produce"],.napkin-loader[data-work="cutting"],.napkin-loader[data-work="producing"],.napkin-loader[data-work="exporting"],.napkin-loader[data-work="sizes"]{--nl-h:90deg;--nl-f0:#8B919E;--nl-f1:#FF4F2E;--nl-f2:#14161B;--nl-f3:#DADDE3}
+.napkin-loader .nl-spin,.napkin-loader .nl-c,.napkin-loader .nl-s{transform-box:view-box;transform-origin:center}
+.napkin-loader .nl-c0{transform:rotate(var(--nl-h))}
+.napkin-loader .nl-c1{transform:rotate(calc(var(--nl-h) - 90deg))}
+.napkin-loader .nl-c2{transform:rotate(calc(var(--nl-h) - 180deg))}
+.napkin-loader .nl-c3{transform:rotate(calc(var(--nl-h) - 270deg))}
+.napkin-loader .nl-c0 .nl-s{fill:var(--nl-f0)}
+.napkin-loader .nl-c1 .nl-s{fill:var(--nl-f1)}
+.napkin-loader .nl-c2 .nl-s{fill:var(--nl-f2)}
+.napkin-loader .nl-c3 .nl-s{fill:var(--nl-f3)}
+.napkin-loader .nl-pin{fill:#14161B;stroke:#FFFFFF;stroke-width:1.5px}
+.napkin-loader .nl-spin{animation:nl-spin var(--nl-t) linear infinite}
+.napkin-loader .nl-s{animation:var(--nl-t) linear infinite}
+.napkin-loader .nl-c0 .nl-s{animation-name:nl-k0}
+.napkin-loader .nl-c1 .nl-s{animation-name:nl-k1}
+.napkin-loader .nl-c2 .nl-s{animation-name:nl-k2}
+.napkin-loader .nl-c3 .nl-s{animation-name:nl-k3}
+.napkin-loader.nl-at .nl-spin,.napkin-loader.nl-at .nl-s{animation-play-state:paused;animation-delay:var(--nl-at,0s)}
+@keyframes nl-k0{0%{transform:rotate(90deg)}7.25%{transform:rotate(90.2deg)}8.75%{transform:rotate(91.1deg)}10.25%{transform:rotate(93deg)}11.75%{transform:rotate(96.3deg)}13.25%{transform:rotate(101.5deg)}14.75%{transform:rotate(109deg)}16%{transform:rotate(117.3deg)}17.25%{transform:rotate(127.6deg)}18.25%{transform:rotate(137.6deg)}19.5%{transform:rotate(152.4deg)}20.5%{transform:rotate(166.3deg)}21.5%{transform:rotate(182deg)}22.5%{transform:rotate(199.8deg)}23.25%{transform:rotate(214.5deg)}24.5%{transform:rotate(240.6deg)}25.75%{transform:rotate(263.8deg)}27%{transform:rotate(283.7deg)}28.25%{transform:rotate(300.7deg)}29.75%{transform:rotate(317.6deg)}31.25%{transform:rotate(330.8deg)}33%{transform:rotate(342.4deg)}34.75%{transform:rotate(350.5deg)}36%{transform:rotate(354.4deg)}37.25%{transform:rotate(357deg)}38.75%{transform:rotate(358.9deg)}40.5%{transform:rotate(359.8deg)}78%{transform:rotate(360deg)}79.75%{transform:rotate(360.5deg)}81.25%{transform:rotate(362deg)}82.5%{transform:rotate(364.4deg)}83.75%{transform:rotate(368.4deg)}84.75%{transform:rotate(372.9deg)}85.75%{transform:rotate(378.8deg)}86.75%{transform:rotate(386.2deg)}87.5%{transform:rotate(392.9deg)}89.25%{transform:rotate(412deg)}90.25%{transform:rotate(421.7deg)}91.5%{transform:rotate(431.2deg)}92.75%{transform:rotate(438.3deg)}94.25%{transform:rotate(444.2deg)}95.75%{transform:rotate(447.7deg)}97.5%{transform:rotate(449.5deg)}100%{transform:rotate(450deg)}}
+@keyframes nl-k1{0%{transform:rotate(180deg);opacity:0}9%{transform:rotate(180deg);opacity:0}9.25%{transform:rotate(180deg);opacity:1}11.25%{transform:rotate(180deg)}13.75%{transform:rotate(180.9deg)}15.25%{transform:rotate(182.7deg)}16.5%{transform:rotate(185.2deg)}17.75%{transform:rotate(189.1deg)}19%{transform:rotate(194.4deg)}20.25%{transform:rotate(201.5deg)}21.25%{transform:rotate(208.6deg)}22.5%{transform:rotate(219.5deg)}23.5%{transform:rotate(229.9deg)}24.75%{transform:rotate(245.5deg)}26%{transform:rotate(268deg)}26.75%{transform:rotate(280deg)}27.5%{transform:rotate(290.9deg)}28.75%{transform:rotate(306.8deg)}30.25%{transform:rotate(322.4deg)}31.5%{transform:rotate(332.7deg)}33%{transform:rotate(342.4deg)}34.5%{transform:rotate(349.5deg)}36.25%{transform:rotate(355deg)}38.5%{transform:rotate(358.7deg)}41%{transform:rotate(359.9deg)}75.5%{transform:rotate(360.1deg)}77.75%{transform:rotate(362.2deg)}79.5%{transform:rotate(366.8deg)}80.75%{transform:rotate(372.6deg)}81.75%{transform:rotate(379.1deg)}83%{transform:rotate(389.9deg)}84%{transform:rotate(401deg)}85%{transform:rotate(414.5deg)}85.75%{transform:rotate(426.5deg)}86.5%{transform:rotate(440deg)}87.75%{transform:rotate(464.7deg)}88.25%{transform:rotate(473.5deg)}89%{transform:rotate(485.5deg)}90.25%{transform:rotate(502deg)}91%{transform:rotate(510.1deg)}91.75%{transform:rotate(517deg)}92.5%{transform:rotate(522.7deg)}93.5%{transform:rotate(528.8deg)}94.25%{transform:rotate(532.2deg)}94.75%{transform:rotate(534.1deg);opacity:1}95%{transform:rotate(534.9deg);opacity:0}95.25%{transform:rotate(535.6deg)}97.25%{transform:rotate(539.1deg)}100%{transform:rotate(540deg);opacity:0}}
+@keyframes nl-k2{0%{transform:rotate(270deg);opacity:0}14.25%{transform:rotate(270deg);opacity:0}14.5%{transform:rotate(270deg);opacity:1}17.5%{transform:rotate(270.1deg)}20%{transform:rotate(271.7deg)}22%{transform:rotate(275deg)}23.25%{transform:rotate(278.5deg)}24.25%{transform:rotate(282.3deg)}25.25%{transform:rotate(287deg)}26.25%{transform:rotate(292.7deg)}27.75%{transform:rotate(303.6deg)}30.5%{transform:rotate(328.4deg)}31.5%{transform:rotate(335.7deg)}32.75%{transform:rotate(343deg)}33.75%{transform:rotate(347.7deg)}35%{transform:rotate(352.3deg)}36.25%{transform:rotate(355.5deg)}37.75%{transform:rotate(358deg)}39.5%{transform:rotate(359.5deg)}41.5%{transform:rotate(360deg)}72%{transform:rotate(360.1deg)}74.25%{transform:rotate(361.9deg)}76%{transform:rotate(366.2deg)}77.5%{transform:rotate(373.3deg)}78.25%{transform:rotate(378.2deg)}79%{transform:rotate(384.2deg)}79.75%{transform:rotate(391.5deg)}80.5%{transform:rotate(400deg)}81.25%{transform:rotate(410deg)}81.75%{transform:rotate(417.4deg)}82.75%{transform:rotate(434.6deg)}83.75%{transform:rotate(454.8deg)}84.75%{transform:rotate(478.4deg)}85.75%{transform:rotate(505.1deg)}86.5%{transform:rotate(523.8deg)}87%{transform:rotate(535.2deg)}87.75%{transform:rotate(550.7deg)}88.5%{transform:rotate(564.4deg)}89.25%{transform:rotate(576.4deg)}90%{transform:rotate(586.8deg)}90.75%{transform:rotate(595.8deg)}91%{transform:rotate(598.5deg);opacity:1}91.25%{transform:rotate(601.1deg);opacity:0}91.75%{transform:rotate(605.8deg)}92.75%{transform:rotate(613.6deg)}93.75%{transform:rotate(619.5deg)}94.75%{transform:rotate(623.8deg)}95.75%{transform:rotate(626.7deg)}97%{transform:rotate(628.8deg)}100%{transform:rotate(630deg);opacity:0}}
+@keyframes nl-k3{0%{transform:rotate(360deg);opacity:0}19.75%{transform:rotate(360deg);opacity:0}20%{transform:rotate(360deg);opacity:1}68.25%{transform:rotate(360deg)}70.75%{transform:rotate(361.4deg)}71.75%{transform:rotate(363.2deg)}72.75%{transform:rotate(366.1deg)}73.75%{transform:rotate(370.2deg)}74.5%{transform:rotate(374.4deg)}75.5%{transform:rotate(381.5deg)}76.25%{transform:rotate(388.1deg)}77.25%{transform:rotate(398.9deg)}78%{transform:rotate(408.6deg)}78.75%{transform:rotate(419.7deg)}79.5%{transform:rotate(432.5deg)}80.25%{transform:rotate(446.9deg)}80.75%{transform:rotate(457.6deg)}81.75%{transform:rotate(481.4deg)}82.5%{transform:rotate(501.6deg)}83%{transform:rotate(516.2deg)}84%{transform:rotate(548.2deg);opacity:1}84.25%{transform:rotate(556.1deg);opacity:0}85%{transform:rotate(574.9deg)}86%{transform:rotate(601.6deg)}86.5%{transform:rotate(613.8deg)}87.25%{transform:rotate(630.6deg)}88.25%{transform:rotate(650deg)}89%{transform:rotate(662.6deg)}90%{transform:rotate(676.8deg)}91%{transform:rotate(688.5deg)}92%{transform:rotate(697.9deg)}93%{transform:rotate(705.2deg)}94.25%{transform:rotate(711.8deg)}95.5%{transform:rotate(716.1deg)}96.75%{transform:rotate(718.5deg)}98.25%{transform:rotate(719.8deg)}100%{transform:rotate(720deg);opacity:0}}
+@keyframes nl-spin{0%,42.5%{transform:rotate(0deg);animation-timing-function:cubic-bezier(.65,0,.35,1)}67.5%,100%{transform:rotate(360deg)}}
+@keyframes nl-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.napkin-loader[data-state="finish"] .nl-spin,.napkin-loader[data-state="finish"] .nl-s,.napkin-loader[data-state="queued"] .nl-spin,.napkin-loader[data-state="queued"] .nl-s,.napkin-loader.nl-flat .nl-spin,.napkin-loader.nl-flat .nl-s{animation:none;transform:none;opacity:1}
+[data-motion="still"] .napkin-loader:not(.nl-at) .nl-spin,[data-motion="still"] .napkin-loader:not(.nl-at) .nl-s{animation:none;transform:none;opacity:1}
+[data-motion="still"] .napkin-loader:not(.nl-at):not(.nl-flat):not([data-state="finish"]):not([data-state="queued"]) .nl-c0 .nl-s{animation:nl-pulse 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){
+.napkin-loader:not(.nl-at) .nl-spin,.napkin-loader:not(.nl-at) .nl-s{animation:none;transform:none;opacity:1}
+.napkin-loader:not(.nl-at):not(.nl-flat):not([data-state="finish"]):not([data-state="queued"]) .nl-c0 .nl-s{animation:nl-pulse 2.4s ease-in-out infinite}
+}
+/* /napkin-loader */
+
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #FAFAFB; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E">
+
+<!-- Top bar -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE; z-index: 6">
+  <button aria-label="Home: your projects" style="width: 28px; height: 28px; border: 0; border-radius: 8px; background: #14161B; display: flex; align-items: center; justify-content: center">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"></path></svg>
+  </button>
+  <span style="font-weight: 600; font-size: 14px">Napkin Studio</span>
+  <span style="font-weight: 600; font-size: 14px; color: #1E4ED8">Production</span>
+  <span style="font-size: 13px; color: #6B7180">Lumen Water · First Light</span>
+  <span style="flex: 1"></span>
+  <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4A4F5C">
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF">S</span>
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #14161B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF; margin-left: -10px">M</span>
+    <span>Sai and Maya are here</span>
+  </div>
+  <button style="height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500">Share</button>
+  <button aria-label="Your account" style="width: 32px; height: 32px; border-radius: 999px; border: 0; background: #F2F3F6; font-weight: 600; font-size: 12px">SB</button>
+</header>
+
+<!-- Canvas -->
+<div class="grid" style="position: absolute; left: 0; top: 48px; width: 1440px; height: 852px"></div>
+
+<!-- ============ Sheet: Out of home (dropped from the Sheets picker) ============ -->
+<section aria-label="Sheet: Out of home, 5 ratio-locked areas" style="position: absolute; left: 24px; top: 74px; width: 620px; height: 348px; box-sizing: border-box; border: 1px solid #D6DAE2; border-radius: 16px; background: rgba(255,255,255,0.62); z-index: 1">
+  <div style="position: absolute; left: 14px; top: -11px; padding: 2px 8px; background: #FAFAFB; font-size: 12px; font-weight: 600; color: #4A4F5C">Sheet · Out of home</div>
+  <div style="position: absolute; right: 12px; top: 10px; display: flex; align-items: center; gap: 6px">
+    <span class="mono" style="font-size: 11px; color: #6B7180">5 areas · ratio-locked</span>
+    <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; font-weight: 500">+ Add a size</button>
+    <button aria-label="More sheet actions" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 14px; color: #4A4F5C">⋯</button>
+  </div>
+
+  <!-- Row 1 -->
+  <div style="position: absolute; left: 18px; top: 44px; display: flex; gap: 20px; align-items: flex-start">
+    <!-- 48-sheet, scamped -->
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; height: 22px">
+        <span style="font-weight: 600">48-sheet</span>
+        <span class="mono" style="font-size: 10.5px; color: #6B7180">6.096 × 3.048 m</span>
+        <span style="flex: 1"></span>
+        <button style="height: 22px; padding: 0 9px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 11px; font-weight: 500">Draw it · 2:1</button>
+      </div>
+      <div role="img" aria-label="48-sheet area, scamped by Sai: Maya raises the bottle to a rising sun, headline top left, logo bottom right" style="position: relative; width: 220px; height: 110px; box-sizing: border-box; background: #FFFFFF; border: 1.5px solid #14161B; border-radius: 4px">
+        <span aria-hidden="true" style="position: absolute; left: 8px; top: 8px; right: 8px; bottom: 8px; border: 1px dashed #D6DAE2; border-radius: 2px"></span>
+        <svg width="217" height="107" viewBox="0 0 237 117" aria-hidden="true" style="position: absolute; left: 0; top: 0">
+          <g fill="none" stroke="#14161B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 80 C40 75 70 83 110 78 S180 76 226 80"></path>
+            <path d="M152 79 C152 64 163 56 174 56 C186 56 196 65 196 79"></path>
+            <path d="M174 50 L174 44 M160 54 L156 49 M188 54 L192 49 M201 66 L207 63 M147 66 L141 63"></path>
+            <circle cx="104" cy="40" r="6"></circle>
+            <path d="M104 46 C103 56 104 64 105 76"></path>
+            <path d="M105 76 L98 96 M105 76 L112 96"></path>
+            <path d="M104 54 C109 50 113 45 116 38"></path>
+            <path d="M104 56 C99 60 96 64 94 70"></path>
+            <path d="M113 39 L117 24 L122 25 L119 40 Z"></path>
+            <path d="M16 22 l5 -6 l5 6 l5 -6 l5 6 l5 -6 l5 6 l5 -6 l5 6 l5 -6 l5 6"></path>
+            <path d="M16 34 l5 -5 l5 5 l5 -5 l5 5 l5 -5 l5 5"></path>
+            <rect x="196" y="95" width="28" height="12" rx="1.5"></rect>
+          </g>
+          <g fill="none" stroke="#4A4F5C" stroke-width="1.1" stroke-linecap="round">
+            <path d="M22 96 q8 -4 16 0 t16 0 t16 0"></path>
+            <path d="M128 100 q8 -4 16 0 t16 0"></path>
+            <path d="M201 101 l3 -3 l3 3 l3 -3 l3 3 l3 -3"></path>
+          </g>
+        </svg>
+        <span class="mono" style="position: absolute; right: 6px; top: 5px; display: flex; align-items: center; gap: 3px; font-size: 10px; color: #4A4F5C; background: #FFFFFF; padding: 0 3px"><svg width="8" height="9" viewBox="0 0 8 9" aria-hidden="true"><rect x="1" y="4" width="6" height="4.5" rx="1" fill="#4A4F5C"></rect><path d="M2.3 4 V2.8 a1.7 1.7 0 0 1 3.4 0 V4" fill="none" stroke="#4A4F5C" stroke-width="1"></path></svg>2:1</span>
+      </div>
+    </div>
+    <!-- 96-sheet -->
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; height: 22px">
+        <span style="font-weight: 600">96-sheet</span>
+        <span class="mono" style="font-size: 10.5px; color: #6B7180">12.192 × 3.048 m</span>
+      </div>
+      <div role="img" aria-label="96-sheet area, empty, 4:1" style="position: relative; width: 300px; height: 75px; box-sizing: border-box; background: #FFFFFF; border: 1.5px solid #D6DAE2; border-radius: 4px; display: flex; align-items: center; justify-content: center">
+        <span aria-hidden="true" style="position: absolute; left: 7px; top: 7px; right: 7px; bottom: 7px; border: 1px dashed #E7E9EE; border-radius: 2px"></span>
+        <span style="font-size: 11px; color: #6B7180">Scamp here</span>
+        <span class="mono" style="position: absolute; right: 6px; top: 5px; display: flex; align-items: center; gap: 3px; font-size: 10px; color: #4A4F5C"><svg width="8" height="9" viewBox="0 0 8 9" aria-hidden="true"><rect x="1" y="4" width="6" height="4.5" rx="1" fill="#4A4F5C"></rect><path d="M2.3 4 V2.8 a1.7 1.7 0 0 1 3.4 0 V4" fill="none" stroke="#4A4F5C" stroke-width="1"></path></svg>4:1</span>
+        <!-- Sai's cursor, pen tool -->
+        <div style="position: absolute; left: 200px; top: 34px; z-index: 2">
+          <svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><path d="M1 1 L14 9 L8 10 L5 16 Z" fill="#7D52F4" stroke="#FFFFFF" stroke-width="1.2"></path></svg>
+          <span style="position: absolute; left: 12px; top: 12px; white-space: nowrap; padding: 2px 8px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; font-size: 11px; font-weight: 600">Sai · pen</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2 -->
+  <div style="position: absolute; left: 18px; top: 196px; display: flex; gap: 20px; align-items: flex-start">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; height: 22px; display: flex; align-items: center"><span style="font-weight: 600">6-sheet</span></div>
+      <div role="img" aria-label="6-sheet area, empty, 2:3" style="position: relative; width: 73px; height: 110px; box-sizing: border-box; background: #FFFFFF; border: 1.5px solid #D6DAE2; border-radius: 4px">
+        <span aria-hidden="true" style="position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px; border: 1px dashed #E7E9EE; border-radius: 2px"></span>
+        <span class="mono" style="position: absolute; right: 5px; top: 4px; font-size: 10px; color: #4A4F5C">2:3</span>
+        <span class="mono" style="position: absolute; left: 5px; bottom: 4px; font-size: 9.5px; color: #4A4F5C; white-space: nowrap">1.2×1.8 m</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; height: 22px; display: flex; align-items: center"><span style="font-weight: 600">Digital 6-sheet</span></div>
+      <div role="img" aria-label="Digital 6-sheet area, empty, 9:16" style="position: relative; width: 62px; height: 110px; box-sizing: border-box; background: #FFFFFF; border: 1.5px solid #D6DAE2; border-radius: 4px">
+        <span aria-hidden="true" style="position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px; border: 1px dashed #E7E9EE; border-radius: 2px"></span>
+        <span class="mono" style="position: absolute; right: 5px; top: 4px; font-size: 10px; color: #4A4F5C">9:16</span>
+        <span class="mono" style="position: absolute; left: 4px; bottom: 4px; font-size: 9.5px; color: #4A4F5C; white-space: nowrap">1080×1920</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; height: 22px; display: flex; align-items: center; gap: 6px"><span style="font-weight: 600">Bus side</span><span class="mono" style="font-size: 10.5px; color: #6B7180">3.6 × 0.6 m</span></div>
+      <div role="img" aria-label="Bus side area, empty, 6:1" style="position: relative; width: 300px; height: 50px; box-sizing: border-box; background: #FFFFFF; border: 1.5px solid #D6DAE2; border-radius: 4px; display: flex; align-items: center; justify-content: center">
+        <span aria-hidden="true" style="position: absolute; left: 5px; top: 5px; right: 5px; bottom: 5px; border: 1px dashed #E7E9EE; border-radius: 2px"></span>
+        <span style="font-size: 11px; color: #6B7180">Scamp here</span>
+        <span class="mono" style="position: absolute; right: 6px; top: 3px; font-size: 10px; color: #4A4F5C">6:1</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Sheets picker (open from the toolbar) ============ -->
+<sc-if value="{{ui.pickerOpen}}" hint-placeholder-val="{{ true }}">
+<div role="dialog" aria-label="Add a sheet" style="position: absolute; left: 124px; top: 432px; width: 540px; height: 390px; box-sizing: border-box; padding: 14px 16px 16px; background: rgba(255,255,255,0.97); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 12px; z-index: 5">
+  <div style="display: flex; align-items: center; gap: 10px">
+    <span style="font-weight: 600; font-size: 15px">Sheets</span>
+    <span class="mono" style="font-size: 11px; color: #6B7180">6 packs · one click each</span>
+    <span style="flex: 1"></span>
+    <button onClick="{{ closePicker }}" aria-label="Close sheets" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: #F2F3F6; font-size: 14px; color: #4A4F5C">×</button>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px">
+    <sc-for list="{{packs}}" as="p" hint-placeholder-count="6">
+      <div class="packcard" style="{{p.cardStyle}}">
+        <div style="display: flex; align-items: baseline; gap: 6px">
+          <span style="font-weight: 600; font-size: 13px; white-space: nowrap">{{p.name}}</span>
+          <span style="flex: 1"></span>
+          <sc-if value="{{p.isAdded}}" hint-placeholder-val="{{ false }}">
+            <span style="display: flex; align-items: center; gap: 3px; font-size: 10.5px; color: #1E4ED8; white-space: nowrap"><svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5.5" fill="#2F64F5"></circle><path d="M3.4 6.2 L5.2 8 L8.6 4.4" fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Added</span>
+          </sc-if>
+          <sc-if value="{{p.notAdded}}" hint-placeholder-val="{{ true }}">
+            <span class="mono" style="font-size: 10.5px; color: #6B7180">{{p.count}}</span>
+          </sc-if>
+        </div>
+        <div aria-hidden="true" style="height: 24px; display: flex; align-items: flex-end; gap: 4px">
+          <sc-for list="{{p.thumbs}}" as="t" hint-placeholder-count="4">
+            <span style="{{t.style}}"></span>
+          </sc-for>
+        </div>
+        <div style="font-size: 11px; line-height: 1.35; color: #4A4F5C; height: 45px; overflow: hidden">{{p.sizes}}</div>
+        <button onClick="{{ p.add }}" aria-label="{{p.aria}}" style="{{p.btnStyle}}">{{p.btn}}</button>
+      </div>
+    </sc-for>
+  </div>
+  <!-- caret to the toolbar button -->
+  <span aria-hidden="true" style="position: absolute; left: 512px; bottom: -7px; width: 12px; height: 12px; background: #FFFFFF; border-right: 1px solid #E7E9EE; border-bottom: 1px solid #E7E9EE; transform: rotate(45deg)"></span>
+</div>
+</sc-if>
+
+<!-- ============ Key visual, selected ============ -->
+<div role="toolbar" aria-label="Selection: Key visual, Toast v2" style="position: absolute; left: 680px; top: 58px; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; background: rgba(255,255,255,0.96); border: 1px solid #E7E9EE; border-radius: 999px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); z-index: 5">
+  <span style="font-size: 12px; color: #1E4ED8; font-weight: 600; margin-right: 4px">Toast v2</span>
+  <button onClick="{{ toggleTray }}" aria-pressed="{{ui.trayPressed}}" style="{{ui.makeBtnStyle}}">
+    <svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><rect x="0.8" y="3" width="8" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="6" y="0.8" width="9.2" height="5.2" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="10.5" y="8" width="4.7" height="4.7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"></rect></svg>
+    Make all sizes
+  </button>
+  <button style="height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; font-weight: 500">Open</button>
+  <button aria-label="More actions" style="width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent; font-size: 16px; color: #4A4F5C">⋯</button>
+</div>
+
+<article aria-label="Key visual, Toast v2, selected" style="position: absolute; left: 680px; top: 108px; width: 320px; box-sizing: border-box; background: #FFFFFF; border: 2px solid #2F64F5; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); padding: 12px 13px 13px; display: flex; flex-direction: column; gap: 8px; z-index: 2">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1.5" y="3" width="15" height="12" rx="2" fill="#14161B"></rect><path d="M3 13 L7 8.5 L10 11.5 L12 9.5 L15 13 Z" fill="#FFFFFF"></path></svg>
+    <span style="font-weight: 600; font-size: 13.5px">Key visual · Toast v2</span>
+    <span style="flex: 1"></span>
+    <span class="mono" style="font-size: 10.5px; color: #6B7180">16:9 · 1920×1080</span>
+  </div>
+  <div role="img" aria-label="Maya toasts the sunrise with the bottle; headline top left, Lumen logo bottom right" style="position: relative; width: 290px; height: 163px; border-radius: 6px; overflow: hidden; background: linear-gradient(0deg, #3E4A5A 0%, #8A6E78 30%, #F3A97B 58%, #FFD9A0 100%)">
+    <span style="position: absolute; left: 132px; top: 46px; width: 30px; height: 96px; border-radius: 15px 15px 4px 4px; background: linear-gradient(180deg, #7A5A48, #4A3830)"></span>
+    <span style="position: absolute; left: 156px; top: 30px; width: 9px; height: 26px; border-radius: 3px; background: radial-gradient(circle at 50% 30%, #E6F4FF, #4C8DBA)"></span>
+    <span style="position: absolute; left: 14px; top: 14px; color: #FFFFFF; font-weight: 700; font-size: 15px; letter-spacing: -0.01em">Drink the morning.</span>
+    <span class="mono" style="position: absolute; right: 12px; bottom: 10px; padding: 2px 6px; border-radius: 3px; background: #FFFFFF; color: #14161B; font-size: 10px; font-weight: 500; letter-spacing: 0.08em">LUMEN</span>
+  </div>
+  <!-- selection handles -->
+  <span aria-hidden="true" style="position: absolute; left: -6px; top: -6px; width: 8px; height: 8px; background: #FFFFFF; border: 2px solid #2F64F5; border-radius: 2px"></span>
+  <span aria-hidden="true" style="position: absolute; right: -6px; top: -6px; width: 8px; height: 8px; background: #FFFFFF; border: 2px solid #2F64F5; border-radius: 2px"></span>
+  <span aria-hidden="true" style="position: absolute; left: -6px; bottom: -6px; width: 8px; height: 8px; background: #FFFFFF; border: 2px solid #2F64F5; border-radius: 2px"></span>
+  <span aria-hidden="true" style="position: absolute; right: -6px; bottom: -6px; width: 8px; height: 8px; background: #FFFFFF; border: 2px solid #2F64F5; border-radius: 2px"></span>
+</article>
+
+<!-- ============ Format set node (from Toast v1) ============ -->
+<article aria-label="Format set, Toast v1, 9 sizes" style="position: absolute; left: 680px; top: 342px; width: 320px; box-sizing: border-box; background: #FFFFFF; border: 1px solid #D6DAE2; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; z-index: 2">
+  <!-- stacked edge: a group -->
+  <span aria-hidden="true" style="position: absolute; left: 8px; right: 8px; top: -5px; height: 6px; border: 1px solid #D6DAE2; border-bottom: 0; border-radius: 10px 10px 0 0; background: #F5F6F8"></span>
+  <div style="display: flex; flex-direction: column; gap: 3px">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="5" width="7" height="12" rx="1.2" fill="#14161B"></rect><rect x="9.5" y="5" width="7.5" height="7.5" rx="1.2" fill="#14161B"></rect><rect x="1" y="1" width="16" height="2.6" rx="1" fill="#14161B"></rect><rect x="9.5" y="14" width="7.5" height="3" rx="1" fill="#14161B"></rect></svg>
+      <span style="font-weight: 600; font-size: 13.5px">Format set · Toast v1</span>
+      <span style="flex: 1"></span>
+      <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #e7f6ed; color: #166534">{{set.doneLabel}}</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #4A4F5C">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M5 7 L7 5 M4.2 5.6 L3 6.8 a1.8 1.8 0 0 0 2.5 2.5 L6.7 8 M7.8 6.4 L9 5.2 a1.8 1.8 0 0 0 -2.5 -2.5 L5.3 3.9" fill="none" stroke="#4A4F5C" stroke-width="1.1" stroke-linecap="round"></path></svg>
+      <span>9 sizes, each linked to the master · started by Sai</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 6px">
+    <sc-for list="{{set.cells}}" as="c" hint-placeholder-count="9">
+      <button class="cell" aria-label="{{c.aria}}" style="border: 0; background: transparent; padding: 0; text-align: left; display: flex; flex-direction: column; gap: 3px">
+        <span class="cellbox" style="{{c.boxStyle}}">
+          <sc-if value="{{c.isRendering}}" hint-placeholder-val="{{ false }}">
+            <span class="pending" style="{{c.thumbStyle}}"></span>
+          </sc-if>
+          <sc-if value="{{c.isShown}}" hint-placeholder-val="{{ true }}">
+            <span style="{{c.thumbStyle}}">
+              <span style="{{c.headStyle}}"></span>
+              <span style="{{c.logoStyle}}"></span>
+            </span>
+          </sc-if>
+        </span>
+        <span style="font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap">{{c.name}}</span>
+        <span style="display: flex; align-items: center; gap: 4px; height: 13px">
+          <sc-if value="{{c.isRendering}}" hint-placeholder-val="{{ false }}">
+            <svg class="napkin-loader" data-work="generating" data-state="run" width="11" height="11" viewBox="0 0 32 32" aria-hidden="true"><g class="nl-spin"><g class="nl-c nl-c3" transform="rotate(90 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#8B919E"></path></g><g class="nl-c nl-c2" transform="rotate(180 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#DADDE3"></path></g><g class="nl-c nl-c1" transform="rotate(270 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#14161B"></path></g><g class="nl-c nl-c0"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#FF4F2E"></path></g></g><circle class="nl-pin" cx="16" cy="16" r="2.4" fill="#14161B" stroke="#FFFFFF" stroke-width="1.5"></circle></svg>
+          </sc-if>
+          <sc-if value="{{c.isFlagged}}" hint-placeholder-val="{{ false }}">
+            <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="9.75" height="13" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you." style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+          </sc-if>
+          <sc-if value="{{c.isDone}}" hint-placeholder-val="{{ true }}">
+            <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5.5" fill="#15803d"></circle><path d="M3.4 6.2 L5.2 8 L8.6 4.4" fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </sc-if>
+          <span class="mono" style="{{c.statusStyle}}">{{c.size}}</span>
+        </span>
+      </button>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{set.showFlag}}" hint-placeholder-val="{{ true }}">
+  <div role="note" style="display: flex; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #fdf3e3; border: 1px solid #F3DDB6">
+    <svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you. — needs you" style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg>
+    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; line-height: 1.4; color: #14161B">
+      <span><span style="font-weight: 600">Jude · checks</span> <span style="color: #7A3E06">Leaderboard 728×90: the logo has 4 px clear space; the Brand board asks for 12 px.</span></span>
+      <span style="display: flex; gap: 6px">
+        <button onClick="{{ fixFlag }}" style="height: 26px; padding: 0 11px; border-radius: 999px; border: 1px solid #14161B; background: #FFFFFF; font-size: 11.5px; font-weight: 600">Fix it</button>
+        <button onClick="{{ keepFlag }}" style="height: 26px; padding: 0 11px; border-radius: 999px; border: 1px solid #E2CFA8; background: transparent; font-size: 11.5px; font-weight: 500">Keep as is</button>
+      </span>
+    </div>
+  </div>
+  </sc-if>
+
+  <div style="display: flex; align-items: center; gap: 8px">
+    <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+      <span class="mono" style="font-size: 10.5px; color: #14161B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">first-light_toast-v1.zip</span>
+      <span class="mono" style="font-size: 10px; color: #6B7180; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">story_1080x1920.png · mpu_300x250.png …</span>
+    </span>
+    <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 V8 M3.3 5.5 L6 8.2 L8.7 5.5 M2 10.5 H10" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      {{set.exportLabel}}
+    </button>
+  </div>
+</article>
+
+<!-- ============ Send tray: Make all sizes ============ -->
+<sc-if value="{{ui.trayOpen}}" hint-placeholder-val="{{ true }}">
+<aside aria-label="Make all sizes of Toast v2" style="position: absolute; left: 1016px; top: 58px; width: 408px; height: 766px; box-sizing: border-box; padding: 14px 16px 16px; background: rgba(255,255,255,0.97); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 10px; z-index: 5">
+  <div style="display: flex; align-items: center; gap: 10px">
+    <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="24" height="32" role="img" aria-label="Wren, Makes frames and clips on Runway." style="--af-phase:0.939"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 10 L19.77 21.18 L7.83 21.75 L17.15 29.22 L14.01 40.75 L24 34.2 L33.99 40.75 L30.85 29.22 L40.17 21.75 L28.23 21.18Z" fill="var(--af-marigold)"></path><g class="af-emblem"><path d="M24 27 Q24.6 30.4 28 31 Q24.6 31.6 24 35 Q23.4 31.6 20 31 Q23.4 30.4 24 27Z" fill="var(--af-mark)"></path></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    <div style="display: flex; flex-direction: column; gap: 1px">
+      <span style="font-weight: 600; font-size: 15px">Make all sizes</span>
+      <span class="mono" style="font-size: 10.5px; color: #6B7180">from Toast v2 · 16:9 · 1920×1080</span>
+    </div>
+    <span style="flex: 1"></span>
+    <button onClick="{{ toggleTray }}" aria-label="Close" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: #F2F3F6; font-size: 14px; color: #4A4F5C">×</button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <span class="cap">Packs</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px">
+      <sc-for list="{{tray.chips}}" as="ch" hint-placeholder-count="5">
+        <button class="chip" onClick="{{ ch.toggle }}" aria-pressed="{{ch.pressed}}" style="{{ch.style}}">{{ch.label}}<span class="mono" style="{{ch.countStyle}}">{{ch.count}}</span></button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border-radius: 10px; background: #F5F6F8">
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap">
+      <span style="color: #4A4F5C">Stays in every size</span>
+      <span class="mono" style="font-size: 11px; color: #1E4ED8; padding: 1px 7px; border-radius: 999px; background: rgba(47,100,245,0.10)">@maya</span>
+      <span class="mono" style="font-size: 11px; color: #1E4ED8; padding: 1px 7px; border-radius: 999px; background: rgba(47,100,245,0.10)">@product_bottle</span>
+      <span style="flex: 1"></span>
+      <a href="#" style="font-size: 12px">Change</a>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.4; color: #4A4F5C">
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="15" height="20" role="img" aria-label="Wren, Makes frames and clips on Runway." style="--af-phase:0.939"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 10 L19.77 21.18 L7.83 21.75 L17.15 29.22 L14.01 40.75 L24 34.2 L33.99 40.75 L30.85 29.22 L40.17 21.75 L28.23 21.18Z" fill="var(--af-marigold)"></path><g class="af-emblem"><path d="M24 27 Q24.6 30.4 28 31 Q24.6 31.6 24 35 Q23.4 31.6 20 31 Q23.4 30.4 24 27Z" fill="var(--af-mark)"></path></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+      <span><span style="font-weight: 600; color: #14161B">Wren · renders</span> What must stay in every size? <span style="color: #14161B">You tapped Maya and the bottle.</span></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #4A4F5C">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="1.5" width="11" height="11" rx="1.5" fill="none" stroke="#4A4F5C" stroke-width="1.2" stroke-dasharray="2 1.6"></rect><rect x="8" y="9" width="3" height="2" fill="#4A4F5C"></rect></svg>
+      <span>Logo and copy stay inside each safe area, from the <a href="#">Brand board</a></span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; min-height: 0; flex: 1">
+    <div class="cap" style="display: grid; grid-template-columns: 1fr 44px 132px; gap: 8px; padding: 0 2px 6px; border-bottom: 1px solid #E7E9EE">
+      <span>Size</span><span>Ratio</span><span>How</span>
+    </div>
+    <ul aria-label="Sizes to make" style="list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1">
+      <sc-for list="{{tray.rows}}" as="r" hint-placeholder-count="9">
+        <li style="display: grid; grid-template-columns: 1fr 44px 132px; gap: 8px; align-items: center; min-height: 28px; padding: 1px 2px; border-bottom: 1px solid #F2F3F6; font-size: 12px">
+          <span style="display: flex; flex-direction: column; line-height: 1.2"><span style="font-weight: 500">{{r.name}}</span><span class="mono" style="font-size: 10px; color: #6B7180">{{r.size}}</span></span>
+          <span class="mono" style="font-size: 11px; color: #4A4F5C">{{r.ratio}}</span>
+          <span style="{{r.howStyle}}">{{r.how}}</span>
+        </li>
+      </sc-for>
+    </ul>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 2px">
+    <button role="checkbox" aria-checked="{{ui.cutsAria}}" onClick="{{ toggleCuts }}" style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0; border: 0; background: transparent; font-size: 12.5px; font-weight: 600; text-align: left">
+      <span aria-hidden="true" style="{{ui.cutsBox}}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.8 5.2 L4 7.4 L8.2 2.8" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+      Cut the film too
+      <span class="mono" style="font-weight: 400; font-size: 10.5px; color: #6B7180">Video · First Light · 15 s</span>
+    </button>
+    <div style="{{ui.cutsStyle}}">
+      <sc-for list="{{tray.cuts}}" as="v" hint-placeholder-count="3">
+        <div style="display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; height: 22px; font-size: 12px">
+          <span class="mono" style="font-size: 11px">{{v.ratio}}</span>
+          <span style="color: #4A4F5C">{{v.how}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid #E7E9EE">
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1">
+      <span class="mono" style="font-size: 12.5px; font-weight: 500">{{tray.total}}</span>
+      <span class="mono" style="font-size: 10.5px; color: #4A4F5C">{{tray.cutsTotal}}</span>
+    </div>
+    <button onClick="{{ send }}" aria-disabled="{{tray.disabled}}" style="{{tray.sendStyle}}">{{tray.sendLabel}}</button>
+  </div>
+</aside>
+</sc-if>
+
+<!-- Toast after sending -->
+<sc-if value="{{ui.sent}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="position: absolute; left: 24px; bottom: 22px; display: flex; align-items: center; gap: 10px; height: 44px; box-sizing: border-box; padding: 0 8px 0 12px; background: rgba(255,255,255,0.96); border: 1px solid #E7E9EE; border-radius: 999px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); font-size: 13px; z-index: 6">
+  <svg class="napkin-loader" data-work="generating" data-state="run" width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><g class="nl-spin"><g class="nl-c nl-c3" transform="rotate(90 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#8B919E"></path></g><g class="nl-c nl-c2" transform="rotate(180 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#DADDE3"></path></g><g class="nl-c nl-c1" transform="rotate(270 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#14161B"></path></g><g class="nl-c nl-c0"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#FF4F2E"></path></g></g><circle class="nl-pin" cx="16" cy="16" r="2.4" fill="#14161B" stroke="#FFFFFF" stroke-width="1.5"></circle></svg>
+  <span><span style="font-weight: 600">Wren · renders</span> <span style="color: #4A4F5C">{{ui.toast}}</span></span>
+  <button onClick="{{ undoSend }}" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; font-weight: 500">Stop</button>
+</div>
+</sc-if>
+
+<!-- Tool bar -->
+<div role="toolbar" aria-label="Canvas tools" style="position: absolute; left: 418px; bottom: 20px; display: flex; align-items: center; gap: 4px; padding: 6px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 999px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); z-index: 5">
+  <button aria-label="Select (V)" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: #14161B; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L13 8 L8 9 L6 14 Z" fill="#FFFFFF"></path></svg></button>
+  <button aria-label="Hand (H)" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 8 V3.5 a1 1 0 0 1 2 0 V7 M7 7 V2.5 a1 1 0 0 1 2 0 V7 M9 7 V3.5 a1 1 0 0 1 2 0 V9 c0 3 -2 5 -4.5 5 C4 14 3 12 2.5 10 L2 8.5 a1 1 0 0 1 1.8 -0.8 L5 9" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg></button>
+  <button aria-label="Pen (P)" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 L4 9.5 L11 2.5 L13.5 5 L6.5 12 Z" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linejoin="round"></path></svg></button>
+  <button aria-label="Text (T)" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; font-weight: 600; font-size: 15px">T</button>
+  <span aria-hidden="true" style="width: 1px; height: 22px; background: #E7E9EE; margin: 0 4px"></span>
+  <button onClick="{{ togglePicker }}" aria-haspopup="dialog" aria-expanded="{{ui.pickerExpanded}}" style="{{ui.sheetsBtnStyle}}"><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect x="1" y="1" width="9" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="12" y="1" width="5" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="1" y="8" width="9" height="5" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"></rect></svg>Sheets</button>
+  <button aria-label="Sketch area 16:9 (S)" style="height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="#14161B" stroke-width="1.3"></rect></svg>16:9</button>
+  <button aria-label="Board (B)" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="#14161B" stroke-width="1.3" stroke-dasharray="2 2"></rect></svg></button>
+  <button aria-label="Add a picture" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="#14161B" stroke-width="1.3"></rect><path d="M3 12 L7 8 L10 11 L12 9 L14 11" fill="none" stroke="#14161B" stroke-width="1.3"></path></svg></button>
+  <button aria-label="Link two nodes (L)" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="8" r="2.2" fill="none" stroke="#14161B" stroke-width="1.3"></circle><circle cx="12" cy="8" r="2.2" fill="none" stroke="#14161B" stroke-width="1.3"></circle><path d="M6.2 8 H9.8" stroke="#14161B" stroke-width="1.3"></path></svg></button>
+  <span aria-hidden="true" style="width: 1px; height: 22px; background: #E7E9EE; margin: 0 4px"></span>
+  <button style="height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: #D63B1F; color: #FFFFFF; font-size: 13px; font-weight: 600">+ Node</button>
+</div>
+
+<!-- Zoom and undo -->
+<div style="position: absolute; right: 16px; bottom: 20px; display: flex; align-items: center; gap: 4px; padding: 4px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 999px; font-size: 12px; z-index: 4">
+  <button aria-label="Undo" style="width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent">↶</button>
+  <button aria-label="Redo" style="width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent">↷</button>
+  <span aria-hidden="true" style="width: 1px; height: 18px; background: #E7E9EE"></span>
+  <button aria-label="Zoom out" style="width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent">−</button>
+  <span class="mono" style="width: 40px; text-align: center">58%</span>
+  <button aria-label="Zoom in" style="width: 30px; height: 30px; border: 0; border-radius: 999px; background: transparent">+</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var s = Object.assign({
+      picker: true, tray: true, added: 'ooh', sent: false, cuts: true, flag: 'open',
+      on: { social: true, display: true, ooh: false, print: false, custom: false }
+    }, this.state || {});
+
+    function thumb(w, h) {
+      return { style: 'display: block; width: ' + w + 'px; height: ' + h + 'px; box-sizing: border-box; border: 1.2px solid #4A4F5C; border-radius: 2px; background: #FFFFFF; flex-shrink: 0' };
+    }
+
+    // ---- Sheets picker packs ----
+    var PACKS = [
+      { id: 'social', name: 'Social', count: '4', sizes: 'Story 9:16 · Feed 1:1 · Feed 4:5 · YouTube 16:9',
+        t: [[14, 24], [24, 24], [19, 24], [43, 24]] },
+      { id: 'ooh', name: 'Out of home', count: '5', sizes: '48-sheet · 96-sheet · 6-sheet · Digital 6 · Bus side',
+        t: [[28, 14], [36, 9], [14, 21], [12, 21], [30, 5]] },
+      { id: 'print', name: 'Print', count: '3', sizes: 'A4 page · Double-page spread · Half page',
+        t: [[17, 24], [34, 24], [24, 17]] },
+      { id: 'display', name: 'Digital display', count: '5', sizes: 'MPU · Leaderboard · Skyscraper · Billboard · Mobile banner',
+        t: [[22, 18], [36, 5], [7, 24], [28, 7], [22, 4]] },
+      { id: 'film', name: 'Film', count: '2', sizes: 'Storyboard frames 16:9 · Vertical frames 9:16',
+        t: [[24, 14], [24, 14], [24, 14], [9, 16], [9, 16]] },
+      { id: 'custom', name: 'Lumen Water', count: '2', sizes: 'Saved for this client · Shelf wobbler 1:1 · Cooler door 3:5',
+        t: [[20, 20], [14, 24]] }
+    ];
+    var packs = PACKS.map(function (p) {
+      var isAdded = s.added === p.id;
+      return {
+        name: p.name, count: p.count, sizes: p.sizes, isAdded: isAdded, notAdded: !isAdded,
+        thumbs: p.t.map(function (x) { return thumb(x[0], x[1]); }),
+        btn: isAdded ? 'Add again' : 'Add sheet',
+        aria: isAdded ? 'Add another ' + p.name + ' sheet; one is on the canvas' : 'Add a ' + p.name + ' sheet, ' + p.count + ' sizes',
+        add: function () { self.setState({ added: p.id, picker: false }); },
+        cardStyle: 'display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: #FFFFFF; ' +
+          (isAdded ? 'border: 1.5px solid #2F64F5' : 'border: 1px solid #E7E9EE'),
+        btnStyle: 'height: 30px; border-radius: 999px; font-size: 12px; font-weight: 600; ' +
+          (isAdded ? 'border: 1px solid #2F64F5; background: rgba(47,100,245,0.08); color: #1E4ED8'
+                   : 'border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B')
+      };
+    });
+
+    // ---- Make all sizes: sizes per pack ----
+    var EXT = 'extend', CROP = 'crop', SAME = 'same';
+    var SIZES = {
+      social: [
+        { name: 'Story / reel', size: '1080×1920', ratio: '9:16', how: 'Extend top and bottom', kind: EXT },
+        { name: 'Feed square', size: '1080×1080', ratio: '1:1', how: 'Crop', kind: CROP },
+        { name: 'Feed portrait', size: '1080×1350', ratio: '4:5', how: 'Crop', kind: CROP },
+        { name: 'YouTube', size: '1920×1080', ratio: '16:9', how: 'Same as master', kind: SAME }
+      ],
+      display: [
+        { name: 'MPU', size: '300×250', ratio: '6:5', how: 'Crop', kind: CROP },
+        { name: 'Leaderboard', size: '728×90', ratio: '8:1', how: 'Made at 21:9, extended', kind: EXT },
+        { name: 'Skyscraper', size: '160×600', ratio: '4:15', how: 'Made at 9:16, extended', kind: EXT },
+        { name: 'Billboard', size: '970×250', ratio: '4:1', how: 'Made at 21:9, cropped', kind: EXT },
+        { name: 'Mobile banner', size: '320×50', ratio: '6:1', how: 'Made at 21:9, extended', kind: EXT }
+      ],
+      ooh: [
+        { name: '48-sheet', size: '6.096×3.048 m', ratio: '2:1', how: 'Extend the sides', kind: EXT },
+        { name: '96-sheet', size: '12.192×3.048 m', ratio: '4:1', how: 'Made at 21:9, extended', kind: EXT },
+        { name: '6-sheet', size: '1.2×1.8 m', ratio: '2:3', how: 'Extend top and bottom', kind: EXT },
+        { name: 'Digital 6-sheet', size: '1080×1920', ratio: '9:16', how: 'Extend top and bottom', kind: EXT },
+        { name: 'Bus side', size: '3.6×0.6 m', ratio: '6:1', how: 'Made at 21:9, extended', kind: EXT }
+      ],
+      print: [
+        { name: 'A4 page', size: '210×297 mm', ratio: '1:1.41', how: 'Extend top and bottom', kind: EXT },
+        { name: 'Double-page spread', size: '420×297 mm', ratio: '1.41:1', how: 'Crop', kind: CROP },
+        { name: 'Half page', size: '210×148 mm', ratio: '1.41:1', how: 'Crop', kind: CROP }
+      ],
+      custom: [
+        { name: 'Shelf wobbler', size: '100×100 mm', ratio: '1:1', how: 'Crop', kind: CROP },
+        { name: 'Cooler door', size: '600×1000 mm', ratio: '3:5', how: 'Extend top and bottom', kind: EXT }
+      ]
+    };
+    var CHIPS = [
+      { id: 'social', label: 'Social' }, { id: 'display', label: 'Digital display' },
+      { id: 'ooh', label: 'Out of home' }, { id: 'print', label: 'Print' }, { id: 'custom', label: 'Lumen Water' }
+    ];
+    var rows = [];
+    var chips = CHIPS.map(function (c) {
+      var on = !!s.on[c.id];
+      if (on) {
+        SIZES[c.id].forEach(function (r) {
+          rows.push(Object.assign({}, r, {
+            howStyle: 'justify-self: start; font-size: 11px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; ' +
+              (r.kind === EXT ? 'background: #FFF4D6; color: #14161B' : 'background: #F2F3F6; color: #4A4F5C')
+          }));
+        });
+      }
+      return {
+        label: c.label, count: String(SIZES[c.id].length), pressed: on ? 'true' : 'false',
+        toggle: function () {
+          var next = Object.assign({}, s.on);
+          next[c.id] = !on;
+          self.setState({ on: next, sent: false });
+        },
+        style: 'height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; border-radius: 999px; font-size: 12.5px; ' +
+          (on ? 'border: 1px solid #2F64F5; background: rgba(47,100,245,0.10); color: #1E4ED8; font-weight: 600'
+              : 'border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-weight: 500'),
+        countStyle: 'font-size: 10.5px; font-weight: 500; ' + (on ? 'color: #1E4ED8' : 'color: #6B7180')
+      };
+    });
+    var cuts = [
+      { ratio: '9:16', how: 'Follows @maya through each shot' },
+      { ratio: '1:1', how: 'Follows @maya through each shot' },
+      { ratio: '4:5', how: 'Follows @maya through each shot' }
+    ];
+    var n = rows.length;
+    var noun = n === 1 ? ' size' : ' sizes';
+    var sendLabel = s.sent ? 'Sent to Wren' : (n === 0 ? 'Pick a pack' : 'Make ' + n + noun);
+    var disabled = s.sent || n === 0;
+
+    var tray = {
+      chips: chips, rows: rows, cuts: cuts,
+      total: n + noun,
+      cutsTotal: s.cuts ? '+ 3 cut-downs · own job' : 'No cut-downs',
+      sendLabel: sendLabel,
+      disabled: disabled ? 'true' : 'false',
+      sendStyle: 'height: 38px; padding: 0 18px; border: 0; border-radius: 999px; font-size: 13.5px; font-weight: 600; ' +
+        (disabled ? 'background: #F2F3F6; color: #4A4F5C; cursor: default' : 'background: #D63B1F; color: #FFFFFF')
+    };
+
+    // ---- Format set (Toast v1) ----
+    var KV = 'linear-gradient(0deg, #3E4A5A 0%, #8A6E78 30%, #F3A97B 58%, #FFD9A0 100%)';
+    var CELLS = [
+      { name: 'Story', size: '1080×1920', w: 25, h: 44, st: 'done' },
+      { name: 'Feed square', size: '1080×1080', w: 44, h: 44, st: 'done' },
+      { name: 'Feed portrait', size: '1080×1350', w: 35, h: 44, st: 'done' },
+      { name: 'YouTube', size: '1920×1080', w: 76, h: 43, st: 'done' },
+      { name: 'MPU', size: '300×250', w: 53, h: 44, st: 'done' },
+      { name: 'Leaderboard', size: '728×90', w: 80, h: 10, st: s.flag === 'open' ? 'flagged' : (s.flag === 'fixing' ? 'rendering' : 'done') },
+      { name: 'Skyscraper', size: '160×600', w: 12, h: 44, st: 'rendering' },
+      { name: 'Billboard', size: '970×250', w: 80, h: 21, st: 'done' },
+      { name: 'Mobile banner', size: '320×50', w: 80, h: 13, st: 'rendering' }
+    ];
+    var done = 0;
+    var cells = CELLS.map(function (c) {
+      var r = c.st === 'rendering', f = c.st === 'flagged';
+      if (c.st === 'done') { done++; }
+      var short = Math.min(c.w, c.h);
+      var lh = Math.max(2, Math.round(c.h * 0.14));
+      var lw = Math.round(lh * 2.6);
+      var inset = f ? 0 : Math.max(1, Math.round(short * 0.1));
+      return {
+        name: c.name, size: c.size, isDone: c.st === 'done',
+        aria: c.name + ' ' + c.size + ', ' + (r ? 'rendering' : (f ? 'flagged by Jude' : 'done')) + '. Open',
+        isRendering: r, isFlagged: f,
+                statusStyle: 'font-size: 10px; ' + (f ? 'color: #b45309; font-weight: 500' : 'color: #4A4F5C'),
+        isShown: !r,
+        boxStyle: 'width: 100%; height: 50px; box-sizing: border-box; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #F5F6F8; ' +
+          (f ? 'border: 1.5px solid #b45309' : 'border: 1px solid #E7E9EE'),
+        thumbStyle: 'position: relative; display: block; overflow: hidden; width: ' + c.w + 'px; height: ' + c.h + 'px; border-radius: 2px; ' +
+          (r ? 'box-sizing: border-box; border: 1px solid #B9BEC9' : 'background: ' + KV),
+        headStyle: r ? 'display: none' : 'position: absolute; left: ' + Math.max(1, Math.round(short * 0.1)) + 'px; top: ' + Math.max(1, Math.round(short * 0.1)) + 'px; width: ' + Math.round(c.w * 0.4) + 'px; height: ' + Math.max(1, Math.round(c.h * 0.07)) + 'px; background: #FFFFFF; border-radius: 1px',
+        logoStyle: r ? 'display: none' : 'position: absolute; right: ' + inset + 'px; bottom: ' + inset + 'px; width: ' + lw + 'px; height: ' + lh + 'px; background: #FFFFFF; border-radius: 1px'
+      };
+    });
+
+    var set = {
+      cells: cells,
+      doneLabel: done + ' of 9 done',
+      showFlag: s.flag === 'open',
+      exportLabel: 'Export zip · ' + done
+    };
+
+    var ui = {
+      pickerOpen: !!s.picker,
+      pickerExpanded: s.picker ? 'true' : 'false',
+      sheetsBtnStyle: 'height: 36px; padding: 0 12px; border: 0; border-radius: 999px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; ' +
+        (s.picker ? 'background: rgba(47,100,245,0.12); color: #1E4ED8; font-weight: 600' : 'background: transparent; color: #14161B; font-weight: 500'),
+      trayOpen: !!s.tray,
+      trayPressed: s.tray ? 'true' : 'false',
+      makeBtnStyle: 'height: 30px; padding: 0 12px; border-radius: 999px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; ' +
+        (s.tray ? 'border: 1px solid #2F64F5; background: rgba(47,100,245,0.10); color: #1E4ED8' : 'border: 1px solid transparent; background: transparent; color: #14161B'),
+      cutsAria: s.cuts ? 'true' : 'false',
+      cutsBox: 'width: 16px; height: 16px; box-sizing: border-box; border-radius: 4px; display: flex; align-items: center; justify-content: center; ' + (s.cuts ? 'background: #2F64F5; border: 0' : 'background: #FFFFFF; border: 1.5px solid #6B7180'),
+      cutsStyle: 'display: flex; flex-direction: column; padding-left: 24px; ' + (s.cuts ? '' : 'display: none'),
+      sent: !!s.sent,
+      toast: 'Making ' + n + noun + ' of Toast v2' + (s.cuts ? ', then 3 cut-downs.' : '.')
+    };
+
+    return {
+      packs: packs, tray: tray, set: set, ui: ui,
+      togglePicker: function () { self.setState({ picker: !s.picker }); },
+      closePicker: function () { self.setState({ picker: false }); },
+      toggleTray: function () { self.setState({ tray: !s.tray }); },
+      toggleCuts: function () { self.setState({ cuts: !s.cuts, sent: false }); },
+      send: function () { if (!disabled) { self.setState({ sent: true }); } },
+      undoSend: function () { self.setState({ sent: false }); },
+      fixFlag: function () { self.setState({ flag: 'fixing' }); },
+      keepFlag: function () { self.setState({ flag: 'kept' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

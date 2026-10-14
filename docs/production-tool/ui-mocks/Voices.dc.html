@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Character voices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+.grid{background-color:#FAFAFB;background-image:radial-gradient(#D6DAE2 1px, transparent 1px);background-size:24px 24px}
+button{font:inherit;cursor:pointer}
+.mono{font-family:'Geist Mono', monospace}
+.cap{font-family:'Geist Mono', monospace;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6B7180}
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #FAFAFB; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E">
+
+<!-- Top bar -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE; z-index: 6">
+  <button aria-label="Home: your projects" style="width: 28px; height: 28px; border: 0; border-radius: 8px; background: #14161B; display: flex; align-items: center; justify-content: center">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"></path></svg>
+  </button>
+  <span style="font-weight: 600; font-size: 14px">Napkin Studio</span>
+  <span style="font-weight: 600; font-size: 14px; color: #1E4ED8">Production</span>
+  <span style="font-size: 13px; color: #6B7180">Lumen Water · First Light</span>
+  <span style="flex: 1"></span>
+  <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4A4F5C">
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF">S</span>
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #14161B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF; margin-left: -10px">M</span>
+    <span>Sai and Maya are here</span>
+  </div>
+  <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#14161B" stroke-width="1.3"></circle><path d="M7 4.2 V7 L9 8.4" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg>History</button>
+  <button aria-pressed="true" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(47,100,245,0.35); background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="2" width="11" height="10" rx="2" fill="none" stroke="#1E4ED8" stroke-width="1.3"></rect><path d="M5 2 V12" stroke="#1E4ED8" stroke-width="1.3"></path></svg>Assets</button>
+  <button style="height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500">Share</button>
+  <button aria-label="Your account" style="width: 32px; height: 32px; border-radius: 999px; border: 0; background: #F2F3F6; font-weight: 600; font-size: 12px">SB</button>
+</header>
+
+<!-- Canvas -->
+<div class="grid" style="position: absolute; left: 0; top: 48px; width: 1440px; height: 852px"></div>
+
+<!-- Assets drawer -->
+<aside aria-label="Assets" style="position: absolute; left: 16px; top: 64px; width: 300px; height: 820px; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 12px; z-index: 4">
+  <div style="display: flex; align-items: center; gap: 8px; height: 32px">
+    <span style="font-weight: 600; font-size: 14px; padding-left: 4px">Assets</span>
+    <span style="flex: 1"></span>
+    <button style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #4A4F5C">Boards <span class="mono" style="font-size: 11px; color: #6B7180">⌥0</span></button>
+    <button aria-label="Close assets" style="width: 28px; height: 28px; border-radius: 999px; border: 0; background: transparent; font-size: 16px; color: #4A4F5C">×</button>
+  </div>
+
+  <div role="tablist" aria-label="Asset sources" style="display: grid; grid-template-columns: 1fr 1fr 0.8fr; gap: 2px; padding: 3px; background: #F2F3F6; border-radius: 999px">
+    <button role="tab" aria-selected="false" style="height: 28px; padding: 0 4px; border: 0; border-radius: 999px; background: transparent; font-size: 11.5px; color: #4A4F5C; white-space: nowrap">This project</button>
+    <button role="tab" aria-selected="true" style="height: 28px; padding: 0 4px; border: 0; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(20,30,60,0.12); font-size: 11.5px; font-weight: 600; color: #1E4ED8; white-space: nowrap">Team library</button>
+    <button role="tab" aria-selected="false" style="height: 28px; padding: 0 4px; border: 0; border-radius: 999px; background: transparent; font-size: 11.5px; color: #4A4F5C">Upload</button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <span class="cap" style="padding-left: 4px">Client shelf · Napkin Studio</span>
+    <div role="radiogroup" aria-label="Client shelf" style="display: flex; gap: 6px">
+      <button role="radio" aria-checked="true" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(47,100,245,0.35); background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 12px; font-weight: 600">Lumen Water</button>
+      <button role="radio" aria-checked="false" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #E7E9EE; background: #FFFFFF; color: #4A4F5C; font-size: 12px">Harbour Bank</button>
+      <button role="radio" aria-checked="false" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #E7E9EE; background: #FFFFFF; color: #4A4F5C; font-size: 12px">Kettle &amp; Co</button>
+    </div>
+  </div>
+
+  <label style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid #E7E9EE; border-radius: 999px; background: #FFFFFF">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="#6B7180" stroke-width="1.3"></circle><path d="M9.2 9.2 L12.5 12.5" stroke="#6B7180" stroke-width="1.3" stroke-linecap="round"></path></svg>
+    <input aria-label="Search the Lumen Water shelf" placeholder="Search Lumen Water" style="border: 0; outline: 0; flex: 1; font: inherit; font-size: 12.5px; color: #14161B; background: transparent">
+  </label>
+
+  <!-- Characters, each with its voice -->
+  <section aria-label="Characters" style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: baseline; gap: 6px; padding: 0 4px"><span class="cap">Characters</span><span style="flex: 1"></span><span style="font-size: 11px; color: #6B7180">2</span></div>
+    <button aria-pressed="true" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; background: #FFFFFF; border: 1px solid rgba(47,100,245,0.45); box-shadow: 0 10px 30px rgba(20,30,60,0.08); text-align: left; color: #14161B">
+      <span style="display: flex; gap: 3px">
+        <span style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(170deg, #F3D9C6 0%, #D9A884 55%, #7A5A48 100%)"></span>
+        <span style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(190deg, #EAD3C2 0%, #C99A78 60%, #6E5040 100%)"></span>
+      </span>
+      <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+        <span class="mono" style="font-size: 12px; color: #1E4ED8">@maya</span>
+        <span style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #4A4F5C"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5 V7.5 H4 L7 10 V2 L4 4.5 Z" fill="#4A4F5C"></path><path d="M8.6 4.2 Q9.8 6 8.6 7.8" fill="none" stroke="#4A4F5C" stroke-width="1.1" stroke-linecap="round"></path></svg>Aoife · designed</span>
+        <span style="font-size: 11px; color: #6B7180"><span class="mono">v4</span> · published by Sai</span>
+      </span>
+    </button>
+    <button style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; background: transparent; border: 1px solid transparent; text-align: left; color: #14161B">
+      <span style="display: flex; gap: 3px">
+        <span style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(170deg, #E9DCCF 0%, #B79176 55%, #4E3A30 100%)"></span>
+        <span style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(190deg, #E3D2C4 0%, #A9856C 60%, #44332A 100%)"></span>
+      </span>
+      <span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+        <span class="mono" style="font-size: 12px; color: #1E4ED8">@ollie</span>
+        <span style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #4A4F5C"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5 V7.5 H4 L7 10 V2 L4 4.5 Z" fill="#4A4F5C"></path><path d="M8.6 4.2 Q9.8 6 8.6 7.8" fill="none" stroke="#4A4F5C" stroke-width="1.1" stroke-linecap="round"></path></svg>Callum · library</span>
+        <span style="font-size: 11px; color: #6B7180"><span class="mono">v1</span> · published by Maya</span>
+      </span>
+    </button>
+  </section>
+
+  <!-- Voices on this shelf -->
+  <section aria-label="Voices" style="display: flex; flex-direction: column; gap: 4px">
+    <div style="display: flex; align-items: baseline; gap: 6px; padding: 0 4px"><span class="cap">Voices</span><span style="flex: 1"></span><span style="font-size: 11px; color: #6B7180">3</span></div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 4px">
+      <button aria-label="Play Aoife" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+      <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-size: 12.5px; font-weight: 600">Aoife</span><span style="font-size: 11px; color: #6B7180">Designed · speaks for <span class="mono" style="color: #1E4ED8">@maya</span></span></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 4px">
+      <button aria-label="Play Callum" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+      <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-size: 12.5px; font-weight: 600">Callum</span><span style="font-size: 11px; color: #6B7180">Library · speaks for <span class="mono" style="color: #1E4ED8">@ollie</span></span></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 4px">
+      <button aria-label="Play Niamh" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+      <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span style="font-size: 12.5px; font-weight: 600">Niamh</span><span style="font-size: 11px; color: #6B7180">Cloned · the narrator</span></span>
+      <span style="height: 20px; padding: 0 8px; border-radius: 999px; background: #e7f6ed; color: #15803d; font-size: 11px; display: flex; align-items: center">Consent on file</span>
+    </div>
+  </section>
+
+  <!-- Pronunciation -->
+  <section aria-label="Brand names" style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: baseline; gap: 6px; padding: 0 4px"><span class="cap">Brand names</span><span style="flex: 1"></span><span style="font-size: 11px; color: #6B7180">said right in every voice</span></div>
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px">
+      <span class="mono" style="height: 24px; padding: 0 9px; border-radius: 999px; background: #F2F3F6; font-size: 11.5px; display: flex; align-items: center">Lumen · LOO-men</span>
+      <span class="mono" style="height: 24px; padding: 0 9px; border-radius: 999px; background: #F2F3F6; font-size: 11.5px; display: flex; align-items: center">Velto · VEL-toe</span>
+      <span class="mono" style="height: 24px; padding: 0 9px; border-radius: 999px; background: #F2F3F6; font-size: 11.5px; display: flex; align-items: center">Vorr · VOR</span>
+    </div>
+  </section>
+
+  <span style="flex: 1"></span>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 8px 4px 0; border-top: 1px solid #E7E9EE; font-size: 12px; color: #6B7180">
+    <span>Shared with everyone at Napkin Studio</span>
+    <span style="flex: 1"></span>
+    <a href="#" style="font-size: 12px">Manage shelves</a>
+  </div>
+</aside>
+
+<!-- Character card: @maya, Voice tab -->
+<section aria-label="Character card: @maya" style="position: absolute; left: 332px; top: 64px; width: 1092px; height: 820px; box-sizing: border-box; padding: 16px; background: rgba(255,255,255,0.96); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 12px; z-index: 5">
+
+  <!-- Card header -->
+  <div style="display: flex; align-items: center; gap: 12px; height: 44px">
+    <div style="display: flex; gap: 3px">
+      <div style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(170deg, #F3D9C6 0%, #D9A884 55%, #7A5A48 100%)"></div>
+      <div style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(190deg, #EAD3C2 0%, #C99A78 60%, #6E5040 100%)"></div>
+      <div style="width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(160deg, #F6E1CF 0%, #E0AE88 50%, #8A6450 100%)"></div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span class="mono" style="font-size: 15px; color: #1E4ED8; font-weight: 500">@maya</span>
+      <span style="font-size: 12px; color: #6B7180">Character · 3 views · <span class="mono">v4</span> · Lumen Water shelf</span>
+    </div>
+    <span style="flex: 1"></span>
+    <div role="tablist" aria-label="Character card" style="display: flex; gap: 2px; padding: 3px; background: #F2F3F6; border-radius: 999px">
+      <button role="tab" aria-selected="false" style="height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font-size: 12.5px; color: #4A4F5C">Views</button>
+      <button role="tab" aria-selected="true" style="height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(20,30,60,0.12); font-size: 12.5px; font-weight: 600; color: #1E4ED8">Voice</button>
+      <button role="tab" aria-selected="false" style="height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font-size: 12.5px; color: #4A4F5C">Wardrobe</button>
+      <button role="tab" aria-selected="false" style="height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font-size: 12.5px; color: #4A4F5C">Used in · 6</button>
+    </div>
+    <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12.5px; color: #14161B">Why this voice?</button>
+    <button aria-label="Close character card" style="width: 30px; height: 30px; border-radius: 999px; border: 0; background: transparent; font-size: 16px; color: #4A4F5C">×</button>
+  </div>
+
+  <!-- Current voice -->
+  <div style="display: flex; align-items: center; gap: 14px; height: 64px; box-sizing: border-box; padding: 0 14px; border-radius: 12px; background: #F5F6F8; border: 1px solid #E7E9EE">
+    <button aria-label="Play Aoife" style="width: 40px; height: 40px; border-radius: 999px; border: 0; background: #14161B; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M4 2.5 L11.5 7 L4 11.5 Z" fill="#FFFFFF"></path></svg></button>
+    <div style="display: flex; flex-direction: column; gap: 2px; width: 250px">
+      <span style="font-size: 15px; font-weight: 600">Aoife <span class="mono" style="font-size: 11.5px; font-weight: 400; color: #6B7180">v2</span></span>
+      <span style="font-size: 12px; color: #4A4F5C">Maya's voice · designed from a description</span>
+    </div>
+    <svg width="150" height="28" viewBox="0 0 150 28" aria-hidden="true"><path d="M2 12v4M7 9v10M12 6v16M17 10v8M22 4v20M27 8v12M32 11v6M37 5v18M42 9v10M47 3v22M52 7v14M57 11v6M62 6v16M67 9v10M72 12v4M77 5v18M82 8v12M87 4v20M92 10v8M97 7v14M102 11v6M107 6v16M112 9v10M117 12v4M122 8v12M127 5v18M132 10v8M137 12v4M142 9v10M147 13v2" stroke="#14161B" stroke-width="2" stroke-linecap="round"></path></svg>
+    <span style="width: 1px; height: 36px; background: #E7E9EE"></span>
+    <label style="display: flex; align-items: center; gap: 8px; flex: 1; height: 36px; padding: 0 6px 0 12px; border: 1px solid #D6DAE2; border-radius: 999px; background: #FFFFFF">
+      <span style="font-size: 12px; color: #6B7180; white-space: nowrap">Hear her say</span>
+      <input aria-label="A line for Aoife to say" value="To the first light." style="border: 0; outline: 0; flex: 1; min-width: 0; font: inherit; font-size: 13px; color: #14161B; background: transparent">
+      <button style="height: 26px; padding: 0 12px; border-radius: 999px; border: 0; background: #F2F3F6; font-size: 12px; font-weight: 500; color: #14161B">Play</button>
+    </label>
+  </div>
+
+  <div style="display: flex; align-items: baseline; gap: 8px; height: 16px; padding: 0 4px">
+    <span class="cap">Change Maya's voice</span>
+    <span style="font-size: 12px; color: #6B7180">Pick one, design one, or clone one. Every line she says moves to the new voice.</span>
+  </div>
+
+  <!-- Three ways to get a voice -->
+  <div style="display: grid; grid-template-columns: 296px 420px 296px; gap: 12px; height: 404px">
+
+    <!-- Library -->
+    <section aria-label="Pick from the library" style="box-sizing: border-box; padding: 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E7E9EE; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 8px; height: 22px">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2.5" width="3" height="11" rx="1" fill="none" stroke="#14161B" stroke-width="1.3"></rect><rect x="6.5" y="2.5" width="3" height="11" rx="1" fill="none" stroke="#14161B" stroke-width="1.3"></rect><path d="M11 3.2 L13.8 2.6 L14.4 13 L12 13.4 Z" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+        <span style="font-size: 14px; font-weight: 600">Pick from the library</span>
+      </div>
+      <label style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid #E7E9EE; border-radius: 999px; background: #FFFFFF">
+        <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="#6B7180" stroke-width="1.3"></circle><path d="M9.2 9.2 L12.5 12.5" stroke="#6B7180" stroke-width="1.3" stroke-linecap="round"></path></svg>
+        <input aria-label="Search library voices" value="warm Irish woman" style="border: 0; outline: 0; flex: 1; min-width: 0; font: inherit; font-size: 12.5px; color: #14161B; background: transparent">
+      </label>
+      <div role="group" aria-label="Filters" style="display: flex; flex-wrap: wrap; gap: 6px">
+        <button aria-pressed="true" style="height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid rgba(47,100,245,0.35); background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 11.5px">Irish</button>
+        <button aria-pressed="true" style="height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid rgba(47,100,245,0.35); background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 11.5px">Woman</button>
+        <button aria-pressed="true" style="height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid rgba(47,100,245,0.35); background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 11.5px">30s</button>
+        <button aria-pressed="false" style="height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid #E7E9EE; background: #FFFFFF; color: #4A4F5C; font-size: 11.5px">Narration</button>
+        <button aria-pressed="false" style="height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid #E7E9EE; background: #FFFFFF; color: #4A4F5C; font-size: 11.5px">Conversational</button>
+      </div>
+      <ul aria-label="Library voices" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+        <li style="display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 4px; border-bottom: 1px solid #F2F3F6">
+          <button aria-label="Play Orla" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="font-size: 13px; font-weight: 600">Orla</span><span style="font-size: 11.5px; color: #6B7180">Soft Dublin, 30s, warm</span></span>
+          <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Use</button>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 4px; border-bottom: 1px solid #F2F3F6">
+          <button aria-label="Play Grace" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="font-size: 13px; font-weight: 600">Grace</span><span style="font-size: 11.5px; color: #6B7180">Galway, 30s, bright</span></span>
+          <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Use</button>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 4px; border-bottom: 1px solid #F2F3F6">
+          <button aria-label="Play Clodagh" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="font-size: 13px; font-weight: 600">Clodagh</span><span style="font-size: 11.5px; color: #6B7180">Cork, late 30s, low and steady</span></span>
+          <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Use</button>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 4px">
+          <button aria-label="Play Saoirse" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="font-size: 13px; font-weight: 600">Saoirse</span><span style="font-size: 11.5px; color: #6B7180">Belfast, 30s, smiling</span></span>
+          <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Use</button>
+        </li>
+      </ul>
+      <span style="flex: 1"></span>
+      <a href="#" style="font-size: 12px; padding: 0 4px">Show 46 more</a>
+    </section>
+
+    <!-- Design (in use) -->
+    <section aria-label="Design one from a description" style="box-sizing: border-box; padding: 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid rgba(47,100,245,0.45); box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 8px; height: 22px">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 L10.5 5.5 L12.5 7.5 L5 15 H3 Z" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linejoin="round" transform="translate(0 -1.5)"></path><path d="M12 1.5 L12.6 3 L14 3.6 L12.6 4.2 L12 5.7 L11.4 4.2 L10 3.6 L11.4 3 Z" fill="#14161B"></path></svg>
+        <span style="font-size: 14px; font-weight: 600">Design one from a description</span>
+        <span style="flex: 1"></span>
+        <span style="height: 22px; padding: 0 9px; border-radius: 999px; background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 11.5px; font-weight: 600; display: flex; align-items: center">Maya's voice came from here</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; align-items: baseline"><label for="voice-desc" style="font-size: 12px; font-weight: 500; color: #4A4F5C">Describe her voice</label><span style="flex: 1"></span><span class="mono" style="font-size: 11px; color: #6B7180">146 / 1,000</span></div>
+        <textarea id="voice-desc" rows="3" style="box-sizing: border-box; width: 100%; height: 48px; resize: none; padding: 8px 10px; border: 1px solid #D6DAE2; border-radius: 10px; font: inherit; font-size: 12.5px; line-height: 1.4; color: #14161B">A warm Irish woman, mid thirties. Soft Dublin accent, unhurried, smiles as she talks. Close to the mic, like she's telling a friend a secret.</textarea>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; align-items: baseline"><label for="voice-audition" style="font-size: 12px; font-weight: 500; color: #4A4F5C">What she says in the previews</label><span style="flex: 1"></span><span class="mono" style="font-size: 11px; color: #6B7180">158 · 100 to 400</span></div>
+        <textarea id="voice-audition" rows="3" style="box-sizing: border-box; width: 100%; height: 48px; resize: none; padding: 8px 10px; border: 1px solid #D6DAE2; border-radius: 10px; font: inherit; font-size: 12.5px; line-height: 1.4; color: #14161B">The first light of the day. I'm up before the house is, the window's open, and for one minute the whole beach is mine. It's perfect. Lumen. Drink the morning.</textarea>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; height: 28px">
+        <span class="cap">Previews · round 2</span>
+        <span style="flex: 1"></span>
+        <button style="height: 30px; padding: 0 14px; border-radius: 999px; border: 0; background: #D63B1F; color: #FFFFFF; font-size: 12.5px; font-weight: 600">Make 3 previews</button>
+      </div>
+      <ul aria-label="Previews" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px">
+        <li style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border-radius: 10px; border: 1px solid #E7E9EE">
+          <button aria-label="Play preview 1" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="font-size: 12.5px; font-weight: 500; width: 64px">Preview 1</span>
+          <svg width="150" height="20" viewBox="0 0 150 20" aria-hidden="true"><path d="M2 9v2M7 7v6M12 4v12M17 6v8M22 3v14M27 7v6M32 5v10M37 8v4M42 4v12M47 6v8M52 2v16M57 5v10M62 7v6M67 4v12M72 8v4M77 6v8M82 3v14M87 7v6M92 9v2M97 5v10M102 7v6M107 4v12M112 8v4M117 6v8M122 9v2M127 5v10M132 8v4M137 6v8M142 9v2" stroke="#737987" stroke-width="1.8" stroke-linecap="round"></path></svg>
+          <span class="mono" style="font-size: 11px; color: #6B7180">0:11</span>
+          <span style="flex: 1"></span>
+          <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Use</button>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border-radius: 10px; border: 1px solid rgba(47,100,245,0.45); background: rgba(47,100,245,0.05)">
+          <button aria-label="Play preview 2" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="font-size: 12.5px; font-weight: 600; width: 64px">Preview 2</span>
+          <svg width="150" height="20" viewBox="0 0 150 20" aria-hidden="true"><path d="M2 8v4M7 5v10M12 7v6M17 3v14M22 6v8M27 9v2M32 4v12M37 6v8M42 2v16M47 7v6M52 5v10M57 8v4M62 3v14M67 6v8M72 9v2M77 4v12M82 7v6M87 5v10M92 8v4M97 3v14M102 6v8M107 8v4M112 5v10M117 7v6M122 4v12M127 8v4M132 6v8M137 9v2M142 8v4" stroke="#1E4ED8" stroke-width="1.8" stroke-linecap="round"></path></svg>
+          <span class="mono" style="font-size: 11px; color: #6B7180">0:12</span>
+          <span style="flex: 1"></span>
+          <span style="height: 28px; padding: 0 10px; font-size: 12px; font-weight: 600; color: #1E4ED8; display: flex; align-items: center">In use</span>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border-radius: 10px; border: 1px solid #E7E9EE">
+          <button aria-label="Play preview 3" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="font-size: 12.5px; font-weight: 500; width: 64px">Preview 3</span>
+          <svg width="150" height="20" viewBox="0 0 150 20" aria-hidden="true"><path d="M2 9v2M7 6v8M12 8v4M17 4v12M22 7v6M27 3v14M32 6v8M37 9v2M42 5v10M47 7v6M52 4v12M57 8v4M62 6v8M67 2v16M72 5v10M77 8v4M82 6v8M87 3v14M92 7v6M97 9v2M102 5v10M107 7v6M112 4v12M117 8v4M122 6v8M127 9v2M132 7v6M137 8v4M142 9v2" stroke="#737987" stroke-width="1.8" stroke-linecap="round"></path></svg>
+          <span class="mono" style="font-size: 11px; color: #6B7180">0:11</span>
+          <span style="flex: 1"></span>
+          <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Use</button>
+        </li>
+      </ul>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px">
+        <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you." style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+        <div style="position: relative; padding: 5px 10px; border-radius: 10px; background: #F5F6F8; border: 1px solid #E7E9EE; font-size: 12px; color: #14161B; line-height: 1.35">
+          <span class="mono" style="font-size: 11px; color: #4A4F5C">Jude · checks</span>: I listened to all three. Only 2 keeps the accent on "Lumen".
+        </div>
+      </div>
+    </section>
+
+    <!-- Clone -->
+    <section aria-label="Clone from a sample" style="box-sizing: border-box; padding: 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E7E9EE; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 8px; height: 22px">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="1.5" width="5" height="8" rx="2.5" fill="none" stroke="#14161B" stroke-width="1.3"></rect><path d="M3.2 7.5 a4.8 4.8 0 0 0 9.6 0 M8 12.5 V14.5 M5.5 14.5 h5" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg>
+        <span style="font-size: 14px; font-weight: 600">Clone from a sample</span>
+      </div>
+      <div style="box-sizing: border-box; padding: 10px; border-radius: 10px; border: 1px dashed #D6DAE2; background: #F5F6F8; display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button aria-label="Play the sample" style="width: 28px; height: 28px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+          <span style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0"><span class="mono" style="font-size: 11.5px; color: #14161B">maya_read_take3.wav</span><span style="font-size: 11px; color: #6B7180">1:24 · one speaker · clean</span></span>
+          <button aria-label="Remove the sample" style="width: 28px; height: 28px; border-radius: 999px; border: 0; background: transparent; font-size: 15px; color: #4A4F5C">×</button>
+        </div>
+        <span style="font-size: 11.5px; color: #15803d">Good length: 1 to 2 minutes works best.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <label for="clone-speaker" style="font-size: 12px; font-weight: 500; color: #4A4F5C">Whose voice is this?</label>
+        <input id="clone-speaker" value="Ciara Nolan, actor" style="box-sizing: border-box; height: 32px; padding: 0 10px; border: 1px solid #D6DAE2; border-radius: 10px; font: inherit; font-size: 12.5px; color: #14161B">
+      </div>
+      <label style="display: flex; align-items: flex-start; gap: 8px; padding: 10px; border-radius: 10px; background: #fdf3e3; font-size: 12px; line-height: 1.4; color: #14161B">
+        <input type="checkbox" style="margin: 2px 0 0; width: 16px; height: 16px; flex-shrink: 0">
+        <span>Ciara Nolan agreed in writing to have her voice cloned for Lumen Water work. I can show that agreement if asked.</span>
+      </label>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span style="font-size: 12px; color: #4A4F5C">Agreement</span>
+        <span style="flex: 1"></span>
+        <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Attach the signed form</button>
+      </div>
+      <span style="flex: 1"></span>
+      <button aria-disabled="true" style="height: 34px; border-radius: 999px; border: 1px solid #E7E9EE; background: #F2F3F6; color: #6B7180; font-size: 12.5px; font-weight: 600; cursor: not-allowed">Clone voice</button>
+      <span style="font-size: 11.5px; color: #6B7180; text-align: center">Tick the agreement first.</span>
+    </section>
+  </div>
+
+  <!-- Bottom row: where, names, owner -->
+  <div style="display: grid; grid-template-columns: 296px 420px 296px; gap: 12px; height: 212px">
+
+    <!-- Where Maya speaks -->
+    <section aria-label="Everywhere Maya speaks" style="box-sizing: border-box; padding: 12px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E7E9EE; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+      <div style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 13.5px; font-weight: 600">Everywhere Maya speaks</span><span style="flex: 1"></span><span style="font-size: 11.5px; color: #6B7180">all in Aoife</span></div>
+      <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+        <li style="display: flex; align-items: center; gap: 8px; height: 28px; border-bottom: 1px solid #F2F3F6; font-size: 12px"><span class="mono" style="font-size: 11px; color: #6B7180; width: 44px">Shot 1</span><span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">"The first light of the day."</span><span style="font-size: 11px; color: #6B7180">voice-over</span></li>
+        <li style="display: flex; align-items: center; gap: 8px; height: 28px; border-bottom: 1px solid #F2F3F6; font-size: 12px"><span class="mono" style="font-size: 11px; color: #6B7180; width: 44px">Shot 4</span><span style="flex: 1">"It's perfect!"</span><span style="font-size: 11px; color: #6B7180">on camera</span></li>
+        <li style="display: flex; align-items: center; gap: 8px; height: 28px; border-bottom: 1px solid #F2F3F6; font-size: 12px"><span class="mono" style="font-size: 11px; color: #6B7180; width: 44px">Shot 5</span><span style="flex: 1">"To the first light."</span><span style="font-size: 11px; color: #6B7180">on camera</span></li>
+        <li style="display: flex; align-items: center; gap: 8px; height: 28px; font-size: 12px"><span class="mono" style="font-size: 11px; color: #6B7180; width: 44px">Radio</span><span style="flex: 1">30 s radio cut</span><span style="font-size: 11px; color: #6B7180">2 lines</span></li>
+      </ul>
+      <label style="display: flex; align-items: flex-start; gap: 8px; padding-top: 4px; font-size: 12px; line-height: 1.4; color: #14161B">
+        <input type="checkbox" checked style="margin: 2px 0 0; width: 16px; height: 16px; flex-shrink: 0">
+        <span>Re-voice her on-camera lines into Aoife. Timing stays, so her lips still match.</span>
+      </label>
+    </section>
+
+    <!-- Pronunciation dictionary -->
+    <section aria-label="Say brand names right" style="box-sizing: border-box; padding: 12px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E7E9EE; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+      <div style="display: flex; align-items: center; gap: 6px"><span style="font-size: 13.5px; font-weight: 600">Say brand names right</span><span style="flex: 1"></span><span style="font-size: 11.5px; color: #6B7180">Napkin Studio · every voice, every shelf</span></div>
+      <ul aria-label="Pronunciations" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+        <li style="display: flex; align-items: center; gap: 10px; height: 30px; border-bottom: 1px solid #F2F3F6; font-size: 12px">
+          <span style="font-weight: 600; width: 52px">Lumen</span>
+          <span class="mono" style="font-size: 11.5px; width: 92px">LOO-men</span>
+          <span style="flex: 1; font-size: 11.5px; color: #6B7180">Lumen Water</span>
+          <button aria-label="Hear Lumen in Aoife's voice" style="width: 26px; height: 26px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 30px; border-bottom: 1px solid #F2F3F6; font-size: 12px">
+          <span style="font-weight: 600; width: 52px">Velto</span>
+          <span class="mono" style="font-size: 11.5px; width: 92px">VEL-toe</span>
+          <span style="flex: 1; font-size: 11.5px; color: #6B7180">was said "Veltor"</span>
+          <button aria-label="Hear Velto in Aoife's voice" style="width: 26px; height: 26px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+        </li>
+        <li style="display: flex; align-items: center; gap: 10px; height: 30px; border-bottom: 1px solid #F2F3F6; font-size: 12px">
+          <span style="font-weight: 600; width: 52px">Vorr</span>
+          <span class="mono" style="font-size: 11.5px; width: 92px">/vɔːr/</span>
+          <span style="flex: 1; font-size: 11.5px; color: #6B7180">was said "War"; rhymes with "door"</span>
+          <button aria-label="Hear Vorr in Aoife's voice" style="width: 26px; height: 26px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1.5 L8.5 5 L2.5 8.5 Z" fill="#14161B"></path></svg></button>
+        </li>
+      </ul>
+      <div style="display: flex; align-items: center; gap: 6px; padding-top: 4px">
+        <input aria-label="Brand name" placeholder="Word" style="box-sizing: border-box; width: 96px; height: 30px; padding: 0 10px; border: 1px solid #D6DAE2; border-radius: 999px; font: inherit; font-size: 12px; color: #14161B">
+        <input aria-label="Say it like" placeholder="Say it like, or IPA" style="box-sizing: border-box; flex: 1; min-width: 0; height: 30px; padding: 0 10px; border: 1px solid #D6DAE2; border-radius: 999px; font: inherit; font-size: 12px; color: #14161B">
+        <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; color: #14161B">Add</button>
+      </div>
+      <span style="font-size: 11.5px; color: #6B7180">Lines that use a changed word are made again in the same voice.</span>
+    </section>
+
+    <!-- Who it belongs to -->
+    <section aria-label="Who this voice belongs to" style="box-sizing: border-box; padding: 12px 14px; border-radius: 12px; background: #FFFFFF; border: 1px solid #E7E9EE; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+      <span style="font-size: 13.5px; font-weight: 600">Who it belongs to</span>
+      <div role="radiogroup" aria-label="Aoife belongs to" style="display: flex; flex-direction: column; gap: 2px">
+        <label style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 8px; font-size: 12.5px; color: #14161B"><input type="radio" name="voice-owner" style="margin: 0; width: 15px; height: 15px">This project only</label>
+        <label style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 8px; background: rgba(47,100,245,0.08); font-size: 12.5px; color: #14161B; font-weight: 600"><input type="radio" name="voice-owner" checked style="margin: 0; width: 15px; height: 15px">Lumen Water shelf</label>
+        <label style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 8px; font-size: 12.5px; color: #14161B"><input type="radio" name="voice-owner" style="margin: 0; width: 15px; height: 15px">All of Napkin Studio</label>
+      </div>
+      <span style="font-size: 11.5px; line-height: 1.4; color: #4A4F5C">Anyone at Napkin Studio can use her on Lumen Water work.</span>
+      <span style="flex: 1"></span>
+      <span style="font-size: 11px; color: #6B7180">Designed by Shrey · 13 Oct · <span class="mono">v2</span></span>
+    </section>
+  </div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

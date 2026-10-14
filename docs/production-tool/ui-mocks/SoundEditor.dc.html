@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video editor: sound</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+.grid{background-color:#FAFAFB;background-image:radial-gradient(#D6DAE2 1px, transparent 1px);background-size:24px 24px}
+.mono{font-family:'Geist Mono', monospace}
+button{font:inherit;cursor:pointer}
+/* napkin-loader */
+/* The Napkin loader: the Napkin logo (ui/Mark.tsx) at work. Copy this whole
+   block, and the <svg class="napkin-loader"> pattern marked "copy verbatim",
+   as they are; change only width/height, data-work and data-state.
+   The logo: a disc of four quadrants turned -45deg, always in the Napkin
+   colours: create #FF4F2E (top), produce #8B919E (right), learn #DADDE3
+   (bottom), plan #14161B (left). A centre pin (ink dot, white ring) is the
+   axis everything turns on.
+   The markup has four card slots, painted back to front (.nl-c3 ... .nl-c0),
+   so the leading card .nl-c0 is always on top and each trailing card lies
+   UNDER the one ahead of it. data-work picks which quadrant leads; the
+   trailing cards are the logo's others in its fixed order (counter-clockwise
+   from the leader), each card always sits at its own logo position.
+   One 4 s loop (--nl-t):
+     0.0-0.2 s  only the pin and the leading card
+     0.2-1.8 s  the leader revolves one turn clockwise round the pin; the
+                cards behind it fan out one after another, each sliding out
+                from under the one ahead, until the circle closes (the logo)
+     1.8-2.8 s  the whole logo spins one turn round the pin
+     2.8-4.0 s  the cards fold back, each sliding under the one ahead, until
+                only the leader is left; repeat
+   data-work (who leads):
+     create  (orange) generating | rendering | retouching | create (default)
+     plan    (ink)    planning | writing | directing | plan
+     learn   (light)  reading | researching | checking | learn
+     produce (grey)   cutting | producing | exporting | sizes | produce
+   data-state: run (default) | finish (the full logo, still: hold it 0.6 s,
+               then show the done state) | queued (the full logo, still)
+   Reduced motion (prefers-reduced-motion, or [data-motion="still"] on any
+   ancestor): the full logo, still; the leading quadrant pulses in opacity.
+   .nl-flat: the full logo, still, no pulse (legends, swatches).
+   .nl-at + style="--nl-at:-1.2s": a paused poster frame at that point. */
+.napkin-loader{display:block;flex-shrink:0;overflow:visible;--nl-t:4s;--nl-h:0deg;--nl-f0:#FF4F2E;--nl-f1:#14161B;--nl-f2:#DADDE3;--nl-f3:#8B919E}
+.napkin-loader[data-work="plan"],.napkin-loader[data-work="planning"],.napkin-loader[data-work="writing"],.napkin-loader[data-work="directing"]{--nl-h:270deg;--nl-f0:#14161B;--nl-f1:#DADDE3;--nl-f2:#8B919E;--nl-f3:#FF4F2E}
+.napkin-loader[data-work="learn"],.napkin-loader[data-work="reading"],.napkin-loader[data-work="researching"],.napkin-loader[data-work="checking"]{--nl-h:180deg;--nl-f0:#DADDE3;--nl-f1:#8B919E;--nl-f2:#FF4F2E;--nl-f3:#14161B}
+.napkin-loader[data-work="produce"],.napkin-loader[data-work="cutting"],.napkin-loader[data-work="producing"],.napkin-loader[data-work="exporting"],.napkin-loader[data-work="sizes"]{--nl-h:90deg;--nl-f0:#8B919E;--nl-f1:#FF4F2E;--nl-f2:#14161B;--nl-f3:#DADDE3}
+.napkin-loader .nl-spin,.napkin-loader .nl-c,.napkin-loader .nl-s{transform-box:view-box;transform-origin:center}
+.napkin-loader .nl-c0{transform:rotate(var(--nl-h))}
+.napkin-loader .nl-c1{transform:rotate(calc(var(--nl-h) - 90deg))}
+.napkin-loader .nl-c2{transform:rotate(calc(var(--nl-h) - 180deg))}
+.napkin-loader .nl-c3{transform:rotate(calc(var(--nl-h) - 270deg))}
+.napkin-loader .nl-c0 .nl-s{fill:var(--nl-f0)}
+.napkin-loader .nl-c1 .nl-s{fill:var(--nl-f1)}
+.napkin-loader .nl-c2 .nl-s{fill:var(--nl-f2)}
+.napkin-loader .nl-c3 .nl-s{fill:var(--nl-f3)}
+.napkin-loader .nl-pin{fill:#14161B;stroke:#FFFFFF;stroke-width:1.5px}
+.napkin-loader .nl-spin{animation:nl-spin var(--nl-t) linear infinite}
+.napkin-loader .nl-s{animation:var(--nl-t) linear infinite}
+.napkin-loader .nl-c0 .nl-s{animation-name:nl-k0}
+.napkin-loader .nl-c1 .nl-s{animation-name:nl-k1}
+.napkin-loader .nl-c2 .nl-s{animation-name:nl-k2}
+.napkin-loader .nl-c3 .nl-s{animation-name:nl-k3}
+.napkin-loader.nl-at .nl-spin,.napkin-loader.nl-at .nl-s{animation-play-state:paused;animation-delay:var(--nl-at,0s)}
+@keyframes nl-k0{0%{transform:rotate(90deg)}7.25%{transform:rotate(90.2deg)}8.75%{transform:rotate(91.1deg)}10.25%{transform:rotate(93deg)}11.75%{transform:rotate(96.3deg)}13.25%{transform:rotate(101.5deg)}14.75%{transform:rotate(109deg)}16%{transform:rotate(117.3deg)}17.25%{transform:rotate(127.6deg)}18.25%{transform:rotate(137.6deg)}19.5%{transform:rotate(152.4deg)}20.5%{transform:rotate(166.3deg)}21.5%{transform:rotate(182deg)}22.5%{transform:rotate(199.8deg)}23.25%{transform:rotate(214.5deg)}24.5%{transform:rotate(240.6deg)}25.75%{transform:rotate(263.8deg)}27%{transform:rotate(283.7deg)}28.25%{transform:rotate(300.7deg)}29.75%{transform:rotate(317.6deg)}31.25%{transform:rotate(330.8deg)}33%{transform:rotate(342.4deg)}34.75%{transform:rotate(350.5deg)}36%{transform:rotate(354.4deg)}37.25%{transform:rotate(357deg)}38.75%{transform:rotate(358.9deg)}40.5%{transform:rotate(359.8deg)}78%{transform:rotate(360deg)}79.75%{transform:rotate(360.5deg)}81.25%{transform:rotate(362deg)}82.5%{transform:rotate(364.4deg)}83.75%{transform:rotate(368.4deg)}84.75%{transform:rotate(372.9deg)}85.75%{transform:rotate(378.8deg)}86.75%{transform:rotate(386.2deg)}87.5%{transform:rotate(392.9deg)}89.25%{transform:rotate(412deg)}90.25%{transform:rotate(421.7deg)}91.5%{transform:rotate(431.2deg)}92.75%{transform:rotate(438.3deg)}94.25%{transform:rotate(444.2deg)}95.75%{transform:rotate(447.7deg)}97.5%{transform:rotate(449.5deg)}100%{transform:rotate(450deg)}}
+@keyframes nl-k1{0%{transform:rotate(180deg);opacity:0}9%{transform:rotate(180deg);opacity:0}9.25%{transform:rotate(180deg);opacity:1}11.25%{transform:rotate(180deg)}13.75%{transform:rotate(180.9deg)}15.25%{transform:rotate(182.7deg)}16.5%{transform:rotate(185.2deg)}17.75%{transform:rotate(189.1deg)}19%{transform:rotate(194.4deg)}20.25%{transform:rotate(201.5deg)}21.25%{transform:rotate(208.6deg)}22.5%{transform:rotate(219.5deg)}23.5%{transform:rotate(229.9deg)}24.75%{transform:rotate(245.5deg)}26%{transform:rotate(268deg)}26.75%{transform:rotate(280deg)}27.5%{transform:rotate(290.9deg)}28.75%{transform:rotate(306.8deg)}30.25%{transform:rotate(322.4deg)}31.5%{transform:rotate(332.7deg)}33%{transform:rotate(342.4deg)}34.5%{transform:rotate(349.5deg)}36.25%{transform:rotate(355deg)}38.5%{transform:rotate(358.7deg)}41%{transform:rotate(359.9deg)}75.5%{transform:rotate(360.1deg)}77.75%{transform:rotate(362.2deg)}79.5%{transform:rotate(366.8deg)}80.75%{transform:rotate(372.6deg)}81.75%{transform:rotate(379.1deg)}83%{transform:rotate(389.9deg)}84%{transform:rotate(401deg)}85%{transform:rotate(414.5deg)}85.75%{transform:rotate(426.5deg)}86.5%{transform:rotate(440deg)}87.75%{transform:rotate(464.7deg)}88.25%{transform:rotate(473.5deg)}89%{transform:rotate(485.5deg)}90.25%{transform:rotate(502deg)}91%{transform:rotate(510.1deg)}91.75%{transform:rotate(517deg)}92.5%{transform:rotate(522.7deg)}93.5%{transform:rotate(528.8deg)}94.25%{transform:rotate(532.2deg)}94.75%{transform:rotate(534.1deg);opacity:1}95%{transform:rotate(534.9deg);opacity:0}95.25%{transform:rotate(535.6deg)}97.25%{transform:rotate(539.1deg)}100%{transform:rotate(540deg);opacity:0}}
+@keyframes nl-k2{0%{transform:rotate(270deg);opacity:0}14.25%{transform:rotate(270deg);opacity:0}14.5%{transform:rotate(270deg);opacity:1}17.5%{transform:rotate(270.1deg)}20%{transform:rotate(271.7deg)}22%{transform:rotate(275deg)}23.25%{transform:rotate(278.5deg)}24.25%{transform:rotate(282.3deg)}25.25%{transform:rotate(287deg)}26.25%{transform:rotate(292.7deg)}27.75%{transform:rotate(303.6deg)}30.5%{transform:rotate(328.4deg)}31.5%{transform:rotate(335.7deg)}32.75%{transform:rotate(343deg)}33.75%{transform:rotate(347.7deg)}35%{transform:rotate(352.3deg)}36.25%{transform:rotate(355.5deg)}37.75%{transform:rotate(358deg)}39.5%{transform:rotate(359.5deg)}41.5%{transform:rotate(360deg)}72%{transform:rotate(360.1deg)}74.25%{transform:rotate(361.9deg)}76%{transform:rotate(366.2deg)}77.5%{transform:rotate(373.3deg)}78.25%{transform:rotate(378.2deg)}79%{transform:rotate(384.2deg)}79.75%{transform:rotate(391.5deg)}80.5%{transform:rotate(400deg)}81.25%{transform:rotate(410deg)}81.75%{transform:rotate(417.4deg)}82.75%{transform:rotate(434.6deg)}83.75%{transform:rotate(454.8deg)}84.75%{transform:rotate(478.4deg)}85.75%{transform:rotate(505.1deg)}86.5%{transform:rotate(523.8deg)}87%{transform:rotate(535.2deg)}87.75%{transform:rotate(550.7deg)}88.5%{transform:rotate(564.4deg)}89.25%{transform:rotate(576.4deg)}90%{transform:rotate(586.8deg)}90.75%{transform:rotate(595.8deg)}91%{transform:rotate(598.5deg);opacity:1}91.25%{transform:rotate(601.1deg);opacity:0}91.75%{transform:rotate(605.8deg)}92.75%{transform:rotate(613.6deg)}93.75%{transform:rotate(619.5deg)}94.75%{transform:rotate(623.8deg)}95.75%{transform:rotate(626.7deg)}97%{transform:rotate(628.8deg)}100%{transform:rotate(630deg);opacity:0}}
+@keyframes nl-k3{0%{transform:rotate(360deg);opacity:0}19.75%{transform:rotate(360deg);opacity:0}20%{transform:rotate(360deg);opacity:1}68.25%{transform:rotate(360deg)}70.75%{transform:rotate(361.4deg)}71.75%{transform:rotate(363.2deg)}72.75%{transform:rotate(366.1deg)}73.75%{transform:rotate(370.2deg)}74.5%{transform:rotate(374.4deg)}75.5%{transform:rotate(381.5deg)}76.25%{transform:rotate(388.1deg)}77.25%{transform:rotate(398.9deg)}78%{transform:rotate(408.6deg)}78.75%{transform:rotate(419.7deg)}79.5%{transform:rotate(432.5deg)}80.25%{transform:rotate(446.9deg)}80.75%{transform:rotate(457.6deg)}81.75%{transform:rotate(481.4deg)}82.5%{transform:rotate(501.6deg)}83%{transform:rotate(516.2deg)}84%{transform:rotate(548.2deg);opacity:1}84.25%{transform:rotate(556.1deg);opacity:0}85%{transform:rotate(574.9deg)}86%{transform:rotate(601.6deg)}86.5%{transform:rotate(613.8deg)}87.25%{transform:rotate(630.6deg)}88.25%{transform:rotate(650deg)}89%{transform:rotate(662.6deg)}90%{transform:rotate(676.8deg)}91%{transform:rotate(688.5deg)}92%{transform:rotate(697.9deg)}93%{transform:rotate(705.2deg)}94.25%{transform:rotate(711.8deg)}95.5%{transform:rotate(716.1deg)}96.75%{transform:rotate(718.5deg)}98.25%{transform:rotate(719.8deg)}100%{transform:rotate(720deg);opacity:0}}
+@keyframes nl-spin{0%,42.5%{transform:rotate(0deg);animation-timing-function:cubic-bezier(.65,0,.35,1)}67.5%,100%{transform:rotate(360deg)}}
+@keyframes nl-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.napkin-loader[data-state="finish"] .nl-spin,.napkin-loader[data-state="finish"] .nl-s,.napkin-loader[data-state="queued"] .nl-spin,.napkin-loader[data-state="queued"] .nl-s,.napkin-loader.nl-flat .nl-spin,.napkin-loader.nl-flat .nl-s{animation:none;transform:none;opacity:1}
+[data-motion="still"] .napkin-loader:not(.nl-at) .nl-spin,[data-motion="still"] .napkin-loader:not(.nl-at) .nl-s{animation:none;transform:none;opacity:1}
+[data-motion="still"] .napkin-loader:not(.nl-at):not(.nl-flat):not([data-state="finish"]):not([data-state="queued"]) .nl-c0 .nl-s{animation:nl-pulse 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){
+.napkin-loader:not(.nl-at) .nl-spin,.napkin-loader:not(.nl-at) .nl-s{animation:none;transform:none;opacity:1}
+.napkin-loader:not(.nl-at):not(.nl-flat):not([data-state="finish"]):not([data-state="queued"]) .nl-c0 .nl-s{animation:nl-pulse 2.4s ease-in-out infinite}
+}
+/* /napkin-loader */
+
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #F5F6F8; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E">
+
+<!-- Top bar (editor) -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE; z-index: 5">
+  <button aria-label="Back to the canvas" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px">← Canvas</button>
+  <span aria-hidden="true" style="width: 1px; height: 22px; background: #E7E9EE"></span>
+  <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="4" width="16" height="12" rx="2" fill="#14161B"></rect><path d="M8 7.5 L13 10 L8 12.5 Z" fill="#FFFFFF"></path></svg>
+  <span style="font-weight: 600; font-size: 14px">Video · First Light</span>
+  <span style="font-size: 13px; color: #676D7A">Lumen Water</span>
+  <span class="mono" style="font-size: 11px; color: #676D7A; padding: 2px 8px; border: 1px solid #E7E9EE; border-radius: 999px">16:9 · 15 s</span>
+
+  <div role="group" aria-label="Editor view" style="display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid #E7E9EE; border-radius: 999px; background: #FFFFFF; margin-left: 8px">
+    <button aria-pressed="false" style="height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #4A4F5C">Picture</button>
+    <button aria-pressed="true" style="height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: rgba(47,100,245,0.10); color: #1E4ED8; font-size: 12px; font-weight: 600">Sound</button>
+  </div>
+
+  <span style="flex: 1"></span>
+
+  <!-- running job: Edie mixing, napkin loader led by the produce quadrant -->
+  <div role="status" style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 8px; border-radius: 999px; background: #F2EEFE; font-size: 12px; color: #4A4F5C">
+    <svg class="napkin-loader" data-work="produce" data-state="run" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g class="nl-spin"><g class="nl-c nl-c3" transform="rotate(90 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#8B919E"></path></g><g class="nl-c nl-c2" transform="rotate(180 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#DADDE3"></path></g><g class="nl-c nl-c1" transform="rotate(270 16 16)"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#14161B"></path></g><g class="nl-c nl-c0"><path class="nl-s" d="M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z" fill="#FF4F2E"></path></g></g><circle class="nl-pin" cx="16" cy="16" r="2.4" fill="#14161B" stroke="#FFFFFF" stroke-width="1.5"></circle></svg>
+    <span>Edie · edits: mixing your changes into mix v4 · started by you</span>
+  </div>
+
+  <div style="display: flex; align-items: center" aria-label="Sai and Maya are here" role="img">
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF">S</span>
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #14161B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF; margin-left: -10px">M</span>
+  </div>
+
+  <button aria-haspopup="menu" aria-expanded="true" style="height: 32px; padding: 0 12px 0 14px; border-radius: 999px; border: 1px solid #14161B; background: #F5F6F8; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px">Export<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="#14161B" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+  <button style="height: 32px; padding: 0 16px; border-radius: 999px; border: 0; background: #D63B1F; color: #FFFFFF; font-size: 13px; font-weight: 600">Render ad</button>
+</header>
+
+<!-- ============ Shots and their sound (per-shot path strip) ============ -->
+<section aria-label="Shots and their sound" style="position: absolute; left: 16px; top: 64px; width: 600px; height: 310px; box-sizing: border-box; padding: 12px 14px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 4px">
+  <div style="display: flex; align-items: center; gap: 8px; height: 26px">
+    <span style="font-weight: 600; font-size: 13px">Shots and their sound</span>
+    <span style="flex: 1"></span>
+    <span style="font-size: 12px; color: #4A4F5C">2 speak on camera · 4 silent</span>
+  </div>
+
+  <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px">
+    <!-- 1 -->
+    <li style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 10px">
+      <span class="mono" style="width: 14px; font-size: 11px; color: #676D7A">1</span>
+      <span aria-hidden="true" style="width: 52px; height: 29px; flex: none; border-radius: 5px; background-image: linear-gradient(180deg, #F8C99B 0%, #9CC3D5 70%, #E9D7B5 100%)"></span>
+      <span style="width: 136px; white-space: nowrap; font-size: 13px">Wide dawn beach</span>
+      <span class="mono" style="width: 40px; white-space: nowrap; font-size: 11px; color: #676D7A">2.0 s</span>
+      <button aria-label="Shot 1 path: silent, Gen-4.5 on Runway plus sound layers. Change" style="height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="padding: 1px 7px; border-radius: 999px; background: #F2F3F6; border: 1px solid #D6DAE2; color: #14161B; font-size: 10px; font-weight: 500">Path 2</span>silent · Gen-4.5 on Runway + layers</button>
+    </li>
+    <!-- 2 -->
+    <li style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 10px">
+      <span class="mono" style="width: 14px; font-size: 11px; color: #676D7A">2</span>
+      <span aria-hidden="true" style="width: 52px; height: 29px; flex: none; border-radius: 5px; background-image: linear-gradient(170deg, #F3D9C6 0%, #D9A884 60%, #9CC3D5 100%)"></span>
+      <span style="width: 136px; white-space: nowrap; font-size: 13px">Medium Maya walking</span>
+      <span class="mono" style="width: 40px; white-space: nowrap; font-size: 11px; color: #676D7A">2.5 s</span>
+      <button aria-label="Shot 2 path: silent, Gen-4.5 on Runway plus sound layers. Change" style="height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="padding: 1px 7px; border-radius: 999px; background: #F2F3F6; border: 1px solid #D6DAE2; color: #14161B; font-size: 10px; font-weight: 500">Path 2</span>silent · Gen-4.5 on Runway + layers</button>
+    </li>
+    <!-- 3 -->
+    <li style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 10px">
+      <span class="mono" style="width: 14px; font-size: 11px; color: #676D7A">3</span>
+      <span aria-hidden="true" style="width: 52px; height: 29px; flex: none; border-radius: 5px; background-image: radial-gradient(circle at 40% 50%, #E6F4FF 0%, #A9D4F2 40%, #D9A884 100%)"></span>
+      <span style="width: 136px; white-space: nowrap; font-size: 13px">Insert bottle opening</span>
+      <span class="mono" style="width: 40px; white-space: nowrap; font-size: 11px; color: #676D7A">1.5 s</span>
+      <button aria-label="Shot 3 path: silent, Gen-4.5 on Runway plus sound layers. Change" style="height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="padding: 1px 7px; border-radius: 999px; background: #F2F3F6; border: 1px solid #D6DAE2; color: #14161B; font-size: 10px; font-weight: 500">Path 2</span>silent · Gen-4.5 on Runway + layers</button>
+    </li>
+    <!-- 4: selected (the selected line lives here) -->
+    <li style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 10px; background: rgba(47,100,245,0.05); box-shadow: inset 0 0 0 1px rgba(47,100,245,0.35)">
+      <span class="mono" style="width: 14px; font-size: 11px; color: #1E4ED8; font-weight: 500">4</span>
+      <span aria-hidden="true" style="width: 52px; height: 29px; flex: none; border-radius: 5px; background-image: linear-gradient(160deg, #FFD9A0 0%, #F3A97B 50%, #7A5A48 100%)"></span>
+      <span style="width: 136px; white-space: nowrap; font-size: 13px; color: #1E4ED8; font-weight: 600">Close Maya smiles</span>
+      <span class="mono" style="width: 40px; white-space: nowrap; font-size: 11px; color: #4A4F5C">4.0 s</span>
+      <button aria-label="Shot 4 path: speaks on camera, Veo 3.1 Fast on Runway. Change" style="height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="padding: 1px 7px; border-radius: 999px; background: #14161B; border: 1px solid #14161B; color: #FFFFFF; font-size: 10px; font-weight: 500">Path 1</span>speaks on camera · Veo 3.1 Fast on Runway</button>
+    </li>
+    <!-- 5 -->
+    <li style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 10px">
+      <span class="mono" style="width: 14px; font-size: 11px; color: #676D7A">5</span>
+      <span aria-hidden="true" style="width: 52px; height: 29px; flex: none; border-radius: 5px; background-image: linear-gradient(0deg, #3E4A5A 0%, #F3A97B 50%, #FFD9A0 100%)"></span>
+      <span style="width: 136px; white-space: nowrap; font-size: 13px">Low wide toast</span>
+      <span class="mono" style="width: 40px; white-space: nowrap; font-size: 11px; color: #676D7A">3.0 s</span>
+      <button aria-label="Shot 5 path: speaks on camera, Veo 3.1 Fast on Runway. Change" style="height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="padding: 1px 7px; border-radius: 999px; background: #14161B; border: 1px solid #14161B; color: #FFFFFF; font-size: 10px; font-weight: 500">Path 1</span>speaks on camera · Veo 3.1 Fast on Runway</button>
+    </li>
+    <!-- 6 -->
+    <li style="display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px; border-radius: 10px">
+      <span class="mono" style="width: 14px; font-size: 11px; color: #676D7A">6</span>
+      <span aria-hidden="true" style="width: 52px; height: 29px; flex: none; border-radius: 5px; background: #14161B; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 7px; font-weight: 600; letter-spacing: 0.06em">LUMEN</span>
+      <span style="width: 136px; white-space: nowrap; font-size: 13px">End card</span>
+      <span class="mono" style="width: 40px; white-space: nowrap; font-size: 11px; color: #676D7A">2.0 s</span>
+      <button aria-label="Shot 6 path: silent end card plus sound layers. Change" style="height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="padding: 1px 7px; border-radius: 999px; background: #F2F3F6; border: 1px solid #D6DAE2; color: #14161B; font-size: 10px; font-weight: 500">Path 2</span>silent · end card + layers</button>
+    </li>
+  </ul>
+
+  <span style="flex: 1"></span>
+  <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4A4F5C">
+    <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="15" height="20" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips." style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    <span><span class="mono" style="color: #14161B">Dex · directs</span>: Maya speaks in shots 4 and 5, so they make their own sound.</span>
+  </div>
+</section>
+
+<!-- ============ Mix: loudness target and meter ============ -->
+<section aria-label="Mix" style="position: absolute; left: 632px; top: 64px; width: 424px; height: 310px; box-sizing: border-box; padding: 12px 16px 14px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 10px">
+  <div style="display: flex; align-items: center; gap: 8px; height: 30px">
+    <span style="font-weight: 600; font-size: 13px">Mix</span>
+    <span class="mono" style="font-size: 11px; color: #4A4F5C; padding: 1px 8px; border: 1px solid #E7E9EE; border-radius: 999px">v4</span>
+    <span style="flex: 1"></span>
+    <svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="21" height="28" role="img" aria-label="Edie, Splices moments and renders the ad. — working" style="--af-phase:0.347"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 7.5 L32.5 16 L24 24.5 L15.5 16Z" fill="var(--af-iris)"></path><path d="M24 22.5 L33.5 32 L24 41.5 L14.5 32Z" fill="var(--af-iris)"></path><path d="M32.5 19.4 L37.1 24 L32.5 28.6 L27.9 24Z" fill="var(--af-iris)"></path><g class="af-emblem"><g fill="var(--af-mark)"><rect x="19.2" y="32.3" width="2.3" height="3.2" rx="0.4"></rect><rect x="22.7" y="29.9" width="2.3" height="5.6" rx="0.4"></rect><rect x="26.2" y="27.5" width="2.3" height="8" rx="0.4"></rect></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="20.099999999999998" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.7" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    <span style="padding: 4px 10px; border-radius: 10px; background: #F5F6F8; font-size: 12px; color: #4A4F5C; white-space: nowrap"><span class="mono" style="color: #14161B">Edie · edits</span>: I'm mixing your level changes.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <span id="lt-label" style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #676D7A">Loudness target</span>
+    <div role="radiogroup" aria-labelledby="lt-label" style="display: flex; gap: 6px">
+      <button role="radio" aria-checked="true" style="flex: 1; height: 44px; border-radius: 12px; border: 1.5px solid #2F64F5; background: rgba(47,100,245,0.06); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px"><span style="font-size: 13px; font-weight: 600; color: #1E4ED8">Online</span><span class="mono" style="font-size: 11px; color: #1E4ED8">−14 LUFS</span></button>
+      <button role="radio" aria-checked="false" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px"><span style="font-size: 13px; font-weight: 500; color: #14161B">TV</span><span class="mono" style="font-size: 11px; color: #4A4F5C">−23 LUFS</span></button>
+      <button role="radio" aria-checked="false" style="flex: 1; height: 44px; border-radius: 12px; border: 1px solid #D6DAE2; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px"><span style="font-size: 13px; font-weight: 500; color: #14161B">Radio</span><span class="mono" style="font-size: 11px; color: #4A4F5C">−18 LUFS</span></button>
+    </div>
+  </div>
+
+  <!-- meter -->
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: baseline; gap: 14px">
+      <span class="mono" style="font-size: 20px; font-weight: 500">−14.2</span>
+      <span style="font-size: 12px; color: #4A4F5C; margin-left: -10px">LUFS, whole ad</span>
+      <span class="mono" style="font-size: 12px; color: #14161B">−1.4 dB</span>
+      <span style="font-size: 12px; color: #4A4F5C; margin-left: -10px">true peak</span>
+      <span style="flex: 1"></span>
+      <span style="font-size: 12px; color: #15763a; background: #e7f6ed; padding: 3px 10px; border-radius: 999px">On target</span>
+    </div>
+    <div role="meter" aria-label="Loudness of the whole ad" aria-valuemin="-36" aria-valuemax="0" aria-valuenow="-14.2" aria-valuetext="−14.2 LUFS, target −14" style="position: relative; width: 392px; height: 30px">
+      <!-- integrated: -36..0 over 392px; -14.2 -> 237px; target -14 -> 239.6px -->
+      <div style="position: absolute; left: 0; top: 0; width: 392px; height: 12px; border-radius: 999px; background: #F2F3F6"></div>
+      <div style="position: absolute; left: 0; top: 0; width: 237px; height: 12px; border-radius: 999px; background: #14161B"></div>
+      <!-- short-term, moving -->
+      <div style="position: absolute; left: 0; top: 16px; width: 392px; height: 5px; border-radius: 999px; background: #F2F3F6"></div>
+      <div style="position: absolute; left: 0; top: 16px; width: 262px; height: 5px; border-radius: 999px; background: #8B919E"></div>
+      <span aria-hidden="true" style="position: absolute; left: 238.6px; top: -4px; width: 2px; height: 29px; background: #2F64F5; border-radius: 1px"></span>
+    </div>
+    <div class="mono" aria-hidden="true" style="position: relative; width: 392px; height: 12px; font-size: 10px; color: #676D7A; margin-top: -6px">
+      <span style="position: absolute; left: 0">−36</span>
+      <span style="position: absolute; left: 120px">−24</span>
+      <span style="position: absolute; left: 186px">−18</span>
+      <span style="position: absolute; left: 226px; color: #1E4ED8">target</span>
+      <span style="position: absolute; left: 318px">−6</span>
+      <span style="position: absolute; right: 0">0</span>
+    </div>
+  </div>
+
+  <span style="flex: 1"></span>
+  <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4A4F5C">
+    <span style="margin-right: 2px; white-space: nowrap">Under speech</span>
+    <span class="mono" style="padding: 3px 8px; border-radius: 999px; background: #F5F6F8; font-size: 11px; white-space: nowrap">Effects −8 dB</span>
+    <span class="mono" style="padding: 3px 8px; border-radius: 999px; background: #F5F6F8; font-size: 11px; white-space: nowrap">Ambience −6 dB</span>
+    <span class="mono" style="padding: 3px 8px; border-radius: 999px; background: #F5F6F8; font-size: 11px; white-space: nowrap">Music −12 dB</span>
+  </div>
+</section>
+
+<!-- ============ Right column: preview, selected line, Jude ============ -->
+<!-- Preview player (small in the Sound view) -->
+<section aria-label="Preview" style="position: absolute; left: 1072px; top: 64px; width: 352px; height: 198px; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(20,30,60,0.08); background: linear-gradient(160deg, #FFD9A0 0%, #F3A97B 48%, #7A5A48 100%)">
+  <div aria-hidden="true" style="position: absolute; left: 118px; top: 30px; width: 120px; height: 150px; border-radius: 48% 48% 44% 44%; background: radial-gradient(circle at 46% 38%, #F6E1CF 0%, #E0AE88 45%, #8A6450 100%); opacity: 0.92"></div>
+  <span style="position: absolute; left: 10px; top: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(20,22,27,0.72); color: #FFFFFF; font-size: 12px; font-weight: 500">Shot 4 · Close · Maya smiles</span>
+  <span style="position: absolute; left: 10px; bottom: 10px; padding: 3px 10px; border-radius: 6px; background: rgba(20,22,27,0.72); color: #FFFFFF; font-size: 12px">"It's perfect!"</span>
+</section>
+<div role="toolbar" aria-label="Playback" style="position: absolute; left: 1072px; top: 268px; width: 352px; height: 32px; display: flex; align-items: center; gap: 6px">
+  <button aria-label="Play" style="width: 32px; height: 32px; border: 0; border-radius: 999px; background: #14161B; display: flex; align-items: center; justify-content: center"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5 L10.5 6 L3 10.5 Z" fill="#FFFFFF"></path></svg></button>
+  <span class="mono" style="font-size: 13px; margin-left: 4px"><span style="font-weight: 500">0:09.4</span><span style="color: #676D7A"> / 0:15.0</span></span>
+  <span style="flex: 1"></span>
+  <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; font-weight: 500">Loop this line</button>
+</div>
+
+<!-- Selected line -->
+<aside aria-label="Selected line" style="position: absolute; left: 1072px; top: 310px; width: 352px; height: 356px; box-sizing: border-box; padding: 12px 14px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 8px">
+  <div style="display: flex; align-items: center; gap: 8px; height: 24px">
+    <span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #2F64F5"></span>
+    <span style="font-weight: 600; font-size: 14px">Line · shot 4 at <span class="mono" style="font-weight: 500">0:03.1</span></span>
+    <span style="flex: 1"></span>
+    <span style="font-size: 11px; color: #4A4F5C; padding: 2px 8px; border: 1px solid #E7E9EE; border-radius: 999px; display: flex; align-items: center; gap: 5px"><svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><rect x="0.7" y="1.7" width="7.6" height="6.6" rx="1.2" fill="none" stroke="#4A4F5C" stroke-width="1.2"></rect><path d="M8.3 4 L11.3 2.3 V7.7 L8.3 6 Z" fill="#4A4F5C"></path></svg>On screen</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <label for="line-text" style="font-size: 12px; color: #4A4F5C"><span class="mono" style="color: #1E4ED8">@maya</span> says, lips synced, from the shot's own sound</label>
+    <input id="line-text" value="It's perfect!" style="height: 34px; box-sizing: border-box; font: inherit; font-size: 14px; padding: 0 12px; border: 1px solid #D6DAE2; border-radius: 10px; color: #14161B; background: #FFFFFF">
+  </div>
+
+  <div style="display: flex; align-items: center; height: 20px">
+    <span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #676D7A">Takes · this line</span>
+  </div>
+  <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px">
+    <li style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px; border-radius: 10px">
+      <button aria-label="Play take v1" style="width: 26px; height: 26px; flex: none; border: 1px solid #D6DAE2; border-radius: 999px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5 L10.5 6 L3 10.5 Z" fill="#14161B"></path></svg></button>
+      <div style="display: flex; flex-direction: column; flex: 1; gap: 1px"><span style="font-size: 13px"><span class="mono">v1</span> · as shot, Veo's voice</span><span class="mono" style="font-size: 10px; color: #676D7A">1.25 s · with the clip</span></div>
+      <button aria-label="Use take v1" style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">Use</button>
+    </li>
+    <li style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px; border-radius: 10px">
+      <button aria-label="Play take v2" style="width: 26px; height: 26px; flex: none; border: 1px solid #D6DAE2; border-radius: 999px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5 L10.5 6 L3 10.5 Z" fill="#14161B"></path></svg></button>
+      <div style="display: flex; flex-direction: column; flex: 1; gap: 1px"><span style="font-size: 13px"><span class="mono">v2</span> · redone, brighter</span><span class="mono" style="font-size: 10px; color: #676D7A">1.25 s · same timing</span></div>
+      <button aria-label="Use take v2" style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">Use</button>
+    </li>
+    <li style="display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px; border-radius: 10px; background: rgba(47,100,245,0.05); box-shadow: inset 0 0 0 1px rgba(47,100,245,0.35)">
+      <button aria-label="Play take v3" style="width: 26px; height: 26px; flex: none; border: 1px solid #D6DAE2; border-radius: 999px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5 L10.5 6 L3 10.5 Z" fill="#14161B"></path></svg></button>
+      <div style="display: flex; flex-direction: column; flex: 1; gap: 1px"><span style="font-size: 13px; color: #1E4ED8; font-weight: 600"><span class="mono" style="font-weight: 500">v3</span> · redone, softer</span><span class="mono" style="font-size: 10px; color: #4A4F5C">1.25 s · same timing</span></div>
+      <span style="font-size: 11px; color: #1E4ED8; font-weight: 600; padding: 0 4px">In the mix</span>
+    </li>
+  </ul>
+
+  <span style="flex: 1"></span>
+  <div style="display: flex; gap: 6px">
+    <button style="flex: 1; height: 36px; border-radius: 999px; border: 0; background: #D63B1F; color: #FFFFFF; font-size: 13px; font-weight: 600">Redo this line</button>
+    <button style="flex: 1.35; height: 36px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500">Re-voice to Maya's voice</button>
+  </div>
+  <span style="font-size: 12px; color: #4A4F5C">Both keep the timing, so her lips still match.</span>
+</aside>
+
+<!-- Jude's checks: quiet notes -->
+<aside aria-label="Checks on the sound" style="position: absolute; left: 1072px; top: 676px; width: 352px; height: 208px; box-sizing: border-box; padding: 10px 14px 12px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 6px">
+  <div style="display: flex; align-items: center; gap: 8px; height: 24px">
+    <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="17" height="22" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you." style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    <span class="mono" style="font-size: 12px">Jude · checks</span>
+    <span style="flex: 1"></span>
+    <span style="font-size: 12px; color: #4A4F5C">2 to look at</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 7px 10px; border-radius: 10px; background: #FAFAFB; border: 1px solid #E7E9EE">
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 13px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 999px; background: #b45309; flex: none"></span>Line runs past the shot: shot 4 grows <span class="mono" style="margin-left: -3px">0.6 s</span></div>
+    <div style="display: flex; gap: 6px; padding-left: 14px">
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">Grow it, shot 1 gives 0.6 s</button>
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 0; background: transparent; font-size: 12px; color: #4A4F5C">Show</button>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 7px 10px; border-radius: 10px; background: #FAFAFB; border: 1px solid #E7E9EE">
+    <div style="display: flex; align-items: center; gap: 7px; font-size: 13px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 999px; background: #b45309; flex: none"></span>Two voices overlap at <span class="mono" style="margin-left: -3px">0:12</span></div>
+    <div style="display: flex; gap: 6px; padding-left: 14px">
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">Start the tagline after her line</button>
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 0; background: transparent; font-size: 12px; color: #4A4F5C">Show</button>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #15763a; padding-left: 2px">
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3 L5 8.6 L9.6 3.6" fill="none" stroke="#15763a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    <span>Hits on the motion. No stray words.</span>
+  </div>
+</aside>
+
+<!-- ============ Layered timeline ============ -->
+<section aria-label="Sound timeline" style="position: absolute; left: 16px; top: 390px; width: 1040px; height: 494px; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); overflow: hidden">
+
+  <!-- toolbar -->
+  <div style="position: absolute; left: 12px; top: 8px; width: 1014px; height: 30px; display: flex; align-items: center; gap: 6px">
+    <span style="font-weight: 600; font-size: 13px; margin-right: 6px">Sound</span>
+    <button style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">+ Line</button>
+    <button style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">+ Effect</button>
+    <button aria-pressed="true" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #F5F6F8; font-size: 12px; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2 V7 a4 4 0 0 0 8 0 V2" fill="none" stroke="#14161B" stroke-width="1.6"></path><path d="M2 2 H4.5 M9.5 2 H12" stroke="#14161B" stroke-width="2"></path></svg>Snap hits to motion</button>
+    <button style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">Rewrite music to the cut</button>
+    <span style="flex: 1"></span>
+    <span style="font-size: 12px; color: #b45309; background: #fdf3e3; padding: 3px 10px; border-radius: 999px">2 checks to look at</span>
+    <span aria-hidden="true" style="width: 1px; height: 18px; background: #E7E9EE; margin: 0 4px"></span>
+    <button aria-label="Zoom out the timeline" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent">−</button>
+    <span class="mono" style="font-size: 11px; color: #4A4F5C">1 s</span>
+    <button aria-label="Zoom in the timeline" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent">+</button>
+  </div>
+
+  <!-- ===== lane headers (x 12..184) ===== -->
+  <div style="position: absolute; left: 12px; top: 68px; width: 172px; height: 52px; display: flex; flex-direction: column; justify-content: center; gap: 2px"><span style="font-size: 12px; font-weight: 600; color: #4A4F5C">Picture</span><span style="font-size: 11px; color: #676D7A">shots and motion</span></div>
+
+  <div style="position: absolute; left: 12px; top: 126px; width: 172px; height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 5px">
+    <div style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 12px; font-weight: 600">Native</span><span style="font-size: 11px; color: #676D7A">shot sound · 2</span></div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button class="mono" aria-label="Mute Native" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">M</button>
+      <button class="mono" aria-label="Solo Native" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">S</button>
+      <input type="range" min="-24" max="6" value="0" aria-label="Native level" style="width: 72px; margin: 0 2px; accent-color: #14161B">
+      <span class="mono" style="font-size: 10px; color: #4A4F5C">0 dB</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 12px; top: 186px; width: 172px; height: 72px; display: flex; flex-direction: column; justify-content: center; gap: 5px">
+    <div style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 12px; font-weight: 600">Voice</span><span style="font-size: 11px; color: #676D7A">4 lines · 2 on screen</span></div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button class="mono" aria-label="Mute Voice" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">M</button>
+      <button class="mono" aria-label="Solo Voice" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">S</button>
+      <input type="range" min="-24" max="6" value="0" aria-label="Voice level" style="width: 72px; margin: 0 2px; accent-color: #14161B">
+      <span class="mono" style="font-size: 10px; color: #4A4F5C">0 dB</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 12px; top: 264px; width: 172px; height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 5px">
+    <div style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 12px; font-weight: 600">Effects</span><span style="font-size: 11px; color: #676D7A">5 cues</span></div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button class="mono" aria-label="Mute Effects" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">M</button>
+      <button class="mono" aria-label="Solo Effects" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">S</button>
+      <input type="range" min="-24" max="6" value="-4" aria-label="Effects level" style="width: 72px; margin: 0 2px; accent-color: #14161B">
+      <span class="mono" style="font-size: 10px; color: #4A4F5C">−4 dB</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 12px; top: 324px; width: 172px; height: 48px; display: flex; flex-direction: column; justify-content: center; gap: 5px">
+    <div style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 12px; font-weight: 600">Ambience</span><span style="font-size: 11px; color: #676D7A">muted</span></div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button class="mono" aria-label="Mute Ambience" aria-pressed="true" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #14161B; background: #14161B; font-size: 10px; font-weight: 600; padding: 0; color: #FFFFFF">M</button>
+      <button class="mono" aria-label="Solo Ambience" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">S</button>
+      <input type="range" min="-24" max="6" value="-10" aria-label="Ambience level" style="width: 72px; margin: 0 2px; accent-color: #14161B">
+      <span class="mono" style="font-size: 10px; color: #4A4F5C">−10 dB</span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 12px; top: 378px; width: 172px; height: 54px; display: flex; flex-direction: column; justify-content: center; gap: 5px">
+    <div style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 12px; font-weight: 600">Music</span><span style="font-size: 11px; color: #676D7A">3 sections</span></div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button class="mono" aria-label="Mute Music" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">M</button>
+      <button class="mono" aria-label="Solo Music" aria-pressed="false" style="width: 22px; height: 22px; border-radius: 6px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 10px; font-weight: 600; padding: 0; color: #14161B">S</button>
+      <input type="range" min="-24" max="6" value="-8" aria-label="Music level" style="width: 72px; margin: 0 2px; accent-color: #14161B">
+      <span class="mono" style="font-size: 10px; color: #4A4F5C">−8 dB</span>
+    </div>
+  </div>
+
+  <!-- ===== tracks: 55 px per second, x 0 = 0:00, from left 196 ===== -->
+  <div style="position: absolute; left: 196px; top: 0; width: 825px; height: 494px">
+
+    <!-- ruler -->
+    <div aria-hidden="true" style="position: absolute; left: 0; top: 44px; width: 825px; height: 20px; border-bottom: 1px solid #E7E9EE; background-image: repeating-linear-gradient(90deg, #D6DAE2 0, #D6DAE2 1px, transparent 1px, transparent 55px); background-size: 825px 20px; background-repeat: no-repeat"></div>
+    <div class="mono" aria-hidden="true" style="position: absolute; left: 0; top: 46px; width: 825px; height: 14px; font-size: 10px; color: #676D7A">
+      <span style="position: absolute; left: 4px">0:00</span>
+      <span style="position: absolute; left: 114px">0:02</span>
+      <span style="position: absolute; left: 224px">0:04</span>
+      <span style="position: absolute; left: 334px">0:06</span>
+      <span style="position: absolute; left: 444px">0:08</span>
+      <span style="position: absolute; left: 554px">0:10</span>
+      <span style="position: absolute; left: 664px">0:12</span>
+      <span style="position: absolute; left: 774px">0:14</span>
+    </div>
+
+    <!-- lane grounds -->
+    <div style="position: absolute; left: 0; top: 126px; width: 825px; height: 54px; background: #FAFAFB; border-radius: 8px"></div>
+    <div style="position: absolute; left: 0; top: 186px; width: 825px; height: 72px; background: #FAFAFB; border-radius: 8px"></div>
+    <div style="position: absolute; left: 0; top: 264px; width: 825px; height: 54px; background: #FAFAFB; border-radius: 8px"></div>
+    <div style="position: absolute; left: 0; top: 324px; width: 825px; height: 48px; background: #FAFAFB; border-radius: 8px"></div>
+    <div style="position: absolute; left: 0; top: 378px; width: 825px; height: 54px; background: #FAFAFB; border-radius: 8px"></div>
+
+    <!-- shot cuts carried down through the lanes -->
+    <span aria-hidden="true" style="position: absolute; left: 110px; top: 68px; width: 0; height: 364px; border-left: 1px dashed #D6DAE2"></span>
+    <span aria-hidden="true" style="position: absolute; left: 247.5px; top: 68px; width: 0; height: 364px; border-left: 1px dashed #D6DAE2"></span>
+    <span aria-hidden="true" style="position: absolute; left: 330px; top: 68px; width: 0; height: 364px; border-left: 1px dashed #D6DAE2"></span>
+    <span aria-hidden="true" style="position: absolute; left: 550px; top: 68px; width: 0; height: 364px; border-left: 1px dashed #D6DAE2"></span>
+    <span aria-hidden="true" style="position: absolute; left: 715px; top: 68px; width: 0; height: 364px; border-left: 1px dashed #D6DAE2"></span>
+    <!-- snap guides: motion peaks down to their hits -->
+    <span aria-hidden="true" style="position: absolute; left: 280px; top: 100px; width: 0; height: 172px; border-left: 1px dashed #8B919E"></span>
+    <span aria-hidden="true" style="position: absolute; left: 583px; top: 100px; width: 0; height: 172px; border-left: 1px dashed #8B919E"></span>
+
+    <!-- Picture row: shots (top 68..96) -->
+    <div style="position: absolute; left: 0; top: 68px; width: 109px; height: 28px; border-radius: 6px; background-image: linear-gradient(180deg, #F8C99B 0%, #9CC3D5 70%, #E9D7B5 100%); display: flex; align-items: center; padding-left: 6px; box-sizing: border-box"><span class="mono" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(20,22,27,0.72); color: #FFFFFF">1 · P2</span></div>
+    <div style="position: absolute; left: 111px; top: 68px; width: 135px; height: 28px; border-radius: 6px; background-image: linear-gradient(170deg, #F3D9C6 0%, #D9A884 60%, #9CC3D5 100%); display: flex; align-items: center; padding-left: 6px; box-sizing: border-box"><span class="mono" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(20,22,27,0.72); color: #FFFFFF">2 · P2</span></div>
+    <div style="position: absolute; left: 248.5px; top: 68px; width: 80px; height: 28px; border-radius: 6px; background-image: radial-gradient(circle at 40% 50%, #E6F4FF 0%, #A9D4F2 40%, #D9A884 100%); display: flex; align-items: center; padding-left: 6px; box-sizing: border-box"><span class="mono" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(20,22,27,0.72); color: #FFFFFF">3 · P2</span></div>
+    <div style="position: absolute; left: 331px; top: 68px; width: 218px; height: 28px; border-radius: 6px; box-sizing: border-box; border: 2px solid #2F64F5; background-image: linear-gradient(160deg, #FFD9A0 0%, #F3A97B 50%, #7A5A48 100%); display: flex; align-items: center; padding-left: 5px"><span class="mono" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #14161B; color: #FFFFFF">4 · P1</span></div>
+    <!-- shot 4 would grow by 0.6 s (R1): ghost end -->
+    <div aria-hidden="true" style="position: absolute; left: 549px; top: 66px; width: 34px; height: 32px; box-sizing: border-box; border: 1.5px dashed #b45309; border-left: 0; border-radius: 0 6px 6px 0; background: rgba(253,243,227,0.7)"></div>
+    <span class="mono" style="position: absolute; left: 500px; top: 72px; padding: 1px 5px; border-radius: 4px; background: #fdf3e3; color: #b45309; font-size: 10px">+0.6 s</span>
+    <div style="position: absolute; left: 551px; top: 68px; width: 163px; height: 28px; border-radius: 6px; background-image: linear-gradient(0deg, #3E4A5A 0%, #F3A97B 50%, #FFD9A0 100%); display: flex; align-items: center; padding-left: 38px; box-sizing: border-box"><span class="mono" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #14161B; color: #FFFFFF">5 · P1</span></div>
+    <div style="position: absolute; left: 716px; top: 68px; width: 109px; height: 28px; border-radius: 6px; background: #14161B; display: flex; align-items: center; padding-left: 6px; box-sizing: border-box"><span class="mono" style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,0.16); color: #FFFFFF">6 · end card</span></div>
+
+    <!-- motion curve (top 100..120); higher = more motion -->
+    <svg width="825" height="22" viewBox="0 0 825 22" aria-hidden="true" style="position: absolute; left: 0; top: 99px"><path d="M0 19 L55 17 L110 18 L150 15 L200 13 L247 16 L265 9 L280 2 L295 11 L330 18 L400 19 L470 17 L517 15 L550 16 L570 12 L583 3 L600 11 L650 15 L715 19 L770 20 L825 20 L825 22 L0 22 Z" fill="rgba(20,22,27,0.07)"></path><path d="M0 19 L55 17 L110 18 L150 15 L200 13 L247 16 L265 9 L280 2 L295 11 L330 18 L400 19 L470 17 L517 15 L550 16 L570 12 L583 3 L600 11 L650 15 L715 19 L770 20 L825 20" fill="none" stroke="#4A4F5C" stroke-width="1.3" stroke-linejoin="round"></path><circle cx="280" cy="2" r="2.2" fill="#14161B"></circle><circle cx="583" cy="3" r="2.2" fill="#14161B"></circle></svg>
+
+    <!-- ===== Native lane (126..180): Path 1 shots only ===== -->
+    <div style="position: absolute; left: 330px; top: 130px; width: 219px; height: 46px; box-sizing: border-box; border-radius: 8px; background: #F2F3F6; border: 1px solid #D6DAE2; overflow: hidden">
+      <span style="position: absolute; left: 6px; top: 3px; font-size: 10px; color: #4A4F5C; white-space: nowrap">Shot 4 · room and Maya</span>
+      <svg width="219" height="24" viewBox="0 0 219 24" aria-hidden="true" style="position: absolute; left: 0; top: 18px"><path d="M4 11 V13 M8 10 V14 M12 11 V13 M16 10 V14 M20 11 V13 M24 10 V14 M28 11 V13 M32 10 V14 M36 11 V13 M40 10 V14 M44 11 V13 M48 10 V14 M52 11 V13 M56 10 V14 M60 11 V13 M64 10 V14 M68 11 V13 M72 10 V14 M76 11 V13 M80 10 V14 M84 11 V13 M88 10 V14 M92 11 V13 M96 10 V14 M100 11 V13 M104 10 V14 M108 11 V13 M112 10 V14 M116 11 V13 M120 10 V14 M124 11 V13 M128 10 V14 M132 11 V13 M136 10 V14 M140 11 V13 M144 10 V14 M148 11 V13 M152 10 V14 M156 11 V13 M160 10 V14 M164 11 V13 M168 10 V14 M172 4 V20 M176 2 V22 M180 6 V18 M184 3 V21 M188 7 V17 M192 4 V20 M196 2 V22 M200 6 V18 M204 4 V20 M208 8 V16 M212 10 V14 M216 11 V13" stroke="#4A4F5C" stroke-width="2" stroke-linecap="round"></path></svg>
+    </div>
+    <div style="position: absolute; left: 551px; top: 130px; width: 164px; height: 46px; box-sizing: border-box; border-radius: 8px; background: #F2F3F6; border: 1px solid #D6DAE2; overflow: hidden">
+      <span style="position: absolute; left: 6px; top: 3px; font-size: 10px; color: #4A4F5C; white-space: nowrap">Shot 5 · surf and Maya</span>
+      <svg width="164" height="24" viewBox="0 0 164 24" aria-hidden="true" style="position: absolute; left: 0; top: 18px"><path d="M4 10 V14 M8 9 V15 M12 10 V14 M16 9 V15 M20 10 V14 M24 9 V15 M28 10 V14 M32 9 V15 M36 10 V14 M40 9 V15 M44 10 V14 M48 9 V15 M52 4 V20 M56 2 V22 M60 5 V19 M64 3 V21 M68 6 V18 M72 3 V21 M76 2 V22 M80 5 V19 M84 4 V20 M88 6 V18 M92 3 V21 M96 5 V19 M100 4 V20 M104 7 V17 M108 9 V15 M112 10 V14 M116 9 V15 M120 10 V14 M124 9 V15 M128 10 V14 M132 9 V15 M136 10 V14 M140 9 V15 M144 10 V14 M148 9 V15 M152 10 V14 M156 11 V13 M160 11 V13" stroke="#4A4F5C" stroke-width="2" stroke-linecap="round"></path></svg>
+    </div>
+    <span style="position: absolute; left: 10px; top: 146px; font-size: 11px; color: #676D7A">Silent shots have no shot sound</span>
+
+    <!-- ===== Voice lane (186..258): row A on screen (190..220), row B voice-over (224..254) ===== -->
+    <!-- overlap band 0:12.0 - 0:12.3 -->
+    <div aria-hidden="true" style="position: absolute; left: 658px; top: 187px; width: 20px; height: 70px; box-sizing: border-box; background: repeating-linear-gradient(135deg, rgba(180,83,9,0.22) 0, rgba(180,83,9,0.22) 3px, rgba(180,83,9,0.06) 3px, rgba(180,83,9,0.06) 6px); border-left: 1.5px solid #b45309; border-right: 1.5px solid #b45309"></div>
+
+    <!-- VO 1: off screen -->
+    <button aria-label="Line: The first light of the day. Maya, voice-over, 0:04.5 to 0:07.5" style="position: absolute; left: 247.5px; top: 224px; width: 165px; height: 30px; box-sizing: border-box; border-radius: 7px; background: #EEF2FE; border: 1px solid #D6DAE2; padding: 0 6px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 0; text-align: left; overflow: hidden">
+      <span style="font-size: 10px; color: #14161B; white-space: nowrap">"The first light of the day."</span>
+      <span class="mono" style="font-size: 9px; color: #4A4F5C; white-space: nowrap"><span style="color: #1E4ED8">@maya</span> · voice-over</span>
+    </button>
+    <!-- It's perfect!: selected, on screen, runs past the shot -->
+    <button aria-pressed="true" aria-label="Line: It's perfect! Maya, on screen, 0:09.1 to 0:10.35, runs 0.35 s past shot 4" style="position: absolute; left: 500px; top: 190px; width: 70px; height: 30px; box-sizing: border-box; border-radius: 7px; background: #EEF2FE; border: 2px solid #2F64F5; padding: 0 5px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; overflow: hidden; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08)">
+      <span style="font-size: 10px; color: #14161B; white-space: nowrap; font-weight: 600">"It's perfect!"</span>
+      <span class="mono" style="font-size: 9px; color: #1E4ED8; white-space: nowrap; display: flex; align-items: center; gap: 3px"><svg width="10" height="8" viewBox="0 0 12 10" aria-hidden="true"><rect x="0.7" y="1.7" width="7.6" height="6.6" rx="1.2" fill="none" stroke="#1E4ED8" stroke-width="1.3"></rect><path d="M8.3 4 L11.3 2.3 V7.7 L8.3 6 Z" fill="#1E4ED8"></path></svg>@maya</span>
+      <span aria-hidden="true" style="position: absolute; left: 48px; top: 0; width: 20px; height: 26px; background: repeating-linear-gradient(135deg, rgba(180,83,9,0.28) 0, rgba(180,83,9,0.28) 3px, transparent 3px, transparent 6px)"></span>
+    </button>
+    <!-- To the first light.: on screen, shot 5 -->
+    <button aria-label="Line: To the first light. Maya, on screen, 0:11.0 to 0:12.3" style="position: absolute; left: 605px; top: 190px; width: 72px; height: 30px; box-sizing: border-box; border-radius: 7px; background: #EEF2FE; border: 1px solid #D6DAE2; padding: 0 5px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; overflow: hidden">
+      <span style="font-size: 10px; color: #14161B; white-space: nowrap">"To the first light."</span>
+      <span class="mono" style="font-size: 9px; color: #4A4F5C; white-space: nowrap; display: flex; align-items: center; gap: 3px"><svg width="10" height="8" viewBox="0 0 12 10" aria-hidden="true"><rect x="0.7" y="1.7" width="7.6" height="6.6" rx="1.2" fill="none" stroke="#4A4F5C" stroke-width="1.3"></rect><path d="M8.3 4 L11.3 2.3 V7.7 L8.3 6 Z" fill="#4A4F5C"></path></svg><span style="color: #1E4ED8">@maya</span></span>
+    </button>
+    <!-- Tagline: voice-over, narrator -->
+    <button aria-label="Line: Lumen. Drink the morning. Narrator, voice-over, 0:12.0 to 0:14.6" style="position: absolute; left: 660px; top: 224px; width: 143px; height: 30px; box-sizing: border-box; border-radius: 7px; background: #EEF2FE; border: 1px solid #D6DAE2; padding: 0 6px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left; overflow: hidden">
+      <span style="font-size: 10px; color: #14161B; white-space: nowrap">"Lumen. Drink the morning."</span>
+      <span class="mono" style="font-size: 9px; color: #4A4F5C; white-space: nowrap">Narrator · voice-over</span>
+    </button>
+
+    <!-- ===== Effects lane (264..318): hits on top row, beds below ===== -->
+    <!-- hits -->
+    <span aria-hidden="true" style="position: absolute; left: 276px; top: 269px; width: 8px; height: 8px; background: #14161B; transform: rotate(45deg)"></span>
+    <span style="position: absolute; left: 288px; top: 266px; font-size: 10px; color: #14161B; white-space: nowrap">Cap twist</span>
+    <span aria-hidden="true" style="position: absolute; left: 579px; top: 269px; width: 8px; height: 8px; background: #14161B; transform: rotate(45deg)"></span>
+    <span style="position: absolute; left: 591px; top: 266px; font-size: 10px; color: #14161B; white-space: nowrap">Glass clink</span>
+    <!-- beds -->
+    <div style="position: absolute; left: 22px; top: 288px; width: 77px; height: 24px; box-sizing: border-box; border-radius: 6px; background: #FFFFFF; border: 1px solid #D6DAE2; font-size: 10px; color: #4A4F5C; display: flex; align-items: center; padding: 0 6px; white-space: nowrap; overflow: hidden">Gulls, far</div>
+    <div style="position: absolute; left: 121px; top: 288px; width: 121px; height: 24px; box-sizing: border-box; border-radius: 6px; background: #FFFFFF; border: 1px solid #D6DAE2; font-size: 10px; color: #4A4F5C; display: flex; align-items: center; padding: 0 6px; white-space: nowrap; overflow: hidden">Footsteps in sand</div>
+    <div style="position: absolute; left: 286px; top: 288px; width: 44px; height: 24px; box-sizing: border-box; border-radius: 6px; background: #FFFFFF; border: 1px solid #D6DAE2; font-size: 10px; color: #4A4F5C; display: flex; align-items: center; padding: 0 6px; white-space: nowrap; overflow: hidden">Fizz</div>
+
+    <!-- ===== Ambience lane (324..372), muted ===== -->
+    <div style="position: absolute; left: 0; top: 328px; width: 715px; height: 40px; box-sizing: border-box; border-radius: 8px; background: #F2F3F6; border: 1px solid #E7E9EE; opacity: 0.5; overflow: hidden">
+      <span style="position: absolute; left: 8px; top: 5px; font-size: 11px; color: #14161B; display: flex; align-items: center; gap: 5px"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6 a4 4 0 0 1 7 -2.6 M10 6 a4 4 0 0 1 -7 2.6" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path><path d="M9.5 1.2 V3.6 H7.1 M2.5 10.8 V8.4 H4.9" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>Dawn surf · loop 4 s</span>
+      <span aria-hidden="true" style="position: absolute; left: 220px; top: 4px; width: 0; height: 30px; border-left: 1px dashed #8B919E"></span>
+      <span aria-hidden="true" style="position: absolute; left: 440px; top: 4px; width: 0; height: 30px; border-left: 1px dashed #8B919E"></span>
+      <span aria-hidden="true" style="position: absolute; left: 660px; top: 4px; width: 0; height: 30px; border-left: 1px dashed #8B919E"></span>
+      <svg width="715" height="14" viewBox="0 0 715 14" aria-hidden="true" style="position: absolute; left: 0; top: 22px"><path d="M0 12 C30 4 50 4 80 8 S140 3 180 7 S250 3 300 7 S380 4 420 8 S500 3 560 7 S640 4 690 10 L715 13" fill="none" stroke="#4A4F5C" stroke-width="1.2"></path></svg>
+    </div>
+
+    <!-- ===== Music lane (378..432): sections per scene, ducked under speech ===== -->
+    <div style="position: absolute; left: 0; top: 382px; width: 329px; height: 46px; box-sizing: border-box; border-radius: 8px; background: linear-gradient(90deg, #F2F3F6 0%, #E7E9EE 100%); border: 1px solid #D6DAE2; overflow: hidden">
+      <span style="position: absolute; left: 8px; top: 5px; font-size: 11px; color: #14161B; white-space: nowrap">Scene 1 · beach · soft piano, rising</span>
+    </div>
+    <div style="position: absolute; left: 331px; top: 382px; width: 383px; height: 46px; box-sizing: border-box; border-radius: 8px; background: linear-gradient(90deg, #E7E9EE 0%, #DADDE3 100%); border: 1px solid #D6DAE2; overflow: hidden">
+      <span style="position: absolute; left: 8px; top: 5px; font-size: 11px; color: #14161B; white-space: nowrap">Scene 2 · Maya · strings lift</span>
+    </div>
+    <div style="position: absolute; left: 716px; top: 382px; width: 109px; height: 46px; box-sizing: border-box; border-radius: 8px; background: #E7E9EE; border: 1px solid #D6DAE2; overflow: hidden">
+      <span style="position: absolute; left: 8px; top: 5px; font-size: 11px; color: #14161B; white-space: nowrap">End card · sting</span>
+    </div>
+    <!-- duck line: dips under every line of speech -->
+    <svg width="825" height="20" viewBox="0 0 825 20" aria-hidden="true" style="position: absolute; left: 0; top: 404px"><path d="M2 5 L240 5 L250 15 L410 15 L420 5 L493 5 L503 15 L570 15 L580 5 L598 5 L608 15 L800 15 L810 5 L823 5" fill="none" stroke="#2F64F5" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+
+    <!-- playhead at 0:09.4 (x 517) -->
+    <div aria-hidden="true" style="position: absolute; left: 516px; top: 40px; width: 2px; height: 394px; background: #14161B"></div>
+    <div class="mono" aria-hidden="true" style="position: absolute; left: 496px; top: 40px; padding: 1px 5px; border-radius: 4px; background: #14161B; color: #FFFFFF; font-size: 10px">0:09.4</div>
+
+    <!-- legend -->
+    <div style="position: absolute; left: 0; top: 446px; width: 825px; height: 28px; display: flex; align-items: center; gap: 16px; font-size: 11px; color: #4A4F5C">
+      <span style="display: flex; align-items: center; gap: 5px"><svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><rect x="0.7" y="1.7" width="7.6" height="6.6" rx="1.2" fill="none" stroke="#4A4F5C" stroke-width="1.2"></rect><path d="M8.3 4 L11.3 2.3 V7.7 L8.3 6 Z" fill="#4A4F5C"></path></svg>said on screen</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 7px; height: 7px; background: #14161B; transform: rotate(45deg)"></span>hit, on the biggest motion</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 16px; height: 2px; background: #2F64F5"></span>music level, lower under speech</span>
+      <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 14px; height: 10px; background: repeating-linear-gradient(135deg, rgba(180,83,9,0.4) 0, rgba(180,83,9,0.4) 2px, transparent 2px, transparent 4px); border-radius: 2px"></span>needs a look</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Export menu (open) ============ -->
+<div role="menu" aria-label="Export" style="position: absolute; left: 1104px; top: 52px; width: 320px; box-sizing: border-box; padding: 6px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 14px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 2px; z-index: 10">
+  <button role="menuitem" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left"><span style="font-size: 13px; font-weight: 500">Film for online</span><span class="mono" style="font-size: 11px; color: #4A4F5C">MP4 · −14 LUFS</span></button>
+  <button role="menuitem" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left"><span style="font-size: 13px; font-weight: 500">TV master</span><span class="mono" style="font-size: 11px; color: #4A4F5C">−23 LUFS · true peak −1 dB</span></button>
+  <button role="menuitem" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left"><span style="font-size: 13px; font-weight: 500">Stems</span><span style="font-size: 11px; color: #4A4F5C">One file per layer</span></button>
+  <button role="menuitem" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left"><span style="font-size: 13px; font-weight: 500">Cue sheet</span><span style="font-size: 11px; color: #4A4F5C">Every line, cue and section, with times</span></button>
+  <span aria-hidden="true" style="height: 1px; background: #E7E9EE; margin: 2px 6px"></span>
+  <button role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 0; border-radius: 10px; background: #F5F6F8; text-align: left">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="6" width="14" height="10" rx="2" fill="none" stroke="#14161B" stroke-width="1.4"></rect><path d="M4 6 L13 2" stroke="#14161B" stroke-width="1.4" stroke-linecap="round"></path><circle cx="6.5" cy="11" r="2" fill="none" stroke="#14161B" stroke-width="1.3"></circle><path d="M11 9.5 H14 M11 12.5 H14" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg>
+    <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 600">Radio cut (Napkin Radio)</span><span style="font-size: 11px; color: #4A4F5C">30 s, same voices and stems · −18 LUFS</span></span>
+  </button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

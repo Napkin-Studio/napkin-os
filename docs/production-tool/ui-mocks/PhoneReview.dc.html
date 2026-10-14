@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phone review</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+button{font:inherit;cursor:pointer}
+textarea{font:inherit}
+.mono{font-family:'Geist Mono', monospace}
+
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #FAFAFB; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E; display: flex; flex-direction: column">
+
+<!-- Top bar -->
+<header style="flex: none; height: 56px; box-sizing: border-box; padding: 0 2px; display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE">
+  <button aria-label="Home: your projects" style="flex: none; width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center">
+    <span style="width: 28px; height: 28px; border-radius: 8px; background: #14161B; display: flex; align-items: center; justify-content: center">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"></path></svg>
+    </span>
+  </button>
+  <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; line-height: 1.25">
+    <span style="font-weight: 600; font-size: 14px; color: #1E4ED8">Production</span>
+    <span style="font-size: 12px; color: #4A4F5C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Lumen Water · First Light</span>
+  </div>
+  <span style="flex: none; display: flex; align-items: center; gap: 5px; height: 28px; box-sizing: border-box; padding: 0 9px 0 3px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E7E9EE; font-size: 12px; color: #4A4F5C">
+    <span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; background: #14161B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 10px">M</span>
+    Maya is editing
+  </span>
+  <button aria-label="Your account" style="flex: none; width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center">
+    <span style="width: 32px; height: 32px; border-radius: 999px; background: #F2F3F6; font-weight: 600; font-size: 12px; display: flex; align-items: center; justify-content: center">SB</span>
+  </button>
+</header>
+
+<!-- Bigger-screen banner -->
+<div role="note" style="flex: none; margin: 12px 16px 0; padding: 10px 12px; display: flex; align-items: center; gap: 10px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 12px; font-size: 13px; color: #4A4F5C; line-height: 1.35">
+  <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="flex: none"><rect x="2" y="5" width="15" height="10" rx="1.5" fill="none" stroke="#4A4F5C" stroke-width="1.4"></rect><path d="M1 18 H18" stroke="#4A4F5C" stroke-width="1.4" stroke-linecap="round"></path><rect x="16" y="8" width="7" height="12" rx="1.5" fill="#FFFFFF" stroke="#4A4F5C" stroke-width="1.4"></rect></svg>
+  <span>You can watch and leave notes here. <strong style="color: #14161B; font-weight: 600">Open on a laptop or iPad to edit.</strong></span>
+</div>
+
+<!-- Player -->
+<section aria-label="Ad player" style="flex: none; margin: 12px 16px 0; display: flex; flex-direction: column; gap: 6px">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <span style="font-weight: 600; font-size: 14px">The ad</span>
+    <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #F2F3F6; color: #4A4F5C" class="mono">v2</span>
+    <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="15" height="20" role="img" aria-label="Edie, Splices moments and renders the ad." style="--af-phase:0.347"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 7.5 L32.5 16 L24 24.5 L15.5 16Z" fill="var(--af-iris)"></path><path d="M24 22.5 L33.5 32 L24 41.5 L14.5 32Z" fill="var(--af-iris)"></path><path d="M32.5 19.4 L37.1 24 L32.5 28.6 L27.9 24Z" fill="var(--af-iris)"></path><g class="af-emblem"><g fill="var(--af-mark)"><rect x="19.2" y="32.3" width="2.3" height="3.2" rx="0.4"></rect><rect x="22.7" y="29.9" width="2.3" height="5.6" rx="0.4"></rect><rect x="26.2" y="27.5" width="2.3" height="8" rx="0.4"></rect></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="20.099999999999998" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.7" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    <span style="font-size: 12px; color: #4A4F5C">rendered by Edie 12 min ago</span>
+  </div>
+  <div style="position: relative; width: 358px; height: 201px; border-radius: 12px; overflow: hidden; background: linear-gradient(170deg, #F3D9C6 0%, #D9A884 40%, #9CC3D5 72%, #E9D7B5 100%)">
+    <div aria-hidden="true" style="position: absolute; left: 150px; top: 46px; width: 54px; height: 130px; border-radius: 26px 26px 6px 6px; background: linear-gradient(180deg, #7A5A48 0%, #4E3A30 100%); opacity: 0.55"></div>
+    <span style="position: absolute; left: 10px; top: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(20,22,27,0.72); color: #FFFFFF; font-size: 11px">Shot 2 · Medium · Maya walking</span>
+    <button aria-label="{{playLabel}}" onClick="{{ togglePlay }}" style="position: absolute; left: 151px; top: 72px; width: 56px; height: 56px; border-radius: 999px; border: 0; background: rgba(255,255,255,0.94); box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; align-items: center; justify-content: center">
+      <sc-if value="{{playing}}" hint-placeholder-val="{{ false }}">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="4" width="3.5" height="12" rx="1" fill="#14161B"></rect><rect x="11.5" y="4" width="3.5" height="12" rx="1" fill="#14161B"></rect></svg>
+      </sc-if>
+      <sc-if value="{{paused}}" hint-placeholder-val="{{ true }}">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5 L16 10 L6 16.5 Z" fill="#14161B"></path></svg>
+      </sc-if>
+    </button>
+    <span class="mono" style="position: absolute; right: 10px; bottom: 8px; padding: 2px 6px; border-radius: 6px; background: rgba(20,22,27,0.72); color: #FFFFFF; font-size: 11px"><span>{{timeLabel}}</span> / 0:15</span>
+  </div>
+
+  <!-- Scrubber with note markers -->
+  <div style="position: relative; height: 52px">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 24px; height: 4px; border-radius: 999px; background: #E7E9EE"></div>
+    <div aria-hidden="true" style="{{playedStyle}}"></div>
+    <div aria-hidden="true" style="{{windowStyle}}"></div>
+    <!-- cuts between shots: a note's window never crosses one -->
+    <div aria-hidden="true" style="position: absolute; left: 20%; top: 20px; width: 2px; height: 12px; margin-left: -1px; background: #FFFFFF; border-radius: 1px; box-shadow: 0 0 0 1px #D6DAE2"></div>
+    <div aria-hidden="true" style="position: absolute; left: 53.33%; top: 20px; width: 2px; height: 12px; margin-left: -1px; background: #FFFFFF; border-radius: 1px; box-shadow: 0 0 0 1px #D6DAE2"></div>
+    <div aria-hidden="true" style="position: absolute; left: 66.67%; top: 20px; width: 2px; height: 12px; margin-left: -1px; background: #FFFFFF; border-radius: 1px; box-shadow: 0 0 0 1px #D6DAE2"></div>
+    <div aria-hidden="true" style="position: absolute; left: 80%; top: 20px; width: 2px; height: 12px; margin-left: -1px; background: #FFFFFF; border-radius: 1px; box-shadow: 0 0 0 1px #D6DAE2"></div>
+    <div aria-hidden="true" style="position: absolute; left: 93.33%; top: 20px; width: 2px; height: 12px; margin-left: -1px; background: #FFFFFF; border-radius: 1px; box-shadow: 0 0 0 1px #D6DAE2"></div>
+    <div aria-hidden="true" style="{{headStyle}}"></div>
+    <!-- markers: each a 44px tap target centred on its time -->
+    <button aria-label="Go to Sai's note at 0:03" onClick="{{ seek3 }}" style="position: absolute; left: 20%; top: 4px; width: 44px; height: 44px; margin-left: -22px; border: 0; background: transparent; padding: 0; display: flex; align-items: flex-start; justify-content: center">
+      <span style="margin-top: 0; width: 18px; height: 18px; border-radius: 999px 999px 999px 2px; transform: rotate(-45deg); background: #7D52F4; border: 2px solid #FFFFFF; box-shadow: 0 2px 6px rgba(20,30,60,0.15)"></span>
+    </button>
+    <button aria-label="Go to Maya's note at 0:05" onClick="{{ seek5 }}" style="position: absolute; left: 33.33%; top: 4px; width: 44px; height: 44px; margin-left: -22px; border: 0; background: transparent; padding: 0; display: flex; align-items: flex-start; justify-content: center">
+      <span style="width: 18px; height: 18px; border-radius: 999px 999px 999px 2px; transform: rotate(-45deg); background: #14161B; border: 2px solid #FFFFFF; box-shadow: 0 2px 6px rgba(20,30,60,0.15)"></span>
+    </button>
+    <button aria-label="Go to Sai's note at 0:09" onClick="{{ seek9 }}" style="position: absolute; left: 60%; top: 4px; width: 44px; height: 44px; margin-left: -22px; border: 0; background: transparent; padding: 0; display: flex; align-items: flex-start; justify-content: center">
+      <span style="width: 18px; height: 18px; border-radius: 999px 999px 999px 2px; transform: rotate(-45deg); background: #7D52F4; border: 2px solid #FFFFFF; box-shadow: 0 2px 6px rgba(20,30,60,0.15)"></span>
+    </button>
+    <button aria-label="Go to your note at 0:13" onClick="{{ seek13 }}" style="position: absolute; left: 86.67%; top: 4px; width: 44px; height: 44px; margin-left: -22px; border: 0; background: transparent; padding: 0; display: flex; align-items: flex-start; justify-content: center">
+      <span style="width: 18px; height: 18px; border-radius: 999px 999px 999px 2px; transform: rotate(-45deg); background: #737987; border: 2px solid #FFFFFF; box-shadow: 0 2px 6px rgba(20,30,60,0.15)"></span>
+    </button>
+    <span class="mono" style="position: absolute; left: 0; bottom: 0; font-size: 10px; color: #4A4F5C">0:00</span>
+    <span class="mono" style="position: absolute; right: 0; bottom: 0; font-size: 10px; color: #4A4F5C">0:15</span>
+  </div>
+</section>
+
+<!-- Shot strip -->
+<nav aria-label="Shots" style="flex: none; margin: 10px 16px 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px">
+  <button aria-label="Shot 1, Wide, from 0:00" onClick="{{ seek0 }}" style="height: 48px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; gap: 3px; align-items: stretch">
+    <span style="aspect-ratio: 16 / 9; border-radius: 6px; background: linear-gradient(180deg, #F8C99B 0%, #9CC3D5 70%, #E9D7B5 100%)"></span>
+    <span class="mono" style="font-size: 10px; color: #4A4F5C; text-align: left">1 · 0:00</span>
+  </button>
+  <button aria-label="Shot 2, Medium, from 0:03, current shot" onClick="{{ seek3 }}" style="height: 48px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; gap: 3px; align-items: stretch">
+    <span style="aspect-ratio: 16 / 9; border-radius: 6px; box-shadow: 0 0 0 2px #2F64F5; background: linear-gradient(170deg, #F3D9C6 0%, #D9A884 60%, #9CC3D5 100%)"></span>
+    <span class="mono" style="font-size: 10px; color: #1E4ED8; text-align: left; font-weight: 500">2 · 0:03</span>
+  </button>
+  <button aria-label="Shot 3, Insert, from 0:08" onClick="{{ seek8 }}" style="height: 48px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; gap: 3px; align-items: stretch">
+    <span style="aspect-ratio: 16 / 9; border-radius: 6px; background: radial-gradient(circle at 40% 50%, #E6F4FF 0%, #A9D4F2 40%, #D9A884 100%)"></span>
+    <span class="mono" style="font-size: 10px; color: #4A4F5C; text-align: left">3 · 0:08</span>
+  </button>
+  <button aria-label="Shot 4, Close, from 0:10" onClick="{{ seek10 }}" style="height: 48px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; gap: 3px; align-items: stretch">
+    <span style="aspect-ratio: 16 / 9; border-radius: 6px; background: linear-gradient(160deg, #FFD9A0 0%, #F3A97B 50%, #7A5A48 100%)"></span>
+    <span class="mono" style="font-size: 10px; color: #4A4F5C; text-align: left">4 · 0:10</span>
+  </button>
+  <button aria-label="Shot 5, Low wide, from 0:12" onClick="{{ seek12 }}" style="height: 48px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; gap: 3px; align-items: stretch">
+    <span style="aspect-ratio: 16 / 9; border-radius: 6px; background: linear-gradient(0deg, #3E4A5A 0%, #F3A97B 50%, #FFD9A0 100%)"></span>
+    <span class="mono" style="font-size: 10px; color: #4A4F5C; text-align: left">5 · 0:12</span>
+  </button>
+  <button aria-label="Shot 6, End card, from 0:14" onClick="{{ seek14 }}" style="height: 48px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; gap: 3px; align-items: stretch">
+    <span style="aspect-ratio: 16 / 9; border-radius: 6px; background: #14161B; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 8px; font-weight: 600">LUMEN</span>
+    <span class="mono" style="font-size: 10px; color: #4A4F5C; text-align: left">6 · 0:14</span>
+  </button>
+</nav>
+
+<!-- Notes -->
+<section aria-label="Notes on v2" style="flex: 1; min-height: 0; margin: 12px 0 0; padding: 0 16px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-bottom: 12px">
+  <div style="display: flex; align-items: baseline; gap: 8px">
+    <span style="font-weight: 600; font-size: 14px">Notes</span>
+    <span style="font-size: 12px; color: #4A4F5C">2 open · 2 done</span>
+  </div>
+  <div style="display: flex; flex-direction: column; border: 1px solid #E7E9EE; border-radius: 12px; background: #FFFFFF; overflow: hidden">
+    <button onClick="{{ seek5 }}" style="min-height: 56px; padding: 8px 12px; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px">
+      <span class="mono" style="flex: none; width: 34px; font-size: 12px; color: #14161B; font-weight: 500">0:05</span>
+      <span style="flex: none; width: 24px; height: 24px; border-radius: 999px; background: #14161B; color: #FFFFFF; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center">M</span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+        <span style="font-size: 13px; color: #14161B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Her walk feels rushed. Slow it down.</span>
+        <span style="font-size: 11px; color: #4A4F5C">Maya · 4 min ago</span>
+      </span>
+      <span style="flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #fdf3e3; color: #b45309">Open</span>
+    </button>
+    <button onClick="{{ seek9 }}" style="min-height: 56px; padding: 8px 12px; border: 0; border-top: 1px solid #E7E9EE; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px">
+      <span class="mono" style="flex: none; width: 34px; font-size: 12px; color: #14161B; font-weight: 500">0:09</span>
+      <span style="flex: none; width: 24px; height: 24px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center">S</span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+        <span style="font-size: 13px; color: #14161B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Turn the label toward camera.</span>
+        <span style="font-size: 11px; color: #4A4F5C">Sai · 9 min ago</span>
+      </span>
+      <span style="flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #fdf3e3; color: #b45309">Open</span>
+    </button>
+    <button onClick="{{ seek3 }}" style="min-height: 56px; padding: 8px 12px; border: 0; border-top: 1px solid #E7E9EE; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px">
+      <span class="mono" style="flex: none; width: 34px; font-size: 12px; color: #14161B; font-weight: 500">0:03</span>
+      <span style="flex: none; width: 24px; height: 24px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center">S</span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+        <span style="font-size: 13px; color: #14161B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Hold on the first wave a beat longer.</span>
+        <span style="font-size: 11px; color: #4A4F5C">Sai · fixed in v2, Shot 2 · 0:00–0:02 only</span>
+      </span>
+      <span style="flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #e7f6ed; color: #166534">Done</span>
+    </button>
+    <button onClick="{{ seek13 }}" style="min-height: 56px; padding: 8px 12px; border: 0; border-top: 1px solid #E7E9EE; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px">
+      <span class="mono" style="flex: none; width: 34px; font-size: 12px; color: #14161B; font-weight: 500">0:13</span>
+      <span style="flex: none; width: 24px; height: 24px; border-radius: 999px; background: #F2F3F6; color: #14161B; font-size: 9px; font-weight: 600; display: flex; align-items: center; justify-content: center">SB</span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px">
+        <span style="font-size: 13px; color: #14161B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Love the toast. Keep it.</span>
+        <span style="font-size: 11px; color: #4A4F5C">You · yesterday</span>
+      </span>
+      <span style="flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #e7f6ed; color: #166534">Done</span>
+    </button>
+  </div>
+</section>
+
+<!-- Composer -->
+<form aria-label="Leave a note" style="flex: none; margin: 0; padding: 12px 16px 16px; background: rgba(255,255,255,0.96); border-top: 1px solid #E7E9EE; box-shadow: 0 -10px 30px rgba(20,30,60,0.06); display: flex; flex-direction: column; gap: 8px">
+  <label for="note-text" style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600">
+    Leave a note at <span class="mono" style="color: #1E4ED8">{{timeLabel}}</span>
+    <span style="flex: 1"></span>
+    <span style="font-size: 11px; font-weight: 400; color: #4A4F5C">changes only <span class="mono">{{windowLabel}}</span></span>
+  </label>
+  <textarea id="note-text" rows="2" placeholder="What should change at this moment?" style="box-sizing: border-box; width: 100%; min-height: 56px; resize: none; padding: 10px 12px; border: 1px solid #D6DAE2; border-radius: 12px; background: #FFFFFF; font-size: 15px; color: #14161B; line-height: 1.35"></textarea>
+  <button type="button" style="height: 52px; border: 0; border-radius: 999px; background: #D63B1F; color: #FFFFFF; font-size: 19px; font-weight: 700">Leave note at <span>{{timeLabel}}</span></button>
+</form>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var t = (this.state && typeof this.state.t === 'number') ? this.state.t : 7;
+    var playing = !!(this.state && this.state.playing);
+    var self = this;
+    function fmt(s) { return '0:' + (s < 10 ? '0' : '') + s; }
+    function seek(s) { return function () { self.setState({ t: s, playing: false }); }; }
+    // Shots as [start, end) in ad seconds. A note's window lives in shot time:
+    // [floor(st)-1, ceil(st)+1], clamped to the shot, at least 2 s, never crossing a cut.
+    var cuts = [0, 3, 8, 10, 12, 14, 15];
+    var n = 0;
+    while (n < cuts.length - 2 && t >= cuts[n + 1]) { n++; }
+    var start = cuts[n], dur = cuts[n + 1] - cuts[n];
+    var st = t - start;
+    var a = Math.max(0, Math.floor(st) - 1);
+    var b = Math.min(dur, Math.ceil(st) + 1);
+    if (b - a < 2) { if (a === 0) { b = Math.min(dur, a + 2); } else { a = Math.max(0, b - 2); } }
+    var lo = start + a;
+    var hi = start + b;
+    return {
+      timeLabel: fmt(t),
+      windowLabel: 'Shot ' + (n + 1) + ' · ' + fmt(a) + '–' + fmt(b),
+      playedStyle: 'position: absolute; left: 0; top: 24px; height: 4px; border-radius: 999px; background: #14161B; width: ' + (t / 15 * 100).toFixed(2) + '%',
+      headStyle: 'position: absolute; top: 14px; width: 4px; height: 24px; margin-left: -2px; border-radius: 999px; background: #14161B; left: ' + (t / 15 * 100).toFixed(2) + '%',
+      windowStyle: 'position: absolute; top: 18px; height: 16px; border-radius: 4px; background: rgba(255,79,46,0.16); border: 1px dashed #FF4F2E; box-sizing: border-box; left: ' + (lo / 15 * 100).toFixed(2) + '%; width: ' + ((hi - lo) / 15 * 100).toFixed(2) + '%',
+      playing: playing,
+      paused: !playing,
+      playLabel: playing ? 'Pause' : 'Play',
+      togglePlay: function () { self.setState({ playing: !playing }); },
+      seek0: seek(0), seek3: seek(3), seek5: seek(5), seek8: seek(8),
+      seek9: seek(9), seek10: seek(10), seek12: seek(12), seek13: seek(13), seek14: seek(14)
+    };
+  }
+}
+</script>
+</body>
+</html>

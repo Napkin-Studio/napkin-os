@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Script editor: Video and Audio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+.grid{background-color:#FAFAFB;background-image:radial-gradient(#D6DAE2 1px, transparent 1px);background-size:24px 24px}
+button{font:inherit;cursor:pointer}
+textarea{font:inherit}
+.mono{font-family:'Geist Mono', monospace}
+.lbl{font-family:'Geist Mono', monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#5F6573}
+.ref{color:#1E4ED8;font-family:'Geist Mono', monospace;font-size:12px}
+.tc{font-family:'Geist Mono', monospace;font-size:11px;color:#4A4F5C;width:44px;flex:none}
+.kind{font-family:'Geist Mono', monospace;font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;color:#4A4F5C;background:#F2F3F6;border-radius:999px;padding:1px 7px;flex:none}
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #FAFAFB; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E">
+
+<!-- Editor top bar -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE; z-index: 6">
+  <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500">← Canvas</button>
+  <div style="display: flex; align-items: center; gap: 8px">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2" width="12" height="16" rx="2" fill="#FF6A55"></rect><path d="M7 7h6M7 10h6M7 13h4" stroke="#16181D" stroke-width="1.4" stroke-linecap="round"></path></svg>
+    <span style="font-weight: 600; font-size: 14px">Script · First Light</span>
+    <span style="font-size: 13px; color: #5F6573">Lumen Water</span>
+  </div>
+  <div role="radiogroup" aria-label="Script view" style="margin-left: 12px; display: flex; padding: 3px; background: #F2F3F6; border-radius: 999px">
+    <button role="radio" aria-checked="false" style="height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font-size: 12.5px; color: #4A4F5C">Screenplay</button>
+    <button role="radio" aria-checked="true" style="height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: #FFFFFF; font-size: 12.5px; font-weight: 600; color: #1E4ED8; box-shadow: 0 1px 3px rgba(20,30,60,0.12)">Video · Audio</button>
+  </div>
+  <span style="flex: 1"></span>
+  <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4A4F5C">
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF">S</span>
+    <span>Sai is editing shot 1</span>
+  </div>
+  <span class="mono" style="font-size: 11px; color: #166534; padding: 3px 9px; border-radius: 999px; background: #e7f6ed">Saved</span>
+  <button style="height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: #D63B1F; color: #FFFFFF; font-size: 13px; font-weight: 600">Update storyboard</button>
+  <button aria-label="Your account" style="width: 32px; height: 32px; border-radius: 999px; border: 0; background: #F2F3F6; font-weight: 600; font-size: 12px">SB</button>
+</header>
+
+<!-- Page background -->
+<div class="grid" style="position: absolute; left: 0; top: 48px; width: 1440px; height: 852px"></div>
+
+<!-- Script header -->
+<div style="position: absolute; left: 32px; top: 64px; width: 1376px; height: 72px; display: flex; align-items: center; gap: 24px">
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em">First Light</h1>
+    <span style="font-size: 12.5px; color: #4A4F5C">15 s · 16:9 · 6 shots · Maya edited shot 4 two minutes ago</span>
+  </div>
+  <span style="flex: 1"></span>
+  <div role="group" aria-label="Shot lengths" style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; justify-content: space-between"><span class="lbl">Length</span><span class="mono" style="font-size: 11px; color: #4A4F5C">15 s target · 15.0 s estimated</span></div>
+    <div style="display: flex; gap: 3px; width: 600px; height: 22px">
+      <div class="mono" style="width: 100px; border-radius: 6px; background: #F2F3F6; font-size: 10.5px; color: #4A4F5C; display: flex; align-items: center; padding-left: 6px">1 · 2.5</div>
+      <div class="mono" style="width: 100px; border-radius: 6px; background: #F2F3F6; font-size: 10.5px; color: #4A4F5C; display: flex; align-items: center; padding-left: 6px">2 · 2.5</div>
+      <div class="mono" style="width: 80px; box-sizing: border-box; border-radius: 6px; border: 1.5px dashed #2F64F5; font-size: 10.5px; color: #1E4ED8; display: flex; align-items: center; padding-left: 6px">3 · 2.0</div>
+      <div class="mono" style="width: 160px; border-radius: 6px; background: rgba(47,100,245,0.12); font-size: 10.5px; color: #1E4ED8; font-weight: 500; display: flex; align-items: center; padding-left: 6px">4 · 4.0</div>
+      <div class="mono" style="width: 100px; border-radius: 6px; background: #F2F3F6; font-size: 10.5px; color: #4A4F5C; display: flex; align-items: center; padding-left: 6px">5 · 2.5</div>
+      <div class="mono" style="width: 60px; border-radius: 6px; background: #F2F3F6; font-size: 10.5px; color: #4A4F5C; display: flex; align-items: center; padding-left: 6px">6 · 1.5</div>
+    </div>
+  </div>
+</div>
+
+<!-- Column headers -->
+<div style="position: absolute; left: 32px; top: 148px; width: 1376px; height: 24px; display: grid; grid-template-columns: 148px minmax(0, 1fr) 500px; align-items: center">
+  <span class="lbl" style="padding-left: 14px">Shot</span>
+  <span class="lbl" style="padding-left: 16px">Video</span>
+  <span class="lbl" style="padding-left: 16px">Audio</span>
+</div>
+
+<!-- Shot 1 -->
+<article aria-label="Shot 1" style="position: absolute; left: 32px; top: 176px; width: 1376px; height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 148px minmax(0, 1fr) 500px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 12px; overflow: hidden">
+  <span style="position: absolute; left: 129px; bottom: 9px; display: flex; z-index: 1"><span role="img" aria-label="Last written by Sai" style="width: 16px; height: 16px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 700; flex: none">S</span></span>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px; border-right: 1px solid #E7E9EE">
+    <button aria-label="Drag to move shot 1" style="width: 20px; height: 32px; border: 0; background: transparent; padding: 0"><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="#737987"><circle cx="2.5" cy="3" r="1.3"></circle><circle cx="7.5" cy="3" r="1.3"></circle><circle cx="2.5" cy="8" r="1.3"></circle><circle cx="7.5" cy="8" r="1.3"></circle><circle cx="2.5" cy="13" r="1.3"></circle><circle cx="7.5" cy="13" r="1.3"></circle></g></svg></button>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: baseline; gap: 6px"><span class="mono" style="font-size: 15px; font-weight: 500">1</span><span class="mono" style="font-size: 10.5px; color: #5F6573; white-space: nowrap">0:00 · 2.5 s</span></div>
+      <span style="font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #F2F3F6; color: #4A4F5C; align-self: flex-start">Wide · static</span>
+    </div>
+  </div>
+  <div style="padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid #E7E9EE; min-width: 0">
+    <div style="font-size: 13px">Dawn over the empty <span class="ref">@ext_beach</span>. Waves roll in under a pink sky. <span class="ref">@ref_golden_hour</span></div>
+    <div style="font-size: 12px; color: #5F6573; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Direction: Hold still. Let the light arrive before anything moves; no people yet.</div>
+  </div>
+  <div style="padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; position: relative">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00</span><span class="kind">Sound</span><span>Waves, low and slow</span></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00</span><span class="kind">Music</span><span>Low synth swell starts<span aria-hidden="true" style="display: inline-block; width: 2px; height: 15px; background: #7D52F4; vertical-align: -3px; margin-left: 1px"></span></span></div>
+    <span style="position: absolute; left: 286px; top: 6px; padding: 1px 7px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; font-size: 10.5px; font-weight: 600">Sai</span>
+  </div>
+</article>
+
+<!-- Insert affordance between 1 and 2 (hovered) -->
+<div style="position: absolute; left: 32px; top: 242px; width: 1376px; height: 36px; display: flex; align-items: center; gap: 10px">
+  <span aria-hidden="true" style="flex: 1; height: 0; border-top: 1.5px dashed #2F64F5"></span>
+  <button style="height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid #2F64F5; background: #FFFFFF; color: #1E4ED8; font-size: 12.5px; font-weight: 600; box-shadow: 0 10px 30px rgba(20,30,60,0.08)">+ Insert shot here</button>
+  <button style="height: 30px; padding: 0 12px 0 8px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 6px; box-shadow: 0 10px 30px rgba(20,30,60,0.08)">
+    <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="12" height="16" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips." style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    Bridge 1 → 2
+  </button>
+  <span aria-hidden="true" style="flex: 1; height: 0; border-top: 1.5px dashed #2F64F5"></span>
+</div>
+
+<!-- Shot 2 -->
+<article aria-label="Shot 2" style="position: absolute; left: 32px; top: 280px; width: 1376px; height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 148px minmax(0, 1fr) 500px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 12px; overflow: hidden">
+  <span style="position: absolute; left: 129px; bottom: 9px; display: flex; z-index: 1"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="12" height="16" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></span>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px; border-right: 1px solid #E7E9EE">
+    <button aria-label="Drag to move shot 2" style="width: 20px; height: 32px; border: 0; background: transparent; padding: 0"><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="#737987"><circle cx="2.5" cy="3" r="1.3"></circle><circle cx="7.5" cy="3" r="1.3"></circle><circle cx="2.5" cy="8" r="1.3"></circle><circle cx="7.5" cy="8" r="1.3"></circle><circle cx="2.5" cy="13" r="1.3"></circle><circle cx="7.5" cy="13" r="1.3"></circle></g></svg></button>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: baseline; gap: 6px"><span class="mono" style="font-size: 15px; font-weight: 500">2</span><span class="mono" style="font-size: 10.5px; color: #5F6573; white-space: nowrap">0:02.5 · 2.5 s</span></div>
+      <span style="font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #F2F3F6; color: #4A4F5C; align-self: flex-start">Medium · tracking</span>
+    </div>
+  </div>
+  <div style="padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid #E7E9EE; min-width: 0">
+    <div style="font-size: 13px"><span class="ref" aria-describedby="ask-maya" style="background: rgba(255,79,46,0.10); box-shadow: inset 0 -2px 0 #FF4F2E; border-radius: 3px 3px 0 0; padding: 0 2px">@maya</span> walks barefoot along the waterline, toward camera.</div>
+    <div style="font-size: 12px; color: #5F6573; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Direction: Unhurried, a little cold. She looks out to sea, not at us; arms loose, hair still damp.</div>
+  </div>
+  <div style="padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00</span><span class="kind">Sound</span><span>Footsteps in wet sand</span></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:01</span><span class="kind">Music</span><span>Swell keeps building</span></div>
+  </div>
+</article>
+
+<!-- Shot 4 (expanded) -->
+<article aria-label="Shot 4, open" style="position: absolute; left: 32px; top: 352px; width: 1376px; height: 336px; box-sizing: border-box; display: grid; grid-template-columns: 148px minmax(0, 1fr) 500px; background: #FFFFFF; border: 1.5px solid #2F64F5; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); overflow: hidden">
+  <!-- Gutter -->
+  <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 10px; border-right: 1px solid #E7E9EE; background: #FAFAFB">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <button aria-label="Drag to move shot 4" style="width: 20px; height: 32px; border: 0; background: transparent; padding: 0"><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="#737987"><circle cx="2.5" cy="3" r="1.3"></circle><circle cx="7.5" cy="3" r="1.3"></circle><circle cx="2.5" cy="8" r="1.3"></circle><circle cx="7.5" cy="8" r="1.3"></circle><circle cx="2.5" cy="13" r="1.3"></circle><circle cx="7.5" cy="13" r="1.3"></circle></g></svg></button>
+      <span class="mono" style="font-size: 20px; font-weight: 500; color: #1E4ED8">4</span>
+      <span class="mono" style="font-size: 10.5px; color: #5F6573; line-height: 1.3">0:07–0:11<br>4.0 s</span>
+    </div>
+    <button aria-haspopup="dialog" aria-label="Shot 4 last written by Maya. Why?" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 4px; border: 1px solid #E7E9EE; border-radius: 999px; background: #FFFFFF; font-size: 11.5px; font-weight: 500; line-height: 1; color: #4A4F5C; white-space: nowrap"><span aria-hidden="true" style="width: 16px; height: 16px; border-radius: 999px; background: #14161B; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 700">M</span>Maya<span class="mono" style="font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7180">why?</span></button>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <span class="lbl">Camera</span>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11.5px">
+        <div style="display: flex; justify-content: space-between"><span style="color: #5F6573">Size</span><span>Close-up</span></div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #5F6573">Angle</span><span>Eye level</span></div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #5F6573">Move</span><span>Slow push</span></div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #5F6573">Lens</span><span class="mono">50 mm</span></div>
+      </div>
+      <button style="margin-top: 2px; height: 26px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 11.5px; color: #4A4F5C">Edit camera</button>
+    </div>
+    <span style="flex: 1"></span>
+    <button style="height: 26px; border-radius: 999px; border: 0; background: transparent; font-size: 11.5px; color: #4A4F5C; text-align: left; padding: 0 4px">▴ Collapse</button>
+  </div>
+
+  <!-- Video column -->
+  <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid #E7E9EE; min-width: 0">
+    <span class="lbl">Action</span>
+    <div style="font-size: 13.5px; line-height: 1.45">Close on <span class="ref" style="font-size: 13px">@maya_laughing</span>. The first sip of <span class="ref" style="font-size: 13px">@product_bottle</span>; <span style="background: rgba(47,100,245,0.18); border-radius: 2px">the sun breaks the horizon behind her.</span><span aria-hidden="true" style="display: inline-block; width: 2px; height: 16px; background: #14161B; vertical-align: -3px; margin-left: 1px"></span></div>
+    <div style="display: flex; gap: 6px; flex-wrap: wrap">
+      <span style="display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border: 1px solid #E7E9EE; border-radius: 999px"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 999px; background: linear-gradient(160deg, #F6E1CF 0%, #E0AE88 50%, #8A6450 100%)"></span><span class="ref" style="font-size: 11px">@maya_laughing</span><span style="font-size: 10px; color: #5F6573">character</span></span>
+      <span style="display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border: 1px solid #E7E9EE; border-radius: 999px"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 999px; background: radial-gradient(circle at 50% 40%, #E6F4FF 0%, #A9D4F2 45%, #4C8DBA 100%)"></span><span class="ref" style="font-size: 11px">@product_bottle</span><span style="font-size: 10px; color: #5F6573">product</span></span>
+      <span style="display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; border: 1px solid #E7E9EE; border-radius: 999px"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 999px; background: linear-gradient(120deg, #FFD9A0 0%, #FF9F68 50%, #6B4A6E 100%)"></span><span class="ref" style="font-size: 11px">@ref_golden_hour</span><span style="font-size: 10px; color: #5F6573">lighting</span></span>
+      <button style="height: 24px; padding: 0 10px; border-radius: 999px; border: 1px dashed #D6DAE2; background: transparent; font-size: 11px; color: #4A4F5C">+ @ reference</button>
+    </div>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 2px">
+      <label for="dir4" class="lbl">Performance direction</label>
+      <span class="mono" style="font-size: 11px; color: #4A4F5C">1,240 / 4,000</span>
+    </div>
+    <textarea id="dir4" style="height: 84px; resize: none; box-sizing: border-box; padding: 8px 10px; border: 1px solid #D6DAE2; border-radius: 8px; font-size: 12.5px; line-height: 1.5; color: #14161B; background: #FFFFFF; overflow: hidden">She has been up since four and it shows: shoulders loose, a little cold, hair still damp from the sea. Hold on her face before the sip; the bottle sits just below frame. As the first light reaches her, her eyes close, not a squint, a rest. On the sip they open slowly and the smile starts in the eyes before the mouth. It must feel private, as if she forgot the camera. The line comes out half laugh, half breath, not performed for anyone. Keep the shoulders still; the only movement is the breath and the light crossing her cheek. No wink at the lens, no product pose.</textarea>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <div aria-hidden="true" style="position: relative; width: 160px; height: 6px; border-radius: 999px; background: #F2F3F6; flex: none">
+        <span style="position: absolute; left: 0; top: 0; width: 50px; height: 6px; border-radius: 999px; background: #2F64F5"></span>
+        <span style="position: absolute; left: 40px; top: -3px; width: 2px; height: 12px; background: #14161B"></span>
+      </div>
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="15" height="20" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips." style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+      <span style="font-size: 11.5px; color: #4A4F5C"><span class="mono" style="font-size: 11px">1,240 / 4,000</span> · Runway uses the first 1,000, Dex condenses</span>
+      <a href="#" style="font-size: 11.5px">See Dex's 1,000</a>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px">
+      <span class="lbl">Moments in this shot</span>
+      <button style="height: 24px; padding: 0 10px; border-radius: 999px; border: 1px dashed #D6DAE2; background: transparent; font-size: 11px; color: #4A4F5C">+ Moment</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px">
+      <div role="group" aria-label="Moments on a 4 second track" style="position: relative; width: 180px; height: 26px; flex: none">
+        <span aria-hidden="true" style="position: absolute; left: 0; top: 11px; width: 180px; height: 4px; border-radius: 999px; background: #F2F3F6"></span>
+        <span aria-hidden="true" style="position: absolute; left: 86px; top: 5px; width: 8px; height: 16px; border-radius: 3px; background: #14161B"></span>
+        <span aria-hidden="true" style="position: absolute; left: 131px; top: 5px; width: 8px; height: 16px; border-radius: 3px; background: #14161B"></span>
+        <span class="mono" style="position: absolute; left: 0; top: 18px; font-size: 9px; color: #5F6573">0:00</span>
+        <span class="mono" style="position: absolute; right: 0; top: 18px; font-size: 9px; color: #5F6573">0:04</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; flex-wrap: wrap">
+        <span style="display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border: 1px solid #D6DAE2; border-radius: 999px"><span class="mono" style="font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #14161B; color: #FFFFFF">0:02</span>eyes open</span>
+        <span aria-hidden="true" style="color: #5F6573">·</span>
+        <span style="display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border: 1px solid #D6DAE2; border-radius: 999px"><span class="mono" style="font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #14161B; color: #FFFFFF">0:03</span>line: 'It's perfect!'</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio column -->
+  <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <span class="lbl">Sound and voice</span>
+    <sc-if value="{{ pending }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px"><span class="tc" style="padding-top: 2px">0:00</span><span class="kind" style="margin-top: 1px">Music</span><span><del style="color: #6B7180; text-decoration-color: #6B7180"><span style="position: absolute; left: -9999px">Old: </span>Synth swell lifts to its peak</del> <ins style="text-decoration: underline; text-decoration-color: #FF6A55; text-decoration-thickness: 2px; text-underline-offset: 3px"><span style="position: absolute; left: -9999px">Skye's draft: </span>Swell peaks on the sip at 0:02</ins></span></div>
+        <div style="display: flex; align-items: center; gap: 6px; padding-left: 8px; white-space: nowrap">
+          <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="15" height="20" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+          <div role="note" style="position: relative; padding: 3px 9px; border: 1px solid #E7E9EE; border-radius: 10px; background: #FFFFFF; box-shadow: 0 10px 30px rgba(20,30,60,0.08); font-size: 12px; line-height: 1.35; white-space: nowrap">
+            <span aria-hidden="true" style="position: absolute; left: -5px; top: 50%; width: 8px; height: 8px; margin-top: -4px; box-sizing: border-box; background: #FFFFFF; border-left: 1px solid #E7E9EE; border-bottom: 1px solid #E7E9EE; transform: rotate(45deg)"></span>
+            <span class="mono" style="font-size: 11px; color: #4A4F5C">Skye · scripts:</span> I timed it to the sip.
+          </div>
+          <span style="flex: 1"></span>
+          <button onClick="{{ keep }}" style="height: 26px; padding: 0 12px; border-radius: 999px; border: 0; background: #D63B1F; color: #FFFFFF; font-size: 11.5px; font-weight: 600">Keep</button>
+          <button onClick="{{ keepMine }}" style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 11.5px; font-weight: 500">Keep mine</button>
+          <button aria-haspopup="dialog" aria-label="Why did Skye write this? Opens the decision in the decision tree" style="height: 26px; padding: 0 8px; border-radius: 999px; border: 0; background: transparent; color: #1E4ED8; font-size: 11.5px; font-weight: 500">Why</button>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ kept }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px"><span class="tc" style="padding-top: 2px">0:00</span><span class="kind" style="margin-top: 1px">Music</span><span>Swell peaks on the sip at 0:02</span><span style="flex: 1"></span><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="12" height="16" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg><button onClick="{{ undoChoice }}" style="height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 11px; font-weight: 500">Undo</button></div>
+    </sc-if>
+    <sc-if value="{{ keptMine }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px"><span class="tc" style="padding-top: 2px">0:00</span><span class="kind" style="margin-top: 1px">Music</span><span>Synth swell lifts to its peak</span><span style="flex: 1"></span><span role="img" aria-label="Last written by you" style="width: 16px; height: 16px; box-sizing: border-box; border-radius: 999px; border: 1.2px solid #4A4F5C; display: inline-flex; align-items: center; justify-content: center; font-size: 7.5px; font-weight: 700; color: #4A4F5C; flex: none">SB</span><button onClick="{{ undoChoice }}" style="height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 11px; font-weight: 500">Undo</button></div>
+    </sc-if>
+    <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px"><span class="tc" style="padding-top: 2px">0:01</span><span class="kind" style="margin-top: 1px">Sound</span><span>Soft exhale; gulls far off</span></div>
+    <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; padding: 8px 10px; margin: 0 -10px; border-radius: 8px; background: #F5F6F8">
+      <span class="tc" style="padding-top: 2px">0:03</span>
+      <span class="kind" style="margin-top: 1px; background: #FFFFFF">Line</span>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span><span style="font-weight: 600">MAYA</span> (half laugh, half breath)</span>
+        <span style="font-size: 14px">"It's perfect!"</span>
+        <span style="font-size: 11.5px; color: #4A4F5C">Voice: Maya, warm · tied to moment <span class="mono" style="font-size: 11px">0:03</span></span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px"><span class="tc" style="padding-top: 2px">0:03.5</span><span class="kind" style="margin-top: 1px">Sound</span><span>Bottle set down on sand</span></div>
+    <span style="flex: 1"></span>
+    <div role="group" aria-label="Add audio" style="display: flex; gap: 6px">
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px dashed #D6DAE2; background: transparent; font-size: 11.5px; color: #4A4F5C">+ VO</button>
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px dashed #D6DAE2; background: transparent; font-size: 11.5px; color: #4A4F5C">+ Line</button>
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px dashed #D6DAE2; background: transparent; font-size: 11.5px; color: #4A4F5C">+ Music</button>
+      <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px dashed #D6DAE2; background: transparent; font-size: 11.5px; color: #4A4F5C">+ Sound</button>
+    </div>
+  </div>
+</article>
+
+<!-- Drop slot after shot 4 -->
+<div aria-hidden="true" style="position: absolute; left: 32px; top: 696px; width: 1376px; height: 64px; box-sizing: border-box; border: 1.5px dashed #2F64F5; border-radius: 12px; background: rgba(47,100,245,0.06)"></div>
+
+<!-- Shot 5 -->
+<article aria-label="Shot 5" style="position: absolute; left: 32px; top: 768px; width: 1376px; height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 148px minmax(0, 1fr) 500px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 12px; overflow: hidden">
+  <span style="position: absolute; left: 129px; bottom: 9px; display: flex; z-index: 1"><span role="img" aria-label="Last written by you" style="width: 16px; height: 16px; box-sizing: border-box; border-radius: 999px; border: 1.2px solid #4A4F5C; display: inline-flex; align-items: center; justify-content: center; font-size: 7.5px; font-weight: 700; color: #4A4F5C; flex: none">SB</span></span>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px; border-right: 1px solid #E7E9EE">
+    <button aria-label="Drag to move shot 5" style="width: 20px; height: 32px; border: 0; background: transparent; padding: 0"><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="#737987"><circle cx="2.5" cy="3" r="1.3"></circle><circle cx="7.5" cy="3" r="1.3"></circle><circle cx="2.5" cy="8" r="1.3"></circle><circle cx="7.5" cy="8" r="1.3"></circle><circle cx="2.5" cy="13" r="1.3"></circle><circle cx="7.5" cy="13" r="1.3"></circle></g></svg></button>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: baseline; gap: 6px"><span class="mono" style="font-size: 15px; font-weight: 500">5</span><span class="mono" style="font-size: 10.5px; color: #5F6573; white-space: nowrap">0:11 · 2.5 s</span></div>
+      <span style="font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #F2F3F6; color: #4A4F5C; align-self: flex-start">Low wide · tilt up</span>
+    </div>
+  </div>
+  <div style="padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid #E7E9EE; min-width: 0">
+    <div style="font-size: 13px">Low angle: <span class="ref">@maya</span> toasts the sunrise. <span class="ref">@ref_low_wide</span> <span title="No reference with this name yet" style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #b45309; text-decoration: underline wavy #b45309; text-underline-offset: 3px">@ref_sun_flare</span></div>
+    <div style="font-size: 12px; color: #5F6573; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Direction: Arm up, bottle catches the sun; a small private cheers, not a pose.</div>
+  </div>
+  <div style="padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00.5</span><span class="kind">VO</span><span>"Lumen. Drink the morning."</span></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00</span><span class="kind">Music</span><span>Swell resolves into one held chord</span></div>
+  </div>
+</article>
+
+<!-- Shot 6 -->
+<article aria-label="Shot 6" style="position: absolute; left: 32px; top: 838px; width: 1376px; height: 62px; box-sizing: border-box; display: grid; grid-template-columns: 148px minmax(0, 1fr) 500px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 12px; overflow: hidden">
+  <span style="position: absolute; left: 129px; bottom: 9px; display: flex; z-index: 1"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="12" height="16" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></span>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px; border-right: 1px solid #E7E9EE">
+    <button aria-label="Drag to move shot 6" style="width: 20px; height: 32px; border: 0; background: transparent; padding: 0"><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="#737987"><circle cx="2.5" cy="3" r="1.3"></circle><circle cx="7.5" cy="3" r="1.3"></circle><circle cx="2.5" cy="8" r="1.3"></circle><circle cx="7.5" cy="8" r="1.3"></circle><circle cx="2.5" cy="13" r="1.3"></circle><circle cx="7.5" cy="13" r="1.3"></circle></g></svg></button>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: baseline; gap: 6px"><span class="mono" style="font-size: 15px; font-weight: 500">6</span><span class="mono" style="font-size: 10.5px; color: #5F6573; white-space: nowrap">0:13.5 · 1.5 s</span></div>
+      <span style="font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #F2F3F6; color: #4A4F5C; align-self: flex-start">End card</span>
+    </div>
+  </div>
+  <div style="padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid #E7E9EE; min-width: 0">
+    <div style="font-size: 13px">Logo on white; <span class="ref">@product_bottle</span> centred under the line.</div>
+  </div>
+  <div style="padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00</span><span class="kind">Sound</span><span>One wave, then quiet</span></div>
+  </div>
+</article>
+
+<!-- Shot 3, being dragged -->
+<article aria-label="Shot 3, moving" style="position: absolute; left: 52px; top: 704px; width: 1340px; height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 148px minmax(0, 1fr) 488px; background: #FFFFFF; border: 1.5px solid #2F64F5; border-radius: 12px; overflow: hidden; transform: rotate(-0.6deg); box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); z-index: 3">
+  <span style="position: absolute; left: 129px; bottom: 9px; display: flex; z-index: 1"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="12" height="16" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></span>
+  <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px; border-right: 1px solid #E7E9EE; background: rgba(47,100,245,0.06)">
+    <span aria-hidden="true" style="width: 20px; display: flex; justify-content: center"><svg width="10" height="16" viewBox="0 0 10 16"><g fill="#2F64F5"><circle cx="2.5" cy="3" r="1.3"></circle><circle cx="7.5" cy="3" r="1.3"></circle><circle cx="2.5" cy="8" r="1.3"></circle><circle cx="7.5" cy="8" r="1.3"></circle><circle cx="2.5" cy="13" r="1.3"></circle><circle cx="7.5" cy="13" r="1.3"></circle></g></svg></span>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: baseline; gap: 6px"><span class="mono" style="font-size: 15px; font-weight: 500; color: #1E4ED8">3</span><span class="mono" style="font-size: 10.5px; color: #5F6573; white-space: nowrap">2.0 s</span></div>
+      <span style="font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #FFFFFF; color: #4A4F5C; align-self: flex-start">Insert · static</span>
+    </div>
+  </div>
+  <div style="padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-right: 1px solid #E7E9EE; min-width: 0">
+    <div style="font-size: 13px">She cracks open <span class="ref">@product_bottle</span>; light catches the bubbles.</div>
+    <div style="font-size: 12px; color: #5F6573; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Direction: Hands only. A clean twist, no fumbling; the cap stays in shot.</div>
+  </div>
+  <div style="padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00</span><span class="kind">Sound</span><span>Fizz, close</span></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px"><span class="tc">0:00.5</span><span class="kind">VO</span><span>"The first light of the day."</span></div>
+  </div>
+</article>
+
+<!-- Grab cursor and drop hint -->
+<div style="position: absolute; left: 58px; top: 728px; z-index: 4; display: flex; align-items: flex-start; gap: 6px">
+  <svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 8 V4.5 a1 1 0 0 1 2 0 V7 M7 7 V4 a1 1 0 0 1 2 0 V7 M9 7 V4.5 a1 1 0 0 1 2 0 V9 c0 3 -2 5 -4.5 5 C4 14 3 12 2.5 10 L2 8.5 a1 1 0 0 1 1.8 -0.8 L5 9" fill="#FFFFFF" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg>
+</div>
+<div role="status" style="position: absolute; left: 1060px; top: 682px; z-index: 5; padding: 5px 12px; border-radius: 999px; background: #14161B; color: #FFFFFF; font-size: 12px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08)">Drop after shot 4 · shots renumber and times update</div>
+
+<!-- Floating options on the selected words in shot 4 -->
+<div role="toolbar" aria-label="Skye, on the selected words" style="position: absolute; left: 300px; top: 343px; display: flex; align-items: center; gap: 2px; padding: 4px 4px 4px 8px; background: rgba(255,255,255,0.97); border: 1px solid #E7E9EE; border-radius: 999px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); white-space: nowrap; z-index: 5; line-height: 1">
+  <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="15" height="20" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+  <span class="mono" style="font-size: 11px; color: #4A4F5C; padding: 0 6px 0 4px">Skye</span>
+  <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #14161B">Tighten</button>
+  <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #14161B">Make it 10 s</button>
+  <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #14161B">Add a beat</button>
+  <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #14161B">Write the VO</button>
+  <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #14161B">Say it another way</button>
+</div>
+
+<!-- Ask anchored to @maya in shot 2 -->
+<section id="ask-maya" aria-label="Dex asks about @maya in shot 2" style="position: absolute; left: 186px; top: 150px; width: 340px; box-sizing: border-box; padding: 12px; border: 1.5px solid #FF4F2E; border-radius: 12px; background: #FFFFFF; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 10px; z-index: 5">
+  <span aria-hidden="true" style="position: absolute; left: 20px; bottom: -7px; width: 12px; height: 12px; box-sizing: border-box; background: #FFFFFF; border-right: 1.5px solid #FF4F2E; border-bottom: 1.5px solid #FF4F2E; transform: rotate(45deg)"></span>
+  <div style="display: flex; align-items: flex-start; gap: 10px">
+    <svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="27" height="36" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips. — needs you" style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg>
+    <div style="display: flex; flex-direction: column; gap: 3px">
+      <span class="mono" style="font-size: 11px; color: #4A4F5C">Dex · directs</span>
+      <p style="margin: 0; font-size: 13px; line-height: 1.4">Maya has three looks. Which one walks the waterline in shot 2?</p>
+    </div>
+  </div>
+  <sc-if value="{{ askOpen }}" hint-placeholder-val="{{ true }}">
+    <div role="group" aria-label="Answer Dex" style="display: flex; gap: 6px">
+      <button onClick="{{ pickFront }}" style="flex: 1; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 12px; font-weight: 500"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: linear-gradient(170deg, #F3D9C6 0%, #D9A884 55%, #7A5A48 100%); flex: none"></span>Front</button>
+      <button onClick="{{ pickSide }}" style="flex: 1; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 12px; font-weight: 500"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: linear-gradient(190deg, #EAD3C2 0%, #C99A78 60%, #6E5040 100%); flex: none"></span>Side</button>
+      <button onClick="{{ pickLaughing }}" style="flex: 1; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 12px; font-weight: 500"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: linear-gradient(160deg, #F6E1CF 0%, #E0AE88 50%, #8A6450 100%); flex: none"></span>Laughing</button>
+    </div>
+    <span style="font-size: 11.5px; color: #6B7180">Sai and Maya see this too. First answer settles it.</span>
+  </sc-if>
+  <sc-if value="{{ askAnswered }}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #166534">
+      <span>{{ answerText }}</span>
+      <span style="flex: 1"></span>
+      <button onClick="{{ reopenAsk }}" style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; color: #14161B; font-size: 12px; font-weight: 500">Undo</button>
+    </div>
+  </sc-if>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const choice = s.choice || null;
+    const look = s.look || null;
+    return {
+      pending: choice === null,
+      kept: choice === "kept",
+      keptMine: choice === "mine",
+      keep: () => this.setState({ choice: "kept" }),
+      keepMine: () => this.setState({ choice: "mine" }),
+      undoChoice: () => this.setState({ choice: null }),
+      askOpen: look === null,
+      askAnswered: look !== null,
+      answerText: look ? "You picked @maya_" + look + " for shot 2." : "",
+      pickFront: () => this.setState({ look: "front" }),
+      pickSide: () => this.setState({ look: "side" }),
+      pickLaughing: () => this.setState({ look: "laughing" }),
+      reopenAsk: () => this.setState({ look: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crew: who works on your ad</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+.grid{background-color:#FAFAFB;background-image:radial-gradient(#D6DAE2 1px, transparent 1px);background-size:24px 24px}
+button{font:inherit;cursor:pointer}
+.card{width:182px;height:492px;box-sizing:border-box;background:#FFFFFF;border:1px solid #D6DAE2;border-radius:12px;box-shadow:0 10px 30px rgba(20,30,60,0.08);padding:12px;display:flex;flex-direction:column;gap:10px}
+.tile{flex:none;height:112px;border-radius:10px;background:#F5F6F8;display:flex;align-items:flex-end;justify-content:center;position:relative;padding-bottom:6px;box-sizing:border-box}
+.house{position:absolute;left:8px;top:8px;font-family:'Geist Mono',monospace;font-size:10px;padding:2px 8px;border-radius:999px;background:#14161B;color:#FFFFFF}
+.name{font-size:20px;font-weight:600;line-height:1.1}
+.job{font-family:'Geist Mono',monospace;font-size:12px;color:#4A4F5C}
+.role{font-size:13px;line-height:1.4;color:#14161B;min-height:37px}
+.lbl{font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#4A4F5C}
+.where{font-size:12px;line-height:1.45;color:#4A4F5C}
+/* the crew speaks: a speech bubble, signed (Brief Maker's .say) */
+.say{position:relative;display:block;background:#FFFFFF;color:#14161B;border:1px solid #D6DAE2;border-radius:12px;padding:8px 11px;font-size:12px;line-height:1.4;text-align:left;box-shadow:0 2px 6px rgba(20,30,60,0.06);margin-bottom:4px;flex:none}
+.say::after{content:"";position:absolute;left:18px;bottom:-7px;width:12px;height:12px;background:#FFFFFF;border:0 solid #D6DAE2;border-right-width:1px;border-bottom-width:1px;transform:rotate(45deg) skew(8deg,8deg)}
+.sayer{display:block;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#4A4F5C;margin-bottom:3px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:6px;width:56px}
+.mini{width:32px;height:32px;display:flex;align-items:flex-end;justify-content:center}
+.cap{font-size:10.5px;color:#4A4F5C;white-space:nowrap}
+.ref{color:#1E4ED8;font-family:'Geist Mono',monospace;font-size:11.5px}
+
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #FAFAFB; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E">
+
+<!-- Top bar -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE; z-index: 5">
+  <button aria-label="Home: your projects" style="width: 28px; height: 28px; border: 0; border-radius: 8px; background: #14161B; display: flex; align-items: center; justify-content: center">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"></path></svg>
+  </button>
+  <span style="font-weight: 600; font-size: 14px">Napkin Studio</span>
+  <span style="font-weight: 600; font-size: 14px; color: #1E4ED8">Production</span>
+  <span style="font-size: 13px; color: #4A4F5C">The crew</span>
+  <span style="flex: 1"></span>
+  <button aria-label="Your account" style="width: 32px; height: 32px; border-radius: 999px; border: 0; background: #F2F3F6; font-weight: 600; font-size: 12px">SB</button>
+</header>
+
+<!-- Canvas -->
+<div class="grid" style="position: absolute; left: 0; top: 48px; width: 1440px; height: 852px"></div>
+
+<!-- Title -->
+<div style="position: absolute; left: 32px; top: 72px; width: 1376px; display: flex; align-items: flex-end; gap: 16px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div class="lbl" style="font-size: 11px">Crew sheet</div>
+    <h1 style="margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -0.01em">Who works on your ad</h1>
+  </div>
+  <span style="flex: 1"></span>
+  <span style="font-size: 13px; color: #4A4F5C; padding-bottom: 4px">Five make the ad. Two house agents read and check. Every line they say is signed.</span>
+</div>
+
+<!-- Group labels -->
+<div style="position: absolute; left: 32px; top: 146px; width: 958px; display: flex; align-items: center; gap: 10px">
+  <span class="lbl" style="font-size: 11px; color: #4A4F5C">Makes the ad</span>
+  <span style="flex: 1; height: 1px; background: #D6DAE2"></span>
+</div>
+<div style="position: absolute; left: 1032px; top: 146px; width: 376px; display: flex; align-items: center; gap: 10px">
+  <span class="lbl" style="font-size: 11px; color: #4A4F5C">House agents · in every Napkin tool</span>
+  <span style="flex: 1; height: 1px; background: #D6DAE2"></span>
+</div>
+
+<!-- Cards -->
+<div style="position: absolute; left: 32px; top: 172px; display: flex; gap: 12px">
+
+  <!-- Dex -->
+  <article class="card" aria-label="Dex, directs">
+    <div class="tile" style="background: rgba(47,100,245,0.08)">
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips." style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name" style="color: #1E4ED8">Dex</span><span class="job">· directs</span></div>
+    <div class="role">Plans the shots and writes each prompt.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">Storyboard node and editor, a shot's camera fields, "Insert a shot here"</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Dex · directs</span>I planned six shots from the script.</div>
+    <div class="say"><span class="sayer">Dex · directs</span>Camera goes low and wide. Only shot 5 changes.</div>
+  </article>
+
+  <!-- Skye -->
+  <article class="card" aria-label="Skye, scripts">
+    <div class="tile" style="background: rgba(255,106,85,0.10)">
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name">Skye</span><span class="job">· scripts</span></div>
+    <div class="role">Drafts the script and rewrites marked lines.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">Script node and editor, drafts in place, the VO column</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Skye · scripts</span>I tightened scene 3 so the ad fits 15 s.</div>
+    <div class="say"><span class="sayer">Skye · scripts</span>"Lumen. Drink the morning." runs long for the end card. Trim it?</div>
+  </article>
+
+  <!-- Wren -->
+  <article class="card" aria-label="Wren, renders">
+    <div class="tile" style="background: #FFF7E0">
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Wren, Makes frames and clips on Runway." style="--af-phase:0.939"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 10 L19.77 21.18 L7.83 21.75 L17.15 29.22 L14.01 40.75 L24 34.2 L33.99 40.75 L30.85 29.22 L40.17 21.75 L28.23 21.18Z" fill="var(--af-marigold)"></path><g class="af-emblem"><path d="M24 27 Q24.6 30.4 28 31 Q24.6 31.6 24 35 Q23.4 31.6 20 31 Q23.4 30.4 24 27Z" fill="var(--af-mark)"></path></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name">Wren</span><span class="job">· renders</span></div>
+    <div class="role">On screen while Runway makes a frame or clip.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">Empty frames and clips, the Video board, the jobs list</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Wren · renders</span>I'm rendering clip 4 on Runway. About 0:40 left.</div>
+    <div class="say"><span class="sayer">Wren · renders</span>Frame 6 is ready. Sai started it.</div>
+  </article>
+
+  <!-- Rhea -->
+  <article class="card" aria-label="Rhea, retouches">
+    <div class="tile" style="background: rgba(108,211,162,0.14)">
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Rhea, Cut-outs, fills and upscales." style="--af-phase:0.497"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M9.5 40 V26.5 A14.5 14.5 0 0 1 38.5 26.5 V40Z" fill="var(--af-mint)"></path><g class="af-emblem"><g fill="var(--af-mark)"><circle cx="20.4" cy="30" r="1.3"></circle><circle cx="24" cy="30" r="1.3"></circle><circle cx="27.6" cy="30" r="1.3"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name">Rhea</span><span class="job">· retouches</span></div>
+    <div class="role">Cuts out, fills and upscales in a frame.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">Image editor: cut-out, fill the area, upscale</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Rhea · retouches</span>I filled the area you circled. Keep it or try again?</div>
+    <div class="say"><span class="sayer">Rhea · retouches</span>I cut <span class="ref">@maya</span> out of frame 4.</div>
+  </article>
+
+  <!-- Edie -->
+  <article class="card" aria-label="Edie, edits">
+    <div class="tile" style="background: rgba(125,82,244,0.10)">
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Edie, Splices moments and renders the ad." style="--af-phase:0.347"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 7.5 L32.5 16 L24 24.5 L15.5 16Z" fill="var(--af-iris)"></path><path d="M24 22.5 L33.5 32 L24 41.5 L14.5 32Z" fill="var(--af-iris)"></path><path d="M32.5 19.4 L37.1 24 L32.5 28.6 L27.9 24Z" fill="var(--af-iris)"></path><g class="af-emblem"><g fill="var(--af-mark)"><rect x="19.2" y="32.3" width="2.3" height="3.2" rx="0.4"></rect><rect x="22.7" y="29.9" width="2.3" height="5.6" rx="0.4"></rect><rect x="26.2" y="27.5" width="2.3" height="8" rx="0.4"></rect></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="20.099999999999998" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.7" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name">Edie</span><span class="job">· edits</span></div>
+    <div class="role">Splices moments and renders the ad.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">Video editor timeline, patch windows, Make video</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Edie · edits</span>I patched <span style="font-family: 'Geist Mono', monospace">0:02–0:04</span> of shot 4 and spliced it in.</div>
+    <div class="say"><span class="sayer">Edie · edits</span>The ad is ready: v3, 15 s, 16:9.</div>
+  </article>
+
+  <span aria-hidden="true" style="width: 18px; flex: none"></span>
+
+  <!-- Ellis -->
+  <article class="card" aria-label="Ellis, reads, house agent">
+    <div class="tile" style="background: #F5F6F8">
+      <span class="house">house agent</span>
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Ellis, Reads your notes back before anything is made again." style="--af-phase:0.207"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 8 L41.5 40 L6.5 40Z" fill="var(--plan)"></path><g class="af-emblem"><g><rect x="19.4" y="29.3" width="9.2" height="6.4" rx="0.8" fill="var(--plan-eye)" opacity="0.88"></rect><path d="M21.2 31.4 h5.6 M21.2 33.6 h4" stroke="var(--plan)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name">Ellis</span><span class="job">· reads</span></div>
+    <div class="role">Turns notes and handwriting into text.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">Sketches on the canvas, notes on a frame or a moment, Convert</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Ellis · reads</span>I converted your handwriting. Undo brings the ink back.</div>
+    <div class="say"><span class="sayer">Ellis · reads</span>I read your note at 0:02: "her eyes open".</div>
+  </article>
+
+  <!-- Jude -->
+  <article class="card" aria-label="Jude, checks, house agent">
+    <div class="tile" style="background: #F5F6F8">
+      <span class="house">house agent</span>
+      <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="72" height="96" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you." style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px"><span class="name">Jude</span><span class="job">· checks</span></div>
+    <div class="role">Checks each result against its shot.</div>
+    <div style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Shows up in</span><span class="where">The check mark on frames and clips, retries in the jobs list</span></div>
+    <span style="flex: 1"></span>
+    <div class="say"><span class="sayer">Jude · checks</span>Frame 2 matches <span class="ref">@maya_side</span> and <span class="ref">@ext_beach</span>.</div>
+    <div class="say"><span class="sayer">Jude · checks</span>Clip 5 lost the bottle label. I'm trying once more.</div>
+  </article>
+</div>
+
+<!-- States at 24px -->
+<section aria-label="Small figures and their states" style="position: absolute; left: 32px; top: 684px; width: 1376px; box-sizing: border-box; padding: 16px 20px 18px; background: rgba(255,255,255,0.9); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; align-items: center; gap: 20px">
+    <span class="lbl" style="font-size: 11px">At 24 px · on nodes, in job cards, next to a signature</span>
+    <span style="flex: 1"></span>
+    <span style="font-size: 12px; color: #4A4F5C"><span style="font-weight: 600; color: #14161B">Idle</span> · a slow bob, the odd blink</span>
+    <span style="font-size: 12px; color: #4A4F5C"><span style="font-weight: 600; color: #14161B">Working</span> · leans in, steps, motion lines</span>
+    <span style="font-size: 12px; color: #4A4F5C"><span style="font-weight: 600; color: #14161B">Needs you</span> · a speech bubble with "!"</span>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px">
+
+    <!-- Dex -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Dex <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· directs</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips." style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips. — working" style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Dex, Plans the shots, draws the frames and makes the clips. — needs you" style="--af-phase:0.351"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="37" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="37" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M40 26 L32 39.86 L16 39.86 L8 26 L16 12.14 L32 12.14Z" fill="var(--af-cobalt)"></path><g class="af-emblem"><g><rect x="19" y="26.6" width="10" height="6.8" rx="1.2" stroke="var(--af-mark)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></rect><circle cx="24" cy="30" r="1.1" fill="var(--af-mark)"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+    <!-- Skye -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Skye <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· scripts</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Skye, Drafts and rewrites the script." style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Skye, Drafts and rewrites the script. — working" style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Skye, Drafts and rewrites the script. — needs you" style="--af-phase:0.924"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M14 8.5 H34 V38 H14Z" fill="var(--af-coral)"></path><g class="af-emblem"><g><rect x="19.4" y="25.8" width="9.2" height="6.4" rx="0.8" fill="var(--af-mark)" opacity="0.88"></rect><path d="M21.2 27.9 h5.6 M21.2 30.1 h4" stroke="var(--af-coral)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+    <!-- Wren -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Wren <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· renders</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Wren, Makes frames and clips on Runway." style="--af-phase:0.939"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 10 L19.77 21.18 L7.83 21.75 L17.15 29.22 L14.01 40.75 L24 34.2 L33.99 40.75 L30.85 29.22 L40.17 21.75 L28.23 21.18Z" fill="var(--af-marigold)"></path><g class="af-emblem"><path d="M24 27 Q24.6 30.4 28 31 Q24.6 31.6 24 35 Q23.4 31.6 20 31 Q23.4 30.4 24 27Z" fill="var(--af-mark)"></path></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Wren, Makes frames and clips on Runway. — working" style="--af-phase:0.939"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 10 L19.77 21.18 L7.83 21.75 L17.15 29.22 L14.01 40.75 L24 34.2 L33.99 40.75 L30.85 29.22 L40.17 21.75 L28.23 21.18Z" fill="var(--af-marigold)"></path><g class="af-emblem"><path d="M24 27 Q24.6 30.4 28 31 Q24.6 31.6 24 35 Q23.4 31.6 20 31 Q23.4 30.4 24 27Z" fill="var(--af-mark)"></path></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Wren, Makes frames and clips on Runway. — needs you" style="--af-phase:0.939"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 10 L19.77 21.18 L7.83 21.75 L17.15 29.22 L14.01 40.75 L24 34.2 L33.99 40.75 L30.85 29.22 L40.17 21.75 L28.23 21.18Z" fill="var(--af-marigold)"></path><g class="af-emblem"><path d="M24 27 Q24.6 30.4 28 31 Q24.6 31.6 24 35 Q23.4 31.6 20 31 Q23.4 30.4 24 27Z" fill="var(--af-mark)"></path></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="23.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+    <!-- Rhea -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Rhea <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· retouches</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Rhea, Cut-outs, fills and upscales." style="--af-phase:0.497"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M9.5 40 V26.5 A14.5 14.5 0 0 1 38.5 26.5 V40Z" fill="var(--af-mint)"></path><g class="af-emblem"><g fill="var(--af-mark)"><circle cx="20.4" cy="30" r="1.3"></circle><circle cx="24" cy="30" r="1.3"></circle><circle cx="27.6" cy="30" r="1.3"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Rhea, Cut-outs, fills and upscales. — working" style="--af-phase:0.497"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M9.5 40 V26.5 A14.5 14.5 0 0 1 38.5 26.5 V40Z" fill="var(--af-mint)"></path><g class="af-emblem"><g fill="var(--af-mark)"><circle cx="20.4" cy="30" r="1.3"></circle><circle cx="24" cy="30" r="1.3"></circle><circle cx="27.6" cy="30" r="1.3"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Rhea, Cut-outs, fills and upscales. — needs you" style="--af-phase:0.497"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M9.5 40 V26.5 A14.5 14.5 0 0 1 38.5 26.5 V40Z" fill="var(--af-mint)"></path><g class="af-emblem"><g fill="var(--af-mark)"><circle cx="20.4" cy="30" r="1.3"></circle><circle cx="24" cy="30" r="1.3"></circle><circle cx="27.6" cy="30" r="1.3"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+    <!-- Edie -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Edie <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· edits</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Edie, Splices moments and renders the ad." style="--af-phase:0.347"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 7.5 L32.5 16 L24 24.5 L15.5 16Z" fill="var(--af-iris)"></path><path d="M24 22.5 L33.5 32 L24 41.5 L14.5 32Z" fill="var(--af-iris)"></path><path d="M32.5 19.4 L37.1 24 L32.5 28.6 L27.9 24Z" fill="var(--af-iris)"></path><g class="af-emblem"><g fill="var(--af-mark)"><rect x="19.2" y="32.3" width="2.3" height="3.2" rx="0.4"></rect><rect x="22.7" y="29.9" width="2.3" height="5.6" rx="0.4"></rect><rect x="26.2" y="27.5" width="2.3" height="8" rx="0.4"></rect></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="20.099999999999998" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.7" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Edie, Splices moments and renders the ad. — working" style="--af-phase:0.347"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 7.5 L32.5 16 L24 24.5 L15.5 16Z" fill="var(--af-iris)"></path><path d="M24 22.5 L33.5 32 L24 41.5 L14.5 32Z" fill="var(--af-iris)"></path><path d="M32.5 19.4 L37.1 24 L32.5 28.6 L27.9 24Z" fill="var(--af-iris)"></path><g class="af-emblem"><g fill="var(--af-mark)"><rect x="19.2" y="32.3" width="2.3" height="3.2" rx="0.4"></rect><rect x="22.7" y="29.9" width="2.3" height="5.6" rx="0.4"></rect><rect x="26.2" y="27.5" width="2.3" height="8" rx="0.4"></rect></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="20.099999999999998" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.7" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Edie, Splices moments and renders the ad. — needs you" style="--af-phase:0.347"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="36" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="36" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 7.5 L32.5 16 L24 24.5 L15.5 16Z" fill="var(--af-iris)"></path><path d="M24 22.5 L33.5 32 L24 41.5 L14.5 32Z" fill="var(--af-iris)"></path><path d="M32.5 19.4 L37.1 24 L32.5 28.6 L27.9 24Z" fill="var(--af-iris)"></path><g class="af-emblem"><g fill="var(--af-mark)"><rect x="19.2" y="32.3" width="2.3" height="3.2" rx="0.4"></rect><rect x="22.7" y="29.9" width="2.3" height="5.6" rx="0.4"></rect><rect x="26.2" y="27.5" width="2.3" height="8" rx="0.4"></rect></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="20.099999999999998" y="13.7" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.7" y="13.7" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+    <!-- Ellis -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Ellis <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· reads · house</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Ellis, Reads your notes back before anything is made again." style="--af-phase:0.207"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 8 L41.5 40 L6.5 40Z" fill="var(--plan)"></path><g class="af-emblem"><g><rect x="19.4" y="29.3" width="9.2" height="6.4" rx="0.8" fill="var(--plan-eye)" opacity="0.88"></rect><path d="M21.2 31.4 h5.6 M21.2 33.6 h4" stroke="var(--plan)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Ellis, Reads your notes back before anything is made again. — working" style="--af-phase:0.207"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 8 L41.5 40 L6.5 40Z" fill="var(--plan)"></path><g class="af-emblem"><g><rect x="19.4" y="29.3" width="9.2" height="6.4" rx="0.8" fill="var(--plan-eye)" opacity="0.88"></rect><path d="M21.2 31.4 h5.6 M21.2 33.6 h4" stroke="var(--plan)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Ellis, Reads your notes back before anything is made again. — needs you" style="--af-phase:0.207"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M24 8 L41.5 40 L6.5 40Z" fill="var(--plan)"></path><g class="af-emblem"><g><rect x="19.4" y="29.3" width="9.2" height="6.4" rx="0.8" fill="var(--plan-eye)" opacity="0.88"></rect><path d="M21.2 31.4 h5.6 M21.2 33.6 h4" stroke="var(--plan)" stroke-width="0.9" stroke-linecap="round"></path></g></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="25.9" y="22.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+    <!-- Jude -->
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: #F5F6F8">
+      <span style="font-size: 12px; font-weight: 600">Jude <span style="font-family: 'Geist Mono', monospace; font-weight: 400; color: #4A4F5C">· checks · house</span></span>
+      <div style="display: flex; justify-content: space-between">
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you." style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">idle</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="working" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you. — working" style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg></div><span class="cap">working</span></div>
+        <div class="cell"><div class="mini"><svg class="agent-figure" data-state="needs-you" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Jude, Checks each result as it lands, and says when one needs you. — needs you" style="--af-phase:0.484"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="34" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="34" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g transform="rotate(-5 24 23.5)"><path d="M11.5 11 H36.5 V36 H11.5Z" fill="var(--plan)"></path><g class="af-emblem"><path d="M20.2 27.5 l2.6 2.6 l5 -5" stroke="var(--plan-eye)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></g><g class="af-eyes" fill="var(--plan-eye)"><rect x="19.7" y="17.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="17.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g><g class="af-badge"><circle class="af-badge-ring" cx="40" cy="8" r="6"></circle><path class="af-badge-bubble" d="M40 2 a6 6 0 1 1 -3.9 10.55 l-2.6 1.95 l1.3 -3.5 A6 6 0 0 1 40 2Z"></path><path class="af-badge-mark" d="M40 5 v3.6"></path><circle class="af-badge-dot" cx="40" cy="11" r="0.95"></circle></g></svg></div><span class="cap">needs you</span></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
