@@ -9,7 +9,12 @@
 .fragment p[data-type="parenthetical"]::after, .sp-static p[data-type="parenthetical"]::after { content: ")"; }
 .fragment p[data-type="dialogue"], .sp-static p[data-type="dialogue"] { margin: 0 0 0.6em; padding: 0 18% 0 22%; }
 .fragment p[data-type="direction"], .sp-static p[data-type="direction"] {
+  margin-top: 0.4em; padding: 8px 10px 8px 10px; border-left: 2px solid var(--tool); background: var(--tool-soft); border-radius: 0 8px 8px 0; font-family: var(--f-display);
+}
 .fragment p[data-type="direction"]::before {
+  content: "Direction"; display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tool-ink); margin-bottom: 2px;
+}
+.sp-static .mention.unknown, .fragment .mention.unknown { color: inherit; text-decoration: underline wavy var(--warn); text-underline-offset: 3px; font-weight: 500; }
 .fragment p.is-empty::after, .fragment p.is-editor-empty::after { content: attr(data-placeholder); color: var(--ink3); pointer-events: none; }
 .fragment p.is-empty:first-child::after { float: none; }
 .fragment .mention, span[data-type="mention"], .sp-static .mention { color: var(--tool-ink); font-weight: 600; }
