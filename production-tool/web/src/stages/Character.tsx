@@ -444,7 +444,8 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits }: 
   }
 
   const preview = ctrl.preview(ids)
-  const usable = preview.inputs.length + preview.drawings + preview.notes.length > 0
+  // A sketch area counts on its own: its strokes are the sketch, and words are optional (Wren asks).
+  const usable = preview.inputs.length + preview.drawings + preview.notes.length + (preview.sketch ? 1 : 0) > 0
   const single = meaningful.length === 1 ? imageOf(meaningful[0]) : undefined
   const singleImage = single?.asset ? single : undefined
   const named = singleImage ? ctrl.nameOn(singleImage.id, doc) : undefined
