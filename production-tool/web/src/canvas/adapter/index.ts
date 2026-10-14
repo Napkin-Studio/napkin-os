@@ -7,12 +7,43 @@
 
 import type { CanvasEngine, CanvasExportFile, CanvasSnapshot, EngineId } from '../core/canvasAdapter'
 
-/** ?engine=own or ?engine=excalidraw for one person, else the remote config's ownCanvas, else Excalidraw. */
-export function engineChoice(search: string, flags?: { ownCanvas?: boolean } | null): EngineId {
+const REMEMBER = 'napkin.canvasEngine'
+
+/** This browser's storage for the per-person choice; null where storage is blocked. */
+function local(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * ?engine=own or ?engine=excalidraw for one person (remembered in this browser, since the app's
+ * routes drop the query), else the remote config's ownCanvas, else Excalidraw.
+ */
+export function engineChoice(search: string, flags?: { ownCanvas?: boolean } | null, store = local()): EngineId {
   const asked = new URLSearchParams(search).get('engine')
-  if (asked === 'own' || asked === 'excalidraw') return asked
+  if (asked === 'own' || asked === 'excalidraw') {
+    try {
+      store?.setItem(REMEMBER, asked)
+    } catch {
+      // not remembered
+    }
+    return asked
+  }
+  let kept: string | null
+  try {
+    kept = store?.getItem(REMEMBER) ?? null
+  } catch {
+    kept = null
+  }
+  if (kept === 'own' || kept === 'excalidraw') return kept
   return flags?.ownCanvas ? 'own' : 'excalidraw'
 }
+
+// Read the query when the app loads, before its router replaces the URL.
+engineChoice(globalThis.location?.search ?? '', null)
 
 export async function loadEngine(id: EngineId): Promise<CanvasEngine> {
   if (id === 'own') return (await import('./own/engine')).ownEngine

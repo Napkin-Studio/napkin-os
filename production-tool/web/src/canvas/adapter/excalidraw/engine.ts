@@ -21,7 +21,8 @@ export const excalidrawEngine: CanvasEngine = {
         initial,
         onApi: (api) => {
           if (adapter) return
-          adapter = new ExcalidrawAdapter(api, { setTheme: render, destroy: () => root.unmount() })
+          // Unmounting inside another root's commit (the stage's effect cleanup) is deferred a task.
+          adapter = new ExcalidrawAdapter(api, { setTheme: render, destroy: () => void setTimeout(() => root.unmount(), 0) })
           resolve(adapter)
         },
         onChange: opts.onChange,

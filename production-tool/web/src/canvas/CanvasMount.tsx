@@ -28,19 +28,33 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
     const el = host.current
     if (!el) return
     let gone = false
+    // Each mount gets its own slot: a mount that is cleaned up before its engine has loaded (React's
+    // strict double effect) must never share a container with the next one.
+    const slot = document.createElement('div')
+    slot.style.cssText = 'position:absolute;inset:0'
+    el.appendChild(slot)
+    let mine: CanvasAdapter | null = null
     const choice = engineChoice(globalThis.location?.search ?? '', remoteConfig?.flags)
     void loadEngine(engineToMount(choice, initial))
-      .then((engine) => engine.mount(el, { initial, onChange: () => cbs.current.onChange(), theme }))
+      .then((engine) => engine.mount(slot, { initial, onChange: () => cbs.current.onChange(), theme }))
       .then((a) => {
-        if (gone) return a.destroy()
+        mine = a
+        if (gone) {
+          a.destroy()
+          slot.remove()
+          return
+        }
         adapter.current = a
         cbs.current.onReady(a)
       })
       .catch((e) => console.warn('the canvas engine did not load', e))
     return () => {
       gone = true
-      adapter.current?.destroy()
-      adapter.current = null
+      if (mine) {
+        mine.destroy()
+        slot.remove()
+      }
+      if (adapter.current === mine) adapter.current = null
     }
     // The engine mounts once per stage; theme changes go through setTheme below.
     // eslint-disable-next-line react-hooks/exhaustive-deps

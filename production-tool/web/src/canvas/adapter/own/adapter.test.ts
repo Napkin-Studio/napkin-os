@@ -82,6 +82,16 @@ describe('choosing the engine', () => {
     expect(engineChoice('?engine=other', null)).toBe('excalidraw')
   })
 
+  it('remembers ?engine= in this browser, since the app’s routes drop the query', () => {
+    const kv = new Map<string, string>()
+    const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v) }
+    expect(engineChoice('?engine=own', null, store)).toBe('own')
+    expect(engineChoice('', { ownCanvas: false }, store)).toBe('own')
+    expect(engineChoice('?engine=excalidraw', null, store)).toBe('excalidraw')
+    expect(engineChoice('', { ownCanvas: true }, store)).toBe('excalidraw')
+    expect(engineChoice('', { ownCanvas: true }, null)).toBe('own')
+  })
+
   it('a saved scene opens in the engine that made it; the choice applies to an empty project', () => {
     const ex = { elements: [{ id: 'a', type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }], files: {} }
     const own = { ...ex, engine: 'own' as const }
