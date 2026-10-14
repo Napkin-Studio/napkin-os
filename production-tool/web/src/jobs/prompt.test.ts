@@ -123,6 +123,16 @@ describe('storyboard from a line', () => {
     expect(sent[0].input.script).not.toContain('Something else')
   })
 
+  it('plans on the storyboard it started from, a second one too (+ Node)', async () => {
+    const { store, deps, sent } = await project()
+    const second = id('storyboard')
+    await systemUpdate(store, (d) => { d.storyboards[second] = { id: second, v: 1, field_v: {}, title: 'Storyboard 2', ratio: '16:9', target_s: 15 } }, 'add a storyboard')
+    await store.flush()
+    await storyboardFromLine(deps, second, 'A runner drinks water at dawn.')
+    expect(sent).toHaveLength(1)
+    expect(sent[0].purpose).toEqual({ for: 'shot_list', storyboardId: second })
+  })
+
   it('stops on an unknown @name before anything is sent', async () => {
     const { store, deps, sent } = await project()
     await expect(storyboardFromLine(deps, mainStoryboard(doc(store))!.id, 'A @jogger runs past.')).rejects.toThrow('No reference called @jogger')

@@ -135,8 +135,8 @@ export async function ideaPlanInput(deps: FrameDeps, storyboardId: Id, idea: str
 }
 
 /**
- * Dex plans an empty storyboard from a line (decision 1). Today's job layer plans the project's
- * storyboard (model/selectors mainStoryboard); a plan already running is joined, never started twice.
+ * Dex plans an empty storyboard from a line (decision 1), on that storyboard (any node, not only the
+ * project's first); a plan already running there is joined, never started twice.
  */
 export async function storyboardFromLine(deps: FrameDeps, storyboardId: Id, line: string, scopeNode: Id = storyboardId): Promise<{ jobId: string; joined: boolean }> {
   const words = line.trim()
@@ -144,11 +144,12 @@ export async function storyboardFromLine(deps: FrameDeps, storyboardId: Id, line
   if (!words && !scriptHasWords(d, storyboardId)) throw new Error(NO_WORDS.storyboard)
   const unknown = unknownName(d, words)
   if (unknown) throw new Error(unknown)
-  if (mainStoryboard(d)?.id !== storyboardId) throw new Error('Dex plans the project\'s first storyboard for now, and this is another one.')
-  const running = runningPlan(d)
+  // The plan lands on the node it started from (planOrJoin's targeting): joined when one runs there.
+  const running = runningPlan(d, storyboardId)
   if (running) return { jobId: running, joined: true }
   const input = await ideaPlanInput(deps, storyboardId, words, scopeNode)
-  return { jobId: await deps.runner.submit('shot_list', input, [], { for: 'shot_list' }), joined: false }
+  const ctx = storyboardId !== mainStoryboard(d)?.id ? { for: 'shot_list' as const, storyboardId } : { for: 'shot_list' as const }
+  return { jobId: await deps.runner.submit('shot_list', input, [], ctx), joined: false }
 }
 
 /** The role a link from `from` into `to` takes, by the linking rules; null with the reason when it may not. */

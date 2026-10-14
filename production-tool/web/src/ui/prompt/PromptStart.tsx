@@ -203,7 +203,7 @@ function StoryboardStart({ storyboardId, fromScript, place, scopeNode }: { story
         <Signed agent="dex" />
         <p className="pstart-line">{PROMPT_COPY.storyboard.fromScript}</p>
         <div className="pstart-actions">
-          <button className="btn sm primary" disabled={busy} onClick={() => void attempt(() => planOrJoin(services))}>Plan shots</button>
+          <button className="btn sm primary" disabled={busy} onClick={() => void attempt(() => planOrJoin(services, { storyboardId }))}>Plan shots</button>
         </div>
         {busy && <AtWork agent="dex" line={PROMPT_COPY.storyboard.busy} />}
         {error && <div className="pstart-error" role="alert">{error}</div>}
