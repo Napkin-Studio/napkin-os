@@ -1,8 +1,11 @@
 // The select tool (features/engine-select.clan): DOM-free, driven by the input
 // router's press, drag and release in scene coordinates.
 //
-// - A click selects the topmost element there, with its whole outermost group;
-//   shift-click adds or removes it.
+// - A click selects the topmost element there, with its whole outermost group
+//   (groupIds run innermost to outermost, as Excalidraw's and core/nodes.ts read
+//   them); shift-click adds or removes it.
+// - Group adds a new outermost group to the selection and Ungroup takes the
+//   outermost one off, each one undoable step (canvas-edit-tools; ui-behaviour 3.8).
 // - A press on empty space starts a marquee (mouse, touch) or a lasso (pen); at
 //   release it selects what lies inside (the whole box for a marquee, the centre
 //   for a lasso), added to the selection with shift.
@@ -48,10 +51,12 @@ export class SelectTool {
   private dragFrom: Pt | null = null
   private additive = false
   private readonly cbs = new Set<() => void>()
+  private readonly newId: () => string
 
-  constructor(scene: SceneStore, hit: (x: number, y: number) => ElementRecord | undefined) {
+  constructor(scene: SceneStore, hit: (x: number, y: number) => ElementRecord | undefined, opts: { newId?: () => string } = {}) {
     this.scene = scene
     this.hit = hit
+    this.newId = opts.newId ?? (() => `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`)
   }
 
   onChange(cb: () => void): () => void {
@@ -63,11 +68,55 @@ export class SelectTool {
     for (const cb of this.cbs) cb()
   }
 
-  /** An element and the rest of its outermost group. */
+  /** An element and the rest of its outermost group (the last of its groupIds). */
   private withGroup(r: ElementRecord): string[] {
-    const g = r.groupIds[0]
+    const g = r.groupIds.at(-1)
     if (!g) return [r.id]
-    return this.scene.all().filter((x) => x.groupIds[0] === g).map((x) => x.id)
+    return this.scene.all().filter((x) => x.groupIds.includes(g)).map((x) => x.id)
+  }
+
+  /** The selection's units: each outermost group once, and each ungrouped element. */
+  private units(): Map<string, string[]> {
+    const out = new Map<string, string[]>()
+    for (const id of this.selected) {
+      const r = this.scene.get(id)
+      if (!r) continue
+      const key = r.groupIds.at(-1) ?? `#${id}`
+      out.set(key, [...(out.get(key) ?? []), id])
+    }
+    return out
+  }
+
+  /** What is selected: nothing, one thing, one whole group (ink when all its members are pen strokes), or several things. */
+  selectionKind(): { kind: 'none' } | { kind: 'one' } | { kind: 'group'; group: string; ink: boolean; count: number } | { kind: 'several'; count: number } {
+    const units = this.units()
+    if (!units.size) return { kind: 'none' }
+    if (units.size > 1) return { kind: 'several', count: units.size }
+    const [[key, ids]] = [...units]
+    if (key.startsWith('#')) return { kind: 'one' }
+    const members = this.scene.all().filter((r) => r.groupIds.includes(key))
+    const ink = members.every((r) => r.kind === 'stroke' && r.props.tool !== 'highlighter')
+    return { kind: 'group', group: key, ink, count: Math.max(ids.length, members.length) }
+  }
+
+  /** Group the selection (two or more things) under a new outermost group, as one step. Returns its id, or null. */
+  group(): string | null {
+    if (this.units().size < 2) return null
+    const g = this.newId()
+    const recs = [...this.selected].map((id) => this.scene.get(id)).filter((r): r is ElementRecord => !!r && !r.locked)
+    if (recs.length < 2) return null
+    this.scene.change((tx) => tx.put(recs.map((r) => ({ ...r, groupIds: [...r.groupIds, g] }))))
+    this.changed()
+    return g
+  }
+
+  /** Take the outermost group off the selected elements, as one step. False when nothing was grouped. */
+  ungroup(): boolean {
+    const recs = [...this.selected].map((id) => this.scene.get(id)).filter((r): r is ElementRecord => !!r && !r.locked && r.groupIds.length > 0)
+    if (!recs.length) return false
+    this.scene.change((tx) => tx.put(recs.map((r) => ({ ...r, groupIds: r.groupIds.slice(0, -1) }))))
+    this.changed()
+    return true
   }
 
   /** The ids and everything on the boards (and frames) among them, at any depth. */
