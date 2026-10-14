@@ -358,6 +358,7 @@ jobs:
           cache-dependency-path: |
             production-tool/web/package-lock.json
             production-tool/clan-store/package-lock.json
+            production-tool/canvas-engine/package-lock.json
       - name: CLAN store — build napkin-wasm, lint, test
         working-directory: production-tool/clan-store
         run: |
@@ -365,6 +366,16 @@ jobs:
           npm run build
           npm run lint
           npm test
+      # Our own canvas engine (features/canvas-engine.clan): its lint and tests, then the PR
+      # bench on the seed-1 G3 scene: storage bytes, memory caps, and draw-time CPU under 2x
+      # bench/baseline.json relative to a control timed in the same job (features/engine-ci.clan).
+      - name: Canvas engine — lint, test, bench
+        working-directory: production-tool/canvas-engine
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run bench
       - name: Web — lint, test, build
         if: hashFiles('production-tool/web/package.json') != ''
         working-directory: production-tool/web
@@ -395,7 +406,7 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           if git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD |
-             grep -qE '^(Dockerfile|\.dockerignore|production-tool/(web|clan-store|contracts)/)'; then
+             grep -qE '^(Dockerfile|\.dockerignore|production-tool/(web|clan-store|contracts|canvas-engine)/)'; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
@@ -443,6 +454,7 @@ jobs:
             app/package-lock.json
             production-tool/web/package-lock.json
             production-tool/clan-store/package-lock.json
+            production-tool/canvas-engine/package-lock.json
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo registry

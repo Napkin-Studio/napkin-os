@@ -89,8 +89,8 @@ else
         want[middleware]=1 ;;
       mock-backend/*|mock-middleware/*)
         want[mock-backend]=1 ;;
-      production-tool/web/*|production-tool/clan-store/*|production-tool/contracts/*)
-        # napkin-web's image bundles the tool's web app (Dockerfile, production stage)
+      production-tool/web/*|production-tool/clan-store/*|production-tool/contracts/*|production-tool/canvas-engine/*)
+        # napkin-web's image bundles the tool's web app and the canvas engine it imports (Dockerfile, production stage)
         want[production-tool]=1; want[image]=1 ;;
       production-tool/*)
         want[production-tool]=1 ;;
@@ -214,6 +214,11 @@ suite_production-tool() {
   ( cd production-tool/clan-store &&
     { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
     npm run -s build && npm run -s lint && npm test ) &&
+  # The canvas engine (features/canvas-engine.clan): lint, tests, and the PR bench on the
+  # seed-1 G3 scene (byte, memory and draw-time checks; features/engine-ci.clan).
+  ( cd production-tool/canvas-engine &&
+    { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
+    npm run -s lint && npm test && npm run -s bench ) &&
   if [[ -f production-tool/web/package.json ]]; then
     ( cd production-tool/web &&
       { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
