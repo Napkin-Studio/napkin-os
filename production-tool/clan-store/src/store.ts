@@ -12,7 +12,7 @@
 // LocalPatchBus, live text through LocalTextBus. This store is what they call.
 import { parse as parseYaml } from 'yaml'
 import { APP_SCHEMA } from './app-template.gen'
-import { APP_ID, freshHost, route, type NapkinHost, type WasmSource } from './host'
+import { APP_ID, asBytes, freshHost, HostRefused, route, type NapkinHost, type RawResponse, type WasmSource } from './host'
 import { integrity } from './integrity'
 import { mergePatch } from './merge-patch'
 import { indexedDbPersistence, type Persistence } from './persist'
@@ -52,7 +52,49 @@ export interface ChainEntry {
   [k: string]: unknown
 }
 
-export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: 'interval' | 'accept' | 'manual' }) => Promise<void>
+/**
+ * Why the bytes are posted: the 5-minute interval, a lock (accept), a person's Save (manual), and,
+ * with the canvas checkpoint (features/engine-store.clan), a handoff and an export.
+ */
+export type MirrorReason = 'interval' | 'accept' | 'manual' | 'handoff' | 'export'
+
+export type MirrorPost = (bytes: Uint8Array, meta: { handle: string; reason: MirrorReason }) => Promise<void>
+
+/**
+ * Called before the bytes leave at one of the four checkpoint moments (a mirror post of any reason,
+ * and exportClan as 'export'), so a quiet asset (the canvas checkpoint) can be written first.
+ */
+export type BeforeBytes = (reason: MirrorReason) => Promise<void>
+
+/**
+ * The store's public API (features/engine-store.clan): what ClanDocumentStore does on its own
+ * thread and what the store Worker's proxy (production-tool/web/src/store/client.ts) does from the
+ * main thread. The buses and the web app's ModelStore depend on this, never on the class.
+ */
+export interface ClanStoreApi {
+  load(): Promise<Doc | null>
+  open(bytes: Uint8Array): Promise<Doc>
+  create(init: { person: Person; title?: string; ratio?: string; target_s?: number }): Promise<Doc>
+  get(): Doc
+  documentId(): string
+  setPerson(person: Person): void
+  personClaim(): string
+  patch(mergePatchBody: object, why: Why): Promise<Doc>
+  record(entry: { action: string; rationale?: string; agent?: string; pinned?: boolean; targets?: string[]; cites?: string[] }, opts?: { once?: boolean }): Promise<boolean>
+  exportClan(): Promise<Uint8Array>
+  onChange(cb: (d: Doc) => void): () => void
+  chain(): Promise<ChainEntry[]>
+  flush(): Promise<void>
+  startMirror(post: MirrorPost, opts?: { everyMs?: number; onError?: (e: unknown) => void }): () => void
+  stopMirror(): void
+  mirrorNow(reason?: Exclude<MirrorReason, 'interval'>): Promise<void>
+  /** Store a binary under human/assets/<name> with no decision entry (a quiet write). */
+  writeAsset(name: string, bytes: Uint8Array): Promise<void>
+  /** The bytes of human/assets/<name>, or null. */
+  readAsset(name: string): Promise<Uint8Array | null>
+  setBeforeBytes(fn: BeforeBytes | null): void
+  dispose(): void
+}
 
 /** The contract this build reads. */
 export const CONTRACT = '3'
@@ -127,7 +169,7 @@ export function assertIntegrity(before: Doc | null, after: Doc, what = 'the patc
   if (fresh.length) throw new InvalidDocument(fresh, what)
 }
 
-export class ClanDocumentStore implements DocumentStore {
+export class ClanDocumentStore implements DocumentStore, ClanStoreApi {
   private host: NapkinHost | null = null
   private doc: Doc | null = null
   private docId: string | null = null
@@ -145,6 +187,7 @@ export class ClanDocumentStore implements DocumentStore {
   private revision = 0
   /** `agent action` of every entry in the chain, built on first need. */
   private recorded: Set<string> | null = null
+  private beforeBytes: BeforeBytes | null = null
 
   constructor(opts: ClanStoreOptions = {}) {
     this.wasm = opts.wasm
@@ -310,8 +353,46 @@ export class ClanDocumentStore implements DocumentStore {
   }
 
   async exportClan(): Promise<Uint8Array> {
+    await this.runBeforeBytes('export')
     await this.queue.catch(() => {})
     return this.bytes()
+  }
+
+  /**
+   * Store a binary under human/assets/<name> through the host's /upload-asset with no agent: no
+   * decision entry. The data is unchanged, so listeners are not called; the bytes are saved and the
+   * next interval mirror posts them.
+   */
+  writeAsset(name: string, bytes: Uint8Array): Promise<void> {
+    return this.serial(async () => {
+      const h = this.need()
+      const resp = h.handle('/upload-asset', `name=${encodeURIComponent(name)}`, bytes) as RawResponse
+      if (resp.status !== 200) throw new HostRefused(resp.status, new TextDecoder().decode(asBytes(resp.body)) || `/upload-asset: ${resp.status}`)
+      this.revision++
+      this.scheduleSave()
+    })
+  }
+
+  /** The bytes of human/assets/<name>, or null when the document has none. */
+  async readAsset(name: string): Promise<Uint8Array | null> {
+    await this.queue.catch(() => {})
+    const h = this.need()
+    const resp = h.handle(`/assets/${name}`, '', new Uint8Array()) as RawResponse
+    return resp.status === 200 ? asBytes(resp.body) : null
+  }
+
+  /** What runs before the bytes leave at a checkpoint moment (the canvas checkpoint). */
+  setBeforeBytes(fn: BeforeBytes | null): void {
+    this.beforeBytes = fn
+  }
+
+  private async runBeforeBytes(reason: MirrorReason) {
+    if (!this.beforeBytes || !this.host || !this.doc) return
+    try {
+      await this.beforeBytes(reason)
+    } catch (e) {
+      console.warn(`could not write before the ${reason} bytes`, e)
+    }
   }
 
   onChange(cb: (d: Doc) => void): () => void {
@@ -355,7 +436,7 @@ export class ClanDocumentStore implements DocumentStore {
   }
 
   /** Post the bytes now, whatever changed (e.g. on a lock: reason 'accept'). */
-  mirrorNow(reason: 'accept' | 'manual' = 'manual'): Promise<void> {
+  mirrorNow(reason: Exclude<MirrorReason, 'interval'> = 'manual'): Promise<void> {
     return this.postMirror(reason)
   }
 
@@ -479,9 +560,13 @@ export class ClanDocumentStore implements DocumentStore {
     }
   }
 
-  private async postMirror(reason: 'interval' | 'accept' | 'manual') {
+  private async postMirror(reason: MirrorReason) {
     const m = this.mirror
     if (!m && reason !== 'manual') return
+    if (!this.host || !this.doc) return
+    // The checkpoint moment: a quiet asset may be written first, and goes with these bytes.
+    await this.runBeforeBytes(reason)
+    await this.queue.catch(() => {})
     if (!this.host || !this.doc) return
     const rev = String(this.revision)
     if (reason === 'interval' && m?.lastPosted === rev) return

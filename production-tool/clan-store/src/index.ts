@@ -2,7 +2,7 @@ export type { Doc, DocAsset, DocumentStore, Entity, MapName, Person, Project, Wh
 export { MAP_NAMES } from './types'
 export {
   ClanDocumentStore, CONTRACT, UnsupportedContract, assertIntegrity, newProjectData, newUlidId,
-  type ChainEntry, type ClanStoreOptions, type MirrorPost,
+  type BeforeBytes, type ChainEntry, type ClanStoreApi, type ClanStoreOptions, type MirrorPost, type MirrorReason,
 } from './store'
 export { indexedDbPersistence, memoryPersistence, type Persistence, type Saved } from './persist'
 export { buildExportZip, assetPath, assetExt, clanFileName, sha256Hex, type AssetResolver, type ExportZip } from './bundle'
