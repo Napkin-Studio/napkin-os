@@ -85,6 +85,11 @@ export function strokeOutline(pts: Uint8Array, size: number): number[][] {
   return getStroke(input, { size, thinning: 0.6, smoothing: 0.5, streamline: 0.4, simulatePressure: false, last: true })
 }
 
+/** The outline of a stroke still being drawn (the live-ink canvas), from its points in scene coordinates. */
+export function liveOutline(points: readonly { x: number; y: number; pressure: number }[], size: number, last = false): number[][] {
+  return getStroke(points.map((p) => [p.x, p.y, p.pressure]), { size, thinning: 0.6, smoothing: 0.5, streamline: 0.4, simulatePressure: false, last })
+}
+
 export class Renderer {
   private readonly scene: SceneStore
   private readonly host: RenderHost
