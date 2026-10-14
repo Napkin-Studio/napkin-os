@@ -12,6 +12,7 @@
 
 import { element, type ElementRecord, type Kind, type Plain, type Style, type Tag } from '../model/records'
 import { encodePoints } from '../model/points'
+import { zKeys } from '../model/z'
 
 /** An Excalidraw element, read loosely: only what the tool ever wrote is used. */
 export interface ExcalidrawLike {
@@ -78,9 +79,6 @@ export const NOTICES = {
 const fin = (n: unknown, d = 0) => (typeof n === 'number' && Number.isFinite(n) ? n : d)
 const colour = (c: unknown) => (typeof c === 'string' && c && c !== 'transparent' ? c : undefined)
 
-/** A sortable z key per position: the array order is Excalidraw's paint order. */
-export const zAt = (i: number) => `a${i.toString(36).padStart(6, '0')}`
-
 function tagOf(e: ExcalidrawLike): Tag | null {
   const c = e.customData
   if (!c || typeof c !== 'object' || Array.isArray(c)) return null
@@ -117,10 +115,12 @@ export function convertExcalidraw(scene: { elements?: readonly unknown[]; files?
   const els = (scene?.elements ?? []).filter((e): e is ExcalidrawLike => !!e && typeof e === 'object' && typeof (e as ExcalidrawLike).id === 'string' && typeof (e as ExcalidrawLike).type === 'string')
   const live = els.filter((e) => !e.isDeleted)
   const ids = new Set(live.map((e) => e.id))
+  // Fractional keys in the array's order, Excalidraw's paint order.
+  const zs = zKeys(live.length)
   live.forEach((e, i) => {
     const tag = tagOf(e)
     const base = {
-      id: e.id, z: zAt(i), x: fin(e.x), y: fin(e.y), w: fin(e.width), h: fin(e.height), rotation: fin(e.angle),
+      id: e.id, z: zs[i], x: fin(e.x), y: fin(e.y), w: fin(e.width), h: fin(e.height), rotation: fin(e.angle),
       parentId: e.frameId && ids.has(e.frameId) ? e.frameId : null,
       groupIds: [...(e.groupIds ?? [])].filter((g): g is string => typeof g === 'string'),
       locked: !!e.locked, opacity: Math.min(1, Math.max(0, fin(e.opacity, 100) / 100)),

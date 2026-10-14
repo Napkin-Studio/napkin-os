@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
-import { convertExcalidraw, NOTICES, zAt, type ExcalidrawLike } from '../src/import/excalidraw'
+import { convertExcalidraw, NOTICES, type ExcalidrawLike } from '../src/import/excalidraw'
 import { decodePoints } from '../src/model/points'
 import { validateElement, type ElementRecord } from '../src/model/records'
 import { SceneStore } from '../src/model/store'
@@ -52,7 +52,7 @@ describe('convertExcalidraw', () => {
 
   it('keeps every live id in order, drops the deleted, and every record is napkin/1', () => {
     expect(out.records.map((x) => x.id)).toEqual(SCENE.filter((e) => !e.isDeleted).map((e) => e.id))
-    expect(out.records.map((x) => x.z)).toEqual(out.records.map((_, i) => zAt(i)))
+    expect(new Set(out.records.map((x) => x.z)).size).toBe(out.records.length)
     expect([...out.records.map((x) => x.z)].sort()).toEqual(out.records.map((x) => x.z))
     for (const x of out.records) expect(validateElement(x)).toBe(x)
   })
