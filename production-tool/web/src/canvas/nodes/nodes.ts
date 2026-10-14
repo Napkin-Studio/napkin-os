@@ -25,6 +25,9 @@ const tag = (e: Pick<CanvasElement, 'customData'> | undefined): { kind?: string;
   return { kind: typeof c?.kind === 'string' ? c.kind : undefined, id: typeof c?.id === 'string' ? c.id : undefined }
 }
 
+const entityIn = (doc: ProductionDocument, c: { kind: CardKind; id: string }) =>
+  !!(c.kind === 'script' ? doc.scripts : c.kind === 'storyboard' ? doc.storyboards : doc.videos)?.[c.id]
+
 /** The card a node element shows, if it is one of the document's nodes. */
 export function cardOf(e: CanvasElement): { kind: CardKind; id: string } | null {
   const t = tag(e)
@@ -125,7 +128,9 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
     const ends = e as CanvasElement & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null; role?: string }
     const a = cardOf(byEl.get(ends.startBinding?.elementId ?? '') ?? ({} as CanvasElement))
     const b = cardOf(byEl.get(ends.endBinding?.elementId ?? '') ?? ({} as CanvasElement))
-    if (a && b && ends.role) relink.push({ id, v: 1, field_v: {}, from: { kind: a.kind, id: a.id }, to: { kind: b.kind, id: b.id }, role: ends.role as LinkRole })
+    // Both ends must be in the document: a node coming back with the canvas's undo is put back
+    // there first (CanvasDocSync.nodes), and the link waits for it.
+    if (a && b && ends.role && entityIn(doc, a) && entityIn(doc, b)) relink.push({ id, v: 1, field_v: {}, from: { kind: a.kind, id: a.id }, to: { kind: b.kind, id: b.id }, role: ends.role as LinkRole })
   }
   return { unlink, relink }
 }

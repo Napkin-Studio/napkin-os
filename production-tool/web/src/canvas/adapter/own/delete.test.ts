@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Services } from '../../../app/context'
 import { CanvasController } from '../../controller'
 import { mainScript, mainStoryboard } from '../../../model/selectors'
+import { reconcileLinks } from '../../nodes/nodes'
 import { snapshotDoc } from '../../../test/jobFixtures'
 import { OwnAdapter } from './adapter'
 
@@ -45,6 +46,21 @@ describe('delete on the own engine', () => {
     await ctrl.sync.nodes(a.elements({ includeDeleted: true }))
     expect(doc.get().storyboards[id]).toBeUndefined()
     a.undoScene('undo')
+    await ctrl.sync.nodes(a.elements({ includeDeleted: true }))
+    expect(doc.get().storyboards[id]).toBeDefined()
+  })
+
+  it('a link coming back with its node waits until the node is back in the document', async () => {
+    const { a, doc, ctrl, sb, link } = setup()
+    const id = mainStoryboard(doc.get())!.id
+    const seen = new Set(['link_x'])
+    ctrl.deleteElements([sb.id])
+    await ctrl.sync.nodes(a.elements({ includeDeleted: true }))
+    a.undoScene('undo')
+    // The canvas has the link again, the document not yet the storyboard: no relink (the .clan would refuse it).
+    expect(a.elements().some((e) => e.id === link.id)).toBe(true)
+    expect(doc.get().storyboards[id]).toBeUndefined()
+    expect(reconcileLinks(a.elements(), doc.get(), seen).relink).toEqual([])
     await ctrl.sync.nodes(a.elements({ includeDeleted: true }))
     expect(doc.get().storyboards[id]).toBeDefined()
   })
