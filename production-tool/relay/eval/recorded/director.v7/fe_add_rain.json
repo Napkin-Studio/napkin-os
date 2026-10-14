@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"local\", \"runAs\": \"frame\"}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"add rain. Everything else in @current stays exactly as it is.\", \"refs\": [{\"sha256\": \"sha256:d70ef3340ec3d18a9c4f793db4bfc6c197a3a00f9cf9f7b4dfb6f961996bf0f0\", \"name\": \"current\", \"role\": \"current\"}, {\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"maya_front\", \"role\": \"character\"}], \"ratio\": \"1344:768\"}, \"rationale\": \"'Add rain' changes something in the picture while the camera stays. No region was given, so this is a whole-picture instruction edit that keeps the rest of the frame as it is.\", \"confidence\": 0.93}"
+}

@@ -47,6 +47,22 @@ export interface Camera {
   lens_mm?: number
   macro?: boolean
 }
+/** A change to a shot's camera: the leaves that change, each with its new value (common cameraPatch). */
+export type CameraPatch = Partial<Camera>
+/** The camera fields with a word table (common cameraWords). */
+export type CameraWordField = 'size' | 'angle' | 'movement' | 'movement_speed'
+/** How each camera value is said: the chip label and the phrases that mean it (common cameraWords). */
+export type CameraWords = Record<CameraWordField, Record<string, { label: string; words: string[] }>>
+
+/** Change this frame (director.schema.json#/$defs/frameEdit): how Dex read the words, and what ran. */
+export type FrameReading = 'camera' | 'local' | 'both'
+export interface FrameEditOutput {
+  reading: FrameReading
+  runAs: 'frame' | 'region_edit' | 'none'
+  camera?: CameraPatch
+  maskUnused?: boolean
+  words_as_given?: boolean
+}
 
 export const BEAT_KINDS = ['moment', 'line', 'vo', 'music', 'sound', 'camera'] as const
 export type BeatKind = (typeof BEAT_KINDS)[number]

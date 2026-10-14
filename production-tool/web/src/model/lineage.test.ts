@@ -100,7 +100,8 @@ describe('the decision tree from /chain (spec 3.20)', () => {
     const q = `q_${id('x').slice(2)}`
     const askJob = job('frame_edit', 'dex', { kind: 'shot', id: shot }, { state: 'needs_input' })
     await bus.apply({ patches: [askJob.patch, { op: 'create', entity: 'asks', id: q, base_version: 0, value: {
-      question: { id: q, kind: 'ambiguity', text: 'Bigger how?', options: [{ id: 'camera', label: 'Move the camera in', value: 'camera' }, { id: 'subject', label: 'Make it bigger', value: 'subject' }], allow_text: false },
+      question: { id: q, kind: 'ambiguity', text: 'Bigger how?', options: [{ id: 'camera', label: 'Move the camera in', value: 'camera' }, { id: 'local', label: 'Make it bigger', value: 'local' },
+        { id: 'both', label: 'Both', value: 'both' }], allow_text: false },
       node: { kind: 'shot', id: shot }, job_id: askJob.id, crew: 'dex', state: 'open', answers: [] } }],
     why: { action: 'ask Bigger how?', agent: 'dex', cites: [`${docId}#jobs[${askJob.id}]`] } }, { undo: false })
     await bus.apply({ patches: [

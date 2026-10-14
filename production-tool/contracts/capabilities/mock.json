@@ -23,6 +23,7 @@
       ]
     },
     "region_edit": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}},
+    "frame_edit": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}},
     "clip": {
       "model": "mock",
       "endpoint": "mock://video",

@@ -61,6 +61,17 @@ SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
 # Where a prompt's role lines go: one line per ref role, written from common.schema.json's
 # refRoleTable at load, so the prompt and the role picker never differ (contract 3).
 ROLE_LINES = "<!-- role-lines -->"
+# Where director.v7's camera values and their words go, from common.schema.json's cameraWords
+# (features/frame-change-edit.clan): the chips, the prompt and the passthrough's lexicon read one table.
+CAMERA_WORDS = "<!-- camera-words -->"
+# The shortest verbatim run of the shot's own text that counts as given, not added (_given_words).
+QUOTE_MIN = 20
+# Change this frame (features/frame-change-edit.clan): the readings, the ops it runs as, and the
+# camera leaves that only move the camera (no new still).
+READINGS = ("camera", "local", "both")
+MOVE_LEAVES = {"movement", "movement_speed"}
+# Words that name the continuity frames a frame_edit never has (the old framing would come back).
+CONTINUITY_WORDS = re.compile(r"@(?:anchor|previous)\b|\b(?:anchor|previous) (?:frame|shot|picture|image)\b", re.I)
 # Words that take one thing from a picture: "like @x", "@x's", "the dress of @x", "from @x", "as in @x".
 DONOR = re.compile(r"(?:\blike|\bfrom|\bas in|\bof)\s+@([a-z][a-z0-9_]{2,15})\b|@([a-z][a-z0-9_]{2,15})'s\b")
 
@@ -203,24 +214,83 @@ def _donors_are_objects(job: dict, payload: dict) -> None:
             r["role"] = "object"
 
 
+def _quoted_spans(prompt: str, source: str, covered: set[int]) -> None:
+    """Mark in `covered` every prompt position inside a verbatim run of QUOTE_MIN or more characters
+    of `source`."""
+    if len(source) < QUOTE_MIN or len(prompt) < QUOTE_MIN:
+        return
+    grams = {source[i:i + QUOTE_MIN] for i in range(len(source) - QUOTE_MIN + 1)}
+    for i in range(len(prompt) - QUOTE_MIN + 1):
+        if prompt[i:i + QUOTE_MIN] in grams:
+            covered.update(range(i, i + QUOTE_MIN))
+
+
+def _given_words(prompt: str, payload: dict) -> int:
+    """How much of `prompt` the person gave rather than the director (features/frame-change-edit.clan):
+    their words, plus whatever repeats the shot's own action, direction or condensed direction verbatim
+    in runs of QUOTE_MIN characters or more. An overlap, not added lengths: a paraphrase counts as the
+    director's, and a passage quoted twice counts once. One measure for every op, and the eval's
+    `length` score uses it too."""
+    prompt = prompt or ""
+    text = (payload.get("text") or "").strip()
+    shot = payload.get("shot") if isinstance(payload.get("shot"), dict) else {}
+    covered: set[int] = set()
+    at = prompt.find(text) if text else -1
+    if at >= 0:
+        covered.update(range(at, at + len(text)))
+    for field in ("action", "direction", "direction_condensed"):
+        _quoted_spans(prompt, shot.get(field) or "", covered)
+    return len(covered) + (len(text) if text and at < 0 else 0)
+
+
 def _within_budget(job: dict, op: str, payload: dict) -> None:
     """What the director added beyond the participant's words stays near the op's budget."""
     budget = ADD_BUDGET.get(op)
     if budget is None:
         return
-    added = len(job.get("prompt") or "") - len(payload.get("text") or "")
+    prompt = job.get("prompt") or ""
+    added = len(prompt) - _given_words(prompt, payload)
     if added > budget * 1.5:
         raise DirectorError(f"the director added {added} characters to the words; {op} allows about {budget}")
 
 
+def _plain(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").lower()).strip()
+
+
+def _starts_with(prompt: str, words: str) -> bool:
+    """The prompt begins with the person's words (case, spacing and their closing stop aside)."""
+    w = _plain(words).rstrip(".!?;, ")
+    return not w or _plain(prompt).startswith(w)
+
+
+def _common_const(name: str, contracts: Path = CONTRACTS):
+    return json.loads((contracts / "common.schema.json").read_text())["$defs"][name]["const"]
+
+
 def role_lines(contracts: Path = CONTRACTS) -> str:
-    table = json.loads((contracts / "common.schema.json").read_text())["$defs"]["refRoleTable"]["const"]
+    table = _common_const("refRoleTable", contracts)
     return "\n".join(f"- `{role}`: {row['prompt_line']}" for role, row in table.items())
 
 
+def camera_words(contracts: Path = CONTRACTS) -> dict:
+    """common.schema.json's cameraWords: {field: {value: {label, words}}} (features/frame-change-edit.clan)."""
+    return _common_const("cameraWords", contracts)
+
+
+def camera_lines(contracts: Path = CONTRACTS) -> str:
+    """The camera values and the words that mean them, one line per field, for director.v7's prompt."""
+    lines = []
+    for field, values in camera_words(contracts).items():
+        said = "; ".join(f"`{v}` ({', '.join(row['words'])})" for v, row in values.items() if v != "graphic")
+        lines.append(f"  - `{field}`: {said}")
+    lines.append("  - `lens_mm`: a focal length in mm (8 to 800); `macro`: true for a macro lens")
+    return "\n".join(lines)
+
+
 def load_prompt(path: Path, contracts: Path = CONTRACTS) -> str:
-    """A prompt file with its role lines filled in."""
-    return path.read_text().replace(ROLE_LINES, role_lines(contracts))
+    """A prompt file with its role lines and camera words filled in."""
+    return path.read_text().replace(ROLE_LINES, role_lines(contracts)).replace(CAMERA_WORDS, camera_lines(contracts))
 
 
 class DirectorError(Exception):
@@ -319,10 +389,12 @@ class Director:
         return common.rstrip() + ("\n\n" + body if body else "") + tail
 
     def run(self, op: str, payload: dict, provider_name: Optional[str] = None, job_id: str = "",
-            extra_hashes: tuple = ()) -> DirectorResult:
+            extra_hashes: tuple = (), images: Optional[list] = None) -> DirectorResult:
         """`payload` is the job's input (relay-api.schema.json#/$defs/JobInput). shot_list needs
         no provider, so `provider_name` may be None for it. `extra_hashes` are artifacts the relay
-        made itself and the job may name though the input does not (a clip_edit keyframe)."""
+        made itself and the job may name though the input does not (a clip_edit keyframe).
+        `images`: the pictures the model sees ({media_type, data}); only a frame_edit sends one, its
+        current frame (features/frame-change-edit.clan). Every other op sends none."""
         sheet = None
         if op != "shot_list":
             sheet = self.sheets.get(provider_name)
@@ -341,7 +413,8 @@ class Director:
         t0 = time.monotonic()
         output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
                                 attribution=job_id or op, model=model,
-                                max_tokens=6000 if op == "shot_list" else 3000)
+                                max_tokens=6000 if op == "shot_list" else 3000,
+                                images=list(images or []) if op == "frame_edit" else None)
         latency_ms = round((time.monotonic() - t0) * 1000)
 
         if op in VIDEO_OPS and "providerJob" in output:
@@ -369,6 +442,14 @@ class Director:
             return
         if "shots" in output:
             raise DirectorError(f"shots belong to shot_list, not {op}")
+        if op == "frame_edit":
+            # Dex's reading resolves the op the provider job runs as; every check below runs under it.
+            run_as = self._check_frame_edit(payload, output)
+            if run_as is None:
+                return  # a question, or a change of camera movement only: nothing to draw
+            if output["frameEdit"].get("maskUnused"):
+                payload = {k: v for k, v in payload.items() if k not in ("region", "mask")}
+            op = run_as
         if output.get("question") is not None:
             if "providerJob" in output or "shots" in output:
                 raise DirectorError("answered with a question and a job; send one or the other")
@@ -430,6 +511,84 @@ class Director:
             raise DirectorError(str(e)) from e
         if op == "region_edit":
             self._check_region_edit(payload, sheet, job)
+
+    def _check_frame_edit(self, payload: dict, output: dict) -> Optional[str]:
+        """Change this frame (features/frame-change-edit.clan): hold Dex's reading of the words to what
+        the schema cannot say, and resolve the op the job runs as (output.frameEdit.runAs). None when
+        nothing is to be drawn: a question, or a change of camera movement only (its providerJob, if
+        any, is dropped). Raises DirectorError, and the passthrough then makes the job."""
+        edit, question = output.get("frameEdit"), output.get("question")
+        answer = payload.get("answer") or {}
+        chosen = answer.get("value") if answer.get("value") in READINGS else None
+        if question is not None:
+            if chosen:
+                raise DirectorError(f"asked again after the person chose {chosen}")
+            if edit is not None or "providerJob" in output:
+                raise DirectorError("answered with a question and a reading; send one or the other")
+            self._check_frame_edit_ask(question)
+            return None
+        if edit is None:
+            raise DirectorError("a frame_edit answer needs frameEdit, its reading of the words")
+        reading = edit["reading"]
+        edit.pop("words_as_given", None)  # the passthrough's mark ("Dex sent your words as they are"), never Dex's
+        if chosen and reading != chosen:
+            raise DirectorError(f"read the words as {reading}, but the person chose {chosen}")
+        patch = edit.get("camera") or {}
+        if reading == "local":
+            if patch:
+                raise DirectorError("a local change changes no camera field")
+            edit.pop("camera", None)
+        else:
+            was = ((payload.get("shot") or {}).get("camera")) or {}
+            changed = {k: v for k, v in patch.items() if was.get(k) != v}
+            if not changed:
+                raise DirectorError(f"a {reading} change must change at least one camera field")
+            edit["camera"] = changed  # a leaf that keeps its value is no change
+        regioned = bool(payload.get("region") or payload.get("mask"))
+        if reading == "local":
+            run_as = "region_edit" if regioned else "frame"  # without a box: an instruction edit
+        elif reading == "camera" and set(edit["camera"]) <= MOVE_LEAVES:
+            run_as = "none"
+        else:
+            run_as = "frame"
+        edit["runAs"] = run_as
+        if reading != "local" and regioned:
+            edit["maskUnused"] = True  # a camera change redraws the whole frame (Laurence's step 4)
+        else:
+            edit.pop("maskUnused", None)
+        if run_as == "none":
+            output.pop("providerJob", None)  # the still stays; the clip takes the new move
+            return None
+        job = output.get("providerJob")
+        if job is None:
+            raise DirectorError(f"a {reading} change runs as {run_as} and needs a providerJob")
+        if CONTINUITY_WORDS.search(job["prompt"]):
+            raise DirectorError("a changed frame names no anchor or previous frame")
+        if not _starts_with(job["prompt"], payload.get("text") or ""):
+            raise DirectorError("a frame_edit prompt starts with the person's words, as written")
+        image = payload["image"]["sha256"]
+        job["refs"] = [{"sha256": image, "name": "current", "role": "current"},
+                       *[r for r in job.get("refs") or [] if r["sha256"] != image]]
+        if edit.get("maskUnused"):
+            job.pop("mask", None)
+            job.pop("region", None)
+        return run_as
+
+    @staticmethod
+    def _check_frame_edit_ask(question: dict) -> None:
+        """Bigger how? is an ambiguity with fixed options camera / local / both (each id its value), no
+        recommendation and no typed answer. Options carry no cost (owner decision 2026-10-13)."""
+        if question["kind"] != "ambiguity":
+            raise DirectorError(f"a frame_edit asks only when the words could mean two things, not a {question['kind']}")
+        if question.get("recommended_option_id"):
+            raise DirectorError("an ambiguity recommends no option")
+        values = [o.get("value") for o in question["options"]]
+        if (any(o["id"] != o.get("value") for o in question["options"]) or len(set(values)) != len(values)
+                or not set(values) <= set(READINGS) or not {"camera", "local"} <= set(values)):
+            raise DirectorError(f"a frame_edit question offers camera, local and maybe both, each id its value: {values}")
+        question["options"] = sorted(({k: v for k, v in o.items() if k != "cost"} for o in question["options"]),
+                                     key=lambda o: READINGS.index(o["value"]))
+        question["allow_text"] = False
 
     @staticmethod
     def _check_keyframe(kf: dict) -> None:

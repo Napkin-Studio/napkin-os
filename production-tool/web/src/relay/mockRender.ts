@@ -163,6 +163,20 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     stamp(ctx, w, h, `edit · ${inp.text ?? ''}`)
     return { blob: await toBlob(c), mime: 'image/png', w, h }
   }
+  if (req.op === 'frame_edit') {
+    // Change this frame: the current frame at its own size, dimmed where a box was marked, with the words.
+    const img = await bitmap(input, inp.image?.sha256)
+    const w = img?.width ?? inp.aspect?.w ?? 768
+    const h = img?.height ?? inp.aspect?.h ?? 432
+    const { c, ctx } = canvas(w, h)
+    paper(ctx, w, h, n)
+    if (img) ctx.drawImage(img, 0, 0)
+    ctx.fillStyle = 'rgba(255,79,46,0.18)'
+    const r = inp.region ?? { x: 0, y: 0, w: 1, h: 1 }
+    ctx.fillRect(r.x * w, r.y * h, r.w * w, r.h * h)
+    stamp(ctx, w, h, `frame edit · ${inp.text ?? ''}`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h }
+  }
   if (req.op === 'frame') {
     const { w, h, croppedFrom } = mockImageSize(inp.aspect || inp.ratio ? inp : { ratio: '9:16' }, sizeFor('9:16'))
     const { c, ctx } = canvas(w, h)

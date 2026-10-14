@@ -1,0 +1,16 @@
+{
+  "op": "frame_edit",
+  "question": {
+    "kind": "ambiguity",
+    "text": "Bigger how?",
+    "why": "Bigger could mean moving the camera in, or making the bottle itself bigger in the frame.",
+    "options": [
+      { "id": "camera", "label": "Move the camera in", "value": "camera" },
+      { "id": "local", "label": "Make it bigger in the frame", "value": "local" },
+      { "id": "both", "label": "Both", "value": "both" }
+    ],
+    "allow_text": false
+  },
+  "rationale": "The words could mean a camera change or a change to the bottle.",
+  "confidence": 0.4
+}

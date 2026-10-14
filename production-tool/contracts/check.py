@@ -152,6 +152,7 @@ INVALID_TARGETS = {
     "patch-batch": ("patch.schema.json", "#/$defs/PatchBatch", None),
     "customdata": ("customdata.schema.json", "", None),
     "question": ("common.schema.json", "#/$defs/question", None),
+    "director": ("director.schema.json", "", None),
 }
 
 failures = 0
@@ -218,6 +219,20 @@ roles = set(COMMON["refRole"]["enum"])
 if roles != set(COMMON["refRoleTable"]["const"]):
     fail(f"✗ common refRoleTable does not cover exactly the roles: {sorted(roles ^ set(COMMON['refRoleTable']['const']))}")
 
+# Every camera value has its words (features/frame-change-edit.clan): the web's labels, director.v7's
+# camera lines and the passthrough's lexicon read the one table.
+camera_words = COMMON["cameraWords"]["const"]
+for field, enum in (("size", "cameraSize"), ("angle", "cameraAngle"), ("movement", "cameraMovement"),
+                    ("movement_speed", "movementSpeed")):
+    missing = set(COMMON[enum]["enum"]) ^ set(camera_words.get(field, {}))
+    if missing:
+        fail(f"✗ common cameraWords.{field} does not cover exactly {enum}: {sorted(missing)}")
+    for value, row in camera_words.get(field, {}).items():
+        if not row.get("label") or not row.get("words"):
+            fail(f"✗ common cameraWords.{field}.{value} needs a label and words")
+if set(COMMON["cameraPatch"]["properties"]) != set(COMMON["camera"]["properties"]):
+    fail("✗ common cameraPatch must have exactly camera's leaves")
+
 # Every op a sheet claims must be routable, and config must name only known providers.
 sheets = {json.loads(p.read_text())["provider"]: json.loads(p.read_text()) for p in (HERE / "capabilities").glob("*.json")}
 for f in sorted(HERE.glob("examples/config.*.json")):
@@ -229,9 +244,10 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     if "fallbackOnly" in cfg:  # no longer read (features/runway-fallback.clan)
         fail(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
     # Contract 3 needs the director that asks (director.v6): v5 against v3 is refused by the relay.
-    # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; v6 stays bundled for a rollback.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1"):
-        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6 or director.v6.1")
+    # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; director.v7
+    # (features/frame-change-edit.clan) adds Change this frame. v6 and v6.1 stay bundled for a rollback.
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7"):
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1 or v7")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.
@@ -243,6 +259,18 @@ GONE = re.compile(r"\b(fal|heygen)\b|fal-ai/", re.I)
 for f in sorted([*HERE.glob("capabilities/*.json"), *HERE.glob("examples/config.*.json"), *HERE.glob("examples/director.*.json")]):
     if GONE.search(f.read_text()):
         fail(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
+
+# Change this frame reserves the dearer of the two ops it may run as (features/frame-change-edit.clan):
+# its price is derived from the sheet, never typed apart from it.
+for provider, sheet in sheets.items():
+    o = sheet["ops"]
+    if "frame_edit" in o:
+        want = max(o[k]["estimateUsd"] or 0 for k in ("frame", "region_edit") if k in o)
+        if o["frame_edit"]["estimateUsd"] != want:
+            fail(f"✗ capabilities/{provider}.json: frame_edit estimateUsd is {o['frame_edit']['estimateUsd']}; "
+                 f"it is the higher of frame and region_edit ({want})")
+        if o["frame_edit"]["model"] != o["frame"]["model"]:
+            fail(f"✗ capabilities/{provider}.json: frame_edit runs on frame's model ({o['frame']['model']})")
 
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():

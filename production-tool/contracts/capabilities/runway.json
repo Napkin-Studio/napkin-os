@@ -73,6 +73,17 @@
       "outputs": [1, 4],
       "label": "Gemini 3 Pro"
     },
+    "frame_edit": {
+      "model": "gemini_image3_pro",
+      "endpoint": "POST /v1/text_to_image",
+      "estimateUsd": 0.2,
+      "seed": false,
+      "outputs": [
+        1,
+        4
+      ],
+      "label": "Gemini 3 Pro"
+    },
     "clip": {
       "model": "veo3.1",
       "endpoint": "POST /v1/image_to_video",

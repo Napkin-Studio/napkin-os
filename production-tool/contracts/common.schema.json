@@ -84,6 +84,64 @@
       "required": ["size"],
       "additionalProperties": false
     },
+    "cameraPatch": {
+      "type": "object",
+      "description": "A change to a shot's camera (frame_edit's frameEdit.camera): the leaves of camera, none required, each the new value. size never becomes graphic (a graphic card has no camera to change).",
+      "properties": {
+        "size": { "allOf": [{ "$ref": "#/$defs/cameraSize" }, { "not": { "const": "graphic" } }] },
+        "angle": { "$ref": "#/$defs/cameraAngle" },
+        "movement": { "$ref": "#/$defs/cameraMovement" },
+        "movement_speed": { "$ref": "#/$defs/movementSpeed" },
+        "lens_mm": { "type": "integer", "minimum": 8, "maximum": 800 },
+        "macro": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "cameraWords": {
+      "description": "How each camera value is said (features/frame-change-edit.clan): label is the word the camera chips and the diff show ('angle: eye level -> overhead'); words are the phrases that mean it (the longest match wins). One table for the web's labels, director.v7's camera lines (the <!-- camera-words --> marker), the passthrough's lexicon and the eval, so they never differ. Every value of cameraSize, cameraAngle, cameraMovement and movementSpeed has a row (a contract test holds it).",
+      "const": {
+        "size": {
+          "extreme_wide": { "label": "extreme wide", "words": ["extreme wide", "extreme long shot", "very wide shot"] },
+          "wide": { "label": "wide", "words": ["wide shot", "wide", "long shot", "establishing", "full shot"] },
+          "medium_wide": { "label": "medium wide", "words": ["medium wide", "medium long shot", "cowboy shot"] },
+          "medium": { "label": "medium", "words": ["medium shot", "mid shot", "waist up"] },
+          "medium_close": { "label": "medium close", "words": ["medium close-up", "medium close up", "medium closeup", "chest up"] },
+          "close": { "label": "close", "words": ["close-up", "close up", "closeup", "close shot"] },
+          "extreme_close": { "label": "extreme close", "words": ["extreme close-up", "extreme close up", "extreme closeup"] },
+          "insert": { "label": "insert", "words": ["insert shot", "insert", "cutaway"] },
+          "over_shoulder": { "label": "over the shoulder", "words": ["over the shoulder", "over-the-shoulder"] },
+          "two_shot": { "label": "two shot", "words": ["two shot", "two-shot"] },
+          "graphic": { "label": "graphic", "words": ["graphic card", "title card"] }
+        },
+        "angle": {
+          "eye_level": { "label": "eye level", "words": ["eye level", "eye-level", "straight on"] },
+          "high_angle": { "label": "high angle", "words": ["high angle", "high-angle", "from above", "looking down"] },
+          "low_angle": { "label": "low angle", "words": ["low angle", "low-angle", "from below", "looking up", "worm's eye"] },
+          "overhead": { "label": "overhead", "words": ["overhead", "top down", "top-down", "bird's eye", "birds eye", "directly above"] },
+          "aerial": { "label": "aerial", "words": ["aerial", "drone shot", "from the air"] },
+          "dutch": { "label": "dutch", "words": ["dutch angle", "dutch tilt", "dutch", "canted"] },
+          "pov": { "label": "POV", "words": ["pov", "point of view", "point-of-view"] }
+        },
+        "movement": {
+          "static": { "label": "static", "words": ["static", "locked off", "locked-off", "holds still"] },
+          "pan": { "label": "pan", "words": ["pan", "pans", "panning"] },
+          "tilt": { "label": "tilt", "words": ["tilt up", "tilt down", "tilts", "tilting"] },
+          "push_in": { "label": "push in", "words": ["push in", "pushes in", "push-in", "dolly in", "moves in"] },
+          "pull_out": { "label": "pull out", "words": ["pull out", "pulls out", "pull back", "pulls back", "dolly out"] },
+          "track": { "label": "track", "words": ["tracking shot", "tracking", "tracks"] },
+          "orbit": { "label": "orbit", "words": ["orbit", "orbits", "circles around", "arcs around"] },
+          "handheld": { "label": "handheld", "words": ["handheld", "hand-held", "shaky cam"] },
+          "crane_up": { "label": "crane up", "words": ["crane up", "cranes up", "boom up", "jib up"] },
+          "crane_down": { "label": "crane down", "words": ["crane down", "cranes down", "boom down", "jib down"] },
+          "drone": { "label": "drone", "words": ["drone move", "flies over", "fly-over", "flyover"] }
+        },
+        "movement_speed": {
+          "slow": { "label": "slow", "words": ["slowly", "slow", "gently"] },
+          "normal": { "label": "normal", "words": ["steadily", "normal speed"] },
+          "fast": { "label": "fast", "words": ["quickly", "fast", "rapidly", "whip"] }
+        }
+      }
+    },
     "beatKind": {
       "enum": ["moment", "line", "vo", "music", "sound", "camera"],
       "description": "moment: something that happens at a time in the shot. line: spoken on screen (speaker, parenthetical, tied to a moment or not). vo, music, sound: the audio rows. camera: a change of camera inside the shot."

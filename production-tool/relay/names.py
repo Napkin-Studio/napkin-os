@@ -118,8 +118,8 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
     refs = payload.get("refs") or []
     if op == "shot_list" or not refs or not limits:
         return payload, []
-    # anchorFrame, previousFrame and a region edit's image go as refs too (director.v4).
-    reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op == "region_edit")
+    # anchorFrame, previousFrame and an edited image (region_edit, frame_edit's current frame) go as refs too.
+    reserved = sum(1 for k in ("anchorFrame", "previousFrame") if payload.get(k)) + (op in ("region_edit", "frame_edit"))
     max_char = limits.get("maxCharacter", len(refs))
     max_all = max(limits.get("max", len(refs) + reserved) - reserved, 0)
     named = _named(payload)

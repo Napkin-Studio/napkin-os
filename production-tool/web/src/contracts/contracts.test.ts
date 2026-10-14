@@ -5,8 +5,10 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CONTRACTS, loadJson, makeAjv, SCHEMA } from '../test/schemas'
-import { LINK_RULE, quotaClassOf, REF_ROLE_TABLE } from './load'
-import { OPS, REF_ROLES, type Job, type JobRequest, type ProductionDocument, type Question } from './types'
+import { CAMERA_WORDS, LINK_RULE, quotaClassOf, REF_ROLE_TABLE } from './load'
+import {
+  CAMERA_ANGLES, CAMERA_MOVEMENTS, CAMERA_SIZES, OPS, REF_ROLES, type FrameEditOutput, type Job, type JobRequest, type ProductionDocument, type Question,
+} from './types'
 
 const ajv = makeAjv()
 const check = (ref: string, data: unknown) => {
@@ -51,7 +53,8 @@ describe('contract 3 examples', () => {
   // check refuse the rest (a key that is not its id, a 1 s window, a link
   // linkRule does not allow, a map key with a dot).
   const SCHEMA_REFUSED = ['document.v2', 'document.action-601', 'document.role-feel', 'document.rank-space', 'document.ambiguity-recommended',
-    'job-request.contract-2', 'job-answer.both', 'patch-batch.no-why', 'customdata.pin', 'question.ambiguity-recommended']
+    'job-request.contract-2', 'job-request.frame_edit-anchor', 'job-answer.both', 'patch-batch.no-why', 'customdata.pin',
+    'question.ambiguity-recommended', 'director.frame_edit-movement-job']
   const target: Record<string, string> = {
     document: SCHEMA('document'),
     'job-request': `${SCHEMA('relay-api')}#/$defs/JobRequest`,
@@ -59,6 +62,7 @@ describe('contract 3 examples', () => {
     'patch-batch': `${SCHEMA('patch')}#/$defs/PatchBatch`,
     customdata: SCHEMA('customdata'),
     question: `${SCHEMA('common')}#/$defs/question`,
+    director: SCHEMA('director'),
   }
   for (const name of SCHEMA_REFUSED) {
     it(`invalid/${name} is refused`, () => {
@@ -79,6 +83,20 @@ describe('the tables in common.schema.json', () => {
     for (const op of OPS) expect(['image', 'video', 'render', 'text']).toContain(quotaClassOf(op))
     expect(quotaClassOf('clip_patch')).toBe('video')
     expect(quotaClassOf('shot_list')).toBe('text')
+  })
+  it('says every camera value, and the frameEdit types match director.schema.json', () => {
+    const common = loadJson('common.schema.json') as { $defs: Record<string, { enum?: string[]; properties?: Record<string, unknown> }> }
+    expect(Object.keys(CAMERA_WORDS.size).sort()).toEqual([...CAMERA_SIZES].sort())
+    expect(Object.keys(CAMERA_WORDS.angle).sort()).toEqual([...CAMERA_ANGLES].sort())
+    expect(Object.keys(CAMERA_WORDS.movement).sort()).toEqual([...CAMERA_MOVEMENTS].sort())
+    expect(Object.keys(CAMERA_WORDS.movement_speed).sort()).toEqual([...(common.$defs.movementSpeed.enum ?? [])].sort())
+    expect(CAMERA_WORDS.angle.eye_level.label).toBe('eye level')
+    const director = loadJson('director.schema.json') as { $defs: { frameEdit: { properties: Record<string, { enum?: string[] }> } } }
+    const props = director.$defs.frameEdit.properties
+    const edit: Required<FrameEditOutput> = { reading: 'both', runAs: 'none', camera: {}, maskUnused: true, words_as_given: true }
+    expect(Object.keys(props).sort()).toEqual(Object.keys(edit).sort())
+    expect(props.reading.enum).toEqual(['camera', 'local', 'both'])
+    expect(props.runAs.enum).toEqual(['frame', 'region_edit', 'none'])
   })
   it('lets a script drive a storyboard and no video drive a script', () => {
     expect(LINK_RULE.rules.some((r) => r.from.includes('script') && r.to.includes('storyboard') && r.roles.includes('drives'))).toBe(true)

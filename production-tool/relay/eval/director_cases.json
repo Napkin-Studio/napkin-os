@@ -1,5 +1,5 @@
 {
-  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words.",
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter.",
   "assets": {
     "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
     "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
@@ -97,6 +97,515 @@
         "lacquered"
       ],
       "budget": 500
+    },
+    {
+      "id": "fe_overhead_aerial",
+      "why": "Review item 5: the camera must change, not come back as it was",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make this an overhead aerial shot",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "overhead",
+            "aerial"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_low_angle",
+      "why": "An angle change in plain words",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "shoot her from a low angle, looking up at her",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "low_angle"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_close_hands",
+      "why": "A size change named by what it frames",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "go in close on her hands",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "size": [
+            "close",
+            "extreme_close",
+            "insert",
+            "medium_close"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_dutch",
+      "why": "Dutch tilt is an angle, not a tilt move",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "give it a dutch tilt",
+        "image": "F3",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "dutch"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_wide_establishing",
+      "why": "A wider size from establishing words",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make it a wide establishing shot of the beach",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "size": [
+            "wide",
+            "extreme_wide"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_scarf_red",
+      "why": "A colour change is local: the camera stays",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make her scarf red",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "local",
+        "runAs": "frame"
+      },
+      "budget": 250
+    },
+    {
+      "id": "fe_remove_bottle",
+      "why": "Removing an object is local",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "remove the bottle from the table",
+        "image": "F2",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV02",
+          "kind": "shot",
+          "duration_s": 2,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "A green bottle of Lumen water on the kitchen table, morning light.",
+          "refs": []
+        },
+        "refs": []
+      },
+      "expect": {
+        "reading": "local",
+        "runAs": "frame"
+      },
+      "budget": 250
+    },
+    {
+      "id": "fe_add_rain",
+      "why": "Weather added to the frame is local",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "add rain",
+        "image": "F3",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "local",
+        "runAs": "frame"
+      },
+      "budget": 250
+    },
+    {
+      "id": "fe_bigger",
+      "why": "Bigger could be the camera or the bottle: ask, recommend nothing",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make the bottle bigger",
+        "image": "F2",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV02",
+          "kind": "shot",
+          "duration_s": 2,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "A green bottle of Lumen water on the kitchen table, morning light.",
+          "refs": []
+        },
+        "refs": []
+      },
+      "expect": {
+        "reading": "ask"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_push_in",
+      "why": "A camera move only: nothing to draw",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "push in slowly",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "movement": [
+            "push_in"
+          ],
+          "movement_speed": [
+            "slow"
+          ]
+        },
+        "runAs": "none"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_overhead_masked",
+      "why": "Laurence's step 4: a camera change with a marked area redraws the whole frame",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make this an overhead aerial shot",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ],
+        "region": {
+          "x": 0.38,
+          "y": 0.3,
+          "w": 0.24,
+          "h": 0.4
+        },
+        "mask": "A6"
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "overhead",
+            "aerial"
+          ]
+        },
+        "runAs": "frame",
+        "maskUnused": true
+      },
+      "budget": 500
     }
-  ]
+  ],
+  "frames": {
+    "F1": "beach_medium.png",
+    "F2": "kitchen_bottle.png",
+    "F3": "street_wide.png"
+  }
 }

@@ -111,7 +111,7 @@ STALE_BUILD = "This build reads contract 3; reload the page."
 QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
 INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
-BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch"}
+BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "stitch"}
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
@@ -753,7 +753,7 @@ class Relay:
     def _check_flags(self, cfg: dict, req: dict) -> None:
         op, inp, flags = req["op"], req["input"], cfg["flags"]
         off = None
-        if op in ("shot_list", "frame") and not flags["storyboard"]:
+        if op in ("shot_list", "frame", "frame_edit") and not flags["storyboard"]:
             off = "The storyboard is switched off for now."
         elif op in ("clip", "clip_edit") and not flags["video"]:
             off = "Video is switched off for now."
@@ -1141,8 +1141,17 @@ class Relay:
             return self._fail(job, e.code, e.message, paid=False, refund=True)
         if directed.get("question"):
             return self._ask(job, directed["question"], block)
+        # Change this frame runs as the op Dex resolved (features/frame-change-edit.clan): the adapter,
+        # its sheet and its price are that op's, and a change of camera movement only draws nothing.
+        run_as = job["op"]
+        if job["op"] == "frame_edit":
+            run_as = (directed.get("frameEdit") or {}).get("runAs") or "frame"
+            if run_as == "none":
+                return self._finish(job, "completed", director=block, outputs=[], kind="generated",
+                                    paid=False, refund=True)
+            job = self._reserve_as(job, provider, run_as)
         pjob = directed["providerJob"]
-        set_job_context(job["op"], asset_refs(job["_req"]["input"]))
+        set_job_context(run_as, asset_refs(job["_req"]["input"]))
         try:
             request_id = self._adapter(job, provider).submit(pjob)
         except Moderated as e:
@@ -1197,9 +1206,56 @@ class Relay:
             return self._reload(job)
         return self._with_poll(saved)
 
+    def _reserve_as(self, job: dict, provider: str, op: str) -> dict:
+        """A frame_edit reserved the dearer of its two ops; once Dex has read the words, the reservation
+        follows the op it runs as, priced at the request's settings (contracts/pricing.py), and the
+        agency's month in the ledger moves by the difference (features/tenant-limits.clan)."""
+        estimate, unknown = self._estimate(op, provider, None, job["_req"]["input"])
+        delta = estimate - job["cost"].get("reserved", 0)
+        if not delta:
+            return job
+        saved = self._save(job, cost={**job["cost"], "estimate": estimate, "reserved": estimate, "unknown": unknown})
+        if saved is None:
+            return job
+        self.ledger.adjust(job.get("_tenant"), job.get("_month"), delta)
+        return saved
+
+    # A frame_edit's current frame reaches Dex within this, or the words go as they are (features/frame-change-edit.clan).
+    FRAME_FETCH_S = 3.0
+
+    def _frame_image(self, job: dict) -> tuple[list | None, str | None]:
+        """The current frame, downscaled as a character card's picture (cards.downscale), for a director
+        that looks at it: ([image], None), or (None, why the passthrough makes the job instead). Only
+        pictures in our own store, within FRAME_FETCH_S; an agency that has turned Claude off
+        (tenant-limits' allow.claude) sends it nowhere."""
+        if not getattr(self.director, "sees_images", False):
+            return None, None
+        if not self._policy(job.get("_tenant"))["allow"]["claude"]:
+            return None, "your agency keeps its pictures from Claude"
+        url = ((job["_req"].get("input") or {}).get("image") or {}).get("url") or ""
+        if self.blobs.key_for_url(url) is None:
+            return None, "the frame is not one of ours"
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FetchTimeout
+
+        from cards import downscale
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="frame")
+        try:
+            data = pool.submit(self.blobs.fetch, url).result(timeout=self.FRAME_FETCH_S)
+            media_type, b64 = downscale(data)
+        except FetchTimeout:
+            log.warning("job %s: the frame took over %ss to fetch; the words go as they are", job["jobId"], self.FRAME_FETCH_S)
+            return None, f"the frame did not load within {self.FRAME_FETCH_S:g} s"
+        except Exception as e:
+            log.warning("job %s: could not read the frame (%s); the words go as they are", job["jobId"], e)
+            return None, "the frame could not be read"
+        finally:
+            pool.shutdown(wait=False)
+        return [{"media_type": media_type, "data": b64}], None
+
     def _direct(self, job: dict, sheet: dict | None) -> tuple[dict, dict]:
         start = self.clock()
-        # An agency that turned Claude off gets the passthrough director and no cards (features/tenant-limits.clan).
+        # An agency that turned Claude off gets the passthrough director and no cards (features/tenant-limits.clan);
+        # a frame_edit Dex cannot look at gets the passthrough too (features/frame-change-edit.clan).
         claude = self._policy(job.get("_tenant"))["allow"]["claude"]
         director = self.director if claude else PassthroughDirector()
         try:
@@ -1221,7 +1277,16 @@ class Relay:
                 wired = {**wired, "answer": {**a, **({"question": q["text"]} if q.get("text") else {}),
                                               **({"chose": chose["label"]} if chose else {}),
                                               **({"value": chose["value"]} if chose and "value" in chose else {})}}
-            out = dict(director.direct({**req, "input": wired}, sheet))
+            kw, unseen = {}, None
+            if req["op"] == "frame_edit" and claude:
+                images, unseen = self._frame_image(job)
+                if images:
+                    kw = {"images": images}
+                elif unseen:  # Dex cannot see the frame: the words go as they are, and the History says why
+                    director = PassthroughDirector()
+            out = dict(director.direct({**req, "input": wired}, sheet, **kw))
+            if unseen:
+                out["rationale"] = f"Dex could not look at the frame ({unseen}), so your words went as they are."[:300]
         except PromptTooOld as e:  # a config with director.v5 under contract 3: said plainly, never run
             log.error("%s", e)
             raise ApiError("internal", str(e)) from e
@@ -1274,6 +1339,10 @@ class Relay:
         in-flight place and no provider slot, and never times out into a guess. The relay names the
         question (its id is the document's ask key)."""
         q = {"id": new_id("q"), **{k: v for k, v in question.items() if k != "id"}}
+        if job["op"] == "frame_edit":
+            # No price on an option (owner decision 2026-10-13): what the chosen change costs is recorded
+            # with the job, for History. Whatever Dex wrote is dropped.
+            q["options"] = [{k: v for k, v in o.items() if k != "cost"} for o in q.get("options") or []]
         cost = {**job["cost"], "reserved": 0.0}
         saved = self._save(job, state="needs_input", question=q, director=block, cost=cost, _queue=None,
                            _released=True, queuePosition=None, _slot=None, provider=None, model=None,

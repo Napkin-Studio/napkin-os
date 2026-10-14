@@ -175,10 +175,29 @@ def test_the_role_lines_are_the_contracts_verbatim():
         assert table["lighting"]["prompt_line"] in d.system_for(op), op
 
 
-def test_only_the_v6_prompts_are_bundled():
+def test_only_the_v6_and_later_prompts_are_bundled():
     """Contract 3 runs director.v6: the older prompts write fields contract 3 refuses. director.v6.1
-    (frame-aspect) is v6 plus the true-shape crop; v6 stays, so a rollback is a config change."""
-    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v6.1.md", "director.v6.md"]
+    (frame-aspect) is v6 plus the true-shape crop; director.v7 (frame-change-edit) adds Change this
+    frame. v6 and v6.1 stay, so a rollback is a config change."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v6.1.md", "director.v6.md", "director.v7.md"]
+
+
+def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():
+    v61 = (PROMPTS / "director.v6.1.md").read_text()
+    v7 = (PROMPTS / "director.v7.md").read_text()
+    assert v7.startswith(v61.split("## Ask instead of guessing")[0])  # the opening is unchanged
+    assert "<!-- ops: frame_edit -->" in v7 and "<!-- camera-words -->" in v7
+    assert "about $" not in v7 and "Never a price or a cost" in v7
+    frame = v7.split("<!-- ops: frame -->")[1].split("<!-- ops:")[0]
+    assert "the person's words first when there are any" in frame
+    d, _ = make()
+    loaded = Director(d.port, PROMPTS, {}, prompt_version="director.v7")
+    section = loaded.system_for("frame_edit")
+    assert "## frame_edit" in section and "## frame\n" not in section and "## clip" not in section
+    # The camera words come from common.schema.json's cameraWords, never typed into the prompt.
+    assert "<!-- camera-words -->" not in loaded.system
+    assert "`overhead` (overhead, top down" in section and "`push_in` (push in" in section
+    assert "`graphic`" not in section.split("The values and the words that mean them")[1].split("- `frameEdit.runAs`")[0]
 
 
 def test_v6_1_is_v6_plus_the_crop_and_the_layout_scene():

@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"camera\", \"runAs\": \"frame\", \"camera\": {\"angle\": \"low_angle\"}}, \"providerJob\": {\"provider\": \"runway\", \"op\": \"frame\", \"model\": \"gemini_image3_pro\", \"prompt\": \"shoot her from a low angle, looking up at her. Seen from a low angle, looking up, medium shot. The people, place and light of @current, not its framing. @maya_front stands on the beach at sunset, her blue scarf lifting in the wind.\", \"refs\": [{\"name\": \"current\", \"sha256\": \"sha256:138064aac89f3ef36a12a386bf253919c9df1678e0468283a4c72c284bbf1487\", \"role\": \"current\"}, {\"name\": \"maya_front\", \"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"role\": \"character\"}], \"ratio\": \"1344:768\"}, \"rationale\": \"Low angle changes how the frame is shot, so the whole frame is redrawn from the new camera with the current frame and Maya as refs. Only the angle changes; size stays medium.\", \"confidence\": 0.93}"
+}

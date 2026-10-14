@@ -5,6 +5,7 @@
 
 import { continueFix, resumeFixes } from './fix'
 import { continueFollow } from './follow'
+import { landFrameEditIn } from './frameEdit'
 import { continueDrawing, type FrameDeps } from './frames'
 import { landFrame, landRender, landTake } from './handlers'
 import { landShotList } from './plan'
@@ -21,6 +22,11 @@ export function wireJobs(deps: FrameDeps) {
       await continueDrawing(deps).catch(warn('draw the rest'))
       await continueFollow(deps).catch(warn('update what follows'))
     })
+  })
+  // Change this frame: the new version lands unpicked, for Apply, Keep both or Discard (jobs/frameEdit.ts).
+  runner.onComplete('frame_edit', (job, ctx) => {
+    if (ctx.for !== 'frame_edit') return
+    void landFrameEditIn(doc, job, ctx).catch(warn('change this frame'))
   })
   runner.onComplete('clip', (job, ctx) => {
     if (ctx.for !== 'clip') return

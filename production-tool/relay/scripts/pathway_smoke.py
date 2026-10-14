@@ -40,7 +40,7 @@ from providers.types import effective_sheet  # noqa: E402
 
 PATHWAYS = ("runway",)
 KEYS = {"runway": "RUNWAY_API_KEY"}
-IMAGE_STEPS = ("generate", "view", "frame", "region_edit")
+IMAGE_STEPS = ("generate", "view", "frame", "region_edit", "frame_edit")
 VIDEO_STEPS = ("clip", "clip_edit")
 TERMINAL = ("completed", "failed", "cancelled", "uncertain")
 JOB_TIMEOUT_S = 900
@@ -82,6 +82,10 @@ def inputs(args) -> dict[str, dict | None]:
         "region_edit": ({"image": image, "region": {"x": 0.3, "y": 0.1, "w": 0.4, "h": 0.25},
                          "mask": _asset(args.mask_url, "image/png"), "text": "a red hat", "ratio": "4:5"}
                         if args.mask_url else None),
+        # Change this frame (features/frame-change-edit.clan): the picture as the shot's current frame, redrawn
+        # from above. Check by eye that the camera changed and the old framing did not come back.
+        "frame_edit": {"text": "make this an overhead aerial shot", "image": image, "shot": shot, "refs": [front],
+                       "aspect": {"w": 1344, "h": 756}},
         "clip": {"shot": shot, "image": image, "refs": [front], "ratio": "16:9"},
         "clip_edit": ({"video": _asset(args.video_url, "video/mp4"), "feel": {"strength": "flex"},
                        "text": "warmer, golden-hour light"} if args.video_url else None),
@@ -151,7 +155,7 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
                 spent += cost
                 t0 = time.time()
                 job_id = _id("job")
-                kind = {"frame": "storyboard", "clip": "video", "clip_edit": "video"}.get(row["op"], "sketch")
+                kind = {"frame": "storyboard", "frame_edit": "shot", "clip": "video", "clip_edit": "video"}.get(row["op"], "sketch")
                 req = {"contractVersion": "3", "jobId": job_id, "op": row["op"], "projectId": _id("proj"),
                        "nonce": "n_" + job_id[-12:], "node": {"kind": kind, "id": _id(kind)}, "parentIds": [],
                        "input": inp[row["op"]]}
