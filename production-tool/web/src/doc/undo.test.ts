@@ -123,7 +123,9 @@ describe('undo and redo on the document', () => {
     await store.flush()
     expect(steps(store).undo).toHaveLength(MAX_STEPS)
     expect(steps(store).undo[0].label).toBe('edit 6')
-  })
+    // 105 writes through the wasm engine: about 1.4 s alone, past vitest's 5 s default when the full
+    // suite (79 files since script-editor) shares the machine.
+  }, 30_000)
 
   it('there is no undo without the .clan engine', async () => {
     const store = new SnapshotDocumentStore(emptyDocument(MAYA), null, 0)
