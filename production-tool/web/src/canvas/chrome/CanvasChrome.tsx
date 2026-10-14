@@ -98,19 +98,45 @@ const ICON: Record<string, ReactNode> = {
 
 export type NewNode = 'script' | 'storyboard' | 'video' | 'picture' | 'sketch'
 
-export function CanvasToolbar({ chrome, ratio, onNode }: {
+export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   chrome: CanvasChrome | null
   /** The storyboard's ratio: the sketch area's shape (ui-behaviour 3.7). */
   ratio: string
   onNode: (kind: NewNode) => void
+  /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
+  vertical?: boolean
 }) {
   const { tool } = useChrome(chrome)
   const nodeRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const t = (id: ChromeTool, label: string, key: string, body: ReactNode = ICON[id]) => (
     <button type="button" className={`tb-tool ${tool === id ? 'on' : ''}`} aria-pressed={tool === id} aria-label={`${label} (${key})`} title={`${label} (${key})`}
-      onClick={() => chrome?.setTool(id)}>{body}</button>
+      onClick={() => chrome?.setTool(id)}>{body}{vertical && <span className="tb-name">{label}</span>}</button>
   )
+  if (vertical) {
+    return (
+      <div className="canvas-toolbar vertical" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+        {t('pen', 'Pen', 'P')}
+        {t('eraser', 'Eraser', 'E')}
+        {t('select', 'Select', 'V')}
+        {t('hand', 'Hand', 'H')}
+        {t('sketch', ratio, 'S', <svg width="20" height="14" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>)}
+        {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
+        {t('image', 'Picture', 'I', ICON.image)}
+        <span aria-hidden="true" className="tb-sep" />
+        <span className="tb-undo"><UndoButtons bare /></span>
+        <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}><b>+</b>Node</button>
+        <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="start" label="Add" className="pt-menu">
+          {(['script', 'storyboard', 'video'] as const).map((k) => (
+            <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode(k) }}>
+              <NodeIcon kind={k} size={16} />{k === 'script' ? 'Script' : k === 'storyboard' ? 'Storyboard' : 'Video'}
+            </button>
+          ))}
+          <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode('picture') }}>{ICON.image}A picture</button>
+        </Float>
+      </div>
+    )
+  }
   return (
     <div className="canvas-toolbar" role="toolbar" aria-label="Canvas tools">
       {t('select', 'Select', 'V')}
@@ -147,15 +173,15 @@ export function CanvasToolbar({ chrome, ratio, onNode }: {
 
 // ── Zoom and undo ───────────────────────────────────────────────────────────
 
-export function ZoomPill({ chrome }: { chrome: CanvasChrome | null }) {
+export function ZoomPill({ chrome, touch = false }: { chrome: CanvasChrome | null; touch?: boolean }) {
   const { zoom } = useChrome(chrome)
   return (
-    <div className="zoom-pill" role="group" aria-label="Undo and zoom">
-      <UndoButtons bare />
-      <span aria-hidden="true" className="zp-sep" />
+    <div className={`zoom-pill ${touch ? 'touch' : ''}`} role="group" aria-label="Undo and zoom">
+      {!touch && <><UndoButtons bare /><span aria-hidden="true" className="zp-sep" /></>}
       <button type="button" aria-label="Zoom out" onClick={() => chrome?.zoomBy(-1)}>−</button>
       <button type="button" className="zp-value" title="Fit everything (⌥0)" onClick={() => chrome?.fitAll()}>{Math.round(zoom * 100)}%</button>
       <button type="button" aria-label="Zoom in" onClick={() => chrome?.zoomBy(1)}>+</button>
+      {touch && <><span aria-hidden="true" className="zp-sep" /><button type="button" className="zp-fit" onClick={() => chrome?.fitAll()}>Fit</button></>}
     </div>
   )
 }

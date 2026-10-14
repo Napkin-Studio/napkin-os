@@ -10,6 +10,8 @@ import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
 import { BusyPointer } from './ui/loader/BusyPointer'
 import { UndoKeys } from './ui/UndoButtons'
+import { PhoneReview } from './stages/PhoneReview'
+import { PHONE, useMedia } from './ui/hooks'
 import { PanelsContext } from './ui/chrome/panels'
 import { CLAN_DB } from './model/store'
 import { clanDbFor, INDEX_KEY } from './projects/storage'
@@ -36,12 +38,16 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
     assets: panel === 'assets',
     toggle: (p: 'history' | 'assets') => setPanel((now) => (now === p ? null : p)),
   }), [panel])
+  const phone = useMedia(PHONE)
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
   // The beta's record: where the person is, and what went wrong in front of them.
   useEffect(() => { setScreen({ stage, project: project.id }) }, [stage, project.id])
   useEffect(() => { if (trouble) errorShown('clan-write', trouble) }, [trouble])
   useEffect(() => { if (storeNote) errorShown('store', storeNote) }, [storeNote])
+
+  // A phone gets Phone review whatever the route (ui-behaviour 2.5): watch and leave notes, no editing.
+  if (phone) return <PanelsContext.Provider value={panels}><PhoneReview /></PanelsContext.Provider>
 
   return (
     <PanelsContext.Provider value={panels}>

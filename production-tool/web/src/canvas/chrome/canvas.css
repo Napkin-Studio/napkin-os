@@ -104,3 +104,19 @@
 .start-card { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: 420px; padding: 16px 18px; z-index: 4; display: flex; flex-direction: column; gap: 10px; }
 .start-card b { font-size: 14px; font-weight: 600; }
 .start-card p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink2); }
+
+/* ── iPad (mock TabletCanvas): the tool bar is a column on the left, 44px targets ── */
+.canvas-toolbar.vertical { left: 12px; top: 16px; bottom: auto; transform: none; flex-direction: column; gap: 2px; padding: 6px; border-radius: 20px; }
+.canvas-toolbar.vertical .tb-tool { width: 64px; height: 56px; border-radius: 14px; flex-direction: column; gap: 3px; font-size: 11px; }
+.canvas-toolbar.vertical .tb-name { font-size: 11px; font-weight: 500; }
+.canvas-toolbar.vertical .tb-sep { width: 40px; height: 1px; margin: 4px 0; }
+.canvas-toolbar.vertical .tb-undo { display: flex; flex-direction: column; align-items: center; }
+.canvas-toolbar.vertical .tb-undo button { width: 56px; height: 48px; border: 0; background: transparent; font-size: 20px; border-radius: 12px; cursor: pointer; color: var(--ink); }
+.canvas-toolbar.vertical .tb-undo button:disabled { color: var(--ink3); }
+.canvas-toolbar.vertical .tb-node { width: 64px; height: 60px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; padding: 0; }
+.canvas-toolbar.vertical .tb-node b { font-size: 18px; }
+.zoom-pill.touch { padding: 6px 10px; }
+.zoom-pill.touch button { width: 44px; height: 44px; font-size: 18px; }
+.zoom-pill.touch .zp-value { width: 56px; font-size: 13px; }
+.zoom-pill.touch .zp-fit { width: auto; padding: 0 12px; font-size: 14px; }
+.br-pill { left: 100px; }

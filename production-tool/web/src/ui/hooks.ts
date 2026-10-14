@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
 import { oneAtATime } from '../lib/guard'
 import { placeFloating, type Anchor } from '../lib/place'
@@ -72,6 +72,20 @@ export function useColorScheme(): 'light' | 'dark' {
   }, [])
   return dark ? 'dark' : 'light'
 }
+
+/** Whether a media query matches now, kept up to date (phone and tablet layouts, ui-behaviour 2.5). */
+export function useMedia(q: string): boolean {
+  const subscribe = useCallback((cb: () => void) => {
+    const m = typeof window !== 'undefined' ? window.matchMedia?.(q) : undefined
+    m?.addEventListener('change', cb)
+    return () => m?.removeEventListener('change', cb)
+  }, [q])
+  return useSyncExternalStore(subscribe, () => typeof window !== 'undefined' && !!window.matchMedia?.(q).matches, () => false)
+}
+
+/** A phone (below 600px wide) gets Phone review; an iPad or a narrow window (below 1180px, or touch) the tablet layout. */
+export const PHONE = '(max-width: 599px)'
+export const TABLET = '(max-width: 1179px), (pointer: coarse)'
 
 /**
  * Position a floating element (toolbar, popover) by its anchor, kept fully inside

@@ -33,7 +33,7 @@ import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { isActive } from '../jobs/runner'
 import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
-import { useColorScheme, useFloating } from '../ui/hooks'
+import { TABLET, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
@@ -64,7 +64,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const panels = usePanels()
   const [chrome, setChrome] = useState<CanvasChrome | null>(null)
   const [board, setBoard] = useState<string | null>(null)
-  const narrow = useNarrow()
+  const narrow = useMedia(TABLET)
   const doc = useDoc()
   const ui = useUi()
   useJobsTick()
@@ -342,8 +342,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}
               onPicture={() => chrome?.setTool('image')} onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} />
           : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={() => chrome?.fitAll()} narrow={narrow} />}
-        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} />
-        {!narrow && <ZoomPill chrome={chrome} />}
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
+        <ZoomPill chrome={chrome} touch={narrow} />
       </div>
     </div>
   )
@@ -800,15 +800,3 @@ function StartCard({ onScript, onPictures }: { onScript: () => void; onPictures:
   )
 }
 
-/** Below 1180px (iPad), the rail folds into a pill (ui-behaviour 2.5, 3.2). */
-function useNarrow(): boolean {
-  const q = '(max-width: 1179px)'
-  const [narrow, setNarrow] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(q).matches)
-  useEffect(() => {
-    const m = matchMedia(q)
-    const on = () => setNarrow(m.matches)
-    m.addEventListener('change', on)
-    return () => m.removeEventListener('change', on)
-  }, [])
-  return narrow
-}
