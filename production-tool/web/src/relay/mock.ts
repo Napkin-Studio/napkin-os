@@ -23,6 +23,7 @@ import { AGENCY_SHELF } from '../contracts/types'
 import { quotaClassOf } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
 import { hexOf } from '../lib/hash'
+import { mockFrameEdit } from '../jobs/frameWords'
 import type { AnswerResult, Relay, UploadResult } from './types'
 import { RelayError } from './types'
 
@@ -69,6 +70,12 @@ const MOCK_HOST = 'https://mock.napkin.invalid'
 
 /** The words the mock's question is asked about. */
 const ASK = /\[ask\]/i
+
+/** The value a frame_edit's answer chose (its options' ids are their values: camera, local, both). */
+function frameAnswer(item: LedgerItem): string | undefined {
+  const fromChange = item.req.input.answer?.optionId
+  return item.answer?.option_id ?? fromChange
+}
 
 /** What the contract-3 relay says to a request of another contract. */
 export const OTHER_CONTRACT = 'This build reads contract 3; reload the page.'
@@ -419,6 +426,9 @@ export class MockRelay implements Relay {
           item.done = { state: 'failed', at: this.opts.now(), error: { code: 'moderated', message: 'This request was blocked by the safety check.', retryable: false, providerCode: 'SAFETY.INPUT.TEXT' } }
         } else if (/#fail/i.test(text)) {
           item.done = { state: 'failed', at: this.opts.now(), error: { code: 'provider_failed', message: 'The provider could not make this one. Try again.', retryable: true } }
+        } else if (req.op === 'frame_edit' && mockFrameEdit(req.input, frameAnswer(item)).edit?.runAs === 'none') {
+          // Only the camera's move changes: nothing is drawn (features/frame-change-edit.clan).
+          item.done = { state: 'completed', at: this.opts.now(), outputs: [] }
         } else if (req.op === 'shot_list') {
           const names = (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))
           item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, names, req.input.shots ?? []), outputs: [] }
@@ -451,7 +461,9 @@ export class MockRelay implements Relay {
     // An answered question starts the job's clock again: it goes on from where it stopped.
     const elapsed = now - (item.answeredAt ?? item.createdAt)
     const delay = this.delayFor(req.op)
-    const asks = ASK.test(`${req.input.text ?? ''} ${req.input.script ?? ''}`) && !req.input.answer
+    // Change this frame: the passthrough's reading of the words (jobs/frameEdit.ts), its ask included.
+    const frameEdit = req.op === 'frame_edit' ? mockFrameEdit(req.input, frameAnswer(item)) : undefined
+    const asks = (ASK.test(`${req.input.text ?? ''} ${req.input.script ?? ''}`) || !!frameEdit?.question) && !req.input.answer
     let state: JobState
     let queuePosition: number | undefined
     if (item.done) {
@@ -459,7 +471,7 @@ export class MockRelay implements Relay {
     } else if (asks && !item.answer && elapsed >= delay * 0.4) {
       state = 'needs_input'
       if (!item.question) {
-        item.question = mockQuestion()
+        item.question = frameEdit?.question ? { id: newUlidId('q'), ...frameEdit.question } : mockQuestion()
         this.save()
       }
     } else if (elapsed < delay * 0.4) {
@@ -503,6 +515,12 @@ export class MockRelay implements Relay {
     if (item.done?.shots) job.shots = item.done.shots
     if (item.done?.error) job.error = item.done.error
     if (item.question) job.question = item.question
+    if (frameEdit?.edit && state !== 'needs_input') {
+      job.director = {
+        model: 'passthrough', promptVersion: 'director.v0', rationale: `mock: read as a ${frameEdit.edit.reading} change`,
+        output: { op: 'frame_edit', frameEdit: frameEdit.edit, question: null, rationale: 'mock', confidence: 0.1 },
+      }
+    }
     if (item.answer && item.answeredBy) {
       job.answer = item.answer
       job.answeredBy = item.answeredBy

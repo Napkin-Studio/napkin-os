@@ -25,6 +25,9 @@ export type JobPurpose =
   | { for: 'stitch' }
   /** A Generate on a sketch area (features/frame-aspect.clan): it lands as a frame made from the sketch. */
   | { for: 'sketch'; sketchId: Id }
+  /** Change this frame (features/frame-change-edit.clan): a proposal on the shot's frame `parentFrameId`,
+   *  landed unpicked until Apply or Keep both (jobs/frameEdit.ts). */
+  | { for: 'frame_edit'; shotId: Id; parentFrameId?: Id }
 
 export type Purpose = JobPurpose['for']
 
@@ -40,6 +43,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
   switch (p.for) {
     case 'frame':
     case 'clip':
+    case 'frame_edit':
       return { kind: 'shot', id: p.shotId }
     case 'shot_list':
       return { kind: 'storyboard', id: mainStoryboard(d)!.id }
@@ -56,7 +60,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
 /** The input rows a purpose keeps (what the job is a new version of, the notes it fixes). */
 export function purposeInputs(p: JobPurpose): JobInputRow[] {
   const rows: JobInputRow[] = []
-  if (p.for === 'frame' && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
+  if ((p.for === 'frame' || p.for === 'frame_edit') && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
   if (p.for === 'clip' && p.parentTakeId) rows.push({ kind: 'take', ref: p.parentTakeId, used_as: 'new version of', included: true })
   for (const r of (p.for === 'frame' ? p.fixReviewIds : p.for === 'clip' ? p.reviewIds : undefined) ?? []) {
     rows.push({ kind: 'note', ref: r, used_as: 'note to fix', included: true })
@@ -85,6 +89,11 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
     }
     case 'sketch':
       return j.node.kind === 'sketch' ? { for: 'sketch', sketchId: j.node.id } : null
+    case 'frame_edit': {
+      if (j.node.kind !== 'shot') return null
+      const pf = parent('frame')
+      return { for: 'frame_edit', shotId: j.node.id, ...(pf ? { parentFrameId: pf } : {}) }
+    }
     case 'clip': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'clip', shotId: j.node.id }

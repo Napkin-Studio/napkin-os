@@ -1796,9 +1796,9 @@
             "value": "camera"
           },
           {
-            "id": "subject",
+            "id": "local",
             "label": "Make her bigger in frame",
-            "value": "subject"
+            "value": "local"
           },
           {
             "id": "other",
