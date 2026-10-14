@@ -85,8 +85,11 @@ function shotsFor(d: Doc, kind: LinkEndpointKind | null, id: Id): Shot[] {
   if (kind === 'shot') return d.shots[id] ? [d.shots[id]] : []
   if (kind === 'storyboard') return shotsOf(d, id)
   if (kind === 'script') {
+    // Its scenes' shots, and the shots of the storyboards it drives (what the Script editor shows).
     const scenes = new Set(scenesOf(d, id).map((s) => s.id))
-    return values(d.shots).filter((s) => s.scene_id && scenes.has(s.scene_id)).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
+    const boards = new Set(values(d.links).filter((l) => l.role === 'drives' && l.from.id === id && l.to.kind === 'storyboard').map((l) => l.to.id))
+    return values(d.shots).filter((s) => (s.scene_id && scenes.has(s.scene_id)) || boards.has(s.storyboard_id))
+      .sort((a, b) => (a.storyboard_id < b.storyboard_id ? -1 : a.storyboard_id > b.storyboard_id ? 1 : a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
   }
   if (kind === 'video') {
     const sb = values(d.links).find((l) => l.role === 'renders' && l.to.kind === 'video' && l.to.id === id)
@@ -95,18 +98,21 @@ function shotsFor(d: Doc, kind: LinkEndpointKind | null, id: Id): Shot[] {
   return []
 }
 
-/** The ids a prose fragment mentions (its mention nodes), and the @words of plain text. */
-function mentionsIn(prose: unknown, texts: (string | undefined)[]): { ids: Id[]; words: string[] } {
-  const ids: Id[] = []
+/** What a fragment names: its mention nodes' ids (with the label each was inserted with), and the
+ *  @words typed in its text and in the flat fields. */
+function mentionsIn(prose: unknown, texts: (string | undefined)[]): { ids: { id: Id; label?: string }[]; words: string[] } {
+  const ids: { id: Id; label?: string }[] = []
+  const all = [...texts]
   const walk = (n: unknown) => {
     if (!n || typeof n !== 'object') return
-    const node = n as { type?: string; attrs?: { id?: unknown }; content?: unknown[] }
-    if (node.type === 'mention' && typeof node.attrs?.id === 'string') ids.push(node.attrs.id)
+    const node = n as { type?: string; text?: unknown; attrs?: { id?: unknown; label?: unknown }; content?: unknown[] }
+    if (node.type === 'mention' && typeof node.attrs?.id === 'string') ids.push({ id: node.attrs.id, ...(typeof node.attrs.label === 'string' ? { label: node.attrs.label } : {}) })
+    if (node.type === 'text' && typeof node.text === 'string') all.push(node.text)
     for (const c of node.content ?? []) walk(c)
   }
   walk(prose)
   const words: string[] = []
-  for (const t of texts) for (const m of (t ?? '').matchAll(MENTION)) words.push(m[1])
+  for (const t of all) for (const m of (t ?? '').matchAll(MENTION)) words.push(m[1])
   return { ids, words }
 }
 
@@ -237,9 +243,10 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
   }
   const take = (prose: unknown, texts: (string | undefined)[], shot: Id | null, extra: Id[] = []) => {
     const m = mentionsIn(prose, texts)
-    for (const id of [...m.ids, ...extra]) {
+    for (const { id, label } of [...m.ids, ...extra.map((id) => ({ id, label: undefined }))]) {
       const r = resolve(d, { id })
       if (r) note(`${r.kind}:${r.id}`, shot, named)
+      else if (label) note(label, shot, unknown) // a mention whose reference is gone
     }
     for (const w of m.words) {
       const r = resolve(d, { name: w })

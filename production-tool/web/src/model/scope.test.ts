@@ -123,3 +123,19 @@ describe('scopeOf', () => {
     expect(items.filter((i) => i.kind === 'storyboard')).toHaveLength(1)
   })
 })
+
+describe('scopeOf reads the live text too', () => {
+  it('typed @words inside the prose, and a mention whose reference is gone, are unknown names', () => {
+    const d = fresh()
+    d.shots[S16].prose = { type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'A @jogger runs past ' }, { type: 'mention', attrs: { id: 'ref_gone', label: 'old_name' } }] }] }
+    const unknown = scopeOf(d, SB).filter((i) => i.kind === 'unknown').map((i) => i.name)
+    expect(unknown.sort()).toEqual(['jogger', 'old_name'])
+  })
+
+  it('a script counts the shots of the storyboard it drives, scene or not', () => {
+    const d = fresh()
+    d.shots[S16].action = 'A @jogger.'
+    delete d.shots[S16].scene_id
+    expect(scopeOf(d, SCRIPT).find((i) => i.kind === 'unknown')).toMatchObject({ name: 'jogger', usedBy: [S16] })
+  })
+})
