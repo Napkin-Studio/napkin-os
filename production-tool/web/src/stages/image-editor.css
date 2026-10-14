@@ -5,7 +5,7 @@
 .ie-tools { align-self: start; display: flex; flex-direction: column; gap: 4px; padding: 8px 5px; }
 .ie-tools button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); display: grid; place-items: center; cursor: pointer; }
 .ie-tools button:hover:not(:disabled) { background: var(--soft); }
-.ie-tools button.on { background: var(--ink-fixed); color: #FFFFFF; }
+.ie-tools button.on { background: var(--ink); color: var(--paper); }
 .ie-stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; max-width: 880px; margin: 0 auto; width: 100%; padding-left: 60px; }
 .ie-toolbar { align-self: flex-start; display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; font-size: 13px; }
 .ie-frame { width: 100%; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow-soft); background: var(--soft); }

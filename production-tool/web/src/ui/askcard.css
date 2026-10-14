@@ -14,8 +14,8 @@
 .askcard-why { font-size: 13px; line-height: 1.45; color: var(--ink2); }
 .askcard-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .askcard-options .askcard-opt { height: 38px; padding: 0 14px; font-size: 13px; font-weight: 500; border-color: var(--ink); }
-.askcard-options .askcard-opt:first-child:not(.rec) { background: var(--ink-fixed); color: #FFFFFF; border-color: var(--ink-fixed); }
-.askcard-options .askcard-opt:first-child:not(.rec):hover:not(:disabled) { background: #2A2E37; }
+.askcard-options .askcard-opt:first-child:not(.rec) { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.askcard-options .askcard-opt:first-child:not(.rec):hover:not(:disabled) { background: var(--ink2); border-color: var(--ink2); }
 .askcard-options.blocks { flex-direction: column; flex-wrap: nowrap; }
 .askcard-options.blocks .askcard-opt {
   height: auto; min-height: 54px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink);
@@ -24,7 +24,7 @@
 .askcard-options.blocks .askcard-opt:first-child:not(.rec) { background: var(--card); color: var(--ink); border-color: var(--ink); }
 .askcard-label { font-weight: 600; font-size: 14px; }
 .askcard-options:not(.blocks) .askcard-label { font-weight: 500; font-size: 13px; }
-.askcard-rec { grid-column: 2; grid-row: 1; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); background: var(--ink-fixed); color: #FFFFFF; }
+.askcard-rec { grid-column: 2; grid-row: 1; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); background: var(--ink); color: var(--paper); }
 .askcard-options:not(.blocks) .askcard-rec { margin-left: 6px; }
 .askcard-detail { grid-column: 1 / -1; font-family: var(--f-mono); font-size: 11px; font-weight: 400; color: var(--ink2); }
 .askcard-options:not(.blocks) .askcard-detail { margin-left: 6px; font-family: var(--f-display); }
@@ -35,7 +35,7 @@
 .askcard-note { font-size: 12px; color: var(--warn); }
 .askcard-later {
   display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px 0 8px; border: 0; border-radius: var(--r-pill);
-  background: #FFF1EE; color: var(--action); font-size: 13px; cursor: pointer; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  background: var(--create-soft); color: var(--action); font-size: 13px; cursor: pointer; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 .askcard-later b { font-weight: 600; }
 .askcard-later span { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; }
