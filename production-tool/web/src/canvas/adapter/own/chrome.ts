@@ -22,6 +22,8 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       return t.type === 'native' ? FROM_ENGINE[t.id] ?? null : null
     },
     // The Picture tool is the node layer's (canvas/nodes/pictures.ts): a file picker, then the pictures in view.
+    // The engine's own sketch tool takes the next area's ratio when it has one (features/canvas-edit-tools.clan).
+    setSketchRatio: (r) => (a as unknown as { setSketchRatio?: (r: string) => void }).setSketchRatio?.(r),
     supports: (t) => !!TO_ENGINE[t] || (t === 'image' && canvasActions.canPicture()),
     setTool: (t) => {
       if (t === 'image') {

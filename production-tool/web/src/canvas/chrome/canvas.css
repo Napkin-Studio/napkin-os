@@ -187,3 +187,9 @@
 .br-new:not([aria-disabled='true']):hover { border-color: var(--tool); color: var(--tool-ink); background: var(--tool-soft); }
 /* An open menu's button keeps its tooltip to itself. */
 .canvas-toolbar [aria-expanded='true'][data-tip]::after { display: none; }
+/* The sketch area shape picker (3.7): four radios, each with its shape. */
+.tb-shapes { min-width: 210px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.tb-shapes .pt-label { padding: 2px 8px 4px; }
+.tb-shapes .pt-menurow.on { color: var(--tool-ink); background: var(--tool-soft); font-weight: 600; }
+.tb-shape { display: inline-block; height: 12px; border: 1.3px solid currentColor; border-radius: 2px; margin-right: 4px; }
+.tb-shapenote { padding: 6px 8px 2px; font-size: 11.5px; color: var(--ink3); max-width: 220px; }

@@ -12,6 +12,7 @@ import { rowLabel, type BoardRow } from './boards'
 import { boardKey } from '../boards/boards'
 import type { CanvasChrome, ChromeTool } from './controls'
 import { canvasActions } from './actions'
+import { RATIOS, type Ratio } from '../../contracts/types'
 import './canvas.css'
 
 /** What the canvas below can do through the chrome's actions (actions.ts), kept current. */
@@ -134,6 +135,15 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   const actions = useActions()
   const nodeRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
+  // The next sketch area's shape (ui-behaviour 3.7): the storyboard's ratio until the person picks one.
+  // An existing area's ratio never changes; the picker is the only way the next one's does.
+  const shapeRef = useRef<HTMLButtonElement>(null)
+  const [picked, setPicked] = useState<Ratio | null>(null)
+  const [shapes, setShapes] = useState(false)
+  const shape = picked ?? ratio
+  useEffect(() => {
+    if (picked) chrome?.setSketchRatio?.(picked)
+  }, [chrome, picked])
   // A chrome tool (Board, Link) is on: the engine's tool shows as not pressed. Picking an engine tool ends it.
   const shown = actions.mode ? null : tool
   useEffect(() => {
@@ -218,12 +228,35 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       <span aria-hidden="true" className="tb-sep" />
       {(() => {
         const on = has('sketch')
+        const active = shown === 'sketch'
         return (
-          <button type="button" className={`tb-tool wide ${shown === 'sketch' ? 'on' : ''}`} aria-pressed={shown === 'sketch'} aria-label={`Sketch area ${ratio} (S)`}
-            aria-disabled={on ? undefined : 'true'} data-tip={on ? `Sketch area ${ratio} (S): drag to draw, then Generate brings back a picture at its shape` : `Sketch area (S) · not on this canvas yet`}
-            onClick={() => { if (!on) return; canvasActions.setMode(null); chrome?.setTool('sketch') }}>
-            <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{ratio}
-          </button>
+          <>
+            <button ref={shapeRef} type="button" className={`tb-tool wide ${active ? 'on' : ''}`} aria-pressed={active} aria-label={`Sketch area ${shape} (S)`}
+              aria-haspopup={on && active ? 'dialog' : undefined} aria-expanded={on && active ? shapes : undefined}
+              aria-disabled={on ? undefined : 'true'}
+              data-tip={!on ? 'Sketch area (S) · not on this canvas yet' : active ? `Sketch area ${shape}: press again to pick the shape` : `Sketch area ${shape} (S): drag to draw, then Generate brings back a picture at its shape`}
+              onClick={() => {
+                if (!on) return
+                if (active) return setShapes(!shapes)
+                canvasActions.setMode(null)
+                chrome?.setTool('sketch')
+              }}>
+              <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{shape}
+            </button>
+            <Float anchor={shapeRef} open={shapes} onClose={() => setShapes(false)} side="above" align="start" role="dialog" label="Sketch area shape" className="tb-shapes pt-menu">
+              <span className="pt-label">Sketch area shape</span>
+              <div role="radiogroup" aria-label="Sketch area shape">
+                {RATIOS.map((r) => (
+                  <button key={r} type="button" role="radio" aria-checked={shape === r} className={`pt-menurow ${shape === r ? 'on' : ''}`}
+                    onClick={() => { setPicked(r); setShapes(false) }}>
+                    <span className="tb-shape" style={{ aspectRatio: r.replace(':', ' / ') }} aria-hidden="true" />{r}
+                    {r === ratio && <span className="hint">storyboard</span>}
+                  </button>
+                ))}
+              </div>
+              <span className="tb-shapenote">The next area takes this shape; drawn areas keep theirs.</span>
+            </Float>
+          </>
         )
       })()}
       {mode('board', 'Board', 'B', actions.canBoard, 'Board (B): drag out a board, or click for one', 'Board (B) · needs the new canvas (it has boards as frames)')}
