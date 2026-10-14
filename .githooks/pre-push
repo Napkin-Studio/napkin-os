@@ -8,16 +8,24 @@
 #      unless every one of them carries a `Feature: none` trailer (typo-sized fixes).
 #      Each feature record in the push must pass `scripts/feature verify`: past
 #      `exploring`, its design is complete and approved.
+#   0. The licence policy (always, before the rest): a push that adds or changes anything
+#      in licences/*.toml needs NAPKIN_LICENCE_APPROVED=<name>, a name in the policy's
+#      `approvers`, and every new or changed entry must say approved_by that name
+#      (docs/contracts/licences.md). It is a person's approval, so only a person sets it.
 #
 # Only a person may bypass it: NAPKIN_ALLOW_MAIN=1 permits a push to main,
 # NAPKIN_SKIP_CHECKS=1 skips step 1, and NAPKIN_NO_FEATURE=1 skips step 2.
-# Agents never bypass it, and never use --no-verify.
+# NAPKIN_LICENCE_APPROVED is a person's approval, not a bypass; nothing skips step 0.
+# Agents never set any of these, and never use --no-verify.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 zero=0000000000000000000000000000000000000000
 status=0
+licence_py() {
+  if command -v uv >/dev/null; then uv run -q --no-project --python 3.12 python "$@"; else python3 "$@"; fi
+}
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ "$local_sha" == "$zero" ]] && continue          # deleting a remote ref
@@ -37,6 +45,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   range="$base..$local_sha"
   [[ -z "$(git rev-list "$range")" ]] && continue
   echo "pre-push: ${remote_ref#refs/heads/} ← $(git rev-list --count "$range") commit(s)"
+
+  # 0. a person approves every licence policy change
+  if [[ -n "$(git diff --name-only "$range" -- 'licences/*.toml')" ]] &&
+     ! licence_py scripts/licences/check.py --approval-guard "$base" "$local_sha"; then
+    echo "pre-push: licences/*.toml changed without a person's approval (NAPKIN_LICENCE_APPROVED)"
+    status=1
+  fi
 
   # 1. checks
   if [[ "${NAPKIN_SKIP_CHECKS:-}" == 1 ]]; then

@@ -74,6 +74,7 @@ from judge_base import (  # noqa: E402  (after sys.path tweak)
     check_verdicts,
 )
 import judge_base  # noqa: E402  (shared loader and HTTP classifier)
+import weights_guard  # noqa: E402  (only weights listed in licences/weights.toml load)
 
 NAME = "local"
 DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
@@ -142,8 +143,13 @@ _WARN_LOCK = threading.Lock()
 # ---- configuration ----------------------------------------------------------------
 def resolve_model(model_name: str | None = None) -> str:
     """The model to load: the argument, else RAG_LOCAL_RERANKER, else DEFAULT_MODEL. May
-    be a Hugging Face repo id or a local directory holding a saved model."""
-    return model_name or os.environ.get("RAG_LOCAL_RERANKER") or DEFAULT_MODEL
+    be a Hugging Face repo id or a local directory holding a saved model. Either must be
+    listed in licences/weights.toml (weights_guard); otherwise BackendNotConfigured."""
+    name = model_name or os.environ.get("RAG_LOCAL_RERANKER") or DEFAULT_MODEL
+    try:
+        return weights_guard.require(name)
+    except weights_guard.UnlistedWeights as e:
+        raise BackendNotConfigured(f"local: {e}") from e
 
 
 def _mps_available() -> bool:
@@ -500,13 +506,16 @@ def main(argv: list[str] | None = None) -> int:
                    help="load the model from the cache and score a sample pair")
     ap.add_argument("--device", default=None, help="mps | cpu | cuda (default: RAG_LOCAL_DEVICE, else auto)")
     a = ap.parse_args(argv)
+    try:
+        name = resolve_model((a.download if a.download is not None else a.check) or None)
+    except BackendNotConfigured as e:          # not in licences/weights.toml
+        print(f"not configured: {e}", file=sys.stderr)
+        return 2
     if a.download is not None:
-        name = resolve_model(a.download or None)
         t = time.monotonic()
         path = download(name)
         print(f"{name}: {path} ({time.monotonic() - t:.1f}s)")
         return 0
-    name = resolve_model(a.check or None)
     t = time.monotonic()
     try:
         b = LocalCrossEncoderBackend(name, device=a.device)

@@ -36,6 +36,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import weights_guard  # noqa: E402  (only weights listed in licences/weights.toml load)
+
 MODEL = os.environ.get("RAG_EMBED_LOCAL_MODEL", "nvidia/Nemotron-3-Embed-1B-BF16")
 PARITY_MIN_COSINE = 0.999
 # Top-1 agreement required on the golden sample. Set to 1.0 before measuring, changed to
@@ -69,6 +71,10 @@ def model():
     with _LOCK:
         if _MODEL is None:
             try:
+                weights_guard.require(MODEL)      # only weights listed in licences/weights.toml
+            except weights_guard.UnlistedWeights as e:
+                raise LocalEmbedUnavailable(str(e)) from e
+            try:
                 from sentence_transformers import SentenceTransformer
                 _MODEL = SentenceTransformer(MODEL, device=_device(), local_files_only=True,
                                              trust_remote_code=True)
@@ -93,6 +99,7 @@ def embed(texts: list[str], input_type: str = "passage") -> list[list[float]]:
 
 def _download() -> None:
     """Fetch the weights into the HF cache (explicit, never at brief time)."""
+    weights_guard.require(MODEL)
     from huggingface_hub import snapshot_download
     t = time.time()
     path = snapshot_download(MODEL, allow_patterns=["*.json", "*.safetensors", "*.py", "*.txt",

@@ -9,11 +9,12 @@
 #   scripts/check.sh --only rust,wasm  just these suites
 #   scripts/check.sh --list            say which suites would run, run nothing
 #
-# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image
+# Suites: rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image licences
 # `image` (docker build --target runtime) runs when the Dockerfile, .dockerignore or the parts of
 # production-tool the image bundles change, or when named; it needs docker.
 # `desktop` (cargo check of app/src-tauri) runs only when that path changes or is named:
-# the full .deb bundle stays in CI.
+# the full .deb bundle stays in CI. `licences` (scripts/licences/check.py) runs its cheap
+# scans on any code change and reads the lockfiles only when a manifest or licences/ changed.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel)"
@@ -24,7 +25,7 @@ unset CLAN_NO_HINTS
 for b in chromium chromium-browser google-chrome-stable google-chrome; do
   command -v "$b" >/dev/null && { export NAPKIN_PDF_RENDER_TESTS=1; break; }
 done
-ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image)
+ALL=(rust wasm conformance frontend desktop engine middleware mock-backend terraform production-tool image licences)
 
 base="" range="" only="" list=0 all=0
 while [[ $# -gt 0 ]]; do
@@ -55,6 +56,7 @@ changed_files() {
 }
 
 declare -A want=()
+licence_files=()
 if [[ $all -eq 1 ]]; then
   for s in "${ALL[@]}"; do want[$s]=1; done
 elif [[ -n "$only" ]]; then
@@ -103,6 +105,15 @@ else
         want[image]=1 ;;
       docker-compose.yml|server/Dockerfile)
         notes+=("$f changed: the Deploy workflow builds the images; try 'docker build .' locally") ;;
+    esac
+    # A second pass, so the first-match routing above is unchanged: what the licence gate reads.
+    case "$f" in
+      package.json|*/package.json|package-lock.json|*/package-lock.json|\
+      Cargo.toml|*/Cargo.toml|Cargo.lock|.cargo/*|pyproject.toml|*/pyproject.toml|uv.lock|*/uv.lock|\
+      requirements*.txt|*/requirements*.txt|licences/*|scripts/licences/*|*/build-layer.sh|\
+      Dockerfile*|*/Dockerfile*|*.woff2|*.woff|*.ttf|*.otf|patches/*|*/patches/*|\
+      *.py|*.ts|*.tsx|*.js|*.mjs|*.jsx|*.html)
+        want[licences]=1; licence_files+=("$f") ;;
     esac
   done < <(changed_files | sort -u)
   for n in "${notes[@]}"; do echo "note: $n"; done
@@ -208,6 +219,15 @@ suite_production-tool() {
       { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
       npm run -s lint && npm test && npm run -s build:web )
   fi
+}
+
+suite_licences() {
+  # The unit tests, then the repo itself (test_repo_tree_passes): on a path-picked run it
+  # reads the lockfiles only when one of the changed files is a manifest or licences/.
+  if [[ $all -eq 0 && -z "$only" ]]; then
+    export NAPKIN_LICENCE_CHANGED="$(printf '%s\n' "${licence_files[@]}")"
+  fi
+  uv run -q --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
 }
 
 logdir="$(mktemp -d "${TMPDIR:-/tmp}/napkin-check.XXXXXX")"

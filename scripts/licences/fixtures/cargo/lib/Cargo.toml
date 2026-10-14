@@ -1,0 +1,15 @@
+[package]
+name = "lib"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+netdep = { path = "../netdep", optional = true }
+mac = { path = "../mac" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasmonly = { path = "../wasmonly" }
+
+[features]
+net = ["dep:netdep"]

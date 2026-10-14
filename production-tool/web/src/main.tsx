@@ -1,3 +1,5 @@
+// First: tells Excalidraw to load its fonts from our copy (OFL replacements), before anything draws.
+import './excalidrawAssets'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'

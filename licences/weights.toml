@@ -1,0 +1,43 @@
+# Every model weight we run, with its licence and file hashes. The licence gate
+# (scripts/licences/check.py) fails on a model id in code that is not listed here, on a
+# non-commercial weight licence, and on a rembg new_session() with no model name.
+# engine/rag/weights_guard.py refuses to load an unlisted id at run time, so an
+# environment override (RAG_EMBED_LOCAL_MODEL, RAG_LOCAL_RERANKER) cannot get round it.
+#
+# Fields: id (the Hugging Face repo id), source, revision (the commit the hashes were
+# read from), files [{path, sha256}] (the weight and tokenizer files, from the Hub's LFS
+# pointers), weight_licence, code_licence ("none" when the repo ships no code),
+# model_card_url, tier, used_by, approved_by (one of policy.toml approvers).
+
+[[model]]
+id = "nvidia/Nemotron-3-Embed-1B-BF16"
+source = "https://huggingface.co/nvidia/Nemotron-3-Embed-1B-BF16"
+revision = "c0c9fea93ea424587517f2c59e20db9f1d6bf615"
+files = [
+  { path = "model.safetensors", sha256 = "f959c3b04e66b42de280bfb97c140cb7e0bfe25e3ecb0b4464c68a8436b2d04f" },
+  { path = "tokenizer.json", sha256 = "797410dfb649a5b9ba92bc4fef7dbf4022d00e73de6867c4ac199a8846439421" },
+]
+# The repo's LICENSE: "All binary model files and source code files are licensed under
+# the OpenMDW-1.1 License" (read 2026-10-13 at the revision above).
+weight_licence = "OpenMDW-1.1"
+code_licence = "OpenMDW-1.1"
+model_card_url = "https://huggingface.co/nvidia/Nemotron-3-Embed-1B-BF16"
+tier = "server"
+used_by = ["engine/rag/embed_local.py"]
+approved_by = "Shrey (2026-10-13 decision)"
+
+[[model]]
+id = "BAAI/bge-reranker-v2-m3"
+source = "https://huggingface.co/BAAI/bge-reranker-v2-m3"
+revision = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
+files = [
+  { path = "model.safetensors", sha256 = "d9e3e081faff1eefb84019509b2f5558fd74c1a05a2c7db22f74174fcedb5286" },
+  { path = "sentencepiece.bpe.model", sha256 = "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865" },
+  { path = "tokenizer.json", sha256 = "69564b696052886ed0ac63fa393e928384e0f8caada38c1f4864a9bfbf379c15" },
+]
+weight_licence = "Apache-2.0"
+code_licence = "none"
+model_card_url = "https://huggingface.co/BAAI/bge-reranker-v2-m3"
+tier = "server"
+used_by = ["engine/rag/judge_local.py"]
+approved_by = "Shrey (2026-10-13 decision)"

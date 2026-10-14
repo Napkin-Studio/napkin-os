@@ -419,3 +419,47 @@ jobs:
         run: |
           docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/production/index.html
           docker image ls napkin-web:ci
+
+  # The licence gate (features/licence-gate.clan, docs/contracts/licences.md): every
+  # lockfile we ship or run, fonts, binaries and model weights against licences/policy.toml.
+  # No path filter: it always runs the full check. The rulesets quote this job's name, so
+  # renaming it breaks branch protection.
+  licences:
+    name: Licences — npm · cargo · python · weights · fonts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # the policy diff reads the PR's base
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            production-tool/web/package-lock.json
+            production-tool/clan-store/package-lock.json
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: licences
+          cache-targets: false
+      # PyPI metadata by exact version, package archives for clarifications, and the
+      # production-only npm installs the font scan reads.
+      - name: Cache licence metadata
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/napkin-licences
+          key: napkin-licences-${{ hashFiles('**/uv.lock', '**/package-lock.json', 'licences/policy.toml') }}
+          restore-keys: napkin-licences-
+      - name: Licence gate (unit tests, then this tree)
+        run: uv run --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
+      - name: Licence policy changes in this PR
+        if: always() && github.event_name == 'pull_request'
+        run: uv run --no-project --python 3.12 python scripts/licences/check.py --policy-diff "origin/${{ github.base_ref }}" >> "$GITHUB_STEP_SUMMARY"
