@@ -13,13 +13,13 @@ import { homeItems, itemId } from '../projects/homeList'
 import { behindNapkinOs, signOut } from '../relay/access'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
-import { clock, edited, greetName, greeting, menuName, refusalNotice, stageChip } from './homeWords'
+import { clock, edited, greetName, greeting, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
 import { DataSharing } from './DataSharing'
 import { sayer, type CastKey } from './agents/cast'
 import { useBlobUrl } from './hooks'
 import { StudioMark } from './Mark'
-import { MarkTile } from './chrome/Bar'
+import { Account, MarkTile } from './chrome/Bar'
 import './home.css'
 
 const CREW: CastKey[] = ['dex', 'ellis', 'jude']
@@ -166,7 +166,6 @@ function HomeBar() {
   const shell = useShell()
   const { relay, app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
-  const [menu, setMenu] = useState(false)
   const [sharing, setSharing] = useState(false)
   const allow = ui.me?.allow
   return (
@@ -180,22 +179,15 @@ function HomeBar() {
       </span>
       <span />
       <span className="hm-right">
-        <span className="topmenu">
-          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-          {menu && (
-            <span className="menu" role="menu">
-              <span className="handle menu-head">{menuName(ui.me)}</span>
-              {/* Who receives the agency's material (features/tenant-limits.clan). */}
-              {allow && (
-                <button className="btn sm ghost" role="menuitem" onClick={() => { setMenu(false); setSharing(true) }}>Data sharing</button>
-              )}
-              {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
-              {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
-                <button className="btn sm ghost" role="menuitem" onClick={() => void signOut()}>Sign out</button>
-              )}
-            </span>
+        {/* The account menu every bar has: who you are, the theme, Reduce motion, the projects. */}
+        <Account>
+          {/* Who receives the agency's material (features/tenant-limits.clan). */}
+          {allow && <button type="button" className="pt-menurow" onClick={() => setSharing(true)}>Data sharing</button>}
+          {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
+          {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
+            <button type="button" className="pt-menurow" onClick={() => void signOut()}>Sign out</button>
           )}
-        </span>
+        </Account>
       </span>
       {sharing && allow && <DataSharing allow={allow} onClose={() => setSharing(false)} />}
     </header>

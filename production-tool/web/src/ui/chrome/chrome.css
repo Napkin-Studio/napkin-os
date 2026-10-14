@@ -119,3 +119,7 @@
 /* The dot grid every canvas-like surface sits on. */
 .pt-grid { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }
 .pt-mention { color: var(--tool-ink); }
+
+/* Light / Dark / System in the account menu: the segmented switch, compact. */
+.pt-menu .pt-theme button { height: 26px; padding: 0 10px; }
+

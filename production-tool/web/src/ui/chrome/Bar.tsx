@@ -2,8 +2,9 @@
 // Main.dc.html; ui-behaviour 3.1): the Home mark, the brand, the back button, an editor's
 // title with its node mark, the people here and the account button with its menu.
 
-import { useRef, useState, type ReactNode } from 'react'
-import { useServices, useShell, useUi } from '../../app/context'
+import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useShell } from '../../app/context'
+import { onThemeChoice, setThemeChoice, themeChoice, type ThemeChoice } from '../../theme'
 import type { Me } from '../../contracts/types'
 import { Float } from '../Float'
 import { StudioMark } from '../Mark'
@@ -67,11 +68,31 @@ export function Presence({ line }: { line?: string }) {
   return <div className="pt-presence">{line}</div>
 }
 
-/** The account button: your initials; its menu has who you are, Reduce motion, and the projects. */
+const THEMES: { id: ThemeChoice; label: string }[] = [{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }, { id: 'system', label: 'System' }]
+
+/** Light / Dark / System, as the shell's switch keeps it (napkin.theme): applies at once, no reload. */
+export function ThemeChoices() {
+  const choice = useSyncExternalStore(onThemeChoice, () => themeChoice(), () => 'system' as ThemeChoice)
+  return (
+    <div className="pt-menurow" style={{ cursor: 'default' }}>
+      <span id="pt-theme-label">Theme</span>
+      <span style={{ flex: 1 }} />
+      <div className="pt-seg pt-theme" role="radiogroup" aria-labelledby="pt-theme-label">
+        {THEMES.map((t) => (
+          <button key={t.id} type="button" role="radio" aria-checked={choice === t.id} aria-pressed={choice === t.id}
+            onClick={() => setThemeChoice(t.id)}>{t.label}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The account button: your initials; its menu has who you are, the theme, Reduce motion, and the projects. */
 export function Account({ children }: { children?: ReactNode }) {
-  const ui = useUi()
-  const { ui: uiStore } = useServices()
+  // The app's part of the UI (who you are, Reduce motion): the same on Home and in a project.
   const shell = useShell()
+  const app = shell.deps.app
+  const ui = useSyncExternalStore(app.subscribe, app.get)
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [crew, setCrew] = useState(false)
@@ -88,11 +109,12 @@ export function Account({ children }: { children?: ReactNode }) {
           <div className="pt-mono">@{me?.handle ?? 'guest'}{me?.team ? ` · ${me.team}` : ''}</div>
         </div>
         <div className="pt-menusep" />
+        <ThemeChoices />
         <label className="pt-menurow" style={{ cursor: 'default' }}>
           <span>Reduce motion</span>
           <span style={{ flex: 1 }} />
           <button type="button" role="switch" aria-checked={still} aria-label="Reduce motion" className="pt-switch"
-            onClick={() => uiStore.update((u) => { u.motion = still ? undefined : 'still' })} />
+            onClick={() => app.update((u) => { u.motion = still ? undefined : 'still' })} />
         </label>
         {children}
         <button type="button" className="pt-menurow" onClick={() => { setOpen(false); setCrew(true) }}>The crew<span className="hint">who works on your ad</span></button>
