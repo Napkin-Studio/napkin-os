@@ -31,11 +31,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
 import logging
+import os
 import re
 import threading
 import time
+from urllib.parse import urlsplit
 
 import httpx
 import jsonschema
@@ -517,9 +520,48 @@ class ModelPort:
         raise ModelError(f"{purpose}: no valid structured output ({last_err})", "invalid_output")
 
 
+# Set on AWS Lambda and on ECS (Fargate) tasks: a deployed service, where a model endpoint on this
+# machine's loopback is always a development setting that leaked into a deployment.
+DEPLOYED_MARKERS = ("AWS_LAMBDA_FUNCTION_NAME", "ECS_CONTAINER_METADATA_URI", "ECS_CONTAINER_METADATA_URI_V4")
+
+
+def is_loopback(url: str) -> bool:
+    host = (urlsplit(url if "//" in url else "//" + url).hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_unspecified
+
+
+def refuse_loopback_when_deployed(settings) -> None:
+    """A loopback model URL (a developer's local model backend) is refused on Lambda and ECS, with a
+    plain error at start-up, instead of every model call failing to connect. The URL is the
+    setting, else the variable the SDK itself reads for this wire."""
+    marker = next((m for m in DEPLOYED_MARKERS if os.environ.get(m)), None)
+    if not marker:
+        return
+    api = settings.model_api
+    candidates = [("NAPKIN_MODEL_BASE_URL", settings.model_base_url)]
+    if api == "anthropic":
+        candidates.append(("ANTHROPIC_BASE_URL", os.environ.get("ANTHROPIC_BASE_URL")))
+    elif api == "bedrock":
+        candidates += [("ANTHROPIC_BEDROCK_BASE_URL", os.environ.get("ANTHROPIC_BEDROCK_BASE_URL")),
+                       ("ANTHROPIC_BEDROCK_MANTLE_BASE_URL", os.environ.get("ANTHROPIC_BEDROCK_MANTLE_BASE_URL"))]
+    for name, url in candidates:
+        if url and is_loopback(url):
+            raise ValueError(f"{name}={url} is a loopback address, which is for local development only; this "
+                             f"process is deployed ({marker} is set). Unset it, or point it at the real "
+                             f"model endpoint.")
+
+
 def build_wire(settings, client=None, transport=None):
     """The configured wire. `client`: an Anthropic-SDK-shaped client to use
-    instead of constructing one (tests)."""
+    instead of constructing one (tests). A loopback model URL is refused when
+    deployed (refuse_loopback_when_deployed)."""
+    refuse_loopback_when_deployed(settings)
     if settings.model_api == "openai":
         return OpenAIWire(settings.model_base_url, settings.model_api_key, settings.model_extra_body,
                           transport=transport)
