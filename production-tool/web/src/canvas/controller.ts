@@ -1,13 +1,12 @@
-// The canvas's logic over the Excalidraw API. The canvas is free: draw, write or
+// The canvas's logic over the CanvasAdapter (features/canvas-core.clan). The canvas is free: draw, write or
 // drop pictures anywhere. Every picture, drawing, note and result is a node;
 // select any of them and Generate puts a new node beside them (or where you
 // click), with a curved arrow from each input. Any image can be named
 // key_variant (maya_front), set as a key's front, and turned into the other
 // views. The React component only renders overlays and calls in.
 
-import { CaptureUpdateAction, convertToExcalidrawElements, getVisibleSceneBounds, newElementWith } from '@excalidraw/excalidraw'
-import type { BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
+import type { FileData, FileMap, ImageElement, SceneElement } from './adapter/excalidraw'
+import type { CanvasAdapter } from './core/canvasAdapter'
 import { AGENCY_SHELF, type CustomData, type Job, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef, type ProductionDocument, type RefRole, type Variant, type View, type ModelChoice } from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
@@ -21,7 +20,7 @@ import { namedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
 import { keyNamed, refsList } from '../model/selectors'
 import {
-  alive, bindArrow, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
+  alive, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
   imageOf, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
 } from './scene'
 import { instruction, planSelection } from './selection'
@@ -30,8 +29,8 @@ import { frameText } from './text'
 
 
 export interface CanvasSnapshot {
-  elements: El[]
-  files: BinaryFiles
+  elements: SceneElement[]
+  files: FileMap
 }
 
 export const OTHER_VIEWS: View[] = ['three-quarter', 'side', 'back']
@@ -46,7 +45,7 @@ export interface GeneratePreview {
 }
 
 export class CanvasController {
-  readonly api: ExcalidrawImperativeAPI
+  private readonly canvas: CanvasAdapter<SceneElement, FileData>
   private readonly s: Services
   private readonly processing = new Set<string>()
   /** File ids restoreFiles has looked for once already. */
@@ -56,19 +55,24 @@ export class CanvasController {
   /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
   readonly sync: CanvasDocSync
 
-  constructor(api: ExcalidrawImperativeAPI, services: Services) {
-    this.api = api
+  constructor(canvas: CanvasAdapter<SceneElement, FileData>, services: Services) {
+    this.canvas = canvas
     this.s = services
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
     this.sync.gens(this.els())
   }
 
   private els(): El[] {
-    return this.api.getSceneElementsIncludingDeleted() as El[]
+    return this.canvas.elements({ includeDeleted: true })
+  }
+
+  /** The scene's elements that are not deleted. */
+  liveElements(): El[] {
+    return this.canvas.elements()
   }
 
   private setEls(els: El[], undoable = true) {
-    this.api.updateScene({ elements: els, captureUpdate: undoable ? CaptureUpdateAction.IMMEDIATELY : CaptureUpdateAction.NEVER })
+    this.canvas.commit(els, { undoable })
   }
 
   private patchEl(id: string, fn: (e: El) => El, undoable = false) {
@@ -92,20 +96,20 @@ export class CanvasController {
    * the node's asset, else by the file id made from its hash, among this browser's blobs.
    */
   async restoreFiles(): Promise<number> {
-    const files = this.api.getFiles()
-    const lacking = alive(this.els()).filter((e) => e.type === 'image' && (e as ExcalidrawImageElement).fileId
-      && !files[(e as ExcalidrawImageElement).fileId!] && !this.restoreTried.has((e as ExcalidrawImageElement).fileId!)) as ExcalidrawImageElement[]
+    const files = this.canvas.files()
+    const lacking = alive(this.els()).filter((e) => e.type === 'image' && (e as ImageElement).fileId
+      && !files[(e as ImageElement).fileId!] && !this.restoreTried.has((e as ImageElement).fileId!)) as ImageElement[]
     if (!lacking.length) return 0
     for (const el of lacking) this.restoreTried.add(el.fileId!)
     const byFileId = new Map(Object.keys(this.doc().assets).map((sha) => [fileIdFor(sha) as string, sha]))
-    const add: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
+    const add: FileData[] = []
     for (const el of lacking) {
       const c = cd(el) as { asset?: string } | undefined
       const sha = c?.asset ?? byFileId.get(el.fileId!)
       const blob = sha ? await getBlob(sha) : undefined
       if (sha && blob) add.push({ ...(await fileData(sha, blob)), id: el.fileId! })
     }
-    if (add.length) this.api.addFiles(add)
+    if (add.length) this.canvas.addFiles(add)
     return add.length
   }
 
@@ -116,9 +120,9 @@ export class CanvasController {
 
   async save() {
     const elements = this.els().filter((e) => !e.isDeleted)
-    const used = new Set(elements.map((e) => (e as ExcalidrawImageElement).fileId).filter(Boolean) as string[])
-    const files: BinaryFiles = {}
-    for (const [k, v] of Object.entries(this.api.getFiles())) if (used.has(k)) files[k] = v
+    const used = new Set(elements.map((e) => (e as ImageElement).fileId).filter(Boolean) as string[])
+    const files: FileMap = {}
+    for (const [k, v] of Object.entries(this.canvas.files())) if (used.has(k)) files[k] = v
     await idbPut('kv', this.s.project.canvasKey, { elements, files } satisfies CanvasSnapshot)
   }
 
@@ -162,15 +166,15 @@ export class CanvasController {
     const shown = alive(els).filter((e) => gone.includes(e.id) && cd(e)?.kind !== 'provenance' && !e.frameId)
     const b = bounds(shown.length ? shown : alive(els).filter((e) => gone.includes(e.id)))
     const label = shown.length === 1 ? (cd(shown[0])?.kind === 'gen' ? 'Image deleted' : 'Deleted') : `${shown.length} deleted`
-    this.setEls(els.map((e) => (gone.includes(e.id) ? newElementWith(e, { isDeleted: true }) : e)))
-    this.api.updateScene({ appState: { selectedElementIds: {} }, captureUpdate: CaptureUpdateAction.NEVER })
+    this.setEls(els.map((e) => (gone.includes(e.id) ? this.canvas.patch(e, { isDeleted: true }) : e)))
+    this.canvas.select([])
     this.syncNow()
     return { ids: gone, at: { x: b.minX + b.w / 2, y: b.minY + b.h / 2 }, label }
   }
 
   /** Undo a delete from the inline Undo (Ctrl+Z does the same through Excalidraw). */
   undelete(ids: string[]) {
-    this.setEls(this.els().map((e) => (ids.includes(e.id) && e.isDeleted ? newElementWith(e, { isDeleted: false }) : e)))
+    this.setEls(this.els().map((e) => (ids.includes(e.id) && e.isDeleted ? this.canvas.patch(e, { isDeleted: false }) : e)))
     this.syncNow()
   }
 
@@ -190,10 +194,10 @@ export class CanvasController {
   }
 
   private async intakePictures() {
-    const files = this.api.getFiles()
+    const files = this.canvas.files()
     const fresh = alive(this.els()).filter(
-      (e) => e.type === 'image' && !cd(e) && (e as ExcalidrawImageElement).fileId && files[(e as ExcalidrawImageElement).fileId!] && !this.processing.has(e.id),
-    ) as ExcalidrawImageElement[]
+      (e) => e.type === 'image' && !cd(e) && (e as ImageElement).fileId && files[(e as ImageElement).fileId!] && !this.processing.has(e.id),
+    ) as ImageElement[]
     for (const el of fresh) {
       this.processing.add(el.id)
       try {
@@ -204,11 +208,11 @@ export class CanvasController {
         let fileId = el.fileId!
         if (changed) {
           const data = await fileData(sha, blob)
-          this.api.addFiles([data])
+          this.canvas.addFiles([data])
           fileId = data.id
         }
         const customData: CustomData = { kind: 'pic', id: newId('node'), asset: sha }
-        this.patchEl(el.id, (e) => newElementWith(e as ExcalidrawImageElement, { fileId, status: 'saved', customData }), true)
+        this.patchEl(el.id, (e) => this.canvas.patch(e, { fileId, status: 'saved', customData } as Partial<ImageElement>), true)
         this.addAsset(sha, blob, 'uploaded', { w, h })
       } catch (e) {
         console.warn('Could not take in a picture', e)
@@ -225,12 +229,12 @@ export class CanvasController {
     if (!strokes.length) return null
     const b = bounds(strokes)
     const pad = 16
-    const blob = (await downscale(await exportElements(strokes, this.api.getFiles()))).blob
+    const blob = (await downscale(await exportElements(this.canvas, strokes, this.canvas.files()))).blob
     const sha = await putBlob(blob)
-    const [frame] = convertToExcalidrawElements(
-      [{ type: 'frame', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', children: [], customData: { kind: 'drawn', id: newId('node'), asset: sha } }],
+    const frame = this.canvas.frameAround(
+      { x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', customData: { kind: 'drawn', id: newId('node'), asset: sha } },
     )
-    const next = els.map((e) => (ids.includes(e.id) ? newElementWith(e, { frameId: frame.id }) : e))
+    const next = els.map((e) => (ids.includes(e.id) ? this.canvas.patch(e, { frameId: frame.id }) : e))
     this.setEls([frame, ...next]) // frames sit below their children
     this.addAsset(sha, blob, 'drawn')
     return frame
@@ -243,10 +247,10 @@ export class CanvasController {
       const c = cd(f) as Extract<CustomData, { kind: 'drawn' }>
       const kids = childrenOf(els, f.id).filter((k) => k.type !== 'text')
       if (!kids.length) continue
-      const blob = (await downscale(await exportElements(kids, this.api.getFiles()))).blob
+      const blob = (await downscale(await exportElements(this.canvas, kids, this.canvas.files()))).blob
       const sha = await putBlob(blob)
       if (sha === c.asset) continue
-      this.patchEl(f.id, (e) => newElementWith(e, { customData: { ...c, asset: sha } }))
+      this.patchEl(f.id, (e) => this.canvas.patch(e, { customData: { ...c, asset: sha } }))
       this.addAsset(sha, blob, 'drawn')
       // A name on the drawing follows its new picture.
       systemUpdate(this.s.doc, (d) => {
@@ -261,7 +265,7 @@ export class CanvasController {
     const c = cd(el)
     if (c?.kind === 'note') return c.id
     const id = newId('node')
-    this.patchEl(elId, (e) => newElementWith(e, { customData: { kind: 'note', id } }))
+    this.patchEl(elId, (e) => this.canvas.patch(e, { customData: { kind: 'note', id } }))
     return id
   }
 
@@ -434,12 +438,12 @@ export class CanvasController {
     for (const view of views) {
       const jobId = newId('job')
       const parents = front.node ? [front.node] : []
-      const gen = makeGenPlaceholder(jobId, 'view', parents, { x, y: slot.y }, NODE, view)
+      const gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, NODE, view)
       x += NODE.w + 40
       let all = [...this.els(), gen]
       if (frontEl && front.node) {
-        const arrow = makeArrow(frontEl, gen, front.node, jobId, 0, true)
-        all = bindArrow([...all, arrow], arrow)
+        const arrow = makeArrow(this.canvas, frontEl, gen, front.node, jobId, 0, true)
+        all = this.canvas.bindArrow([...all, arrow], arrow)
       }
       this.setEls(all)
       placed.push({ jobId, view })
@@ -475,7 +479,7 @@ export class CanvasController {
    * document already has are replaced, and what was made from them is marked out of date.
    */
   async importEntry(entry: LibraryEntry) {
-    const files: Parameters<ExcalidrawImperativeAPI['addFiles']>[0] = []
+    const files: FileData[] = []
     const got: { variant: Variant; sha: string; w: number; h: number }[] = []
     for (const r of entry.refs ?? []) {
       const blob = await this.s.relay.fetchOutput(r.asset)
@@ -487,18 +491,17 @@ export class CanvasController {
       bmp?.close?.()
       this.addAsset(sha, blob, 'uploaded', bmp ? { w: bmp.width, h: bmp.height } : undefined)
     }
-    this.api.addFiles(files)
-    const [vx0, vy0] = getVisibleSceneBounds(this.api.getAppState())
+    this.canvas.addFiles(files)
+    const { minX: vx0, minY: vy0 } = this.canvas.visibleBounds()
     const start = nextSlot(this.els(), { maxX: vx0, minY: vy0 + 40 }, { w: (NODE.w + 40) * got.length, h: NODE.h })
     const nodes: { nodeId: string; variant: Variant; sha: string }[] = []
     const added: El[] = []
     got.forEach((g, i) => {
       const nodeId = newId('node')
       const h = Math.round((NODE.w * g.h) / Math.max(1, g.w))
-      const [el] = convertToExcalidrawElements(
-        [{ type: 'image', x: start.x + i * (NODE.w + 40), y: start.y, width: NODE.w, height: h, fileId: fileIdFor(g.sha), customData: { kind: 'pic', id: nodeId, asset: g.sha } }],
-      )
-      added.push(newElementWith(el as ExcalidrawImageElement, { status: 'saved' }))
+      added.push(this.canvas.imageNode(
+        { x: start.x + i * (NODE.w + 40), y: start.y, width: NODE.w, height: h, fileId: fileIdFor(g.sha), customData: { kind: 'pic', id: nodeId, asset: g.sha }, status: 'saved' },
+      ))
       nodes.push({ nodeId, variant: g.variant, sha: g.sha })
     })
     for (const el of added) this.processing.add(el.id)
@@ -529,11 +532,11 @@ export class CanvasController {
   // ── jobs that land on the canvas ──
 
   private placeGen(jobId: string, op: 'generate' | 'view', parentIds: string[], sources: { el: El; id: string }[], at: { x: number; y: number; w: number; h: number }, view?: View) {
-    const gen = makeGenPlaceholder(jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
+    const gen = makeGenPlaceholder(this.canvas, jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
     let els = [...this.els(), gen]
     sources.forEach((s, i) => {
-      const arrow = makeArrow(s.el, gen, s.id, jobId, i)
-      els = bindArrow([...els, arrow], arrow)
+      const arrow = makeArrow(this.canvas, s.el, gen, s.id, jobId, i)
+      els = this.canvas.bindArrow([...els, arrow], arrow)
     })
     this.setEls(els)
     this.reveal([gen.id, ...sources.map((s) => s.el.id)])
@@ -543,10 +546,10 @@ export class CanvasController {
   reveal(ids: string[]) {
     const els = alive(this.els()).filter((e) => ids.includes(e.id))
     if (!els.length) return
-    const [vx0, vy0, vx1, vy1] = getVisibleSceneBounds(this.api.getAppState())
+    const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     const b = bounds(els)
     if (b.minX >= vx0 && b.minY >= vy0 && b.maxX <= vx1 && b.maxY <= vy1) return
-    this.api.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85, animate: true })
+    this.canvas.fit(els, { zoomFactor: 0.85, animate: true })
   }
 
   /** A failed canvas job was retried as a new job: move the node and its arrows to the new id. */
@@ -556,17 +559,17 @@ export class CanvasController {
     if (!old) return
     const c = cd(old) as Extract<CustomData, { kind: 'gen' }>
     this.sync.moved.add(oldId)
-    const gen = makeGenPlaceholder(newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view)
-    let next: El[] = els.map((e) => (e.id === old.id ? newElementWith(e, { isDeleted: true }) : e))
+    const gen = makeGenPlaceholder(this.canvas, newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view)
+    let next: El[] = els.map((e) => (e.id === old.id ? this.canvas.patch(e, { isDeleted: true }) : e))
     next.push(gen)
     const into = els.filter((e) => !e.isDeleted && cd(e)?.kind === 'provenance' && (cd(e) as { to: string }).to === oldId)
     into.forEach((a, i) => {
       const from = (cd(a) as { from: string }).from
       const fromEl = byOwnId(els, from)
-      next = next.map((e) => (e.id === a.id ? newElementWith(e, { isDeleted: true }) : e))
+      next = next.map((e) => (e.id === a.id ? this.canvas.patch(e, { isDeleted: true }) : e))
       if (fromEl) {
-        const arrow = makeArrow(fromEl, gen, from, newJobId, i, c.op === 'view')
-        next = bindArrow([...next, arrow], arrow)
+        const arrow = makeArrow(this.canvas, fromEl, gen, from, newJobId, i, c.op === 'view')
+        next = this.canvas.bindArrow([...next, arrow], arrow)
       }
     })
     this.setEls(next, false)
@@ -581,7 +584,7 @@ export class CanvasController {
       const j = doc.jobs[c.id]
       if (j && j.state !== c.state && j.state !== 'completed') {
         changed = true
-        return newElementWith(e, { customData: { ...c, state: j.state } })
+        return this.canvas.patch(e, { customData: { ...c, state: j.state } })
       }
       return e
     })
@@ -597,13 +600,13 @@ export class CanvasController {
     if (!blob) return
     await putBlobAs(out.sha256, blob)
     const data = await fileData(out.sha256, blob)
-    this.api.addFiles([data])
+    this.canvas.addFiles([data])
     const c = cd(el) as Extract<CustomData, { kind: 'gen' }>
     const h = out.w && out.h ? Math.round((el.width * out.h) / out.w) : el.height
-    this.patchEl(el.id, (e) => newElementWith(e as ExcalidrawImageElement, {
+    this.patchEl(el.id, (e) => this.canvas.patch(e, {
       fileId: fileIdFor(out.sha256), status: 'saved', height: h,
       customData: { ...c, state: 'completed', asset: out.sha256, ...(job.kind === 'mock' ? { mock: true } : {}) },
-    }))
+    } as Partial<ImageElement>))
     // The landing is the crew's decision, citing the job and the refs it used, as for frames and clips.
     const why = landingWhy(this.s.doc, job.jobId, c.op === 'view' && c.view ? `the ${c.view} view on the canvas` : 'a picture on the canvas')
     if (this.s.doc.record) {
@@ -621,7 +624,7 @@ export class CanvasController {
 
   scrollTo(nodeId: string) {
     const el = byOwnId(this.els(), nodeId)
-    if (el) this.api.scrollToContent(el, { animate: true, fitToViewport: true, viewportZoomFactor: 0.5 })
+    if (el) this.canvas.fit([el], { zoomFactor: 0.5, animate: true })
   }
 
   /** The text of a note node or loose text element (for labels). */
