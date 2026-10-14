@@ -37,12 +37,13 @@ import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
-import { currentRender, currentTake, mainStoryboard, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
+import { currentRender, currentTake, mainStoryboard, mainVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
 import { SoundView } from './SoundView'
 import { addTakeNote, pickTake } from './videoEdits'
+import { PromptStart } from '../ui/prompt/PromptStart'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -119,6 +120,7 @@ export function Video() {
         <AgentFigure agent="dex" size={64} decorative />
         <span className="sayer">{sayer('dex')}</span>
         <b>No shots yet.</b>Plan your shots and draw the frames first; I make one clip per frame.
+        {mainVideo(doc) && <PromptStart kind="video" nodeId={mainVideo(doc)!.id} place="editor" />}
         <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.stage = 'storyboard' })}>← Back to Storyboard</button></div>
       </div></div>
     )

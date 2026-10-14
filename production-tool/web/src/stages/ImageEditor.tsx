@@ -30,6 +30,7 @@ import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { croppedCaption } from '../canvas/core/sketch'
 import './image-editor.css'
+import { PromptStart } from '../ui/prompt/PromptStart'
 
 const TOOL_ICON: Record<'none' | 'box' | 'brush' | 'click', React.ReactNode> = {
   none: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L13 8 L8 9 L6 14 Z" fill="currentColor" /></svg>,
@@ -142,7 +143,7 @@ export function ImageEditor({ shotId, onBack, onShot }: { shotId: string; onBack
           <div className="ie-frame" style={{ aspectRatio: String(aspect) }}>
             <RegionImage src={url} aspect={aspect} mode={running ? 'none' : mode} region={region} strokes={strokes} onRegion={setRegion} onStrokes={setStrokes}>
               {jobId && running && <div style={{ position: 'absolute', inset: 0 }}><JobSlot jobId={jobId} /></div>}
-              {!current && !running && <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><div className="faint">No frame yet</div></div>}
+              {!current && !running && <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shot.id} place="editor" /></div>}
             </RegionImage>
           </div>
           <div className="ie-under">
