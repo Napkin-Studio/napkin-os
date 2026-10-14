@@ -20,6 +20,7 @@
     "bench:baseline": "BENCH_RECORD=1 vitest run --config bench/vitest.config.ts"
   },
   "dependencies": {
+    "@bokuweb/zstd-wasm": "0.0.27",
     "@tldraw/store": "5.5.2",
     "perfect-freehand": "1.2.0",
     "rbush": "4.0.1",

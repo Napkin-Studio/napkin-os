@@ -2,7 +2,7 @@
 // test plan "Bench on PRs" and "Storage checks"), on the seed-1 G3 scene:
 //
 // - the scene is the spikes' scene (fingerprint f8082c81);
-// - storage bytes, exact: the G3 Y state at most 3.0 MB raw (2.0 MB compressed), a move at most 200 B,
+// - storage bytes, exact: the G3 Y state at most 3.0 MB raw (its zstd checkpoint at most 2.0 MB), a move at most 200 B,
 //   a finished 60-point stroke at most 900 B, at most 16 B left behind per move
 //   (ported from docs/production-tool/canvas-storage-bench 01, storage/ybench2, 03);
 // - memory caps: a scripted pan keeps the preview bitmap cache under the iPad cap
@@ -13,7 +13,8 @@
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { checkpointOf } from '../src/checkpoint/checkpoint'
+import { zstdCodec } from '../src/checkpoint/zstd'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
@@ -51,12 +52,12 @@ describe('the G3 scene', () => {
 
 describe('storage bytes (exact; canvas-storage-bench 01, ybench2, 03)', () => {
   // 3.0 MB, not the umbrella's first 2.6: the per-field layout costs about 0.5 MB raw over a
-  // whole-element JSON (decision on features/engine-ci.clan, 2026-10-14). Compressed it stays
-  // far under the 2.0 MB checkpoint ceiling; gzip stands in for zstd until engine-store.
-  it('the G3 Y state is at most 3.0 MB raw and 2.0 MB compressed', () => {
+  // whole-element JSON (decision on features/engine-ci.clan, 2026-10-14). The checkpoint
+  // (canvas.ybin.zst: zstd level 3 of the compacted state, engine-store) stays under 2.0 MB.
+  it('the G3 Y state is at most 3.0 MB raw and its checkpoint at most 2.0 MB', async () => {
     const update = Y.encodeStateAsUpdate(doc)
-    const packed = gzipSync(update, { level: 6 }).byteLength
-    process.stderr.write(`bench: G3 Y state ${(update.byteLength / 1e6).toFixed(2)} MB raw, ${(packed / 1e6).toFixed(2)} MB gzip\n`)
+    const packed = checkpointOf(doc, await zstdCodec()).byteLength
+    process.stderr.write(`bench: G3 Y state ${(update.byteLength / 1e6).toFixed(2)} MB raw, checkpoint ${(packed / 1e6).toFixed(2)} MB\n`)
     expect(update.byteLength).toBeLessThanOrEqual(3.0e6)
     expect(packed).toBeLessThanOrEqual(2.0e6)
   })
@@ -163,7 +164,7 @@ describe('draw-time CPU, relative to the control', () => {
     const ctx = nullContext()
     for (const [name, cam] of Object.entries(CAMERAS)) {
       warm.draw(ctx, cam, VIEWPORT, 1)
-      ratios[name] = timeMedian(5, () => warm.draw(ctx, cam, VIEWPORT, 1)) / control
+      ratios[name] = timeMedian(11, () => warm.draw(ctx, cam, VIEWPORT, 1)) / control
     }
     warm.destroy()
     process.stderr.write(`bench: control ${control.toFixed(1)} ms; ratios ${JSON.stringify(Object.fromEntries(Object.entries(ratios).map(([k, v]) => [k, +v.toFixed(3)])))}\n`)
@@ -175,8 +176,8 @@ describe('draw-time CPU, relative to the control', () => {
     const base = JSON.parse(readFileSync(BASELINE, 'utf8')) as Baseline
     for (const [name, ratio] of Object.entries(ratios)) {
       expect(base.ratios[name], `baseline for ${name}`).toBeTypeOf('number')
-      // A frame of well under a millisecond is timer noise: the floor is 1 ms of the baseline's control.
-      const limit = 2 * Math.max(base.ratios[name], 1 / base.controlMs)
+      // A frame of a millisecond or two is GC and timer noise on a shared runner: the floor is 2 ms of the baseline's control.
+      const limit = 2 * Math.max(base.ratios[name], 2 / base.controlMs)
       expect(ratio, `${name}: ${ratio.toFixed(3)} against baseline ${base.ratios[name]} (limit ${limit.toFixed(3)})`).toBeLessThanOrEqual(limit)
     }
   })
