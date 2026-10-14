@@ -1,8 +1,10 @@
-"""The model port, both wires (contract 5, §1 and §5.3).
+"""The model port, every wire (contract 5, §1 and §5.3).
 
-  POST /v1/messages          Anthropic Messages shape
-  POST /v1/chat/completions  OpenAI-compatible shape (the NIM wire), response_format json_schema
-  GET  /v1/models            the id map, in the shape the request's headers ask for
+  POST /v1/messages                    Anthropic Messages shape; `stream: true` answers SSE
+  POST /anthropic/v1/messages          the same, at the path Bedrock's mantle endpoint uses
+  POST /model/{modelId}/invoke         Bedrock InvokeModel with an Anthropic body (bedrock-2023-05-31)
+  POST /v1/chat/completions            OpenAI-compatible shape (the NIM wire), response_format json_schema
+  GET  /v1/models                      the id map, in the shape the request's headers ask for
 
 Each call is one fresh `claude -p`. Transport only: no prompt engineering,
 no schema logic, no retries, no cache (two identical requests may differ, as
@@ -16,10 +18,12 @@ import base64
 import binascii
 import json
 import os
+import re
 import secrets
 import string
 import time
 from dataclasses import dataclass, field
+from urllib.parse import unquote
 
 from common import ClaudeCall, ClaudeFailure, Config, Request, Response, Slots, run_claude
 
@@ -27,12 +31,11 @@ from common import ClaudeCall, ClaudeFailure, Config, Request, Response, Slots, 
 
 BASE_MODELS: dict[str, str] = {
     "claude-opus-5": "opus",
-    "claude-opus-5-5": "claude-opus-5-5",
-    "claude-sonnet-5-5": "claude-sonnet-5-5",
     "claude-sonnet-5": "sonnet",
     # exact ids, passed to the CLI as they are, so a call names the model that answered it
     "claude-opus-5-5": "claude-opus-5-5",
     "claude-sonnet-5-5": "claude-sonnet-5-5",
+    "claude-opus-4-6": "claude-opus-4-6",
     "claude-haiku-4-5": "haiku",
     "claude-haiku-4-5-20251001": "haiku",
     "claude-fable-5-1": "fable",
@@ -61,6 +64,25 @@ def model_map() -> dict[str, str]:
 
 
 MODELS = model_map()
+
+# A Bedrock id: an optional inference-profile prefix (eu., us., global., apac., …), `anthropic.`, the
+# Anthropic id, and an optional `-v1` / `-v1:0` version. `eu.anthropic.claude-sonnet-5-5` and
+# `global.anthropic.claude-haiku-4-5-20251001-v1:0` resolve as `claude-sonnet-5-5` and `claude-haiku-4-5`.
+_BEDROCK_ID = re.compile(r"^(?:(?:eu|us|us-gov|global|apac|jp|au|ca)\.)?anthropic\.(?P<id>claude-[a-z0-9-]+?)"
+                         r"(?:-v\d+(?::\d+)?)?$")
+
+
+def resolve_model(model: str) -> str | None:
+    """The CLI alias for a model id: an id in MODELS, or a Bedrock id whose Anthropic id (with or
+    without its date) is in MODELS. None otherwise: an unknown id is a 404, never a default."""
+    if model in MODELS:
+        return MODELS[model]
+    m = _BEDROCK_ID.match(model or "")
+    if m:
+        for cand in (m.group("id"), re.sub(r"-\d{8}$", "", m.group("id"))):
+            if cand in MODELS:
+                return MODELS[cand]
+    return None
 
 EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
@@ -128,11 +150,37 @@ class ModelCall:
     max_tokens: int | None = None    # the reply budget the caller asked for (hidden thinking counts)
     images: list = field(default_factory=list)   # [(media_type, b64)]
     ignored: list = field(default_factory=list)
+    stream: bool = False             # answer as Anthropic SSE events
 
     def claude(self, cfg: Config) -> ClaudeCall:
         return ClaudeCall(alias=self.alias, prompt=flatten(self.turns), system=self.system,
-                          json_schema=self.schema, effort=self.effort, images=list(self.images),
-                          max_turns=cfg.max_turns)
+                          json_schema=cli_schema(self.schema)[0] if self.schema is not None else None,
+                          effort=self.effort, images=list(self.images), max_turns=cfg.max_turns)
+
+
+_COMBINATORS = ("oneOf", "anyOf", "allOf", "not", "if", "$ref")
+
+
+def _strip_ids(schema):
+    if isinstance(schema, dict):
+        return {k: _strip_ids(v) for k, v in schema.items() if k not in ("$schema", "$id")}
+    if isinstance(schema, list):
+        return [_strip_ids(v) for v in schema]
+    return schema
+
+
+def cli_schema(schema: dict) -> tuple[dict, bool]:
+    """The schema as the CLI's --json-schema takes it, and whether it was wrapped. The CLI makes the
+    schema a tool's input, which must be a plain object at the top: a draft marker or `$id` it tries
+    to resolve and refuses, and a top-level oneOf/anyOf/$ref (or a non-object) it cannot take. Such a
+    schema goes in as `{"answer": <schema>}` (its `$defs` kept at the top so its refs still resolve)
+    and the answer is unwrapped before it is returned. The caller still validates the full schema."""
+    s = _strip_ids(schema)
+    if s.get("type") == "object" and not any(k in s for k in _COMBINATORS):
+        return s, False
+    defs = {k: s.pop(k) for k in ("$defs", "definitions") if k in s}
+    return {"type": "object", "properties": {"answer": s}, "required": ["answer"], "additionalProperties": False,
+            **defs}, True
 
 
 def flatten(turns: list) -> str:
@@ -186,7 +234,7 @@ def _check_schema_obj(schema, where: str) -> dict:
 # ------------------------------------------------------------------ Wire A — Anthropic
 
 A_IGNORED = {"temperature", "top_p", "top_k", "stop_sequences", "metadata", "thinking", "service_tier",
-             "cache_control"}
+             "cache_control", "betas", "fallbacks"}
 A_REFUSED = {
     "tools": "the mock does not support `tools`: `claude -p` cannot emulate tool_use content blocks, and "
              "silently dropping them would pass in development and fail against the real API",
@@ -241,9 +289,6 @@ def build_anthropic(body: dict) -> ModelCall:
     for key, why in A_REFUSED.items():
         if key in body:
             raise invalid(why)
-    if body.get("stream") is True:
-        raise invalid("the mock does not support `stream: true`: it would have to fake the SSE event "
-                      "sequence, which hides stream-handling bugs until production")
     if "stream" in body and not isinstance(body["stream"], bool):
         raise invalid("stream: Input should be a valid boolean")
     model = body.get("model")
@@ -263,7 +308,8 @@ def build_anthropic(body: dict) -> ModelCall:
         raise invalid("messages: at least one message is required")
     # Shape first, so a malformed body is a 400 whatever the model; then the model,
     # before anything is spawned.
-    if model not in MODELS:
+    alias = resolve_model(model)
+    if alias is None:
         raise unknown_model(model)
 
     system = body.get("system")
@@ -308,8 +354,8 @@ def build_anthropic(body: dict) -> ModelCall:
         if effort is not None and effort not in EFFORT_LEVELS:
             raise invalid(f"output_config.effort: Input should be one of {sorted(EFFORT_LEVELS)}")
 
-    return ModelCall(model=model, alias=MODELS[model], turns=turns, system=system, schema=schema,
-                     effort=effort, max_tokens=mt, images=images,
+    return ModelCall(model=model, alias=alias, turns=turns, system=system, schema=schema,
+                     effort=effort, max_tokens=mt, images=images, stream=body.get("stream") is True,
                      ignored=sorted(k for k in body if k in A_IGNORED))
 
 
@@ -365,7 +411,10 @@ def reply_text(envelope: dict, call: ModelCall) -> str:
     if call.schema is not None:
         if "structured_output" not in envelope:
             raise WireError(500, "api_error", "claude CLI returned no structured_output for a json_schema request")
-        return json.dumps(envelope["structured_output"], ensure_ascii=False)
+        out = envelope["structured_output"]
+        if cli_schema(call.schema)[1] and isinstance(out, dict) and "answer" in out:
+            out = out["answer"]
+        return json.dumps(out, ensure_ascii=False)
     text = envelope.get("result")
     if not isinstance(text, str):
         raise WireError(500, "api_error", "claude CLI envelope has no `result` text")
@@ -483,7 +532,8 @@ def build_openai(body: dict) -> ModelCall:
         v = body.get(k)
         if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 1):
             raise invalid(f"{k}: must be an integer >= 1", param=k)
-    if model not in MODELS:
+    alias = resolve_model(model)
+    if alias is None:
         raise unknown_model(model)
 
     system_parts: list[str] = []
@@ -536,7 +586,7 @@ def build_openai(body: dict) -> ModelCall:
             raise invalid("response_format.json_schema.schema: required", param="response_format")
 
     system = "\n\n".join(system_parts) if system_parts else None
-    return ModelCall(model=model, alias=MODELS[model], turns=turns, system=system, schema=schema,
+    return ModelCall(model=model, alias=alias, turns=turns, system=system, schema=schema,
                      max_tokens=body.get("max_completion_tokens") or body.get("max_tokens"), images=images,
                      ignored=sorted(k for k in body if k in O_IGNORED))
 
@@ -553,6 +603,77 @@ def to_openai(envelope: dict, call: ModelCall) -> dict:
             "usage": {"prompt_tokens": i, "completion_tokens": o, "total_tokens": i + o}}
 
 
+# ------------------------------------------------------------------ Anthropic streaming (SSE)
+
+
+def sse_events(msg: dict) -> list:
+    """A finished Anthropic message as the Messages API's SSE sequence: message_start, one text
+    content block (start, one text_delta, stop), message_delta with stop_reason and usage, then
+    message_stop. The CLI answers whole, so the text arrives as one delta once the run is done; the
+    framing, order and fields are the API's, so a streaming client's handling is exercised as it is
+    against the API."""
+    i, o = msg["usage"]["input_tokens"], msg["usage"]["output_tokens"]
+    start = {**msg, "content": [], "stop_reason": None, "stop_sequence": None,
+             "usage": {**msg["usage"], "output_tokens": 0}}
+    text = msg["content"][0]["text"] if msg["content"] else ""
+    return [
+        ("message_start", {"type": "message_start", "message": start}),
+        ("content_block_start", {"type": "content_block_start", "index": 0,
+                                 "content_block": {"type": "text", "text": ""}}),
+        ("ping", {"type": "ping"}),
+        ("content_block_delta", {"type": "content_block_delta", "index": 0,
+                                 "delta": {"type": "text_delta", "text": text}}),
+        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+        ("message_delta", {"type": "message_delta",
+                           "delta": {"stop_reason": msg["stop_reason"], "stop_sequence": None},
+                           "usage": {"input_tokens": i, "output_tokens": o,
+                                     "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}}),
+        ("message_stop", {"type": "message_stop"}),
+    ]
+
+
+# ------------------------------------------------------------------ Wire A on Bedrock — InvokeModel
+
+BEDROCK_VERSION = "bedrock-2023-05-31"
+BEDROCK_PATH = re.compile(r"^/model/(?P<id>[^/]+)/(?P<op>invoke|invoke-with-response-stream|converse|converse-stream)$")
+# Bedrock's own error names (the x-amzn-ErrorType header) and statuses. Auth is 403 and a model
+# timeout 408 there, as on AWS.
+_BEDROCK_ERRORS = {400: (400, "ValidationException"), 401: (403, "AccessDeniedException"),
+                   403: (403, "AccessDeniedException"), 404: (404, "ResourceNotFoundException"),
+                   405: (405, "ValidationException"), 411: (411, "ValidationException"),
+                   413: (413, "ValidationException"), 429: (429, "ThrottlingException"),
+                   500: (500, "InternalServerException"), 503: (503, "ServiceUnavailableException"),
+                   504: (408, "ModelTimeoutException"), 529: (503, "ServiceUnavailableException")}
+
+
+def bedrock_error(e: WireError) -> Response:
+    status, name = _BEDROCK_ERRORS.get(e.status, (500, "InternalServerException"))
+    return Response(status, {"message": e.message}, {"x-amzn-ErrorType": f"{name}:http://internal.amazon.com/coral/"
+                                                                         "com.amazon.bedrock/"},
+                    close=status in (404, 411, 413))
+
+
+def build_bedrock(model_id: str, op: str, body: dict) -> ModelCall:
+    """InvokeModel with an Anthropic body: the model is in the path, `anthropic_version` must be
+    bedrock-2023-05-31, `anthropic_beta` is accepted and ignored; the rest is the Messages body."""
+    if op.startswith("converse"):
+        raise WireError(404, "not_found_error", "the mock serves InvokeModel with an Anthropic body, not Converse "
+                        "(Nova research locally goes to the research port, NAPKIN_RESEARCH_URL)")
+    if op == "invoke-with-response-stream":
+        raise invalid("the mock does not serve InvokeModelWithResponseStream (AWS event-stream framing); "
+                      "use invoke, or `stream: true` on the Anthropic wire (/v1/messages)")
+    if body.get("anthropic_version") != BEDROCK_VERSION:
+        raise invalid(f"anthropic_version: must be {BEDROCK_VERSION!r} on Bedrock")
+    for k in ("model", "stream"):
+        if k in body:
+            raise invalid(f"{k}: Extra inputs are not permitted (on Bedrock the model is in the path)")
+    beta = body.get("anthropic_beta")
+    if beta is not None and not (isinstance(beta, list) and all(isinstance(b, str) for b in beta)):
+        raise invalid("anthropic_beta: Input should be a list of strings")
+    rest = {k: v for k, v in body.items() if k not in ("anthropic_version", "anthropic_beta")}
+    return build_anthropic({**rest, "model": model_id})
+
+
 # ------------------------------------------------------------------ handler
 
 
@@ -566,31 +687,51 @@ def list_models(anthropic_shape: bool) -> dict:
                                         "owned_by": "napkin-mock-backend"} for m in ids]}
 
 
-def authorised(cfg: Config, req: Request, anthropic_shape: bool) -> bool:
+def authorised(cfg: Config, req: Request, wire: str) -> bool:
+    """With MOCK_TOKEN unset, any credentials pass (a dummy key, a Bedrock bearer token or a SigV4
+    signature: none is checked). With it set, the wire's own header must carry it."""
     if not cfg.token:
         return True
     auth = req.header("authorization") or ""
     if auth == f"Bearer {cfg.token}":
         return True
-    return anthropic_shape and req.header("x-api-key") == cfg.token
+    return wire == "anthropic" and req.header("x-api-key") == cfg.token
+
+
+def wire_of(req: Request) -> tuple[str, str]:
+    """(wire, path) for a model-family request: `anthropic`, `bedrock` or `openai`, and the path with
+    the mantle prefix (/anthropic) removed."""
+    path = req.path.rstrip("/")
+    if path.startswith("/anthropic/"):
+        path = path[len("/anthropic"):]
+    if path == "/v1/messages" or (path == "/v1/models" and req.header("anthropic-version")):
+        return "anthropic", path
+    if path.startswith("/model/"):
+        return "bedrock", path
+    return "openai", path
 
 
 def handle(cfg: Config, slots: Slots, req: Request) -> Response:
-    path = req.path.rstrip("/")
-    anthropic_shape = path == "/v1/messages" or (path == "/v1/models" and req.header("anthropic-version"))
-    render = (lambda e: e.anthropic()) if anthropic_shape else (lambda e: e.openai())
+    wire, path = wire_of(req)
+    render = {"anthropic": WireError.anthropic, "openai": WireError.openai, "bedrock": bedrock_error}[wire]
     try:
-        if not authorised(cfg, req, bool(anthropic_shape)):
-            raise WireError(401, "authentication_error", "invalid x-api-key" if anthropic_shape
+        if not authorised(cfg, req, wire):
+            raise WireError(401, "authentication_error", "invalid x-api-key" if wire != "openai"
                             else "Incorrect API key provided")
         if path == "/v1/models":
             if req.method != "GET":
                 raise WireError(405, "invalid_request_error", f"use GET for {path}")
-            return Response(200, list_models(bool(anthropic_shape)))
+            return Response(200, list_models(wire == "anthropic"))
         if req.method != "POST":
             raise WireError(405, "invalid_request_error", f"use POST for {path}")
-        body = parse_body(req.body)
-        call = build_anthropic(body) if anthropic_shape else build_openai(body)
+        if wire == "bedrock":
+            m = BEDROCK_PATH.match(path)
+            if not m:
+                raise WireError(404, "not_found_error", f"no route {path}")
+            call = build_bedrock(unquote(m.group("id")), m.group("op"), parse_body(req.body))
+        else:
+            body = parse_body(req.body)
+            call = build_anthropic(body) if wire == "anthropic" else build_openai(body)
         if not slots.acquire(cfg.queue_timeout_for("model")):
             raise WireError(529, "overloaded_error",
                             f"all {slots.n} claude slots busy (MOCK_CONCURRENCY); try again")
@@ -602,7 +743,12 @@ def handle(cfg: Config, slots: Slots, req: Request) -> Response:
             raise WireError(500, "api_error", f.message) from None
         finally:
             slots.release()
-        resp = to_anthropic(envelope, call) if anthropic_shape else to_openai(envelope, call)
-        return Response(200, resp, note=f"model={call.model} images={len(call.images)}")
+        note = f"wire={wire} model={call.model} images={len(call.images)}" + (" stream" if call.stream else "")
+        if wire == "openai":
+            return Response(200, to_openai(envelope, call), note=note)
+        msg = to_anthropic(envelope, call)
+        if call.stream:
+            return Response(200, {}, note=note, events=sse_events(msg))
+        return Response(200, msg, note=note)
     except WireError as e:
         return render(e)

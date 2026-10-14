@@ -18,7 +18,7 @@ class Process(unittest.TestCase):
             self.assertEqual(st, 200)
             self.assertEqual((h["ok"], h["service"]), (True, "napkin-mock-backend"))
             self.assertEqual(set(h["fakes"]), {"model", "research", "retrieval", "layers"})
-            self.assertEqual(h["fakes"]["model"]["shapes"], ["anthropic", "openai"])
+            self.assertEqual(h["fakes"]["model"]["shapes"], ["anthropic", "bedrock", "openai"])
             self.assertTrue(h["fakes"]["model"]["images"])
             self.assertEqual(h["fakes"]["model"]["models"]["claude-opus-5"], "opus")
             self.assertEqual(h["fakes"]["research"]["api"], "napkin.research/1")

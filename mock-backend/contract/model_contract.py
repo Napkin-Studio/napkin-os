@@ -13,7 +13,7 @@ appends /v1/messages), the root including /v1 for openai (the suite appends
 
   --no-live            skip the checks that make model calls (the rest spend nothing)
   --no-image           skip the image transcription check (an endpoint without vision)
-  --expect-refusals    the target refuses tools, stream, a prefill and a document block
+  --expect-refusals    the target refuses tools, a prefill and a document block (and OpenAI stream)
                        with a 400 (the mock does; the real APIs accept most of these)
 
 Standard library only.
@@ -207,7 +207,6 @@ def main() -> int:
             cases = {
                 "tools": {"model": m, "max_tokens": 16, "messages": user,
                           "tools": [{"name": "t", "description": "d", "input_schema": {"type": "object"}}]},
-                "stream: true": {"model": m, "max_tokens": 16, "messages": user, "stream": True},
                 "assistant prefill": {"model": m, "max_tokens": 16,
                                       "messages": user + [{"role": "assistant", "content": "{"}]},
                 "document block": {"model": m, "max_tokens": 16, "messages": [{"role": "user", "content": [

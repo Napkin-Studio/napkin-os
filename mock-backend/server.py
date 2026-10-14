@@ -6,8 +6,10 @@ middleware talks to (docs/contracts/peripherals.md, contract 5, §5).
 
 | family    | routes                                           | answered by                      |
 |-----------|--------------------------------------------------|----------------------------------|
-| model     | POST /v1/messages, POST /v1/chat/completions,    | claude -p (Anthropic / OpenAI)   |
-|           | GET /v1/models                                   |                                  |
+| model     | POST /v1/messages (stream or not),               | claude -p (Anthropic, Bedrock,   |
+|           | POST /anthropic/v1/messages (Bedrock mantle),    | OpenAI shapes)                   |
+|           | POST /model/{id}/invoke (Bedrock InvokeModel),   |                                  |
+|           | POST /v1/chat/completions, GET /v1/models        |                                  |
 | research  | POST /v1/research                                | claude -p + WebSearch, WebFetch  |
 | retrieval | GET /v1/packs, POST /v1/retrieve                 | pack files + claude -p           |
 | layers    | /v1/layers/...                                   | SQLite, no model                 |
@@ -46,7 +48,7 @@ RETRIEVAL_PATHS = {"/v1/packs", "/v1/retrieve"}
 
 def family_of(path: str) -> str | None:
     p = path.rstrip("/") or "/"
-    if p in MODEL_PATHS:
+    if p in MODEL_PATHS or p == "/anthropic/v1/messages" or p.startswith("/model/"):
         return "model"
     if p == "/v1/research":
         return "research"
@@ -78,7 +80,8 @@ class Backend:
         fakes = {}
         if "model" in self.cfg.fakes:
             import model_port
-            fakes["model"] = {"api": "napkin.model/1", "shapes": ["anthropic", "openai"],
+            fakes["model"] = {"api": "napkin.model/1", "shapes": ["anthropic", "bedrock", "openai"],
+                              "stream": ["anthropic"],
                               "models": dict(model_port.MODELS), "images": True, "embeddings": False}
         for name in ("research", "retrieval", "layers"):
             if name in self.families:
@@ -122,6 +125,9 @@ def make_handler(backend: Backend):
             pass
 
         def _send(self, resp: Response, req_id: str) -> None:
+            if resp.events is not None:
+                self._send_events(resp, req_id)
+                return
             data = json.dumps(resp.body, ensure_ascii=False).encode("utf-8")
             self.send_response(resp.status)
             self.send_header("Content-Type", "application/json")
@@ -135,13 +141,29 @@ def make_handler(backend: Backend):
             self.end_headers()
             self.wfile.write(data)
 
+        def _send_events(self, resp: Response, req_id: str) -> None:
+            """Server-sent events, as the Messages API streams them; the connection closes after the
+            last one (no Content-Length, so the close ends the body)."""
+            self.send_response(resp.status)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("request-id", req_id)
+            self.send_header("Connection", "close")
+            self.close_connection = True
+            self.end_headers()
+            for event, data in resp.events:
+                self.wfile.write(f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
+                self.wfile.flush()
+
         def _error_for(self, path: str, status: int, message: str) -> Response:
             fam = family_of(path.split("?")[0])
             if fam == "model":
                 import model_port
                 e = model_port.WireError(status, "request_too_large" if status == 413 else "invalid_request_error",
                                          message)
-                r = e.anthropic() if path.startswith("/v1/messages") else e.openai()
+                p = path.split("?")[0]
+                r = model_port.bedrock_error(e) if p.startswith("/model/") else e.anthropic() \
+                    if p.startswith(("/v1/messages", "/anthropic/")) else e.openai()
             else:
                 r = PeripheralError(status, "invalid_input", message).response()
             r.close = True
