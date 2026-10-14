@@ -260,17 +260,24 @@ for f in sorted([*HERE.glob("capabilities/*.json"), *HERE.glob("examples/config.
     if GONE.search(f.read_text()):
         fail(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
 
-# Change this frame reserves the dearer of the two ops it may run as (features/frame-change-edit.clan):
-# its price is derived from the sheet, never typed apart from it.
+# An op that runs as one of others once the director has read the words reserves the dearest of them,
+# at its defaults, on the model the first of them runs on (features/frame-change-edit.clan: Change
+# this frame). Its price is derived from the models catalogue through pricing.py (features/
+# runway-sheet-sync.clan), never typed apart from it. clip_patch joins this table when it lands.
+RUNS_AS = {"frame_edit": ("frame", "region_edit")}
 for provider, sheet in sheets.items():
     o = sheet["ops"]
-    if "frame_edit" in o:
-        want = max(o[k]["estimateUsd"] or 0 for k in ("frame", "region_edit") if k in o)
-        if o["frame_edit"]["estimateUsd"] != want:
-            fail(f"✗ capabilities/{provider}.json: frame_edit estimateUsd is {o['frame_edit']['estimateUsd']}; "
-                 f"it is the higher of frame and region_edit ({want})")
-        if o["frame_edit"]["model"] != o["frame"]["model"]:
-            fail(f"✗ capabilities/{provider}.json: frame_edit runs on frame's model ({o['frame']['model']})")
+    for op, runs_as in RUNS_AS.items():
+        if op not in o:
+            continue
+        options = [k for k in runs_as if k in o]
+        want = max(pricing.op_usd(sheet, k) or 0 for k in options)
+        got = pricing.op_usd(sheet, op)
+        if got != want:
+            fail(f"✗ capabilities/{provider}.json: {op} prices at {got} at its defaults; "
+                 f"it is the dearest of {', '.join(options)} ({want})")
+        if o[op]["model"] != o[runs_as[0]]["model"]:
+            fail(f"✗ capabilities/{provider}.json: {op} runs on {runs_as[0]}'s model ({o[runs_as[0]]['model']})")
 
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():

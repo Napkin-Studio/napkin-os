@@ -76,7 +76,10 @@
     "frame_edit": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {
+        "outputs": 1,
+        "ratio": "1344:768"
+      },
       "seed": false,
       "outputs": [
         1,

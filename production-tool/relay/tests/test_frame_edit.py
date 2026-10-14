@@ -21,6 +21,7 @@ from PIL import Image
 
 import names
 from conftest import CDN, Harness, asset, base_config, envelope, ref
+from contracts_dir import pricing
 from director import new_id
 from director.base import PassthroughDirector
 from director.claude import ClaudeDirector
@@ -390,13 +391,18 @@ def test_a_change_of_movement_only_completes_unpaid_with_no_provider_call(answer
 # ── money: the reservation follows the op it runs as ──────────────────────────────────────────
 
 def test_frame_edit_reserves_the_dearer_op_then_the_price_of_the_one_it_runs_as():
+    # region_edit on a cheaper catalogue model than frame's, so the two prices differ (runway-sheet-sync:
+    # prices come from models[model].pricing through pricing.py).
     h = harness()
-    h.providers["runway"].sheet["ops"]["region_edit"]["estimateUsd"] = 0.1
+    sheet = h.providers["runway"].sheet
+    sheet["ops"]["region_edit"]["model"] = "gemini_image3.1_flash"
+    cheap = pricing().op_usd(sheet, "region_edit")
+    assert cheap < pricing().op_usd(sheet, "frame_edit") == 0.2
     dex(h, reply("local", "region_edit", prompt=LOCAL_PROMPT, region=BOX,
                  refs=[{"sha256": FRAME["sha256"], "name": "current", "role": "current"}]))
     job = post(h, h.as_person(), edit_input("make her scarf red", region=BOX))
-    assert job["cost"]["estimate"] == job["cost"]["reserved"] == 0.1
-    assert spent(h) == 0.1
+    assert job["cost"]["estimate"] == job["cost"]["reserved"] == cheap
+    assert spent(h) == cheap
     h2 = harness()
     dex(h2, CAMERA)
     job2 = post(h2, h2.as_person(), edit_input())
@@ -405,8 +411,9 @@ def test_frame_edit_reserves_the_dearer_op_then_the_price_of_the_one_it_runs_as(
 
 def test_the_sheet_prices_frame_edit_at_the_dearer_of_frame_and_region_edit():
     for name in ("runway", "mock"):
-        ops = load_sheet(name)["ops"]
-        assert ops["frame_edit"]["estimateUsd"] == max(ops["frame"]["estimateUsd"], ops["region_edit"]["estimateUsd"])
+        sheet = load_sheet(name)
+        price = lambda op: pricing().op_usd(sheet, op) or 0  # noqa: E731
+        assert price("frame_edit") == max(price("frame"), price("region_edit"))
 
 
 # ── checks under the op it runs as ────────────────────────────────────────────────────────────
@@ -488,7 +495,8 @@ def test_an_agency_that_keeps_pictures_from_claude_gets_the_passthrough():
     wire = dex(h, CAMERA)
     token = h.as_person()
     tid = h.people[token]["tenant"]["id"]
-    h.store.put_tenant({"tenantId": tid, "agency": "blue", "enabled": True, "allow": {"claude": False}})
+    h.store.put_tenant({"tenantId": tid, "agency": "blue", "enabled": True,
+                        "allow": {"claude": False, "makers": ["runway", "google"]}})
     h.relay._tenants.pop(tid, None)
     job = post(h, token, edit_input())
     assert not wire.calls and job["director"]["model"] == "passthrough"
