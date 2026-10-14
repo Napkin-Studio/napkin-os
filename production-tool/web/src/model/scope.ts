@@ -60,6 +60,8 @@ export interface ScopeOptions {
   members?: (endpoint: LinkEndpoint) => Id[] | undefined
 }
 
+/** "Script · First Light", or "Script" while it has only its default name. */
+const titled = (kind: string, title: string | undefined) => (title && title.trim().toLowerCase() !== kind.toLowerCase() ? `${kind} · ${title}` : kind)
 const values = <T>(m: Record<string, T> | undefined): T[] => Object.values(m ?? {})
 const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
 const UPSTREAM: LinkRole[] = ['drives', 'renders']
@@ -165,15 +167,15 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
     }
     case 'script': {
       const s = d.scripts?.[e.id]
-      return [{ ...base, kind: 'script', id: e.id, label: `Script · ${s?.title || 'Untitled'}` }]
+      return [{ ...base, kind: 'script', id: e.id, label: titled('Script', s?.title) }]
     }
     case 'storyboard': {
       const s = d.storyboards?.[e.id]
-      return [{ ...base, kind: 'storyboard', id: e.id, label: `Storyboard · ${s?.title || 'Untitled'}` }]
+      return [{ ...base, kind: 'storyboard', id: e.id, label: titled('Storyboard', s?.title) }]
     }
     case 'video': {
       const v = d.videos?.[e.id]
-      return [{ ...base, kind: 'video', id: e.id, label: `Video · ${v?.title || 'Untitled'}` }]
+      return [{ ...base, kind: 'video', id: e.id, label: titled('Video', v?.title) }]
     }
     case 'document': {
       const doc = d.documents?.[e.id]

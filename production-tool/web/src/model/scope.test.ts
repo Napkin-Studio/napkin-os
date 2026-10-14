@@ -139,3 +139,11 @@ describe('scopeOf reads the live text too', () => {
     expect(scopeOf(d, SCRIPT).find((i) => i.kind === 'unknown')).toMatchObject({ name: 'jogger', usedBy: [S16] })
   })
 })
+
+describe('scope labels', () => {
+  it('a node with its default name is called by its kind alone', () => {
+    const d = fresh()
+    d.scripts[SCRIPT].title = 'Script'
+    expect(inputChips(scopeOf(d, SB))[0].label).toBe('Script')
+  })
+})
