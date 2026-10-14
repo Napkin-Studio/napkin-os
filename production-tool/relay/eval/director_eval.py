@@ -4,7 +4,7 @@ passthrough and each director prompt, scored by checks in code.
   uv run python -m eval.director_eval record director.v5 --model sonnet   # live, on the configured wire
   uv run python -m eval.director_eval score                               # replays every recording
 
-`record` calls the model (NAPKIN_MODEL_API: claude-cli locally, on the developer's own login)
+`record` calls the model on the configured wire (locally: scripts/model-local run, on the developer's own login)
 and keeps each raw reply under eval/recorded/<version>/<case>.json. `score` and the test
 (tests/test_director_eval.py) only replay them, so CI makes no model call.
 
@@ -275,11 +275,7 @@ def main(argv=None) -> None:
     data = load()
     if args.cmd == "record":
         from director.claude import build_wire, settings_from_env
-        if os.environ.get("NAPKIN_MODEL_API") == "claude-cli":
-            from director.cli_wire import ClaudeCliWire
-            base = ClaudeCliWire(os.environ.get("NAPKIN_CLAUDE_CLI", "claude"))
-        else:
-            base = build_wire(settings_from_env())
+        base = build_wire(settings_from_env())
         for case in data["cases"]:
             if args.case and case["id"] not in args.case:
                 continue

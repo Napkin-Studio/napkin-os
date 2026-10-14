@@ -170,7 +170,7 @@ def test_the_passthrough_on_the_frame_edit_cases_never_sees_a_picture_and_keeps_
 V7 = Path(__file__).resolve().parent.parent / "eval" / "recorded" / "director.v7"
 
 
-@pytest.mark.skipif(not V7.is_dir(), reason="director.v7 is not recorded yet: NAPKIN_MODEL_API=claude-cli "
+@pytest.mark.skipif(not V7.is_dir(), reason="director.v7 is not recorded yet: scripts/model-local run "
                     "uv run python -m eval.director_eval record director.v7 (features/frame-change-edit.clan next_step)")
 def test_every_frame_edit_case_passes_on_recorded_director_v7_replies():
     rows = table(load(), ["director.v7"])["director.v7"]

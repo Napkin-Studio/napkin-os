@@ -68,8 +68,12 @@ uv run python -m local            # http://localhost:8787
 - Providers: whatever `providers/<name>.py` adapters exist. Without
   `providers/mock.py`, a stub stands in for mock: after 2 s it returns the
   job's first input asset as the output, labelled `kind: "mock"`.
-- Director: `director/claude.py` (`make()`) when it exists, otherwise the
-  passthrough (the shot list is split evenly from the script).
+- Director: `director/claude.py` (`make()`) when a model is configured, otherwise the
+  passthrough (the shot list is split evenly from the script). To run the real director, the
+  character cards and Skye on your own Claude Code login, start the relay under the one local
+  model backend: `../../scripts/model-local run uv run python -m local` (the anthropic wire with
+  `NAPKIN_MODEL_BASE_URL` on 127.0.0.1:8797, answered by `claude -p`; model.py refuses that URL
+  on Lambda). The config's Bedrock ids (`eu.anthropic.…`) are accepted there as they are.
 - Stitch runs in-process when `ffmpeg` is on the PATH (the end card's pieces are PNGs in
   `production-tool/stitch/endcard/`, so no font is needed).
 - Local mode accepts `http://localhost` asset URLs; AWS requires `https://`.

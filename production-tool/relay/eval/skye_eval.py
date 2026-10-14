@@ -2,7 +2,7 @@
 writer, scored by checks in code. A person runs `record` with the eval key before PR 3 merges and
 logs the result in the record; CI only replays (`score`), so it makes no model call.
 
-  uv run python -m eval.skye_eval record              # live: Bedrock (or NAPKIN_MODEL_API=claude-cli)
+  uv run python -m eval.skye_eval record              # live: Bedrock (or locally under scripts/model-local run)
   uv run python -m eval.skye_eval score               # replays eval/recorded/skye.v1/*.json
   uv run python -m eval.skye_eval score --passthrough # the checks over the no-model writer
 
@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -123,11 +122,7 @@ def main(argv=None) -> int:
         from director.claude import build_wire, settings_from_env
         from director.model import ModelPort
         from contracts_dir import contracts_dir
-        if os.environ.get("NAPKIN_MODEL_API") == "claude-cli":
-            from director.cli_wire import ClaudeCliWire
-            wire = ClaudeCliWire(os.environ.get("NAPKIN_CLAUDE_CLI", "claude"))
-        else:
-            wire = build_wire(settings_from_env())
+        wire = build_wire(settings_from_env())
         port = ModelPort(wire, model=WRITE_MODEL, timeout=120)
 
         class Keep:
