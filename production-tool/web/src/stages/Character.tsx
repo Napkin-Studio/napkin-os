@@ -32,7 +32,8 @@ import { framesFromSketch, sketchDeleteText } from '../doc/remove'
 import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
-import { alive, bounds, byOwnId, cd, imageOf, isText, isUserDrawing, type Canvas, type El } from '../canvas/scene'
+import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
+import { showStartCard } from './startCard'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
 import { keyNamed, keysList, mainScript, mainStoryboard, refsList } from '../model/selectors'
@@ -298,8 +299,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     }
   }, [ctrl, asking, limits])
 
-  const hasMarks = els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e))
-  const showHint = !ui.hintDismissed && !hasMarks && Object.keys(doc.refs).length === 0
+  const showHint = showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
 
   // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
   // canvas-nodes): the rail jumps to the frames, and nothing is drawn over the canvas for them.
