@@ -51,6 +51,21 @@ export default defineConfig([
       }],
     },
   },
+  // One .clan writer per browser (features/engine-store.clan): napkin-wasm and ClanDocumentStore
+  // run only in the store Worker (src/store/); the main thread uses its proxy. Tests may build a
+  // store directly. src/store/store.test.ts checks the names lint cannot see.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/store/**', 'src/test/**', '**/*.test.{ts,tsx}', 'src/canvas/adapter/**', 'src/canvas/core/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        patterns: [
+          ENGINE, ONE_ADAPTER,
+          { group: ['**/clan-store/src', '**/clan-store/src/*'], importNames: ['ClanDocumentStore', 'loadWasm', 'freshHost', 'NapkinHost'], message: 'The .clan is written only in the store Worker (src/store/); use the store proxy (features/engine-store.clan)' },
+        ],
+      }],
+    },
+  },
   // The core is engine-free: no engine, no sync library, and no adapter.
   {
     files: ['src/canvas/core/**/*.{ts,tsx}'],

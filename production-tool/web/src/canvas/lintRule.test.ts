@@ -61,6 +61,25 @@ describe('one engine’s adapter is reached only through the loader (features/en
   })
 })
 
+describe('one .clan writer: napkin-wasm only in the store Worker (features/engine-store.clan)', () => {
+  const STORE = 'Clan' + 'DocumentStore'
+  it.each([
+    ['a session building the store', `import { ${STORE} } from '../../../clan-store/src'`, 'src/projects/session.ts'],
+    ['the model loading the wasm', `import { load${'Wasm'} } from '../../../clan-store/src'`, 'src/model/store.ts'],
+    ['a stage reaching the host', `import { fresh${'Host'} } from '../../../clan-store/src/host'`, 'src/stages/X.tsx'],
+  ])('%s is refused', async (_what, line, file) => {
+    const msgs = await restricted(`${line}\nexport const y = 1\n`, file)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toContain('features/engine-store.clan')
+  })
+
+  it('the Worker and tests may, and everyone may use the buses and types', async () => {
+    expect(await restricted(`import { ${STORE} } from '../../../clan-store/src'\nexport const y = ${STORE}\n`, 'src/store/server.ts')).toEqual([])
+    expect(await restricted(`import { ${STORE} } from '../../../clan-store/src'\nexport const y = ${STORE}\n`, 'src/test/model.ts')).toEqual([])
+    expect(await restricted(`import { LocalPatchBus, type ClanStoreApi } from '../../../clan-store/src'\nexport type Y = ClanStoreApi\nexport const y = LocalPatchBus\n`, 'src/model/store.ts')).toEqual([])
+  })
+})
+
 describe('src/canvas/core imports no engine, no sync library and no adapter', () => {
   const core = 'src/canvas/core/x.ts'
   it.each([
