@@ -285,9 +285,21 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     open(kind)
   }, [chrome, open])
   const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
+  // ⌥0: everything, the boards drawn over the canvas included.
+  const fitEverything = () => {
+    if (!chrome) return
+    if (!frames.length) return chrome.fitAll()
+    const els = canvas ? alive(canvas.elements()) : []
+    const b = els.length ? bounds(els) : undefined
+    const xs = frames.flatMap((f) => [f.rect.x, f.rect.x + f.rect.w]).concat(b ? [b.minX, b.maxX] : [])
+    const ys = frames.flatMap((f) => [f.rect.y - 16, f.rect.y + f.rect.h]).concat(b ? [b.minY, b.maxY] : [])
+    // The rail covers the left 240px: fit to the right of it.
+    const x = Math.min(...xs) - 240
+    chrome.fitRect({ x, y: Math.min(...ys), w: Math.max(...xs) - x, h: Math.max(...ys) - Math.min(...ys) })
+  }
   // The boards drawn over the canvas until art-boards makes them frames (mock Main): picture boards
   // wrap their pictures; Script, Storyboard and Video hold their node cards.
-  const frames = useMemo(() => {
+  const frames = ((): ReturnType<typeof boardFrames> => {
     if (Object.keys(doc.boards ?? {}).length) return []
     const groups = rows.flatMap((r) => {
       if (r.target.kind !== 'refs') return []
@@ -295,7 +307,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
       return hit.length ? [{ id: r.id, title: r.title, box: bounds(hit) }] : []
     })
     return boardFrames(groups)
-  }, [doc.boards, rows, els])
+  })()
   // The dot grid moves with the canvas.
   const grid = vs ? { '--grid-x': `${vs.view.scrollX * vs.view.zoom}px`, '--grid-y': `${vs.view.scrollY * vs.view.zoom}px`, '--grid-s': `${24 * vs.view.zoom}px` } as React.CSSProperties : undefined
 
@@ -355,7 +367,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
         {panels.assets
           ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}
               onPicture={() => chrome?.setTool('image')} onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} />
-          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={() => chrome?.fitAll()} narrow={narrow} />}
+          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow={narrow} />}
         <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
       </div>

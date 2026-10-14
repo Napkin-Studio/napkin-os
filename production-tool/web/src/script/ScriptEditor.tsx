@@ -27,6 +27,8 @@ import { HistoryPanel, type HistoryFocus } from '../ui/History'
 import { AskOptions } from '../ui/AskCard'
 import { UndoButtons } from '../ui/UndoButtons'
 import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
+import { nodeTitle } from '../ui/chrome/panels'
+import { useProjectName } from '../ui/useDownload'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { NapkinLoader } from '../ui/loader/NapkinLoader'
 import { useBlobUrl } from '../ui/hooks'
@@ -107,6 +109,7 @@ export function ScriptEditor({ scriptId }: { scriptId: string }) {
 }
 
 function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; scriptId: string; onBack: () => void; backTo: string }) {
+  const projectName = useProjectName()
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -266,7 +269,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     return k === 'scene' || k === 'shot' || k === 'beat' ? { kind: k, id } : null
   })()
   const empty = !composed.shots.length && Object.values(doc.scenes).every((s) => s.script_id !== scriptId || (!s.heading.trim() && !s.text?.trim()))
-  const title = composed.script.title || 'Untitled script'
+  const title = nodeTitle(composed.script.title, 'Script', projectName)
 
   const page = (
     <main className="se-page" aria-label={view === 'av' ? 'Video and audio' : 'Screenplay'}

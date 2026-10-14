@@ -19,3 +19,11 @@ export function initials(name: string | undefined): string {
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
+
+/** A node's title in its bar or card: its own title, or, while it still has the template's word
+ *  ("Script", "Storyboard"), the ad's name ("First Light" from "Lumen Water · First Light"). */
+export function nodeTitle(own: string | undefined, templateWord: string, project: string | undefined): string {
+  if (own && own.trim() && own.trim() !== templateWord && !/^untitled/i.test(own.trim())) return own.trim()
+  const ad = project?.split(' · ').at(-1)?.trim()
+  return ad && !/^untitled/i.test(ad) ? ad : templateWord
+}

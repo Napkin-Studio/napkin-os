@@ -39,6 +39,7 @@ import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
 import { currentRender, currentTake, mainStoryboard, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
+import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
 import { SoundView } from './SoundView'
 import { addTakeNote, pickTake } from './videoEdits'
@@ -52,6 +53,7 @@ const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
 export function Video() {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   /** Picture or Sound (ui-behaviour 3.21): Sound is a shell until the audio features land. */
+  const projectName = useProjectName()
   const [view, setView] = useState<'picture' | 'sound'>('picture')
   const doc = useDoc()
   const ui = useUi()
@@ -125,7 +127,7 @@ export function Video() {
   return (
     <div className="editor">
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-        title={`Video · ${mainStoryboard(doc)?.title ?? 'Video'}`}
+        title={`Video · ${nodeTitle(mainStoryboard(doc)?.title, 'Storyboard', projectName)}`}
         meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>}
         middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
         right={<button className="btn" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}

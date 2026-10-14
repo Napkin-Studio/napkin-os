@@ -16,6 +16,8 @@ export interface CanvasChrome {
   zoomBy(step: 1 | -1): void
   /** Fit everything on the canvas (⌥0). */
   fitAll(): void
+  /** Fit a scene box (the boards drawn over the canvas, which are not the engine's elements). */
+  fitRect(r: { x: number; y: number; w: number; h: number }): void
   /** Called when the tool or the zoom changes. */
   onChange(cb: () => void): () => void
 }
@@ -26,6 +28,12 @@ export const ZOOM_STEPS = [0.1, 0.25, 0.33, 0.5, 0.62, 0.75, 0.9, 1, 1.25, 1.5, 
 export function nextZoom(z: number, step: 1 | -1): number {
   if (step > 0) return ZOOM_STEPS.find((s) => s > z + 0.001) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]
   return [...ZOOM_STEPS].reverse().find((s) => s < z - 0.001) ?? ZOOM_STEPS[0]
+}
+
+/** The zoom and scroll that show box `r` in a `vw` x `vh` view with a margin, at most 100%. */
+export function fitView(r: { x: number; y: number; w: number; h: number }, vw: number, vh: number, margin = 48): { zoom: number; scrollX: number; scrollY: number } {
+  const zoom = Math.min(1, (vw - margin * 2) / Math.max(1, r.w), (vh - margin * 2) / Math.max(1, r.h))
+  return { zoom, scrollX: (vw / zoom - r.w) / 2 - r.x, scrollY: (vh / zoom - r.h) / 2 - r.y }
 }
 
 /** Keep the middle of the view still while zooming: the new scroll for one axis. */

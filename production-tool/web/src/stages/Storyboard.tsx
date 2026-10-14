@@ -41,6 +41,7 @@ import { insertShot } from '../script/edits'
 import { ShotEditor } from '../script/ShotEditor'
 import { scriptMentionHooks } from '../script/mentionHooks'
 import { EditorBar } from '../ui/chrome/TopBars'
+import { nodeTitle } from '../ui/chrome/panels'
 import { Float } from '../ui/Float'
 import { trayGroups, type TrayRow } from '../ui/tray'
 import { applyClipLine, applyFrameEditStep, cameraDiff, cameraLabel, changeFrame, discardStep, frameEditCopy, frameEditLines, frameEditOf, keepBothStep, proposalOf } from '../jobs/frameEdit'
@@ -137,7 +138,7 @@ export function Storyboard() {
   return (
     <div className="editor">
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
-        title={`Storyboard · ${sb?.title ?? 'Storyboard'}`}
+        title={`Storyboard · ${nodeTitle(sb?.title, 'Storyboard', projectName)}`}
         meta={<><RatioPill ratio={ratio} onPick={(r) => void updateDoc(docStore, (d) => setRatio(d, r), `set the storyboard format to ${r}`)} /><span className="pt-project">{projectName}</span></>}
         primary={primary} />
       <div className="sb-sub">

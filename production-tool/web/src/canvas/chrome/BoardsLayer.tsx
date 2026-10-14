@@ -12,11 +12,15 @@ import { isRunning, jobAt } from '../../jobs/select'
 import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, scenesOf, shotsOf, staleList } from '../../model/selectors'
 import { AgentFigure } from '../../ui/agents/AgentFigure'
 import { NodeIcon } from '../../ui/chrome/Bar'
+import { nodeTitle } from '../../ui/chrome/panels'
+import { useProjectName } from '../../ui/useDownload'
 import { useBlobUrl } from '../../ui/hooks'
 import { NapkinLoader } from '../../ui/loader/NapkinLoader'
 import type { BoardFrame } from './boards'
 import type { Pt } from '../core/canvasAdapter'
 
+/** @names in blue (mock Main). */
+const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map((p, i) => (p.startsWith('@') ? <span key={i} className="pt-mention">{p}</span> : p))
 const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
 const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s)
 
@@ -105,6 +109,7 @@ function ScriptCard({ onOpen }: { onOpen: () => void }) {
   const doc = useDoc()
   const ui = useUi()
   const script = mainScript(doc)
+  const project = useProjectName()
   const shots = shotsOf(doc)
   const scenes = scenesOf(doc)
   const writing = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'write'))
@@ -112,19 +117,19 @@ function ScriptCard({ onOpen }: { onOpen: () => void }) {
     .map((b) => (b.kind === 'line' || b.kind === 'vo' ? `${b.kind === 'vo' ? 'VO: ' : b.speaker ? `${cap(b.speaker.toLowerCase())}: ` : ''}"${b.text ?? ''}"` : b.text ?? '')).filter(Boolean).join(' ')
   const words = scenes.map((s) => s.text ?? '').join(' ').trim()
   return (
-    <Card icon="script" title={`Script · ${script?.title ?? 'Script'}`} meta={<span className="pt-mono">{Math.round(script?.target_s ?? 15)} s</span>} onOpen={onOpen} style={{ height: 380 }}>
+    <Card icon="script" title={`Script · ${nodeTitle(script?.title, 'Script', project)}`} meta={<span className="pt-mono">{Math.round(script?.target_s ?? 15)} s</span>} onOpen={onOpen} style={{ height: 380 }}>
       {shots.length ? (
         <div className="bl-av">
           <span className="bl-avhead">Video</span><span className="bl-avhead">Audio</span>
           {shots.slice(0, 3).map((s) => (
             <span key={s.id} style={{ display: 'contents' }}>
-              <span className="bl-avcell">{short(s.action ?? '', 90)}</span>
+              <span className="bl-avcell">{withRefs(short(s.action ?? '', 90))}</span>
               <span className="bl-avcell muted">{short(sound(s), 70)}</span>
             </span>
           ))}
         </div>
       ) : (
-        <p className={`bl-excerpt ${words ? '' : 'faint'}`}>{words ? short(words, 260) : 'No script yet · write it, or paste one in.'}</p>
+        <p className={`bl-excerpt ${words ? '' : 'faint'}`}>{words ? withRefs(short(words, 260)) : 'No script yet · write it, or paste one in.'}</p>
       )}
       <span className="bl-meta">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'} · {shots.length} {shots.length === 1 ? 'shot' : 'shots'}</span>
       <span className="pt-grow" />
@@ -137,13 +142,14 @@ function StoryboardCard({ onOpen }: { onOpen: () => void }) {
   const doc = useDoc()
   const ui = useUi()
   const sb = mainStoryboard(doc)
+  const project = useProjectName()
   const shots = shotsOf(doc)
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   const behind = staleList(doc).filter((m) => m.target.kind === 'frame' || m.target.kind === 'shot').length
   const planning = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'shot_list'))
   const drawingIdx = shots.findIndex((s) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === s.id)))
   return (
-    <Card icon="storyboard" title={`Storyboard · ${sb?.title ?? 'Storyboard'}`}
+    <Card icon="storyboard" title={`Storyboard · ${nodeTitle(sb?.title, 'Storyboard', project)}`}
       meta={<span className="pt-mono">{sb?.ratio ?? '16:9'} · {shots.length} shots · {Math.round(total)} s</span>}
       extra={behind ? <span className="pt-pill warn">{behind} behind the script</span> : undefined} onOpen={onOpen} style={{ height: 194 }}>
       {shots.length ? (
@@ -173,6 +179,7 @@ function FrameTile({ shot, n, drawing }: { shot: Shot; n: number; drawing: boole
 function VideoCard({ onOpen }: { onOpen: () => void }) {
   const doc = useDoc()
   const ui = useUi()
+  const project = useProjectName()
   const shots = shotsOf(doc)
   const ready = shots.filter((s) => !!currentTake(doc, s.id)).length
   const render = currentRender(doc)
@@ -182,7 +189,7 @@ function VideoCard({ onOpen }: { onOpen: () => void }) {
   const clipRunning = shots.map((s, i) => ({ i, on: isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === s.id)) })).find((x) => x.on)
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   return (
-    <Card icon="video" title={`Video · ${mainStoryboard(doc)?.title ?? 'Video'}`} onOpen={onOpen} style={{ height: 194 }}>
+    <Card icon="video" title={`Video · ${nodeTitle(mainStoryboard(doc)?.title, 'Storyboard', project)}`} onOpen={onOpen} style={{ height: 194 }}>
       <div className="bl-videorow">
         <span className="bl-poster">
           {adUrl ? <video src={adUrl} muted preload="metadata" /> : url ? <img src={url} alt="" /> : null}

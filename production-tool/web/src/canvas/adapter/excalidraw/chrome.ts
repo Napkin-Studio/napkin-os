@@ -4,7 +4,7 @@
 
 import { CaptureUpdateAction } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
+import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
 
 const TO_ENGINE: Record<ChromeTool, string> = {
   select: 'selection', hand: 'hand', pen: 'freedraw', text: 'text', sketch: 'frame', image: 'image', eraser: 'eraser',
@@ -32,6 +32,11 @@ export function excalidrawChrome(api: ExcalidrawImperativeAPI): CanvasChrome {
     fitAll: () => {
       const els = api.getSceneElements()
       if (els.length) api.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.9, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
+    },
+    fitRect: (r) => {
+      const st = api.getAppState()
+      const v = fitView(r, st.width, st.height)
+      api.updateScene({ appState: { zoom: { value: v.zoom as never }, scrollX: v.scrollX, scrollY: v.scrollY }, captureUpdate: CaptureUpdateAction.NEVER })
     },
     onChange: (cb) => {
       let last = ''
