@@ -154,3 +154,51 @@ describe('Renderer', () => {
     expect(fills).toEqual(['#F2F3F5', '#FF7A5C', '#a33b2b', '#F2F3F5'])
   })
 })
+
+describe('the selection frame and scaling (canvas-edit-tools)', () => {
+  const recorder = () => {
+    const calls: string[] = []
+    const ctx = new Proxy({} as DrawContext, {
+      get: (_t, k) => (k === 'lineWidth' || k === 'globalAlpha' ? 1 : (...a: unknown[]) => { calls.push(`${String(k)}${k === 'fillText' || k === 'setLineDash' ? `:${JSON.stringify(a[0])}` : k === 'scale' ? `:${JSON.stringify(a)}` : ''}`) }),
+      set: () => true,
+    })
+    return { calls, ctx }
+  }
+  const setup = () => {
+    const store = new SceneStore(new Y.Doc())
+    const pts = encodePoints([{ x: 0, y: 0, pressure: 0.5 }, { x: 40, y: 20, pressure: 0.5 }], { x: 0, y: 0 })
+    store.seed([
+      element({ id: 's', kind: 'stroke', z: 'a1', x: 0, y: 0, w: 80, h: 40, groupIds: ['g'], props: { tool: 'pen' } }),
+      element({ id: 'k', kind: 'sketch', z: 'a2', x: 200, y: 0, w: 160, h: 90, style: { fill: '#ffffff' }, props: { ratio: '16:9' } }),
+    ], { s: pts })
+    return new Renderer(store, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
+  }
+
+  it('draws a scaled stroke at its box, and a sketch area says its ratio is locked', () => {
+    const r = setup()
+    const { calls, ctx } = recorder()
+    r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1)
+    expect(calls).toContain('scale:[2,2]')
+    expect(calls).toContain('fillText:"16:9 locked"')
+  })
+
+  it('a group frame is one dashed box with four handles and its label, in place of the members’ outlines', () => {
+    const r = setup()
+    r.selected = new Set(['s'])
+    r.frame = { box: { x: 0, y: 0, w: 80, h: 40 }, dashed: true, handles: true, label: 'Ink · 1 stroke · one group' }
+    const { calls, ctx } = recorder()
+    r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1)
+    // The sketch area's own outline, the dashed box and four handles; no outline round the stroke.
+    expect(calls.filter((c) => c === 'strokeRect')).toHaveLength(6)
+    expect(calls).toContain('setLineDash:[5,4]')
+    expect(calls).toContain('fillText:"Ink · 1 stroke · one group"')
+  })
+
+  it('a scale being dragged is drawn round its corner, nothing written', () => {
+    const r = setup()
+    r.scaling = { ids: new Set(['k']), ox: 200, oy: 0, s: 2 }
+    const { calls, ctx } = recorder()
+    r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1)
+    expect(calls).toContain('scale:[2,2]')
+  })
+})

@@ -1,14 +1,15 @@
 // CanvasChrome on our own engine (features/production-ui.clan): the bar's tools
 // map onto the engine's (select, hand, pen and eraser; text, sketch areas and
-// pictures are not on the own engine yet, so those buttons do nothing here), zoom
+// pictures are not on the own engine yet, so those buttons do nothing here; the
+// sketch area tool is the engine's, canvas-edit-tools), zoom
 // keeps the middle of the view still, and fit uses the adapter's own fit.
 
 import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
 import type { OwnAdapter } from './adapter'
 
-const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser' }
+const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser', sketch: 'sketch' }
 // The highlighter is the pen's other mode (the pen's options), so the pen stays lit.
-const FROM_ENGINE: Record<string, ChromeTool> = { selection: 'select', hand: 'hand', freedraw: 'pen', pen: 'pen', highlighter: 'pen', eraser: 'eraser' }
+const FROM_ENGINE: Record<string, ChromeTool> = { selection: 'select', hand: 'hand', freedraw: 'pen', pen: 'pen', highlighter: 'pen', eraser: 'eraser', sketch: 'sketch' }
 
 export function ownChrome(a: OwnAdapter): CanvasChrome {
   const size = () => {

@@ -77,6 +77,7 @@ export class CanvasController {
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
+    void this.sync.nodes(this.els())
   }
 
   private els(): El[] {
@@ -153,11 +154,12 @@ export class CanvasController {
     this.syncTimer = null
     void this.sync.gens(this.els())
     void this.sync.sketches(this.els())
+    void this.sync.nodes(this.els())
   }
 
   // ── delete and undo ──
 
-  /** What deleting these elements takes with it: a drawing's strokes, and the arrows to and from them. */
+  /** What deleting these elements takes with it: a drawing's strokes, and the arrows and links to and from them. */
   private deletionOf(ids: string[]): string[] {
     const els = alive(this.els())
     const out = new Set(ids)
@@ -168,6 +170,9 @@ export class CanvasController {
     for (const e of els) {
       const c = cd(e)
       if (c?.kind === 'provenance' && (owned.has(c.from) || owned.has(c.to))) out.add(e.id)
+      // A link or arrow bound to something that goes, goes with it (canvas-edit-tools).
+      const b = e as El & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      if ((b.startBinding?.elementId && out.has(b.startBinding.elementId)) || (b.endBinding?.elementId && out.has(b.endBinding.elementId))) out.add(e.id)
     }
     return [...out]
   }
@@ -177,9 +182,20 @@ export class CanvasController {
     const gone = this.deletionOf(ids)
     if (!gone.length) return null
     const els = this.els()
-    const shown = alive(els).filter((e) => gone.includes(e.id) && cd(e)?.kind !== 'provenance' && !e.frameId)
-    const b = bounds(shown.length ? shown : alive(els).filter((e) => gone.includes(e.id)))
-    const label = shown.length === 1 ? (cd(shown[0])?.kind === 'gen' ? 'Image deleted' : 'Deleted') : `${shown.length} deleted`
+    // What the person picked: not the strokes, arrows and links that went along with it.
+    const shown = alive(els).filter((e) => gone.includes(e.id) && (ids.includes(e.id) || cd(e)?.kind !== 'link') && cd(e)?.kind !== 'provenance' && !(e.frameId && gone.includes(e.frameId)))
+    const node = shown.length === 1 ? cd(shown[0])?.kind : undefined
+    const NODE_WORD: Record<string, string> = { script: 'Script deleted', storyboard: 'Storyboard deleted', video: 'Video deleted', gen: 'Image deleted', link: 'Link deleted' }
+    // A link is drawn between its ends, wherever its own box says: the chip goes between them.
+    const byId = new Map(alive(els).map((e) => [e.id, e]))
+    const placed = shown.flatMap((e) => {
+      const ends = e as El & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      const a = cd(e)?.kind === 'link' ? byId.get(ends.startBinding?.elementId ?? '') : undefined
+      const z = cd(e)?.kind === 'link' ? byId.get(ends.endBinding?.elementId ?? '') : undefined
+      return a && z ? [a, z] : [e]
+    })
+    const b = bounds(placed.length ? placed : alive(els).filter((e) => gone.includes(e.id)))
+    const label = shown.length === 1 ? NODE_WORD[node ?? ''] ?? 'Deleted' : `${shown.length} deleted`
     this.setEls(els.map((e) => (gone.includes(e.id) ? this.canvas.patch(e, { isDeleted: true }) : e)))
     this.canvas.select([])
     this.syncNow()

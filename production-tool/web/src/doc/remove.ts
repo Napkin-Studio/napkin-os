@@ -20,7 +20,9 @@ import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat'
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | NodeRemovalKind
+/** The document's nodes on the canvas (features/canvas-edit-tools.clan). */
+export type NodeRemovalKind = 'script' | 'storyboard' | 'video'
 
 export interface Removal {
   kind: RemovalKind
@@ -281,6 +283,69 @@ export function removeSketch(d: Doc, sketchId: string): Removal {
   if (frames.length) r.note = `the ${plural(frames.length, 'frame')} made from it stay`
   else if (!sketch) r.note = 'it had no row'
   r.ids = [sketchId, ...frames.map((f) => f.id)]
+  return r
+}
+
+/** Fold a sub-removal (a shot's) into `r`: what it took out, and what it changed the first time only. */
+function absorb(r: Removal, sub: Removal) {
+  r.removed.push(...sub.removed)
+  for (const m of sub.modified) {
+    const seen = r.modified.some((x) => x.map === m.map && x.before.id === m.before.id) || r.removed.some((x) => x.map === m.map && x.value.id === m.before.id)
+    if (!seen) r.modified.push(m)
+  }
+}
+
+/**
+ * A Script, Storyboard or Video node left the canvas (features/canvas-edit-tools.clan; ui-behaviour
+ * 3.3 Delete). The entity goes with what only it holds: a script's scenes (shots planned from them
+ * keep their place, without the scene), a storyboard's shots with their frames, clips, beats and
+ * place in the cut (as removeShot), a video's renders. Its links, the notes, marks, checks,
+ * suggestions and asks on any of them go too. Jobs stay on record (what was made and paid for),
+ * and no bytes are touched. Undone by the canvas's Ctrl+Z (restoreTo) or the inline Undo.
+ */
+export function removeNode(d: Doc, kind: NodeRemovalKind, nodeId: string): Removal {
+  const map = kind === 'script' ? 'scripts' : kind === 'storyboard' ? 'storyboards' : 'videos'
+  const ent = mapOf(d, map)[nodeId] as (Entity & { title?: string }) | undefined
+  if (!ent) throw new Error(`That ${kind} is already gone.`)
+  const title = typeof ent.title === 'string' && ent.title.trim() ? ` "${ent.title.trim()}"` : ''
+  const r = blank(kind, nodeId, `${kind}${title}`)
+  const ids: string[] = [nodeId]
+  const asksOn = (k: string, set: Set<string>) => {
+    for (const a of Object.values(d.asks)) if (a.node.kind === k && set.has(a.node.id)) takeOut(d, r, 'asks', a.id)
+  }
+  takeOut(d, r, map, nodeId)
+  if (kind === 'script') {
+    const scenes = new Set(Object.values(d.scenes).filter((x) => x.script_id === nodeId).map((x) => x.id))
+    for (const sc of scenes) takeOut(d, r, 'scenes', sc)
+    for (const sh of Object.values(d.shots)) if (sh.scene_id && scenes.has(sh.scene_id)) modify(r, 'shots', sh, (x) => { delete x.scene_id })
+    takeOutAbout(d, r, 'scene', scenes)
+    asksOn('scene', scenes)
+    ids.push(...scenes)
+    if (scenes.size) r.note = `with ${plural(scenes.size, 'scene')}`
+  } else if (kind === 'storyboard') {
+    const shots = Object.values(d.shots).filter((x) => x.storyboard_id === nodeId).map((x) => x.id)
+    let frames = 0
+    let clips = 0
+    for (const sh of shots) {
+      const sub = removeShot(d, sh)
+      frames += sub.removed.filter((m) => m.map === 'frames').length
+      clips += sub.removed.filter((m) => m.map === 'takes').length
+      absorb(r, sub)
+      ids.push(...sub.ids)
+    }
+    asksOn('shot', new Set(shots))
+    if (shots.length) r.note = `with ${plural(shots.length, 'shot')}, ${plural(frames, 'frame')} and ${plural(clips, 'clip')}`
+  } else {
+    const renders = Object.values(d.renders).filter((x) => x.video_id === nodeId).map((x) => x.id)
+    for (const id of renders) takeOut(d, r, 'renders', id)
+    for (const x of Object.values(d.reviews)) if (x.video_id === nodeId) takeOut(d, r, 'reviews', x.id)
+    takeOutAbout(d, r, 'render', new Set(renders))
+    ids.push(...renders)
+    if (renders.length) r.note = `with ${plural(renders.length, 'render')}`
+  }
+  takeOutAbout(d, r, kind, new Set([nodeId]))
+  asksOn(kind, new Set([nodeId]))
+  r.ids = ids
   return r
 }
 

@@ -79,7 +79,7 @@ export interface ElementRecord extends BaseRecord<'el', RecordId<ElementRecord>>
   z: string
   /** The container (board, frame or sketch area) this element sits in. */
   parentId: string | null
-  /** Groups, outermost first (nesting). */
+  /** Groups, innermost first and outermost last, as Excalidraw's (nesting; canvas-edit-tools). */
   groupIds: string[]
   locked: boolean
   /** 0..1 */

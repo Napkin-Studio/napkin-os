@@ -1,0 +1,17 @@
+/* The selection bar for nodes, links and groups (ui-behaviour 3.9; mocks CanvasLinking, SketchInk):
+   the canvas's frosted pill, 32 px buttons, one primary at most, greyed actions say why. */
+.canvas-wrap .toolbar.selbar { gap: 4px; padding: 4px; border-radius: var(--r-pill); background: var(--frost, rgba(255, 255, 255, 0.94)); backdrop-filter: blur(12px); }
+.selbar .row { display: inline-flex; align-items: center; }
+.selbar .sep { width: 1px; height: 18px; background: var(--line-soft); margin: 0 2px; }
+.selbar .sb-btn { height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 12px; font-weight: 500; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.selbar .sb-btn:hover:not(:disabled) { background: var(--soft); }
+.selbar .sb-btn.primary { background: var(--action); color: var(--action-fg); font-weight: 600; }
+.selbar .sb-btn.primary:hover:not(:disabled) { background: var(--action-hover); }
+.selbar .sb-btn.ink { background: var(--tool-soft); color: var(--tool-ink); font-weight: 600; }
+.selbar .sb-btn:disabled { color: var(--ink3); cursor: default; }
+.selbar .sb-btn.primary:disabled { opacity: 0.55; color: var(--action-fg); }
+.selbar .sb-btn.ink:disabled { opacity: 0.6; }
+.selbar .sb-icon { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: var(--ink2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; }
+.selbar .sb-icon:hover { background: var(--soft); color: var(--ink); }
+.sb-more { min-width: 220px; }
+.sb-more .pt-menurow.danger { color: var(--danger); }

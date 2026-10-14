@@ -1,14 +1,15 @@
-// The canvas and the document, kept in step when generated images are deleted
-// and come back (the 🗑, the Delete key, Excalidraw's own Ctrl+Z or Ctrl+Y). A
-// running job whose image goes is cancelled; the job itself stays on record.
+// The canvas and the document, kept in step when generated images, sketch areas
+// and the document's nodes (Script, Storyboard, Video) are deleted and come back
+// (the 🗑, the Delete key, the canvas's own Ctrl+Z or Ctrl+Y). A running job whose
+// image or node goes is cancelled; the job itself stays on record.
 // Names are the document's: a named image is a solid reference and keeps its
 // name in References when its node leaves the canvas.
 //
 // No Excalidraw import here, so it runs (and is tested) on plain elements.
 
-import type { CustomData } from '../contracts/types'
+import type { CustomData, ProductionDocument } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { bareRemoval, deleteFrom, removeGen, removeSketch, restoreTo, type Removal } from '../doc/remove'
+import { bareRemoval, deleteFrom, removeGen, removeNode, removeSketch, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
 import type { DocumentStore } from '../doc/types'
 
 export interface SceneEl {
@@ -29,6 +30,14 @@ function sketchId(e: SceneEl): string | undefined {
   return c && typeof c === 'object' && c.kind === 'sketch' && e.type === 'rectangle' ? c.id : undefined
 }
 
+const NODE_KINDS: readonly string[] = ['script', 'storyboard', 'video']
+
+/** A node element's document entity (canvas-nodes' tag {kind, id}), as 'kind:id'. */
+function nodeKey(e: SceneEl): string | undefined {
+  const c = e.customData as { kind?: unknown; id?: unknown } | undefined
+  return c && typeof c === 'object' && typeof c.kind === 'string' && NODE_KINDS.includes(c.kind) && typeof c.id === 'string' ? `${c.kind}:${c.id}` : undefined
+}
+
 export interface CanvasSyncDeps {
   doc: DocumentStore
   /** Stop a job whose image was deleted while it was still being made. */
@@ -47,6 +56,9 @@ export class CanvasDocSync {
   /** Sketch areas alive at the last sync (null until the first). */
   private areas: Set<string> | null = null
   private readonly areasSeen = new Set<string>()
+  /** Nodes alive at the last sync, as 'kind:id' (null until the first). */
+  private nodesAlive: Set<string> | null = null
+  private readonly nodesSeen = new Set<string>()
 
   constructor(deps: CanvasSyncDeps) {
     this.deps = deps
@@ -102,6 +114,43 @@ export class CanvasDocSync {
     return this.queue
   }
 
+  /**
+   * The document's nodes deleted or brought back since the last call (features/canvas-edit-tools.clan):
+   * a Script, Storyboard or Video node takes its entity out through removeNode (a running job on it is
+   * stopped first) and puts it back with restoreTo, in step with the canvas's undo.
+   */
+  nodes(els: readonly SceneEl[]): Promise<void> {
+    const now = new Set(els.filter((e) => !e.isDeleted).map(nodeKey).filter((x): x is string => !!x))
+    if (!this.nodesAlive) {
+      this.nodesAlive = now
+      for (const k of now) this.nodesSeen.add(k)
+      return this.queue
+    }
+    const gone = [...this.nodesAlive].filter((k) => !now.has(k))
+    const back = [...now].filter((k) => !this.nodesAlive!.has(k) && this.nodesSeen.has(k))
+    for (const k of now) this.nodesSeen.add(k)
+    this.nodesAlive = now
+    for (const k of gone) {
+      const [kind, id] = k.split(/:(.*)/s) as [NodeRemovalKind, string]
+      this.queue = this.queue.then(async () => {
+        const store = this.deps.doc
+        const d = store.get()
+        const map = kind === 'script' ? d.scripts : kind === 'storyboard' ? d.storyboards : d.videos
+        if (!map[id]) return
+        for (const j of runningOn(d, kind, id)) this.deps.cancel(j)
+        this.removals.set(k, await deleteFrom(store, (doc) => removeNode(doc, kind, id), { system: true }))
+      }).catch((e) => console.warn('could not record the delete', e))
+    }
+    for (const k of back) {
+      this.queue = this.queue.then(async () => {
+        const r = this.removals.get(k)
+        this.removals.delete(k)
+        if (r) await restoreTo(this.deps.doc, r)
+      }).catch((e) => console.warn('could not record the restore', e))
+    }
+    return this.queue
+  }
+
   private async removeGen(id: string) {
     const store = this.deps.doc
     const job = store.get().jobs[id]
@@ -114,4 +163,15 @@ export class CanvasDocSync {
     this.removals.delete(id)
     await restoreTo(this.deps.doc, r)
   }
+}
+
+/**
+ * Jobs still running on a node or on what it holds (a storyboard's shots, a script's scenes): what a
+ * delete stops, and what the in-page question names (ui-behaviour 3.3).
+ */
+export function runningOn(d: ProductionDocument, kind: string, id: string): string[] {
+  const held = new Set<string>([`${kind}:${id}`])
+  if (kind === 'storyboard') for (const s of Object.values(d.shots)) if (s.storyboard_id === id) held.add(`shot:${s.id}`)
+  if (kind === 'script') for (const s of Object.values(d.scenes)) if (s.script_id === id) held.add(`scene:${s.id}`)
+  return Object.values(d.jobs).filter((j) => !TERMINAL_STATES.includes(j.state) && held.has(`${j.node.kind}:${j.node.id}`)).map((j) => j.id)
 }

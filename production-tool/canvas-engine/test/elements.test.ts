@@ -65,3 +65,21 @@ describe('the element view', () => {
     expect(records.slice(1).map((r) => r.z)).toEqual(RECORDS.filter((r) => r.id !== 'f').map((r) => r.z))
   })
 })
+
+describe('scaled strokes and sketch ratios (canvas-edit-tools)', () => {
+  it('a stroke the handles scaled is served with its points scaled, and comes back with its box', () => {
+    const pts = encodePoints([{ x: 0, y: 0, pressure: 0.5 }, { x: 40, y: 20, pressure: 0.5 }], { x: 0, y: 0 })
+    const r = element({ id: 'z', kind: 'stroke', z: 'a1', x: 10, y: 10, w: 80, h: 40, props: { tool: 'pen' } })
+    const el = elementFromRecord(r, pts)
+    expect(el.points!.at(-1)).toEqual([80, 40])
+    const back = recordsFromElements([el], () => r).records[0]
+    expect(back).toMatchObject({ x: 10, y: 10, w: 80, h: 40 })
+  })
+
+  it('a sketch area keeps its ratio through the element view', () => {
+    const r = element({ id: 'k', kind: 'sketch', z: 'a1', x: 0, y: 0, w: 320, h: 180, style: { fill: '#ffffff' }, props: { ratio: '16:9' }, customData: { kind: 'sketch', id: 'sketch_1' } })
+    const el = elementFromRecord(r)
+    expect(el.ratio).toBe('16:9')
+    expect(recordsFromElements([el], () => r).records[0].props).toEqual({ ratio: '16:9' })
+  })
+})
