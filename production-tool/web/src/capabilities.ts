@@ -173,6 +173,14 @@ export function modelLabel(provider: string | undefined, model: string | undefin
   return model
 }
 
+/** "<model> on Runway" (ui-behaviour 3.7): every surface names a model with where it runs. */
+export function modelWhere(provider: string | undefined, model: string | undefined): string | undefined {
+  const label = modelLabel(provider, model)
+  if (!label) return undefined
+  const where = provider === 'runway' ? 'Runway' : provider === 'elevenlabs' ? 'ElevenLabs' : provider === 'mock' || !provider ? 'the mock' : provider
+  return `${label} on ${where}`
+}
+
 // ── The dev switch: pick a config and a provider set to see the UI change ──
 
 export type ConfigChoice = 'allon' | 'testing' | 'live' | 'remote'

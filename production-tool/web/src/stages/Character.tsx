@@ -28,7 +28,7 @@ import { alive, bounds, cd, imageOf, isText, isUserDrawing, type Canvas, type El
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
 import { keyNamed, keysList, mainScript, mainStoryboard, refsList } from '../model/selectors'
-import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
+import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { isActive } from '../jobs/runner'
@@ -647,7 +647,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
     text.trim() ? 'your words' : null].filter(Boolean).join(', ') || 'Your words only'
   // "<model> on Runway" (ui-behaviour 3.7), the pick or the first routed model.
   const shown = choice ?? modelChoicesFor('generate', config)[0]
-  const model = shown ? `${modelLabel(shown.provider, shown.model)} on ${shown.provider === 'runway' ? 'Runway' : shown.provider === 'mock' ? 'the mock' : shown.provider}` : undefined
+  const model = shown ? modelWhere(shown.provider, shown.model) : undefined
   const tick = (id: string, label: React.ReactNode, on: boolean, change?: () => void) => (
     <label key={id} className="tray-row">
       <input type="checkbox" checked={on} disabled={!change} onChange={change} />

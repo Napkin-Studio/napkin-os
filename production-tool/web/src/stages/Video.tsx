@@ -39,6 +39,7 @@ import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
 import { currentRender, currentTake, mainStoryboard, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
+import './video.css'
 import { addTakeNote, pickTake } from './videoEdits'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
@@ -120,46 +121,41 @@ export function Video() {
 
   return (
     <div className="editor">
-    <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-      title={`Video · ${mainStoryboard(doc)?.title ?? 'Video'}`} meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>} />
-    <div className="panel">
-      <div className="panel-inner">
-        <div className="eyebrow">Step 3</div>
-        <div className="row">
-          <h1>Video</h1>
-          <span className="spacer" />
-          <button className="btn dark" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
-          {controls.stitch && (
-            <button className="btn primary" disabled={rendering || !!renderBlocked} onClick={() => void render()} title={renderBlocked ?? 'Join the clips into one ad with the end card'}>
-              {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
-            </button>
-          )}
-        </div>
-        <p className="lede">One clip per frame. Pause anywhere to leave a note, then make a new version.</p>
-        {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 10 }}>{error}</div>}
-
-        <div className="strip">
-          {shots.map((s, i) => (
-            <ShotCard key={s.id} shot={s} index={i} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
-              onSelect={() => { setShotId(s.id); setMode('shot') }}
-              onMake={(opts) => makeClip(s, opts)} />
-          ))}
-          <button className={`shotcard ${mode === 'all' ? 'sel' : ''}`} style={{ flexBasis: 140 }} disabled={!allTaken} onClick={() => setMode('all')}
-            title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>
-            <div className="thumb" style={{ display: 'grid', placeItems: 'center', fontWeight: 700, color: 'var(--ink2)' }}>▶ All shots</div>
-            <div className="meta"><span className="faint">Stitched preview</span></div>
+      <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
+        title={`Video · ${mainStoryboard(doc)?.title ?? 'Video'}`}
+        meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>}
+        right={<button className="btn" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
+        primary={controls.stitch ? (
+          <button className="btn primary" disabled={rendering || !!renderBlocked} onClick={() => void render()} title={renderBlocked ?? 'Join the clips into one ad with the end card'}>
+            {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
           </button>
-        </div>
-
-        <div style={{ marginTop: 20 }}>
-          <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}>
-            {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobSlot jobId={stitchJob} /></div>}
-            {latestAd && <AdResult sha={latestAd.asset} />}
-            {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
-          </Player>
-        </div>
+        ) : undefined} />
+      <div className="panel ve-body pt-grid">
+        {error && <div role="alert" className="ve-error">{error}</div>}
+        <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}
+          strip={(
+            <div className="ve-timeline pt-card">
+              <div className="ve-tlhead"><b>Timeline</b><span className="pt-pill ok">{taken} of {shots.length} clips</span><span className="pt-grow" />
+                <button className={`btn sm ${mode === 'all' ? 'on' : ''}`} disabled={!allTaken} onClick={() => setMode('all')}
+                  title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>▶ All shots</button>
+              </div>
+              <div className="ve-track"><span className="ve-lane"><b>Shots</b><span>main track</span></span>
+                <div className="strip">
+                  {shots.map((s, i) => (
+                    <ShotCard key={s.id} shot={s} index={i} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
+                      onSelect={() => { setShotId(s.id); setMode('shot') }}
+                      onMake={(opts) => makeClip(s, opts)} />
+                  ))}
+                </div>
+              </div>
+              <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.</div>
+            </div>
+          )}>
+          {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobSlot jobId={stitchJob} /></div>}
+          {latestAd && <AdResult sha={latestAd.asset} />}
+          {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
+        </Player>
       </div>
-    </div>
     </div>
   )
 }
@@ -343,7 +339,7 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
   )
 }
 
-function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; onPickShot: (id: string) => void; children?: React.ReactNode }) {
+function Player({ mode, shot, take, onPickShot, strip, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; onPickShot: (id: string) => void; strip?: React.ReactNode; children?: React.ReactNode }) {
   const { doc: docStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -574,6 +570,7 @@ function Player({ mode, shot, take, onPickShot, children }: { mode: 'shot' | 'al
           ))}
         </div>
       ) : null}
+      {strip}
     </div>
 
     <div className="stack" style={{ gap: 14 }}>

@@ -1,0 +1,42 @@
+/* The Image editor (mock ImageEditor.dc.html): a vertical tool rail, the frame on the grid with its
+   edits strip under it, and Layers and Actions on the right. */
+.image-editor { z-index: 9; }
+.ie-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 54px minmax(0, 1fr) 318px; gap: 0 24px; padding: 16px; overflow: auto; }
+.ie-tools { align-self: start; display: flex; flex-direction: column; gap: 4px; padding: 8px 5px; }
+.ie-tools button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.ie-tools button:hover:not(:disabled) { background: var(--soft); }
+.ie-tools button.on { background: var(--ink-fixed); color: #FFFFFF; }
+.ie-stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; max-width: 880px; margin: 0 auto; width: 100%; padding-left: 60px; }
+.ie-toolbar { align-self: flex-start; display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; font-size: 13px; }
+.ie-frame { width: 100%; border-radius: 4px; overflow: hidden; box-shadow: var(--shadow-soft); background: var(--soft); }
+.ie-frame > * { width: 100%; height: 100%; }
+.ie-under { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.ie-said { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 8px; border-radius: var(--r-pill); background: var(--ok-bg); color: var(--success); }
+.ie-said b { font-weight: 600; }
+.ie-edits { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.ie-edithead { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.ie-vstrip { display: flex; gap: 8px; flex-wrap: wrap; }
+.ie-vtile { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 4px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); cursor: pointer; font-size: 13px; color: var(--ink); }
+.ie-vtile.on { border-color: var(--tool); color: var(--tool-ink); font-weight: 600; }
+.ie-vthumb { width: 46px; height: 30px; border-radius: 15px; overflow: hidden; background: var(--soft); }
+.ie-vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ie-side { display: flex; flex-direction: column; gap: 16px; }
+.ie-panel { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ie-panelhead { display: flex; justify-content: space-between; text-transform: none; }
+.ie-panelhead span:first-child { text-transform: uppercase; }
+.ie-layer { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; background: var(--tool-soft); font-size: 13px; }
+.ie-layerthumb { width: 42px; height: 28px; border-radius: 4px; overflow: hidden; background: var(--soft); }
+.ie-layerthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ie-note { margin: 0; font-size: 12px; }
+.ie-action { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--r-card); font-size: 13px; }
+.ie-action.on { border-color: var(--tool); }
+.ie-action b { font-weight: 600; }
+.ie-action .textarea { min-height: 54px; }
+.ie-versions span { padding: 0 6px; }
+.ie-foot { margin-top: 2px; }
+.ie-error { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+@media (max-width: 1179px) {
+  .ie-body { grid-template-columns: 54px minmax(0, 1fr); }
+  .ie-side { grid-column: 1 / -1; }
+  .ie-stage { padding-left: 0; }
+}
