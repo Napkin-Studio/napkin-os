@@ -1,0 +1,377 @@
+{
+  "$comment": "frame-aspect: one case table for the web (canvas/core/sketch.ts) and the relay (aspect.py, director.provider_ratio). tolerance: two shapes are the same when their log ratios differ by no more than this. Per row: the target shape, the export size of a sketch area of that shape (long side 1536), and per Runway image model the size it renders (provider_ratio), the centre-crop box (left, top, right, bottom; null when no crop), the size after the crop and the share of the picture lost.",
+  "tolerance": 0.005,
+  "exportLongSide": 1536,
+  "cases": [
+    {
+      "name": "16:9",
+      "target": {
+        "w": 16,
+        "h": 9
+      },
+      "ratio": "16:9",
+      "export": {
+        "w": 1536,
+        "h": 864
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 1344,
+            "h": 768
+          },
+          "crop": [
+            0,
+            6,
+            1344,
+            762
+          ],
+          "out": {
+            "w": 1344,
+            "h": 756
+          },
+          "loss": 0.0156
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 1344,
+            "h": 768
+          },
+          "crop": [
+            0,
+            6,
+            1344,
+            762
+          ],
+          "out": {
+            "w": 1344,
+            "h": 756
+          },
+          "loss": 0.0156
+        }
+      }
+    },
+    {
+      "name": "9:16",
+      "target": {
+        "w": 9,
+        "h": 16
+      },
+      "ratio": "9:16",
+      "export": {
+        "w": 864,
+        "h": 1536
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 768,
+            "h": 1344
+          },
+          "crop": [
+            6,
+            0,
+            762,
+            1344
+          ],
+          "out": {
+            "w": 756,
+            "h": 1344
+          },
+          "loss": 0.0156
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 768,
+            "h": 1344
+          },
+          "crop": [
+            6,
+            0,
+            762,
+            1344
+          ],
+          "out": {
+            "w": 756,
+            "h": 1344
+          },
+          "loss": 0.0156
+        }
+      }
+    },
+    {
+      "name": "1:1",
+      "target": {
+        "w": 1,
+        "h": 1
+      },
+      "ratio": "1:1",
+      "export": {
+        "w": 1536,
+        "h": 1536
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 1024,
+            "h": 1024
+          },
+          "crop": null,
+          "out": {
+            "w": 1024,
+            "h": 1024
+          },
+          "loss": 0
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 1024,
+            "h": 1024
+          },
+          "crop": null,
+          "out": {
+            "w": 1024,
+            "h": 1024
+          },
+          "loss": 0
+        }
+      }
+    },
+    {
+      "name": "4:5",
+      "target": {
+        "w": 4,
+        "h": 5
+      },
+      "ratio": "4:5",
+      "export": {
+        "w": 1229,
+        "h": 1536
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 896,
+            "h": 1152
+          },
+          "crop": [
+            0,
+            16,
+            896,
+            1136
+          ],
+          "out": {
+            "w": 896,
+            "h": 1120
+          },
+          "loss": 0.0278
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 896,
+            "h": 1152
+          },
+          "crop": [
+            0,
+            16,
+            896,
+            1136
+          ],
+          "out": {
+            "w": 896,
+            "h": 1120
+          },
+          "loss": 0.0278
+        }
+      }
+    },
+    {
+      "name": "story 1080x1920",
+      "target": {
+        "w": 1080,
+        "h": 1920
+      },
+      "export": {
+        "w": 864,
+        "h": 1536
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 768,
+            "h": 1344
+          },
+          "crop": [
+            6,
+            0,
+            762,
+            1344
+          ],
+          "out": {
+            "w": 756,
+            "h": 1344
+          },
+          "loss": 0.0156
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 768,
+            "h": 1344
+          },
+          "crop": [
+            6,
+            0,
+            762,
+            1344
+          ],
+          "out": {
+            "w": 756,
+            "h": 1344
+          },
+          "loss": 0.0156
+        }
+      }
+    },
+    {
+      "name": "link ad 191x100",
+      "target": {
+        "w": 191,
+        "h": 100
+      },
+      "export": {
+        "w": 1536,
+        "h": 804
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 1344,
+            "h": 768
+          },
+          "crop": [
+            0,
+            32,
+            1344,
+            736
+          ],
+          "out": {
+            "w": 1344,
+            "h": 704
+          },
+          "loss": 0.0833
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 1344,
+            "h": 768
+          },
+          "crop": [
+            0,
+            32,
+            1344,
+            736
+          ],
+          "out": {
+            "w": 1344,
+            "h": 704
+          },
+          "loss": 0.0833
+        }
+      }
+    },
+    {
+      "name": "banner 7200x3600",
+      "target": {
+        "w": 7200,
+        "h": 3600
+      },
+      "export": {
+        "w": 1536,
+        "h": 768
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 1344,
+            "h": 768
+          },
+          "crop": [
+            0,
+            48,
+            1344,
+            720
+          ],
+          "out": {
+            "w": 1344,
+            "h": 672
+          },
+          "loss": 0.125
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 1344,
+            "h": 768
+          },
+          "crop": [
+            0,
+            48,
+            1344,
+            720
+          ],
+          "out": {
+            "w": 1344,
+            "h": 672
+          },
+          "loss": 0.125
+        }
+      }
+    },
+    {
+      "name": "leaderboard 728x90",
+      "target": {
+        "w": 728,
+        "h": 90
+      },
+      "export": {
+        "w": 1536,
+        "h": 190
+      },
+      "models": {
+        "gemini_image3_pro": {
+          "size": {
+            "w": 1536,
+            "h": 672
+          },
+          "crop": [
+            0,
+            241,
+            1536,
+            431
+          ],
+          "out": {
+            "w": 1536,
+            "h": 190
+          },
+          "loss": 0.7173
+        },
+        "gemini_image3.1_flash": {
+          "size": {
+            "w": 2816,
+            "h": 352
+          },
+          "crop": [
+            0,
+            2,
+            2816,
+            350
+          ],
+          "out": {
+            "w": 2816,
+            "h": 348
+          },
+          "loss": 0.0114
+        }
+      }
+    }
+  ]
+}

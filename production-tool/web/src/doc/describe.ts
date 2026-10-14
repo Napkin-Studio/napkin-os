@@ -129,6 +129,22 @@ export function describeWrite(action: string, before: ProductionDocument, after:
   if (action.startsWith('complete ')) return null
   if (QUIET.has(action)) return null
   switch (action) {
+    // Sketch areas (features/frame-aspect.clan): a person's frame made into one, Wren's ask on one, its answer.
+    case 'sketch area': {
+      const s = Object.values(after.sketches).find((x) => !before.sketches[x.id])
+      return s ? { action: `create sketch area ${s.ratio ?? `${s.aspect.w}:${s.aspect.h}`}`, rationale: words(`${s.aspect.w}×${s.aspect.h} from a frame`, s.id) } : null
+    }
+    case 'ask sketch': {
+      const a = Object.values(after.asks).find((x) => !before.asks[x.id])
+      return a ? { action: `ask ${a.question.text}`, rationale: words(`${a.crew} asks before sending`, tail(a.node.id, a.id)) } : null
+    }
+    case 'answer': {
+      const a = Object.values(after.asks).find((x) => x.answers.length !== (before.asks[x.id]?.answers.length ?? 0))
+      const last = a?.answers.at(-1)
+      if (!a || !last) return null
+      const chose = last.option_id ? a.question.options.find((o) => o.id === last.option_id)?.label ?? last.option_id : `"${last.text}"`
+      return { action: `answer ${a.question.text}`, rationale: words(chose, tail(a.node.id, a.id)) }
+    }
     case 'name':
       return describeNames(before, after)
     case 'publish': {

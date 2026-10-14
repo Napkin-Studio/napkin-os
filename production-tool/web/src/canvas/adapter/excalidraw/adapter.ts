@@ -8,9 +8,11 @@ import {
   newElementWith, sceneCoordsToViewportCoords, viewportCoordsToSceneCoords,
 } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI, NormalizedZoomValue } from '@excalidraw/excalidraw/types'
-import type { ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
-import type {
-  ActiveToolSpec, Bounds, CanvasAdapter, ExportPngOptions, FrameIntent, ImageNodeIntent, Pt, ProvenanceArrowIntent, ViewSnapshot,
+import type { ExcalidrawFrameElement, ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
+import {
+  MAX_EXPORT_PIXELS,
+  type ActiveToolSpec, type Bounds, type CanvasAdapter, type ExportPngOptions, type FrameIntent, type ImageNodeIntent, type PointerSample, type Pt,
+  type ProvenanceArrowIntent, type RegionExport, type SketchAreaIntent, type ViewportTransform, type ViewSnapshot,
 } from '../../core/canvasAdapter'
 import type { FileData, FileId, FileMap, SceneElement } from './types'
 
@@ -90,6 +92,17 @@ export class ExcalidrawAdapter implements CanvasAdapter<SceneElement, FileData> 
     return frame
   }
 
+  sketchArea(i: SketchAreaIntent): El {
+    const [rect] = convertToExcalidrawElements(
+      [{
+        type: 'rectangle', x: i.x, y: i.y, width: i.w, height: i.h,
+        backgroundColor: '#ffffff', fillStyle: 'solid', strokeColor: 'transparent', strokeWidth: 1, roughness: 0, roundness: null,
+        customData: { kind: 'sketch', id: i.sketchId },
+      } as never],
+    )
+    return rect
+  }
+
   // ── files ──
 
   files(): FileMap {
@@ -148,6 +161,34 @@ export class ExcalidrawAdapter implements CanvasAdapter<SceneElement, FileData> 
     return this.api.onScrollChange(() => cb())
   }
 
+  onPointer(cb: (p: PointerSample) => void): () => void {
+    const sample = (phase: PointerSample['phase'], e: { clientX: number; clientY: number; pointerType?: string; pressure?: number }) => {
+      const p = viewportCoordsToSceneCoords({ clientX: e.clientX, clientY: e.clientY }, this.api.getAppState())
+      const pointerType = e.pointerType === 'pen' || e.pointerType === 'touch' ? e.pointerType : 'mouse'
+      cb({ phase, x: p.x, y: p.y, pointerType, pressure: pointerType === 'mouse' ? 0.5 : e.pressure ?? 0.5 })
+    }
+    const move = (e: PointerEvent) => sample('move', e)
+    const stopMoves = () => globalThis.removeEventListener?.('pointermove', move)
+    const offDown = this.api.onPointerDown((_tool, _state, e) => {
+      sample('down', e)
+      stopMoves()
+      globalThis.addEventListener?.('pointermove', move)
+    })
+    const offUp = this.api.onPointerUp((_tool, _state, e) => {
+      stopMoves()
+      sample('up', e)
+    })
+    return () => {
+      stopMoves()
+      offDown()
+      offUp()
+    }
+  }
+
+  onViewport(cb: (v: ViewportTransform) => void): () => void {
+    return this.api.onScrollChange((scrollX, scrollY, zoom) => cb({ scrollX, scrollY, zoom: zoom.value }))
+  }
+
   isBusy(): boolean {
     const st = this.api.getAppState()
     return st.activeTool.type !== 'selection' || !!st.newElement || !!st.selectionElement || st.selectedElementsAreBeingDragged ||
@@ -166,6 +207,32 @@ export class ExcalidrawAdapter implements CanvasAdapter<SceneElement, FileData> 
       mimeType: 'image/png',
       exportPadding: opts.padding,
       appState: { exportBackground: true, viewBackgroundColor: opts.background, exportWithDarkMode: false },
+    })
+  }
+
+  /**
+   * Exactly `rect`, at outW x outH: the members are cloned into a transient frame of the box that is
+   * never added to the scene, so the export is the box's size however far a stroke runs (and no
+   * Safari canvas past 16.7 MP), strokes crossing the edge are clipped, and nothing on the canvas moves.
+   */
+  async exportRegion(req: RegionExport, files: FileMap): Promise<Blob> {
+    if (req.outW * req.outH > MAX_EXPORT_PIXELS) throw new Error(`An export of ${req.outW}×${req.outH} is too large.`)
+    const [frame] = convertToExcalidrawElements(
+      [{ type: 'frame', x: req.rect.x, y: req.rect.y, width: req.rect.w, height: req.rect.h, name: '', children: [] }],
+    ) as ExcalidrawFrameElement[]
+    const ids = new Set(req.elementIds)
+    const members = this.elements().filter((e) => ids.has(e.id)).map((e) => newElementWith(e, { frameId: frame.id } as never))
+    return await exportToBlob({
+      elements: [frame, ...members],
+      files,
+      mimeType: 'image/png',
+      exportPadding: 0,
+      exportingFrame: frame,
+      getDimensions: () => ({ width: req.outW, height: req.outH, scale: req.outW / Math.max(1e-9, req.rect.w) }),
+      appState: {
+        exportBackground: true, viewBackgroundColor: req.background, exportWithDarkMode: false,
+        frameRendering: { enabled: true, name: false, outline: false, clip: true },
+      },
     })
   }
 }

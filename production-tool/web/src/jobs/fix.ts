@@ -21,7 +21,7 @@ import { clipText as cutText } from '../lib/guard'
 import { jobsList, shotsOf } from '../model/selectors'
 import { assetRef } from './assets'
 import { makeClip, selectedTake } from './clips'
-import { continuity, selectedFrame, type FrameDeps } from './frames'
+import { continuity, ownAspect, selectedFrame, type FrameDeps } from './frames'
 import { isActive, jobCtx } from './runner'
 
 /** The notes' text for the clip: every note but the boxed one (that went into the frame). */
@@ -47,9 +47,10 @@ export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]
   const region = boxed.region
   // Like any frame region edit, it keeps the frame in its sequence: shot 1's frame and the one before go too.
   const anchors = await continuity(deps.relay, d, index)
+  const own = ownAspect(d, frame.asset)
   return deps.runner.submit(
     'region_edit',
-    { image, region, text: cutText(boxed.text ?? '', 1000), ...anchors },
+    { image, region, text: cutText(boxed.text ?? '', 1000), ...anchors, ...(own ? { aspect: own } : {}) },
     frame.job_id ? [frame.job_id] : [],
     { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id) },
     undefined,

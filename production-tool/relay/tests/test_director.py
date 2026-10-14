@@ -175,9 +175,22 @@ def test_the_role_lines_are_the_contracts_verbatim():
         assert table["lighting"]["prompt_line"] in d.system_for(op), op
 
 
-def test_only_the_v6_prompt_is_bundled():
-    """Contract 3 runs director.v6: the older prompts write fields contract 3 refuses."""
-    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v6.md"]
+def test_only_the_v6_prompts_are_bundled():
+    """Contract 3 runs director.v6: the older prompts write fields contract 3 refuses. director.v6.1
+    (frame-aspect) is v6 plus the true-shape crop; v6 stays, so a rollback is a config change."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v6.1.md", "director.v6.md"]
+
+
+def test_v6_1_is_v6_plus_the_crop_and_the_layout_scene():
+    v6 = (PROMPTS / "director.v6.md").read_text()
+    v61 = (PROMPTS / "director.v6.1.md").read_text()
+    assert "centre-crops the provider's size to `input.aspect`" in v61
+    assert "Keep the subject, faces and any text clear of the edges the crop takes." in v61
+    assert "A layout drawing gives the scene: with one, never add that line" in v61
+    added = [line for line in v61.splitlines() if line not in v6.splitlines()]
+    assert len(added) == 3, added  # the aspect line, the crop line and the layout line; nothing else moved
+    d, _ = make()
+    assert Director(d.port, PROMPTS, {}, prompt_version="director.v6.1").prompt_version == "director.v6.1"
 
 
 def test_v6_names_refs_and_limits_each_ref_to_what_it_names():
@@ -372,14 +385,21 @@ def test_region_edit_needs_the_current_ref():
 
 
 @pytest.mark.parametrize("name, edit, why", [
-    ("generate_runway", job_edit(ratio="1080:1350"), "does not take ratio"),
-    ("generate_runway", job_edit(ratio="1920:1080"), "does not take ratio"),
-    ("region_edit_runway", job_edit(ratio="512:512"), "does not take ratio"),  # a flash size; pro has none
-    ("clip_runway", job_edit(ratio="1080:1350"), "does not take ratio"),
     ("clip_runway", lambda r: r["providerJob"].pop("durationS"), "needs a durationS"),
 ])
 def test_provider_limits_the_sheet_cannot_say_raise(name, edit, why):
     refuses(why, name, edit)
+
+
+@pytest.mark.parametrize("name, ratio, size", [
+    # frame-aspect: a pixel size the model does not take snaps by shape (it was refused, and the job failed).
+    ("generate_runway", "1080:1350", "896:1152"),
+    ("generate_runway", "1920:1080", "1344:768"),
+    ("region_edit_runway", "512:512", "1024:1024"),  # a flash size; pro has none
+    ("clip_runway", "1080:1350", "720:1280"),
+])
+def test_a_size_the_model_does_not_take_snaps_to_its_nearest(name, ratio, size):
+    assert attempt(name, job_edit(ratio=ratio)).output["providerJob"]["ratio"] == size
 
 
 def test_a_clip_prompt_past_runways_1000_characters_is_refused():

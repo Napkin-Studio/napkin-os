@@ -20,7 +20,7 @@ import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref'
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch'
 
 export interface Removal {
   kind: RemovalKind
@@ -197,6 +197,33 @@ export function removeRef(d: Doc, refId: string): Removal {
   takeOut(d, r, 'refs', refId)
   takeOutAbout(d, r, 'ref', new Set([refId]))
   r.ids = [refId]
+  return r
+}
+
+/** The frames made from a sketch area. */
+export function framesFromSketch(d: Doc, sketchId: string) {
+  return Object.values(d.frames).filter((f) => f.sketch_id === sketchId)
+}
+
+/** The inline confirm when a sketch area goes: what it made stays (features/frame-aspect.clan). */
+export function sketchDeleteText(frames: number): string {
+  if (!frames) return 'Delete this sketch area?'
+  return `Delete this sketch area? The ${frames === 1 ? 'frame' : `${frames} frames`} made from it ${frames === 1 ? 'stays' : 'stay'}.`
+}
+
+/** A sketch area left the canvas: its sketches[id] row goes, and the frames made from it stay without
+ *  their sketch_id (v3 has no deleted sketch). Its links and the notes, marks and asks on it go too. */
+export function removeSketch(d: Doc, sketchId: string): Removal {
+  const sketch = d.sketches[sketchId]
+  const frames = framesFromSketch(d, sketchId)
+  const r = blank('sketch', sketchId, `sketch area ${sketchId}`)
+  takeOut(d, r, 'sketches', sketchId)
+  for (const f of frames) modify(r, 'frames', f, (x) => { delete x.sketch_id })
+  takeOutAbout(d, r, 'sketch', new Set([sketchId]))
+  for (const a of Object.values(d.asks)) if (a.node.kind === 'sketch' && a.node.id === sketchId) takeOut(d, r, 'asks', a.id)
+  if (frames.length) r.note = `the ${plural(frames.length, 'frame')} made from it stay`
+  else if (!sketch) r.note = 'it had no row'
+  r.ids = [sketchId, ...frames.map((f) => f.id)]
   return r
 }
 

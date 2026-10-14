@@ -93,7 +93,8 @@ function randomScene(rand: () => number): { all: PlainEl[]; selected: string[] }
       el = { id, type: 'text', ...(rand() < 0.5 ? { text: words } : { originalText: words, text: 'wrapped' }) }
     } else if (r < 0.45) el = { id, type: 'rectangle', customData: { kind: 'pin', id: `rev_${i}`, genId: 'job_1', region: { x: 0, y: 0, w: 1, h: 1 } } }
     else if (r < 0.50) el = { id, type: 'arrow', customData: { kind: 'provenance', from: 'node_0', to: 'job_1' } }
-    else if (r < 0.55) el = { id, type: pick(['rectangle', 'text', 'frame', 'image']), customData: { kind: pick(['mystery', 'board', 'sketch', 'script', 'storyboard', 'video', 'link']), id: `x_${i}` } }
+    // 'sketch' is a live tag since frame-aspect, so it is not among the unknown tags here.
+    else if (r < 0.55) el = { id, type: pick(['rectangle', 'text', 'frame', 'image']), customData: { kind: pick(['mystery', 'board', 'script', 'storyboard', 'video', 'link']), id: `x_${i}` } }
     else if (r < 0.58) el = { id, type: pick(['frame', 'magicframe']) }
     else if (r < 0.60) el = { id, type: 'image' }
     else if (r < 0.62) el = { id, type: 'arrow' }
@@ -124,7 +125,9 @@ describe('planSelection is planGraph’s projection, and equals today’s', () =
     for (let s = 0; s < 2000; s++) {
       const { all, selected } = randomScene(rand)
       const want = ORACLE(all, selected)
-      expect(planSelection(all, selected), `scene ${s}`).toEqual(want)
+      const { sketches, ...got } = planSelection(all, selected)
+      expect(got, `scene ${s}`).toEqual(want)
+      expect(sketches).toEqual([]) // no geometry, no areas: v2 scenes plan no sketch
       if (want.images.length || want.strokes.length || want.notes.length || want.pending.length) nonEmpty++
     }
     // The scenes exercise the planner, not just empty selections.
@@ -162,5 +165,45 @@ describe('planGraph', () => {
     expect(plan.pending).toEqual(['run'])
     expect(plan.refused).toEqual([{ elId: 'run', reason: STILL_BEING_MADE }])
     expect(plan.images.map((i) => i.elId)).toEqual(['g'])
+  })
+})
+
+describe('planGraph: sketch areas (features/frame-aspect.clan)', () => {
+  const area = (id: string, x = 0, y = 0, w = 160, h = 90): PlainEl =>
+    ({ id, type: 'rectangle', x, y, width: w, height: h, customData: { kind: 'sketch', id: `sketch_${id}` } })
+  const stroke = (id: string, x: number, y: number, w = 20, h = 20, more: Partial<PlainEl> = {}): PlainEl =>
+    ({ id, type: 'freedraw', x, y, width: w, height: h, ...more })
+  const scene = [area('A'), stroke('in', 10, 10), stroke('cross', 150, 40, 100, 10), stroke('out', 400, 400), area('B', 1000, 0)]
+
+  it('the area alone plans to that sketch', () => {
+    const plan = planGraph({ elements: scene, selectedIds: ['A'] })
+    expect(plan.sketches).toEqual([{ elId: 'A', sketchId: 'sketch_A' }])
+    expect(plan.nodes).toEqual({ sketch: ['A'] })
+    expect(plan.strokes).toEqual([])
+  })
+
+  it('strokes inside or crossing an area stand for it, once; a stroke outside stays loose', () => {
+    const plan = planGraph({ elements: scene, selectedIds: ['in', 'cross', 'out'] })
+    expect(plan.sketches).toEqual([{ elId: 'A', sketchId: 'sketch_A' }])
+    expect(plan.strokes).toEqual(['out'])
+    expect(plan.images).toEqual([])
+  })
+
+  it('a deleted area holds nothing, and a stroke in a drawing stays the drawing’s', () => {
+    const els = [{ ...area('A'), isDeleted: true }, stroke('in', 10, 10)]
+    expect(planGraph({ elements: els, selectedIds: ['in', 'A'] }).sketches).toEqual([])
+    const drawn: PlainEl = { id: 'd', type: 'frame', customData: { kind: 'drawn', id: 'n_d', asset: SHA('d') } }
+    const plan = planGraph({ elements: [area('A'), drawn, stroke('s', 10, 10, 20, 20, { frameId: 'd' })], selectedIds: ['s'] })
+    expect(plan.sketches).toEqual([])
+    expect(plan.images.map((i) => i.elId)).toEqual(['d'])
+  })
+
+  it('planSelection projects the areas', () => {
+    expect(planSelection(scene, ['B', 'in']).sketches).toEqual([{ elId: 'B', sketchId: 'sketch_B' }, { elId: 'A', sketchId: 'sketch_A' }])
+  })
+
+  it('a sketch tag on anything but a rectangle is not an area', () => {
+    const els: PlainEl[] = [{ id: 't', type: 'text', text: 'hi', customData: { kind: 'sketch', id: 's' } }]
+    expect(planGraph({ elements: els, selectedIds: ['t'] }).sketches).toEqual([])
   })
 })

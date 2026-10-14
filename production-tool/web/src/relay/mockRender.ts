@@ -1,7 +1,9 @@
 // The mock's pictures and clips, drawn on a canvas in the browser. Every
 // output carries a big "MOCK" stamp so it can never pass for a real result.
 
-import type { JobRequest, Ratio, View } from '../contracts/types'
+import type { Aspect, JobRequest, Ratio, View } from '../contracts/types'
+import { aspectOfRatio, centreCrop, sameShape } from '../canvas/core/sketch'
+import { runwaySize } from '../lib/runwaySizes'
 import { END_CARD_S } from '../jobs/clips'
 import type { MockRenderer, RenderedOutput } from './mock'
 
@@ -109,22 +111,37 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
 
 const VIEW_LABEL: Record<View, string> = { front: 'front', 'three-quarter': '3/4', side: 'side', back: 'back' }
 
+/**
+ * The size an image job comes back at from the relay (features/frame-aspect.clan): Runway's size for the
+ * job's shape (input.aspect, else input.ratio), centre-cropped to the shape, with croppedFrom when it was
+ * cut. This mock draws the cropped size straight away (no crop in the browser, so no sha per browser).
+ */
+export function mockImageSize(input: { aspect?: Aspect; ratio?: Ratio }, fallback: { w: number; h: number }): { w: number; h: number; croppedFrom?: Aspect } {
+  const target = input.aspect ?? (input.ratio ? aspectOfRatio(input.ratio) : undefined)
+  if (!target) return fallback
+  const size = runwaySize(target, 'gemini_image3_pro')
+  if (sameShape(size, target)) return { ...size }
+  const box = centreCrop(size, target)
+  return { w: box.w, h: box.h, croppedFrom: size }
+}
+
 async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const inp = req.input
   const n = req.jobId.charCodeAt(req.jobId.length - 1)
   if (req.op === 'generate' && (inp.refs ?? []).length >= 2) {
     // Several inputs: lay them over each other, the first on top.
-    const { c, ctx } = canvas(768, 1024)
-    paper(ctx, 768, 1024, n)
+    const { w, h, croppedFrom } = mockImageSize(inp, { w: 768, h: 1024 })
+    const { c, ctx } = canvas(w, h)
+    paper(ctx, w, h, n)
     const refs = inp.refs ?? []
     const imgs = (await Promise.all(refs.map((r) => bitmap(input, r.asset.sha256)))).filter(Boolean) as ImageBitmap[]
     imgs.forEach((img, i) => {
       ctx.globalAlpha = i === 0 ? 1 : 0.55
-      contain(ctx, img, 40, 40, 688, 900, { scale: 1 - i * 0.12 })
+      contain(ctx, img, w * 0.05, h * 0.04, w * 0.9, h * 0.88, { scale: 1 - i * 0.12 })
     })
     ctx.globalAlpha = 1
-    stamp(ctx, 768, 1024, `${refs.length} inputs · ${inp.text ?? ''}`)
-    return { blob: await toBlob(c), mime: 'image/png', w: 768, h: 1024 }
+    stamp(ctx, w, h, `${refs.length} inputs · ${inp.text ?? ''}`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
   }
   if (req.op === 'region_edit') {
     const img = await bitmap(input, inp.image?.sha256)
@@ -147,7 +164,7 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     return { blob: await toBlob(c), mime: 'image/png', w, h }
   }
   if (req.op === 'frame') {
-    const { w, h } = sizeFor(inp.ratio ?? '9:16')
+    const { w, h, croppedFrom } = mockImageSize(inp.aspect || inp.ratio ? inp : { ratio: '9:16' }, sizeFor('9:16'))
     const { c, ctx } = canvas(w, h)
     paper(ctx, w, h, (inp.shot?.id.charCodeAt(inp.shot.id.length - 1) ?? 1) * 3 + n)
     // The shot's first named ref stands in for the character.
@@ -161,21 +178,22 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     ctx.textBaseline = 'top'
     wrapText(ctx, inp.text || inp.shot?.action || '', w * 0.06, h * 0.04, w * 0.88, w * 0.05, 3)
     stamp(ctx, w, h, `shot · ${inp.shot?.camera.size ?? ''} · ${inp.shot?.camera.movement ?? ''}`)
-    return { blob: await toBlob(c), mime: 'image/png', w, h }
+    return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
   }
   // generate, view
-  const { c, ctx } = canvas(768, 1024)
-  paper(ctx, 768, 1024, n)
+  const { w, h, croppedFrom } = mockImageSize(inp, { w: 768, h: 1024 })
+  const { c, ctx } = canvas(w, h)
+  paper(ctx, w, h, n)
   const source = req.op === 'view' ? inp.image?.sha256 : inp.refs?.[0]?.asset.sha256
   const img = await bitmap(input, source)
   const view = inp.view
   if (img) {
     if (view === 'back') ctx.filter = 'grayscale(1) brightness(0.8)'
-    contain(ctx, img, 60, 60, 648, 860, { mirror: view === 'side', scale: view === 'three-quarter' ? 0.92 : 1 })
+    contain(ctx, img, w * 0.08, h * 0.06, w * 0.84, h * 0.84, { mirror: view === 'side', scale: view === 'three-quarter' ? 0.92 : 1 })
     ctx.filter = 'none'
   }
-  stamp(ctx, 768, 1024, req.op === 'view' ? `view · ${VIEW_LABEL[view ?? 'front']}` : `generated · ${inp.text ?? ''}`)
-  return { blob: await toBlob(c), mime: 'image/png', w: 768, h: 1024 }
+  stamp(ctx, w, h, req.op === 'view' ? `view · ${VIEW_LABEL[view ?? 'front']}` : `generated · ${inp.text ?? ''}`)
+  return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
 }
 
 // ── Clips: a canvas animation recorded with MediaRecorder ───────────────────

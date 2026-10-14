@@ -4,7 +4,8 @@
 // column is only a hint each adapter maps. Pure, engine-free.
 //
 // Tag status: 'v2' tags are in the scene today (contracts/customdata.schema.json);
-// 'v3' tags come with contract-v3; 'unassigned' kinds have no tag yet, and
+// 'v3' tags come with contract-v3, and are read once a feature puts them in the
+// scene (LIVE_V3_TAGS: 'sketch', from frame-aspect); 'unassigned' kinds have no tag yet, and
 // contract-v3 decides whether they need one. Nothing here writes a tag.
 
 import type { ElementLike } from './canvasAdapter'
@@ -90,14 +91,16 @@ export const GENERATING_KINDS: readonly NodeKind[] = NODE_REGISTRY.filter((e) =>
  * note (loose text); an untagged stroke or shape is a 'stroke' (the person's
  * own marks, not yet a node). Groups are found by groupOf, not here.
  */
-export type Classified = 'picture' | 'drawing' | 'generated' | 'note' | SystemKind | 'stroke' | 'unknown'
+export type Classified = 'picture' | 'drawing' | 'generated' | 'note' | 'sketch' | SystemKind | 'stroke' | 'unknown'
 
 function tagOf(el: ElementLike): string | undefined {
   const c = el.customData as { kind?: unknown } | undefined
   return c && typeof c === 'object' && 'kind' in c && typeof c.kind === 'string' ? c.kind : undefined
 }
 
-const LIVE_TAGS = new Map(NODE_REGISTRY.filter((e) => e.tagStatus === 'v2' && e.tag).map((e) => [e.tag!, e.kind]))
+/** The v3 tags this build reads: the sketch area (features/frame-aspect.clan). The others wait for canvas-nodes. */
+export const LIVE_V3_TAGS: readonly string[] = ['sketch']
+const LIVE_TAGS = new Map(NODE_REGISTRY.filter((e) => e.tag && (e.tagStatus === 'v2' || LIVE_V3_TAGS.includes(e.tag))).map((e) => [e.tag!, e.kind]))
 
 export function classify(el: ElementLike): Classified {
   const c = el.customData as unknown
@@ -107,6 +110,8 @@ export function classify(el: ElementLike): Classified {
     if (!kind) return 'unknown'
     // A note is words: the tag on anything but text is not one (canvas/sceneRead.ts isText).
     if (kind === 'note' && el.type !== 'text') return 'unknown'
+    // A sketch area is a rectangle (adapter sketchArea).
+    if (kind === 'sketch' && el.type !== 'rectangle') return 'unknown'
     return kind as Classified
   }
   if (el.type === 'text') return 'note'

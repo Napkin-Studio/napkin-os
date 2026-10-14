@@ -10,12 +10,17 @@ import { CanvasView } from '../canvas/adapter/excalidraw/CanvasView'
 import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot } from '../canvas/controller'
+import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
+import { croppedCaption } from '../canvas/core/sketch'
+import { framesFromSketch, sketchDeleteText } from '../doc/remove'
+import { AskCard } from '../ui/AskCard'
+import { LAYOUT_ONLY } from '../ui/asks'
+import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, cd, imageOf, isText, isUserDrawing, type Canvas, type El } from '../canvas/scene'
-import { AGENCY_SHELF, REF_ROLES, type CustomData, type KeyEntry, type LibraryIndex, type ModelChoice, type NamedRef, type RefRole, type View } from '../contracts/types'
+import { AGENCY_SHELF, REF_ROLES, type Ask, type CustomData, type KeyEntry, type LibraryIndex, type ModelChoice, type NamedRef, type RefRole, type View } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
 import { keyNamed, keysList, refsList } from '../model/selectors'
-import { choiceToSend } from '../capabilities'
+import { choiceToSend, modelChoicesFor } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
 import { systemUpdate } from '../doc/store'
@@ -79,6 +84,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   /** Waiting for a click that says where the next result goes. */
   const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
+  /** Wren's ask from a placed Generate on a sketch with no words: answered here, then it goes. */
+  const [asking, setAsking] = useState<{ ask: Ask; job: { ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice }; at: { x: number; y: number } } | null>(null)
 
   const refresh = useCallback(() => {
     if (!canvas) return
@@ -99,7 +106,13 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   // Land canvas results; mirror job states into customData.
   useEffect(() => {
     if (!ctrl) return
-    return runner.onComplete('canvas', (job) => void ctrl.land(job))
+    const offCanvas = runner.onComplete('canvas', (job) => void ctrl.land(job))
+    // A Generate on a sketch area lands on the canvas too, as a frame made from it (features/frame-aspect.clan).
+    const offSketch = runner.onComplete('sketch', (job) => void ctrl.land(job))
+    return () => {
+      offCanvas()
+      offSketch()
+    }
   }, [ctrl, runner])
   useEffect(() => {
     if (!ctrl) return
@@ -121,6 +134,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     refresh()
     return off
   }, [canvas, refresh])
+
+  // A resized sketch area keeps its shape: corrected once, when the pointer comes up (features/frame-aspect.clan).
+  useEffect(() => {
+    if (!canvas || !ctrl) return
+    return canvas.onPointer((p) => {
+      if (p.phase === 'up') requestAnimationFrame(() => ctrl.lockAreas())
+    })
+  }, [canvas, ctrl])
 
   const onChange = useCallback(() => {
     ctrl?.onChange()
@@ -151,6 +172,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     const targets = ctrl.deletable(sel)
     if (!targets.length) return
     const ids = targets.map((e) => e.id)
+    // A sketch area: what was made from it stays, and the confirm says so (features/frame-aspect.clan).
+    const areas = targets.flatMap((e) => { const c = cd(e); return c?.kind === 'sketch' ? [c.id] : [] })
+    const made = areas.reduce((n, id) => n + framesFromSketch(docStore.get(), id).length, 0)
+    if (made) {
+      const b = bounds(targets)
+      setConfirming({ ids, text: sketchDeleteText(made), at: { x: b.minX + b.w / 2, y: b.minY } })
+      return
+    }
     const running = targets.map((e) => cd(e)).filter((c): c is Extract<CustomData, { kind: 'gen' }> => c?.kind === 'gen')
       .map((c) => docStore.get().jobs[c.id]).filter((j) => j && isActive(runner.liveInfo(j.id)?.state ?? j.state))
     if (running.length) {
@@ -176,7 +205,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
       if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
       const ids = canvas.view().selectedIds
       const sel = alive(canvas.elements()).filter((x) => ids.includes(x.id))
-      if (!sel.some((x) => imageOf(x))) return
+      if (!sel.some((x) => imageOf(x) || cd(x)?.kind === 'sketch')) return
       e.preventDefault()
       e.stopPropagation()
       requestDelete(sel)
@@ -193,12 +222,27 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     const p = canvas.viewportToScene({ x: e.clientX, y: e.clientY }, canvas.view())
     const job = placing
     setPlacing(null)
+    const at = { x: p.x - 150, y: p.y - 200 }
     try {
-      await ctrl.generate(job.ids, job.text, { at: { x: p.x - 150, y: p.y - 200 }, more: job.more, limits, modelChoice: job.modelChoice })
+      const r = await ctrl.generate(job.ids, job.text, { at, more: job.more, limits, modelChoice: job.modelChoice })
+      if ('ask' in r) setAsking({ ask: r.ask, job, at })
     } catch (err) {
       setPlaceError(errText(err))
     }
   }, [placing, ctrl, canvas, limits])
+
+  /** The answer to Wren's ask from a placed Generate: layout only goes as it is; described, its words go. */
+  const onAskAnswered = useCallback(async (answer: AnswerChoice) => {
+    if (!ctrl || !asking) return
+    const { job, at } = asking
+    setAsking(null)
+    try {
+      if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await ctrl.generate(job.ids, job.text, { at, more: job.more, limits, modelChoice: job.modelChoice, layoutOnly: true })
+      else if ('text' in answer) await ctrl.generate(job.ids, answer.text, { at, more: job.more, limits, modelChoice: job.modelChoice })
+    } catch (err) {
+      setPlaceError(errText(err))
+    }
+  }, [ctrl, asking, limits])
 
   const hasMarks = els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e))
   const showHint = !ui.hintDismissed && !hasMarks && Object.keys(doc.refs).length === 0
@@ -228,11 +272,20 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             const p = toView(confirming.at)
             return (
               <Floating className="toolbar confirming" anchor={{ x: p.x, top: p.y, bottom: p.y }}>
-                <InlineConfirm text={confirming.text} yes="Stop and remove" onYes={() => doDelete(confirming.ids)} onNo={() => setConfirming(null)} />
+                <InlineConfirm text={confirming.text} yes={confirming.text.startsWith('Delete this sketch area') ? 'Delete' : 'Stop and remove'} onYes={() => doDelete(confirming.ids)} onNo={() => setConfirming(null)} />
               </Floating>
             )
           })()}
           {canvas && !confirming && !placing && <ArrowCards canvas={canvas} wrap={wrap} selected={selected} toView={toView} />}
+          {asking && (() => {
+            const p = toView(asking.at)
+            return (
+              <Floating className="popover" anchor={{ x: p.x + 150, top: p.y, bottom: p.y }}>
+                <AskCard ask={docStore.get().asks[asking.ask.id] ?? asking.ask} onLocalAnswer={onAskAnswered} />
+                <button className="btn xs ghost" onClick={() => setAsking(null)}>Cancel</button>
+              </Floating>
+            )
+          })()}
           {undo?.at && (() => {
             const p = toView(undo.at)
             return <UndoChip className="oncanvas" label={undo.label} onUndo={runUndo} style={{ left: p.x, top: p.y }} />
@@ -281,6 +334,10 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   const w = el.width * zoom
   const h = el.height * zoom
   const dismissed = ui.jobs[c.id]?.dismissed
+  // "1344×756 · cropped to 16:9": the relay cut the model's size to the sketch's shape (features/frame-aspect.clan).
+  const frame = Object.values(doc.frames).find((f) => f.job_id === c.id)
+  const own = frame ? doc.assets[frame.asset] : undefined
+  const caption = frame?.cropped_to && own?.w && own?.h ? croppedCaption({ w: own.w, h: own.h }, frame.cropped_to.to) : undefined
   const showNode = (isActive(state) || state === 'failed' || state === 'cancelled') && !dismissed && state !== 'completed'
   return (
     <>
@@ -295,6 +352,7 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
           {showMock && c.mock && <span className="mockbadge">MOCK</span>}
         </div>
       )}
+      {state === 'completed' && caption && <div className="gencaption" style={{ left: tl.x, top: tl.y + h }}>{caption}</div>}
     </>
   )
 }
@@ -481,11 +539,13 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
 }) {
   const doc = useDoc()
   const { controls, config } = useConfig()
-  const preview = ctrl.preview(ids)
   // The model for this Generate: the last that worked for pictures, or the one picked here.
   const [pick, setPick] = useState<ModelChoice | undefined>()
   const choice = pick ?? lastWorkedModel(doc, 'generate', config)
   const modelChoice = choiceToSend('generate', config, choice)
+  const preview = ctrl.preview(ids, choice?.model ?? modelChoicesFor('generate', config)[0]?.model)
+  /** Wren's ask on a sketch with no words, shown here; nothing is sent until it is answered. */
+  const [asked, setAsked] = useState<Ask | null>(null)
   const [text, setText] = useState('')
   const [more, setMore] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -503,23 +563,40 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
       t.selectionStart = t.selectionEnd = s + add.length
     })
   }
-  const submit = async () => {
+  const go = async (fn: () => Promise<GenerateResult>) => {
     setBusy(true)
     setError(null)
     try {
-      await ctrl.generate(ids, text, { more, limits, modelChoice })
-      onClose()
+      const r = await fn()
+      if ('ask' in r) setAsked(r.ask)
+      else onClose()
     } catch (e) {
       setError(errText(e))
     } finally {
       setBusy(false)
     }
   }
-  const count = preview.inputs.length + preview.drawings
+  const submit = () => go(() => ctrl.generate(ids, text, { more, limits, modelChoice }))
+  const answered = async (answer: AnswerChoice) => {
+    setAsked(null)
+    if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, layoutOnly: true }))
+    else if ('text' in answer) await go(() => ctrl.generate(ids, answer.text, { more, limits, modelChoice }))
+  }
+  if (asked) {
+    return (
+      <Floating className="popover" anchor={at}>
+        <AskCard ask={doc.asks[asked.id] ?? asked} onLocalAnswer={answered} />
+        <div className="row" style={{ marginTop: 8 }}><span className="spacer" /><button className="btn sm ghost" onClick={onClose}>Cancel</button></div>
+      </Floating>
+    )
+  }
+  const count = preview.inputs.length + preview.drawings + (preview.sketch ? 1 : 0)
+  const oneArea = preview.areas <= 1
   return (
     <Floating className="popover" anchor={at}>
       <h3>Generate from {count ? `${count} ${count === 1 ? 'input' : 'inputs'}` : 'your words'}</h3>
       <div className="taghints">
+        {preview.sketch && <span className="taghint static" title={preview.sketch.frame ? 'This frame becomes a sketch area: the result comes back at its shape' : 'The result comes back at this shape'}>sketch area {preview.sketch.label}</span>}
         {preview.inputs.map((i) => <span key={i.nodeId} className="taghint static">{i.name ? `@${i.name}` : KIND_WORD[i.kind]}</span>)}
         {preview.drawings > 0 && <span className="taghint static">new drawing</span>}
         {preview.notes.map((n, i) => <span key={`n${i}`} className="taghint static" title={n}>“{n.length > 24 ? `${n.slice(0, 23)}…` : n}”</span>)}
@@ -546,6 +623,8 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
           if (e.key === 'Escape') onClose()
         }}
       />
+      {preview.cropLine && <div className="faint" role="note" style={{ fontSize: 12.5, marginTop: 6 }}>{preview.cropLine}</div>}
+      {!oneArea && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>Pick one sketch area for one Generate.</div>}
       {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{error}</div>}
       <div className="row" style={{ marginTop: 10, gap: 6 }}>
         <span className="faint" style={{ fontSize: 11.5 }}>{text.length}/1000</span>
@@ -553,8 +632,8 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
         <ModelPick op="generate" value={choice} onChange={setPick} />
         <span className="spacer" />
         <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm" disabled={busy} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(ids, text, more, modelChoice) }}>Place…</button>
-        <button className="btn sm primary" disabled={busy} onClick={submit}>{busy ? 'Sending…' : 'Generate'}</button>
+        <button className="btn sm" disabled={busy || !oneArea} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(ids, text, more, modelChoice) }}>Place…</button>
+        <button className="btn sm primary" disabled={busy || !oneArea} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
     </Floating>
   )

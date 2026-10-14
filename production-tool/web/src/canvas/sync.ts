@@ -8,7 +8,7 @@
 
 import type { CustomData } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { bareRemoval, deleteFrom, removeGen, restoreTo, type Removal } from '../doc/remove'
+import { bareRemoval, deleteFrom, removeGen, removeSketch, restoreTo, type Removal } from '../doc/remove'
 import type { DocumentStore } from '../doc/types'
 
 export interface SceneEl {
@@ -21,6 +21,12 @@ export interface SceneEl {
 function genId(e: SceneEl): string | undefined {
   const c = e.customData as CustomData | undefined
   return c && typeof c === 'object' && c.kind === 'gen' ? c.id : undefined
+}
+
+/** A sketch area's sketches[id] (features/frame-aspect.clan). */
+function sketchId(e: SceneEl): string | undefined {
+  const c = e.customData as CustomData | undefined
+  return c && typeof c === 'object' && c.kind === 'sketch' && e.type === 'rectangle' ? c.id : undefined
 }
 
 export interface CanvasSyncDeps {
@@ -38,6 +44,9 @@ export class CanvasDocSync {
   /** Gens whose element goes away without being deleted (a retry moves it to a new id). */
   readonly moved = new Set<string>()
   private queue: Promise<void> = Promise.resolve()
+  /** Sketch areas alive at the last sync (null until the first). */
+  private areas: Set<string> | null = null
+  private readonly areasSeen = new Set<string>()
 
   constructor(deps: CanvasSyncDeps) {
     this.deps = deps
@@ -60,6 +69,36 @@ export class CanvasDocSync {
       this.queue = this.queue.then(() => this.removeGen(id)).catch((e) => console.warn('could not record the delete', e))
     }
     for (const id of back) this.queue = this.queue.then(() => this.restoreGen(id)).catch((e) => console.warn('could not record the restore', e))
+    return this.queue
+  }
+
+  /**
+   * Sketch areas deleted or brought back since the last call: the sketches[id] row goes with its
+   * area (the frames made from it stay) and comes back with it, in step with the canvas's undo.
+   */
+  sketches(els: readonly SceneEl[]): Promise<void> {
+    const now = new Set(els.filter((e) => !e.isDeleted).map(sketchId).filter((x): x is string => !!x))
+    if (!this.areas) {
+      this.areas = now
+      for (const id of now) this.areasSeen.add(id)
+      return this.queue
+    }
+    const gone = [...this.areas].filter((id) => !now.has(id))
+    const back = [...now].filter((id) => !this.areas!.has(id) && this.areasSeen.has(id))
+    for (const id of now) this.areasSeen.add(id)
+    this.areas = now
+    for (const id of gone) {
+      this.queue = this.queue.then(async () => {
+        this.removals.set(id, await deleteFrom(this.deps.doc, (d) => removeSketch(d, id), { system: true }))
+      }).catch((e) => console.warn('could not record the delete', e))
+    }
+    for (const id of back) {
+      this.queue = this.queue.then(async () => {
+        const r = this.removals.get(id) ?? bareRemoval('sketch', id, `sketch area ${id}`)
+        this.removals.delete(id)
+        await restoreTo(this.deps.doc, r)
+      }).catch((e) => console.warn('could not record the restore', e))
+    }
     return this.queue
   }
 

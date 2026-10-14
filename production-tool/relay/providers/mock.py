@@ -15,7 +15,7 @@ import time
 import uuid
 from typing import Callable, Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .types import (
     VIDEO_OPS, AssetResolver, ProviderError, ProviderJob,
@@ -32,9 +32,12 @@ def _blank(size: int = 1024) -> Image.Image:
     return Image.new("RGB", (size, size), (200, 200, 205))
 
 
-def stamp(png_or_jpeg: Optional[bytes], label: str) -> tuple[bytes, int, int]:
-    """Draw a MOCK banner on the image (or a blank canvas) and return PNG bytes."""
+def stamp(png_or_jpeg: Optional[bytes], label: str, size: Optional[tuple[int, int]] = None) -> tuple[bytes, int, int]:
+    """Draw a MOCK banner on the image (or a blank canvas) and return PNG bytes. With `size`, the
+    picture is first filled to that size (centre-cropped and scaled), as a provider renders it."""
     img = Image.open(io.BytesIO(png_or_jpeg)).convert("RGB") if png_or_jpeg else _blank()
+    if size and img.size != size:
+        img = ImageOps.fit(img, size, Image.LANCZOS)
     w, h = img.size
     draw = ImageDraw.Draw(img)
     size = max(24, h // 10)
@@ -47,6 +50,21 @@ def stamp(png_or_jpeg: Optional[bytes], label: str) -> tuple[bytes, int, int]:
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue(), w, h
+
+
+def runway_size(job: ProviderJob) -> Optional[tuple[int, int]]:
+    """The size Runway would render an image job at: its table's snap of the job's shape
+    (frame-aspect), so the relay's crop after it runs locally and in tests as it does live.
+    None for video ops, jobs with no shape, and region edits: an edit keeps its source's own pixels,
+    which the region pipeline's paste-back and leak check compare (the relay's crop of a Runway edit
+    is tested with a recorded size in test_aspect.py)."""
+    from aspect import CROP_OPS, parse_ratio
+    from director.director import _nearest_ratio, provider_sizes
+
+    if job.op not in CROP_OPS or job.op == "region_edit" or not job.ratio:
+        return None
+    snapped = _nearest_ratio(job.ratio, provider_sizes("runway", job.op, None) or ())
+    return parse_ratio(snapped)
 
 
 class MockProvider:
@@ -108,7 +126,7 @@ class MockProvider:
         n = max(1, job.outputs or 1)
         outputs = []
         for i in range(n):
-            data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}")
+            data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", runway_size(job))
             outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="image/png", w=w, h=h,
                                           duration_s=job.duration_s if job.op in VIDEO_OPS else None,
                                           data=data))

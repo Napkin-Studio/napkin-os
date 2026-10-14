@@ -32,6 +32,8 @@ export interface RenderedOutput {
   w?: number
   h?: number
   durationS?: number
+  /** The size Runway would have rendered before the relay's crop (frame-aspect): metadata only, no crop here. */
+  croppedFrom?: { w: number; h: number }
 }
 
 /** Makes the mock's pictures and clips. The browser one draws on a canvas; tests pass a stub. */
@@ -431,6 +433,7 @@ export class MockRelay implements Relay {
             if (r.w) o.w = r.w
             if (r.h) o.h = r.h
             if (r.durationS) o.durationS = Math.round(r.durationS * 100) / 100
+            if (r.croppedFrom) o.croppedFrom = { ...r.croppedFrom }
             outputs.push(o)
           }
           if (!item.done) item.done = { state: 'completed', at: this.opts.now(), outputs }

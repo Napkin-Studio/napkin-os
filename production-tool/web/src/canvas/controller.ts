@@ -7,7 +7,10 @@
 
 import type { FileData, FileMap, ImageElement, SceneElement } from './adapter/excalidraw'
 import type { CanvasAdapter } from './core/canvasAdapter'
-import { AGENCY_SHELF, type CustomData, type Job, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef, type ProductionDocument, type RefRole, type Variant, type View, type ModelChoice } from '../contracts/types'
+import {
+  AGENCY_SHELF, type Ask, type Aspect, type CustomData, type Job, type JobInput, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef,
+  type ProductionDocument, type Ratio, type RefRole, type Variant, type View, type ModelChoice,
+} from '../contracts/types'
 import type { Services } from '../app/context'
 import { getBlob, idbLocation, putBlob, putBlobAs } from '../lib/blobs'
 import { idbPut } from '../lib/idb'
@@ -18,12 +21,18 @@ import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
-import { keyNamed, refsList } from '../model/selectors'
+import { applySketchFrame } from '../jobs/handlers'
+import { LOCAL_PERSON } from '../jobs/runner'
+import { purposeOf } from '../model/purpose'
+import { keyNamed, mainStoryboard, refsList } from '../model/selectors'
+import { cropLoss } from '../lib/runwaySizes'
+import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
+import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
   alive, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
-  imageOf, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
+  imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
 } from './scene'
-import { instruction, planSelection } from './selection'
+import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
 import { frameText } from './text'
 
@@ -42,7 +51,18 @@ export interface GeneratePreview {
   drawings: number
   notes: string[]
   pending: number
+  /** The sketch area it exports (a person's frame counts: it becomes one), with its size label. */
+  sketch?: { label: string; aspect: Aspect; frame: boolean }
+  /** More than one area: one Generate takes one. */
+  areas: number
+  /** The crop warning when the relay's crop would take most of the picture (frame-aspect, open question 7). */
+  cropLine?: string
 }
+
+/** What a Generate did: sent a job, or (a sketch with no words and nothing linked) asked first. */
+export type GenerateResult = { jobId: string } | { ask: Ask }
+
+const ONE_AREA = 'Pick one sketch area for one Generate.'
 
 export class CanvasController {
   private readonly canvas: CanvasAdapter<SceneElement, FileData>
@@ -60,6 +80,7 @@ export class CanvasController {
     this.s = services
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
     this.sync.gens(this.els())
+    this.sync.sketches(this.els())
   }
 
   private els(): El[] {
@@ -139,6 +160,7 @@ export class CanvasController {
     if (this.syncTimer) clearTimeout(this.syncTimer)
     this.syncTimer = null
     void this.sync.gens(this.els())
+    void this.sync.sketches(this.els())
   }
 
   // ── delete and undo ──
@@ -272,17 +294,26 @@ export class CanvasController {
   // ── Generate from any selection ──
 
   /** What a Generate on these elements would use (for the popover). */
-  preview(elIds: string[]): GeneratePreview {
+  preview(elIds: string[], model?: string): GeneratePreview {
     const doc = this.doc()
-    const plan = planSelection(this.els(), elIds)
+    const els = this.els()
+    const frames = this.userFramesIn(elIds)
+    const plan = planSelection(els, elIds.filter((id) => !frames.some((f) => f.id === id)))
+    const areas = plan.sketches.map((s) => ({ aspect: doc.sketches[s.sketchId]?.aspect ?? this.aspectOfEl(els.find((e) => e.id === s.elId)!), frame: false }))
+      .concat(frames.map((f) => ({ aspect: this.aspectOfEl(f), frame: true })))
+    const area = areas.length === 1 ? areas[0] : undefined
+    const loss = area ? cropLoss(area.aspect, model) : 0
     return {
       inputs: plan.images.map((i) => {
         const r = this.nameOn(i.nodeId, doc)
         return { nodeId: i.nodeId, kind: i.kind, ...(r ? { name: nameOf(r) } : {}) }
       }),
-      drawings: plan.strokes.length ? 1 : 0,
+      drawings: plan.strokes.length && !area ? 1 : 0,
       notes: plan.notes.map((n) => n.text),
       pending: plan.pending.length,
+      areas: areas.length,
+      ...(area ? { sketch: { label: aspectLabel(area.aspect), aspect: area.aspect, frame: area.frame } } : {}),
+      ...(loss > BIG_CROP ? { cropLine: BIG_CROP_LINE } : {}),
     }
   }
 
@@ -298,11 +329,21 @@ export class CanvasController {
    * One new image from the selected nodes and the typed words. `at` is the spot the participant
    * clicked (top-left of the new node); without it the node goes beside the selection.
    */
-  /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). */
-  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice } = {}) {
-    const doc = this.doc()
+  /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). `layoutOnly`: the
+   *  answer to Wren's ask on a sketch with no words ("Use it as a layout only"). */
+  async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean } = {}): Promise<GenerateResult> {
     let plan = planSelection(this.els(), elIds)
     if (plan.pending.length) throw new Error('One of these is still being made. Wait for it, or leave it out.')
+    // A person's own frame used in Generate becomes a sketch area (one undo step), its strokes where they are.
+    const frames = this.userFramesIn(elIds)
+    if (frames.length + plan.sketches.length > 1) throw new Error(ONE_AREA)
+    if (frames.length) {
+      const area = await this.frameToArea(frames[0])
+      elIds = [...elIds.filter((id) => id !== frames[0].id), area.id]
+      plan = planSelection(this.els(), elIds)
+    }
+    if (plan.sketches.length) return await this.generateSketch(plan, typed, opts)
+    const doc = this.doc()
     // Loose strokes become one drawing node first.
     if (plan.strokes.length) {
       const frame = await this.wrapDrawing(plan.strokes)
@@ -348,10 +389,158 @@ export class CanvasController {
       ...plan.notes.map((n, k) => ({ el: this.els().find((e) => e.id === n.elId)!, id: noteIds[k] })),
     ]
     const jobId = newId('job')
-    const slot = opts.at ? { ...opts.at, ...NODE } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), NODE)
+    // The shape: the first picture or drawing's, snapped to the nearest of the four; words only, the storyboard's.
+    const first = plan.images[0]
+    const ratio: Ratio = first ? ratioFor(this.aspectOfImage(first.elId, first.asset)) : mainStoryboard(doc)?.ratio ?? '16:9'
+    const size = nodeSize(ratio === '16:9' ? { w: 16, h: 9 } : ratio === '9:16' ? { w: 9, h: 16 } : ratio === '1:1' ? { w: 1, h: 1 } : { w: 4, h: 5 })
+    const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds(sources.map((s) => s.el)), size)
     this.placeGen(jobId, 'generate', sources.map((s) => s.id), sources, slot)
-    const input = { refs, ratio: '4:5' as const, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
+    const input = { refs, ratio, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
+    return { jobId }
+  }
+
+  // ── sketch areas (features/frame-aspect.clan; ui-behaviour 3.7) ──
+
+  /** The person this browser acts for, as the document names them. */
+  private person(): string {
+    const me = this.s.ui.get().me
+    return me ? `human:${me.participantId}` : LOCAL_PERSON
+  }
+
+  /** An element's shape in whole units. */
+  private aspectOfEl(e: El): Aspect {
+    return { w: Math.max(1, Math.round(Math.abs(e.width))), h: Math.max(1, Math.round(Math.abs(e.height))) }
+  }
+
+  /** An image input's shape: its picture's measured size, else its node's. */
+  private aspectOfImage(elId: string, asset: string): Aspect {
+    const a = this.doc().assets[asset]
+    if (a?.w && a?.h) return { w: a.w, h: a.h }
+    const el = this.els().find((e) => e.id === elId)
+    return el ? this.aspectOfEl(el) : { w: 1, h: 1 }
+  }
+
+  /** The person's own Excalidraw frames this selection uses: selected, or holding a selected stroke. */
+  private userFramesIn(elIds: readonly string[]): El[] {
+    const live = new Map(alive(this.els()).map((e) => [e.id, e]))
+    const out = new Map<string, El>()
+    const own = (e: El | undefined) => !!e && e.type === 'frame' && !cd(e)
+    for (const id of elIds) {
+      const e = live.get(id)
+      if (!e) continue
+      if (own(e)) out.set(e.id, e)
+      else if (e.frameId && own(live.get(e.frameId))) out.set(e.frameId, live.get(e.frameId)!)
+    }
+    return [...out.values()]
+  }
+
+  /**
+   * A person's frame becomes a sketch area, in one undo step: a white area with the frame's exact
+   * bounds and aspect (and its ratio when it is one of the four), and the frame's strokes taken out
+   * of it where they are. Frames never used in Generate stay frames.
+   */
+  async frameToArea(frame: El): Promise<El> {
+    const sketchId = newId('sketch')
+    const aspect = this.aspectOfEl(frame)
+    const ratio = exactRatio(aspect)
+    const area = this.canvas.sketchArea({ x: frame.x, y: frame.y, w: frame.width, h: frame.height, sketchId })
+    const next: El[] = []
+    for (const e of this.els()) {
+      if (e.id === frame.id) {
+        next.push(area) // where the frame was: below its strokes
+        next.push(this.canvas.patch(e, { isDeleted: true }))
+      } else next.push(e.frameId === frame.id ? this.canvas.patch(e, { frameId: null }) : e)
+    }
+    this.setEls(next)
+    await systemUpdate(this.s.doc, (d) => {
+      d.sketches[sketchId] = { id: sketchId, v: 1, field_v: {}, aspect, ...(ratio ? { ratio } : {}), drawn_by: this.person() }
+    }, 'sketch area')
+    void this.sync.sketches(this.els())
+    return area
+  }
+
+  /** What an area's Generate sends: exactly the area, its strokes clipped to it, at its shape, as a layout. */
+  private async generateSketch(plan: CanvasPlan, typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean }): Promise<GenerateResult> {
+    const doc = this.doc()
+    const els = alive(this.els())
+    const s = plan.sketches[0]
+    const areaEl = els.find((e) => e.id === s.elId)
+    if (!areaEl) throw new Error('That sketch area is gone.')
+    const sketch = doc.sketches[s.sketchId]
+    const aspect = sketch?.aspect ?? this.aspectOfEl(areaEl)
+    const rect: Rect = { x: areaEl.x, y: areaEl.y, w: areaEl.width, h: areaEl.height }
+    // Words typed inside the area go as words, as a drawing's do.
+    const written = els.filter((e) => isText(e) && e.id !== areaEl.id && intersects(boxOf(e as unknown as Boxed), rect)).map((e) => textOf(e)).filter(Boolean)
+    const notes = plan.notes.filter((n) => !els.some((e) => e.id === n.elId && intersects(boxOf(e as unknown as Boxed), rect)))
+    const text = instruction(typed, [...notes, ...written.map((w) => ({ text: w }))])
+    const said = mentions(doc, text)
+    if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
+    // Nothing says what it is: Wren asks first, and nothing is sent (or spent) until someone answers.
+    if (!text && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
+
+    const limits = opts.limits ?? { max: 14, characters: 14 }
+    if (plan.images.length + 1 > limits.max) throw new Error(`Pick at most ${limits.max} pictures and drawings for one Generate.`)
+    await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
+    const members = membersOf(els as unknown as Boxed[], rect).filter((e) => e.id !== areaEl.id)
+    const ex = exportPlan(rect, aspect)
+    const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' }, this.canvas.files())
+    const sha = await putBlob(blob)
+    this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
+    const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: await assetRef(this.s.relay, sha) }]
+    for (const i of plan.images) {
+      const named = this.nameOn(i.nodeId)
+      if (named) refs.push(await namedInput(this.s.relay, this.doc(), named))
+      else refs.push({ id: i.nodeId, role: i.kind === 'pic' ? 'other' : 'character', kind: i.kind === 'drawn' ? 'drawing' : i.kind === 'gen' ? 'generated' : 'picture', asset: await assetRef(this.s.relay, i.asset) })
+    }
+    for (const r of said.found) if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(this.s.relay, this.doc(), r))
+
+    const noteIds = notes.map((n) => n.nodeId ?? this.noteId(n.elId))
+    const live = this.els()
+    const sources: { el: El; id: string }[] = [
+      { el: areaEl, id: s.sketchId },
+      ...plan.images.map((i) => ({ el: live.find((e) => e.id === i.elId)!, id: i.nodeId })),
+      ...notes.map((n, k) => ({ el: live.find((e) => e.id === n.elId)!, id: noteIds[k] })),
+    ]
+    const jobId = newId('job')
+    // The new frame sits to the right of the area, at its true shape.
+    const size = nodeSize(aspect)
+    const slot = opts.at ? { ...opts.at, ...size } : nextSlot(this.els(), bounds([areaEl]), size)
+    this.placeGen(jobId, 'generate', sources.map((x) => x.id), sources, slot)
+    const ratio = exactRatio(aspect)
+    const input: JobInput = { refs, ...(ratio ? { ratio } : { aspect }), ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
+    await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'sketch', sketchId: s.sketchId }, jobId, opts.modelChoice)
+    return { jobId }
+  }
+
+  /**
+   * Put resized sketch areas back on their shape: anchored top-left, led by the width (core/sketch.ts
+   * lockAspect). Called once on pointer-up, as a system write, so the resize stays one undo step of
+   * the person's and two browsers correcting it write the same thing. Returns how many moved.
+   */
+  lockAreas(): number {
+    const d = this.doc()
+    let moved = 0
+    const next = this.els().map((e) => {
+      const c = cd(e)
+      if (c?.kind !== 'sketch' || e.isDeleted || e.type !== 'rectangle') return e
+      const s = d.sketches[c.id]
+      const r = s && lockAspect({ x: e.x, y: e.y, w: e.width, h: e.height }, s.aspect)
+      if (!r) return e
+      moved++
+      return this.canvas.patch(e, { height: r.h })
+    })
+    if (moved) this.setEls(next, false)
+    return moved
+  }
+
+  /** Wren's ask on a sketch with no words and nothing linked: an asks[id] row on the sketch, with no job. */
+  private async askAboutSketch(sketchId: string): Promise<Ask> {
+    const open = Object.values(this.doc().asks).find((a) => a.node.kind === 'sketch' && a.node.id === sketchId && a.state === 'open' && !a.job_id)
+    if (open) return open
+    const ask = sketchAsk(sketchId)
+    await systemUpdate(this.s.doc, (d) => { d.asks[ask.id] = ask }, SKETCH_ASK)
+    return ask
   }
 
   // ── names: key_variant on any image ──
@@ -431,15 +620,19 @@ export class CanvasController {
     for (const r of refsList(doc).filter((x) => x.key === key && x.id !== front.id && x.asset).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
     const els = this.els()
     const anchor = frontEl ? bounds([frontEl]) : { maxX: 0, minY: 0 }
+    // The views keep the front's exact shape, so they line up with it (frame-aspect).
+    const known = doc.assets[front.asset]
+    const aspect: Aspect = known?.w && known?.h ? { w: known.w, h: known.h } : frontEl ? this.aspectOfEl(frontEl) : { w: 4, h: 5 }
+    const size = nodeSize(aspect)
     // A row to the right of the front, clear of anything already there.
-    const slot = nextSlot(els, anchor, { w: NODE.w * views.length + 40 * (views.length - 1), h: NODE.h })
+    const slot = nextSlot(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
     const placed: { jobId: string; view: View }[] = []
     let x = slot.x
     for (const view of views) {
       const jobId = newId('job')
       const parents = front.node ? [front.node] : []
-      const gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, NODE, view)
-      x += NODE.w + 40
+      const gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
+      x += size.w + 40
       let all = [...this.els(), gen]
       if (frontEl && front.node) {
         const arrow = makeArrow(this.canvas, frontEl, gen, front.node, jobId, 0, true)
@@ -450,8 +643,8 @@ export class CanvasController {
     }
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
     for (const p of placed) {
-      // Same ratio as the front, so the views line up (the relay refuses a view without one).
-      await this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), ratio: '4:5' }, front.node ? [front.node] : [], { for: 'canvas' }, p.jobId, modelChoice)
+      // The front's own shape: the relay asks for the nearest size and crops back to it.
+      await this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), aspect }, front.node ? [front.node] : [], { for: 'canvas' }, p.jobId, modelChoice)
     }
   }
 
@@ -615,6 +808,9 @@ export class CanvasController {
         agent: why.agent, cites: why.cites, ...(docId ? { targets: [`${docId}#jobs[${job.jobId}]`] } : {}),
       }).catch((e) => console.warn('could not record the canvas landing', e))
     }
+    // A Generate on a sketch area lands as a frame made from it, with its crop (frame-aspect).
+    const p = this.doc().jobs[job.jobId] ? purposeOf(this.doc().jobs[job.jobId]) : null
+    if (p?.for === 'sketch') await systemUpdate(this.s.doc, (d) => { applySketchFrame(d, job, p.sketchId) }, 'frame')
     if (c.op === 'view' && c.view) {
       const source = this.nameOn(c.parentIds[0])
       const key = source?.key
@@ -643,6 +839,12 @@ function libraryCopy(entry: LibraryEntry) {
 function dropUnusedKeys(d: ProductionDocument) {
   const used = new Set(Object.values(d.refs).map((r) => r.key))
   for (const k of Object.values(d.keys)) if (!used.has(k.key) && !k.library) delete d.keys[k.id]
+}
+
+/** A node's size on the canvas at this shape: 300 wide (as before), at most 400 tall. */
+export function nodeSize(aspect: Aspect): { w: number; h: number } {
+  const w = aspect.h > aspect.w * (NODE.h / NODE.w) ? Math.round((NODE.h * aspect.w) / aspect.h) : NODE.w
+  return { w, h: Math.round((w * aspect.h) / aspect.w) }
 }
 
 export function viewLabel(v: View): string {

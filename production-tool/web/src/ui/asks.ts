@@ -1,8 +1,11 @@
 // The ask card's logic (ui/AskCard.tsx, ui/JobSlot.tsx), apart from the components so it can be tested:
 // which ask a job has, whether the job waits on it, and sending a person's answer through the runner.
 
-import type { Ask, Id, ProductionDocument } from '../contracts/types'
+import type { Ask, AskAnswer, Id, ProductionDocument } from '../contracts/types'
+import { updateDoc } from '../doc/store'
+import type { DocumentStore } from '../doc/types'
 import type { AnswerChoice, JobRunner } from '../jobs/runner'
+import { newId } from '../lib/ulid'
 
 /** The ask on a job, if it has one. */
 export function askOfJob(asks: Record<Id, Ask>, jobId: Id): Ask | undefined {
@@ -27,4 +30,43 @@ export async function sendAnswer(runner: Pick<JobRunner, 'answer' | 'change'>, a
   }
   const r = await runner.answer(ask.job_id, answer)
   return 'conflict' in r ? `${byWords(r.conflict.answeredBy)} answered first. Their answer stands; use Change to choose again.` : null
+}
+
+// ── asks with no job (features/frame-aspect.clan) ──
+
+/** The store action that writes Wren's sketch ask (doc/describe.ts names it). */
+export const SKETCH_ASK = 'ask sketch'
+export const LAYOUT_ONLY = 'layout_only'
+
+/**
+ * Wren's ask on a sketch area with no words and nothing linked (ui-behaviour 3.7, 3.17): "Use it as
+ * a layout only" goes ahead; "Describe it" opens the text box, and the words go with the sketch.
+ */
+export function sketchAsk(sketchId: Id): Ask {
+  const id = newId('q')
+  return {
+    id, v: 1, field_v: {},
+    question: {
+      id, kind: 'nudge', text: 'What is this sketch of?',
+      options: [{ id: LAYOUT_ONLY, label: 'Use it as a layout only', value: 'layout' }, { id: 'describe', label: 'Describe it' }],
+      allow_text: true,
+    },
+    node: { kind: 'sketch', id: sketchId },
+    crew: 'wren',
+    state: 'open',
+    answers: [],
+  }
+}
+
+/** Answer an ask that has no job (it asks before anything is sent): the person's answer, written to the
+ *  document as theirs; the caller then goes ahead with it. */
+export async function answerLocally(store: DocumentStore, askId: Id, answer: AnswerChoice, by: string, now = new Date().toISOString()): Promise<AskAnswer> {
+  const row: AskAnswer = { ...('optionId' in answer ? { option_id: answer.optionId } : { text: answer.text }), by, at: now }
+  await updateDoc(store, (d) => {
+    const a = d.asks[askId]
+    if (!a) throw new Error('That question is gone.')
+    a.answers = [...a.answers, row].slice(-16)
+    a.state = 'answered'
+  }, 'answer')
+  return row
 }
