@@ -11,14 +11,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { Editor } from '@tiptap/core'
 import { useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
 import { formatRoute, scriptRoute } from '../app/route'
-import { newUlidId, type PMNode as PMNodeLike, type Prose } from '../../../clan-store/src'
+import { newUlidId, type PMNode as PMNodeLike } from '../../../clan-store/src'
 import type { Ask, CameraSize, ProductionDocument, Scene, Shot, WriteIntent, WriteTarget } from '../contracts/types'
 import { updateDoc } from '../doc/store'
-import { deleteFrom, removeShot } from '../doc/remove'
+import { deleteFrom, removeBeat, removeScene, removeShot, sceneContents, sceneDeleteText, shotDeleteText, shotNeedsConfirm, type Removal } from '../doc/remove'
+import { InlineConfirm } from '../ui/Undo'
 import { askedShot, planOrJoin, runningPlan } from '../jobs/plan'
 import { LOCAL_PERSON } from '../jobs/runner'
 import type { ModelStore } from '../model/store'
-import { openAsks, scriptText, staleList } from '../model/selectors'
+import { framesOf, openAsks, scriptText, staleList, takesOf } from '../model/selectors'
 import { answerShotAsk } from '../stages/storyboardEdits'
 import { AgentAvatar } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
@@ -43,8 +44,9 @@ import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
 import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeState, startWrite } from './skye'
-import { answerLocalAsk, nameAsks, settleNameAsks, unknownInShot } from './nameAsks'
-import { isLinked, linkForMention } from '../text/mention/source'
+import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
+import { linkForMention } from '../text/mention/source'
+import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
@@ -56,6 +58,9 @@ import './look.css'
 
 type Doc = ProductionDocument
 type Focus = { key: string; editor: Editor | null } | null
+/** How a delete was asked for: Backspace in an empty fragment, ⌘⇧⌫, or a visible Delete control. */
+export type RemoveHow = 'empty' | 'command' | 'button'
+export type RemoveItem = (kind: 'scene' | 'shot' | 'beat', id: string, how: RemoveHow) => boolean
 
 const cameraWords = (s: Shot) => [s.camera.size, s.camera.movement ?? 'static'].map((x) => (x as CameraSize | string).replace(/_/g, ' ')).map((x, i) => (i === 0 ? x[0].toUpperCase() + x.slice(1) : x)).join(' · ')
 const secs = (n: number) => `${(Math.round(n * 10) / 10).toFixed(1)} s`
@@ -129,6 +134,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [sheet, setSheet] = useState<'outline' | 'facts' | null>(null)
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
   const [menu, setMenu] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -149,6 +155,50 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   }, [])
+
+  // Delete in the editor (ui-behaviour 3.10, 3.3 Delete; item 4): through the document's removal cascade
+  // (doc/remove.ts), one undo step each, said with Undo. A shot with frames or clips, or a scene with shots,
+  // asks first; Backspace in an empty fragment never deletes made work.
+  const removeItem = useCallback<RemoveItem>((kind, id, how) => {
+    const d = store.get()
+    const c = composeScript(d, scriptId, pickedBoard && d.storyboards[pickedBoard] ? pickedBoard : undefined)
+    const numberOf = (k: string) => c?.rows.find((r) => r.id === id && (r.kind === k || (k === 'shot' && r.kind === 'end_card')))
+    const run = (fn: (x: Doc) => Removal, label: string) => {
+      setConfirm(null)
+      void attempt(async () => {
+        await deleteFrom(docStore, fn)
+        say(`Deleted ${label}.`, true)
+      })
+    }
+    if (kind === 'beat') {
+      const b = d.beats[id]
+      if (!b) return false
+      run((x) => removeBeat(x, id), b.kind === 'line' ? 'the line' : b.kind === 'vo' ? 'the voice-over line' : `the ${b.kind}`)
+      return true
+    }
+    if (kind === 'shot') {
+      if (!d.shots[id]) return false
+      const row = numberOf('shot')
+      const n = row && 'number' in row ? row.number : 0
+      const label = d.shots[id].kind === 'end_card' ? 'the end card' : `shot ${n}`
+      if (shotNeedsConfirm(d, id)) {
+        if (how === 'empty') return false
+        setConfirm({ text: shotDeleteText(n, framesOf(d, id).length, takesOf(d, id).length), yes: 'Delete shot', go: () => run((x) => removeShot(x, id), label) })
+        return true
+      }
+      run((x) => removeShot(x, id), label)
+      return true
+    }
+    const scene = d.scenes[id]
+    if (!scene) return false
+    const row = numberOf('scene')
+    const n = row && 'number' in row ? row.number : 0
+    const text = sceneDeleteText(n, sceneContents(d, id))
+    if (how === 'empty' && (text || scene.heading.trim())) return false
+    if (text) setConfirm({ text, yes: 'Delete scene', go: () => run((x) => removeScene(x, id), `scene ${n}`) })
+    else run((x) => removeScene(x, id), `scene ${n}`)
+    return true
+  }, [store, scriptId, pickedBoard, docStore, attempt, say])
 
   // The caret's shot is the URL's focus (?shot=), so a link opens on it.
   useEffect(() => {
@@ -283,14 +333,14 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       {!phone && view === 'screenplay' && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say} />}
       {view === 'av' && !phone ? (
         <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
-          mentions={mentions} say={say} onError={setError} disabled={!!planning} />
+          mentions={mentions} say={say} onError={setError} disabled={!!planning} onRemove={removeItem} />
       ) : <div className="sp-rows">
         {empty && !phone && <EmptyScript store={store} scriptId={scriptId} chain={chain} setActive={setActive} />}
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
             current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions} drafts={drafts} whyOf={whyOf}
             onDraft={empty ? (sceneId) => void attempt(() => draftFromLine(skyeDeps, store, scriptId, sceneId)) : undefined}
-            hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} />
+            hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} onRemove={removeItem} />
         ))}
       </div>}
       {!phone && (
@@ -347,6 +397,11 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         }} />
       </header>
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
+      {confirm && (
+        <div className="se-line se-confirm">
+          <InlineConfirm text={confirm.text} yes={confirm.yes} onNo={() => setConfirm(null)} onYes={confirm.go} />
+        </div>
+      )}
       {(notice || error) && (
         <div className={`se-line ${error ? 'bad' : ''}`} role={error ? 'alert' : 'status'}>
           {error ?? notice?.text}
@@ -416,6 +471,7 @@ interface RowProps {
   drafts(kind: WriteTarget['kind'], id: string): ReactNode
   whyOf(kind: 'scene' | 'shot', id: string, label: string): () => void
   onDraft?: (sceneId: string) => void
+  onRemove: RemoveItem
 }
 
 function Row(p: RowProps) {
@@ -427,7 +483,7 @@ function Row(p: RowProps) {
 }
 
 /** A scene: its heading (one line, a field) and the text no shot owns yet (live text). */
-function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions, drafts, onDraft }: RowProps & { scene: Scene; number: number }) {
+function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActive, hooksFor, focusOn, say, onError, mentions, drafts, onDraft, onRemove }: RowProps & { scene: Scene; number: number }) {
   const key = caretKey('scene', scene.id)
   const headingKey = caretKey('heading', scene.id)
   const input = useRef<HTMLInputElement>(null)
@@ -471,9 +527,17 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
       say(UNPLANNED_MOMENT)
       return true
     },
+    remove: (how) => {
+      // An empty scene's text: back to its heading, or the scene goes when that is empty too.
+      if (how === 'empty' && scene.heading.trim()) return chain.move(key, 'up')
+      const took = onRemove('scene', scene.id, how)
+      if (took) chain.move(headingKey, 'up')
+      return took
+    },
   })
   return (
     <section className="sp-scene" aria-label={`Scene ${number}`}>
+      {!readOnly && <button type="button" className="sp-del" aria-label={`Delete scene ${number}`} title="Delete this scene (⌘⇧⌫)" onClick={() => onRemove('scene', scene.id, 'button')}>×</button>}
       <input ref={input} className="sp-heading" aria-label={`Scene ${number} heading`} placeholder="INT. PLACE - DAY" readOnly={readOnly}
         value={draft ?? scene.heading}
         onFocus={() => setDraft(scene.heading)}
@@ -490,6 +554,9 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
             chain.focus(key, 'start')
           } else if ((e.key === 'ArrowUp' && el.selectionStart === 0) || (e.key === 'Tab' && e.shiftKey)) {
             if (chain.move(headingKey, 'up')) e.preventDefault()
+          } else if (e.key === 'Backspace' && !readOnly && (((e.metaKey || e.ctrlKey) && e.shiftKey) || (!el.value && !hasText))) {
+            e.preventDefault()
+            if (onRemove('scene', scene.id, e.shiftKey ? 'command' : 'empty')) chain.move(headingKey, 'up')
           }
         }} />
       {editing && !readOnly ? (
@@ -536,7 +603,7 @@ function StaticProse({ prose, doc }: { prose?: { content?: PMNodeLike[] }; doc: 
 }
 
 /** A shot: one line when collapsed; the current shot expands to its action and Direction, then its beats. */
-function ShotRow({ shot, number, start, end, store, chain, readOnly, current, setCurrent, hooksFor, focusOn, onError, mentions, drafts }: RowProps & { shot: Shot; number: number; start: number; end: boolean }) {
+function ShotRow({ shot, number, start, end, store, chain, readOnly, current, setCurrent, hooksFor, focusOn, onError, mentions, drafts, onRemove }: RowProps & { shot: Shot; number: number; start: number; end: boolean }) {
   const key = caretKey('shot', shot.id)
   const open = current === shot.id
   const docStore = useServices().doc
@@ -566,6 +633,12 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
       void addBeat(store, shot.id, 'line', { at_s: 0 }).then((id) => chain.focus(caretKey('beat', id), 'start'), (e) => onError(e instanceof Error ? e.message : 'That line could not be added.'))
       return true
     },
+    remove: (how) => {
+      if (how === 'empty' && shotNeedsConfirm(store.get(), shot.id)) return false
+      const took = onRemove('shot', shot.id, how)
+      if (took) chain.move(key, 'up')
+      return took
+    },
   })
   return (
     <div className={`sp-shot open ${end ? 'end' : ''}`} data-shot={shot.id}>
@@ -579,6 +652,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
             onChange={(e) => void setShotSeconds(docStore, shot.id, Number(e.target.value) || 1)} />
           <span className="faint">s</span>
         </label>
+        <button type="button" className="btn xs ghost sp-delshot" aria-label={`Delete ${end ? 'the end card' : `shot ${number}`}`} title="Delete this shot (⌘⇧⌫)" onClick={() => onRemove('shot', shot.id, 'button')}>Delete shot</button>
       </div>
       <ShotEditor store={store} shotId={shot.id} name={`Shot ${number}`} chain={chain} chainKey={key} keys={shotHooks}
         onEditor={focusOn(key)} mentions={mentions} />
@@ -592,7 +666,7 @@ function ShotRow({ shot, number, start, end, store, chain, readOnly, current, se
 }
 
 /** A beat of the current shot: a line (speaker, then the words) or another kind, with its time. */
-function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, mentions, drafts }: RowProps & { beatId: string }) {
+function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, mentions, drafts, onRemove }: RowProps & { beatId: string }) {
   const beat = doc.beats[beatId]
   const docStore = useServices().doc
   const [speaker, setSpeaker] = useState<string | null>(null)
@@ -614,8 +688,9 @@ function BeatRow({ beatId, doc, store, chain, readOnly, hooksFor, focusOn, say, 
           }} />
       )}
       <FragmentEditor store={store} kind="beat" id={beatId} label={beat.kind === 'line' ? 'Line' : `${beat.kind} beat`} className="sp-beattext"
-        chain={chain} chainKey={key} keys={hooksFor(key)} onEditor={focusOn(key)} onNotice={say} readOnly={readOnly} mentions={mentions}
+        chain={chain} chainKey={key} keys={hooksFor(key, { remove: (how) => { const took = onRemove('beat', beatId, how); if (took) chain.move(key, 'up'); return took } })} onEditor={focusOn(key)} onNotice={say} readOnly={readOnly} mentions={mentions}
         placeholder={beat.kind === 'line' ? 'What they say…' : 'What happens…'} />
+      {!readOnly && <button type="button" className="sp-del" aria-label={beat.kind === 'line' ? 'Delete this line' : `Delete this ${beat.kind}`} title="Delete (⌘⇧⌫)" onClick={() => onRemove('beat', beatId, 'button')}>×</button>}
       {drafts('beat', beatId)}
     </div>
   )
@@ -736,16 +811,14 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
       : deleteFrom(docStore, (d) => { answerShotAsk(d, a.id, 'remove', person); return removeShot(d, shotId) })
     void Promise.resolve(go).catch((e) => onError(e instanceof Error ? e.message : 'That did not work.'))
   }
-  const names = refNames(doc)
-  const used = new Map<string, number[]>()
-  const missingBy = new Map<string, number[]>()
-  shots.forEach((s, i) => {
-    for (const r of s.refs ?? []) used.set(r, [...(used.get(r) ?? []), i + 1])
-    for (const u of unknownInShot(doc, s.prose as Prose | undefined)) missingBy.set(u.name, [...(missingBy.get(u.name) ?? []), i + 1])
-  })
-  const missing = [...missingBy.entries()]
-  const script = { kind: 'script' as const, id: composed.script.id }
-  const unlinked = Object.values(doc.refs).filter((r) => !isLinked(doc, r.id, script))
+  // Everything linked into the script, and what its words name (model/scope.ts, ui-behaviour 3.16): the
+  // same list the node's inputs strip and the send tray read, so a link made anywhere shows here at once.
+  const scope = scopeOf(doc, composed.script.id)
+  const refs = scopeRefs(scope)
+  const inputs = scope.filter((i) => i.via !== 'mention' && i.kind !== 'ref' && i.kind !== 'key' && !(i.kind === 'storyboard' && i.via === 'upstream'))
+  const numbers = (it: ScopeItem) => it.usedBy.map((id) => shots.findIndex((s) => s.id === id) + 1).filter((n) => n > 0)
+  const inScope = new Set(refs.filter((i) => i.kind === 'ref' && i.via !== 'mention').map((i) => i.id))
+  const unlinked = Object.values(doc.refs).filter((r) => !inScope.has(r.id))
   return (
     <aside className="se-facts" aria-label="This script">
       <section className="se-facthead">
@@ -804,29 +877,42 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
           })}
         </section>
       )}
+      {inputs.length > 0 && (
+        <section aria-label="Inputs" className="se-inputs">
+          <div className="pt-label">Inputs · {inputs.length}</div>
+          <div className="se-inputchips">
+            {inputs.map((i) => <span key={`${i.kind}:${i.id}`} className="se-inputchip" title={i.via === 'upstream' ? 'Linked to what drives this script' : undefined}>{i.label}</span>)}
+          </div>
+        </section>
+      )}
       <section aria-label="References" className="se-refs">
-        <div className="pt-label se-refhead"><span>References · {used.size + missing.length}</span><span>Shots</span></div>
-        {[...used.entries()].map(([id, nums]) => {
-          const n = names[id]
-          const role = doc.refs[id]?.role ?? doc.keys[id]?.role
+        <div className="pt-label se-refhead"><span>References · {refs.length}</span><span>Shots</span></div>
+        {refs.map((it) => {
+          const nums = numbers(it)
+          if (it.kind === 'unknown') {
+            return (
+              <div key={`unknown:${it.id}`} className="se-ref">
+                <span className="se-refthumb missing" />
+                <span className="pt-ref unknown">@{it.name}</span>
+                <span className="pt-pill warn">no ref yet</span>
+                <span className="se-refshots">{nums.join(' ')}</span>
+              </div>
+            )
+          }
+          const ref = it.kind === 'ref' ? doc.refs[it.id] : undefined
+          const role = ref?.role ?? doc.keys[it.id]?.role
           return (
-            <div key={id} className="se-ref">
-              <RefThumb sha={doc.refs[id]?.asset} />
-              <span className="pt-ref">@{n ? (n.variant ? `${n.key}_${n.variant}` : n.key) : 'gone'}</span>
-              {role && <span className="pt-pill">{role}</span>}
+            <div key={`${it.kind}:${it.id}`} className={`se-ref ${it.via === 'mention' ? 'unlinked' : ''}`} data-via={it.via}>
+              <RefThumb sha={it.asset} />
+              <span className="pt-ref">@{it.name}</span>
+              {role && <span className="pt-pill">{it.role !== role && it.via === 'link' ? it.role : role}</span>}
+              {it.via === 'mention' && ref && <button type="button" className="linkbtn se-reflink" title="Named in the script but not linked to it" onClick={() => onLink(ref.id)}>Link</button>}
+              {it.via === 'board' && <span className="faint se-refvia" title="On a board linked to this script">board</span>}
               <span className="se-refshots">{nums.join(' ')}</span>
             </div>
           )
         })}
-        {missing.map(([name, nums]) => (
-          <div key={name} className="se-ref">
-            <span className="se-refthumb missing" />
-            <span className="pt-ref unknown">@{name}</span>
-            <span className="pt-pill warn">no ref yet</span>
-            <span className="se-refshots">{nums.join(' ')}</span>
-          </div>
-        ))}
-        {!used.size && !missing.length && <div className="faint">Name a picture on the canvas, then type @ in a shot.</div>}
+        {!refs.length && <div className="faint">Name a picture on the canvas, then type @ in a shot.</div>}
         {unlinked.length > 0 && (
           <label className="se-link">
             <span className="linkbtn">+ Link a reference</span>

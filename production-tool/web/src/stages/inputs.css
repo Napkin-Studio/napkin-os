@@ -1,0 +1,22 @@
+/* The inputs strip on a node card (ui-behaviour 3.16): one line, chips that never wrap the card. */
+.in-strip { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 11px; flex: none; }
+.in-label { font-family: var(--f-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); margin-right: 2px; }
+.in-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 160px; padding: 1px 7px 1px 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink2); }
+.in-chip:not(:has(img)) { padding-left: 7px; }
+.in-chip > span { overflow: hidden; text-overflow: ellipsis; }
+.in-chip img { width: 14px; height: 14px; border-radius: 50%; object-fit: cover; flex: none; }
+.in-chip .in-ref { color: var(--tool-ink); }
+.in-more { padding: 1px 7px; color: var(--ink3); }
+
+/* An editor's scope line (the Storyboard editor's sub bar). */
+.in-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 20px; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+.in-scope .in-strip { flex: 0 1 auto; }
+.in-refs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.in-why { font-size: 10.5px; color: var(--ink3); }
+.in-shots { font-family: var(--f-mono); font-size: 10px; color: var(--ink3); }
+.in-unknown .in-ref { color: var(--warn); text-decoration: underline wavy var(--warn); text-underline-offset: 3px; }
+.in-unknown .in-why { color: var(--warn); }
+.in-unlinked { border-style: dashed; }
+
+/* The send tray's unknown-name row (ui-behaviour 3.16). */
+.tray-unknown { font-size: 12.5px; color: var(--warn); }

@@ -113,29 +113,37 @@ export function Video() {
   if (!controls.video) {
     return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
   }
-  if (!shots.length) {
+  // The approved editor top bar (mock VideoEditor), empty or not: ← Canvas, the node, its actions.
+  const empty = !shots.length
+  const bar = (
+    <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
+      title={`Video · ${nodeTitle(mainStoryboard(doc)?.title, 'Storyboard', projectName)}`}
+      meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>}
+      middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
+      right={<button className="btn" disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
+      primary={controls.stitch ? (
+        <button className="btn primary" disabled={empty || rendering || !!renderBlocked} onClick={() => void render()} title={empty ? 'Plan the shots first' : renderBlocked ?? 'Join the clips into one ad with the end card'}>
+          {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
+        </button>
+      ) : undefined} />
+  )
+  if (empty) {
     return (
-      <div className="panel"><div className="empty-state">
-        <AgentFigure agent="dex" size={64} decorative />
-        <span className="sayer">{sayer('dex')}</span>
-        <b>No shots yet.</b>Plan your shots and draw the frames first; I make one clip per frame.
-        <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.stage = 'storyboard' })}>← Back to Storyboard</button></div>
-      </div></div>
+      <div className="editor">
+        {bar}
+        <div className="panel"><div className="empty-state">
+          <AgentFigure agent="dex" size={64} decorative />
+          <span className="sayer">{sayer('dex')}</span>
+          <b>No shots yet.</b>Plan your shots and draw the frames first; I make one clip per frame.
+          <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.stage = 'storyboard' })}>Open the storyboard</button></div>
+        </div></div>
+      </div>
     )
   }
 
   return (
     <div className="editor">
-      <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-        title={`Video · ${nodeTitle(mainStoryboard(doc)?.title, 'Storyboard', projectName)}`}
-        meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>}
-        middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
-        right={<button className="btn" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
-        primary={controls.stitch ? (
-          <button className="btn primary" disabled={rendering || !!renderBlocked} onClick={() => void render()} title={renderBlocked ?? 'Join the clips into one ad with the end card'}>
-            {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
-          </button>
-        ) : undefined} />
+      {bar}
       <div className="panel ve-body pt-grid">
         {error && <div role="alert" className="ve-error">{error}</div>}
         {view === 'sound' ? <SoundView /> : <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}

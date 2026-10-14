@@ -28,6 +28,7 @@ import type { MentionHooks } from './mentions'
 import { AUDIO_KINDS, nextMomentTime, setBeatTime, tieLine, timeLabel } from './moments'
 import { ShotEditor } from './ShotEditor'
 import { TimePill } from './TimePill'
+import type { RemoveItem } from './ScriptEditor'
 
 type Doc = ProductionDocument
 const still: SortingStrategy = () => null
@@ -45,6 +46,8 @@ export interface AVViewProps {
   say(m: string): void
   onError(m: string | null): void
   disabled?: boolean
+  /** Delete a shot or a beat through the page (its confirm, its Undo line). */
+  onRemove?: RemoveItem
 }
 
 export function AVView(p: AVViewProps) {
@@ -106,7 +109,7 @@ export function AVView(p: AVViewProps) {
   )
 }
 
-function AVRow({ shot, number, start, end, line, doc, store, chain, current, setCurrent, mentions, say, onError, disabled }: AVViewProps & { shot: Shot; number: number; start: number; end: boolean; line: 'before' | 'after' | null }) {
+function AVRow({ shot, number, start, end, line, doc, store, chain, current, setCurrent, mentions, say, onError, disabled, onRemove }: AVViewProps & { shot: Shot; number: number; start: number; end: boolean; line: 'before' | 'after' | null }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({ id: shot.id, disabled: disabled || end })
   const open = current === shot.id
   const docStore = useServices().doc
@@ -116,6 +119,13 @@ function AVRow({ shot, number, start, end, line, doc, store, chain, current, set
   const run = (fn: () => Promise<unknown>) => {
     onError(null)
     Promise.resolve().then(fn).catch((e) => onError(e instanceof Error ? e.message : 'That did not work.'))
+  }
+  // Backspace in an empty fragment, or ⌘⇧⌫: the page deletes (a shot with frames or clips only on ⌘⇧⌫, with its confirm).
+  const removeKey = (kind: 'shot' | 'beat', id: string, how: 'empty' | 'command') => {
+    if (!onRemove) return false
+    const took = onRemove(kind, id, how)
+    if (took) chain.move(caretKey(kind, id), 'up')
+    return took
   }
   const add = (kind: BeatKind) => run(() => addBeat(store, shot.id, kind, { at_s: kind === 'moment' ? nextMomentTime(doc, shot.id) : 0 }).then((id) => chain.focus(caretKey('beat', id), 'start')))
   return (
@@ -127,12 +137,13 @@ function AVRow({ shot, number, start, end, line, doc, store, chain, current, set
         <span className="av-len">{secs(shot.duration_s)}</span>
         <span className="sp-chip">{words(shot.camera.size)} · {words(shot.camera.movement ?? 'static')}</span>
         {open && <CameraFields shot={shot} />}
+        {open && onRemove && <button type="button" className="btn xs ghost sp-delshot" aria-label={`Delete ${end ? 'the end card' : `shot ${number}`}`} title="Delete this shot (⌘⇧⌫)" onClick={() => onRemove('shot', shot.id, 'button')}>Delete shot</button>}
       </div>
       <div className="av-video" role="cell">
         {open ? (
           <>
             <ShotEditor store={store} shotId={shot.id} name={`Shot ${number}`} chain={chain} chainKey={caretKey('shot', shot.id)} mentions={mentions}
-              keys={{ out: (dir) => chain.move(caretKey('shot', shot.id), dir), moment: () => { add('moment'); return true } }} />
+              keys={{ out: (dir) => chain.move(caretKey('shot', shot.id), dir), moment: () => { add('moment'); return true }, remove: (how) => removeKey('shot', shot.id, how) }} />
             <RefChips shot={shot} doc={doc} />
             <div className="av-moments" aria-label="Moments in this shot">
               <div className="eyebrow">Moments in this shot</div>
@@ -141,7 +152,8 @@ function AVRow({ shot, number, start, end, line, doc, store, chain, current, set
                 <div key={m.id} className="sp-beat kind-moment">
                   <TimePill at={m.at_s} duration={shot.duration_s} onSet={(at) => run(() => updateDoc(docStore, (d) => setBeatTime(d, m.id, at), `move beats[${m.id}]`))} />
                   <FragmentEditor store={store} kind="beat" id={m.id} label={`Moment at ${timeLabel(m.at_s)}`} className="sp-beattext" mentions={mentions}
-                    chain={chain} chainKey={caretKey('beat', m.id)} keys={{ out: (dir) => chain.move(caretKey('beat', m.id), dir) }} onNotice={say} placeholder="What happens then…" />
+                    chain={chain} chainKey={caretKey('beat', m.id)} keys={{ out: (dir) => chain.move(caretKey('beat', m.id), dir), remove: (how) => removeKey('beat', m.id, how) }} onNotice={say} placeholder="What happens then…" />
+                  {onRemove && <button type="button" className="sp-del" aria-label={`Delete the moment at ${timeLabel(m.at_s)}`} title="Delete (⌘⇧⌫)" onClick={() => onRemove('beat', m.id, 'button')}>×</button>}
                 </div>
               ))}
               <button className="linkbtn" onClick={() => add('moment')}>+ Moment</button>
@@ -156,7 +168,7 @@ function AVRow({ shot, number, start, end, line, doc, store, chain, current, set
       </div>
       <div className="av-audio" role="cell">
         {audio.map((b) => (
-          <AudioRow key={b.id} beat={b} shot={shot} moments={moments} open={open} store={store} chain={chain} mentions={mentions} say={say} onError={onError} />
+          <AudioRow key={b.id} beat={b} shot={shot} moments={moments} open={open} store={store} chain={chain} mentions={mentions} say={say} onError={onError} onRemove={onRemove ? (how) => (how === 'button' ? onRemove('beat', b.id, how) : removeKey('beat', b.id, how)) : undefined} />
         ))}
         {open && (
           <div className="av-add">
@@ -253,7 +265,7 @@ function MomentTrack({ shot, moments, onMove }: { shot: Shot; moments: Beat[]; o
 }
 
 /** One audio row: its kind, its time, a Line's speaker and the moment it is tied to, and its words. */
-function AudioRow({ beat, shot, moments, open, store, chain, mentions, say, onError }: { beat: Beat; shot: Shot; moments: Beat[]; open: boolean; store: ModelStore; chain: CaretChain; mentions: MentionHooks; say(m: string): void; onError(m: string | null): void }) {
+function AudioRow({ beat, shot, moments, open, store, chain, mentions, say, onError, onRemove }: { beat: Beat; shot: Shot; moments: Beat[]; open: boolean; store: ModelStore; chain: CaretChain; mentions: MentionHooks; say(m: string): void; onError(m: string | null): void; onRemove?: (how: 'empty' | 'command' | 'button') => boolean }) {
   const { doc: docStore } = useServices()
   const label = AUDIO_KINDS.find((k) => k.kind === beat.kind)?.label ?? beat.kind
   const run = (fn: () => Promise<unknown>) => {
@@ -281,8 +293,9 @@ function AudioRow({ beat, shot, moments, open, store, chain, mentions, say, onEr
         </>
       )}
       <FragmentEditor store={store} kind="beat" id={beat.id} label={`${label} at ${timeLabel(beat.at_s)}`} className="sp-beattext" mentions={mentions}
-        chain={chain} chainKey={caretKey('beat', beat.id)} keys={{ out: (dir) => chain.move(caretKey('beat', beat.id), dir) }} onNotice={say}
+        chain={chain} chainKey={caretKey('beat', beat.id)} keys={{ out: (dir) => chain.move(caretKey('beat', beat.id), dir), remove: (how) => onRemove?.(how) ?? false }} onNotice={say}
         placeholder={beat.kind === 'line' ? 'What they say…' : beat.kind === 'music' ? 'The music…' : beat.kind === 'sound' ? 'The sound…' : 'The voice-over…'} />
+      {onRemove && <button type="button" className="sp-del" aria-label={`Delete this ${label.toLowerCase()}`} title="Delete (⌘⇧⌫)" onClick={() => onRemove('button')}>×</button>}
     </div>
   )
 }

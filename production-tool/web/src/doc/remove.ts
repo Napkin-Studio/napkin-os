@@ -20,7 +20,7 @@ import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch'
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat'
 
 export interface Removal {
   kind: RemovalKind
@@ -77,15 +77,23 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** A shot, with its frames, clips, beats, its place in the cut, and the notes and marks on them. The
  *  shots after it are numbered by rank, so nothing renumbers. */
 export function removeShot(d: Doc, shotId: string): Removal {
-  const shot = d.shots[shotId]
-  if (!shot) throw new Error('That shot is already gone.')
+  if (!d.shots[shotId]) throw new Error('That shot is already gone.')
   const r = blank('shot', shotId, shotName(d, shotId))
+  const { frames, takes } = takeShotOut(d, r, shotId)
+  r.note = `with ${plural(frames.length, 'frame')} and ${plural(takes.length, 'clip')}`
+  r.ids = [shotId, ...frames, ...takes]
+  return r
+}
+
+/** Everything removeShot takes, into `r`; the shot's frame and clip ids. */
+function takeShotOut(d: Doc, r: Removal, shotId: string): { frames: string[]; takes: string[] } {
   const frameIds = new Set(framesOf(d, shotId).map((f) => f.id))
   const takeIds = new Set(takesOf(d, shotId).map((t) => t.id))
+  const beatIds = new Set(Object.values(d.beats).filter((b) => b.shot_id === shotId).map((b) => b.id))
   takeOut(d, r, 'shots', shotId)
   for (const id of frameIds) takeOut(d, r, 'frames', id)
   for (const id of takeIds) takeOut(d, r, 'takes', id)
-  for (const b of Object.values(d.beats)) if (b.shot_id === shotId) takeOut(d, r, 'beats', b.id)
+  for (const id of beatIds) takeOut(d, r, 'beats', id)
   for (const v of Object.values(d.videos)) {
     const items = Object.entries(v.edl).filter(([, item]) => item.shot_id === shotId)
     if (items.length) modify(r, 'videos', v, (x) => { for (const [itemId] of items) delete x.edl[itemId] })
@@ -93,9 +101,58 @@ export function removeShot(d: Doc, shotId: string): Removal {
   takeOutAbout(d, r, 'shot', new Set([shotId]))
   takeOutAbout(d, r, 'frame', frameIds)
   takeOutAbout(d, r, 'take', takeIds)
-  r.note = `with ${plural(frameIds.size, 'frame')} and ${plural(takeIds.size, 'clip')}`
-  r.ids = [shotId, ...frameIds, ...takeIds]
+  takeOutAbout(d, r, 'beat', beatIds)
+  return { frames: [...frameIds], takes: [...takeIds] }
+}
+
+const BEAT_WORD: Record<string, string> = { moment: 'moment', line: 'line', vo: 'voice-over line', music: 'music cue', sound: 'sound', camera: 'camera beat' }
+
+/** One beat of a shot (a line, a moment, a VO, a cue), with the suggestions and marks on it. A line tied
+ *  to a moment that goes stays, untied. */
+export function removeBeat(d: Doc, beatId: string): Removal {
+  const beat = d.beats[beatId]
+  if (!beat) throw new Error('That line is already gone.')
+  const r = blank('beat', beatId, `${BEAT_WORD[beat.kind] ?? beat.kind} in ${shotName(d, beat.shot_id)}`)
+  takeOut(d, r, 'beats', beatId)
+  for (const b of Object.values(d.beats)) if (b.moment_id === beatId) modify(r, 'beats', b, (x) => { delete x.moment_id })
+  takeOutAbout(d, r, 'beat', new Set([beatId]))
+  const words = (beat.text ?? '').replace(/\s+/g, ' ').trim()
+  if (words) r.note = `"${words.length > 120 ? `${words.slice(0, 119)}…` : words}"`
+  r.ids = [beat.shot_id, beatId]
   return r
+}
+
+/** What deleting a scene takes with it: its shots, and their frames and clips. */
+export function sceneContents(d: Doc, sceneId: string): { shots: string[]; frames: number; clips: number } {
+  const shots = Object.values(d.shots).filter((s) => s.scene_id === sceneId).map((s) => s.id)
+  return { shots, frames: shots.reduce((n, id) => n + framesOf(d, id).length, 0), clips: shots.reduce((n, id) => n + takesOf(d, id).length, 0) }
+}
+
+/** A scene: its heading and words, and the shots planned from it with everything removeShot takes. */
+export function removeScene(d: Doc, sceneId: string): Removal {
+  const scene = d.scenes[sceneId]
+  if (!scene) throw new Error('That scene is already gone.')
+  const r = blank('scene', sceneId, `scene ${scene.heading.trim() || sceneId}`)
+  const { shots } = sceneContents(d, sceneId)
+  const frames: string[] = []
+  const takes: string[] = []
+  takeOut(d, r, 'scenes', sceneId)
+  for (const id of shots) {
+    const got = takeShotOut(d, r, id)
+    frames.push(...got.frames)
+    takes.push(...got.takes)
+  }
+  takeOutAbout(d, r, 'scene', new Set([sceneId]))
+  if (shots.length) r.note = `with ${plural(shots.length, 'shot')}, ${plural(frames.length, 'frame')} and ${plural(takes.length, 'clip')}`
+  r.ids = [sceneId, ...shots, ...frames, ...takes]
+  return r
+}
+
+/** The inline confirm when a scene goes with shots in it; null when it can go at once (Undo brings it back). */
+export function sceneDeleteText(n: number, c: { shots: string[]; frames: number; clips: number }): string | null {
+  if (!c.shots.length) return null
+  const made = [c.frames && plural(c.frames, 'frame'), c.clips && plural(c.clips, 'clip')].filter(Boolean)
+  return `Delete scene ${n} and its ${plural(c.shots.length, 'shot')}${made.length ? `, with ${made.join(' and ')}` : ''}?`
 }
 
 /** Versions made from `goneId` now come from its parent. */
@@ -304,6 +361,12 @@ export function bareRemoval(kind: RemovalKind, id: string, what: string): Remova
   const r = blank(kind, id, what)
   r.ids = [id]
   return r
+}
+
+/** Whether deleting a shot needs a confirm first: only when it has frames or clips (made work). Otherwise
+ *  it goes at once, and Undo brings it back (ui-behaviour 3.3 Delete). */
+export function shotNeedsConfirm(d: Doc, shotId: string): boolean {
+  return framesOf(d, shotId).length > 0 || takesOf(d, shotId).length > 0
 }
 
 /** The inline confirm on a shot's ×. */

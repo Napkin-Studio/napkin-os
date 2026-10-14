@@ -11,7 +11,8 @@ import { useDoc, useJobsTick, useUi } from '../../app/context'
 import type { Shot } from '../../contracts/types'
 import { cameraLabel } from '../../jobs/frameEdit'
 import { isRunning, jobAt } from '../../jobs/select'
-import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, scenesOf, shotsOf, staleList } from '../../model/selectors'
+import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf, staleList } from '../../model/selectors'
+import { InputsStrip } from '../../stages/InputsStrip'
 import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
@@ -65,6 +66,7 @@ export function ScriptCard({ onOpen }: { onOpen: () => void }) {
   const words = scenes.map((s) => s.text ?? '').join(' ').trim()
   return (
     <Card icon="script" title={`Script · ${chrome.title(script?.title, 'Script', project)}`} meta={<span className="pt-mono">{Math.round(script?.target_s ?? 15)} s</span>} onOpen={onOpen} style={{ height: 380 }}>
+      <InputsStrip nodeId={script?.id} />
       {shots.length ? (
         <div className="bl-av">
           <span className="bl-avhead">Video</span><span className="bl-avhead">Audio</span>
@@ -101,6 +103,7 @@ export function StoryboardCard({ onOpen }: { onOpen: () => void }) {
     <Card icon="storyboard" title={`Storyboard · ${chrome.title(sb?.title, 'Storyboard', project)}`}
       meta={<span className="pt-mono">{sb?.ratio ?? '16:9'} · {shots.length} shots · {Math.round(total)} s</span>}
       extra={behind ? <span className="pt-pill warn">{behind} behind the script</span> : undefined} onOpen={onOpen} style={{ height: 194 }}>
+      <InputsStrip nodeId={sb?.id} />
       {shots.length ? (
         <div className="bl-strip">
           {shots.slice(0, 6).map((s, i) => <FrameTile key={s.id} shot={s} n={i + 1} drawing={i === drawingIdx} />)}
@@ -141,6 +144,7 @@ export function VideoCard({ onOpen }: { onOpen: () => void }) {
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   return (
     <Card icon="video" title={`Video · ${chrome.title(mainStoryboard(doc)?.title, 'Storyboard', project)}`} onOpen={onOpen} style={{ height: 194 }}>
+      <InputsStrip nodeId={mainVideo(doc)?.id} />
       <div className="bl-videorow">
         <span className="bl-poster">
           {adUrl ? <video src={adUrl} muted preload="metadata" /> : url ? <img src={url} alt="" /> : null}

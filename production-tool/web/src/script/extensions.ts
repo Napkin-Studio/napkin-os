@@ -90,6 +90,9 @@ export interface KeyHooks {
   enter?(editor: Editor): boolean
   /** A paste of several lines into unplanned scene text (a script): true when the page took it. */
   pasteScript?(text: string, editor: Editor): boolean
+  /** Delete the item this fragment belongs to (ui-behaviour 3.10): 'empty' is Backspace in an empty
+   *  fragment, 'command' is ⌘⇧⌫ / Ctrl+Shift+Backspace anywhere in it. True when the page took it. */
+  remove?(how: 'empty' | 'command', editor: Editor): boolean
 }
 
 export interface EditorOptions {
@@ -301,7 +304,12 @@ function keysExtension(opts: EditorOptions) {
         'Shift-Enter': () => insertBreak(editor),
         ArrowUp: () => (firstBlock() && editor.view.endOfTextblock('up') ? opts.keys?.out?.('up', editor) ?? false : false),
         ArrowDown: () => (lastBlock() && editor.view.endOfTextblock('down') ? opts.keys?.out?.('down', editor) ?? false : false),
+        'Mod-Shift-Backspace': () => opts.keys?.remove?.('command', editor) ?? false,
         Backspace: () => {
+          // Backspace in an empty fragment deletes its item (a line, a shot, an empty scene).
+          const sel = editor.state.selection
+          const blank = (() => { let all = true; editor.state.doc.forEach((b) => { if (b.content.size) all = false }); return all })()
+          if (sel.empty && blockIndexAt(editor.state) === 0 && sel.$from.parentOffset === 0 && blank && opts.keys?.remove?.('empty', editor)) return true
           // An empty Direction goes, and the caret goes back to the action.
           const { $from, empty } = editor.state.selection
           if (kind === 'shot' && empty && $from.parent.type.name === 'direction' && $from.parent.content.size === 0 && editor.state.doc.childCount > 1) {
@@ -429,6 +437,7 @@ export class HookRelay {
       escape: () => this.hooks?.escape?.() ?? false,
       enter: (e) => this.hooks?.enter?.(e) ?? false,
       pasteScript: (t, e) => this.hooks?.pasteScript?.(t, e) ?? false,
+      remove: (how, e) => this.hooks?.remove?.(how, e) ?? false,
     }
   }
 }

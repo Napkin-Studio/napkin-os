@@ -21,7 +21,7 @@
 .sb-card.confirming { min-height: 120px; justify-content: center; }
 .sb-cardhead { display: flex; align-items: center; gap: 8px; height: 26px; }
 .sb-handle { color: var(--ink3); font-size: 12px; letter-spacing: -2px; cursor: grab; }
-.sb-num { width: 22px; height: 22px; border-radius: 50%; background: var(--ink-fixed); color: #FFFFFF; display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+.sb-num { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
 .sb-card.on .sb-num { background: var(--tool); }
 .sb-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
 .sb-dur { color: var(--ink2); }
@@ -31,12 +31,12 @@
 .sb-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .sb-framejob { position: absolute; inset: 0; }
 .sb-noframe { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--line); border-radius: 8px; font-size: 12px; color: var(--ink2); background: var(--card); }
-.sb-vtag { position: absolute; left: 8px; top: 8px; padding: 1px 7px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.9); font-family: var(--f-mono); font-size: 10.5px; color: var(--ink2); }
+.sb-vtag { position: absolute; left: 8px; top: 8px; padding: 1px 7px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 90%, transparent); font-family: var(--f-mono); font-size: 10.5px; color: var(--ink2); }
 .sb-badgewrap { position: absolute; right: 8px; top: 8px; }
-.sb-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--r-pill); font-size: 11px; background: rgba(255, 255, 255, 0.92); color: var(--ink2); }
+.sb-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--r-pill); font-size: 11px; background: color-mix(in srgb, var(--card) 92%, transparent); color: var(--ink2); }
 .sb-badge.ok { background: var(--ok-bg); color: var(--success); }
 .sb-badge.warn { background: var(--warn-bg); color: var(--warn); }
-.sb-badge.warm { background: #FFF7E0; color: var(--ink); }
+.sb-badge.warm { background: var(--warn-bg); color: var(--ink); }
 .sb-openie {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 14px;
   border: 0; border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-pop); font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; opacity: 0;
@@ -68,9 +68,18 @@
 .sb-diff { display: flex; gap: 10px; align-items: flex-start; }
 .sb-proposal { position: relative; width: 72px; height: 42px; border-radius: 6px; overflow: hidden; background: var(--soft); flex: none; }
 .sb-proposal img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.sb-proposal span { position: absolute; left: 4px; bottom: 3px; padding: 0 5px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.9); font-family: var(--f-mono); font-size: 9.5px; }
+.sb-proposal span { position: absolute; left: 4px; bottom: 3px; padding: 0 5px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 90%, transparent); font-family: var(--f-mono); font-size: 9.5px; }
 .sb-diffrow { display: flex; gap: 6px; align-items: baseline; font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
 .sb-diffrow del { color: var(--danger); background: var(--danger-bg); padding: 0 3px; }
 .sb-diffrow ins { text-decoration: none; color: var(--success); background: var(--ok-bg); padding: 0 3px; }
 .sb-applyline { align-self: stretch; border-radius: 6px; padding: 4px 8px; }
 .sb-cardfoot { display: flex; justify-content: flex-end; margin-top: -6px; }
+
+/* Delete a shot (ui-behaviour 3.11, 3.3 Delete; item 4): × beside More, shown on hover or focus; the card takes Delete. */
+.sb-del { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; color: var(--ink3); font-size: 15px; opacity: 0; transition: opacity 120ms; }
+.sb-card:hover .sb-del, .sb-card:focus-within .sb-del, .sb-del:focus-visible { opacity: 1; }
+.sb-del:hover { color: var(--danger); background: var(--danger-bg); }
+.sb-card:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+.sb-deleted { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+@media (hover: none) { .sb-del { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sb-del { transition: none; } }

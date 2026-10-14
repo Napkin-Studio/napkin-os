@@ -17,7 +17,7 @@
 /* The element bar: a frosted pill floating over the page. */
 .se-elements {
   position: sticky; top: 0; width: max-content; max-width: calc(100% - 24px); margin: 2px auto 12px; padding: 4px; gap: 2px; flex-wrap: nowrap;
-  border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.94); box-shadow: var(--shadow-soft);
+  border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 94%, transparent); box-shadow: var(--shadow-soft);
 }
 .se-elements .chip { height: 28px; padding: 0 12px; border: 0; background: transparent; font-weight: 500; font-size: 13px; color: var(--ink2); }
 .se-elements .chip.on { background: var(--tool-soft); color: var(--tool-ink); font-weight: 600; }
@@ -75,7 +75,7 @@
 .se-meter .seg.rest { background: transparent; }
 .se-meter .target { background: var(--ink); top: -4px; bottom: -4px; }
 .se-meterlabels { width: 100%; display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
-.se-atwork { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: var(--r-pill); background: #FFF1EE; font-size: 12px; color: var(--ink); }
+.se-atwork { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: var(--r-pill); background: var(--create-soft); font-size: 12px; color: var(--ink); }
 .se-atwork .who { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
 .se-refs { display: flex; flex-direction: column; gap: 4px; }
 .se-refhead { display: flex; justify-content: space-between; margin-bottom: 4px; }
