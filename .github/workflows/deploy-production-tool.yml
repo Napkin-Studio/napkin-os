@@ -98,6 +98,8 @@ jobs:
           mkdir -p "$build/pkg/contracts"
           cp production-tool/contracts/*.schema.json "$build/pkg/contracts/"
           cp -r production-tool/contracts/capabilities "$build/pkg/contracts/"
+          # the one price function the relay reserves with (features/runway-sheet-sync.clan)
+          cp production-tool/contracts/pricing.py "$build/pkg/contracts/"
           (cd "$build/pkg" && zip -qr9 "$build/relay.zip" .)
           ls -lh "$build/relay.zip"
           prev=$(aws lambda get-alias --function-name "$RELAY_FN" --name live --query FunctionVersion --output text)

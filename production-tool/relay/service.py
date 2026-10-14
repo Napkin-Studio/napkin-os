@@ -46,7 +46,8 @@ import library
 import names
 import projects
 from contracts import Contracts, api
-from director.base import Director, PromptTooOld, new_id
+from contracts_dir import pricing
+from director.base import Director, PromptTooOld, fit_duration, new_id
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
 from providers.types import effective_sheet, op_models
@@ -682,11 +683,31 @@ class Relay:
         if off:
             raise ApiError("flag_off", off)
 
-    def _estimate(self, op: str, provider: str, model: str | None = None) -> tuple[float, bool]:
+    @staticmethod
+    def _settings(op: str, spec: dict, sheet: dict, inp: dict) -> dict:
+        """What the request says about the settings its price depends on (contracts/pricing.py):
+        four options, the clip's length, an edit's input length. The rest are the op's defaults.
+        Audio stays off (providers/types.py video_audio)."""
+        settings: dict = {}
+        if "more_options" in (inp.get("chips") or []):
+            settings["outputs"] = max(spec.get("outputs") or [sheet.get("outputsPerCall", 1)])
+        seconds = (inp.get("shot") or {}).get("duration_s")
+        if seconds:
+            if op == "clip":
+                settings["durationS"] = fit_duration(seconds, spec)
+            elif op == "clip_edit":
+                settings["inputS"] = seconds
+        return settings
+
+    def _estimate(self, op: str, provider: str, model: str | None = None, inp: dict | None = None) -> tuple[float, bool]:
+        """One job's price on `provider` (and `model`, default the op's own) at the request's settings,
+        from the sheet through contracts/pricing.py; (UNKNOWN_PRICE_USD, True) when it has none."""
         sheet = self.registry.sheet(provider)
-        if sheet and op in sheet.get("ops", {}):
-            sheet = effective_sheet(sheet, op, model)
-        price = ((sheet or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
+        if not sheet or op not in sheet.get("ops", {}):
+            return UNKNOWN_PRICE_USD, True
+        sheet = effective_sheet(sheet, op, model)
+        spec = sheet["ops"][op]
+        price = pricing().op_usd(sheet, op, None, self._settings(op, spec, sheet, inp or {}))
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
 
     @staticmethod
@@ -724,7 +745,8 @@ class Relay:
             candidates = self._chain(cfg, op, pick)
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
-            prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
+            prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None, req["input"])
+                      for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
         # Admitted only when this job fits under the cap: "spent < cap" let the last jobs pass it.
@@ -977,7 +999,7 @@ class Relay:
         pick = job["_req"].get("modelChoice")
         picked = pick["model"] if pick and pick["provider"] == provider else None
         sheet = effective_sheet(self.registry.sheet(provider), job["op"], picked)
-        estimate, unknown = self._estimate(job["op"], provider, picked)
+        estimate, unknown = self._estimate(job["op"], provider, picked, job["_req"]["input"])
         refused = self._floor_admission(job, cfg, estimate)
         if refused is not None:
             self.store.incr(slot, "n", -1)

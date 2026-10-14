@@ -16,7 +16,7 @@
 //   one      a card's Redraw / Remake;  after  "this and the frames (clips) after".
 //
 // Steered (the cards and the bar), a plan of more than one item is shown first in
-// the update box (items in order, cost); then each frame and clip waits in the box
+// the update box (items in order); then each frame and clip waits in the box
 // (ui/UpdateBox.tsx) for the user's words for that request, a model (starting on
 // the last that worked for that step) and "Make it". "Do the rest as they are"
 // turns steering off and the run goes on with the box's models. A new version
@@ -30,7 +30,7 @@
 import type { Config, ModelChoice, Op, ProductionDocument } from '../contracts/types'
 import type { FollowItem, FollowRun, JobCtx } from '../doc/ui'
 import { describeFollow } from '../doc/describe'
-import { choiceToSend, modelChoicesFor, routedSheet, type Sheets } from '../capabilities'
+import { choiceToSend, modelChoicesFor, type Sheets } from '../capabilities'
 import { updateDoc } from '../doc/store'
 import { newId } from '../lib/ulid'
 import { jobsList, shotsOf } from '../model/selectors'
@@ -126,42 +126,12 @@ export function planFor(d: ProductionDocument, scope: FollowScope, fixing: Reado
   }
 }
 
-/** What one job of `op` costs on the provider routed for it (null when it does not say). */
-function estimate(op: Op, config: Config, sheets?: Sheets): number | null {
-  const sheet = routedSheet(op, config, sheets)
-  if (!sheet) return null
-  return sheet.ops[op]?.estimateUsd ?? null
-}
-
-/** The estimated cost of a plan, from the capability sheets: each step at its model (`models`, what
- *  the run sends; absent, the routed default). The ad (ffmpeg) costs nothing. */
-export function planCost(p: FollowPlan, config: Config, sheets?: Sheets, models: FollowRun['models'] = {}): { usd: number; known: boolean } {
-  const price = (op: 'frame' | 'clip', pick?: ModelChoice) =>
-    pick ? modelChoicesFor(op, config, sheets).find((o) => o.provider === pick.provider && o.model === pick.model)?.estimateUsd ?? null : estimate(op, config, sheets)
-  const frame = price('frame', models.frame)
-  const clip = price('clip', models.clip)
-  const known = (!p.frames.length || frame !== null) && (!p.clips.length || clip !== null)
-  return { usd: p.frames.length * (frame ?? 0) + p.clips.length * (clip ?? 0), known }
-}
-
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
 /** "3 frames, 3 clips, 1 ad". */
 export function planWords(p: FollowPlan): string {
   return [p.frames.length && plural(p.frames.length, 'frame'), p.clips.length && plural(p.clips.length, 'clip'), p.ad && '1 ad']
     .filter(Boolean).join(', ')
-}
-
-/** A plan's cost, short, for a menu item's hint: "~$0.60". */
-export function planCostShort(p: FollowPlan, config: Config, sheets?: Sheets, models?: FollowRun['models']): string {
-  const c = planCost(p, config, sheets, models)
-  return `${c.known ? '~' : '≥ '}$${c.usd.toFixed(2)}`
-}
-
-/** "3 frames, 3 clips, 1 ad · about $2.01". */
-export function planSummary(p: FollowPlan, config: Config, sheets?: Sheets, models?: FollowRun['models']): string {
-  const c = planCost(p, config, sheets, models)
-  return `${planWords(p)} · ${c.known ? `about $${c.usd.toFixed(2)}` : `at least $${c.usd.toFixed(2)}`}`
 }
 
 // ── running it ──────────────────────────────────────────────────────────────

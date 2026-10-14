@@ -1,0 +1,160 @@
+{
+ "endpoint": "POST /v1/video_upscale",
+ "fetched": "2026-10-13",
+ "schema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+   "propertyName": "model"
+  },
+  "oneOf": [
+   {
+    "additionalProperties": false,
+    "properties": {
+     "creativity": {
+      "description": "How much AI-generated detail to add during upscaling, from 0 (faithful) to 100.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer"
+     },
+     "flavor": {
+      "description": "Processing style: `vivid` for enhanced color and detail, `natural` for faithful reproduction.",
+      "enum": [
+       "vivid",
+       "natural"
+      ],
+      "type": "string"
+     },
+     "fpsBoost": {
+      "description": "Whether to increase the output frame rate.",
+      "type": "boolean"
+     },
+     "model": {
+      "const": "magnific_video_upscaler_creative",
+      "type": "string"
+     },
+     "resolution": {
+      "description": "Target output resolution from 720p to 4k. Defaults to `2k`.",
+      "enum": [
+       "720p",
+       "1k",
+       "2k",
+       "4k"
+      ],
+      "type": "string"
+     },
+     "sharpen": {
+      "description": "Sharpness intensity from 0 (none) to 100.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer"
+     },
+     "smartGrain": {
+      "description": "Grain and texture enhancement from 0 to 100.",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer"
+     },
+     "videoUri": {
+      "anyOf": [
+       {
+        "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:video/mp4;base64,...`, up to 5MB) containing an encoded video. See [our docs](/assets/inputs#videos) on video inputs for more information.",
+        "example": "https://example.com/video.mp4",
+        "maxLength": 2048,
+        "minLength": 13,
+        "pattern": "^https:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+        "example": "runway://<token>",
+        "maxLength": 5000,
+        "minLength": 13,
+        "pattern": "^runway:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A data URI containing encoded media, up to 5MB.",
+        "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "maxLength": 5242880,
+        "minLength": 13,
+        "pattern": "^data:video\\/.*",
+        "type": "string"
+       }
+      ],
+      "description": "Video to upscale. See [video inputs](/assets/inputs#videos) for URL, upload, and file size limits. Maximum duration is 30 seconds.",
+      "example": "https://example.com/video.mp4"
+     }
+    },
+    "required": [
+     "videoUri",
+     "model"
+    ],
+    "title": "magnific_video_upscaler_creative",
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "model": {
+      "const": "enhance_frame_rate",
+      "type": "string"
+     },
+     "targetFramerate": {
+      "description": "The output frame rate.",
+      "enum": [
+       "24",
+       "25",
+       "30",
+       "48",
+       "50",
+       "60",
+       "120",
+       "23_98",
+       "29_97",
+       "59_94"
+      ],
+      "type": "string"
+     },
+     "videoUri": {
+      "anyOf": [
+       {
+        "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:video/mp4;base64,...`, up to 5MB) containing an encoded video. See [our docs](/assets/inputs#videos) on video inputs for more information.",
+        "example": "https://example.com/video.mp4",
+        "maxLength": 2048,
+        "minLength": 13,
+        "pattern": "^https:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+        "example": "runway://<token>",
+        "maxLength": 5000,
+        "minLength": 13,
+        "pattern": "^runway:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A data URI containing encoded media, up to 5MB.",
+        "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "maxLength": 5242880,
+        "minLength": 13,
+        "pattern": "^data:video\\/.*",
+        "type": "string"
+       }
+      ],
+      "description": "The video to convert. See [video inputs](/assets/inputs#videos) for URL, upload, and file size limits. Maximum duration is 300 seconds.",
+      "example": "https://example.com/video.mp4"
+     }
+    },
+    "required": [
+     "videoUri",
+     "targetFramerate",
+     "model"
+    ],
+    "title": "enhance_frame_rate",
+    "type": "object"
+   }
+  ]
+ },
+ "source": "https://docs.dev.runwayml.com/openapi.json"
+}

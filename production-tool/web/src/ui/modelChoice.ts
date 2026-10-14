@@ -1,4 +1,4 @@
-// The regenerate menu's helpers (features/model-choice.clan): prices as shown, and which
+// The regenerate menu's helpers (features/model-choice.clan): which
 // model made a frame or take (its tooltip, and where the menu starts). Read from the job's
 // record; a job picked for one provider that ran on another (the relay's fallback) says so.
 
@@ -46,12 +46,6 @@ export function madeWith(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, job
   const fallback = fellBack(local?.fallbackFrom ?? local?.request?.modelChoice, made.provider)
   const label = `${modelLabel(made.provider, made.model)} (${made.provider})${fallback ? ` · ${fallback}` : ''}`
   return fallback ? { made, label, fallback } : { made, label }
-}
-
-/** An estimate as the menu shows it. */
-export function price(usd: number | null): string {
-  if (usd == null) return 'price not published'
-  return `~$${usd < 0.1 ? usd.toFixed(3) : usd.toFixed(2)}`
 }
 
 /** Where the menu starts: the model that made the version being replaced, when it is offered. */

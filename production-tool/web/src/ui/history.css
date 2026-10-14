@@ -19,6 +19,7 @@
 .history-agent.provider .history-icon { color: var(--produce); }
 .history-model { font-family: var(--f-mono); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
 .history-pin { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 6px; background: var(--create-soft); color: var(--create); }
+.history-cost { font-family: var(--f-mono); font-size: 10.5px; white-space: nowrap; }
 .history-action { margin-top: 3px; font-weight: 600; color: var(--ink); }
 .history-why { margin-top: 2px; line-height: 1.4; overflow-wrap: anywhere; }
 .history-saw { margin-top: 5px; font-size: 12px; }

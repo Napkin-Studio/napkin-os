@@ -1,0 +1,100 @@
+{
+  "contractVersion": "3",
+  "about": "What one ad costs Napkin to make, at the provider's list prices (features/runway-sheet-sync.clan). relay/scripts/ad_costs.py prices each scenario with contracts/pricing.py and capabilities/<provider>.json; provider_reference.py --check prints the table into docs/production-tool/provider-reference.md. Prices never live here: change the sheet and every total moves.",
+  "provider": "runway",
+  "scenarios": [
+    {
+      "id": "typical",
+      "label": "Typical ad, first pass (15 s, 6 shots, 1 character)",
+      "lines": [
+        {"what": "character: generate", "op": "generate", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 1},
+        {"what": "character: 3 views", "op": "view", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 3},
+        {"what": "frames", "op": "frame", "model": "gemini_image3_pro", "settings": {"ratio": "1344:768", "outputs": 1}, "count": 6},
+        {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "clips, 6 s, audio off", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": false}, "count": 6},
+        {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
+        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
+      ]
+    },
+    {
+      "id": "typical_takes",
+      "label": "Typical, 3 takes of every frame and clip",
+      "lines": [
+        {"what": "character: generate", "op": "generate", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 1},
+        {"what": "character: 3 views", "op": "view", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 3},
+        {"what": "frames, 3 takes", "op": "frame", "model": "gemini_image3_pro", "settings": {"ratio": "1344:768", "outputs": 1}, "count": 18},
+        {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "clips, 6 s, audio off, 3 takes", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": false}, "count": 18},
+        {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
+        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
+      ]
+    },
+    {
+      "id": "typical_audio",
+      "label": "Typical, Veo audio on, first pass",
+      "lines": [
+        {"what": "character: generate", "op": "generate", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 1},
+        {"what": "character: 3 views", "op": "view", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 3},
+        {"what": "frames", "op": "frame", "model": "gemini_image3_pro", "settings": {"ratio": "1344:768", "outputs": 1}, "count": 6},
+        {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "clips, 6 s, audio on", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": true}, "count": 6},
+        {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
+        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
+      ]
+    },
+    {
+      "id": "typical_audio_takes",
+      "label": "Typical, audio on with 3 takes",
+      "lines": [
+        {"what": "character: generate", "op": "generate", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 1},
+        {"what": "character: 3 views", "op": "view", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 3},
+        {"what": "frames, 3 takes", "op": "frame", "model": "gemini_image3_pro", "settings": {"ratio": "1344:768", "outputs": 1}, "count": 18},
+        {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "clips, 6 s, audio on, 3 takes", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": true}, "count": 18},
+        {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
+        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
+        {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
+      ]
+    },
+    {
+      "id": "heavy",
+      "label": "Heavy ad (2 characters, audio on, 8 s clips, 3 takes)",
+      "lines": [
+        {"what": "characters: 4-up generate", "op": "generate", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 4}, "count": 2},
+        {"what": "characters: 3 views each", "op": "view", "model": "gemini_image3_pro", "settings": {"ratio": "896:1152", "outputs": 1}, "count": 6},
+        {"what": "frames, 3 takes", "op": "frame", "model": "gemini_image3_pro", "settings": {"ratio": "1344:768", "outputs": 1}, "count": 18},
+        {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 6},
+        {"what": "preciseEdit at high", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"preciseEdit": true, "refs": 1}, "count": 3},
+        {"what": "clips, 8 s, audio on, 3 takes", "op": "clip", "model": "veo3.1", "settings": {"durationS": 8, "audio": true}, "count": 18},
+        {"what": "bridge, 8 s", "op": "bridge", "model": "veo3.1", "settings": {"durationS": 8, "audio": true}, "count": 1},
+        {"what": "moment fixes, 4 s cuts", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 4},
+        {"what": "upscales at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 6},
+        {"what": "Make all sizes: still extends at high", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "high", "refs": 1}, "count": 6},
+        {"what": "cut-downs: aleph2 expand of the 15 s ad (upper bound; method not decided)", "op": "cutdown", "model": "aleph2", "settings": {"inputS": 15}, "count": 2},
+        {"what": "4K video upscale of the 15 s ad at 24 fps", "op": "upscale", "model": "magnific_video_upscaler_creative", "settings": {"resolution": "4k", "inputS": 15, "fps": 24}, "count": 1}
+      ]
+    }
+  ],
+  "expected": {"typical": 1089, "typical_takes": 2769, "typical_audio": 1809, "typical_audio_takes": 4929, "heavy": 8863},
+  "placeholders": [
+    {"what": "Claude on Bedrock (the director), per ad", "usd": 0.5, "measured": false, "note": "Replaced from dogfood-telemetry once it records tokens per job."},
+    {"what": "billedFailureRate: failed and moderated tasks Runway bills, as a share of spend", "rate": 0, "measured": false, "note": "Measured by runway-spend-truth. Billed failures are charged to the agency silently (Shrey, 2026-10-13)."}
+  ],
+  "fixedMonthly": [
+    {"what": "Fargate and ALB (napkin-web)", "usd": null, "measured": false},
+    {"what": "S3", "usd": null, "measured": false},
+    {"what": "KMS", "usd": null, "measured": false},
+    {"what": "CloudFront egress", "usd": null, "measured": false},
+    {"what": "stitch Lambda", "usd": null, "measured": false}
+  ],
+  "fixedMonthlyNote": "Filled by Shrey from AWS Cost Explorer; null means not yet entered.",
+  "tier": {
+    "maxMonthlyCreditSpend": null,
+    "maxDailyGenerations": {},
+    "read": null,
+    "note": "Runway's tier ceilings from GET /v1/organization (relay/scripts/runway_smoke.py --org-only prints them). The sum of agency caps, when agencies choose them, stays under maxMonthlyCreditSpend."
+  }
+}

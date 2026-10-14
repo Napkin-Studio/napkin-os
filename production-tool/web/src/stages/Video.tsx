@@ -267,7 +267,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
               title={`Remake clip ${index + 1} only, from its frame and shot as they are now`}
               onClick={() => void start({ kind: 'one', item: { kind: 'clip', shotId: shot.id } })}
               items={after > 1 ? [{
-                label: `Remake this and the clips after (${after})`, hint: update.cost(afterScope), icon: '⇥',
+                label: `Remake this and the clips after (${after})`, icon: '⇥',
                 onSelect: () => void start(afterScope),
               }] : []}>
               Remake

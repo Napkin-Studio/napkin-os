@@ -1,0 +1,83 @@
+{
+  "contractVersion": "3",
+  "provider": "mock",
+  "checked": "2026-10-06",
+  "usdPerCredit": 0.01,
+  "sources": [],
+  "ops": {
+    "generate": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}},
+    "view": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}},
+    "frame": {
+      "model": "mock",
+      "endpoint": "mock://image",
+      "defaults": {"outputs": 1},
+      "label": "Mock",
+      "alternates": [
+        {
+          "model": "mock-hq",
+          "endpoint": "mock://image",
+          "defaults": {"outputs": 1},
+          "label": "Mock HQ",
+          "note": "Local stand-in for a better model"
+        }
+      ]
+    },
+    "region_edit": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}},
+    "clip": {
+      "model": "mock",
+      "endpoint": "mock://video",
+      "defaults": {"durationS": 6},
+      "minS": 2,
+      "maxS": 15,
+      "label": "Mock",
+      "alternates": [
+        {
+          "model": "mock-hq",
+          "endpoint": "mock://video",
+          "defaults": {"durationS": 6},
+          "label": "Mock HQ",
+          "note": "Local stand-in for a better model",
+          "minS": 2,
+          "maxS": 15
+        }
+      ]
+    },
+    "clip_edit": {
+      "model": "mock",
+      "endpoint": "mock://video",
+      "defaults": {"inputS": 5},
+      "minS": 2,
+      "maxS": 15,
+      "regionModel": "mock",
+      "regionEndpoint": "mock://video"
+    }
+  },
+  "models": {
+    "mock": {"label": "Mock", "pricing": {"unit": "second", "credits": 1, "source": []}},
+    "mock-hq": {"label": "Mock HQ", "pricing": {"unit": "image", "credits": 0, "source": []}}
+  },
+  "tagSyntax": "at_tag",
+  "refs": {"max": 14, "maxCharacter": 5},
+  "seed": true,
+  "outputsPerCall": 4,
+  "mask": "png_white_edit",
+  "segment": true,
+  "angles": true,
+  "series": 9,
+  "video": {
+    "firstFrameWithRefs": true,
+    "lastFrame": true,
+    "multiShot": true,
+    "regionEdit": "mask",
+    "feelEdit": "strength",
+    "audioDefault": false,
+    "audioControl": true
+  },
+  "inputs": {"headRequired": false, "followsRedirects": true},
+  "results": {"mode": "poll", "minPollS": 1, "idempotencyKey": true, "outputUrlTtlH": null, "cancel": true},
+  "concurrency": {
+    "image": 100,
+    "video": 100,
+    "note": "Every capability on, so every UI control can be built and tested before the real keys exist. Returns the input stamped 'MOCK' after 2 s with a fake queue position. A mock output is labelled kind 'mock' and can never count as final."
+  }
+}

@@ -16,6 +16,33 @@
       "format": "date",
       "description": "When the facts were last checked against the provider's docs."
     },
+    "usdPerCredit": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "What one of the provider's credits costs in USD (Runway: 0.01, from guides/pricing.md and the OpenAPI info). Contract 3."
+    },
+    "sources": {
+      "type": "array",
+      "description": "The published documents the facts were checked against, with the date each was fetched. Their committed snapshots are in relay/tests/fixtures. Contract 3.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "fetched": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "url",
+          "fetched"
+        ],
+        "additionalProperties": false
+      }
+    },
     "ops": {
       "type": "object",
       "description": "Which ops this provider can run, and with which model. An op missing here is unsupported.",
@@ -31,13 +58,9 @@
           "endpoint": {
             "type": "string"
           },
-          "estimateUsd": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "description": "Cost of one job at our default settings, for the reserved amount. null when the provider does not publish a price.",
-            "minimum": 0
+          "defaults": {
+            "$ref": "#/$defs/defaults",
+            "description": "The settings one job of this op assumes when its request does not say (features/runway-sheet-sync.clan): what the relay reserves for and the cost model prices. The price itself comes from models[model].pricing through contracts/pricing.py. Replaced estimateUsd in contract 3."
           },
           "maxS": {
             "type": "number"
@@ -81,43 +104,115 @@
             "maxLength": 80,
             "description": "One line on what the model is good for, shown beside it in the menu. Added 2026-10-08 (additive)."
           },
-          "tagSyntax": { "$ref": "#/properties/tagSyntax", "description": "For this op's own model, replaces the sheet's (features/default-models.clan). Added 2026-10-08 (additive)." },
-          "refs": { "$ref": "#/properties/refs", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
-          "series": { "$ref": "#/properties/series", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
-          "outputsPerCall": { "$ref": "#/properties/outputsPerCall", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
-          "video": { "$ref": "#/properties/video", "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)." },
+          "tagSyntax": {
+            "$ref": "#/properties/tagSyntax",
+            "description": "For this op's own model, replaces the sheet's (features/default-models.clan). Added 2026-10-08 (additive)."
+          },
+          "refs": {
+            "$ref": "#/properties/refs",
+            "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)."
+          },
+          "series": {
+            "$ref": "#/properties/series",
+            "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)."
+          },
+          "outputsPerCall": {
+            "$ref": "#/properties/outputsPerCall",
+            "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)."
+          },
+          "video": {
+            "$ref": "#/properties/video",
+            "description": "For this op's own model, replaces the sheet's. Added 2026-10-08 (additive)."
+          },
           "alternates": {
             "type": "array",
-            "description": "Vetted models a participant may pick for this op when they regenerate (features/model-choice.clan). Each is offered with its own estimate; a pick runs on this provider with the alternate's fields over the op's, and its overrides over the sheet's. Only models the adapter builds a request for (its SUPPORTED list). Added 2026-10-08 (additive).",
+            "description": "Vetted models a participant may pick for this op when they regenerate (features/model-choice.clan). A pick runs on this provider with the alternate's fields over the op's, and its overrides over the sheet's. Only models the adapter builds a request for (its SUPPORTED list). Added 2026-10-08 (additive).",
             "items": {
               "type": "object",
               "properties": {
-                "model": { "type": "string" },
-                "endpoint": { "type": "string" },
-                "estimateUsd": { "type": ["number", "null"], "minimum": 0, "description": "One job at the op's default length, on the same basis as the op's own estimate." },
-                "label": { "type": "string", "maxLength": 40 },
-                "note": { "type": "string", "maxLength": 80 },
-                "maxS": { "type": "number" },
-                "minS": { "type": "number" },
-                "durationsS": { "type": "array", "items": { "type": "number" } },
-                "seed": { "type": "boolean" },
-                "outputs": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
-                "tagSyntax": { "$ref": "#/properties/tagSyntax", "description": "Replaces the sheet's for this model." },
-                "refs": { "$ref": "#/properties/refs", "description": "Replaces the sheet's for this model." },
-                "series": { "$ref": "#/properties/series", "description": "Replaces the sheet's for this model." },
-                "outputsPerCall": { "$ref": "#/properties/outputsPerCall", "description": "Replaces the sheet's for this model." },
-                "video": { "$ref": "#/properties/video", "description": "Replaces the sheet's for this model." }
+                "model": {
+                  "type": "string"
+                },
+                "endpoint": {
+                  "type": "string"
+                },
+                "defaults": {
+                  "$ref": "#/$defs/defaults"
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "maxS": {
+                  "type": "number"
+                },
+                "minS": {
+                  "type": "number"
+                },
+                "durationsS": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "outputs": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "tagSyntax": {
+                  "$ref": "#/properties/tagSyntax",
+                  "description": "Replaces the sheet's for this model."
+                },
+                "refs": {
+                  "$ref": "#/properties/refs",
+                  "description": "Replaces the sheet's for this model."
+                },
+                "series": {
+                  "$ref": "#/properties/series",
+                  "description": "Replaces the sheet's for this model."
+                },
+                "outputsPerCall": {
+                  "$ref": "#/properties/outputsPerCall",
+                  "description": "Replaces the sheet's for this model."
+                },
+                "video": {
+                  "$ref": "#/properties/video",
+                  "description": "Replaces the sheet's for this model."
+                }
               },
-              "required": ["model", "endpoint", "estimateUsd", "label"],
+              "required": [
+                "model",
+                "endpoint",
+                "defaults",
+                "label"
+              ],
               "additionalProperties": false
             }
           }
         },
         "required": [
           "model",
-          "endpoint"
+          "endpoint",
+          "defaults"
         ],
         "additionalProperties": false
+      }
+    },
+    "models": {
+      "type": "object",
+      "description": "The catalogue: every model an op uses or a planned feature needs, with its checked limits and its price (features/runway-sheet-sync.clan). Every op and alternate model is here; a model no op uses is allowed. Contract 3.",
+      "additionalProperties": {
+        "$ref": "#/$defs/model"
       }
     },
     "tagSyntax": {
@@ -303,7 +398,10 @@
     "contractVersion",
     "provider",
     "checked",
+    "usdPerCredit",
+    "sources",
     "ops",
+    "models",
     "tagSyntax",
     "refs",
     "seed",
@@ -316,5 +414,301 @@
     "results",
     "concurrency"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "defaults": {
+      "type": "object",
+      "description": "Settings for contracts/pricing.py. A field left out takes the model's default.",
+      "properties": {
+        "outputs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Images per call."
+        },
+        "ratio": {
+          "type": "string",
+          "pattern": "^([0-9]+:[0-9]+|auto)$",
+          "description": "The output ratio; its resolution tier prices tiered models."
+        },
+        "resolution": {
+          "type": "string",
+          "description": "A resolution tier (512, 1K, 2K, 4K) or an upscaler's output resolution (720p, 1k, 2k, 4k)."
+        },
+        "quality": {
+          "enum": [
+            "very_low",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "preciseEdit": {
+          "type": "boolean"
+        },
+        "refs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many reference images the call carries."
+        },
+        "durationS": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Output length of a generated clip."
+        },
+        "audio": {
+          "type": "boolean"
+        },
+        "inputS": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Length of the input video (an edit's output is as long as its input)."
+        },
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "inputPx": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The input image's longest side, for an upscale."
+        },
+        "scaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "object",
+      "description": "One model's checked facts, held to the provider's published schema and price list by relay/tests/test_runway_sheet.py.",
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "ratios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ratio": {
+                "type": "string",
+                "pattern": "^([0-9]+:[0-9]+|auto)$"
+              },
+              "tier": {
+                "type": "string",
+                "description": "The resolution tier the ratio's pixel count falls in (512, 1K, 2K, 4K)."
+              }
+            },
+            "required": [
+              "ratio"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "durationsS": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "inputS": {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "maxFps": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "promptMax": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "promptUnit": {
+          "enum": [
+            "utf16"
+          ],
+          "description": "How promptMax is counted: UTF-16 code units, as Runway measures."
+        },
+        "refs": {
+          "$ref": "#/properties/refs"
+        },
+        "mask": {
+          "$ref": "#/properties/mask"
+        },
+        "preciseEdit": {
+          "type": "boolean",
+          "description": "Edits the first reference image keeping its composition and size."
+        },
+        "keyframes": {
+          "type": "object",
+          "properties": {
+            "max": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "range": {
+              "enum": [
+                "whole_seconds_end_exclusive"
+              ]
+            }
+          },
+          "required": [
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        "targetAspectRatios": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "firstLastFrame": {
+          "type": "boolean",
+          "description": "Takes a first frame and an optional last frame (never a last frame alone)."
+        },
+        "audioDefault": {
+          "type": "boolean"
+        },
+        "scaleFactors": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "resolutions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pricing": {
+          "$ref": "#/$defs/pricing"
+        }
+      },
+      "required": [
+        "label",
+        "pricing"
+      ],
+      "additionalProperties": false
+    },
+    "pricing": {
+      "type": "object",
+      "description": "A model's price in credits (times usdPerCredit for USD), computed only by contracts/pricing.py and held to examples/pricing-cases.json.",
+      "properties": {
+        "unit": {
+          "enum": [
+            "image",
+            "second",
+            "frame"
+          ],
+          "description": "image: per output image (times outputs); second: per second of output (durationS, or inputS for an edit); frame: per output frame (fps times inputS)."
+        },
+        "credits": {
+          "type": "number",
+          "minimum": 0
+        },
+        "audioCredits": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Per unit when audio is on."
+        },
+        "minCredits": {
+          "type": "number",
+          "minimum": 0
+        },
+        "byQuality": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "defaultQuality": {
+          "type": "object",
+          "properties": {
+            "withRefs": {
+              "type": "string"
+            },
+            "otherwise": {
+              "type": "string"
+            },
+            "preciseEdit": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "withRefs",
+            "otherwise"
+          ],
+          "additionalProperties": false
+        },
+        "notWithPreciseEdit": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "needsRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Qualities that need reference images."
+        },
+        "byResolution": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "overPx": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Above this output side in px the price is overPxCredits."
+        },
+        "overPxCredits": {
+          "type": "number",
+          "minimum": 0
+        },
+        "round": {
+          "enum": [
+            "ceil"
+          ]
+        },
+        "source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The provider's published price rows this was entered from, verbatim (relay/tests/fixtures/pricing)."
+        }
+      },
+      "required": [
+        "unit",
+        "source"
+      ],
+      "additionalProperties": false
+    }
+  }
 }

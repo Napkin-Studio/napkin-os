@@ -19,7 +19,7 @@ import pytest
 from PIL import Image
 
 from conftest import CDN, Harness, envelope
-from contracts_dir import contracts_dir
+from contracts_dir import contracts_dir, pricing
 from director import new_id
 from providers import Registry
 from providers._seam import Adapted, Resolver
@@ -151,6 +151,15 @@ INPUTS = {
 }
 
 
+def sent_settings(op: str, body: dict) -> dict:
+    """The settings a Runway body carries that its price depends on."""
+    if op == "clip":
+        return {"durationS": body["duration"], "audio": body["audio"]}
+    if op == "clip_edit":
+        return {}  # priced at the op's default input length: the request does not carry the clip's
+    return {"outputs": body.get("outputCount", 1), "ratio": body["ratio"]}
+
+
 def expected_provider(cfg: dict, h: Harness, op: str) -> str:
     return next(p for p in cfg["routing"][op] if h.relay.registry.supports(p, op))
 
@@ -184,7 +193,9 @@ def test_every_step_runs_on_its_pathway(name, op):
     assert sent, f"{provider} received nothing for {op}"
     for s in sent:
         assert not s["errors"], f"{provider} {s['endpoint']} body breaks its published schema: {s['errors']}"
-    assert job["cost"]["estimate"] == (sheet["ops"][op]["estimateUsd"] or 0) or job["cost"]["unknown"]
+    # The reservation is the sheet's price (contracts/pricing.py) at the settings the body really sent.
+    want = pricing().op_usd(sheet, op, None, sent_settings(op, sent[-1]["body"]))
+    assert want is not None and job["cost"]["estimate"] == want and not job["cost"]["unknown"]
 
 
 @pytest.mark.parametrize("name", PATHWAYS)
@@ -296,11 +307,29 @@ def _script(name: str):
     return module
 
 
-def test_the_cost_of_a_reference_production_per_pathway_is_pinned():
-    """A price change in a capability sheet shows up here, so it is seen in review."""
-    costs = {c["pathway"]: (c["totalUsd"], c["bestTotalUsd"], c["unknown"]) for c in
-             (_script("pathway_costs").costs(n) for n in PATHWAYS)}
-    assert costs == {"runway": (11.0, 11.0, [])}  # features/default-models.clan: a good model always
+def test_the_cost_of_an_ad_is_pinned():
+    """A price change in a capability sheet shows up here, so it is seen in review
+    (contracts/cost-model.json, features/runway-sheet-sync.clan)."""
+    costs = {c["id"]: (c["credits"], c["usd"]) for c in _script("ad_costs").costs()}
+    assert costs == {"typical": (1089, 10.89), "typical_takes": (2769, 27.69), "typical_audio": (1809, 18.09),
+                     "typical_audio_takes": (4929, 49.29), "heavy": (8863, 88.63)}
+
+
+def test_a_price_change_in_the_sheet_moves_the_ad_totals():
+    ad_costs = _script("ad_costs")
+    sheet = json.loads((contracts_dir() / "capabilities" / "runway.json").read_text())
+    sheet["models"]["veo3.1"]["pricing"]["credits"] = 25  # no-audio Veo 3.1 up from 20 to 25 a second
+    moved = {c["id"]: c["credits"] for c in ad_costs.costs(the_sheet=sheet)}
+    assert moved["typical"] == 1089 + 6 * 6 * 5 and moved["typical_audio"] == 1809  # audio-on lines unchanged
+    assert ad_costs.main(["--check"]) == 0  # the committed sheet still gives the expected totals
+
+
+def test_an_unpriced_line_fails_loudly_never_free():
+    ad_costs = _script("ad_costs")
+    sheet = json.loads((contracts_dir() / "capabilities" / "runway.json").read_text())
+    del sheet["models"]["aleph2"]
+    with pytest.raises(ad_costs.pricing().PriceError):
+        ad_costs.costs(the_sheet=sheet)
 
 
 def test_the_smoke_script_sends_nothing_without_live(monkeypatch, capsys):

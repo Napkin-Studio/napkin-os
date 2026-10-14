@@ -9,6 +9,7 @@ import importlib
 import pytest
 
 from conftest import Harness, base_config, job_request, sheets
+from contracts_dir import pricing
 from director import new_id
 from providers import load_sheet
 from providers.base import ProviderError
@@ -40,7 +41,7 @@ def test_a_pick_runs_on_its_provider_and_model_at_its_price():
     h = harness()
     job = post(h, h.as_person(), HQ)
     assert (job["provider"], job["model"]) == ("mock", "mock-hq")
-    assert job["cost"]["reserved"] == 1.8
+    assert job["cost"]["reserved"] == 0.3  # mock-hq's price on the front sheet (conftest.front_sheet)
     assert "fallbackFrom" not in job
     assert h.providers["mock"].submits[0]["model"] == "mock-hq"
 
@@ -49,7 +50,7 @@ def test_no_pick_routes_as_before():
     h = harness()
     job = post(h, h.as_person())
     assert (job["provider"], job["model"]) == ("mock", "mock")
-    assert job["cost"]["reserved"] == 0.9
+    assert job["cost"]["reserved"] == 0.15
 
 
 def test_a_pick_its_provider_cannot_take_falls_back_to_runway_default():
@@ -103,12 +104,12 @@ def test_a_pick_on_a_provider_the_op_does_not_route_is_refused():
 def test_effective_sheet_puts_the_alternate_over_the_op_and_the_sheet():
     runway = load_sheet("runway")
     fast = effective_sheet(runway, "clip", "veo3.1_fast")
-    assert fast["ops"]["clip"]["model"] == "veo3.1_fast" and fast["ops"]["clip"]["estimateUsd"] == 0.6
+    assert fast["ops"]["clip"]["model"] == "veo3.1_fast" and pricing().op_usd(fast, "clip") == 0.6
     assert fast["ops"]["clip"]["durationsS"] == [4, 6, 8] and "alternates" not in fast["ops"]["clip"]
     assert runway["ops"]["clip"]["model"] == "veo3.1"  # the sheet itself is untouched
     # An alternate's own sheet-level settings and lengths replace the sheet's and the op's.
     sheet = copy.deepcopy(runway)
-    sheet["ops"]["clip"]["alternates"].append({"model": "wide", "endpoint": "POST /v1/x", "estimateUsd": 2,
+    sheet["ops"]["clip"]["alternates"].append({"model": "wide", "endpoint": "POST /v1/x", "defaults": {"durationS": 6},
                                                "minS": 3, "maxS": 15, "tagSyntax": "none",
                                                "refs": {"max": 0, "maxCharacter": 0}})
     wide = effective_sheet(sheet, "clip", "wide")

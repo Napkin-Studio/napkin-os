@@ -272,6 +272,17 @@ def check_capabilities(sheet: dict, job: ProviderJob) -> None:
             raise CapabilityMissing(f"{job.op} duration must be {op.get('minS')}-{op.get('maxS')} s")
 
 
+def utf16_units(text: str) -> int:
+    """A prompt's length as Runway measures it: UTF-16 code units (an emoji outside the BMP is 2).
+    The sheet's models[m].promptMax is in these units (promptUnit utf16)."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def prompt_max(sheet: dict, model: str) -> Optional[int]:
+    """The model's prompt limit from the catalogue, or None when the sheet gives none."""
+    return ((sheet.get("models") or {}).get(model) or {}).get("promptMax")
+
+
 def video_audio(_job: ProviderJob) -> bool:
     """Audio is always sent explicitly; Wednesday has none (director.schema: const false)."""
     return False

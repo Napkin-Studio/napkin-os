@@ -1,6 +1,6 @@
 {
  "endpoint": "POST /v1/text_to_image",
- "fetched": "2026-10-08",
+ "fetched": "2026-10-13",
  "schema": {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "discriminator": {
@@ -1362,6 +1362,589 @@
      "model"
     ],
     "title": "gpt_image_2_5_sunburst",
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "model": {
+      "const": "bria_fibo_1_5",
+      "type": "string"
+     },
+     "outputFormat": {
+      "description": "The file format of the output image. Defaults to png.",
+      "enum": [
+       "png",
+       "jpeg"
+      ],
+      "type": "string"
+     },
+     "promptText": {
+      "description": "A non-empty text prompt describing what should appear in the output image.",
+      "maxLength": 10000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "ratio": {
+      "description": "The resolution of the output image, expressed as `<width>:<height>`. 1MP sizes cost 5 credits per image and 4MP sizes 10.",
+      "enum": [
+       "1024:1024",
+       "768:1152",
+       "1152:768",
+       "768:1024",
+       "1024:768",
+       "768:960",
+       "960:768",
+       "576:1024",
+       "1024:576",
+       "2048:2048",
+       "1536:2304",
+       "2304:1536",
+       "1536:2048",
+       "2048:1536",
+       "1536:1920",
+       "1920:1536",
+       "1152:2048",
+       "2048:1152"
+      ],
+      "type": "string"
+     },
+     "referenceImages": {
+      "description": "Up to 1 image to guide the generation. The prompt describes how the output should build on it.",
+      "items": {
+       "additionalProperties": false,
+       "properties": {
+        "uri": {
+         "anyOf": [
+          {
+           "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+           "example": "https://example.com/image.jpg",
+           "maxLength": 2048,
+           "minLength": 13,
+           "pattern": "^https:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+           "example": "runway://<token>",
+           "maxLength": 5000,
+           "minLength": 13,
+           "pattern": "^runway:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A data URI containing encoded media, up to 5MB.",
+           "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+           "maxLength": 5242880,
+           "minLength": 13,
+           "pattern": "^data:image\\/.*",
+           "type": "string"
+          }
+         ],
+         "description": "A HTTPS URL, Runway or data URI containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+         "example": "https://example.com/image.jpg"
+        }
+       },
+       "required": [
+        "uri"
+       ],
+       "title": "BriaFibo15ReferenceImage",
+       "type": "object"
+      },
+      "maxItems": 1,
+      "type": "array"
+     },
+     "seed": {
+      "description": "If unspecified, a random number is chosen. Using the same seed with an identical request reproduces the same image.",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "promptText",
+     "ratio",
+     "model"
+    ],
+    "title": "bria_fibo_1_5",
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "model": {
+      "const": "bria_fibo_edit_1_5",
+      "type": "string"
+     },
+     "outputFormat": {
+      "description": "The file format of the output image. Defaults to png.",
+      "enum": [
+       "png",
+       "jpeg"
+      ],
+      "type": "string"
+     },
+     "promptText": {
+      "description": "An instruction describing how to edit the reference images.",
+      "maxLength": 10000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "ratio": {
+      "description": "The resolution of the output image, expressed as `<width>:<height>`. Omit it or use `auto` to keep the framing of the first reference image. Choosing a size requires at least 2 reference images; a single image always keeps its own framing.",
+      "enum": [
+       "1024:1024",
+       "768:1152",
+       "1152:768",
+       "768:1024",
+       "1024:768",
+       "768:960",
+       "960:768",
+       "576:1024",
+       "1024:576",
+       "auto"
+      ],
+      "type": "string"
+     },
+     "referenceImages": {
+      "description": "1 to 4 images to edit. With several, the instruction describes how to combine them.",
+      "items": {
+       "additionalProperties": false,
+       "properties": {
+        "uri": {
+         "anyOf": [
+          {
+           "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+           "example": "https://example.com/image.jpg",
+           "maxLength": 2048,
+           "minLength": 13,
+           "pattern": "^https:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+           "example": "runway://<token>",
+           "maxLength": 5000,
+           "minLength": 13,
+           "pattern": "^runway:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A data URI containing encoded media, up to 5MB.",
+           "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+           "maxLength": 5242880,
+           "minLength": 13,
+           "pattern": "^data:image\\/.*",
+           "type": "string"
+          }
+         ],
+         "description": "A HTTPS URL, Runway or data URI containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+         "example": "https://example.com/image.jpg"
+        }
+       },
+       "required": [
+        "uri"
+       ],
+       "title": "BriaFiboEdit15ReferenceImage",
+       "type": "object"
+      },
+      "maxItems": 4,
+      "type": "array"
+     },
+     "seed": {
+      "description": "If unspecified, a random number is chosen. Using the same seed with an identical request reproduces the same image.",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "promptText",
+     "model"
+    ],
+    "title": "bria_fibo_edit_1_5",
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "model": {
+      "const": "ideogram_4_0",
+      "type": "string"
+     },
+     "outputCount": {
+      "description": "The number of images to generate. Increasing this number will affect the number of credits consumed by the generation.",
+      "maximum": 4,
+      "minimum": 1,
+      "type": "integer"
+     },
+     "promptText": {
+      "description": "Describe the image to generate, or how to remix the reference image.",
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "quality": {
+      "description": "How much rendering effort the model spends on each image. `low` costs 4 credits per image, `medium` 7 and `high` 11.",
+      "enum": [
+       "low",
+       "medium",
+       "high"
+      ],
+      "type": "string"
+     },
+     "ratio": {
+      "description": "The resolution of the output image, expressed as `<width>:<height>`.",
+      "enum": [
+       "2048:2048",
+       "2560:1440",
+       "1440:2560",
+       "2304:1728",
+       "1728:2304",
+       "2496:1664",
+       "1664:2496",
+       "3072:1280",
+       "1280:3072"
+      ],
+      "type": "string"
+     },
+     "referenceImages": {
+      "description": "An image to remix. The prompt describes how the output should differ from it.",
+      "items": {
+       "additionalProperties": false,
+       "properties": {
+        "uri": {
+         "anyOf": [
+          {
+           "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+           "example": "https://example.com/image.jpg",
+           "maxLength": 2048,
+           "minLength": 13,
+           "pattern": "^https:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+           "example": "runway://<token>",
+           "maxLength": 5000,
+           "minLength": 13,
+           "pattern": "^runway:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A data URI containing encoded media, up to 5MB.",
+           "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+           "maxLength": 5242880,
+           "minLength": 13,
+           "pattern": "^data:image\\/.*",
+           "type": "string"
+          }
+         ],
+         "description": "A HTTPS URL, Runway or data URI containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+         "example": "https://example.com/image.jpg"
+        }
+       },
+       "required": [
+        "uri"
+       ],
+       "title": "Ideogram40ReferenceImage",
+       "type": "object"
+      },
+      "maxItems": 1,
+      "type": "array"
+     }
+    },
+    "required": [
+     "promptText",
+     "model"
+    ],
+    "title": "ideogram_4_0",
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "maskUri": {
+      "anyOf": [
+       {
+        "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+        "example": "https://example.com/image.jpg",
+        "maxLength": 2048,
+        "minLength": 13,
+        "pattern": "^https:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+        "example": "runway://<token>",
+        "maxLength": 5000,
+        "minLength": 13,
+        "pattern": "^runway:\\/\\/.*",
+        "type": "string"
+       },
+       {
+        "description": "A data URI containing encoded media, up to 5MB.",
+        "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "maxLength": 5242880,
+        "minLength": 13,
+        "pattern": "^data:image\\/.*",
+        "type": "string"
+       }
+      ],
+      "description": "A black-and-white mask the same size as the first reference image. Black areas are edited and white areas are preserved. Supports up to 3 additional reference images.",
+      "example": "https://example.com/image.jpg"
+     },
+     "model": {
+      "const": "ideogram_4_5",
+      "type": "string"
+     },
+     "outputCount": {
+      "description": "The number of images to generate. Increasing this number will affect the number of credits consumed by the generation.",
+      "maximum": 8,
+      "minimum": 1,
+      "type": "integer"
+     },
+     "preciseEdit": {
+      "description": "When true, edit the first reference image while preserving its composition and dimensions. Requires at least one reference image.",
+      "type": "boolean"
+     },
+     "promptText": {
+      "description": "Describe the image to generate, or the changes to make to the reference images.",
+      "maxLength": 10000,
+      "minLength": 1,
+      "type": "string"
+     },
+     "quality": {
+      "description": "How much rendering effort the model spends on each image. Defaults to `medium` (8 credits per image) when generating from reference images and `high` (25 credits) otherwise, including `preciseEdit`. `low` costs 4 credits and `very_low` 1; `very_low` requires reference images and is not available with `preciseEdit`.",
+      "enum": [
+       "very_low",
+       "low",
+       "medium",
+       "high"
+      ],
+      "type": "string"
+     },
+     "ratio": {
+      "description": "The resolution of the output image, expressed as `<width>:<height>`. Omit it or use `auto` to let the model choose. With reference images, widescreen 1K sizes are `1024:576`, `576:1024`, `1408:704`, `704:1408` instead of `1280:720`, `720:1280`, `1440:720`, `720:1440`. Not available with `maskUri` or `preciseEdit`, which keep the size of the first reference image.",
+      "enum": [
+       "1024:1024",
+       "1280:720",
+       "720:1280",
+       "1152:864",
+       "864:1152",
+       "1248:832",
+       "832:1248",
+       "1120:896",
+       "896:1120",
+       "1440:720",
+       "720:1440",
+       "2048:2048",
+       "2560:1440",
+       "1440:2560",
+       "2304:1728",
+       "1728:2304",
+       "2496:1664",
+       "1664:2496",
+       "2240:1792",
+       "1792:2240",
+       "2880:1440",
+       "1440:2880",
+       "1024:576",
+       "576:1024",
+       "1408:704",
+       "704:1408",
+       "auto"
+      ],
+      "type": "string"
+     },
+     "referenceImages": {
+      "description": "Up to 5 images to guide the generation. With `maskUri` or `preciseEdit`, the first image is the one being edited and the rest are references.",
+      "items": {
+       "additionalProperties": false,
+       "properties": {
+        "uri": {
+         "anyOf": [
+          {
+           "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+           "example": "https://example.com/image.jpg",
+           "maxLength": 2048,
+           "minLength": 13,
+           "pattern": "^https:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+           "example": "runway://<token>",
+           "maxLength": 5000,
+           "minLength": 13,
+           "pattern": "^runway:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A data URI containing encoded media, up to 5MB.",
+           "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+           "maxLength": 5242880,
+           "minLength": 13,
+           "pattern": "^data:image\\/.*",
+           "type": "string"
+          }
+         ],
+         "description": "A HTTPS URL, Runway or data URI containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+         "example": "https://example.com/image.jpg"
+        }
+       },
+       "required": [
+        "uri"
+       ],
+       "title": "Ideogram45ReferenceImage",
+       "type": "object"
+      },
+      "maxItems": 5,
+      "type": "array"
+     }
+    },
+    "required": [
+     "promptText",
+     "model"
+    ],
+    "title": "ideogram_4_5",
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "model": {
+      "const": "nano_banana_2.1",
+      "type": "string"
+     },
+     "outputCount": {
+      "description": "The number of images to generate. Increasing this number will affect the number of credits consumed by the generation.",
+      "maximum": 4,
+      "minimum": 1,
+      "type": "integer"
+     },
+     "promptText": {
+      "description": "A description of the image you want to generate.",
+      "maxLength": 5500,
+      "minLength": 1,
+      "type": "string"
+     },
+     "ratio": {
+      "description": "The resolution of the output image.",
+      "enum": [
+       "1024:1024",
+       "848:1264",
+       "1264:848",
+       "896:1200",
+       "1200:896",
+       "928:1152",
+       "1152:928",
+       "768:1376",
+       "1376:768",
+       "1584:672",
+       "512:2064",
+       "2064:512",
+       "352:2928",
+       "2928:352",
+       "2048:2048",
+       "1696:2528",
+       "2528:1696",
+       "1792:2400",
+       "2400:1792",
+       "1856:2304",
+       "2304:1856",
+       "1536:2752",
+       "2752:1536",
+       "3168:1344",
+       "1024:4128",
+       "4128:1024",
+       "704:5856",
+       "5856:704",
+       "4096:4096",
+       "3392:5056",
+       "5056:3392",
+       "3584:4800",
+       "4800:3584",
+       "3712:4608",
+       "4608:3712",
+       "3072:5504",
+       "5504:3072",
+       "6336:2688",
+       "2048:8256",
+       "8256:2048",
+       "1408:11712",
+       "11712:1408"
+      ],
+      "type": "string"
+     },
+     "referenceImages": {
+      "description": "Up to 14 images to edit, combine, or use as references for the output.",
+      "items": {
+       "additionalProperties": false,
+       "properties": {
+        "tag": {
+         "description": "A tag to identify the reference image. This is used to reference the image in prompt text. Must be 3-16 characters, start with a letter, and use only letters, digits, and underscores.",
+         "maxLength": 16,
+         "minLength": 3,
+         "pattern": "^[a-z][a-z0-9_]+$",
+         "type": "string"
+        },
+        "uri": {
+         "anyOf": [
+          {
+           "description": "A HTTPS URL, Runway upload URI, or base64 data URI (e.g. `data:image/png;base64,...`, up to 5MB) containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+           "example": "https://example.com/image.jpg",
+           "maxLength": 2048,
+           "minLength": 13,
+           "pattern": "^https:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A Runway upload URI. See https://docs.dev.runwayml.com/assets/uploads for more information.",
+           "example": "runway://<token>",
+           "maxLength": 5000,
+           "minLength": 13,
+           "pattern": "^runway:\\/\\/.*",
+           "type": "string"
+          },
+          {
+           "description": "A data URI containing encoded media, up to 5MB.",
+           "example": "data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+           "maxLength": 5242880,
+           "minLength": 13,
+           "pattern": "^data:image\\/.*",
+           "type": "string"
+          }
+         ],
+         "description": "A HTTPS URL, Runway or data URI containing an encoded image. See [our docs](/assets/inputs#images) on image inputs for more information.",
+         "example": "https://example.com/image.jpg"
+        }
+       },
+       "required": [
+        "uri"
+       ],
+       "title": "NanoBanana21ReferenceImage",
+       "type": "object"
+      },
+      "maxItems": 14,
+      "type": "array"
+     },
+     "thinkingLevel": {
+      "description": "How much the model reasons about the prompt before generating. Defaults to medium.",
+      "enum": [
+       "minimal",
+       "medium",
+       "high"
+      ],
+      "type": "string"
+     }
+    },
+    "required": [
+     "promptText",
+     "ratio",
+     "model"
+    ],
+    "title": "nano_banana_2.1",
     "type": "object"
    },
    {

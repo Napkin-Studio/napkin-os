@@ -82,9 +82,48 @@ def document_rules(doc: dict) -> list[str]:
     return problems
 
 
+sys.path.insert(0, str(HERE))
+import pricing  # noqa: E402  (contracts/pricing.py, standard library only)
+
+
+def sheet_rules(sheet: dict) -> list[str]:
+    """A capability sheet's rules a schema cannot say (features/runway-sheet-sync.clan): every op and
+    alternate model is in the catalogue, at the model's endpoint, within its durations, outputs and
+    ratios, and has a price at its defaults."""
+    problems = []
+    if not isinstance(sheet, dict):
+        return problems
+    models = sheet.get("models") or {}
+    for op, spec in (sheet.get("ops") or {}).items():
+        for s in [spec, *spec.get("alternates", [])]:
+            name = s["model"]
+            m = models.get(name)
+            if m is None:
+                problems.append(f"ops.{op}: {name} is not in models")
+                continue
+            if m.get("endpoint") and m["endpoint"] != s["endpoint"]:
+                problems.append(f"ops.{op}: {name} is at {m['endpoint']}, not {s['endpoint']}")
+            durations = s.get("durationsS", spec.get("durationsS") if s is not spec else None)
+            if durations and m.get("durationsS") and not set(durations) <= set(m["durationsS"]):
+                problems.append(f"ops.{op}: {name} durations {durations} are not all in the model's {m['durationsS']}")
+            if s.get("outputs") and m.get("outputs") and not set(s["outputs"]) <= set(m["outputs"]):
+                problems.append(f"ops.{op}: {name} outputs {s['outputs']} are not all in the model's {m['outputs']}")
+            ratio = (s.get("defaults") or {}).get("ratio")
+            if ratio and m.get("ratios") and ratio not in {r["ratio"] for r in m["ratios"]}:
+                problems.append(f"ops.{op}: {name}'s default ratio {ratio} is not one the model takes")
+            if pricing.op_usd(sheet, op, None if s is spec else name) is None:
+                problems.append(f"ops.{op}: {name} has no price at its defaults {s.get('defaults')}")
+        region = spec.get("regionModel")
+        if region and region not in models:
+            problems.append(f"ops.{op}: regionModel {region} is not in models")
+    return problems
+
+
 # What each instance file must match: (glob, schema file, $defs pointer, extra rules).
 CASES = [
-    ("capabilities/*.json", "capabilities.schema.json", "", None),
+    ("capabilities/*.json", "capabilities.schema.json", "", sheet_rules),
+    ("cost-model.json", "cost-model.schema.json", "", None),
+    ("examples/pricing-cases.json", "pricing-cases.schema.json", "", None),
     ("examples/config.*.json", "config.schema.json", "", None),
     ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest", None),
     ("examples/job.*.json", "relay-api.schema.json", "#/$defs/Job", None),
@@ -104,6 +143,7 @@ CASES = [
 ]
 # Each examples/invalid/<schema stem>.<case>.json must be refused by that schema (or its rules).
 INVALID_TARGETS = {
+    "capabilities": ("capabilities.schema.json", "", sheet_rules),
     "document": ("document.schema.json", "", document_rules),
     "job-request": ("relay-api.schema.json", "#/$defs/JobRequest", None),
     "job-answer": ("relay-api.schema.json", "#/$defs/JobAnswer", None),
@@ -207,6 +247,30 @@ for provider, sheet in sheets.items():
         models = [spec["model"]] + [a["model"] for a in spec.get("alternates", [])]
         if len(set(models)) != len(models):
             fail(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
+
+# The price vectors: pricing.py gives exactly each case's credits, or refuses (the relay's pytest asserts the same file).
+for case in json.loads((HERE / "examples" / "pricing-cases.json").read_text())["cases"]:
+    sheet = sheets[case["sheet"]]
+    try:
+        got = pricing.credits(sheet, case["model"], case["settings"])
+    except pricing.PriceError as e:
+        got = f"refused ({e})"
+    want = "refused" if case.get("refused") else case["credits"]
+    if (want == "refused") != isinstance(got, str) or (want != "refused" and got != want):
+        fail(f"✗ examples/pricing-cases.json: {case['model']} {case['settings']} is {got}; the case says {want}")
+print("✓ examples/pricing-cases.json (vectors)")
+
+# The cost model: each scenario's credits, from the sheet, equal its expected total (a price change shows here).
+cost_model = json.loads((HERE / "cost-model.json").read_text())
+for sc in cost_model["scenarios"]:
+    try:
+        total = sum(pricing.credits(sheets[cost_model["provider"]], ln["model"], ln["settings"]) * ln["count"] for ln in sc["lines"])
+    except pricing.PriceError as e:
+        fail(f"✗ cost-model.json: {sc['id']}: {e}")
+        continue
+    if total != cost_model["expected"].get(sc["id"]):
+        fail(f"✗ cost-model.json: {sc['id']} is {total} credits at today's sheet; expected says {cost_model['expected'].get(sc['id'])}")
+print("✓ cost-model.json (totals)")
 
 # Tenant data never goes in config.json, which is public three ways (features/os-sign-in.clan).
 for f in sorted(HERE.glob("examples/config.*.json")):

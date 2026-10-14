@@ -3,7 +3,7 @@ import { choiceToSend, modelChoicesFor, modelLabel } from './capabilities'
 import { CONFIGS } from './contracts/load'
 import type { Config, DocJob, ProductionDocument } from './contracts/types'
 import type { UiState } from './doc/ui'
-import { fellBack, madeWith, otherModels, price, startingChoice } from './ui/modelChoice'
+import { fellBack, madeWith, otherModels, startingChoice } from './ui/modelChoice'
 
 // features/model-choice.clan, features/runway-fallback.clan: the regenerate menu always offers
 // Runway's models (the floor of every job); a config that routes more providers lists them in order.
@@ -22,9 +22,10 @@ describe('the regenerate menu', () => {
     expect(keys(both, 'clip')).toEqual(['mock:mock', 'mock:mock-hq', 'runway:veo3.1', 'runway:veo3.1_fast'])
   })
 
-  it('carries labels and estimates from the sheets', () => {
-    expect(modelChoicesFor('frame', live).find((o) => o.model === 'gemini_image3.1_flash')).toMatchObject({ label: 'Gemini 3.1 Flash', estimateUsd: 0.07 })
-    expect(modelChoicesFor('clip', live)[0]).toMatchObject({ label: 'Veo 3.1', estimateUsd: 1.2 })
+  it('carries labels and notes from the sheets, and no price (owner, 2026-10-13)', () => {
+    expect(modelChoicesFor('frame', live).find((o) => o.model === 'gemini_image3.1_flash')).toEqual(
+      { provider: 'runway', model: 'gemini_image3.1_flash', label: 'Gemini 3.1 Flash', note: 'Faster and cheaper; the previous default' })
+    expect(modelChoicesFor('clip', live)[0]).toEqual({ provider: 'runway', model: 'veo3.1', label: 'Veo 3.1', note: undefined })
   })
 
   it('sends no pick for the routing default, so the job routes as before', () => {
@@ -50,11 +51,7 @@ describe('the regenerate menu', () => {
     expect(others).toEqual(['mock:mock', 'mock:mock-hq', 'runway:gemini_image3.1_flash'])
   })
 
-  it('shows prices plainly', () => {
-    expect(price(0.028)).toBe('~$0.028')
-    expect(price(2.4)).toBe('~$2.40')
-    expect(price(null)).toBe('price not published')
-  })
+
 
   it('names the model a job ran on, and says when it was made on Runway instead', () => {
     const job = { id: 'job_1', op: 'clip', state: 'completed', provider: 'runway', model: 'veo3.1', parent_ids: [], input_hashes: [], created_at: '2026-10-08T00:00:00Z' } as unknown as DocJob

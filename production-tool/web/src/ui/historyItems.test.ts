@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../doc/store'
-import { aboutItem, entryKind, historyItems, kindOf, plainWords, projectEntries, readable, who, type ChainLike } from './historyItems'
+import { aboutItem, entryKind, historyItems, jobCost, jobOf, kindOf, plainWords, projectEntries, readable, who, type ChainLike } from './historyItems'
 import { HistoryList } from './HistoryList'
 import { jobRationale, type DirectorCard, type JobEntry } from '../../../clan-store/src/attribution'
 
@@ -88,5 +88,24 @@ describe('History (contract 3)', () => {
 
   it('shortens hashes and ids for reading', () => {
     expect(readable(`out ${SHA('a')} for ${J1}`)).toBe('out sha256:aaaaaaaa… for job_…000001')
+  })
+
+  it('shows each job cost, the one place the tool shows money (owner, 2026-10-13)', () => {
+    expect(jobCost({ confirmed: 0.2, currency: 'USD', unknown: false })).toBe('$0.20')
+    expect(jobCost({ confirmed: 0.07, currency: 'USD', unknown: false })).toBe('$0.070')
+    expect(jobCost({ estimate: 1.2, reserved: 1.2, currency: 'USD', unknown: false })).toBe('about $1.20')
+    expect(jobCost({ confirmed: 0, currency: 'USD', unknown: false })).toBeUndefined()  // the mock: free, says nothing
+    expect(jobCost({ estimate: 1, currency: 'USD', unknown: true })).toBeUndefined()   // an unpublished price is no price
+    expect(jobOf(entries[2])).toBe(J1)
+    expect(jobOf(entries[1])).toBeUndefined()
+    const d = doc()
+    d.jobs[J1] = { id: J1, v: 1, field_v: {}, op: 'frame', state: 'failed', node: { kind: 'storyboard', id: Object.keys(d.storyboards)[0] },
+      started_by: 'p_maya001', tenant_id: '5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f', nonce: 'n_000000000001', crew: 'wren',
+      parent_ids: [], input_hashes: [], created_at: T(40), cost: { estimate: 0.2, reserved: 0.2, confirmed: 0.2, currency: 'USD', unknown: false } } as never
+    // A failed attempt the provider billed shows its cost like any other, with no words about it.
+    const html = renderToStaticMarkup(createElement(HistoryList, { entries: [entries[2]], doc: d }))
+    expect(html).toContain('history-cost')
+    expect(html).toContain('$0.20')
+    expect(html).not.toMatch(/charged|refund/i)
   })
 })

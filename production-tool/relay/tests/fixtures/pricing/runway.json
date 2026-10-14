@@ -1,0 +1,202 @@
+{
+ "credit": "Credits can be purchased for $0.01 per credit in the developer portal for a project.",
+ "fetched": "2026-10-13",
+ "rows": {
+  "act_two": [
+   "`act_two` | 5 credits per second"
+  ],
+  "aleph2": [
+   "`aleph2` | 28 credits per second (56 credit minimum per generation)"
+  ],
+  "eleven_multilingual_sts_v2": [
+   "`eleven_multilingual_sts_v2` | 1 credit per 3s of audio"
+  ],
+  "eleven_multilingual_v2": [
+   "`eleven_multilingual_v2` | 1 credit per 50 characters"
+  ],
+  "eleven_text_to_sound_v2": [
+   "`eleven_text_to_sound_v2 (provided duration)` | 1 credit per second of audio",
+   "`eleven_text_to_sound_v2 (no duration)` | 2 credits"
+  ],
+  "eleven_v3": [
+   "`eleven_v3` | 1 credit per 50 characters (minimum 1 credit)"
+  ],
+  "eleven_v4": [
+   "`eleven_v4` | 2.2 credits per 1,000 characters until October 12, 2026 PT, then 5 credits per 1,000 characters (minimum 1 credit)"
+  ],
+  "eleven_voice_dubbing": [
+   "`eleven_voice_dubbing` | 1 credit per 2s of audio"
+  ],
+  "eleven_voice_isolation": [
+   "`eleven_voice_isolation` | 1 credit per 6s of audio"
+  ],
+  "enhance_frame_rate": [
+   "`enhance_frame_rate` | 1 credit per 2 seconds"
+  ],
+  "gemini_2.5_flash": [
+   "`gemini_2.5_flash` | 5 credits per image, any resolution"
+  ],
+  "gemini_image3.1_flash": [
+   "`gemini_image3.1_flash` | 5 credits per 512px image, 7 credits per 1K image, 11 credits per 2K image, 16 credits per 4K image"
+  ],
+  "gemini_image3_pro": [
+   "`gemini_image3_pro` | 20 credits per 1K or 2K image, 40 credits per 4K image"
+  ],
+  "gemini_omni_flash": [
+   "`gemini_omni_flash` (text to video) | 10 credits per second",
+   "`gemini_omni_flash` (image to video) | 10 credits per second, plus 1 credit for the first-frame image",
+   "`gemini_omni_flash` (video to video) | 11 credits per second of input video (capped at 10 seconds), plus 1 credit per reference image"
+  ],
+  "gemini_omni_flash_1.1": [
+   "`gemini_omni_flash_1.1` (360p) | 3.4 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video",
+   "`gemini_omni_flash_1.1` (720p) | 10 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video",
+   "`gemini_omni_flash_1.1` (1080p) | 15 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video",
+   "`gemini_omni_flash_1.1` (4K) | 30 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video"
+  ],
+  "gen4.5": [
+   "`gen4.5` | 12 credits per second"
+  ],
+  "gen4_image": [
+   "`gen4_image` | 5 credits per 720p image, or 8 credits per 1080p image"
+  ],
+  "gen4_image_turbo": [
+   "`gen4_image_turbo` | 2 credits per image, any resolution"
+  ],
+  "gen4_turbo": [
+   "`gen4_turbo` | 5 credits per second"
+  ],
+  "gpt_image_2": [
+   "`gpt_image_2` | 1–41 credits per image, by quality and resolution (see below)",
+   "`gpt_image_2` is billed as credits per image × `outputCount`. The `auto` resolution is billed at the 4K tier. Default quality is `high`."
+  ],
+  "gpt_image_2_5_flare": [
+   "`gpt_image_2_5_flare` | 1–76 credits per image, by quality and resolution, plus 1 credit per reference image (see below)",
+   "`gpt_image_2_5_flare` and `gpt_image_2_5_sunburst` are billed on the same table, as (credits per image + 1 credit per reference image) × `outputCount` — reference images are charged once per generated image, not once per request. The `auto` resolution is billed at the 4K tier. Default quality is `high`."
+  ],
+  "gpt_image_2_5_sunburst": [
+   "`gpt_image_2_5_sunburst` | 1–76 credits per image, by quality and resolution, plus 1 credit per reference image (see below)",
+   "`gpt_image_2_5_flare` and `gpt_image_2_5_sunburst` are billed on the same table, as (credits per image + 1 credit per reference image) × `outputCount` — reference images are charged once per generated image, not once per request. The `auto` resolution is billed at the 4K tier. Default quality is `high`."
+  ],
+  "grok_imagine_1_5": [
+   "`grok_imagine_1_5` (480p) | 10 credits per second, plus 1 credit per image or audio reference (including an image-to-video start frame)",
+   "`grok_imagine_1_5` (720p) | 16 credits per second, plus 1 credit per image or audio reference (including an image-to-video start frame)",
+   "`grok_imagine_1_5` (1080p) | 29 credits per second, plus 1 credit per image or audio reference (including an image-to-video start frame)"
+  ],
+  "grok_imagine_1_5_lite": [
+   "`grok_imagine_1_5_lite` (480p) | 2 credits per second, plus 1 credit for an image-to-video start frame",
+   "`grok_imagine_1_5_lite` (720p) | 3 credits per second, plus 1 credit for an image-to-video start frame",
+   "`grok_imagine_1_5_lite` (1080p) | 14 credits per second, plus 1 credit for an image-to-video start frame"
+  ],
+  "grok_imagine_image_2": [
+   "`grok_imagine_image_2` | 4–8 credits per image, by quality and resolution (see below)",
+   "`grok_imagine_image_2` is billed as `outputCount × perImage + referenceCount × 1`. Reference images cost 1 credit each and are charged once per request, not per output image — for example, four 1K `medium` images with two references is `4 × 6 + 2` = 26 credits. Default quality is `medium`; anything other than `low` (including an omitted `quality`) bills as `medium`. `auto_1k` and `auto_2k` bill at the 1K and 2K tiers. A plain 1K generation is 6 credits (the minimum charge). With `outputCount` capped at 4 and references at 3, the maximum for a single request is 35 credits."
+  ],
+  "gwm1_avatars": [
+   "`gwm1_avatars` | 2 credits upfront, then 2 credits per 6 seconds"
+  ],
+  "h3_max": [
+   "`h3_max` (480p) | 5 credits per second",
+   "`h3_max` (768p) | 8 credits per second"
+  ],
+  "hailuo3": [
+   "`hailuo3` (768P) | 10 credits per second, plus 2 credits per reference image or keyframe (including an image-to-video start frame); reference video billed at the same per-second rate as output (capped at 15 seconds)",
+   "`hailuo3` (2K) | 15 credits per second, plus 2 credits per reference image or keyframe (including an image-to-video start frame); reference video billed at the same per-second rate as output (capped at 15 seconds)"
+  ],
+  "happyhorse_1_0": [
+   "`happyhorse_1_0` (720p) | 15 credits per second",
+   "`happyhorse_1_0` (1080p) | 30 credits per second"
+  ],
+  "ideogram_4_0": [
+   "`ideogram_4_0` | 4–11 credits per image, by quality (see below)",
+   "`ideogram_4_5` and `ideogram_4_0` are billed as credits per image × `outputCount`, at any resolution. `ideogram_4_5` defaults to `medium` when generating from reference images and `high` otherwise, including `preciseEdit`; `very_low` requires reference images and is not available with `preciseEdit`. `ideogram_4_0` defaults to `medium`.",
+   "Quality `very_low`: —",
+   "Quality `low`: 4",
+   "Quality `medium`: 7",
+   "Quality `high`: 11"
+  ],
+  "ideogram_4_5": [
+   "`ideogram_4_5` | 1–25 credits per image, by quality (see below)",
+   "`ideogram_4_5` and `ideogram_4_0` are billed as credits per image × `outputCount`, at any resolution. `ideogram_4_5` defaults to `medium` when generating from reference images and `high` otherwise, including `preciseEdit`; `very_low` requires reference images and is not available with `preciseEdit`. `ideogram_4_0` defaults to `medium`.",
+   "Quality `very_low`: 1",
+   "Quality `low`: 4",
+   "Quality `medium`: 8",
+   "Quality `high`: 25"
+  ],
+  "kling2.5_turbo_pro": [
+   "`kling2.5_turbo_pro` | 12 credits per second"
+  ],
+  "kling3.0_4k": [
+   "`kling3.0_4k` | 43 credits per second"
+  ],
+  "kling3.0_pro": [
+   "`kling3.0_pro` (no audio) | 12 credits per second",
+   "`kling3.0_pro` (audio) | 17 credits per second"
+  ],
+  "kling3.0_standard": [
+   "`kling3.0_standard` (no audio) | 9 credits per second",
+   "`kling3.0_standard` (audio) | 13 credits per second"
+  ],
+  "magnific_precision_upscaler_v2": [
+   "`magnific_precision_upscaler_v2` | 25 credits per image, or 150 credits when output exceeds 4096px"
+  ],
+  "magnific_video_upscaler_creative": [
+   "`magnific_video_upscaler_creative` is billed per output frame, not per second of video. Credits = `ceil(USD / 0.01)`, where `USD = rate × fps × duration_seconds`. Minimum 1 credit per generation. When `fpsBoost` is enabled, output frame count may differ from input and affect cost. Frame-rate conversion on the same endpoint is billed separately — see [Enhance Frame Rate pricing](#enhance-frame-rate-pricing).",
+   "`720p`, `1k` | $0.007 | 210 credits",
+   "`2k` | $0.009 | 270 credits",
+   "`4k` | $0.012 | 360 credits"
+  ],
+  "muse_image": [
+   "`muse_image` | 1 credit per image, any resolution"
+  ],
+  "nano_banana_2.1": [
+   "`nano_banana_2.1` | 4 credits per 1K image, 6 credits per 2K image, 12 credits per 4K image"
+  ],
+  "ruby": [
+   "`ruby` | 20 credits per second; 40 credits per second when the source is larger than 4 megapixels (roughly 4K)"
+  ],
+  "seed_audio": [
+   "`seed_audio` | 0.25 credits per second (5 credit minimum per generation)"
+  ],
+  "seedance2": [
+   "`seedance2` (480p/720p) | 36 credits per second",
+   "`seedance2` (1080p) | 40 credits per second",
+   "`seedance2` (4K) | 150 credits per second"
+  ],
+  "seedance2_5": [
+   "`seedance2_5` (480p) | 20 credits per second of output, plus 10 credits per second of input and reference video (combined video capped at 30 seconds); reference images and audio are free (80 credit minimum per generation)",
+   "`seedance2_5` (720p) | 30 credits per second of output, plus 15 credits per second of input and reference video (combined video capped at 30 seconds); reference images and audio are free (80 credit minimum per generation)",
+   "`seedance2_5` (1080p) | 68 credits per second of output, plus 34 credits per second of input and reference video (combined video capped at 30 seconds); reference images and audio are free (80 credit minimum per generation)"
+  ],
+  "seedance2_fast": [
+   "`seedance2_fast` (480p/720p) | 29 credits per second"
+  ],
+  "seedance2_mini": [
+   "`seedance2_mini` (480p/720p) | 16 credits per second (64 credit minimum per generation)"
+  ],
+  "seedream5_lite": [
+   "`seedream5_lite` | 4 credits per image, any resolution"
+  ],
+  "seedream5_pro": [
+   "`seedream5_pro` | 5 credits per 1K image, 9 credits per 2K image"
+  ],
+  "veo3.1": [
+   "`veo3.1 (audio)` | 40 credits per second",
+   "`veo3.1 (no audio)` | 20 credits per second"
+  ],
+  "veo3.1_fast": [
+   "`veo3.1_fast (audio)` | 15 credits per second",
+   "`veo3.1_fast (no audio)` | 10 credits per second"
+  ],
+  "wan3": [
+   "`wan3` (480p) | 5 credits per second",
+   "`wan3` (720p) | 10 credits per second",
+   "`wan3` (1080p) | 20 credits per second"
+  ],
+  "wan3_prime": [
+   "`wan3_prime` (480p) | 6.8 credits per second",
+   "`wan3_prime` (720p) | 14 credits per second",
+   "`wan3_prime` (1080p) | 28 credits per second"
+  ]
+ },
+ "source": "https://docs.dev.runwayml.com/guides/pricing.md"
+}

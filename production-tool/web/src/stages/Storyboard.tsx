@@ -379,7 +379,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
             title={`Redraw frame ${index + 1} only, from what shot ${index + 1} says now`}
             onClick={() => void start({ kind: 'one', item: { kind: 'frame', shotId: shot.id } })}
             items={after > 1 ? [{
-              label: `Redraw this and the frames after (${after})`, hint: update.cost(afterScope), icon: '⇥',
+              label: `Redraw this and the frames after (${after})`, icon: '⇥',
               onSelect: () => void start(afterScope),
             }] : []}>
             Redraw
@@ -391,7 +391,7 @@ function FrameCard({ shot, index, onDraw, onNext }: { shot: Shot; index: number;
         <div className="cardstate drift">
           <span>{driftLabel(drift)}</span><span aria-hidden="true">·</span>
           <button className="linkbtn" disabled={update.running}
-            title={`Redraw this frame and every one after it, then their clips and the ad (${update.size(carryScope)} · ${update.cost(carryScope)})`}
+            title={`Redraw this frame and every one after it, then their clips and the ad (${update.size(carryScope)})`}
             onClick={() => void start(carryScope)}>Carry the look forward</button>
         </div>
       )}

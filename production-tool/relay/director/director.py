@@ -20,7 +20,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 from providers import CapabilityMissing, ProviderJob, check_capabilities
-from providers.types import CONTRACTS, IMAGE_OPS
+from providers.types import CONTRACTS, prompt_max, utf16_units
 from providers.tags import TAG as TAG_IN_TEXT, UnknownTag, rewrite_tags, unsent_in_words
 
 from .base import fit_duration, require_prompt, view_angle
@@ -51,7 +51,6 @@ RUNWAY_CLIP_RATIOS = frozenset(("1280:720", "720:1280", "1080:1920", "1920:1080"
 # Endpoints that take no usable ratio: the output keeps the input's shape (or the endpoint has no such field).
 NO_RATIO = {("runway", "clip_edit")}
 # Longest prompt per provider and op kind; a longer one is a 400 from the provider.
-PROMPT_MAX = {("runway", "clip"): 1000, ("runway", "clip_edit"): 1000, ("runway", "image"): 5500}
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
 # per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
@@ -448,10 +447,11 @@ class Director:
 
     @staticmethod
     def _check_provider_limits(op: str, sheet: dict, job: dict) -> None:
-        provider, kind = job["provider"], "image" if op in IMAGE_OPS else op
-        limit = PROMPT_MAX.get((provider, kind))
-        if limit and len(job["prompt"]) > limit:
-            raise DirectorError(f"{provider} {op} prompt is {len(job['prompt'])} characters, over its {limit}")
+        provider = job["provider"]
+        # The model's own limit, from the catalogue, counted as Runway counts (UTF-16 code units).
+        limit = prompt_max(sheet, job.get("model") or sheet["ops"][op]["model"])
+        if limit and utf16_units(job["prompt"]) > limit:
+            raise DirectorError(f"{provider} {op} prompt is {utf16_units(job['prompt'])} characters, over its {limit}")
         ratio = job.get("ratio")
         if ratio and (provider, op) in NO_RATIO:
             # The model often copies the ratio it was given; the frame or clip sets the shape here,

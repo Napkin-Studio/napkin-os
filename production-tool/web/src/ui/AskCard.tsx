@@ -1,7 +1,7 @@
 // The minimal ask card (ui-behaviour 3.17; features/contract-v3.clan, the only
 // new UI on today's panels): an agent asked instead of guessing, and its job
 // waits (needs_input). The card shows the question, why, the options with their
-// cost or detail, the text box when the question allows one, Later, and once
+// detail (never a cost: owner, 2026-10-13), the text box when the question allows one, Later, and once
 // answered, who chose what with Change. Anyone in the agency may answer; the
 // first answer wins (the relay says who won).
 
@@ -13,8 +13,6 @@ import { sendAnswer } from './asks'
 import { AgentFigure } from './agents/AgentFigure'
 import './askcard.css'
 
-const money = (n: number) => `about $${n < 1 ? n.toFixed(2) : n.toFixed(2)}`
-
 /** The question's options as buttons, the recommended one marked. */
 export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boolean; onPick: (optionId: string) => void }) {
   return (
@@ -23,7 +21,7 @@ export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boo
         <button key={o.id} className={`btn sm askcard-opt${o.id === q.recommended_option_id ? ' rec' : ''}`} disabled={disabled} onClick={() => onPick(o.id)}>
           {o.label}
           {o.id === q.recommended_option_id && <span className="askcard-rec"> · Recommended</span>}
-          {(o.detail || o.cost) && <span className="askcard-detail"> · {o.detail ?? (o.cost ? money(o.cost.estimate) : '')}</span>}
+          {o.detail && <span className="askcard-detail"> · {o.detail}</span>}
         </button>
       ))}
     </div>

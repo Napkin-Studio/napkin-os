@@ -417,7 +417,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .modelchip { display: inline-flex; align-items: center; gap: 6px; height: 26px; max-width: 220px; padding: 0 9px 0 6px; border-radius: var(--r-pill); border: 1px solid transparent; background: var(--soft); font: inherit; font-size: 12px; font-weight: 600; color: var(--ink2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .modelchip:hover { border-color: var(--line); }
 .modelchip.open { border-color: var(--tool); background: var(--tool-soft); color: var(--tool-ink); }
-.modelprice { font-size: 11.5px; white-space: nowrap; }
 .caret { font-size: 9px; color: var(--ink3); }
 .pmark { width: 16px; height: 16px; border-radius: 5px; display: inline-grid; place-items: center; flex-shrink: 0; font: 700 9px var(--f-mono); color: #fff; background: var(--produce); }
 .pmark-runway { background: #14161B; }

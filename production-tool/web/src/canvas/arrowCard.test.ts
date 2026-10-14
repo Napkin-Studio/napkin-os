@@ -45,7 +45,9 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(card.fallback).toBeUndefined()
     expect(card.state).toBeUndefined()
     expect(card.when).toBe('Ran at 14:05 · took 12 s')
-    expect(card.cost).toBe('$0.15')
+    // No cost on the canvas (owner, 2026-10-13): History shows it.
+    expect(card).not.toHaveProperty('cost')
+    expect(cardLines(card).join(' ')).not.toMatch(/\$/)
     // The arrow from the named image marks that one.
     expect(arrowCard(doc, ui, { from: 'node_maya', to: 'job_g' }, { kindOf }).from[0]).toEqual({ label: '@maya_front', here: true })
     // An arrow from a text box names its words.
@@ -102,11 +104,8 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(card.told).toBeUndefined()
     expect(card.passthrough).toBe('No director: your words went to the model as written.')
     expect(card.who).toBe('Dex · the mock (no model)')
-    expect(card.cost).toBeUndefined()
-    doc.jobs.job_p.cost = { confirmed: 0, currency: 'USD', unknown: false }
-    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }).cost).toBeUndefined()
     doc.jobs.job_p.cost = { estimate: 0.04, currency: 'USD', unknown: false }
-    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }).cost).toBe('about $0.040')
+    expect(cardLines(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' })).join(' ')).not.toMatch(/\$/)
   })
 
   it('a step still running, or with no record, says so', () => {

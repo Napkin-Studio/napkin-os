@@ -101,11 +101,11 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
 
 // ── The regenerate menu (features/model-choice.clan) ──
 
-/** One model a person may pick when they regenerate. */
+/** One model a person may pick when they regenerate. No price: the UI shows none (owner, 2026-10-13);
+ *  each job's cost is recorded and shown in History. */
 export interface ModelOption extends ModelChoice {
   label: string
   note?: string
-  estimateUsd: number | null
 }
 
 /** What the menu offers for an op: each routed provider in the order its jobs run (Runway, the floor,
@@ -116,8 +116,8 @@ export function modelChoicesFor(op: Op, config: Config, sheets: Sheets = SHEETS)
   for (const provider of config.routing[op] ?? []) {
     const spec = sheets[provider]?.ops[op]
     if (!spec) continue
-    out.push({ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note, estimateUsd: spec.estimateUsd ?? null })
-    for (const a of spec.alternates ?? []) out.push({ provider, model: a.model, label: a.label, note: a.note, estimateUsd: a.estimateUsd })
+    out.push({ provider, model: spec.model, label: spec.label ?? spec.model, note: spec.note })
+    for (const a of spec.alternates ?? []) out.push({ provider, model: a.model, label: a.label, note: a.note })
   }
   return out
 }
