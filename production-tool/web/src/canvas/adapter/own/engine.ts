@@ -24,6 +24,9 @@ export function probeCapabilities(): InputCapabilities {
   }
 }
 
+/** Single-key tools on the canvas until the toolbar offers them (ui-behaviour 7). */
+const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter' }
+
 const layer = (host: HTMLElement, z: number) => {
   const c = document.createElement('canvas')
   c.style.cssText = `position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;z-index:${z}`
@@ -56,6 +59,11 @@ export const ownEngine: CanvasEngine = {
     const caps = probeCapabilities()
     let frame = 0
     let hover: { x: number; y: number; r: number } | null = null
+    let shift = false
+    // The canvas keeps its own undo and Delete (ui/undoKeys.ts reads this), as Excalidraw's does.
+    host.dataset.ownCanvas = ''
+    host.tabIndex = 0
+    host.style.outline = 'none'
 
     const drawLive = () => {
       const dpr = drawDpr(devicePixelRatio)
@@ -76,6 +84,22 @@ export const ownEngine: CanvasEngine = {
           lctx.fill(p)
           lctx.globalAlpha = 1
         }
+      }
+      const sel = adapter.selector
+      if (sel.marquee || sel.lasso) {
+        lctx.setTransform(dpr * v.zoom, 0, 0, dpr * v.zoom, dpr * v.zoom * v.scrollX, dpr * v.zoom * v.scrollY)
+        lctx.strokeStyle = '#4a7fd4'
+        lctx.fillStyle = 'rgba(74, 127, 212, 0.08)'
+        lctx.lineWidth = 1 / v.zoom
+        lctx.beginPath()
+        if (sel.marquee) lctx.rect(sel.marquee.x0, sel.marquee.y0, sel.marquee.x1 - sel.marquee.x0, sel.marquee.y1 - sel.marquee.y0)
+        else if (sel.lasso?.length) {
+          lctx.moveTo(sel.lasso[0].x, sel.lasso[0].y)
+          for (const p of sel.lasso.slice(1)) lctx.lineTo(p.x, p.y)
+          lctx.closePath()
+        }
+        lctx.fill()
+        lctx.stroke()
       }
       if (hover) {
         lctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -157,6 +181,24 @@ export const ownEngine: CanvasEngine = {
         case 'hover-end':
           hover = null
           break
+        case 'press':
+          adapter.selector.press(toScene(i.x, i.y), { shift, by: i.by })
+          break
+        case 'drag':
+          adapter.selector.drag(toScene(i.x, i.y))
+          break
+        case 'release':
+          try {
+            adapter.selector.release(toScene(i.x, i.y))
+          } catch (e) {
+            console.warn('the move was not kept', e)
+          }
+          break
+        case 'undo':
+        case 'redo':
+          adapter.undoScene(i.kind)
+          adapter.emitIntent(i)
+          break
         default:
           adapter.emitIntent(i)
       }
@@ -182,6 +224,8 @@ export const ownEngine: CanvasEngine = {
       adapter.pointer(s)
     }
     const feed = (phase: RawPointer['phase']) => (e: PointerEvent) => {
+      shift = e.shiftKey
+      if (phase === 'down') host.focus({ preventScroll: true })
       if (phase === 'down') live.setPointerCapture?.(e.pointerId)
       if (phase === 'down' || phase === 'up') sample(phase, e)
       else if (phase === 'move' && e.buttons) sample('move', e)
@@ -209,6 +253,28 @@ export const ownEngine: CanvasEngine = {
       }
     }
     live.addEventListener('wheel', onWheel, { passive: false })
+    // Keys on the canvas: this person's undo and redo, and Delete. Never while an IME is composing.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return
+      const mod = e.ctrlKey || e.metaKey
+      const key = e.key.toLowerCase()
+      if (mod && key === 'z') {
+        e.preventDefault()
+        adapter.undoScene(e.shiftKey ? 'redo' : 'undo')
+      } else if (mod && key === 'y') {
+        e.preventDefault()
+        adapter.undoScene('redo')
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && adapter.selector.selected.size) {
+        e.preventDefault()
+        adapter.selector.deleteSelected()
+      } else if (e.key === 'Escape') adapter.selector.cancel()
+      else if (!mod && !e.altKey && TOOL_KEYS[key]) adapter.setActiveTool({ type: 'native', id: TOOL_KEYS[key] })
+      else return
+      draw()
+    }
+    host.addEventListener('keydown', onKey)
     adapter.attach(() => {
       offChange()
       ro?.disconnect()
@@ -216,6 +282,7 @@ export const ownEngine: CanvasEngine = {
       cancelAnimationFrame(ticking)
       for (const [name, fn] of handlers) live.removeEventListener(name, fn as EventListener)
       live.removeEventListener('wheel', onWheel)
+      host.removeEventListener('keydown', onKey)
       renderer.destroy()
       adapter.useRenderer(null)
       main.remove()

@@ -22,7 +22,9 @@ describe('OwnAdapter', () => {
     a.transact(() => [r], { undoable: false })
     a.transact((els) => els.map((e) => a.patch(e, { x: 5, customData: { kind: 'sketch', id: 's' } })), { undoable: true })
     expect(steps).toEqual([{ changes: [{ id: r.id, field: 'x', before: 0, after: 5 }] }])
-    expect(Object.keys(a).some((k) => /undo|history|stack/i.test(k))).toBe(false)
+    // The engine's store keeps no stack; the person's steps are the coordinator's (engine-select).
+    expect(Object.keys(a.scene).some((k) => /undo|history|stack/i.test(k))).toBe(false)
+    expect(a.undo.depth().undo).toBe(1)
   })
 
   it('opens a saved own snapshot and saves itself with the engine named', () => {
@@ -110,6 +112,50 @@ describe('OwnAdapter on the engine (features/engine-ink.clan)', () => {
     expect(s.points).toHaveLength(2)
     a.setActiveTool({ type: 'native', id: 'selection' })
     expect(a.router.tool).toBe('select')
+  })
+})
+
+describe('selection and undo on the own adapter (features/engine-select.clan)', () => {
+  it('select() and the select tool are one selection; view() reports it', () => {
+    const a = new OwnAdapter()
+    const r = rect(a)
+    a.transact(() => [r], { undoable: false })
+    a.select([r.id])
+    expect(a.view().selectedIds).toEqual([r.id])
+    expect([...a.selector.selected]).toEqual([r.id])
+    a.selector.press({ x: 500, y: 500 })
+    a.selector.release({ x: 500, y: 500 })
+    expect(a.view().selectedIds).toEqual([])
+  })
+
+  it('undoes only this person’s steps, and says when part was skipped', () => {
+    const mine = new OwnAdapter()
+    const theirs = new OwnAdapter(null, { doc: new Y.Doc() })
+    mine.doc.on('update', (u: Uint8Array, o: unknown) => o !== 'peer' && Y.applyUpdate(theirs.doc, u, 'peer'))
+    theirs.doc.on('update', (u: Uint8Array, o: unknown) => o !== 'peer' && Y.applyUpdate(mine.doc, u, 'peer'))
+    const r = rect(mine)
+    mine.transact((els) => [...els, r], { undoable: true })
+    mine.selector.set([r.id])
+    mine.selector.press({ x: 5, y: 5 })
+    mine.selector.release({ x: 25, y: 5 })
+    // Someone else moves it after.
+    theirs.transact((els) => els.map((e) => theirs.patch(e, { x: 100 })), { undoable: true })
+    const notices: string[] = []
+    mine.onNotice((m) => notices.push(m))
+    expect(mine.undoScene('undo')).toBe(true)
+    expect(notices).toEqual(['Someone changed this after you, so undo skipped it.'])
+    expect(mine.elements()[0].x).toBe(100)
+    expect(theirs.undo.depth().undo).toBe(1)
+  })
+
+  it('the own canvas keeps its own Ctrl+Z, as Excalidraw does', async () => {
+    const { keepsItsOwnUndo } = await import('../../../ui/undoKeys')
+    const host = document.createElement('div')
+    host.dataset.ownCanvas = ''
+    const inner = document.createElement('canvas')
+    host.appendChild(inner)
+    expect(keepsItsOwnUndo(inner)).toBe(true)
+    expect(keepsItsOwnUndo(document.createElement('div'))).toBe(false)
   })
 })
 

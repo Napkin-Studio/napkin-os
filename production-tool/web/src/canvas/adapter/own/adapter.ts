@@ -11,7 +11,9 @@
 // viewport = (scene + scroll) * zoom + offset.
 
 import * as Y from 'yjs'
-import { elementFromRecord, Ink, InputRouter, recordsFromElements, SceneStore, type InkTool, type Intent, type Renderer } from '../../../../../canvas-engine/src'
+import {
+  elementFromRecord, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type InkTool, type Intent, type Renderer,
+} from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
   type ActiveToolSpec, type Anchor, type Bounds, type CanvasAdapter, type CanvasAsset, type CanvasElement, type CanvasSnapshot, type Emphasis,
@@ -75,6 +77,9 @@ export class OwnAdapter implements CanvasAdapter {
   readonly scene: SceneStore
   readonly ink: Ink
   readonly router = new InputRouter()
+  /** This person's scene steps (the scene part of the UndoCoordinator; engine-select). */
+  readonly undo: SceneUndo
+  readonly selector: SelectTool
   /** The ink tool the drawing tools use (freedraw is the pen). */
   inkTool: InkTool = 'pen'
   inkStyle = { color: '#1e1e1e', width: 3 }
@@ -87,7 +92,6 @@ export class OwnAdapter implements CanvasAdapter {
   /** A per-element revision, so version() changes when those elements change. */
   private readonly rev = new Map<string, number>()
   private vp = { scrollX: 0, scrollY: 0, zoom: 1, offsetLeft: 0, offsetTop: 0, width: 800, height: 600 }
-  private selected: string[] = []
   private emph: Emphasis = {}
   private tool: ActiveToolSpec = { type: 'native', id: 'selection' }
   private theme: 'light' | 'dark' = 'light'
@@ -110,6 +114,9 @@ export class OwnAdapter implements CanvasAdapter {
     this.doc = doc ?? new Y.Doc()
     this.scene = new SceneStore(this.doc)
     this.ink = new Ink(this.scene)
+    this.undo = new SceneUndo(this.scene)
+    this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y))
+    this.selector.onChange(() => this.changed())
     this.scene.onChange((ids) => {
       this.cache = null
       for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
@@ -289,11 +296,11 @@ export class OwnAdapter implements CanvasAdapter {
 
   view(): ViewSnapshot {
     const { scrollX, scrollY, zoom, offsetLeft, offsetTop } = this.vp
-    return { scrollX, scrollY, zoom, offsetLeft, offsetTop, selectedIds: [...this.selected] }
+    return { scrollX, scrollY, zoom, offsetLeft, offsetTop, selectedIds: [...this.selector.selected] }
   }
 
   select(ids: readonly string[]) {
-    this.selected = [...ids]
+    this.selector.set(ids)
     this.changed()
   }
 
@@ -373,6 +380,34 @@ export class OwnAdapter implements CanvasAdapter {
 
   private image = (sha: string) => this.decoded.get(sha)
 
+  /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
+  private hitAt(x: number, y: number) {
+    if (this.renderer) return this.renderer.hit(x, y)
+    return this.scene.all()
+      .filter((r) => r.kind !== 'board' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)
+      .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+  }
+
+  private readonly noticeCbs = new Set<(message: string) => void>()
+
+  /** Words for the person (the undo skip notice). */
+  onNotice(cb: (message: string) => void): () => void {
+    this.noticeCbs.add(cb)
+    return () => void this.noticeCbs.delete(cb)
+  }
+
+  /** Undo or redo this person's last scene step; says so when part of it was skipped (ui-behaviour 4.5). */
+  undoScene(dir: 'undo' | 'redo'): boolean {
+    const r = dir === 'undo' ? this.undo.undo() : this.undo.redo()
+    if (!r) return false
+    if (r.skipped) {
+      const msg = r.applied ? 'Someone changed part of this after you, so undo skipped that part.' : 'Someone changed this after you, so undo skipped it.'
+      for (const cb of this.noticeCbs) cb(msg)
+    }
+    this.selector.prune()
+    return true
+  }
+
   /** A decoded picture, for the renderer. */
   imageFor(sha: string): CanvasImageSource | undefined {
     return this.decoded.get(sha)
@@ -445,14 +480,15 @@ export class OwnAdapter implements CanvasAdapter {
   /** The engine's renderer (the mount makes it with the browser's Path2D and bitmaps). */
   useRenderer(r: Renderer | null) {
     this.renderer = r
-    if (r) r.selected = new Set(this.selected)
+    if (r) r.selected = this.selector.selected
   }
 
   /** Draw the scene onto the screen's context, in device pixels at `dpr`. */
   drawTo(ctx: Ctx2D, dpr: number) {
     const { scrollX, scrollY, zoom, width, height } = this.vp
     if (this.renderer) {
-      this.renderer.selected = new Set(this.selected)
+      this.renderer.selected = this.selector.selected
+      this.renderer.moving = this.selector.preview
       this.renderer.draw(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr, this.theme === 'dark' ? '#121212' : '#ffffff')
       return
     }
