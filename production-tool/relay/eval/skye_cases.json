@@ -1,0 +1,525 @@
+{
+ "note": "Our own fixtures for Skye's prompt review (features/script-editor.clan). Each case runs every intent.",
+ "intents": [
+  "tighten",
+  "fit_seconds",
+  "add_beat",
+  "write_vo",
+  "rephrase",
+  "draft"
+ ],
+ "cases": [
+  {
+   "id": "rain-umbrella",
+   "sector": "Product",
+   "lines": [
+    {
+     "type": "action",
+     "text": "It starts to rain on a grey street. @maya_front opens a bright yellow @umbrella_open and grins up at the sky."
+    },
+    {
+     "type": "direction",
+     "text": "Slow push in; the yellow is the only colour."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    },
+    {
+     "name": "umbrella_open",
+     "role": "product"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Product spot"
+  },
+  {
+   "id": "kitchen-soup",
+   "sector": "Food",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@maya_front lifts the lid off a steaming pot in a sunny kitchen, tastes the soup from a wooden spoon and nods slowly."
+    },
+    {
+     "type": "direction",
+     "text": "Warm morning light from the left."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    },
+    {
+     "name": "kitchen_day",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Food spot"
+  },
+  {
+   "id": "beach-dawn",
+   "sector": "Travel",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@maya_front walks the length of the waterline at dawn as the light comes up gold behind her, then stops and looks out to sea."
+    },
+    {
+     "type": "direction",
+     "text": "Unhurried; hold on her face."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    },
+    {
+     "name": "beach_dawn",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Travel spot"
+  },
+  {
+   "id": "jogger",
+   "sector": "Sport",
+   "lines": [
+    {
+     "type": "action",
+     "text": "A @jogger runs past far behind @maya_front as she ties her laces on a park bench."
+    },
+    {
+     "type": "direction",
+     "text": "Shallow focus on Maya."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Sport spot"
+  },
+  {
+   "id": "soda-can",
+   "sector": "Drink",
+   "lines": [
+    {
+     "type": "action",
+     "text": "A cold @soda_can sweats on a picnic table. A hand reaches in, cracks it open, and the fizz rises."
+    },
+    {
+     "type": "direction",
+     "text": "Macro; slow motion on the fizz."
+    }
+   ],
+   "refs": [
+    {
+     "name": "soda_can",
+     "role": "product"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Drink spot"
+  },
+  {
+   "id": "bike-commute",
+   "sector": "Mobility",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@sai_front pedals across a busy bridge at rush hour, weaving past stopped cars, smiling under his helmet."
+    },
+    {
+     "type": "direction",
+     "text": "Tracking alongside at handlebar height."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    },
+    {
+     "name": "bridge_dusk",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Mobility spot"
+  },
+  {
+   "id": "phone-call",
+   "sector": "Telecom",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@maya_front answers her phone on a crowded train, covers her other ear, and laughs at whatever she hears."
+    },
+    {
+     "type": "direction",
+     "text": "Handheld, close."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Telecom spot"
+  },
+  {
+   "id": "coffee-shop",
+   "sector": "Food",
+   "lines": [
+    {
+     "type": "action",
+     "text": "In a small coffee shop, the barista slides a cup across the counter to @sai_front, who takes the first sip and closes his eyes."
+    },
+    {
+     "type": "direction",
+     "text": "Steam catches the window light."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    },
+    {
+     "name": "cafe_morning",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Food spot"
+  },
+  {
+   "id": "dog-park",
+   "sector": "Pets",
+   "lines": [
+    {
+     "type": "action",
+     "text": "A muddy @dog_rex bounds through the park and leaps into @maya_front's arms, knocking her hat off."
+    },
+    {
+     "type": "direction",
+     "text": "Wide, then a whip pan to the catch."
+    }
+   ],
+   "refs": [
+    {
+     "name": "dog_rex",
+     "role": "character"
+    },
+    {
+     "name": "maya_front",
+     "role": "character"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Pets spot"
+  },
+  {
+   "id": "laptop-launch",
+   "sector": "Tech",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@sai_front opens a thin @laptop_silver on a kitchen table, and the screen lights his face blue in the dark room."
+    },
+    {
+     "type": "direction",
+     "text": "Only the screen lights the scene."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    },
+    {
+     "name": "laptop_silver",
+     "role": "product"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Tech spot"
+  },
+  {
+   "id": "garden-rain",
+   "sector": "Home",
+   "lines": [
+    {
+     "type": "action",
+     "text": "Rain drums on a greenhouse roof while @maya_front repots a small tomato plant, humming to herself."
+    },
+    {
+     "type": "direction",
+     "text": "Rain sound up; soft focus outside."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Home spot"
+  },
+  {
+   "id": "market-stall",
+   "sector": "Retail",
+   "lines": [
+    {
+     "type": "action",
+     "text": "At a busy street market, @sai_front holds up a ripe mango, sniffs it, and hands coins to the stallholder."
+    },
+    {
+     "type": "direction",
+     "text": "Colourful, crowded background."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    },
+    {
+     "name": "market_day",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Retail spot"
+  },
+  {
+   "id": "mountain-top",
+   "sector": "Outdoor",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@maya_front reaches the mountain summit, drops her backpack, and spreads her arms in the wind above the clouds."
+    },
+    {
+     "type": "direction",
+     "text": "Drone pull-out to reveal the peaks."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    },
+    {
+     "name": "peak_dawn",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Outdoor spot"
+  },
+  {
+   "id": "late-bus",
+   "sector": "Transport",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@sai_front runs for the last night bus, the doors close, then open again; the driver waves him on."
+    },
+    {
+     "type": "direction",
+     "text": "Wide from across the street."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Transport spot"
+  },
+  {
+   "id": "bakery",
+   "sector": "Food",
+   "lines": [
+    {
+     "type": "action",
+     "text": "Flour rises in a beam of light as @maya_front pulls a golden loaf from the oven and taps its base."
+    },
+    {
+     "type": "direction",
+     "text": "Close on the tap; hear the hollow sound."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Food spot"
+  },
+  {
+   "id": "paint-wall",
+   "sector": "Home",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@sai_front rolls a stripe of bright blue paint across a white wall, steps back, and tilts his head."
+    },
+    {
+     "type": "direction",
+     "text": "Locked off; he walks out of frame."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    },
+    {
+     "name": "paint_blue",
+     "role": "product"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Home spot"
+  },
+  {
+   "id": "swim-lake",
+   "sector": "Outdoor",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@maya_front dives off a wooden jetty into a still lake, and the ripples spread to the far shore."
+    },
+    {
+     "type": "direction",
+     "text": "Hold on the ripples after she is gone."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    },
+    {
+     "name": "lake_summer",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Outdoor spot"
+  },
+  {
+   "id": "headphones",
+   "sector": "Tech",
+   "lines": [
+    {
+     "type": "action",
+     "text": "On a noisy platform @sai_front slips on @headphones_black, and the crowd noise drops away to music."
+    },
+    {
+     "type": "direction",
+     "text": "Sound cuts to the music on the put-on."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sai_front",
+     "role": "character"
+    },
+    {
+     "name": "headphones_black",
+     "role": "product"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Tech spot"
+  },
+  {
+   "id": "first-car",
+   "sector": "Auto",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@maya_front sits in her first car, grips the wheel with both hands, takes a breath, and turns the key."
+    },
+    {
+     "type": "direction",
+     "text": "Interior, low angle up at her."
+    }
+   ],
+   "refs": [
+    {
+     "name": "maya_front",
+     "role": "character"
+    },
+    {
+     "name": "car_red",
+     "role": "product"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Auto spot"
+  },
+  {
+   "id": "end-card",
+   "sector": "Brand",
+   "lines": [
+    {
+     "type": "action",
+     "text": "The logo settles over a slow pan across a calm sea at dusk."
+    },
+    {
+     "type": "direction",
+     "text": "Leave space for the tagline."
+    }
+   ],
+   "refs": [
+    {
+     "name": "sea_dusk",
+     "role": "location"
+    }
+   ],
+   "seconds": 2.5,
+   "target_s": 15,
+   "title": "Brand spot"
+  }
+ ]
+}
