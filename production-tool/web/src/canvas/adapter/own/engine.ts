@@ -82,6 +82,7 @@ export const ownEngine: CanvasEngine = {
     // Select first, as Excalidraw opens: the tool bar's pen (P) draws.
     adapter.setActiveTool({ type: 'native', id: 'selection' })
     adapter.surfaceFor = (theme) => surfaceOf(host, theme)
+    adapter.focusCanvas = () => host.focus({ preventScroll: true })
     const main = layer(host, 0)
     const live = layer(host, 1)
     live.style.pointerEvents = 'auto'

@@ -433,6 +433,8 @@ export class OwnAdapter implements CanvasAdapter {
   private currentBoard: string | null = null
   /** The surface for a theme; null draws the plain white or near-black canvas. */
   surfaceFor: ((theme: 'light' | 'dark') => Surface) | null = null
+  /** Give the canvas the keyboard again (the mounted engine's host), so ⌘Z after a chrome action is the canvas's. */
+  focusCanvas: (() => void) | null = null
   private surface: { theme: string; s: Surface } | null = null
 
   setActiveTool(tool: ActiveToolSpec) {
@@ -525,6 +527,8 @@ export class OwnAdapter implements CanvasAdapter {
     if (!made) return null
     this.transact((all) => [...all, made.area, ...made.strokes], { undoable: true })
     this.select([made.area.id])
+    // The picker had the focus: the next ⌘Z or Delete is the canvas's, on the copy.
+    this.focusCanvas?.()
     return made.area.id
   }
 
