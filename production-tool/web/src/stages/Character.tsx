@@ -12,7 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import { scriptRoute } from '../app/route'
 import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
-import { boardRows, type BoardRow } from '../canvas/chrome/boards'
+import { boardFrames, boardRows, type BoardRow } from '../canvas/chrome/boards'
+import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
 import type { CanvasChrome } from '../canvas/chrome/controls'
 import { usePanels } from '../ui/chrome/panels'
 import { AssetsDrawer } from '../ui/assets/AssetsDrawer'
@@ -24,7 +25,7 @@ import { framesFromSketch, sketchDeleteText } from '../doc/remove'
 import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
-import { alive, bounds, cd, imageOf, isText, isUserDrawing, type Canvas, type El } from '../canvas/scene'
+import { alive, bounds, byOwnId, cd, imageOf, isText, isUserDrawing, type Canvas, type El } from '../canvas/scene'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
 import { keyNamed, keysList, mainScript, mainStoryboard, refsList } from '../model/selectors'
@@ -274,7 +275,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     const want = row.target.kind === 'refs' ? new Set(row.target.nodes) : new Set<string>()
     const hit = alive(canvas.elements()).filter((e) => {
       const c = cd(e)
-      return want.has(e.id) || (row.target.kind === 'board' && c?.kind === 'board' && c.id === row.target.id)
+      return want.has(e.id) || (!!c && 'id' in c && want.has(c.id)) || (row.target.kind === 'board' && c?.kind === 'board' && c.id === row.target.id)
     })
     if (hit.length) canvas.fit(hit, { zoomFactor: 0.8, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
   }, [canvas, open])
@@ -284,13 +285,26 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     open(kind)
   }, [chrome, open])
   const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
+  // The boards drawn over the canvas until art-boards makes them frames (mock Main): picture boards
+  // wrap their pictures; Script, Storyboard and Video hold their node cards.
+  const frames = useMemo(() => {
+    if (Object.keys(doc.boards ?? {}).length) return []
+    const groups = rows.flatMap((r) => {
+      if (r.target.kind !== 'refs') return []
+      const hit = r.target.nodes.map((n) => byOwnId(els, n)).filter((e): e is El => !!e)
+      return hit.length ? [{ id: r.id, title: r.title, box: bounds(hit) }] : []
+    })
+    return boardFrames(groups)
+  }, [doc.boards, rows, els])
   // The dot grid moves with the canvas.
   const grid = vs ? { '--grid-x': `${vs.view.scrollX * vs.view.zoom}px`, '--grid-y': `${vs.view.scrollY * vs.view.zoom}px`, '--grid-s': `${24 * vs.view.zoom}px` } as React.CSSProperties : undefined
 
   return (
     <div className="character">
       <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
+        {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <CanvasView initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} />
+        {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <div className="overlay-layer">
           <FlowArrows els={els} toView={toView} />
           {els.map((e) => {
@@ -299,7 +313,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             const named = img ? refsList(doc).find((r) => r.node === img.id) : undefined
             return (
               <span key={e.id}>
-                {named && <NameChip r={named} at={toView({ x: e.x, y: e.y })} />}
+                {named && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
               </span>
             )

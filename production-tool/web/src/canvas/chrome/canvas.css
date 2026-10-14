@@ -3,7 +3,7 @@
 
 /* ── Boards rail (left, frosted) ─────────────────────────────────────────── */
 .board-rail {
-  position: absolute; left: 16px; top: 16px; width: 208px; padding: 12px; z-index: 5;
+  position: absolute; left: 16px; top: 16px; width: 208px; padding: 12px; z-index: 3;
   display: flex; flex-direction: column; gap: 2px;
 }
 .board-rail .br-head { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); padding: 4px 8px 8px; }
@@ -19,7 +19,7 @@
 .br-new { margin-top: 6px; text-align: left; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; font-size: 13px; color: var(--ink2); }
 .br-new:disabled { cursor: default; }
 .board-rail .br-foot { margin-top: 10px; padding: 10px 8px 2px; border-top: 1px solid var(--line-soft); font-family: var(--f-mono); font-size: 11px; line-height: 1.6; color: var(--ink3); }
-.br-pill { position: absolute; left: 16px; top: 16px; z-index: 5; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px; border-radius: var(--r-pill); font-size: 14px; cursor: pointer; color: var(--ink); }
+.br-pill { position: absolute; left: 16px; top: 16px; z-index: 3; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px; border-radius: var(--r-pill); font-size: 14px; cursor: pointer; color: var(--ink); }
 .br-pill .br-cur { color: var(--tool-ink); font-weight: 600; }
 .br-sheet { width: 300px; padding: 8px; }
 .br-sheet .br-row { min-height: 48px; font-size: 15px; }
@@ -28,7 +28,7 @@
 
 /* ── The tool bar (bottom, centred) ──────────────────────────────────────── */
 .canvas-toolbar {
-  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 5;
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 3;
   display: flex; align-items: center; gap: 4px; padding: 6px;
   background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-pop);
 }
@@ -48,7 +48,7 @@
 
 /* ── Zoom and undo (bottom right) ────────────────────────────────────────── */
 .zoom-pill {
-  position: absolute; right: 16px; bottom: 20px; z-index: 5; display: flex; align-items: center; gap: 4px; padding: 4px;
+  position: absolute; right: 16px; bottom: 20px; z-index: 3; display: flex; align-items: center; gap: 4px; padding: 4px;
   background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); font-size: 12px;
 }
 .zoom-pill button { width: 30px; height: 30px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; color: var(--ink); padding: 0; font-size: 13px; }
@@ -120,3 +120,46 @@
 .zoom-pill.touch .zp-value { width: 56px; font-size: 13px; }
 .zoom-pill.touch .zp-fit { width: auto; padding: 0 12px; font-size: 14px; }
 .br-pill { left: 100px; }
+
+/* ── The boards over today's canvas (mock Main) ───────────────────────────── */
+/* Layers, bottom up: the board frames, the canvas (transparent), the node cards, the chrome, the overlays. */
+.boards-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.boards-layer.frames { z-index: 0; }
+.canvas-wrap > .excalidraw { position: relative; z-index: 1; }
+.boards-layer.cards { z-index: 2; }
+.bl-cardbox { position: absolute; transform-origin: 0 0; }
+.bl-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.bl-links path { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.bl-linklabel { position: absolute; padding: 2px 8px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line); font-size: 11px; color: var(--ink2); }
+.bl-board { position: absolute; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--r-board); background: rgba(255, 255, 255, 0.55); }
+:root[data-theme='dark'] .bl-board { background: rgba(22, 26, 31, 0.45); }
+.bl-board.current { border: 2px solid var(--tool); }
+.bl-title { position: absolute; left: 14px; top: -11px; padding: 2px 8px; background: var(--canvas-bg); font-size: 12px; font-weight: 600; color: var(--ink2); }
+.bl-board.current .bl-title { color: var(--tool-ink); top: -12px; }
+.bl-card {
+  position: absolute; left: 16px; right: 16px; top: 22px; pointer-events: auto; box-sizing: border-box;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+}
+.bl-cardhead { display: flex; align-items: center; gap: 8px; }
+.bl-cardhead b { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.bl-av { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; font-size: 11.5px; line-height: 1.45; }
+.bl-avhead { padding: 6px 8px; background: var(--soft); font-family: var(--f-mono); font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.06em; }
+.bl-avcell { padding: 6px 8px; border-top: 1px solid var(--line-soft); }
+.bl-avcell.muted { color: var(--ink2); }
+.bl-excerpt { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.bl-meta { font-size: 12px; color: var(--ink3); }
+.bl-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.bl-frame { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.bl-frame img, .bl-noframe { width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; display: block; }
+.bl-noframe { border: 1.5px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 10.5px; color: var(--ink3); background: var(--card); }
+.bl-frame figcaption { font-size: 11px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bl-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); }
+.bl-atwork { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-pill); font-size: 12px; color: var(--ink2); background: var(--soft); }
+.bl-atwork.warm { background: #FFF7E0; }
+:root[data-theme='dark'] .bl-atwork.warm { background: #3A321E; }
+.bl-videorow { display: flex; gap: 10px; }
+.bl-poster { position: relative; width: 150px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: linear-gradient(180deg, var(--soft), var(--line)); flex: none; }
+.bl-poster img, .bl-poster video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bl-len { position: absolute; right: 6px; bottom: 6px; font-family: var(--f-mono); font-size: 10px; color: #FFFFFF; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.bl-facts { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../../doc/store'
 import type { Board, KeyEntry, NamedRef, ProductionDocument } from '../../contracts/types'
-import { boardKey, boardRows, rowLabel } from './boards'
+import { boardFrames, boardKey, boardRows, rowLabel } from './boards'
 import { nextZoom, scrollForZoom } from './controls'
 
 const person = { id: 'p1', handle: 'shrey', tenant_id: 't1' }
@@ -56,5 +56,22 @@ describe('the zoom pill', () => {
     // The scene point at the middle of a 1000px view stays there.
     const mid = (scroll: number, z: number) => 500 / z - scroll
     expect(mid(scrollForZoom(-100, 1000, 1, 2), 2)).toBeCloseTo(mid(-100, 1))
+  })
+})
+
+describe('the boards drawn on today\'s canvas (mock Main)', () => {
+  it('wraps each picture board round its pictures; Script left of them, Storyboard below, Video to its right', () => {
+    const f = boardFrames([
+      { id: 'characters', title: 'Characters', box: { minX: 400, minY: 100, maxX: 760, maxY: 250 } },
+      { id: 'locations', title: 'Locations', box: { minX: 800, minY: 100, maxX: 1150, maxY: 250 } },
+    ])
+    expect(f.map((x) => x.id)).toEqual(['script', 'characters', 'locations', 'storyboard', 'video'])
+    expect(f[1].rect).toEqual({ x: 384, y: 78, w: 392, h: 206 })
+    expect(f[0].rect).toEqual({ x: 384 - 32 - 340, y: 78, w: 340, h: 440 })
+    expect(f[3].rect).toMatchObject({ x: 12, y: 78 + 440 + 48, w: 752 })
+    expect(f[4].rect).toMatchObject({ x: 12 + 752 + 24, y: 566 })
+  })
+  it('an empty project still shows its Script, Storyboard and Video boards', () => {
+    expect(boardFrames([]).map((x) => x.holds)).toEqual(['script', 'storyboard', 'video'])
   })
 })
