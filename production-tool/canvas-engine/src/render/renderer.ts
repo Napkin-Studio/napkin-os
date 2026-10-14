@@ -99,6 +99,8 @@ export class Renderer {
   private ordered: ElementRecord[] | null = null
   private readonly off: () => void
   selected = new Set<string>()
+  /** A move being dragged (select tool): drawn offset, never written until release. */
+  moving: { ids: ReadonlySet<string>; dx: number; dy: number } | null = null
 
   constructor(scene: SceneStore, host: RenderHost) {
     this.scene = scene
@@ -194,12 +196,18 @@ export class Renderer {
       }
       stats.drawn++
       ctx.globalAlpha = r.opacity
+      const moving = this.moving?.ids.has(r.id) ? this.moving : null
+      if (moving) {
+        ctx.save()
+        ctx.translate(moving.dx, moving.dy)
+      }
       this.drawOne(ctx, r, cam, level, stats)
       if (this.selected.has(r.id)) {
         ctx.strokeStyle = '#4a7fd4'
         ctx.lineWidth = 2 / cam.zoom
         ctx.strokeRect(r.x - 4 / cam.zoom, r.y - 4 / cam.zoom, r.w + 8 / cam.zoom, r.h + 8 / cam.zoom)
       }
+      if (moving) ctx.restore()
     }
     ctx.globalAlpha = 1
     stats.ms = performance.now() - t0
