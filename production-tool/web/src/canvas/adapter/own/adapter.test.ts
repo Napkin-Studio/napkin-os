@@ -6,6 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PointerSample, SceneStep } from '../../core/canvasAdapter'
 import { engineChoice, engineOf, engineToMount, loadEngine } from '../index'
+import * as Y from 'yjs'
+import { SceneStore } from '../../../../../canvas-engine/src'
 import { OwnAdapter } from './adapter'
 import { ownEngine } from './engine'
 
@@ -55,6 +57,59 @@ describe('OwnAdapter', () => {
     a.setViewport({ scrollX: 3, zoom: 2 })
     expect(v).toHaveBeenCalledWith({ scrollX: 3, scrollY: 0, zoom: 2 })
     expect(s).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('OwnAdapter on the engine (features/engine-ink.clan)', () => {
+  it('writes the tool’s elements as napkin/1 records in its Y.Doc, and a move writes only that element', () => {
+    const doc = new Y.Doc()
+    const a = new OwnAdapter(null, { doc })
+    const r = rect(a)
+    const pic = a.imageNode({ id: 'job_1', x: 50, y: 0, width: 300, height: 400, assetSha: null, customData: { kind: 'gen', id: 'job_1' }, status: 'pending', keepIds: true })
+    a.transact((els) => [...els, r, pic], { undoable: true })
+    expect(new SceneStore(doc).all().map((x) => [x.id, x.kind]).sort()).toEqual([[r.id, 'sketch'], ['job_1', 'image']].sort())
+    let updates = 0
+    doc.on('update', () => updates++)
+    a.transact((els) => els.map((e) => (e.id === r.id ? a.patch(e, { x: 40 }) : e)), { undoable: true })
+    expect(updates).toBe(1)
+    expect(new SceneStore(doc).get(r.id)!.x).toBe(40)
+  })
+
+  it('a deleted element is a tombstone this session, and the inline Undo brings it back', () => {
+    const a = new OwnAdapter()
+    const r = rect(a)
+    a.transact(() => [r], { undoable: true })
+    a.transact((els) => els.map((e) => a.patch(e, { isDeleted: true })), { undoable: true })
+    expect(a.scene.all()).toEqual([])
+    expect(a.elements({ includeDeleted: true }).map((e) => [e.id, e.isDeleted])).toEqual([[r.id, true]])
+    a.transact((els) => els.map((e) => a.patch(e, { isDeleted: false })), { undoable: true })
+    expect(a.elements().map((e) => e.id)).toEqual([r.id])
+  })
+
+  it('opens what the doc already holds, and a saved own snapshot seeds an empty doc once', () => {
+    const first = new OwnAdapter()
+    first.transact(() => [rect(first)], { undoable: false })
+    const doc = new Y.Doc()
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(first.doc))
+    expect(new OwnAdapter(null, { doc }).elements()).toHaveLength(1)
+    expect(new OwnAdapter(first.serialize()).elements()).toHaveLength(1)
+  })
+
+  it('the router’s ink intents draw a stroke; the drawing tools map onto it', () => {
+    const a = new OwnAdapter()
+    a.setActiveTool({ type: 'native', id: 'freedraw' })
+    expect(a.router.tool).toBe('ink')
+    a.setActiveTool({ type: 'native', id: 'eraser' })
+    expect(a.inkTool).toBe('eraser')
+    a.setActiveTool({ type: 'native', id: 'freedraw' })
+    a.ink.begin(a.inkTool, { x: 0, y: 0, pressure: 0.5 }, a.inkStyle)
+    a.ink.add([{ x: 20, y: 10, pressure: 0.6 }])
+    a.ink.end()
+    const [s] = a.elements()
+    expect(s.type).toBe('freedraw')
+    expect(s.points).toHaveLength(2)
+    a.setActiveTool({ type: 'native', id: 'selection' })
+    expect(a.router.tool).toBe('select')
   })
 })
 

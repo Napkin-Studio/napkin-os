@@ -17,7 +17,10 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
 }) {
   const host = useRef<HTMLDivElement>(null)
   const adapter = useRef<CanvasAdapter | null>(null)
-  const { remoteConfig } = useServices()
+  const { remoteConfig, clan } = useServices()
+  // The store Worker's scene channel (features/engine-store.clan), when the project's store is one.
+  const store = clan?.clan as { openScene?: (doc: never) => Promise<{ readOnly: string | null }> } | undefined
+  const openScene = store?.openScene ? (doc: unknown) => store.openScene!(doc as never) : undefined
   // The latest callbacks, without remounting the engine when they change.
   const cbs = useRef({ onReady, onChange })
   useEffect(() => {
@@ -36,7 +39,7 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
     let mine: CanvasAdapter | null = null
     const choice = engineChoice(globalThis.location?.search ?? '', remoteConfig?.flags)
     void loadEngine(engineToMount(choice, initial))
-      .then((engine) => engine.mount(slot, { initial, onChange: () => cbs.current.onChange(), theme }))
+      .then((engine) => engine.mount(slot, { initial, onChange: () => cbs.current.onChange(), theme, openScene }))
       .then((a) => {
         mine = a
         if (gone) {

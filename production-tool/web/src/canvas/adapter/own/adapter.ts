@@ -1,11 +1,17 @@
 // OwnAdapter: CanvasAdapter v2 for our own engine (features/engine-adapter.clan,
-// under features/canvas-engine.clan). Until engine-foundation's package backs it,
-// the scene lives here in memory: an ordered element list, pictures by sha256,
-// and the view as plain numbers. The adapter keeps no undo stack: each undoable
-// write is reported as a SceneStep for the UndoCoordinator (engine-select).
-// Coordinates follow the same transform as Excalidraw's, so overlays and the
-// contract tests read both engines alike: viewport = (scene + scroll) * zoom + offset.
+// features/engine-ink.clan, under features/canvas-engine.clan). The scene is
+// canvas-engine's SceneStore over a Y.Doc (the store Worker keeps its replica,
+// live store and checkpoint); the tool reads it as CanvasElements
+// (elementFromRecord) and writes through transact, which converts back and writes
+// only the records and fields that changed. Deleted elements are kept as
+// tombstones for the session, so the inline Undo can bring them back. The adapter
+// keeps no undo stack: each undoable write is reported as a SceneStep for the
+// UndoCoordinator (engine-select). Coordinates follow the same transform as
+// Excalidraw's, so overlays and the contract tests read both engines alike:
+// viewport = (scene + scroll) * zoom + offset.
 
+import * as Y from 'yjs'
+import { elementFromRecord, Ink, InputRouter, recordsFromElements, SceneStore, type InkTool, type Intent, type Renderer } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
   type ActiveToolSpec, type Anchor, type Bounds, type CanvasAdapter, type CanvasAsset, type CanvasElement, type CanvasSnapshot, type Emphasis,
@@ -30,6 +36,8 @@ export interface OwnOptions {
   decode?: (asset: CanvasAsset, done: () => void) => CanvasImageSource | undefined
   /** Ids for new elements. */
   newId?: () => string
+  /** The scene's Y.Doc (the mount opens it through the store Worker); a fresh one otherwise. */
+  doc?: Y.Doc
 }
 
 type OwnEl = CanvasElement & { assetSha?: string | null; startBinding?: { elementId: string }; endBinding?: { elementId: string } }
@@ -63,7 +71,17 @@ const defaultId = () => `own_${Date.now().toString(36)}_${(seq++).toString(36)}`
 
 export class OwnAdapter implements CanvasAdapter {
   readonly engine = 'own' as const
-  private els: OwnEl[] = []
+  readonly doc: Y.Doc
+  readonly scene: SceneStore
+  readonly ink: Ink
+  readonly router = new InputRouter()
+  /** The ink tool the drawing tools use (freedraw is the pen). */
+  inkTool: InkTool = 'pen'
+  inkStyle = { color: '#1e1e1e', width: 3 }
+  /** Elements deleted this session, so includeDeleted and the inline Undo still see them. */
+  private readonly tombstones = new Map<string, CanvasElement>()
+  private cache: CanvasElement[] | null = null
+  private renderer: Renderer | null = null
   private readonly assets = new Map<string, CanvasAsset>()
   private readonly decoded = new Map<string, CanvasImageSource>()
   /** A per-element revision, so version() changes when those elements change. */
@@ -84,29 +102,65 @@ export class OwnAdapter implements CanvasAdapter {
   private readonly pointerCbs = new Set<(p: PointerSample) => void>()
   private readonly changeCbs = new Set<() => void>()
   private teardown: (() => void) | null = null
-  private readonly opts: Required<OwnOptions>
+  private readonly opts: Required<Omit<OwnOptions, 'doc'>>
 
   constructor(initial: CanvasSnapshot | null = null, opts: OwnOptions = {}) {
-    this.opts = { raster: opts.raster ?? defaultRaster, decode: opts.decode ?? defaultDecode, newId: opts.newId ?? defaultId }
-    if (initial?.elements) this.els = initial.elements.map((e) => ({ ...e }))
+    const { doc, ...rest } = opts
+    this.opts = { raster: rest.raster ?? defaultRaster, decode: rest.decode ?? defaultDecode, newId: rest.newId ?? defaultId }
+    this.doc = doc ?? new Y.Doc()
+    this.scene = new SceneStore(this.doc)
+    this.ink = new Ink(this.scene)
+    this.scene.onChange((ids) => {
+      this.cache = null
+      for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
+      this.changed()
+    })
+    // A scene kept in this browser before the live store existed: put it in once.
+    if (initial?.elements?.length && !this.scene.all().length && !this.scene.readOnly) {
+      const { records, points } = recordsFromElements(initial.elements.filter((e) => !e.isDeleted) as never, () => undefined)
+      this.scene.seed(records, points)
+    }
+  }
+
+  /** Why the scene cannot be written (a checkpoint or doc from a newer build), or null. */
+  readOnly(): string | null {
+    return this.scene.readOnly
   }
 
   // ── reads and writes ──
 
   elements(opts: { includeDeleted?: boolean } = {}): CanvasElement[] {
-    return opts.includeDeleted ? [...this.els] : this.els.filter((e) => !e.isDeleted)
+    this.cache ??= this.scene.all()
+      .sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
+      .map((r) => elementFromRecord(r, this.scene.points(r.id)) as unknown as CanvasElement)
+    return opts.includeDeleted ? [...this.cache, ...this.tombstones.values()] : [...this.cache]
   }
 
   transact(fn: (els: readonly CanvasElement[]) => readonly CanvasElement[], opts: { undoable: boolean }) {
-    const before = this.els
-    const after = fn(before) as OwnEl[]
-    this.els = [...after]
-    const changed = sceneDiff(before, after)
-    for (const id of new Set(changed.map((c) => c.id))) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
+    const before = this.elements({ includeDeleted: true })
+    const after = fn(before)
+    const live = after.filter((e) => !e.isDeleted)
+    for (const e of after) {
+      if (e.isDeleted) this.tombstones.set(e.id, { ...e, isDeleted: true })
+      else this.tombstones.delete(e.id)
+    }
+    const { records, points } = recordsFromElements(live as never, (id) => this.scene.get(id))
+    const keep = new Set(records.map((r) => r.id as string))
+    this.scene.change((tx) => {
+      const put = records.filter((r) => {
+        const cur = tx.get(r.id)
+        return !cur || JSON.stringify(cur) !== JSON.stringify(r)
+      })
+      if (put.length) tx.put(put)
+      const gone = this.scene.all().filter((r) => !keep.has(r.id)).map((r) => r.id as string)
+      if (gone.length) tx.remove(gone)
+      for (const [id, p] of Object.entries(points)) if (!this.scene.points(id)) tx.setPoints(id, p)
+    }, { undoable: opts.undoable })
     if (opts.undoable) {
       if (this.depth > 0) this.gestureBefore ??= before
-      else this.emitStep(changed)
+      else this.emitStep(sceneDiff(before, after))
     }
+    this.cache = null
     this.changed()
   }
 
@@ -119,7 +173,7 @@ export class OwnAdapter implements CanvasAdapter {
       if (this.depth === 0 && this.gestureBefore) {
         const before = this.gestureBefore
         this.gestureBefore = null
-        this.emitStep(sceneDiff(before, this.els))
+        this.emitStep(sceneDiff(before, this.elements({ includeDeleted: true })))
       }
     }
   }
@@ -304,11 +358,37 @@ export class OwnAdapter implements CanvasAdapter {
     return this.depth > 0 || this.pointersDown > 0 || !(this.tool.type === 'native' && this.tool.id === 'selection')
   }
 
+  /** The tool's names (Excalidraw's, as the stage passes them) onto the router and the ink tools. */
   setActiveTool(tool: ActiveToolSpec) {
     this.tool = tool
+    const id = tool.type === 'native' ? tool.id : ''
+    if (id === 'freedraw' || id === 'pen') {
+      this.router.tool = 'ink'
+      this.inkTool = 'pen'
+    } else if (id === 'highlighter' || id === 'eraser') {
+      this.router.tool = 'ink'
+      this.inkTool = id
+    } else this.router.tool = id === 'hand' ? 'hand' : 'select'
   }
 
   private image = (sha: string) => this.decoded.get(sha)
+
+  /** A decoded picture, for the renderer. */
+  imageFor(sha: string): CanvasImageSource | undefined {
+    return this.decoded.get(sha)
+  }
+
+  private readonly intentCbs = new Set<(i: Intent) => void>()
+
+  /** The router's intents the ink tools do not use (press, drag, tap, undo, long press…), for engine-select. */
+  onIntent(cb: (i: Intent) => void): () => void {
+    this.intentCbs.add(cb)
+    return () => void this.intentCbs.delete(cb)
+  }
+
+  emitIntent(i: Intent) {
+    for (const cb of this.intentCbs) cb(i)
+  }
 
   private async rasterOf(box: { x: number; y: number; w: number; h: number }, ids: ReadonlySet<string> | null, outW: number, outH: number, background: string): Promise<Blob> {
     const r = this.opts.raster(outW, outH)
@@ -362,9 +442,20 @@ export class OwnAdapter implements CanvasAdapter {
 
   // ── for the mount (engine.ts): the surface drives these ──
 
+  /** The engine's renderer (the mount makes it with the browser's Path2D and bitmaps). */
+  useRenderer(r: Renderer | null) {
+    this.renderer = r
+    if (r) r.selected = new Set(this.selected)
+  }
+
   /** Draw the scene onto the screen's context, in device pixels at `dpr`. */
   drawTo(ctx: Ctx2D, dpr: number) {
     const { scrollX, scrollY, zoom, width, height } = this.vp
+    if (this.renderer) {
+      this.renderer.selected = new Set(this.selected)
+      this.renderer.draw(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr, this.theme === 'dark' ? '#121212' : '#ffffff')
+      return
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.fillStyle = this.theme === 'dark' ? '#121212' : '#ffffff'
     ctx.fillRect(0, 0, width * dpr, height * dpr)

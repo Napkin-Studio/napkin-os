@@ -377,6 +377,11 @@ export interface MountOptions {
   /** Called on every scene or view change. */
   onChange: () => void
   theme: 'light' | 'dark'
+  /**
+   * Fill the engine's scene doc (a Y.Doc, typed loosely so core stays free of yjs) from the store
+   * Worker and keep it in step (features/engine-store.clan). Absent: the scene lives in memory.
+   */
+  openScene?: (doc: unknown) => Promise<{ readOnly: string | null }>
 }
 
 /** An engine module: what src/canvas/adapter/index.ts loads by dynamic import. */
