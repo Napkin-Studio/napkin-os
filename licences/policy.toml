@@ -93,6 +93,7 @@ npm = [
   { path = "app", tier = "client" },
   { path = "production-tool/web", tier = "client" },
   { path = "production-tool/clan-store", tier = "client" },
+  { path = "production-tool/canvas-engine", tier = "client" },
 ]
 rust = [
   { package = "napkin-wasm", targets = ["wasm32-unknown-unknown"], tier = "client" },
