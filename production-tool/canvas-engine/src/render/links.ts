@@ -43,6 +43,14 @@ export function toSegment(p: Pt, a: Pt, b: Pt): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
 }
 
+/** A board by its title band (just above its frame, where the title is drawn): how a board is picked up. */
+export function hitBoardTitle(scene: Pick<SceneStore, 'all'>, p: Pt, zoom: number): ElementRecord | undefined {
+  const band = 28 / zoom
+  return scene.all()
+    .filter((r) => r.kind === 'board' && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y - band && p.y <= r.y + 4 / zoom)
+    .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+}
+
 /** The topmost node or bound link at a scene point (nodes are DOM cards above the canvas). */
 export function hitNodeOrLink(scene: Pick<SceneStore, 'all' | 'get'>, p: Pt, zoom: number): ElementRecord | undefined {
   const all = scene.all().sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))

@@ -54,6 +54,8 @@ export interface ExcalidrawLike {
   fileId?: string | null
   status?: string
   name?: string | null
+  /** A board's purpose (character, location…), on the own engine's board elements. */
+  purpose?: string
   /** A link's role (drives, renders…), on the own engine's link elements. */
   role?: string
 }
@@ -184,7 +186,7 @@ export function convertExcalidraw(scene: { elements?: readonly unknown[]; files?
       case 'frame':
       case 'magicframe': {
         const name = typeof e.name === 'string' ? e.name : ''
-        if (tag?.kind === 'board') return push('board', { props: { name } })
+        if (tag?.kind === 'board') return push('board', { props: { name, ...(typeof e.purpose === 'string' ? { purpose: e.purpose } : {}) } })
         return push('frame', { style: styleOf(e), props: { name } })
       }
       default:

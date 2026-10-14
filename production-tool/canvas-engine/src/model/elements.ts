@@ -35,7 +35,7 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
       return { ...base, type: 'rectangle' }
     case 'board':
     case 'frame':
-      return { ...base, type: 'frame', name: typeof r.props.name === 'string' ? r.props.name : '' }
+      return { ...base, type: 'frame', name: typeof r.props.name === 'string' ? r.props.name : '', ...(typeof r.props.purpose === 'string' ? { purpose: r.props.purpose } : {}) }
     case 'text': {
       const plain = typeof r.props.plain === 'string' ? r.props.plain : ''
       const boundTo = typeof r.props.boundTo === 'string' ? r.props.boundTo : null

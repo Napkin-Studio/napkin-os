@@ -70,6 +70,28 @@ export class SelectTool {
     return this.scene.all().filter((x) => x.groupIds[0] === g).map((x) => x.id)
   }
 
+  /** The ids and everything on the boards (and frames) among them, at any depth. */
+  private withMembers(ids: Iterable<string>): Set<string> {
+    const out = new Set(ids)
+    const kids = new Map<string, string[]>()
+    for (const r of this.scene.all()) if (r.parentId) kids.set(r.parentId, [...(kids.get(r.parentId) ?? []), r.id])
+    const todo = [...out]
+    while (todo.length) {
+      for (const k of kids.get(todo.pop()!) ?? []) if (!out.has(k)) {
+        out.add(k)
+        todo.push(k)
+      }
+    }
+    return out
+  }
+
+  /** The topmost board under a point, other than `self` (positions as they are about to be). */
+  private containerAt(p: Pt, self: string, placed: ReadonlyMap<string, ElementRecord>): string | null {
+    const boards = this.scene.all().filter((r) => r.kind === 'board' && r.id !== self).map((r) => placed.get(r.id) ?? r)
+    const hit = boards.filter((b) => p.x >= b.x && p.y >= b.y && p.x <= b.x + b.w && p.y <= b.y + b.h).sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+    return hit?.id ?? null
+  }
+
   set(ids: Iterable<string>) {
     this.selected = new Set(ids)
     this.changed()
@@ -88,7 +110,7 @@ export class SelectTool {
       } else if (!this.selected.has(hit.id)) this.selected = new Set(ids)
       if (this.selected.has(hit.id)) {
         this.dragFrom = p
-        this.preview = { ids: new Set(this.selected), dx: 0, dy: 0 }
+        this.preview = { ids: this.withMembers(this.selected), dx: 0, dy: 0 }
       }
     } else {
       this.additive = !!opts.shift
@@ -119,7 +141,19 @@ export class SelectTool {
       if (dx || dy) {
         this.scene.change((tx) => {
           const moved = [...ids].map((id) => tx.get(id)).filter((r): r is ElementRecord => !!r && !r.locked).map((r) => ({ ...r, x: r.x + dx, y: r.y + dy }))
-          if (moved.length) tx.put(moved)
+          // Membership is parentId only (art-boards): what was picked up joins the board its centre
+          // lands on, or leaves every board; what came along with a moved board stays on it.
+          const carried = new Set(moved.filter((r) => r.parentId && ids.has(r.parentId)).map((r) => r.id))
+          const placed = new Map(moved.map((r) => [r.id, r]))
+          for (const r of moved) {
+            if (carried.has(r.id) || r.kind === 'board') continue
+            // Strokes in a drawn frame or a sketch area keep that container; only board membership follows the drop.
+            const cur = r.parentId ? tx.get(r.parentId) : undefined
+            if (cur && cur.kind !== 'board') continue
+            const parent = this.containerAt(centre(r), r.id, placed)
+            if (parent !== r.parentId) placed.set(r.id, { ...r, parentId: parent })
+          }
+          if (placed.size) tx.put([...placed.values()])
         })
       }
     } else if (this.marquee) {

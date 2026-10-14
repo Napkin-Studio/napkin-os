@@ -7,13 +7,14 @@ import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore, type Step } from '../src/model/store'
 import { Renderer } from '../src/render/renderer'
 import { inPolygon, SelectTool } from '../src/select/select'
+import { hitBoardTitle } from '../src/render/links'
 
 function setup(records: ElementRecord[]) {
   const doc = new Y.Doc()
   const scene = new SceneStore(doc)
   scene.seed(records)
   const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
-  const tool = new SelectTool(scene, (x, y) => r.hit(x, y))
+  const tool = new SelectTool(scene, (x, y) => hitBoardTitle(scene, { x, y }, 1) ?? r.hit(x, y))
   const steps: Step[] = []
   scene.onStep((s) => steps.push(s))
   let updates = 0
@@ -22,6 +23,47 @@ function setup(records: ElementRecord[]) {
 }
 
 const box = (id: string, x: number, y: number, extra: Partial<ElementRecord> = {}) => element({ id, kind: 'shape', z: `a${x / 100}`, x, y, w: 50, h: 50, props: { geo: 'rect' }, ...extra })
+
+describe('boards as containers (art-boards)', () => {
+  const board = (id: string, x: number, extra: Partial<ElementRecord> = {}) => element({ id, kind: 'board', z: `a0${x}`, x, y: 0, w: 400, h: 300, props: { name: id, purpose: 'location' }, ...extra })
+  const pic = (id: string, x: number, y: number, parentId: string | null = null) => element({ id, kind: 'image', z: `b${x}`, x, y, w: 50, h: 50, parentId, props: { assetSha: null, status: 'saved' } })
+
+  it('a picture dropped on a board joins it, dropped off leaves it, in the move’s one step', () => {
+    const { scene, tool, steps } = setup([board('L', 0), board('C', 600), pic('p', 900, 400)])
+    tool.set(['p'])
+    tool.press({ x: 910, y: 410 })
+    tool.release({ x: 110, y: 110 })
+    expect(scene.get('p')).toMatchObject({ x: 100, y: 100, parentId: 'L' })
+    expect(steps).toHaveLength(1)
+    tool.press({ x: 110, y: 110 })
+    tool.release({ x: 710, y: 110 })
+    expect(scene.get('p')!.parentId).toBe('C')
+    tool.press({ x: 710, y: 110 })
+    tool.release({ x: 710, y: 610 })
+    expect(scene.get('p')!.parentId).toBeNull()
+  })
+
+  it('a board is picked up by its title and moves what is on it, as one step', () => {
+    const { scene, tool, steps } = setup([board('L', 0), pic('p', 100, 100, 'L'), pic('q', 200, 100, 'L'), pic('x', 900, 900)])
+    const hit = hitBoardTitle(scene, { x: 50, y: -10 }, 1)!
+    expect(hit.id).toBe('L')
+    tool.set([hit.id])
+    tool.press({ x: 50, y: -10 })
+    tool.release({ x: 150, y: 20 })
+    expect(steps).toHaveLength(1)
+    expect([scene.get('L')!.x, scene.get('p')!.x, scene.get('q')!.x, scene.get('x')!.x]).toEqual([100, 200, 300, 900])
+    expect(scene.get('p')!.parentId).toBe('L')
+  })
+
+  it('a stroke in a drawn frame keeps its frame when moved', () => {
+    const frame = element({ id: 'f', kind: 'frame', z: 'a1', x: 0, y: 0, w: 200, h: 200, props: { name: 'Drawing' } })
+    const { scene, tool } = setup([board('L', 0), frame, element({ id: 's', kind: 'shape', z: 'a2', x: 10, y: 10, w: 20, h: 20, parentId: 'f', props: { geo: 'rect' } })])
+    tool.set(['s'])
+    tool.press({ x: 15, y: 15 })
+    tool.release({ x: 45, y: 15 })
+    expect(scene.get('s')!.parentId).toBe('f')
+  })
+})
 
 describe('SelectTool', () => {
   const RECS = [box('a', 0, 0), box('b', 100, 0, { groupIds: ['g'] }), box('c', 200, 0, { groupIds: ['g'] }), box('d', 300, 0, { locked: true })]

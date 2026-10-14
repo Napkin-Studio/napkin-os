@@ -48,6 +48,7 @@ export interface DrawContext {
   ellipse(x: number, y: number, rx: number, ry: number, rotation: number, start: number, end: number): void
   closePath(): void
   stroke(): void
+  setLineDash?(segments: number[]): void
   fill(path?: PathLike): void
   drawImage(image: Bitmap, x: number, y: number, w: number, h: number): void
   fillStyle: unknown
@@ -84,6 +85,19 @@ const DEFAULT_INK = '#1e1e1e'
 export function strokeOutline(pts: Uint8Array, size: number): number[][] {
   const input = localPoints(pts).map((p) => [p.x, p.y, p.pressure])
   return getStroke(input, { size, thinning: 0.6, smoothing: 0.5, streamline: 0.4, simulatePressure: false, last: true })
+}
+
+/** What an empty board of this purpose asks for (ui-behaviour 3.2). */
+export function dropHint(purpose: string): string {
+  switch (purpose) {
+    case 'character': return 'Drop pictures here. They become characters.'
+    case 'location': return 'Drop pictures here. They become locations.'
+    case 'product': return 'Drop pictures here. They become products.'
+    case 'reference': return 'Drop pictures here. They become references.'
+    case 'sketches': return 'Draw a sketch area here.'
+    case 'brand': return 'Drop a brand book here.'
+    default: return ''
+  }
 }
 
 /** The outline of a stroke still being drawn (the live-ink canvas), from its points in scene coordinates. */
@@ -160,9 +174,16 @@ export class Renderer {
   }
 
   private order(): ElementRecord[] {
-    this.ordered ??= this.scene.all().filter((r) => r.kind !== 'node').sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
+    if (!this.ordered) {
+      const all = this.scene.all()
+      this.ordered = all.filter((r) => r.kind !== 'node').sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
+      this.occupied = new Set(all.flatMap((r) => (r.parentId ? [r.parentId] : [])))
+    }
     return this.ordered
   }
+
+  /** Containers that hold something (refreshed with the order). */
+  private occupied = new Set<string>()
 
   private pathOf(pts: Uint8Array, size: number, stats: DrawStats): PathLike {
     let p = this.paths.get(pts)
@@ -254,7 +275,19 @@ export class Renderer {
         }
         ctx.strokeStyle = r.kind === 'board' ? '#c9c3b5' : r.kind === 'sketch' ? '#5a6b8c' : stroke
         ctx.lineWidth = 2 / cam.zoom
+        // An empty board is dashed, with its purpose's drop hint (ui-behaviour 3.2).
+        const empty = r.kind === 'board' && !this.occupied.has(r.id)
+        if (empty) ctx.setLineDash?.([8 / cam.zoom, 6 / cam.zoom])
         ctx.strokeRect(r.x, r.y, r.w, r.h)
+        if (empty) {
+          ctx.setLineDash?.([])
+          const hint = dropHint(typeof r.props.purpose === 'string' ? r.props.purpose : '')
+          if (hint && cam.zoom > 0.25) {
+            ctx.fillStyle = '#a8a397'
+            ctx.font = `${13 / cam.zoom}px Geist, sans-serif`
+            ctx.fillText(hint, r.x + 16 / cam.zoom, r.y + r.h / 2)
+          }
+        }
         const name = typeof r.props.name === 'string' ? r.props.name : ''
         if (name && cam.zoom > 0.08) {
           ctx.fillStyle = '#8a8579'
