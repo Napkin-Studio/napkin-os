@@ -8,7 +8,7 @@ import type { CrewId, DocJob, JobState, ModelChoice } from '../../contracts/type
 import type { JobPurpose } from '../../doc/ui'
 import { fellBack } from '../modelChoice'
 
-export type CastKey = 'dex' | 'ellis' | 'jude'
+export type CastKey = 'dex' | 'ellis' | 'jude' | 'skye'
 export type AgentState = 'idle' | 'working' | 'needs-you'
 
 export type ShapeName = 'star' | 'crescent' | 'stack' | 'triangle' | 'column' | 'card' | 'diamond' | 'dome' | 'hex'
@@ -23,6 +23,8 @@ export const CAST: Readonly<Record<CastKey, CastMember>> = {
   dex: { given: 'Dex', job: 'directs', role: 'Plans the shots, draws the frames and makes the clips.', look: { shape: 'hex', emblem: 'frame', tone: 'cobalt' } },
   // The house sheet's Extract and Judge (LOOK_OF.extract, LOOK_OF.judge).
   ellis: { given: 'Ellis', job: 'reads', role: 'Reads your notes back before anything is made again.', look: { shape: 'triangle', emblem: 'page', tone: 'ink' } },
+  // Skye scripts (features/script-editor.clan): coral, the colour of her suggestions' new words.
+  skye: { given: 'Skye', job: 'scripts', role: 'Drafts and rewrites the script in place, as suggestions you keep or not.', look: { shape: 'crescent', emblem: 'wave', tone: 'coral' } },
   jude: { given: 'Jude', job: 'checks', role: 'Checks each result as it lands, and says when one needs you.', look: { shape: 'card', emblem: 'tick', tone: 'ink' } },
 }
 
@@ -53,6 +55,7 @@ export function jobWhat(job: Pick<DocJob, 'op'>, ctx: JobPurpose | undefined, sh
   switch (job.op) {
     case 'shot_list': return 'the shots'
     case 'stitch': return 'the ad'
+    case 'write': return 'a draft'
     case 'frame': return 'a frame'
     case 'clip': case 'clip_edit': return 'a clip'
     case 'view': return 'a view'
@@ -61,7 +64,7 @@ export function jobWhat(job: Pick<DocJob, 'op'>, ctx: JobPurpose | undefined, sh
   }
 }
 
-const VERB: Partial<Record<DocJob['op'], string>> = { shot_list: 'planning', generate: 'drawing', view: 'drawing', frame: 'drawing', stitch: 'putting together', clip: 'making', clip_edit: 'changing' }
+const VERB: Partial<Record<DocJob['op'], string>> = { write: 'writing', shot_list: 'planning', generate: 'drawing', view: 'drawing', frame: 'drawing', stitch: 'putting together', clip: 'making', clip_edit: 'changing' }
 
 /**
  * Who is shown for a job, and the line under them: Dex for planning, the job's crew member

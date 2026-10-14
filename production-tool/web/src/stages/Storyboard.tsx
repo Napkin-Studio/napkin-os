@@ -7,16 +7,16 @@
 // Contract 3: the script's words are the main script's scenes; the shots are the main storyboard's,
 // in rank order; the ratio and the target length are the storyboard's; the frame in a shot is its pick.
 
-import { useEffect, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
+import { useEffect, useMemo, useState } from 'react'
+import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import type { CameraMovement, CameraSize, ModelChoice, Ratio, Region, Shot } from '../contracts/types'
 import { CAMERA_MOVEMENTS, CAMERA_SIZES } from '../contracts/types'
 import { assetRef } from '../jobs/assets'
 import { isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { nameOf, subjectRefs, wholeKeys } from '../lib/names'
 import { croppedCaption } from '../canvas/core/sketch'
-import { continuity, drawFrame, drawTheRest, firstUndrawn, ownAspect, SCRIPT_MAX, selectFrame } from '../jobs/frames'
-import { planShots } from '../jobs/plan'
+import { continuity, drawFrame, drawTheRest, firstUndrawn, ownAspect, selectFrame } from '../jobs/frames'
+import { planOrJoin } from '../jobs/plan'
 import { putBlob } from '../lib/blobs'
 import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
 import { useBlobUrl } from '../ui/hooks'
@@ -41,17 +41,23 @@ import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
-import { currentFrame, framesOf, jobsList, mainStoryboard, openAsks, refsList, scriptText, shotSubjects, shotsOf, staleList, takesOf, unplannedText } from '../model/selectors'
+import { currentFrame, framesOf, jobsList, mainScript, mainStoryboard, openAsks, refsList, scriptText, shotsOf, staleList, storyboardSeconds, takesOf } from '../model/selectors'
 import { askedShot } from '../jobs/plan'
 import { LOCAL_PERSON } from '../jobs/runner'
 import type { Ask, CrewId } from '../contracts/types'
-import { addShot, answerShotAsk, setRatio, setTarget, withMention, withoutMention, wordsPatch, writeScript } from './storyboardEdits'
+import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
+import { scriptRoute } from '../app/route'
+import type { ModelStore } from '../model/store'
+import { insertMention, removeMention } from '../script/edits'
+import { ShotEditor } from '../script/ShotEditor'
+import { scriptMentionHooks } from '../script/mentionHooks'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 const label = (s: string) => s.replace(/_/g, ' ')
 
 export function Storyboard() {
-  const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  const { doc: docStore, ui: uiStore, runner, relay, clan, project } = useServices()
+  const router = useRouter()
   const doc = useDoc()
   const ui = useUi()
   const { controls } = useConfig()
@@ -62,7 +68,8 @@ export function Storyboard() {
   const sb = mainStoryboard(doc)
   const targetS = sb?.target_s ?? 15
   const ratio = sb?.ratio ?? '16:9'
-  const words = unplannedText(doc)
+  const script = mainScript(doc)
+  const words = scriptText(doc)
   const hasRefs = refsList(doc).length > 0
   const check = checkDurations(shots, targetS)
   const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list')
@@ -83,11 +90,14 @@ export function Storyboard() {
   })
 
   // Dex plans from the whole script: the scenes' words and the planned shots' action (jobs/plan.ts).
+  // The Script editor's Plan shots is the same job on the same node: one running is joined.
   const plan = async () => {
     setError(null)
     if (!scriptText(doc).trim()) return setError('Write a line or two first.')
-    await planShots(deps)
+    await planOrJoin(deps)
   }
+  const mentionHooks = useMemo(() => (clan ? scriptMentionHooks(clan, undefined) : undefined), [clan])
+  const openScript = (shot?: string) => script && router.push(scriptRoute(project.id, script.id, shot))
 
   const attempt = async (fn: () => Promise<unknown>) => {
     setError(null)
@@ -101,9 +111,9 @@ export function Storyboard() {
   const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next'))
   const drawRest = () => attempt(() => drawTheRest(deps))
 
-  // The shot's own frame (words) or clip (camera, length) is marked in the same write, so undo takes both back.
+  // The shot's own frame (camera) or clip (move, length) is marked in the same write, so undo takes both back.
+  // Its words are live text: the ShotEditor writes them (features/script-editor.clan).
   const updateShot = (id: string, patch: Partial<Shot>) => updateDoc(docStore, (d) => editShot(d, id, patch), 'edit shot')
-  const updateWords = (s: Shot, w: { action?: string; direction?: string }) => updateShot(s.id, wordsPatch(doc, s, w))
 
   const lock = async () => {
     await updateDoc(docStore, (d) => {
@@ -124,16 +134,15 @@ export function Storyboard() {
         <p className="lede">Write what happens in your ad. We plan the shots, then draw a frame for each one.</p>
         <div className="split">
           <div className="card section stack">
-            <div className="row"><h2>Script</h2><span className="spacer" /><span className="counter">{words.length}/{SCRIPT_MAX}</span></div>
-            <textarea
-              className="textarea"
-              rows={6}
-              maxLength={SCRIPT_MAX}
-              aria-label="Script"
-              placeholder={shots.length ? 'Add more of the story here, then Plan again.' : 'e.g. It starts to rain. Our hero opens a bright umbrella and grins. The logo appears.'}
-              value={words}
-              onChange={(e) => void attempt(() => updateDoc(docStore, (d) => writeScript(d, e.target.value), 'edit'))}
-            />
+            <div className="row"><h2>Script</h2><span className="spacer" /><ScriptMeter seconds={storyboardSeconds(doc)} target={targetS} shots={shots.length} /></div>
+            {/* Read only here: the script is written in the Script editor (features/script-editor.clan). */}
+            <div className={`script-excerpt ${words.trim() ? '' : 'empty'}`} aria-label="Script">
+              {words.trim() ? excerpt(words) : 'No script yet. Open the script to write it, or paste one in.'}
+            </div>
+            <div className="row">
+              <button className="btn sm" disabled={!clan || !script} onClick={() => openScript()}
+                title={clan ? 'Write the script: scenes, shots, direction' : 'The script editor needs this browser to keep the .clan; it could not load here.'}>Open script</button>
+            </div>
             <div className="row wrap">
               <span className="eyebrow" style={{ width: 56 }}>Length</span>
               {TARGETS.map((t) => (
@@ -198,8 +207,10 @@ export function Storyboard() {
                     </select>
                   </div>
                   <div className="stack" style={{ gap: 4 }}>
-                    <textarea className="textarea" aria-label="Action" maxLength={300} value={s.action ?? ''} onChange={(e) => updateWords(s, { action: e.target.value })} />
-                    <ShotRefs shot={s} onAction={(action) => updateWords(s, { action })} />
+                    {clan
+                      ? <ShotEditor store={clan} shotId={s.id} name={`Shot ${i + 1}`} compact mentions={mentionHooks} />
+                      : <div className="script-excerpt">{s.action ?? ''}</div>}
+                    <ShotRefs shot={s} store={clan} onOpen={() => openScript(s.id)} />
                   </div>
                   <select className="select" aria-label="Camera move" value={s.camera.movement ?? 'static'} onChange={(e) => updateShot(s.id, { camera: { ...s.camera, movement: e.target.value as CameraMovement } })}>
                     {CAMERA_MOVEMENTS.map((c) => <option key={c} value={c}>{label(c)}</option>)}
@@ -527,12 +538,17 @@ function VersionThumb({ sha, n, on, onPick }: { sha: string; n: number; on: bool
   )
 }
 
-/** The named refs a shot shows: they are its words' @mentions, so a chip taken off takes the mention out
- *  of the words, and one added goes at the end of the action. */
-function ShotRefs({ shot, onAction }: { shot: Shot; onAction: (action: string) => void }) {
+/** The named refs a shot shows: they are its words' @mentions, so a chip taken off takes every mention
+ *  of it out of the live text, and one added is a mention at the end of the action (script/edits.ts). */
+function ShotRefs({ shot, store, onOpen }: { shot: Shot; store: ModelStore | null; onOpen: () => void }) {
   const doc = useDoc()
-  const names = shotSubjects(doc, shot)
-  const free = [...wholeKeys(doc), ...refsList(doc).map(nameOf)].filter((n) => !names.includes(n))
+  const [error, setError] = useState<string | null>(null)
+  const on = (shot.refs ?? []).map((id) => ({ id, name: doc.refs[id] ? nameOf(doc.refs[id]) : doc.keys[id]?.key })).filter((x): x is { id: string; name: string } => !!x.name)
+  const names = on.map((x) => x.name)
+  const free = [
+    ...wholeKeys(doc).map((k) => ({ id: Object.values(doc.keys).find((x) => x.key === k)!.id, name: k })),
+    ...refsList(doc).map((r) => ({ id: r.id, name: nameOf(r) })),
+  ].filter((n) => !names.includes(n.name))
   const problem = (n: string) => {
     try {
       return subjectRefs(doc, n).length ? null : 'No image has this name'
@@ -540,20 +556,42 @@ function ShotRefs({ shot, onAction }: { shot: Shot; onAction: (action: string) =
       return e instanceof Error ? e.message : 'Set a front first'
     }
   }
+  const run = (fn: () => Promise<void>) => {
+    setError(null)
+    fn().catch((e) => setError(e instanceof Error ? e.message : 'That did not work.'))
+  }
   return (
     <div className="shotrefs">
-      {names.map((n) => (
-        <span key={n} className={`taghint ${problem(n) ? 'missing' : n.includes('_') ? '' : 'whole'}`} title={problem(n) ?? (n.includes('_') ? undefined : 'The whole character')}>
+      {on.map(({ id, name: n }) => (
+        <span key={id} className={`taghint ${problem(n) ? 'missing' : n.includes('_') ? '' : 'whole'}`} title={problem(n) ?? (n.includes('_') ? undefined : 'The whole character')}>
           @{n}
-          <button className="x" aria-label={`Take @${n} off this shot`} onClick={() => onAction(withoutMention(shot.action ?? '', n))}>×</button>
+          {store && <button className="x" aria-label={`Take @${n} off this shot`} onClick={() => run(() => removeMention(store, shot.id, id))}>×</button>}
         </span>
       ))}
-      {free.length > 0 && names.length < 9 && (
-        <select className="select xs" aria-label="Add a reference to this shot" value="" onChange={(e) => e.target.value && onAction(withMention(shot, e.target.value))}>
+      {store && free.length > 0 && names.length < 9 && (
+        <select className="select xs" aria-label="Add a reference to this shot" value="" onChange={(e) => {
+          const pick = free.find((f) => f.id === e.target.value)
+          if (pick) run(() => insertMention(store, shot.id, { id: pick.id, label: pick.name }))
+        }}>
           <option value="">+ ref</option>
-          {free.map((n) => <option key={n} value={n}>@{n}</option>)}
+          {free.map((n) => <option key={n.id} value={n.id}>@{n.name}</option>)}
         </select>
       )}
+      <button className="linkbtn" onClick={onOpen} disabled={!store}>Open in script</button>
+      {error && <span role="alert" className="framecard-error">{error}</span>}
     </div>
   )
+}
+
+/** The script's first lines, for the card. */
+function excerpt(words: string): string {
+  const t = words.trim()
+  return t.length > 320 ? `${t.slice(0, 320).replace(/\s+\S*$/, '')}…` : t
+}
+
+/** '14.2 s of 15 s · 6 shots': the length meter on the Script card. */
+function ScriptMeter({ seconds, target, shots }: { seconds: number; target: number; shots: number }) {
+  if (!shots) return <span className="counter">{target} s target</span>
+  const over = seconds > target
+  return <span className={`counter ${over ? 'warn' : ''}`}>{Math.round(seconds * 10) / 10} s of {target} s · {shots} {shots === 1 ? 'shot' : 'shots'}</span>
 }

@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-// The engine does not load in node; the projects reach it only through export.ts.
+// The canvas engine does not load in node; the projects reach it only through export.ts.
 vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
 
 import { ClanDocumentStore } from '../../../clan-store/src'
@@ -18,8 +18,13 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { id, MAYA, SHA, wasm } from '../test/model'
-import { addShot, moveShot, setRatio, setTarget, withMention, withoutMention, writeScript } from './storyboardEdits'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { id, MAYA, scriptWords, SHA, wasm } from '../test/model'
+import { insertMention, removeMention } from '../script/edits'
+import { addShot, moveShot, setRatio, setTarget } from './storyboardEdits'
+import { editShot } from '../jobs/stale'
 import { addTakeNote, pickTake } from './videoEdits'
 
 const makeClan: MakeClan = (persistence, opts = {}) =>
@@ -59,7 +64,7 @@ describe('a new project', () => {
 describe('the Storyboard and Video panels on the .clan engine', () => {
   it('keep the script in a scene, the format and length on the storyboard, shots in rank order', async () => {
     const { doc } = await newProject()
-    await updateDoc(doc, (d) => writeScript(d, 'It rains. Maya opens a red umbrella.'), 'edit')
+    await updateDoc(doc, (d) => scriptWords(d, 'It rains. Maya opens a red umbrella.'), 'edit')
     await updateDoc(doc, (d) => setRatio(d, '9:16'), 'set the storyboard format to 9:16')
     await updateDoc(doc, (d) => setTarget(d, 20), 'set the storyboard length to 20 s')
     await doc.flush()
@@ -113,11 +118,50 @@ describe('the Storyboard and Video panels on the .clan engine', () => {
   })
 })
 
-describe('a shot\'s @names are in its words', () => {
-  it('adds one at the end of the action and takes every mention out', () => {
-    const shot = { action: 'Maya laughs' } as Parameters<typeof withMention>[0]
-    expect(withMention(shot, 'maya_front')).toBe('Maya laughs @maya_front')
-    expect(withoutMention('Maya @maya_front laughs at @lamp_on', 'maya_front')).toBe('Maya laughs at @lamp_on')
-    expect(withoutMention('@maya and @maya_front', 'maya')).toBe('and @maya_front')
+describe('a shot\'s @names are mentions in its live text', () => {
+  it('a chip added is a mention at the end of the action; taken off, every mention of it goes; each one undo step', async () => {
+    const { doc, clan } = await newProject()
+    const store = clan!
+    const ref = id('ref')
+    const key = id('key')
+    let shotId = ''
+    await updateDoc(doc, (d) => {
+      d.assets[SHA('a')] = { sha256: SHA('a'), kind: 'image', mime: 'image/png', origin: 'generated', locations: [] }
+      d.keys[key] = { id: key, v: 1, field_v: {}, key: 'maya', role: 'character' }
+      d.refs[ref] = { id: ref, v: 1, field_v: {}, key: 'maya', variant: 'front', role: 'character', asset: SHA('a') }
+      shotId = addShot(d)
+    }, 'name maya_front')
+    await store.flush()
+    await store.text.replace('shot', shotId, { type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'Maya laughs' }] }] }, `human:${MAYA.id}`)
+    await insertMention(store, shotId, { id: ref, label: 'maya_front' })
+    expect(store.get().shots[shotId].action).toBe('Maya laughs @maya_front')
+    expect(store.get().shots[shotId].refs).toEqual([ref])
+    await removeMention(store, shotId, ref)
+    expect(store.get().shots[shotId].action).toBe('Maya laughs')
+    expect(store.get().shots[shotId].refs).toEqual([])
+    await store.undo()
+    expect(store.get().shots[shotId].action).toBe('Maya laughs @maya_front')
+  })
+})
+
+describe('the Storyboard stage never writes words', () => {
+  it('its writes (format, length, add, move, camera, seconds) never call TextBus.replace', async () => {
+    const { doc, clan } = await newProject()
+    const store = clan!
+    const replace = vi.spyOn(store.text, 'replace')
+    let shotId = ''
+    await updateDoc(doc, (d) => setRatio(d, '1:1'), 'set the storyboard format to 1:1')
+    await updateDoc(doc, (d) => setTarget(d, 30), 'set the storyboard length to 30 s')
+    await updateDoc(doc, (d) => { shotId = addShot(d); addShot(d) }, 'add shot')
+    await updateDoc(doc, (d) => moveShot(d, shotId, 1), 'move shot')
+    await updateDoc(doc, (d) => editShot(d, shotId, { camera: { size: 'close', movement: 'handheld' }, duration_s: 4 }), 'edit shot')
+    await doc.flush()
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('its source has no flat text writes left', () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const src = readFileSync(join(here, 'Storyboard.tsx'), 'utf8')
+    for (const gone of ['text.replace', 'writeScript', 'wordsPatch', 'withMention', 'updateWords', '<textarea']) expect(src.includes(gone), gone).toBe(false)
   })
 })

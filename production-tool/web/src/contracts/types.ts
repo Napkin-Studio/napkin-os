@@ -593,7 +593,14 @@ export interface Suggestion extends EntityBase {
   job_id: Id
   for: PersonRef
   base_hash: Sha256
-  proposed: { prose: Prose; text: string }
+  proposed: {
+    prose: Prose
+    text: string
+    /** A shot's new length, applied on Keep in the same step. */
+    duration_s?: number
+    /** Beats Keep adds to the shot in the same step. */
+    new_beats?: { kind: BeatKind; at_s: number; speaker?: string; moment_id?: Id; prose: Prose }[]
+  }
   note: string
   state: 'open' | 'kept' | 'dropped' | 'stale'
   decided_by?: PersonRef
@@ -789,8 +796,37 @@ export interface JobInput {
   safeArea?: SafeArea
   context?: JobContext[]
   clips?: { asset: AssetRef; trimS?: number; endCard?: boolean }[]
+  /** write: what Skye drafts or rewrites (features/script-editor.clan). */
+  write?: WriteInput
   /** Change: the new answer to the parent job's question. */
   answer?: JobAnswer
+}
+
+export type WriteIntent = 'draft' | 'tighten' | 'fit_seconds' | 'add_beat' | 'write_vo' | 'rephrase' | 'cut_name'
+export interface WriteTarget { kind: 'scene' | 'shot' | 'beat'; id: Id }
+export interface WriteLine { type: 'action' | 'character' | 'parenthetical' | 'dialogue' | 'direction'; text: string }
+export interface WriteInput {
+  intent: WriteIntent
+  target: WriteTarget
+  base_hash: Sha256
+  lines: WriteLine[]
+  selection?: { from: number; to: number; text: string }
+  seconds?: number
+  /** cut_name: the @name to take out. */
+  name?: string
+  /** A person pressed it on a target Skye was asked to leave alone. */
+  explicit?: boolean
+  context: { script_title?: string; target_s?: number; scene_heading?: string; neighbours: string; refs: { name: string; role: RefRole; label?: string }[] }
+}
+/** One of Skye's drafts: lands as a suggestion; nothing changes until Keep. */
+export interface Write {
+  target: WriteTarget
+  base_hash: Sha256
+  lines: WriteLine[]
+  note: string
+  reasoning?: string
+  duration_s?: number
+  new_beats?: { kind: BeatKind; at_s: number; speaker?: string; text: string }[]
 }
 
 export interface JobRequest {
@@ -846,6 +882,8 @@ export interface Job {
   answeredBy?: PersonRef
   answer?: Answer
   shots?: PlannedShot[]
+  /** write only: Skye's drafts. */
+  writes?: Write[]
   outputs?: Output[]
   kind?: 'generated' | 'mock'
   error?: ContractError

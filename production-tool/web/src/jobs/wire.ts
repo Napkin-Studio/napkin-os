@@ -9,6 +9,7 @@ import { landFrameEditIn } from './frameEdit'
 import { continueDrawing, type FrameDeps } from './frames'
 import { landFrame, landRender, landTake } from './handlers'
 import { landShotList } from './plan'
+import { landWrites } from '../script/skye'
 
 const warn = (what: string) => (e: unknown) => console.warn(`${what} stopped`, e)
 
@@ -32,6 +33,7 @@ export function wireJobs(deps: FrameDeps) {
     if (ctx.for !== 'clip') return
     void landTake(doc, job, ctx).then(() => continueFollow(deps)).catch(warn('update what follows'))
   })
+  runner.onComplete('write', (job) => void landWrites(doc, job).catch(warn("Skye's draft")))
   runner.onComplete('stitch', (job, ctx) => void landRender(doc, job, ctx.for === 'stitch' ? ctx : undefined)
     .then(() => continueFollow(deps)).catch(warn('update what follows')))
 }

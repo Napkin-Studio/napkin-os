@@ -69,6 +69,29 @@ function inlineText(nodes: PMNode[] | undefined, refs: RefNames, mentions: strin
   return out
 }
 
+/**
+ * A block's words as checkpoint writes them (a mention as @key_variant, a
+ * break as a newline), so an editor's counter, its typing stop and its paste
+ * trimming count exactly what checkpoint keeps (features/script-editor.clan).
+ */
+export function flatText(nodes: PMNode[] | undefined, refs: RefNames): string {
+  return inlineText(nodes, refs, [], [])
+}
+
+/** The flat length of a block, or of the given block type's blocks joined by newlines (as a shot's direction). */
+export function flatLength(of: PMNode | Prose, refs: RefNames, type?: string): number {
+  if (of.type !== 'doc') return flatText((of as PMNode).content, refs).length
+  const blocks = ((of as Prose).content ?? []).filter((b) => !type || b.type === type)
+  return blocks.map((b) => flatText(b.content, refs)).join('\n').length
+}
+
+/** The names a prose mentions that match no ref, as checkpoint finds them (in order, repeated). */
+export function unknownNames(prose: Prose, refs: RefNames): string[] {
+  const unknown: string[] = []
+  for (const b of prose.content ?? []) inlineText(b.content, refs, [], unknown)
+  return unknown
+}
+
 /** Why the fragment's blocks do not fit its kind, or null. */
 export function shapeProblem(kind: FragmentKind, prose: Prose): string | null {
   const allowed: readonly string[] = FRAGMENT_BLOCKS[kind]

@@ -10,13 +10,14 @@
 // LocalUndo's, kept in ProjectUi.undo so it survives a reload.
 
 import {
-  ClanDocumentStore, indexedDbPersistence, LocalPatchBus, LocalTextBus, LocalUndo, recordJobOutcome, TERMINAL,
+  ClanDocumentStore, indexedDbPersistence, LocalPatchBus, LocalTextBus, LocalUndo, recordJobOutcome, TERMINAL, TEXT_OWNED,
   type ChainEntry, type JobEntry, type Person, type Persistence, type SerializedUndo,
 } from '../../../clan-store/src'
+import { TypingBursts } from '../script/typing'
 import type { ProductionDocument } from '../contracts/types'
 import { record as recordEvent } from '../dogfood/recorder'
 import type { Doc, DocumentStore, UndoResult, WriteWhy } from '../doc/types'
-import { changeOf } from './diff'
+import { changeOf, textTouched } from './diff'
 
 export type { ChainEntry } from '../../../clan-store/src'
 
@@ -26,6 +27,8 @@ export const CLAN_DB = 'napkin-production-tool-clan'
 interface Pending {
   why: WriteWhy
   after: Doc
+  /** The document the change was made on: only text it changed from this is written. */
+  base: Doc
 }
 
 export interface ModelStoreOptions {
@@ -39,6 +42,8 @@ export class ModelStore implements DocumentStore {
   readonly bus: LocalPatchBus
   readonly text: LocalTextBus
   readonly undoer: LocalUndo
+  /** The editors' typing bursts: each closes into one LocalUndo text step (script/typing.ts). */
+  readonly typing: TypingBursts
   private value: Doc | null = null
   private pending: Pending[] = []
   private readonly listeners = new Set<(d: Doc) => void>()
@@ -59,6 +64,9 @@ export class ModelStore implements DocumentStore {
     this.undoer = new LocalUndo({ saved: opts.undo?.saved ?? null, onChange: (s) => opts.undo?.save(s) })
     this.undoer.bind(this.bus, this.text)
     this.delay = opts.debounceMs ?? 250
+    this.typing = new TypingBursts(this.text, { changed: () => this.scheduleCheckpoint() })
+    // A burst is always its own step, older than whatever comes next (an edit, a Keep, an undo).
+    this.undoer.beforePush = () => this.typing.closeAll()
   }
 
   /** The browser default: the project's own IndexedDB database, napkin-wasm beside the bundle. */
@@ -102,6 +110,7 @@ export class ModelStore implements DocumentStore {
 
   /** The project was closed: write what is pending, then take no more writes. */
   async close(): Promise<void> {
+    this.typing.closeAll()
     await this.flush()
     await this.text.leave().catch(() => {})
     this.closed = true
@@ -135,7 +144,7 @@ export class ModelStore implements DocumentStore {
     const folds = last && last !== this.current && (
       (why.quiet && last.why.quiet) || (why.coalesce && last.why.coalesce === why.coalesce))
     if (folds) last!.after = after
-    else this.pending.push({ why, after })
+    else this.pending.push({ why, after, base: before })
     this.emit()
     this.schedule()
     return Promise.resolve(after)
@@ -155,10 +164,90 @@ export class ModelStore implements DocumentStore {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
     await this.serial(() => this.drain())
+    await this.checkpointText()
     await this.clan.flush()
   }
 
+  // ── live text from the editors ──
+
+  private textTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly savingListeners = new Set<() => void>()
+
+  /** Typing reached a fragment: write its flat fields soon (one quiet checkpoint per pause). */
+  scheduleCheckpoint(ms = 300) {
+    if (this.closed) return
+    if (this.textTimer) clearTimeout(this.textTimer)
+    this.textTimer = setTimeout(() => {
+      this.textTimer = null
+      void this.checkpointText().catch((e) => this.refused(e))
+    }, ms)
+    this.notifySaving()
+  }
+
+  /** Write the flat fields of every fragment the editors changed, then show them. */
+  async checkpointText(): Promise<void> {
+    if (this.textTimer) clearTimeout(this.textTimer)
+    this.textTimer = null
+    await this.serial(async () => {
+      await this.text.checkpoint()
+      this.rebaseText()
+    })
+    this.notifySaving()
+  }
+
+  /** Whether something typed or changed is not written yet ('Saving…'). */
+  saving(): boolean {
+    return !!this.timer || !!this.textTimer || this.pending.length > 0 || this.typing.isOpen()
+  }
+
+  onSaving(cb: () => void): () => void {
+    this.savingListeners.add(cb)
+    const off = this.typing.subscribe(cb)
+    return () => {
+      this.savingListeners.delete(cb)
+      off()
+    }
+  }
+
+  private notifySaving() {
+    for (const cb of this.savingListeners) cb()
+  }
+
+  /**
+   * The text the checkpoint wrote is the truth: the shown document, and every change still
+   * waiting, take the text-owned fields from the buses, so a panel's draft made before the
+   * checkpoint never writes older words back over the editor's (model/diff.ts compares them).
+   */
+  private rebaseText() {
+    const truth = this.bus.doc() as unknown as Record<string, Record<string, Record<string, unknown>>>
+    const rebase = (d: Doc) => {
+      const m = d as unknown as Record<string, Record<string, Record<string, unknown>>>
+      for (const [map, fields] of Object.entries(TEXT_OWNED)) {
+        for (const [id, e] of Object.entries(m[map] ?? {})) {
+          const t = truth[map]?.[id]
+          if (!t) continue
+          for (const f of fields as readonly string[]) {
+            if (t[f] === undefined) delete e[f]
+            else e[f] = structuredClone(t[f])
+          }
+        }
+      }
+    }
+    if (!this.pending.length) {
+      this.value = this.bus.doc() as unknown as Doc
+    } else {
+      for (const p of this.pending) rebase(p.after)
+      if (this.value) {
+        const v = structuredClone(this.value)
+        rebase(v)
+        this.value = v
+      }
+    }
+    this.emit()
+  }
+
   async undo(): Promise<UndoResult> {
+    this.typing.closeAll()
     await this.flush()
     const r = await this.serial(() => this.undoer.undo())
     this.settled()
@@ -166,6 +255,7 @@ export class ModelStore implements DocumentStore {
   }
 
   async redo(): Promise<UndoResult> {
+    this.typing.closeAll()
     await this.flush()
     const r = await this.serial(() => this.undoer.redo())
     this.settled()
@@ -232,7 +322,11 @@ export class ModelStore implements DocumentStore {
       const item = this.pending[0]
       this.current = item
       try {
-        const { patches, text } = changeOf(this.bus.doc() as unknown as ProductionDocument, item.after)
+        const { patches, text: written } = changeOf(this.bus.doc() as unknown as ProductionDocument, item.after)
+        // Live text the change itself did not touch is left alone: a panel's draft made before an editor's
+        // words reached the buses must never write the older words back (features/script-editor.clan).
+        const touched = textTouched(item.base as unknown as ProductionDocument, item.after as unknown as ProductionDocument)
+        const text = written.filter((t) => touched.has(`${t.kind}/${t.id}`))
         const why = item.why
         const agentLanding = !!why.agent && !why.agent.startsWith('human:')
         const undoable = why.undo ?? (!why.quiet && !agentLanding)

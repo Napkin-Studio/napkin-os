@@ -17,11 +17,14 @@ const KINDS: { id: Kind; label: string }[] = [
   { id: 'decision', label: 'Decisions' }, { id: 'check', label: 'Checks' }, { id: 'ask', label: 'Asks' }, { id: 'pick', label: 'Picks' },
 ]
 
-export function HistoryPanel({ store, onClose }: { store: ModelStore | null; onClose: () => void }) {
+/** An item to open History on (Why, why?): its words and the addresses its decisions target or cite. */
+export interface HistoryFocus { label: string; addresses: string[] }
+
+export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | null; onClose: () => void; focus?: HistoryFocus }) {
   const doc = useDoc()
   const ui = useUi()
   const [entries, setEntries] = useState<ChainLike[] | null>(null)
-  const [itemKey, setItemKey] = useState('all')
+  const [itemKey, setItemKey] = useState(focus ? 'focus' : 'all')
   const [kind, setKind] = useState<Kind | 'all'>('all')
   const [error, setError] = useState<string | null>(null)
   const docId = useMemo(() => {
@@ -31,7 +34,7 @@ export function HistoryPanel({ store, onClose }: { store: ModelStore | null; onC
       return ''
     }
   }, [store])
-  const items = useMemo(() => historyItems(doc, docId), [doc, docId])
+  const items = useMemo(() => [...(focus ? [{ key: 'focus', ...focus }] : []), ...historyItems(doc, docId)], [doc, docId, focus])
   const item = items.find((i) => i.key === itemKey)
   const counts = useMemo(() => {
     const c: Record<Kind, number> = { decision: 0, check: 0, ask: 0, pick: 0 }

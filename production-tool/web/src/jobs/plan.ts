@@ -30,6 +30,7 @@ import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
 import { landingWhy } from './landing'
 import { allNamed, jobShot } from './select'
+import { isActive } from './runner'
 
 // ── the request ─────────────────────────────────────────────────────────────
 
@@ -52,6 +53,23 @@ export async function planInput(relay: Relay, d: ProductionDocument, text?: stri
 export async function planShots(deps: FrameDeps, opts: { text?: string } = {}): Promise<string> {
   const input = await planInput(deps.relay, deps.doc.get(), opts.text)
   return deps.runner.submit('shot_list', input, [], { for: 'shot_list' })
+}
+
+/** The plan job running on the main storyboard now, if any. */
+export function runningPlan(d: ProductionDocument): string | undefined {
+  const sb = mainStoryboard(d)
+  if (!sb) return undefined
+  return Object.values(d.jobs).find((j) => j.op === 'shot_list' && j.node?.kind === 'storyboard' && j.node.id === sb.id && isActive(j.state))?.id
+}
+
+/**
+ * Plan shots from either entry point (the Storyboard stage, the Script editor): the same job, on the
+ * same node {kind: 'storyboard', id}. One already running is joined, never started twice.
+ */
+export async function planOrJoin(deps: FrameDeps, opts: { text?: string } = {}): Promise<{ jobId: string; joined: boolean }> {
+  const running = runningPlan(deps.doc.get())
+  if (running) return { jobId: running, joined: true }
+  return { jobId: await planShots(deps, opts), joined: false }
 }
 
 // ── the landing ─────────────────────────────────────────────────────────────
@@ -102,7 +120,7 @@ export function askedShot(a: Ask): string | undefined {
 }
 
 /** Dex's question about a shot the new plan leaves out that something was made from. */
-function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot): Ask {
+function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot, why = 'The new plan leaves it out, but it has frames or clips.'): Ask {
   const id = newUlidId('q')
   const n = shotNumber(d, shot.id)
   const node = { kind: 'shot' as const, id: shot.id }
@@ -110,7 +128,7 @@ function leftOutAsk(d: ProductionDocument, storyboardId: string, shot: Shot): As
     id, v: 1, field_v: {}, node: { kind: 'storyboard', id: storyboardId }, crew: 'dex', state: 'open', answers: [],
     question: {
       id, kind: 'block', text: `Shot ${n} no longer has a scene. Keep it or remove it?`,
-      why: 'The new plan leaves it out, but it has frames or clips.',
+      why,
       options: [
         { id: 'keep', label: 'Keep', value: { route: KEEP_SHOT, node } },
         { id: 'remove', label: 'Remove', value: { route: REMOVE_SHOT, node } },
@@ -206,9 +224,10 @@ export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>): ShotList
   const asked = new Set(openAsks(d).map(askedShot).filter(Boolean))
   for (const s of existing) {
     if (named.has(s.id) || isPerson(s.last_writer)) continue
-    // Never silently: a shot something was made from stays until a person says Remove.
-    if (framesOf(d, s.id).length || takesOf(d, s.id).length) {
-      if (!asked.has(s.id)) out.asks.push(leftOutAsk(d, sb.id, s))
+    // Never silently: a shot something was made from, or whose scene is gone, stays until a person says Remove.
+    const sceneGone = !!s.scene_id && !d.scenes[s.scene_id]
+    if (sceneGone || framesOf(d, s.id).length || takesOf(d, s.id).length) {
+      if (!asked.has(s.id)) out.asks.push(leftOutAsk(d, sb.id, s, sceneGone ? 'Its scene was taken out of the script.' : undefined))
       continue
     }
     out.dropShots.push(s.id)

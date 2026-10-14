@@ -145,8 +145,9 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
 
 
 def to_wire(op: str, payload: dict) -> dict:
-    """A copy of the job input with wire tags on its refs and in its words. shot_list is unchanged."""
-    if op == "shot_list":
+    """A copy of the job input with wire tags on its refs and in its words. shot_list and write are
+    unchanged: Dex and Skye read the person's own names, and an unknown @name is for Skye to ask about."""
+    if op in ("shot_list", "write"):
         return payload
     out = copy.deepcopy(payload)
     refs = out.get("refs") or []

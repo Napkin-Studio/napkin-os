@@ -2162,6 +2162,49 @@
             "text": {
               "type": "string",
               "maxLength": 20000
+            },
+            "duration_s": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 30,
+              "multipleOf": 0.1,
+              "description": "A shot's new length, applied on Keep in the same step (features/script-editor.clan)."
+            },
+            "new_beats": {
+              "type": "array",
+              "maxItems": 6,
+              "description": "Beats Keep adds to the target shot in the same step.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "$ref": "common.schema.json#/$defs/beatKind"
+                  },
+                  "at_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 30,
+                    "multipleOf": 0.5
+                  },
+                  "speaker": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "moment_id": {
+                    "type": "string",
+                    "pattern": "^beat_[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "prose": {
+                    "$ref": "#/$defs/prose"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "at_s",
+                  "prose"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [

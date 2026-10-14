@@ -10,8 +10,8 @@ import { systemUpdate, updateDoc } from '../doc/store'
 import { currentFrame, framesOf, openAsks, scriptText, shotsOf, staleList } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { mockShotList } from '../relay/mock'
-import { answerShotAsk, writeScript } from '../stages/storyboardEdits'
-import { addFrame, job, MAYA, modelStore, SHA } from '../test/model'
+import { answerShotAsk } from '../stages/storyboardEdits'
+import { addFrame, job, MAYA, modelStore, scriptWords, SHA } from '../test/model'
 import { askedShot, landShotList, SCRIPT_CHANGED } from './plan'
 import { jobShot } from './select'
 
@@ -33,7 +33,7 @@ async function plan(s: ModelStore, edit?: (shots: ReturnType<typeof mockShotList
 async function planned(): Promise<{ s: ModelStore; d: ProductionDocument }> {
   const s = modelStore()
   await s.create(MAYA, 'Soup')
-  await updateDoc(s, (d) => writeScript(d, 'Maya walks into a sunny kitchen and smiles. She tastes the soup and nods.'), 'edit')
+  await updateDoc(s, (d) => scriptWords(d, 'Maya walks into a sunny kitchen and smiles. She tastes the soup and nods.'), 'edit')
   await plan(s)
   // Frames for every shot, picked; the storyboard locked.
   await systemUpdate(s, (d) => {
@@ -49,7 +49,7 @@ describe('a re-plan', () => {
     const { s, d: before } = await planned()
     const was = shotsOf(before)
     expect(was.map((x) => x.action)).toEqual(['Maya walks into a sunny kitchen and smiles.', 'She tastes the soup and nods.'])
-    await updateDoc(s, (d) => writeScript(d, 'She waves goodbye at the door.'), 'edit')
+    await updateDoc(s, (d) => scriptWords(d, 'She waves goodbye at the door.'), 'edit')
     const d = await plan(s)
     const now = shotsOf(d)
     expect(now.slice(0, 2).map((x) => x.id)).toEqual(was.map((x) => x.id))
@@ -105,7 +105,7 @@ describe('a re-plan', () => {
   it('a left-out shot with nothing made from it may go', async () => {
     const s = modelStore()
     await s.create(MAYA, 'Soup')
-    await updateDoc(s, (d) => writeScript(d, 'One thing. Another thing.'), 'edit')
+    await updateDoc(s, (d) => scriptWords(d, 'One thing. Another thing.'), 'edit')
     const first = shotsOf(await plan(s))
     const d = await plan(s, (shots) => shots.filter((x) => x.id !== first[1].id))
     expect(d.shots[first[1].id]).toBeUndefined()

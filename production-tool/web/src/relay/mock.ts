@@ -17,8 +17,9 @@
 import { crewFor, newUlidId } from '../../../clan-store/src'
 import type {
   Answer, AnswerConflict, AssetRef, CameraMovement, CameraSize, Config, ContractError, CrewId, InputMime, Job, JobAnswer, JobRequest,
-  JobShot, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output, PlannedShot, Question,
+  JobShot, JobState, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Me, Output, PlannedShot, Question, Write,
 } from '../contracts/types'
+import { mockWrites } from './mockWrite'
 import { AGENCY_SHELF } from '../contracts/types'
 import { quotaClassOf, SPEND_POLICY } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
@@ -51,6 +52,8 @@ export interface MockOptions {
   persistKey?: string | null
   putOutput?: (blob: Blob) => Promise<string>
   getInput?: (sha: string) => Promise<Blob | undefined>
+  /** Answer write with 422 capability_missing, as a relay without Skye does. */
+  writeOff?: boolean
 }
 
 interface LedgerItem {
@@ -63,7 +66,7 @@ interface LedgerItem {
   answer?: Answer
   answeredBy?: string
   answeredAt?: number
-  done?: { state: JobState; outputs?: Output[]; shots?: PlannedShot[]; error?: ContractError; at: number }
+  done?: { state: JobState; outputs?: Output[]; shots?: PlannedShot[]; writes?: Write[]; error?: ContractError; at: number }
 }
 
 const MOCK_HOST = 'https://mock.napkin.invalid'
@@ -240,6 +243,7 @@ export class MockRelay implements Relay {
       persistKey: opts.persistKey === undefined ? 'napkin-pt.mock-ledger' : opts.persistKey,
       putOutput: opts.putOutput ?? putBlob,
       getInput: opts.getInput ?? getBlob,
+      writeOff: opts.writeOff ?? false,
     }
     this.load()
   }
@@ -290,6 +294,8 @@ export class MockRelay implements Relay {
 
   async createJob(req: JobRequest): Promise<Job> {
     if (req.contractVersion !== '3') throw new RelayError({ code: 'invalid_input', message: OTHER_CONTRACT, retryable: false }, 400)
+    // Skye switched off, as an older relay or an agency whose text may not go to the model answers.
+    if (req.op === 'write' && this.opts.writeOff) throw new RelayError({ code: 'capability_missing', message: "Skye isn't available here yet.", retryable: false }, 422)
     const existing = this.ledger.get(req.jobId)
     if (!existing) {
       this.ledger.set(req.jobId, { req, createdAt: this.opts.now(), startPos: 1 + Math.floor(Math.random() * 3) })
@@ -431,6 +437,8 @@ export class MockRelay implements Relay {
         } else if (req.op === 'frame_edit' && mockFrameEdit(req.input, frameAnswer(item)).edit?.runAs === 'none') {
           // Only the camera's move changes: nothing is drawn (features/frame-change-edit.clan).
           item.done = { state: 'completed', at: this.opts.now(), outputs: [] }
+        } else if (req.op === 'write' && req.input.write) {
+          item.done = { state: 'completed', at: this.opts.now(), writes: mockWrites(req.input.write), outputs: [] }
         } else if (req.op === 'shot_list') {
           const names = (req.input.refs ?? []).flatMap((r) => (r.name ? [r.name] : []))
           item.done = { state: 'completed', at: this.opts.now(), shots: mockShotList(req.input.script ?? '', req.input.targetS ?? 10, names, req.input.shots ?? []), outputs: [] }
@@ -515,6 +523,7 @@ export class MockRelay implements Relay {
     if (queuePosition !== undefined) job.queuePosition = queuePosition
     if (item.done?.outputs) job.outputs = item.done.outputs
     if (item.done?.shots) job.shots = item.done.shots
+    if (item.done?.writes) job.writes = item.done.writes
     if (item.done?.error) job.error = item.done.error
     if (item.question) job.question = item.question
     if (frameEdit?.edit && state !== 'needs_input') {
