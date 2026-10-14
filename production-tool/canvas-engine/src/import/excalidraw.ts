@@ -54,6 +54,8 @@ export interface ExcalidrawLike {
   fileId?: string | null
   status?: string
   name?: string | null
+  /** A link's role (drives, renders…), on the own engine's link elements. */
+  role?: string
 }
 
 export interface ConvertedScene {
@@ -160,7 +162,8 @@ export function convertExcalidraw(scene: { elements?: readonly unknown[]; files?
           if (typeof e.endArrowhead === 'string') style.arrowheadEnd = e.endArrowhead
         }
         const end = (b: { elementId?: string } | null | undefined): Plain => (b?.elementId && ids.has(b.elementId) ? { elementId: b.elementId } : null)
-        const props = { route, start: end(e.startBinding), end: end(e.endBinding) }
+        const props: Record<string, Plain> = { route, start: end(e.startBinding), end: end(e.endBinding) }
+        if (tag?.kind === 'link' && typeof e.role === 'string') props.role = e.role
         return push(tag?.kind === 'link' ? 'link' : 'arrow', { style, props })
       }
       case 'text': {

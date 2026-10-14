@@ -14,6 +14,7 @@
 import { getStroke } from 'perfect-freehand'
 import RBush from 'rbush'
 import { localPoints } from '../model/points'
+import { boundEnds, linkSegment } from './links'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
@@ -153,6 +154,11 @@ export class Renderer {
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
   }
 
+  /** An element where it is drawn: offset while it is being moved. */
+  private moved(r: ElementRecord): ElementRecord {
+    return this.moving?.ids.has(r.id) ? { ...r, x: r.x + this.moving.dx, y: r.y + this.moving.dy } : r
+  }
+
   private order(): ElementRecord[] {
     this.ordered ??= this.scene.all().filter((r) => r.kind !== 'node').sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
     return this.ordered
@@ -186,7 +192,8 @@ export class Renderer {
     const minPx = 1.5 / cam.zoom
     const level: Level = cam.zoom < FULL_RES_MIN_ZOOM ? 'small' : 'full'
     for (const r of this.order()) {
-      if (!visible.has(r.id)) {
+      // A bound link is drawn from its ends (it follows them), so its own box never culls it.
+      if (!visible.has(r.id) && r.kind !== 'link') {
         stats.culled++
         continue
       }
@@ -196,7 +203,7 @@ export class Renderer {
       }
       stats.drawn++
       ctx.globalAlpha = r.opacity
-      const moving = this.moving?.ids.has(r.id) ? this.moving : null
+      const moving = r.kind !== 'link' && this.moving?.ids.has(r.id) ? this.moving : null
       if (moving) {
         ctx.save()
         ctx.translate(moving.dx, moving.dy)
@@ -266,6 +273,31 @@ export class Renderer {
       }
       case 'arrow':
       case 'link': {
+        const ends = r.kind === 'link' ? boundEnds((id) => this.scene.get(id), r) : null
+        if (ends) {
+          // A link runs between its ends' edges, wherever they are now; quiet until an end is selected.
+          const { a, b } = linkSegment(this.moved(ends.from), this.moved(ends.to))
+          const lit = this.selected.has(r.id) || this.selected.has(ends.from.id) || this.selected.has(ends.to.id)
+          ctx.globalAlpha = lit ? 1 : 0.3
+          ctx.strokeStyle = '#4a7fd4'
+          ctx.lineWidth = (lit ? 2 : 1.5) / cam.zoom
+          ctx.beginPath()
+          ctx.moveTo(a.x, a.y)
+          ctx.lineTo(b.x, b.y)
+          const ang = Math.atan2(b.y - a.y, b.x - a.x)
+          const head = 9 / cam.zoom
+          ctx.moveTo(b.x - head * Math.cos(ang - 0.45), b.y - head * Math.sin(ang - 0.45))
+          ctx.lineTo(b.x, b.y)
+          ctx.lineTo(b.x - head * Math.cos(ang + 0.45), b.y - head * Math.sin(ang + 0.45))
+          ctx.stroke()
+          const role = typeof r.props.role === 'string' ? r.props.role : ''
+          if (role && cam.zoom > 0.2) {
+            ctx.fillStyle = '#4a7fd4'
+            ctx.font = `${12 / cam.zoom}px Geist, sans-serif`
+            ctx.fillText(role, (a.x + b.x) / 2 + 6 / cam.zoom, (a.y + b.y) / 2 - 6 / cam.zoom)
+          }
+          return
+        }
         const route = Array.isArray(r.props.route) ? (r.props.route as number[]) : [0, 0, r.w, r.h]
         ctx.strokeStyle = r.kind === 'link' ? '#4a7fd4' : stroke
         ctx.lineWidth = (r.style.width ?? 2) / (r.kind === 'link' ? cam.zoom : 1)

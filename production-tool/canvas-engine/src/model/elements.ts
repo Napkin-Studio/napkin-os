@@ -50,6 +50,7 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
       return {
         ...base, type: 'arrow', points, startBinding: binding(r.props.start), endBinding: binding(r.props.end),
         startArrowhead: r.style.arrowheadStart ?? null, endArrowhead: r.style.arrowheadEnd ?? null,
+        ...(typeof r.props.role === 'string' ? { role: r.props.role } : {}),
       }
     }
   }
