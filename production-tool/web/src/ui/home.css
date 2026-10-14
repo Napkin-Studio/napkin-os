@@ -25,13 +25,13 @@
 
 /* ── bar ── */
 .hm-bar {
-  height: 48px; flex-shrink: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 0 14px;
-  background: var(--frost); backdrop-filter: var(--blur); border-bottom: 1px solid var(--line-soft); position: relative; z-index: 5;
+  height: 48px; flex-shrink: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 0 16px;
+  background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid var(--line-soft); position: relative; z-index: 5;
 }
-.hm-bar::after { content: ""; position: absolute; left: 0; bottom: -1px; width: 160px; height: 2px; background: var(--tool); }
-.hm-brand { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.hm-studio { font-weight: 700; letter-spacing: -0.03em; font-size: 15px; }
-.hm-tool { font-weight: 700; letter-spacing: -0.03em; font-size: 15px; color: var(--tool-ink); }
+@media (prefers-color-scheme: dark) { .hm-bar { background: rgba(15, 17, 20, 0.92); } }
+.hm-brand { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
+.hm-studio { font-weight: 600; letter-spacing: -0.01em; font-size: 14px; }
+.hm-tool { font-weight: 600; letter-spacing: -0.01em; font-size: 14px; color: var(--tool-ink); }
 .hm-right { display: flex; align-items: center; gap: 8px; }
 
 /* ── page ── */

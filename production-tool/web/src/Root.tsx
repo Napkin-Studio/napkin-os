@@ -9,7 +9,7 @@ import { RouterContext, ServicesContext, ShellContext } from './app/context'
 import type { Router } from './app/route'
 import type { Shell } from './projects/shell'
 import { Home } from './ui/Home'
-import { StudioMark } from './ui/Mark'
+import { MarkTile } from './ui/chrome/Bar'
 import { NO_ACCESS, signInHref, type Access, type AccessStore } from './relay/access'
 import './ui/home.css'
 
@@ -54,19 +54,19 @@ export function Root({ shell, access, router }: { shell: Shell; access: AccessSt
 function NoAccess({ why }: { why: Exclude<Access, 'ok'> }) {
   const words = NO_ACCESS[why]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, background: 'var(--soft)' }}>
+    <div className="pt-grid" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <header className="hm-bar">
         <span className="hm-brand">
-          <StudioMark size={22} />
+          <MarkTile />
           <span className="hm-studio">Napkin Studio</span>
           <span className="hm-tool">Production</span>
         </span>
       </header>
       <div className="card signin stack" role="status">
-        <b style={{ fontSize: 18, letterSpacing: '-0.02em' }}>{words.title}</b>
+        <b className="signin-title">{words.title}</b>
         {words.body && <p style={{ margin: 0 }}>{words.body}</p>}
         {why === 'signed_out' && (
-          <div className="row"><a className="btn primary" href={signInHref(location)}>Sign in</a></div>
+          <div className="row" style={{ justifyContent: 'center' }}><a className="btn primary" href={signInHref(location)}>Sign in</a></div>
         )}
       </div>
     </div>

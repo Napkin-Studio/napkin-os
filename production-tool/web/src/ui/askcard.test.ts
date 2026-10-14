@@ -67,23 +67,23 @@ describe('the ask card', () => {
   it('shows the question, why, its options and the Recommended mark', () => {
     const runner = fakeRunner()
     const html = renderToStaticMarkup(createElement(ServicesContext.Provider, { value: services(runner) }, createElement(AskCard, { ask: ASK })))
-    expect(html).toContain('Dex asks')
+    expect(html).toContain('Dex · directs')
     expect(html).toContain('Is the umbrella red or yellow?')
     expect(html).toContain('The script says both.')
     expect(html).toContain('Red')
     expect(html).toContain('Yellow')
     expect(html).toContain('Matches the logo')
     expect(html.match(/Recommended/g)).toHaveLength(1)
-    expect(html).toMatch(/Red<span class="askcard-rec"> · Recommended/)
+    expect(html).toMatch(/Red<\/span><span class="askcard-rec">Recommended/)
     expect(html).toContain('aria-label="Your answer"') // allow_text: the box for own words
   })
 
   it('marks the recommended option with the readable tint, not the orange primary button', () => {
     const html = renderToStaticMarkup(createElement(AskOptions, { q: ASK.question, disabled: false, onPick: () => {} }))
     expect(html).not.toContain('primary') // white or orange text on --create fails WCAG AA
-    expect(html).toMatch(/class="btn sm askcard-opt rec"[^>]*>Red/)
-    expect(html).toMatch(/class="btn sm askcard-opt"[^>]*>Yellow/)
-    expect(html).toContain('<span class="askcard-detail"> · Matches the logo</span>')
+    expect(html).toMatch(/class="btn sm askcard-opt rec"[^>]*><span class="askcard-label">Red/)
+    expect(html).toMatch(/class="btn sm askcard-opt"[^>]*><span class="askcard-label">Yellow/)
+    expect(html).toContain('<span class="askcard-detail">Matches the logo</span>')
   })
 
   it('an option clicked answers the job through the runner', async () => {

@@ -7,6 +7,7 @@ import { useServices, useShell, useUi } from '../../app/context'
 import type { Me } from '../../contracts/types'
 import { Float } from '../Float'
 import { initials } from './panels'
+import { CrewSheet } from '../agents/CrewSheet'
 import './chrome.css'
 
 /** "Home: your projects": a dark tile with the Home triangle (the mocks' mark). */
@@ -15,6 +16,15 @@ export function HomeMark({ onClick }: { onClick: () => void }) {
     <button type="button" className="pt-home" aria-label="Home: your projects" title="Home: your projects" onClick={onClick}>
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" /></svg>
     </button>
+  )
+}
+
+/** The same tile where it goes nowhere (Home itself, the signed-out page). */
+export function MarkTile() {
+  return (
+    <span className="pt-home" aria-hidden="true" style={{ cursor: 'default' }}>
+      <svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 11 L7 3 L12 11 Z" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+    </span>
   )
 }
 
@@ -67,6 +77,7 @@ export function Account({ children }: { children?: ReactNode }) {
   const shell = useShell()
   const ref = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
+  const [crew, setCrew] = useState(false)
   const me: Me | undefined = ui.me
   const still = ui.motion === 'still'
   return (
@@ -87,10 +98,12 @@ export function Account({ children }: { children?: ReactNode }) {
             onClick={() => uiStore.update((u) => { u.motion = still ? undefined : 'still' })} />
         </label>
         {children}
+        <button type="button" className="pt-menurow" onClick={() => { setOpen(false); setCrew(true) }}>The crew<span className="hint">who works on your ad</span></button>
         <div className="pt-menusep" />
         <button type="button" className="pt-menurow" onClick={() => { setOpen(false); void shell.newProject() }}>New project</button>
         <button type="button" className="pt-menurow" onClick={() => { setOpen(false); void shell.goHome() }}>All projects</button>
       </Float>
+      {crew && <CrewSheet onClose={() => setCrew(false)} />}
     </>
   )
 }

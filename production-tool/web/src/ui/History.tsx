@@ -9,7 +9,11 @@ import { useDoc, useUi } from '../app/context'
 import type { Kind } from '../model/lineage'
 import type { ModelStore } from '../model/store'
 import { download, exportClanFile } from '../export'
-import { entryKind, historyItems, projectEntries, type ChainLike } from './historyItems'
+import { entryKind, historyItems, kindOf, projectEntries, type ChainLike } from './historyItems'
+import { AgentFigure } from './agents/AgentFigure'
+import type { CastKey } from './agents/cast'
+
+const CREW_ORDER: CastKey[] = ['skye', 'dex', 'wren', 'rhea', 'jude', 'ellis', 'edie']
 import { HistoryList } from './HistoryList'
 import './history.css'
 
@@ -26,6 +30,9 @@ export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | nu
   const [entries, setEntries] = useState<ChainLike[] | null>(null)
   const [itemKey, setItemKey] = useState(focus ? 'focus' : 'all')
   const [kind, setKind] = useState<Kind | 'all'>('all')
+  const [tree, setTree] = useState(true)
+  const [whoOnly, setWhoOnly] = useState<string>('all')
+  const [pinned, setPinned] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const docId = useMemo(() => {
     try {
@@ -36,6 +43,16 @@ export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | nu
   }, [store])
   const items = useMemo(() => [...(focus ? [{ key: 'focus', ...focus }] : []), ...historyItems(doc, docId)], [doc, docId, focus])
   const item = items.find((i) => i.key === itemKey)
+  // Who: everyone, you, the people, or one of the crew (only those in this project's chain).
+  const me = ui.me?.participantId
+  const crewIn = useMemo(() => CREW_ORDER.filter((c) => (entries ?? []).some((e) => e.agent === c)), [entries])
+  const shown = useMemo(() => (entries ?? []).filter((e) => {
+    if (pinned && !e.pinned) return false
+    if (whoOnly === 'all') return true
+    if (whoOnly === 'you') return !!me && e.agent === `human:${me}`
+    if (whoOnly === 'people') return kindOf(e.agent) === 'person'
+    return e.agent === whoOnly
+  }), [entries, pinned, whoOnly, me])
   const counts = useMemo(() => {
     const c: Record<Kind, number> = { decision: 0, check: 0, ask: 0, pick: 0 }
     for (const e of entries ?? []) c[entryKind(e)]++
@@ -74,9 +91,13 @@ export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | nu
     <aside className="history" aria-label="History">
       <div className="history-top">
         <b>History</b>
-        <span className="faint">{entries ? `${entries.length} decisions` : ''}</span>
+        <span className="faint">the project's decision chain</span>
         <span className="spacer" />
-        <button className="btn xs ghost" onClick={onClose} aria-label="Close history">Close</button>
+        <span className="pt-seg" role="group" aria-label="Show as">
+          <button type="button" aria-pressed={!tree} onClick={() => setTree(false)}>List</button>
+          <button type="button" aria-pressed={tree} onClick={() => setTree(true)}>Tree</button>
+        </span>
+        <button className="history-x" onClick={onClose} aria-label="Close history">×</button>
       </div>
       {!store ? (
         <div className="history-empty">
@@ -86,25 +107,44 @@ export function HistoryPanel({ store, onClose, focus }: { store: ModelStore | nu
       ) : (
         <>
           <div className="history-filter">
-            <label className="faint" htmlFor="history-item">Why does this look like this?</label>
-            <select id="history-item" className="select" value={itemKey} onChange={(e) => setItemKey(e.target.value)}>
-              <option value="all">Everything</option>
-              {items.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
-            </select>
-            <label className="faint" htmlFor="history-kind">Kind</label>
-            <select id="history-kind" className="select" value={kind} onChange={(e) => setKind(e.target.value as Kind | 'all')}>
-              <option value="all">All</option>
-              {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label} {counts[k.id]}</option>)}
-            </select>
+            <div className="history-frow">
+              <label className="pt-label" htmlFor="history-item">Item</label>
+              <select id="history-item" className="select" value={itemKey} onChange={(e) => setItemKey(e.target.value)}>
+                <option value="all">Everything</option>
+                {items.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+              </select>
+              {focus && <span className="faint">opened from "Why does this look like this?"</span>}
+            </div>
+            <div className="history-frow" role="group" aria-label="Who">
+              <span className="pt-label">Who</span>
+              <button type="button" className={`chip ${whoOnly === 'all' ? 'on' : ''}`} onClick={() => setWhoOnly('all')}>Everyone</button>
+              <button type="button" className={`chip ${whoOnly === 'you' ? 'on' : ''}`} onClick={() => setWhoOnly('you')}>You</button>
+              <button type="button" className={`chip ${whoOnly === 'people' ? 'on' : ''}`} onClick={() => setWhoOnly('people')}>People</button>
+              {crewIn.map((c) => (
+                <button key={c} type="button" className={`history-crewchip ${whoOnly === c ? 'on' : ''}`} aria-pressed={whoOnly === c} aria-label={c} title={c} onClick={() => setWhoOnly(whoOnly === c ? 'all' : c)}>
+                  <AgentFigure agent={c} size={20} decorative />
+                </button>
+              ))}
+            </div>
+            <div className="history-frow" role="group" aria-label="Kind">
+              <span className="pt-label">Kind</span>
+              {KINDS.map((k) => (
+                <button key={k.id} type="button" className={`chip ${kind === k.id ? 'on' : ''}`} aria-pressed={kind === k.id} onClick={() => setKind(kind === k.id ? 'all' : k.id)}>{k.label} {counts[k.id]}</button>
+              ))}
+              <span className="spacer" />
+              <button type="button" className={`chip ${pinned ? 'on' : ''}`} aria-pressed={pinned} onClick={() => setPinned(!pinned)}>Pinned only</button>
+            </div>
           </div>
           {error && <div role="alert" className="history-error">{error}</div>}
-          {entries ? <HistoryList entries={entries} doc={doc} me={ui.me?.participantId} item={item} kind={kind === 'all' ? undefined : kind} /> : <div className="history-empty faint">Reading the .clan…</div>}
+          {entries ? <HistoryList entries={shown} doc={doc} me={ui.me?.participantId} myName={ui.me?.name ?? ui.me?.handle} item={item} kind={kind === 'all' ? undefined : kind} tree={tree} /> : <div className="history-empty faint">Reading the .clan…</div>}
           <div className="history-foot">
             <button className="btn sm" onClick={async () => {
               const { blob, name } = await exportClanFile(store)
               download(blob, name)
             }}>Download .clan</button>
             <span className="faint">Open it with <code>clan read chain</code></span>
+            <span className="spacer" />
+            {entries && <span className="pt-mono">{shown.length} of {entries.length}</span>}
           </div>
         </>
       )}

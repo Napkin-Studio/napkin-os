@@ -1,0 +1,28 @@
+/* The crew sheet (mock Crew.dc.html). */
+.crew-sheet { position: fixed; inset: 48px 0 0 0; z-index: 70; overflow: auto; }
+.crew-inner { max-width: 1376px; margin: 0 auto; padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 16px; }
+.crew-top { display: flex; align-items: flex-end; gap: 24px; }
+.crew-top h2 { margin: 6px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+.crew-lede { margin-left: auto; font-size: 13px; color: var(--ink2); }
+.crew-heads { display: grid; grid-template-columns: 5fr 2fr; gap: 16px; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; }
+.crew-cards { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+.crew-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.crew-tile { position: relative; height: 112px; border-radius: 10px; background: var(--tile); display: grid; place-items: center; }
+.crew-house { position: absolute; left: 8px; top: 8px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--ink-fixed); color: #FFFFFF; font-family: var(--f-mono); font-size: 10px; }
+.crew-name { display: flex; align-items: baseline; gap: 6px; }
+.crew-name b { font-size: 20px; font-weight: 600; }
+.crew-name span { font-family: var(--f-mono); font-size: 12px; color: var(--ink2); }
+.crew-does { margin: 0; font-size: 13px; line-height: 1.4; min-height: 37px; }
+.crew-where { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink2); }
+.crew-states { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.crew-stateshead { display: flex; gap: 20px; font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+.crew-stateshead .pt-label { margin-right: auto; }
+.crew-stateshead b { color: var(--ink); font-weight: 600; }
+.crew-staterow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+.crew-state { padding: 10px; border-radius: 10px; background: var(--soft); }
+.crew-statename { font-size: 12px; color: var(--ink2); margin-bottom: 6px; }
+.crew-statename b { color: var(--ink); }
+.crew-figs { display: flex; justify-content: space-around; }
+.crew-figs span { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.crew-figs small { font-size: 10.5px; color: var(--ink2); }
+@media (max-width: 1179px) { .crew-cards, .crew-staterow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .crew-heads { display: none; } }

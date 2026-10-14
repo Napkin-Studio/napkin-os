@@ -5,16 +5,17 @@ import { cardsFromRationale, type SeenCard } from '../../../clan-store/src/attri
 import { Thumbs } from '../dogfood/Dogfood'
 import type { Kind } from '../model/lineage'
 import type { ProductionDocument } from '../contracts/types'
-import { aboutItem, entryKind, jobCost, jobOf, kindOf, plainWords, readable, timeOf, who, type AgentKind, type ChainLike, type HistoryItem } from './historyItems'
+import { aboutItem, entryKind, jobCost, jobOf, kindOf, plainWords, readable, timeOf, who, type ChainLike, type HistoryItem } from './historyItems'
+import { AgentFigure } from './agents/AgentFigure'
+import type { CastKey } from './agents/cast'
+import { initials } from './chrome/panels'
 
-const KIND_ICON: Record<AgentKind, string> = { person: '●', crew: '◆', other: '▲' }
-
-export function HistoryList({ entries, me, item, kind, doc }: { entries: ChainLike[]; me?: string; item?: HistoryItem; kind?: Kind; doc?: ProductionDocument }) {
+export function HistoryList({ entries, me, myName, item, kind, doc, tree = false }: { entries: ChainLike[]; me?: string; myName?: string; item?: HistoryItem; kind?: Kind; doc?: ProductionDocument; tree?: boolean }) {
   const words = (t: string) => readable(doc ? plainWords(t, doc) : t)
   const shown = entries.filter((e) => aboutItem(e, item) && (!kind || entryKind(e) === kind))
   if (!shown.length) return <div className="history-empty faint">{item || kind ? 'Nothing recorded about this yet.' : 'Nothing decided yet. Every choice you and the crew make lands here.'}</div>
   return (
-    <ol className="history-list">
+    <ol className={`history-list ${tree ? 'tree' : ''}`}>
       {shown.map((e, i) => {
         const ak = kindOf(e.agent)
         const w = who(e.agent, me)
@@ -24,15 +25,17 @@ export function HistoryList({ entries, me, item, kind, doc }: { entries: ChainLi
         const job = jobOf(e)
         const cost = doc && job ? jobCost(doc.jobs[job]?.cost) : undefined
         return (
-          <li key={`${e.id ?? e.timestamp}-${i}`} className={`history-entry ${ak}`} data-kind={ak} data-decision-kind={entryKind(e)}>
+          <li key={`${e.id ?? e.timestamp}-${i}`} className={`history-entry ${ak} ${entryKind(e) === 'ask' ? 'asked' : ''}`} data-kind={ak} data-decision-kind={entryKind(e)}>
+            <span className="history-gutter" aria-hidden="true">
+              {ak === 'crew' ? <AgentFigure agent={e.agent as CastKey} size={22} decorative /> : <span className="history-who">{w.label === 'You' ? initials(myName ?? me) : initials(w.label)}</span>}
+            </span>
+            <div className="history-card">
             <div className="history-head">
               <span className={`history-agent ${ak}`} title={e.agent}>
-                <span className="history-icon" aria-hidden>{KIND_ICON[ak]}</span>
                 {w.label}
               </span>
               {w.detail && <span className="history-model faint">{w.detail}</span>}
               <span className="spacer" />
-              <span className="history-kind faint">{entryKind(e)}</span>
               {e.pinned && <span className="history-pin" title="Pinned: never compressed">pinned</span>}
               {cost && <span className="history-cost faint" title="What this job cost">{cost}</span>}
               <time className="faint" dateTime={e.timestamp} title={e.timestamp}>{timeOf(e.timestamp)}</time>
@@ -60,12 +63,16 @@ export function HistoryList({ entries, me, item, kind, doc }: { entries: ChainLi
                 }} />
               </div>
             )}
-            {fields.length > 0 && (
-              <details className="history-fields">
-                <summary>{[...new Set(fields.map((f) => words(f)))].join(' · ')}</summary>
-                {fields.map((f) => <span key={f} className="history-field">{readable(f)}</span>)}
-              </details>
-            )}
+            <div className="history-meta">
+              <span className="history-kind">{entryKind(e)}</span>
+              {fields.length > 0 && (
+                <details className="history-fields">
+                  <summary>{[...new Set(fields.map((f) => words(f)))].join(' · ')}</summary>
+                  {fields.map((f) => <span key={f} className="history-field">{readable(f)}</span>)}
+                </details>
+              )}
+            </div>
+            </div>
           </li>
         )
       })}

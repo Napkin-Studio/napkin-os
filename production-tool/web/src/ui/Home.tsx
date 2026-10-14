@@ -19,6 +19,7 @@ import { DataSharing } from './DataSharing'
 import { sayer, type CastKey } from './agents/cast'
 import { useBlobUrl } from './hooks'
 import { StudioMark } from './Mark'
+import { MarkTile } from './chrome/Bar'
 import './home.css'
 
 const CREW: CastKey[] = ['dex', 'ellis', 'jude']
@@ -171,7 +172,7 @@ function HomeBar() {
   return (
     <header className="hm-bar">
       <span className="hm-brand">
-        <StudioMark size={22} />
+        <MarkTile />
         <span className="hm-studio">Napkin Studio</span>
         <span className="hm-tool">Production</span>
         <BetaTag screen={{ stage: 'home' }} />

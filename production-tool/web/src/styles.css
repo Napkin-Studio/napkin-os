@@ -403,7 +403,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .devswitch .ctl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 8px; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 .devswitch .ctl .y { color: var(--success); }
 .devswitch .ctl .n { color: var(--ink3); text-decoration: line-through; }
-.signin { margin: auto; width: 380px; padding: 28px; }
+.signin { margin: auto; width: 320px; padding: 28px 24px; text-align: center; gap: 16px; }
+.signin-title { font-size: 15px; font-weight: 600; line-height: 1.4; }
 
 .empty-state { padding: 48px 24px; text-align: center; color: var(--ink2); }
 .empty-state b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }

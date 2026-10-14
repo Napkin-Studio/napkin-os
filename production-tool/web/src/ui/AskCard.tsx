@@ -11,17 +11,21 @@ import type { Ask, Question } from '../contracts/types'
 import { LOCAL_PERSON, type AnswerChoice } from '../jobs/runner'
 import { answerLocally, sendAnswer } from './asks'
 import { AgentFigure } from './agents/AgentFigure'
+import { castOf, sayer } from './agents/cast'
 import './askcard.css'
 
 /** The question's options as buttons, the recommended one marked. */
 export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boolean; onPick: (optionId: string) => void }) {
+  const options = q.options.filter((o) => o.value !== undefined)
+  // Options with a line of detail are blocks (mock Asks: "Plan the storyboard first · 6 shots"); short ones are pills.
+  const blocks = options.some((o) => o.detail)
   return (
-    <div className="askcard-options">
-      {q.options.filter((o) => o.value !== undefined).map((o) => (
+    <div className={`askcard-options ${blocks ? 'blocks' : ''}`}>
+      {options.map((o) => (
         <button key={o.id} className={`btn sm askcard-opt${o.id === q.recommended_option_id ? ' rec' : ''}`} disabled={disabled} onClick={() => onPick(o.id)}>
-          {o.label}
-          {o.id === q.recommended_option_id && <span className="askcard-rec"> · Recommended</span>}
-          {o.detail && <span className="askcard-detail"> · {o.detail}</span>}
+          <span className="askcard-label">{o.label}</span>
+          {o.id === q.recommended_option_id && <span className="askcard-rec">Recommended</span>}
+          {o.detail && <span className="askcard-detail">{o.detail}</span>}
         </button>
       ))}
     </div>
@@ -69,14 +73,20 @@ export function AskCard({ ask, onLocalAnswer }: { ask: Ask; onLocalAnswer?: (ans
   }
 
   if (later && !answered) {
-    return <button className="askcard-later btn xs" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`}>Waiting for you · {q.text}</button>
+    return (
+      <button className="askcard-later" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`}>
+        <AgentFigure agent={castOf(ask.crew)} size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· {q.text}</span>
+      </button>
+    )
   }
   return (
     <section className={`askcard ${answered ? 'answered' : 'open'}`} role="group" aria-label={`${ask.crew} asks: ${q.text}`} data-ask={ask.id}>
       <div className="askcard-head">
-        <AgentFigure agent="dex" size={32} state={answered ? 'idle' : 'needs-you'} decorative />
-        <span className="askcard-who">{ask.crew[0].toUpperCase() + ask.crew.slice(1)} asks</span>
+        <AgentFigure agent={castOf(ask.crew)} size={28} state={answered ? 'idle' : 'needs-you'} decorative />
+        <span className="askcard-who">{sayer(castOf(ask.crew))}</span>
         {job && job.started_by !== me && <span className="faint">· started by {byWords(job.started_by)}</span>}
+        <span className="askcard-sp" />
+        {!answered && !changing && <button className="askcard-latr" onClick={() => setLater(true)}>Later</button>}
       </div>
       <div className="askcard-q">{q.text}</div>
       {q.why && <div className="askcard-why faint">{q.why}</div>}
@@ -95,9 +105,7 @@ export function AskCard({ ask, onLocalAnswer }: { ask: Ask; onLocalAnswer?: (ans
               <button className="btn sm" type="submit" disabled={busy || !text.trim()}>Send</button>
             </form>
           )}
-          <div className="askcard-foot">
-            {changing ? <button className="btn xs ghost" onClick={() => setChanging(false)}>Keep the answer</button> : <button className="btn xs ghost" onClick={() => setLater(true)}>Later</button>}
-          </div>
+          {changing && <div className="askcard-foot"><button className="btn xs ghost" onClick={() => setChanging(false)}>Keep the answer</button></div>}
         </>
       )}
       {note && <div className="askcard-note" role="status">{note}</div>}

@@ -1,26 +1,41 @@
-/* The ask card (ui/AskCard.tsx): the needs-you orange border is the Research tool's rule. */
-.askcard { border: 2px solid #e8590c; border-radius: 10px; padding: 10px 12px; background: var(--panel, #fff); display: grid; gap: 6px; max-width: 420px; }
-.askcard.answered { border-color: var(--line, #ddd); }
-.askcard-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.askcard-who { font-family: ui-monospace, monospace; }
-.askcard-q { font-weight: 600; }
-.askcard-why { font-size: 12px; }
-.askcard-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.askcard-rec { font-weight: 600; }
-.askcard-detail { font-size: 11px; font-weight: 500; color: var(--ink2); }
-/* The recommended option: dark orange text on a light orange tint, not white or orange on --create
-   (white on #FF4F2E is 3.3:1). Light: #B8321A on #FFF1EC is 5.4:1 (hover #FFE4DA 5.0:1); dark:
-   #FF9A85 on #3A1E17 is 7.4:1. The label, Recommended and the detail all clear WCAG AA. */
-.askcard { --ask-rec-bg: #FFF1EC; --ask-rec-bg-hover: #FFE4DA; --ask-rec-fg: #B8321A; }
-@media (prefers-color-scheme: dark) {
-  .askcard { --ask-rec-bg: #3A1E17; --ask-rec-bg-hover: #4A251B; --ask-rec-fg: #FF9A85; }
+/* The ask card (ui/AskCard.tsx; mock Asks.dc.html): anchored to its node, signed by the agent who owns
+   the step, with the needs-you orange border (the Research tool's rule); Later hides it but it waits. */
+.askcard {
+  border: 1.5px solid #F08A6E; border-radius: var(--r-panel); padding: 16px 18px; background: var(--card); display: grid; gap: 10px; max-width: 440px;
+  box-shadow: 0 0 0 4px rgba(255, 79, 46, 0.08), var(--shadow-pop);
 }
-.askcard .btn.askcard-opt.rec { background: var(--ask-rec-bg); border-color: #e8590c; color: var(--ask-rec-fg); }
-.askcard .btn.askcard-opt.rec:hover:not(:disabled) { background: var(--ask-rec-bg-hover); }
-.askcard .btn.askcard-opt.rec .askcard-detail { color: var(--ask-rec-fg); }
+.askcard.answered { border-color: var(--line); box-shadow: var(--shadow-soft); }
+.askcard-head { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.askcard-who { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink2); }
+.askcard-sp { flex: 1; }
+.askcard-latr { border: 0; background: transparent; font-size: 13px; color: var(--ink2); cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.askcard-latr:hover { background: var(--soft); }
+.askcard-q { font-weight: 600; font-size: 17px; letter-spacing: -0.01em; line-height: 1.3; }
+.askcard-why { font-size: 13px; line-height: 1.45; color: var(--ink2); }
+.askcard-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.askcard-options .askcard-opt { height: 38px; padding: 0 14px; font-size: 13px; font-weight: 500; border-color: var(--ink); }
+.askcard-options .askcard-opt:first-child:not(.rec) { background: var(--ink-fixed); color: #FFFFFF; border-color: var(--ink-fixed); }
+.askcard-options .askcard-opt:first-child:not(.rec):hover:not(:disabled) { background: #2A2E37; }
+.askcard-options.blocks { flex-direction: column; flex-wrap: nowrap; }
+.askcard-options.blocks .askcard-opt {
+  height: auto; min-height: 54px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink);
+  display: grid; grid-template-columns: 1fr auto; justify-items: start; align-items: center; gap: 2px 8px; text-align: left; white-space: normal;
+}
+.askcard-options.blocks .askcard-opt:first-child:not(.rec) { background: var(--card); color: var(--ink); border-color: var(--ink); }
+.askcard-label { font-weight: 600; font-size: 14px; }
+.askcard-options:not(.blocks) .askcard-label { font-weight: 500; font-size: 13px; }
+.askcard-rec { grid-column: 2; grid-row: 1; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); background: var(--ink-fixed); color: #FFFFFF; }
+.askcard-options:not(.blocks) .askcard-rec { margin-left: 6px; }
+.askcard-detail { grid-column: 1 / -1; font-family: var(--f-mono); font-size: 11px; font-weight: 400; color: var(--ink2); }
+.askcard-options:not(.blocks) .askcard-detail { margin-left: 6px; font-family: var(--f-display); }
 .askcard-text { display: flex; gap: 6px; }
-.askcard-text .input { flex: 1; }
+.askcard-text .input { flex: 1; height: 40px; }
 .askcard-foot { display: flex; justify-content: flex-end; }
-.askcard-done { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.askcard-note { font-size: 12px; color: #b45309; }
-.askcard-later { border-color: #e8590c; }
+.askcard-done { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.askcard-note { font-size: 12px; color: var(--warn); }
+.askcard-later {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px 0 8px; border: 0; border-radius: var(--r-pill);
+  background: #FFF1EE; color: var(--action); font-size: 13px; cursor: pointer; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.askcard-later b { font-weight: 600; }
+.askcard-later span { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; }
