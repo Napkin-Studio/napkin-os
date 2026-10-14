@@ -167,6 +167,37 @@ export interface ExportPngOptions {
   background: string
 }
 
+/** A document node on the canvas (canvas-nodes): a box tagged {kind, id} whose card the app draws. */
+export interface NodeIntent {
+  id?: string
+  x: number
+  y: number
+  width: number
+  height: number
+  /** The document entity it stands for: {kind: 'script' | 'storyboard' | 'video' | …, id}. */
+  customData: { kind: string; id: string }
+}
+
+/** A typed link between two elements (canvas-nodes), tagged {kind: 'link', id} with the document's link id. */
+export interface LinkIntent {
+  fromElId: string
+  toElId: string
+  role: string
+  /** The document's links entry. */
+  linkId: string
+}
+
+/** A board frame (art-boards): a container tagged {kind: 'board', id} with the document's board id. */
+export interface BoardIntent {
+  id?: string
+  x: number
+  y: number
+  width: number
+  height: number
+  title: string
+  boardId: string
+}
+
 /** A sketch area (frame-aspect; ui-behaviour 3.7): a white rectangle tagged {kind:'sketch', id}. */
 export interface SketchAreaIntent {
   x: number
@@ -307,12 +338,20 @@ export interface CanvasAdapter {
   bindArrow(els: readonly CanvasElement[], arrow: CanvasElement): CanvasElement[]
   frameAround(intent: FrameIntent): CanvasElement
   sketchArea(intent: SketchAreaIntent): CanvasElement
+  /** A document node's box (canvas-nodes). */
+  node(intent: NodeIntent): CanvasElement
+  /** A typed link between two elements (canvas-nodes); bind it with bindArrow. */
+  link(intent: LinkIntent): CanvasElement
+  /** A board frame (art-boards). */
+  board(intent: BoardIntent): CanvasElement
 
   // ── containers and overlays ──
   /** The live elements whose container is `id`. */
   childrenOf(id: string): CanvasElement[]
   /** Where links and arrows attach to an element (its edges' midpoints); [] when it is gone. */
   anchors(id: string): Anchor[]
+  /** A move being dragged and not yet written (the own engine's preview), so overlays follow it. */
+  dragOffset?(): { ids: ReadonlySet<string>; dx: number; dy: number } | null
   setEmphasis(e: Emphasis): void
   emphasis(): Emphasis
 

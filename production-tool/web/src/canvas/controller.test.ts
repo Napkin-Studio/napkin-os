@@ -74,6 +74,11 @@ class FakeCanvas implements CanvasAdapter {
   provenanceArrow(i: { origin: { x: number; y: number }; customData: unknown }) { return this.make({ type: 'arrow', x: i.origin.x, y: i.origin.y, points: [[0, 0], [1, 1]], customData: i.customData }) }
   bindArrow(els: readonly El[]) { return [...els] }
   frameAround(i: FrameIntent) { return this.make({ type: 'frame', ...i }) }
+  node(i: { id?: string; x: number; y: number; width: number; height: number; customData: unknown }) { return this.make({ type: 'rectangle', ...i }) }
+  link(i: { linkId: string }) { return this.make({ type: 'arrow', customData: { kind: 'link', id: i.linkId } }) }
+  board(i: { id?: string; x: number; y: number; width: number; height: number; title: string; boardId: string }) {
+    return this.make({ type: 'frame', x: i.x, y: i.y, width: i.width, height: i.height, name: i.title, customData: { kind: 'board', id: i.boardId } })
+  }
   sketchArea(i: { x: number; y: number; w: number; h: number; sketchId: string }) {
     return this.make({ type: 'rectangle', x: i.x, y: i.y, width: i.w, height: i.h, backgroundColor: '#ffffff', customData: { kind: 'sketch', id: i.sketchId } })
   }

@@ -12,12 +12,12 @@
 
 import * as Y from 'yjs'
 import {
-  elementFromRecord, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type InkTool, type Intent, type Renderer,
+  elementFromRecord, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type InkTool, type Intent, type Renderer,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
   type ActiveToolSpec, type Anchor, type Bounds, type CanvasAdapter, type CanvasAsset, type CanvasElement, type CanvasSnapshot, type Emphasis,
-  type ExportPngOptions, type FrameIntent, type ImageNodeIntent, type InputCapabilities, type PointerSample, type Pt,
+  type BoardIntent, type ExportPngOptions, type FrameIntent, type ImageNodeIntent, type InputCapabilities, type LinkIntent, type NodeIntent, type PointerSample, type Pt,
   type ProvenanceArrowIntent, type RegionExport, type SceneStep, type SketchAreaIntent, type ViewportTransform, type ViewSnapshot,
 } from '../../core/canvasAdapter'
 import { edgeAnchors } from '../../core/anchors'
@@ -238,6 +238,31 @@ export class OwnAdapter implements CanvasAdapter {
     } as Partial<OwnEl> & { type: string })
   }
 
+  dragOffset() {
+    return this.selector.preview
+  }
+
+  node(i: NodeIntent): CanvasElement {
+    return this.make({
+      ...(i.id ? { id: i.id } : {}), type: 'rectangle', x: i.x, y: i.y, width: i.width, height: i.height,
+      strokeColor: 'transparent', backgroundColor: 'transparent', customData: i.customData,
+    } as Partial<OwnEl> & { type: string })
+  }
+
+  link(i: LinkIntent): CanvasElement {
+    return this.make({
+      type: 'arrow', points: [[0, 0], [1, 1]], role: i.role, customData: { kind: 'link', id: i.linkId },
+      startBinding: { elementId: i.fromElId }, endBinding: { elementId: i.toElId },
+    } as Partial<OwnEl> & { type: string })
+  }
+
+  board(i: BoardIntent): CanvasElement {
+    return this.make({
+      ...(i.id ? { id: i.id } : {}), type: 'frame', x: i.x, y: i.y, width: i.width, height: i.height, name: i.title,
+      customData: { kind: 'board', id: i.boardId },
+    } as Partial<OwnEl> & { type: string })
+  }
+
   // ── containers and overlays ──
 
   childrenOf(id: string): CanvasElement[] {
@@ -382,6 +407,9 @@ export class OwnAdapter implements CanvasAdapter {
 
   /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
+    // Node cards sit above the canvas, and a link is hit along its line (canvas-nodes).
+    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom)
+    if (top) return top
     if (this.renderer) return this.renderer.hit(x, y)
     return this.scene.all()
       .filter((r) => r.kind !== 'board' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)

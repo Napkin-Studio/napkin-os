@@ -14,7 +14,7 @@ import type { ExcalidrawFrameElement, ExcalidrawImageElement } from '@excalidraw
 import {
   MAX_EXPORT_PIXELS,
   type ActiveToolSpec, type Anchor, type Bounds, type CanvasAdapter, type CanvasAsset, type CanvasElement, type CanvasSnapshot, type Emphasis,
-  type ExportPngOptions, type FrameIntent, type ImageNodeIntent, type InputCapabilities, type PointerSample, type Pt,
+  type BoardIntent, type ExportPngOptions, type FrameIntent, type ImageNodeIntent, type InputCapabilities, type LinkIntent, type NodeIntent, type PointerSample, type Pt,
   type ProvenanceArrowIntent, type RegionExport, type SceneStep, type SketchAreaIntent, type ViewportTransform, type ViewSnapshot,
 } from '../../core/canvasAdapter'
 import { edgeAnchors } from '../../core/anchors'
@@ -182,6 +182,35 @@ export class ExcalidrawAdapter implements CanvasAdapter {
       } as never],
     )
     return rect as unknown as CanvasElement
+  }
+
+  node(i: NodeIntent): CanvasElement {
+    const [rect] = convertToExcalidrawElements(
+      [{
+        type: 'rectangle', ...(i.id ? { id: i.id } : {}), x: i.x, y: i.y, width: i.width, height: i.height,
+        backgroundColor: 'transparent', strokeColor: 'transparent', roughness: 0, customData: i.customData,
+      } as never],
+      i.id ? { regenerateIds: false } : undefined,
+    )
+    return rect as unknown as CanvasElement
+  }
+
+  link(i: LinkIntent): CanvasElement {
+    const [arrow] = convertToExcalidrawElements(
+      [{ type: 'arrow', x: 0, y: 0, width: 1, height: 1, points: [[0, 0], [1, 1]] as never, strokeColor: '#4a7fd4', roughness: 0, endArrowhead: 'arrow', customData: { kind: 'link', id: i.linkId } } as never],
+    )
+    return newElementWith(arrow, {
+      startBinding: { elementId: i.fromElId, focus: 0, gap: 8 },
+      endBinding: { elementId: i.toElId, focus: 0, gap: 8 },
+    } as never) as unknown as CanvasElement
+  }
+
+  board(i: BoardIntent): CanvasElement {
+    const [frame] = convertToExcalidrawElements(
+      [{ type: 'frame', ...(i.id ? { id: i.id } : {}), x: i.x, y: i.y, width: i.width, height: i.height, name: i.title, children: [], customData: { kind: 'board', id: i.boardId } } as never],
+      i.id ? { regenerateIds: false } : undefined,
+    )
+    return frame as unknown as CanvasElement
   }
 
   // ── containers and overlays ──
