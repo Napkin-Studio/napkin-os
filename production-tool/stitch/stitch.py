@@ -304,7 +304,13 @@ def probe(ffprobe: str, path: str) -> dict:
 
 
 def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
-    """get(key, dest_path); put(key, src_path, mime); put_json(key, dict)."""
+    """get(key, dest_path); put(key, src_path, mime); put_json(key, dict).
+    An event with `mode` "cut" or "splice" is Fix this moment's (splice.py, features/clip-moment-edit.clan);
+    one with no mode is the ad, as it always was."""
+    if event.get("mode"):
+        import splice  # beside this file, in the Lambda zip too
+
+        return splice.run(event, get=get, put=put, put_json=put_json, ffmpeg=ffmpeg, ffprobe=ffprobe)
     version = card_version(event.get("jobId", ""))
     try:
         with tempfile.TemporaryDirectory() as tmp:

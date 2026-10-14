@@ -1,9 +1,10 @@
 {
-  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter.",
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter. clip_patch cases (features/clip-moment-edit.clan, since director.v7): frame names the still at the note's moment that Dex sees; video V1 is the take; expect.route is fix (a job) or ask (the fix/remake nudge).",
   "assets": {
     "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
     "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
-    "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5"
+    "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5",
+    "V1": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
   },
   "cards": {
     "handyman_front": "Full-body figure in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, standing front-on with feet together. Wears a short-sleeved royal-blue polo shirt with a small round white emblem on the chest. Carries a grey mop and bucket. Photoreal, plain light background.",
@@ -601,6 +602,264 @@
         "maskUnused": true
       },
       "budget": 500
+    },
+    {
+      "id": "cp_scarf_blows",
+      "why": "One thing in the moment changes: fix",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F1",
+      "input": {
+        "text": "her scarf should blow away here",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP01",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_bottle_tips",
+      "why": "An object's action at the moment: fix",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F2",
+      "input": {
+        "text": "the bottle tips over at this point",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP02",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "A green bottle stands on the kitchen table beside a plate.",
+          "refs": []
+        }
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_windows_light",
+      "why": "A detail in the moment changes: fix",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F3",
+      "input": {
+        "text": "the windows should light up just here",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_wide_shot",
+      "why": "The camera for the whole clip: ask",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F1",
+      "input": {
+        "text": "this whole shot should be a wide shot",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP01",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "ask"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_night",
+      "why": "The look of the whole clip: ask",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F3",
+      "input": {
+        "text": "redo the whole clip at night",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "ask"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_night_fix",
+      "why": "Answered fix: make the job, never ask again",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F3",
+      "input": {
+        "text": "redo the whole clip at night",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ],
+        "answer": {
+          "contractVersion": "3",
+          "questionId": "q_00000000000000000000000000",
+          "optionId": "fix"
+        }
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
     }
   ],
   "frames": {

@@ -188,6 +188,12 @@
                 "video": {
                   "$ref": "#/properties/video",
                   "description": "Replaces the sheet's for this model."
+                },
+                "mode": {
+                  "enum": [
+                    "first_last"
+                  ],
+                  "description": "clip_patch only: the alternate makes the window from its first and last frames (Veo 3.1 image_to_video) instead of editing the cut; it is priced by durationS, the window's billed seconds. Added 2026-10-14 (additive, features/clip-moment-edit.clan)."
                 }
               },
               "required": [

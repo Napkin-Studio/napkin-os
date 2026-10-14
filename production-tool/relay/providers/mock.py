@@ -97,7 +97,12 @@ class MockProvider:
 
     @staticmethod
     def _source_sha(job: ProviderJob) -> Optional[str]:
-        """The image to stamp: the first frame, else the marked/current ref, else any ref."""
+        """The image to stamp: the first frame, else the marked/current ref, else any ref. A clip edit's
+        source is its clip (the `current` ref), which it hands back unchanged."""
+        if job.op == "clip_edit":
+            current = next((r.sha256 for r in job.refs if r.role == "current"), None)
+            if current:
+                return current
         sha = job.first_frame
         if not sha and job.keyframe:
             sha = job.keyframe["sha256"]
@@ -123,6 +128,11 @@ class MockProvider:
         except Exception as exc:  # an unfetchable input is a provider failure, not a crash
             return Status("failed", kind="mock",
                           error=ProviderError("provider_failed", f"mock could not read its input: {exc}", True))
+        if job.op == "clip_edit" and source and source[4:8] == b"ftyp":
+            # An MP4 to edit comes back as it went (Fix this moment runs end to end locally, through the
+            # real stitch): labelled mock, like every mock output.
+            return Status("done", queue_position=0, kind="mock", cost_usd=0.0,
+                          outputs=[ProviderOutput(url=f"mock://{request_id}/0", mime="video/mp4", data=source)])
         n = max(1, job.outputs or 1)
         outputs = []
         for i in range(n):

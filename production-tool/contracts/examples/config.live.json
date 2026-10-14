@@ -2,7 +2,7 @@
   "contractVersion": "3",
   "routing": {
     "generate": ["runway"], "view": ["runway"], "shot_list": [],
-    "frame": ["runway"], "region_edit": ["runway"], "frame_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "stitch": []
+    "frame": ["runway"], "region_edit": ["runway"], "frame_edit": ["runway"], "clip": ["runway"], "clip_edit": ["runway"], "clip_patch": ["runway"], "stitch": []
   },
   "director": { "promptVersion": "director.v7", "perClickModel": "eu.anthropic.claude-sonnet-5-5", "shotListModel": "eu.anthropic.claude-sonnet-5-5" },
   "quotas": { "image": 40, "video": 6, "render": 3 },

@@ -178,3 +178,23 @@ def test_every_frame_edit_case_passes_on_recorded_director_v7_replies():
     failed = {cid: [k for k in ("valid", *FRAME_CHECKS) if not r.get(k)] for cid, r in rows.items()
               if cid.startswith("fe_") and not all(r.get(k) for k in ("valid", *FRAME_CHECKS))}
     assert not failed, failed
+
+
+PATCH_CASES = [c for c in load()["cases"] if c["op"] == "clip_patch"]
+
+
+def test_the_clip_patch_cases_cover_fixes_asks_and_an_answer():
+    from eval.director_eval import FRAMES
+    routes = [c["expect"]["route"] for c in PATCH_CASES]
+    assert routes.count("fix") >= 3 and routes.count("ask") >= 2
+    assert any(c["input"].get("answer") for c in PATCH_CASES)
+    data = load()
+    assert all(c["since"] == "director.v7" and (FRAMES / data["frames"][c["frame"]]).exists() for c in PATCH_CASES)
+
+
+@pytest.mark.skipif(not V7.is_dir(), reason="director.v7 is not recorded yet")
+def test_every_clip_patch_case_passes_on_recorded_director_v7_replies():
+    rows = table(load(), ["director.v7"])["director.v7"]
+    assert set(rows) >= {c["id"] for c in PATCH_CASES}, "record every clip_patch case"
+    failing = {cid: r for cid, r in rows.items() if cid in {c["id"] for c in PATCH_CASES} and not all(r.values())}
+    assert not failing, failing

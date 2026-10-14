@@ -177,6 +177,29 @@ def run(h: Harness, op: str, inp: dict, **req_over) -> dict:
     return job
 
 
+def run_patch(h: Harness, inp: dict) -> dict:
+    """Fix this moment (features/clip-moment-edit.clan) on the pathway: the flag on, routed to Runway, and
+    stitch's two stages answered as the Lambda would (tests/test_clip_patch.py drives them in detail)."""
+    h.cfg["flags"] = {**h.cfg["flags"], "clipPatch": True}
+    h.cfg["routing"] = {**h.cfg["routing"], "clip_patch": ["runway"]}
+    token = h.as_person()
+    inp = {**inp, "video": {**inp["video"], "url": f"{CDN}/in/{inp['video']['sha256']}"}}  # a take in our store
+    _, job = h.call("POST", "/jobs", {**envelope("clip_patch", new_id("job")), "input": inp}, token, expect=200)
+    scratch = f"ads/scratch/{job['jobId']}"
+    h.blobs.put(f"{scratch}/cut.json", json.dumps({"ok": True, "takeS": 6.0, "w": 1280, "h": 720, "fps": 24.0, "stills": [
+        {"sha256": "sha256:" + "5" * 64, "bytes": 5}]}).encode(), "application/json")
+    for _ in range(12):
+        if job["state"] in ("completed", "failed", "cancelled", "uncertain", "needs_input"):
+            break
+        if h.store.get_job(job["jobId"]).get("_stage") == "splice":
+            h.blobs.put(f"{scratch}/splice-1.json", json.dumps({"ok": True, "sha256": "sha256:" + "6" * 64, "bytes": 9,
+                                                                "durationS": 6.0, "exact": True, "seams": []}).encode(),
+                        "application/json")
+        h.clock.tick(10)
+        job = h.poll(token, job["jobId"])
+    return job
+
+
 # ── every step on every pathway ─────────────────────────────────────────────
 @pytest.mark.parametrize("name", PATHWAYS)
 @pytest.mark.parametrize("op", PROVIDER_OPS)
@@ -285,7 +308,7 @@ def test_the_recorded_director_output_runs_on_its_pathway(fixture_name):
     sheets = {n: load_sheet(n) for n in ("mock", "runway")}
     h.relay.director = ClaudeDirector(Director(ModelPort(FakeWire(f["reply"]), "claude-haiku-4-5", timeout=5),
                                                PROMPTS, sheets))
-    job = run(h, f["op"], f["input"])
+    job = run_patch(h, f["input"]) if f["op"] == "clip_patch" else run(h, f["op"], f["input"])
     if f["reply"].get("question"):  # the director asked: the job waits for a person, nothing is sent
         assert job["state"] == "needs_input" and job["question"]["id"].startswith("q_") and not stand.sent
         return

@@ -38,6 +38,9 @@ export interface Controls {
   /** A box on the paused clip, fixed in the shot's storyboard frame and the clip made again
    *  (jobs/fix.ts). Needs frame region edits only, not video region support. */
   fixInShot: boolean
+  /** Fix this moment: a note's window on a take made again and spliced back (flag clipPatch and a
+   *  provider routed for clip_patch; features/clip-moment-edit.clan, jobs/patch.ts). */
+  fixMoment: boolean
   /** The "change the feel" box (sheet.video.feelEdit on clip_edit). */
   feelEdit: boolean
   /** The Adhere / Flex / Reimagine control (feelEdit === 'strength'). */
@@ -89,6 +92,7 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
     video,
     videoRegionEdit: video && f.videoRegionEdit && !!clipEdit && clipEdit.video.regionEdit !== 'none',
     fixInShot: video && regionEditFrames,
+    fixMoment: video && !!f.clipPatch && !!s('clip_patch'),
     feelEdit,
     feelStrength: feelEdit && clipEdit!.video.feelEdit === 'strength',
     // stitch and shot_list run inside the relay (ffmpeg Lambda, director), not at a
@@ -189,7 +193,7 @@ export const PROVIDER_CHOICES: { id: ProviderChoice; label: string }[] = [
 
 const ALL_FLAGS_ON: Flags = {
   storyboard: true, video: true, stitch: true, regionEditFrames: true, regionEditCanvas: true,
-  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true,
+  videoRegionEdit: true, feelEdit: true, clickSelect: true, moreOptions: true, clipPatch: true,
 }
 
 function routeAll(provider: Provider, sheets: Sheets): Config['routing'] {

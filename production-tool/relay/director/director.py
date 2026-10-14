@@ -31,7 +31,7 @@ BASE = "https://napkin.ie/production-tool/contracts/"
 PURPOSE = "director"
 TAG = re.compile(r"^[a-z][a-z0-9_]{2,15}$")
 SHA = re.compile(r"sha256:[0-9a-f]{64}")
-VIDEO_OPS = ("clip", "clip_edit")
+VIDEO_OPS = ("clip", "clip_edit", "clip_patch")
 
 # What the provider's endpoint accepts that a schema or sheet cannot say (provider docs, checked 2026-10-06).
 # Runway's image ratios are pixel pairs, a different list per model (openapi: text_to_image).
@@ -50,12 +50,12 @@ PRO_RATIOS = frozenset("""
 """.split())
 RUNWAY_CLIP_RATIOS = frozenset(("1280:720", "720:1280", "1080:1920", "1920:1080"))
 # Endpoints that take no usable ratio: the output keeps the input's shape (or the endpoint has no such field).
-NO_RATIO = {("runway", "clip_edit")}
+NO_RATIO = {("runway", "clip_edit"), ("runway", "clip_patch")}
 # Longest prompt per provider and op kind; a longer one is a 400 from the provider.
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
 # per op. The prompt states these; the code refuses past 1.5 times (the relay then makes the job as written).
-ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250}
+ADD_BUDGET = {"generate": 250, "view": 200, "frame": 500, "region_edit": 250, "clip": 300, "clip_edit": 250, "clip_patch": 250}
 # A prompt file split by "<!-- ops: a b -->" markers: the part before the first is for every op.
 SECTION = re.compile(r"^<!-- ops: ([a-z_ ]+) -->\s*$", re.M)
 # Where a prompt's role lines go: one line per ref role, written from common.schema.json's
@@ -102,7 +102,7 @@ def _clip_edit_source(job: dict, op: str, payload: dict) -> None:
     there (Runway by its video type). The model sometimes leaves it out (a recorded reply with
     refs []), and every such job failed (pathway matrix, 2026-10-08)."""
     video = payload.get("video")
-    if op != "clip_edit" or not video:
+    if op not in ("clip_edit", "clip_patch") or not video:
         return
     refs = [r for r in job.get("refs") or [] if r.get("sha256") != video["sha256"]]
     job["refs"] = [{"sha256": video["sha256"], "name": "current", "role": "current"}, *refs]
@@ -414,7 +414,7 @@ class Director:
         output = self.port.call(PURPOSE, self.system_for(op), ask, self.schema, usage=usage,
                                 attribution=job_id or op, model=model,
                                 max_tokens=6000 if op == "shot_list" else 3000,
-                                images=list(images or []) if op == "frame_edit" else None)
+                                images=list(images or []) if op in ("frame_edit", "clip_patch") else None)
         latency_ms = round((time.monotonic() - t0) * 1000)
 
         if op in VIDEO_OPS and "providerJob" in output:
@@ -453,6 +453,13 @@ class Director:
         if output.get("question") is not None:
             if "providerJob" in output or "shots" in output:
                 raise DirectorError("answered with a question and a job; send one or the other")
+            if op == "clip_patch":
+                if payload.get("answer"):  # "fix" (or words) was chosen; "remake" never comes back to Dex
+                    raise DirectorError("asked again after the person chose to fix this moment")
+                values = {o["value"].get("route") for o in output["question"].get("options", [])
+                          if isinstance(o.get("value"), dict)}
+                if not {"fix", "remake"} <= values:
+                    raise DirectorError("a clip_patch asks only 'fix this moment or remake the clip': options fix and remake")
             return  # a question for a person: the job waits in needs_input
         if "providerJob" not in output:
             raise DirectorError("answered with neither a job nor a question")
@@ -485,6 +492,9 @@ class Director:
             raise DirectorError(f"ref names must be unique canonical tags: {names}")
         if any(r["role"].startswith("element") for r in job["refs"]):
             raise DirectorError(f"{provider_name} has no elements")
+        if op == "clip_patch" and ("keyframe" in job or "keyframes" in job):
+            # Fix this moment's keyframe follows the relay's policy (features/clip-moment-edit.clan).
+            raise DirectorError("a clip_patch keyframe is the relay's; write the prompt only")
         if "keyframe" in job:
             if sheet["video"]["regionEdit"] != "temporal_keyframe":
                 raise DirectorError(f"{provider_name} takes no keyframe edit")

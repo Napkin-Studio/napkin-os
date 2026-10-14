@@ -313,6 +313,18 @@ export interface Flags {
   moreOptions: boolean
   /** The beta's record: notice, Beta tag, thumbs, POST /dogfood/* (features/production-tool-dogfood.clan). Optional; absent means off. */
   dogfood?: boolean
+  /** Fix this moment, op clip_patch (features/clip-moment-edit.clan). Optional; absent means off. */
+  clipPatch?: boolean
+}
+
+/** Fix this moment's settings (config.schema clipPatch); every key optional. */
+export interface ClipPatchSettings {
+  model?: string
+  /** range (the default): the whole take, the window as the keyframe's range. cut: only the window. */
+  send?: 'range' | 'cut'
+  contextS?: number
+  crossfadeS?: number
+  seamMin?: number
 }
 
 export interface Config {
@@ -327,6 +339,7 @@ export interface Config {
   queueTimeoutS?: { image: number; video: number }
   spend: { capUsd: number; warnUsd: number }
   flags: Flags
+  clipPatch?: ClipPatchSettings
   banner: string
   /** Not in config.json: the agency's allowlist from GET /me, which useConfig applies (withAllow):
    *  routing keeps only providers with a model the agency allows, and the model menus list only those. */
@@ -888,8 +901,25 @@ export interface Job {
   kind?: 'generated' | 'mock'
   error?: ContractError
   cost: Cost
+  /** clip_patch only: what was patched and how (relay-api Job.patch). */
+  patch?: JobPatch
+  /** A clip_patch answered "Remake the whole clip": the client makes this op through the send tray. */
+  handoff?: { op: 'clip' }
   createdAt: string
   updatedAt: string
+}
+
+/** relay-api Job.patch (features/clip-moment-edit.clan). */
+export interface JobPatch {
+  send?: 'range' | 'cut' | 'frames'
+  window: NoteWindow
+  cut: { from_s: number; to_s: number }
+  range?: { start_s: number; end_s: number }
+  keyframe: 'none' | 'still' | 'edited'
+  model: string
+  exact?: boolean
+  seams?: { at_s: number; score: number; ok: boolean }[]
+  rawOutput?: Output
 }
 
 export interface AnswerConflict { error: ContractError; answeredBy: PersonRef; answer: Answer }

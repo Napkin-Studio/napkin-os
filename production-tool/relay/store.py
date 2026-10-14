@@ -39,6 +39,7 @@ class MemoryStore:
         self.blocked: set[str] = set()
         self.tenants: dict[str, dict] = {}
         self.held: set[str] = set()
+        self._claims: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     def get_job(self, job_id: str) -> dict | None:
@@ -92,6 +93,29 @@ class MemoryStore:
     def holds(self, tenant: str, sha: str) -> bool:
         with self._lock:
             return f"has#{tenant}#{sha}" in self.held
+
+    # ── claims (features/clip-moment-edit.clan): one owner per key until it releases or `until` passes ──
+    def claim(self, key: str, owner: str, until: float, now: float) -> bool:
+        """Take `key` for `owner` until `until`: only when nobody holds it, its holder's time has passed,
+        or `owner` holds it already. A missed release can never hold a key past `until`."""
+        with self._lock:
+            row = self._claims.get(key)
+            if row and row["owner"] != owner and row["until"] > now:
+                return False
+            self._claims[key] = {"owner": owner, "until": until}
+            return True
+
+    def claimed_by(self, key: str, now: float) -> str | None:
+        with self._lock:
+            row = self._claims.get(key)
+            return row["owner"] if row and row["until"] > now else None
+
+    def release(self, key: str, owner: str) -> None:
+        """Give `key` back, only when `owner` holds it."""
+        with self._lock:
+            row = self._claims.get(key)
+            if row and row["owner"] == owner:
+                del self._claims[key]
 
     # ── tenants (features/os-sign-in.clan) ──
     def tenant(self, tenant_id: str) -> dict | None:
@@ -235,6 +259,34 @@ class DynamoStore:
         r = self.ddb.get_item(TableName=self.quotas_table, Key={"pk": {"S": f"has#{tenant}#{sha}"}},
                               ConsistentRead=True)
         return "Item" in r
+
+    # ── claims: a conditional put on the quotas table (pk "claim#<key>"), never a counter ──
+    def claim(self, key: str, owner: str, until: float, now: float) -> bool:
+        try:
+            self.ddb.put_item(
+                TableName=self.quotas_table,
+                Item={"pk": {"S": f"claim#{key}"}, "owner": {"S": owner}, "until": {"N": str(Decimal(str(until)))}},
+                ConditionExpression="attribute_not_exists(pk) OR #u <= :now OR #o = :me",
+                ExpressionAttributeNames={"#u": "until", "#o": "owner"},
+                ExpressionAttributeValues={":now": {"N": str(Decimal(str(now)))}, ":me": {"S": owner}})
+            return True
+        except self.ddb.exceptions.ConditionalCheckFailedException:
+            return False
+
+    def claimed_by(self, key: str, now: float) -> str | None:
+        r = self.ddb.get_item(TableName=self.quotas_table, Key={"pk": {"S": f"claim#{key}"}}, ConsistentRead=True)
+        item = r.get("Item")
+        if not item or float(item["until"]["N"]) <= now:
+            return None
+        return item["owner"]["S"]
+
+    def release(self, key: str, owner: str) -> None:
+        try:
+            self.ddb.delete_item(TableName=self.quotas_table, Key={"pk": {"S": f"claim#{key}"}},
+                                 ConditionExpression="#o = :me", ExpressionAttributeNames={"#o": "owner"},
+                                 ExpressionAttributeValues={":me": {"S": owner}})
+        except self.ddb.exceptions.ConditionalCheckFailedException:
+            pass  # someone else holds it now (ours expired): theirs to release
 
     # ── tenants (features/os-sign-in.clan): the whole item is one JSON string, as jobs are ──
     def tenant(self, tenant_id: str) -> dict | None:

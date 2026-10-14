@@ -47,3 +47,20 @@ def test_note_window(case):
 def test_window_problems():
     assert "at least 2 s" in time_rules.window_problem({"from_s": 2, "to_s": 3}, 6)
     assert "crosses a cut" in time_rules.window_problem({"from_s": 4, "to_s": 7}, 6)
+
+
+# Fix this moment (features/clip-moment-edit.clan): the twins of clan-store/src/patch.ts.
+PATCHES = json.loads((contracts_dir() / "examples" / "patches.json").read_text())
+
+
+@pytest.mark.parametrize("case", PATCHES["noteToTakeWindow"], ids=lambda c: c["why"])
+def test_note_to_take_window(case):
+    assert time_rules.note_to_take_window(case["note"], case["take_s"], case["item"]) == case["want"]
+
+
+@pytest.mark.parametrize("case", PATCHES["patchPlan"], ids=lambda c: c["why"])
+def test_patch_plan(case):
+    i = case["in"]
+    got = time_rules.patch_plan(i["window"], i["atS"], i["takeS"], i.get("contextS", 0), i.get("edited", False),
+                                i.get("send", "range"), i.get("maxInputS", time_rules.MAX_INPUT_S))
+    assert got == case["want"]

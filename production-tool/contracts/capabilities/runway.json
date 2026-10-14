@@ -114,6 +114,16 @@
       "maxS": 30,
       "seed": true,
       "label": "Aleph 2"
+    },
+    "clip_patch": {
+      "model": "aleph2",
+      "endpoint": "POST /v1/video_to_video",
+      "estimateUsd": 0.56,
+      "usdPerS": 0.28,
+      "minS": 2,
+      "maxS": 30,
+      "seed": true,
+      "label": "Aleph 2"
     }
   },
   "models": {

@@ -51,6 +51,15 @@
       "maxS": 15,
       "regionModel": "mock",
       "regionEndpoint": "mock://video"
+    },
+    "clip_patch": {
+      "model": "mock",
+      "endpoint": "mock://video",
+      "estimateUsd": 0,
+      "usdPerS": 0,
+      "minS": 2,
+      "maxS": 15,
+      "label": "Mock"
     }
   },
   "models": {

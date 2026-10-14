@@ -34,3 +34,70 @@ def window_problem(window: dict, shot_s: float) -> str | None:
     if lo < 0 or hi > shot_s + 1e-9:
         return f"the window {lo}-{hi} s crosses a cut (the shot is {shot_s} s)"
     return None
+
+
+# ── Fix this moment (features/clip-moment-edit.clan): the twins of clan-store/src/patch.ts ──
+# Both pass contracts/examples/patches.json.
+
+EPS = 1e-9
+KEYFRAME_EPS_S = 0.05  # a keyframe sits this far inside the end of its range (end exclusive)
+
+
+def _r3(x: float) -> float:
+    """Rounded to the millisecond as JavaScript's Math.round(x * 1000) / 1000 does (half up)."""
+    v = math.floor(x * 1000 + 0.5) / 1000
+    return int(v) if v == int(v) else v
+
+
+def note_to_take_window(note: dict, take_s: float, item: dict | None = None) -> dict | None:
+    """A note's window on its take: {"window", "atS", "inCut"}, or None. A note on a take (target kind
+    take) is in take time and passes through; any other is in shot time and moves by the cut item's in_s,
+    widened to whole seconds. Fitted inside the take, at least 2 s, shifting inward."""
+    if note.get("at_s") is None or not note.get("window"):
+        return None
+    end = math.floor(take_s + EPS)
+    if end < MIN_WINDOW_S:
+        return None
+    in_s = (item or {}).get("in_s") or 0
+    shot_time = note["target"]["kind"] != "take"
+    w = note["window"]
+    lo = math.floor(w["from_s"] + in_s + EPS) if shot_time else w["from_s"]
+    hi = math.ceil(w["to_s"] + in_s - EPS) if shot_time else w["to_s"]
+    width = min(max(MIN_WINDOW_S, hi - lo), end)
+    lo = min(max(lo, 0), end - width)
+    hi = lo + width
+    at = _r3(min(max(note["at_s"] + (in_s if shot_time else 0), lo), hi))
+    cut_end = (item or {}).get("out_s")
+    cut_end = take_s if cut_end is None else cut_end
+    return {"window": {"from_s": lo, "to_s": hi}, "atS": at, "inCut": lo < cut_end - EPS and hi > in_s + EPS}
+
+
+MAX_INPUT_S = 30  # Aleph 2's longest input; a longer take is cut
+
+
+def patch_plan(window: dict, at_s: float, take_s: float, context_s: int = 0, edited: bool = False,
+               send: str = "range", max_input_s: float = MAX_INPUT_S) -> dict:
+    """What a clip_patch sends. range (the default): the whole take, one keyframe (the edited still or the
+    frame at t) whose range is the window; Aleph bills only the range. cut: the window plus context_s each
+    side, inside the take, with a keyframe only for an edited still at context 0. `seconds` is what Aleph
+    bills before its minimum."""
+    a, b = window["from_s"], window["to_s"]
+    send = "range" if send == "range" and take_s <= max_input_s + EPS else "cut"
+    if send == "range":
+        return {"send": send, "cut": {"from_s": 0, "to_s": _r3(take_s)}, "seconds": b - a,
+                "keyframe": "edited" if edited else "still", "keyframeS": _r3(min(max(at_s, a), b - KEYFRAME_EPS_S)),
+                "range": {"start_s": a, "end_s": b}}
+    frm = max(0, a - context_s)
+    to = _r3(min(take_s, b + context_s))
+    seconds = _r3(to - frm)
+    plan: dict = {"send": send, "cut": {"from_s": frm, "to_s": to}, "seconds": seconds, "keyframe": "none"}
+    if context_s > 0:
+        plan["range"] = {"start_s": a - frm, "end_s": b - frm}
+        plan["keyframe"] = "edited" if edited else "still"
+    elif edited:
+        plan["keyframe"] = "edited"
+    if plan["keyframe"] != "none":
+        lo = plan["range"]["start_s"] if "range" in plan else 0
+        hi = (plan["range"]["end_s"] if "range" in plan else seconds) - KEYFRAME_EPS_S
+        plan["keyframeS"] = _r3(min(max(at_s - frm, lo), hi))
+    return plan
