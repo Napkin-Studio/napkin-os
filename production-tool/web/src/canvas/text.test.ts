@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { SceneElement } from './adapter/excalidraw/types'
+import type { CanvasElement } from './core/canvasAdapter'
 import { frameText, MAX_TEXT } from './text'
 import { placeFloating } from '../lib/place'
 
-type El = SceneElement
+type El = CanvasElement
 const el = (o: Partial<El> & Record<string, unknown>): El =>
   ({ id: 'x', type: 'rectangle', x: 0, y: 0, width: 10, height: 10, isDeleted: false, frameId: null, ...o }) as unknown as El
 

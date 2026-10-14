@@ -1,8 +1,9 @@
 // Export: a zip of <project>.clan (the document and its decision chain, from
-// napkin-wasm), canvas.excalidraw and assets/<sha256>.<ext>. Without the CLAN
+// napkin-wasm), the canvas file (canvas.excalidraw, or canvas.napkin.json from our own
+// engine; features/engine-adapter.clan) and assets/<sha256>.<ext>. Without the CLAN
 // store (the wasm did not load) it falls back to document.json in the zip.
 
-import { serializeScene } from './canvas/adapter/excalidraw/serialize'
+import { canvasExportFile } from './canvas/adapter'
 import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { buildExportZip, clanFileName } from '../../clan-store/src'
 import type { CanvasSnapshot } from './canvas/controller'
@@ -34,9 +35,8 @@ function fileSafe(s: string | undefined): string {
 type ReadCanvas = (key: string) => Promise<CanvasSnapshot | undefined>
 const fromBrowser: ReadCanvas = (key) => idbGet<CanvasSnapshot>('kv', key)
 
-async function canvasFile(canvasKey: string, read: ReadCanvas): Promise<Uint8Array> {
-  const canvas = await read(canvasKey)
-  return strToU8(serializeScene(canvas?.elements ?? [], canvas?.files ?? {}))
+async function canvasFile(canvasKey: string, read: ReadCanvas): Promise<{ name: string; bytes: Uint8Array }> {
+  return await canvasExportFile(await read(canvasKey))
 }
 
 /** `canvasKey`: where the project's canvas is kept (read with `read`). `title`: the project's name, for the zip's. */
@@ -48,7 +48,8 @@ export async function exportBundle(store: DocumentStore, canvasKey: string, titl
     const clan = await store.exportClan()
     const { zip, missing, mismatched } = await buildExportZip({ clan, doc: { project: { ...doc.project, title: named }, assets: doc.assets }, resolve: assetBytes })
     const files = unzipSync(zip) as Zippable
-    files['canvas.excalidraw'] = await canvasFile(canvasKey, read)
+    const scene = await canvasFile(canvasKey, read)
+    files[scene.name] = scene.bytes
     const out = zipSync(files, { level: 0 })
     const packed = Object.keys(doc.assets).length - missing.length - mismatched.length
     void store.record('create an export', `${clanFileName(named)} and ${packed} assets`)
@@ -58,7 +59,8 @@ export async function exportBundle(store: DocumentStore, canvasKey: string, titl
   }
   const files: Record<string, Uint8Array> = {}
   files['document.json'] = strToU8(JSON.stringify(doc, null, 2))
-  files['canvas.excalidraw'] = await canvasFile(canvasKey, read)
+  const scene = await canvasFile(canvasKey, read)
+  files[scene.name] = scene.bytes
   let missing = 0
   for (const a of Object.values(doc.assets)) {
     const blob = await getBlob(a.sha256)

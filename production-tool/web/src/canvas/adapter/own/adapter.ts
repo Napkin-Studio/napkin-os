@@ -1,0 +1,407 @@
+// OwnAdapter: CanvasAdapter v2 for our own engine (features/engine-adapter.clan,
+// under features/canvas-engine.clan). Until engine-foundation's package backs it,
+// the scene lives here in memory: an ordered element list, pictures by sha256,
+// and the view as plain numbers. The adapter keeps no undo stack: each undoable
+// write is reported as a SceneStep for the UndoCoordinator (engine-select).
+// Coordinates follow the same transform as Excalidraw's, so overlays and the
+// contract tests read both engines alike: viewport = (scene + scroll) * zoom + offset.
+
+import {
+  MAX_EXPORT_PIXELS,
+  type ActiveToolSpec, type Anchor, type Bounds, type CanvasAdapter, type CanvasAsset, type CanvasElement, type CanvasSnapshot, type Emphasis,
+  type ExportPngOptions, type FrameIntent, type ImageNodeIntent, type InputCapabilities, type PointerSample, type Pt,
+  type ProvenanceArrowIntent, type RegionExport, type SceneStep, type SketchAreaIntent, type ViewportTransform, type ViewSnapshot,
+} from '../../core/canvasAdapter'
+import { edgeAnchors } from '../../core/anchors'
+import { elementBounds } from '../../core/geometry'
+import { sceneDiff } from '../../core/sceneDiff'
+import { drawElements, svgOf, type Ctx2D } from './draw'
+
+/** A surface to export onto: a 2D context and how to read it back as a PNG. */
+export interface Raster {
+  ctx: Ctx2D
+  toBlob(): Promise<Blob>
+}
+
+export interface OwnOptions {
+  /** A raster of w x h for exports (default: OffscreenCanvas, else a DOM canvas). */
+  raster?: (w: number, h: number) => Raster
+  /** Decode a picture for drawing (default: an HTMLImageElement when the DOM has one). */
+  decode?: (asset: CanvasAsset, done: () => void) => CanvasImageSource | undefined
+  /** Ids for new elements. */
+  newId?: () => string
+}
+
+type OwnEl = CanvasElement & { assetSha?: string | null; startBinding?: { elementId: string }; endBinding?: { elementId: string } }
+
+const CAPS_NONE: InputCapabilities = { coalesced: false, predicted: false, tilt: false, pressure: false }
+
+function defaultRaster(w: number, h: number): Raster {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const c = new OffscreenCanvas(w, h)
+    return { ctx: c.getContext('2d') as unknown as Ctx2D, toBlob: () => c.convertToBlob({ type: 'image/png' }) }
+  }
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  return {
+    ctx: c.getContext('2d') as unknown as Ctx2D,
+    toBlob: () => new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('The export could not be drawn.'))), 'image/png')),
+  }
+}
+
+function defaultDecode(a: CanvasAsset, done: () => void): CanvasImageSource | undefined {
+  if (typeof Image === 'undefined') return undefined
+  const img = new Image()
+  img.onload = done
+  img.src = a.dataURL
+  return img
+}
+
+let seq = 0
+const defaultId = () => `own_${Date.now().toString(36)}_${(seq++).toString(36)}`
+
+export class OwnAdapter implements CanvasAdapter {
+  readonly engine = 'own' as const
+  private els: OwnEl[] = []
+  private readonly assets = new Map<string, CanvasAsset>()
+  private readonly decoded = new Map<string, CanvasImageSource>()
+  /** A per-element revision, so version() changes when those elements change. */
+  private readonly rev = new Map<string, number>()
+  private vp = { scrollX: 0, scrollY: 0, zoom: 1, offsetLeft: 0, offsetTop: 0, width: 800, height: 600 }
+  private selected: string[] = []
+  private emph: Emphasis = {}
+  private tool: ActiveToolSpec = { type: 'native', id: 'selection' }
+  private theme: 'light' | 'dark' = 'light'
+  private caps: InputCapabilities = CAPS_NONE
+  private depth = 0
+  private gestureBefore: readonly CanvasElement[] | null = null
+  /** Pointers down on the canvas now: the engine's own gestures, which make it busy. */
+  private pointersDown = 0
+  private readonly stepCbs = new Set<(s: SceneStep) => void>()
+  private readonly scrollCbs = new Set<() => void>()
+  private readonly viewportCbs = new Set<(v: ViewportTransform) => void>()
+  private readonly pointerCbs = new Set<(p: PointerSample) => void>()
+  private readonly changeCbs = new Set<() => void>()
+  private teardown: (() => void) | null = null
+  private readonly opts: Required<OwnOptions>
+
+  constructor(initial: CanvasSnapshot | null = null, opts: OwnOptions = {}) {
+    this.opts = { raster: opts.raster ?? defaultRaster, decode: opts.decode ?? defaultDecode, newId: opts.newId ?? defaultId }
+    if (initial?.elements) this.els = initial.elements.map((e) => ({ ...e }))
+  }
+
+  // ── reads and writes ──
+
+  elements(opts: { includeDeleted?: boolean } = {}): CanvasElement[] {
+    return opts.includeDeleted ? [...this.els] : this.els.filter((e) => !e.isDeleted)
+  }
+
+  transact(fn: (els: readonly CanvasElement[]) => readonly CanvasElement[], opts: { undoable: boolean }) {
+    const before = this.els
+    const after = fn(before) as OwnEl[]
+    this.els = [...after]
+    const changed = sceneDiff(before, after)
+    for (const id of new Set(changed.map((c) => c.id))) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
+    if (opts.undoable) {
+      if (this.depth > 0) this.gestureBefore ??= before
+      else this.emitStep(changed)
+    }
+    this.changed()
+  }
+
+  gesture<T>(fn: () => T): T {
+    this.depth++
+    try {
+      return fn()
+    } finally {
+      this.depth--
+      if (this.depth === 0 && this.gestureBefore) {
+        const before = this.gestureBefore
+        this.gestureBefore = null
+        this.emitStep(sceneDiff(before, this.els))
+      }
+    }
+  }
+
+  onStep(cb: (step: SceneStep) => void): () => void {
+    this.stepCbs.add(cb)
+    return () => void this.stepCbs.delete(cb)
+  }
+
+  private emitStep(changes: SceneStep['changes']) {
+    if (!changes.length) return
+    for (const cb of this.stepCbs) cb({ changes })
+  }
+
+  patch(el: CanvasElement, fields: Partial<CanvasElement>): CanvasElement {
+    return { ...el, ...fields }
+  }
+
+  // ── intent factories ──
+
+  private make(fields: Partial<OwnEl> & { type: string }): OwnEl {
+    return { id: this.opts.newId(), x: 0, y: 0, width: 0, height: 0, isDeleted: false, frameId: null, groupIds: [], angle: 0, ...fields }
+  }
+
+  imageNode(i: ImageNodeIntent): CanvasElement {
+    return this.make({
+      ...(i.id !== undefined ? { id: i.id } : {}), type: 'image', x: i.x, y: i.y, width: i.width, height: i.height,
+      customData: i.customData, status: i.status, assetSha: i.status === 'pending' ? null : i.assetSha,
+    })
+  }
+
+  provenanceArrow(i: ProvenanceArrowIntent): CanvasElement {
+    const xs = i.points.map((p) => p[0])
+    const ys = i.points.map((p) => p[1])
+    return this.make({
+      type: 'arrow', x: i.origin.x, y: i.origin.y, width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys),
+      points: i.points, strokeColor: i.color, strokeWidth: 2, strokeStyle: 'dashed', customData: i.customData,
+      startBinding: { elementId: i.fromElId }, endBinding: { elementId: i.toElId },
+    } as Partial<OwnEl> & { type: string })
+  }
+
+  /** Bindings live on the arrow (startBinding, endBinding); the ends need no back-reference. */
+  bindArrow(els: readonly CanvasElement[]): CanvasElement[] {
+    return [...els]
+  }
+
+  frameAround(i: FrameIntent): CanvasElement {
+    return this.make({ type: 'frame', x: i.x, y: i.y, width: i.width, height: i.height, name: i.name, customData: i.customData } as Partial<OwnEl> & { type: string })
+  }
+
+  sketchArea(i: SketchAreaIntent): CanvasElement {
+    return this.make({
+      type: 'rectangle', x: i.x, y: i.y, width: i.w, height: i.h, backgroundColor: '#ffffff', strokeColor: 'transparent',
+      customData: { kind: 'sketch', id: i.sketchId },
+    } as Partial<OwnEl> & { type: string })
+  }
+
+  // ── containers and overlays ──
+
+  childrenOf(id: string): CanvasElement[] {
+    return this.elements().filter((e) => e.frameId === id)
+  }
+
+  anchors(id: string): Anchor[] {
+    const el = this.elements().find((e) => e.id === id)
+    return el ? edgeAnchors(this.bounds([el])) : []
+  }
+
+  setEmphasis(e: Emphasis) {
+    this.emph = { ...e }
+    this.changed()
+  }
+
+  emphasis(): Emphasis {
+    return this.emph
+  }
+
+  // ── pictures, by sha256 ──
+
+  addAssets(assets: CanvasAsset[]) {
+    for (const a of assets) {
+      if (this.assets.has(a.sha256)) continue
+      this.assets.set(a.sha256, a)
+      const img = this.opts.decode(a, () => this.changed())
+      if (img) this.decoded.set(a.sha256, img)
+    }
+    if (assets.length) this.changed()
+  }
+
+  private shaOf(el: CanvasElement): string | null {
+    const own = (el as OwnEl).assetSha
+    if (own) return own
+    const c = el.customData as { asset?: unknown } | undefined
+    return typeof c?.asset === 'string' ? c.asset : null
+  }
+
+  imageOf(el: CanvasElement): { sha256: string | null; loaded: boolean } | null {
+    if (el.type !== 'image') return null
+    const sha = this.shaOf(el)
+    return { sha256: sha, loaded: !!sha && this.assets.has(sha) }
+  }
+
+  imageDataURL(el: CanvasElement): string | null {
+    const sha = this.shaOf(el)
+    return (sha && this.assets.get(sha)?.dataURL) || null
+  }
+
+  withAsset(el: CanvasElement, sha256: string): CanvasElement {
+    return { ...el, assetSha: sha256, status: 'saved' } as OwnEl
+  }
+
+  // ── view ──
+
+  view(): ViewSnapshot {
+    const { scrollX, scrollY, zoom, offsetLeft, offsetTop } = this.vp
+    return { scrollX, scrollY, zoom, offsetLeft, offsetTop, selectedIds: [...this.selected] }
+  }
+
+  select(ids: readonly string[]) {
+    this.selected = [...ids]
+    this.changed()
+  }
+
+  visibleBounds() {
+    const { scrollX, scrollY, zoom, width, height } = this.vp
+    return { minX: -scrollX, minY: -scrollY, maxX: -scrollX + width / zoom, maxY: -scrollY + height / zoom }
+  }
+
+  sceneToViewport(p: Pt, v: ViewSnapshot): Pt {
+    return { x: (p.x + v.scrollX) * v.zoom + v.offsetLeft, y: (p.y + v.scrollY) * v.zoom + v.offsetTop }
+  }
+
+  viewportToScene(p: Pt, v: ViewSnapshot): Pt {
+    return { x: (p.x - v.offsetLeft) / v.zoom - v.scrollX, y: (p.y - v.offsetTop) / v.zoom - v.scrollY }
+  }
+
+  // ── the rest ──
+
+  version(els: readonly CanvasElement[]): number {
+    let n = 0
+    for (const e of els) n += (this.rev.get(e.id) ?? 0) + 1
+    return n
+  }
+
+  bounds(els: readonly CanvasElement[]): Bounds {
+    return elementBounds(els)
+  }
+
+  /** Centre the elements and zoom so they cover `zoomFactor` of the viewport (no animation yet). */
+  fit(els: readonly CanvasElement[], opts: { zoomFactor: number; animate: boolean }) {
+    if (!els.length) return
+    const b = this.bounds(els)
+    const { width, height } = this.vp
+    const zoom = Math.min(30, Math.max(0.1, Math.min(width / Math.max(1, b.w), height / Math.max(1, b.h)) * opts.zoomFactor))
+    this.setViewport({ zoom, scrollX: width / (2 * zoom) - (b.minX + b.w / 2), scrollY: height / (2 * zoom) - (b.minY + b.h / 2) })
+  }
+
+  refresh() {
+    this.changed()
+  }
+
+  onScroll(cb: () => void): () => void {
+    this.scrollCbs.add(cb)
+    return () => void this.scrollCbs.delete(cb)
+  }
+
+  onPointer(cb: (p: PointerSample) => void): () => void {
+    this.pointerCbs.add(cb)
+    return () => void this.pointerCbs.delete(cb)
+  }
+
+  capabilities(): InputCapabilities {
+    return { ...this.caps }
+  }
+
+  onViewport(cb: (v: ViewportTransform) => void): () => void {
+    this.viewportCbs.add(cb)
+    return () => void this.viewportCbs.delete(cb)
+  }
+
+  isBusy(): boolean {
+    return this.depth > 0 || this.pointersDown > 0 || !(this.tool.type === 'native' && this.tool.id === 'selection')
+  }
+
+  setActiveTool(tool: ActiveToolSpec) {
+    this.tool = tool
+  }
+
+  private image = (sha: string) => this.decoded.get(sha)
+
+  private async rasterOf(box: { x: number; y: number; w: number; h: number }, ids: ReadonlySet<string> | null, outW: number, outH: number, background: string): Promise<Blob> {
+    const r = this.opts.raster(outW, outH)
+    const ctx = r.ctx
+    ctx.save()
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, outW, outH)
+    ctx.scale(outW / Math.max(1e-9, box.w), outH / Math.max(1e-9, box.h))
+    ctx.translate(-box.x, -box.y)
+    ctx.beginPath()
+    ctx.rect(box.x, box.y, box.w, box.h)
+    ctx.clip()
+    drawElements(ctx, ids ? this.elements().filter((e) => ids.has(e.id)) : this.elements(), this.image)
+    ctx.restore()
+    return await r.toBlob()
+  }
+
+  async exportPng(els: readonly CanvasElement[], opts: ExportPngOptions): Promise<Blob> {
+    const b = this.bounds(els)
+    const box = { x: b.minX - opts.padding, y: b.minY - opts.padding, w: b.w + opts.padding * 2, h: b.h + opts.padding * 2 }
+    const scale = Math.min(1, Math.sqrt(MAX_EXPORT_PIXELS / Math.max(1, box.w * box.h)))
+    return await this.rasterOf(box, new Set(els.map((e) => e.id)), Math.max(1, Math.round(box.w * scale)), Math.max(1, Math.round(box.h * scale)), opts.background)
+  }
+
+  async exportSvg(els: readonly CanvasElement[], opts: ExportPngOptions): Promise<string> {
+    const b = this.bounds(els)
+    const box = { x: b.minX - opts.padding, y: b.minY - opts.padding, w: b.w + opts.padding * 2, h: b.h + opts.padding * 2 }
+    return svgOf(els, box, opts.background, (sha) => this.assets.get(sha)?.dataURL)
+  }
+
+  async exportRegion(req: RegionExport): Promise<Blob> {
+    if (req.outW * req.outH > MAX_EXPORT_PIXELS) throw new Error(`An export of ${req.outW}×${req.outH} is too large.`)
+    return await this.rasterOf(req.rect, new Set(req.elementIds), req.outW, req.outH, req.background)
+  }
+
+  // ── lifetime ──
+
+  serialize(): CanvasSnapshot {
+    return { engine: 'own', elements: this.elements(), files: {} }
+  }
+
+  setTheme(theme: 'light' | 'dark') {
+    this.theme = theme
+    this.changed()
+  }
+
+  destroy() {
+    this.teardown?.()
+    this.teardown = null
+  }
+
+  // ── for the mount (engine.ts): the surface drives these ──
+
+  /** Draw the scene onto the screen's context, in device pixels at `dpr`. */
+  drawTo(ctx: Ctx2D, dpr: number) {
+    const { scrollX, scrollY, zoom, width, height } = this.vp
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = this.theme === 'dark' ? '#121212' : '#ffffff'
+    ctx.fillRect(0, 0, width * dpr, height * dpr)
+    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * zoom * scrollX, dpr * zoom * scrollY)
+    drawElements(ctx, this.elements(), this.image, this.theme)
+  }
+
+  onChange(cb: () => void): () => void {
+    this.changeCbs.add(cb)
+    return () => void this.changeCbs.delete(cb)
+  }
+
+  attach(teardown: () => void, caps: InputCapabilities) {
+    this.teardown = teardown
+    this.caps = caps
+  }
+
+  resize(width: number, height: number, offsetLeft: number, offsetTop: number) {
+    Object.assign(this.vp, { width, height, offsetLeft, offsetTop })
+    this.changed()
+  }
+
+  setViewport(v: Partial<ViewportTransform>) {
+    Object.assign(this.vp, v)
+    const t = { scrollX: this.vp.scrollX, scrollY: this.vp.scrollY, zoom: this.vp.zoom }
+    for (const cb of this.viewportCbs) cb(t)
+    for (const cb of this.scrollCbs) cb()
+    this.changed()
+  }
+
+  pointer(p: PointerSample) {
+    if (p.phase === 'down') this.pointersDown++
+    if (p.phase === 'up') this.pointersDown = Math.max(0, this.pointersDown - 1)
+    for (const cb of this.pointerCbs) cb(p)
+  }
+
+  private changed() {
+    for (const cb of this.changeCbs) cb()
+  }
+}
