@@ -1,0 +1,1262 @@
+{
+  "version": "2026-10-13",
+  "status": "draft-for-owner-review",
+  "safe_area_schema": {
+    "insets": "{type:'insets', top,right,bottom,left, unit:'%'|'px'|'mm'} margins measured in from each edge",
+    "box": "{type:'box', width,height, unit, basis:'full_size', anchor:'centre'} live/display area centred in the format, at full (not artwork) scale"
+  },
+  "packs": [
+    {
+      "id": "social",
+      "name": "Social",
+      "formats": [
+        {
+          "id": "meta-feed-image-4x5",
+          "name": "Meta feed image 4:5 (Facebook / Instagram)",
+          "kind": "image",
+          "width": 1440,
+          "height": 1800,
+          "unit": "px",
+          "ratio": "4:5",
+          "delivery_px": {
+            "width": 1440,
+            "height": 1800
+          },
+          "source": "https://www.facebook.com/business/ads-guide/update/image/instagram-feed",
+          "notes": "Meta accepts 1.91:1 to 4:5 (1% tolerance), min width 500 px. No safe zone published for feed.",
+          "verified": true
+        },
+        {
+          "id": "meta-feed-image-1x1",
+          "name": "Meta feed image 1:1",
+          "kind": "image",
+          "width": 1440,
+          "height": 1440,
+          "unit": "px",
+          "ratio": "1:1",
+          "delivery_px": {
+            "width": 1440,
+            "height": 1440
+          },
+          "source": "https://www.facebook.com/business/ads-guide/update/image/instagram-feed",
+          "notes": "1:1 sits inside Meta's accepted range; the 1440 px size is derived from Meta's 1440-wide recommendation, not stated on the page.",
+          "verified": false
+        },
+        {
+          "id": "meta-feed-video-4x5",
+          "name": "Meta feed video 4:5",
+          "kind": "video",
+          "width": 1440,
+          "height": 1800,
+          "unit": "px",
+          "ratio": "4:5",
+          "delivery_px": {
+            "width": 1440,
+            "height": 1800
+          },
+          "source": "https://www.facebook.com/business/ads-guide/update/video/facebook-feed",
+          "notes": "Meta publishes no feed safe zone; footer (headline/CTA) may not show on mobile Facebook Feed for awareness objectives.",
+          "verified": true
+        },
+        {
+          "id": "meta-stories-9x16",
+          "name": "Meta Stories 9:16 (Facebook / Instagram)",
+          "kind": "video",
+          "width": 1440,
+          "height": 2560,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1440,
+            "height": 2560
+          },
+          "safe_area": {
+            "type": "insets",
+            "top": 14,
+            "right": 6,
+            "bottom": 35,
+            "left": 6,
+            "unit": "%"
+          },
+          "source": "https://www.facebook.com/business/ads-guide/update/video/instagram-story",
+          "notes": "Keep text/logos out of top 14%, bottom 35%, 6% each side. Same spec applies to still images in Stories.",
+          "verified": true
+        },
+        {
+          "id": "meta-reels-9x16",
+          "name": "Meta Reels 9:16 (Facebook / Instagram)",
+          "kind": "video",
+          "width": 1440,
+          "height": 2560,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1440,
+            "height": 2560
+          },
+          "safe_area": {
+            "type": "insets",
+            "top": 14,
+            "right": 6,
+            "bottom": 35,
+            "left": 6,
+            "unit": "%"
+          },
+          "source": "https://www.facebook.com/business/ads-guide/update/video/instagram-reels",
+          "notes": "Top 14%, bottom 35% (profile icon and CTA), 6% each side.",
+          "verified": true
+        },
+        {
+          "id": "tiktok-infeed-9x16",
+          "name": "TikTok In-Feed 9:16",
+          "kind": "video",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": "https://ads.tiktok.com/help/article/video-ads-specifications",
+          "notes": "TikTok publishes minimums only (540x960); 1080x1920 is the conventional delivery. Also accepts 16:9 (min 960x540) and 1:1 (min 640x640). Safe zone: TikTok publishes downloadable templates only (varies with caption length and anchors); no numeric margins on the page.",
+          "verified": false
+        },
+        {
+          "id": "youtube-16x9",
+          "name": "YouTube 16:9 (long-form and in-stream)",
+          "kind": "video",
+          "width": 1920,
+          "height": 1080,
+          "unit": "px",
+          "ratio": "16:9",
+          "delivery_px": {
+            "width": 1920,
+            "height": 1080
+          },
+          "source": [
+            "https://support.google.com/youtube/answer/6375112",
+            "https://support.google.com/google-ads/answer/13547298"
+          ],
+          "notes": "YouTube encode ladder includes 3840x2160 and 2560x1440; ads min 1280x720.",
+          "verified": true
+        },
+        {
+          "id": "youtube-shorts-9x16",
+          "name": "YouTube Shorts / vertical ad 9:16",
+          "kind": "video",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": [
+            "https://support.google.com/google-ads/answer/13547298",
+            "https://support.google.com/google-ads/answer/16041697"
+          ],
+          "notes": "Google recommends 9:16 for Shorts; only first 60 s plays in the Shorts feed. Google shows a safe-zone graphic but publishes no numeric margins.",
+          "verified": true
+        },
+        {
+          "id": "youtube-1x1",
+          "name": "YouTube square 1:1",
+          "kind": "video",
+          "width": 1080,
+          "height": 1080,
+          "unit": "px",
+          "ratio": "1:1",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1080
+          },
+          "source": "https://support.google.com/google-ads/answer/13547298",
+          "notes": "Google Ads also accepts 4:5 and 2:3 vertical.",
+          "verified": true
+        },
+        {
+          "id": "linkedin-image-1.91x1",
+          "name": "LinkedIn single image 1.91:1",
+          "kind": "image",
+          "width": 1200,
+          "height": 628,
+          "unit": "px",
+          "ratio": "1.91:1",
+          "delivery_px": {
+            "width": 1200,
+            "height": 628
+          },
+          "source": "https://www.linkedin.com/help/lms/answer/a426534",
+          "verified": true
+        },
+        {
+          "id": "linkedin-image-1x1",
+          "name": "LinkedIn single image 1:1",
+          "kind": "image",
+          "width": 1200,
+          "height": 1200,
+          "unit": "px",
+          "ratio": "1:1",
+          "delivery_px": {
+            "width": 1200,
+            "height": 1200
+          },
+          "source": "https://www.linkedin.com/help/lms/answer/a426534",
+          "verified": true
+        },
+        {
+          "id": "linkedin-image-4x5",
+          "name": "LinkedIn single image 4:5 (mobile only)",
+          "kind": "image",
+          "width": 720,
+          "height": 900,
+          "unit": "px",
+          "ratio": "4:5",
+          "delivery_px": {
+            "width": 720,
+            "height": 900
+          },
+          "source": "https://www.linkedin.com/help/lms/answer/a426534",
+          "notes": "Vertical assets serve on mobile only.",
+          "verified": true
+        },
+        {
+          "id": "linkedin-video-16x9",
+          "name": "LinkedIn video 16:9",
+          "kind": "video",
+          "width": 1920,
+          "height": 1080,
+          "unit": "px",
+          "ratio": "16:9",
+          "delivery_px": {
+            "width": 1920,
+            "height": 1080
+          },
+          "source": "https://www.linkedin.com/help/lms/answer/a424737",
+          "notes": "1200x675 also recommended; max 1920x1080.",
+          "verified": true
+        },
+        {
+          "id": "linkedin-video-4x5",
+          "name": "LinkedIn video 4:5",
+          "kind": "video",
+          "width": 720,
+          "height": 900,
+          "unit": "px",
+          "ratio": "4:5",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1350
+          },
+          "source": "https://www.linkedin.com/help/lms/answer/a424737",
+          "notes": "Recommended 720x900, max 1080x1350; delivery_px uses the max.",
+          "verified": true
+        },
+        {
+          "id": "linkedin-video-9x16",
+          "name": "LinkedIn video 9:16",
+          "kind": "video",
+          "width": 720,
+          "height": 1280,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": "https://www.linkedin.com/help/lms/answer/a424737",
+          "notes": "Recommended 720x1280, max 1080x1920; delivery_px uses the max.",
+          "verified": true
+        },
+        {
+          "id": "x-video-16x9",
+          "name": "X video 16:9",
+          "kind": "video",
+          "width": 1920,
+          "height": 1080,
+          "unit": "px",
+          "ratio": "16:9",
+          "delivery_px": {
+            "width": 1920,
+            "height": 1080
+          },
+          "source": "https://help.x.com/en/business-and-advertising/creative-ad-specifications",
+          "notes": "Read via search snippet; help.x.com returned 403 to direct fetch.",
+          "verified": false
+        },
+        {
+          "id": "x-video-1x1",
+          "name": "X video 1:1",
+          "kind": "video",
+          "width": 1200,
+          "height": 1200,
+          "unit": "px",
+          "ratio": "1:1",
+          "delivery_px": {
+            "width": 1200,
+            "height": 1200
+          },
+          "source": "https://help.x.com/en/business-and-advertising/creative-ad-specifications",
+          "notes": "Read via search snippet; not fetched directly.",
+          "verified": false
+        },
+        {
+          "id": "x-video-9x16",
+          "name": "X vertical video 9:16",
+          "kind": "video",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": "https://help.x.com/en/business-and-advertising/creative-ad-specifications",
+          "notes": "From X's older creative-specs page (max 1080x1920). Not fetched directly.",
+          "verified": false
+        },
+        {
+          "id": "x-image-1.91x1",
+          "name": "X single image 1.91:1",
+          "kind": "image",
+          "width": 1200,
+          "height": 628,
+          "unit": "px",
+          "ratio": "1.91:1",
+          "delivery_px": {
+            "width": 1200,
+            "height": 628
+          },
+          "source": "https://help.x.com/en/business-and-advertising/creative-ad-specifications",
+          "notes": "Common industry size; not confirmed on an X page in this research.",
+          "verified": false
+        },
+        {
+          "id": "x-image-1x1",
+          "name": "X single image 1:1",
+          "kind": "image",
+          "width": 1200,
+          "height": 1200,
+          "unit": "px",
+          "ratio": "1:1",
+          "delivery_px": {
+            "width": 1200,
+            "height": 1200
+          },
+          "source": "https://help.x.com/en/business-and-advertising/creative-ad-specifications",
+          "notes": "Not confirmed on an X page in this research.",
+          "verified": false
+        },
+        {
+          "id": "pinterest-standard-2x3",
+          "name": "Pinterest standard pin 2:3",
+          "kind": "image",
+          "width": 1000,
+          "height": 1500,
+          "unit": "px",
+          "ratio": "2:3",
+          "delivery_px": {
+            "width": 1000,
+            "height": 1500
+          },
+          "source": "https://help.pinterest.com/en/business/article/pinterest-product-specs",
+          "notes": "Taller or wider than 2:3 may be cropped in feed.",
+          "verified": true
+        },
+        {
+          "id": "pinterest-fullscreen-9x16",
+          "name": "Pinterest full-screen (Idea ad) 9:16",
+          "kind": "video",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "safe_area": {
+            "type": "insets",
+            "top": 270,
+            "right": 195,
+            "bottom": 440,
+            "left": 65,
+            "unit": "px"
+          },
+          "source": "https://help.pinterest.com/en/business/article/pinterest-product-specs",
+          "notes": "Pinterest publishes px insets: top 270, left 65, right 195, bottom 440. Video pins accept 1:2 to 1.91:1; 1:1, 2:3, 4:5, 9:16 recommended.",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "ooh-uk-ie",
+      "name": "Out of home (UK and Ireland)",
+      "formats": [
+        {
+          "id": "uk-48-sheet",
+          "name": "48-sheet billboard (UK/IE roadside, paper)",
+          "kind": "ooh",
+          "width": 6096,
+          "height": 3048,
+          "unit": "mm",
+          "ratio": "2:1",
+          "delivery_px": {
+            "width": 7200,
+            "height": 3600
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 5946,
+            "height": 2948,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 3,
+          "source": [
+            "https://global.com/wp-content/uploads/2020/10/48-Sheets-1.pdf",
+            "https://www.bauermediaoutdoor.co.uk/resources/specifications/station-billboard-specification"
+          ],
+          "notes": "Global: display area 5,946 x 2,948 mm, 3 mm bleed on 1/10-scale artwork (609.6 x 304.8 mm), CMYK PDF, FOGRA39L. Bauer: safe copy 594.6 x 296.8 mm at 1/10, 1 mm bleed. Artwork supplied at 1/10 scale, 300 dpi minimum (450 dpi best for Bauer); delivery_px is the scaled artwork at 300 dpi.",
+          "verified": true
+        },
+        {
+          "id": "uk-96-sheet",
+          "name": "96-sheet billboard",
+          "kind": "ooh",
+          "width": 12192,
+          "height": 3048,
+          "unit": "mm",
+          "ratio": "4:1",
+          "delivery_px": {
+            "width": 14400,
+            "height": 3600
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 11942,
+            "height": 2948,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 3,
+          "source": "https://global.com/wp-content/uploads/2020/10/96-Sheet-global-Spec.pdf",
+          "notes": "Global: display area 11,942 x 2,948 mm; 1/10-scale artwork 1,219.2 x 304.8 mm; 3 mm bleed. Artwork supplied at 1/10 scale, 300 dpi minimum (450 dpi best for Bauer); delivery_px is the scaled artwork at 300 dpi.",
+          "verified": true
+        },
+        {
+          "id": "uk-6-sheet",
+          "name": "6-sheet (roadside / bus shelter / street furniture)",
+          "kind": "ooh",
+          "width": 1200,
+          "height": 1800,
+          "unit": "mm",
+          "ratio": "2:3",
+          "delivery_px": {
+            "width": 3543,
+            "height": 5315
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 1160,
+            "height": 1750,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 3,
+          "source": "https://global.com/wp-content/uploads/2020/10/6-Sheet-006-506-Spec.pdf",
+          "notes": "Global 006/506: display area 1,160 x 1,750 mm; quarter-scale artwork 300 x 450 mm; 3 mm bleed. Artwork supplied at 1/4 scale, 300 dpi minimum (450 dpi best for Bauer); delivery_px is the scaled artwork at 300 dpi.",
+          "verified": true
+        },
+        {
+          "id": "uk-adshel-6-sheet",
+          "name": "Adshel 6-sheet (Bauer Media Outdoor, ex-Clear Channel)",
+          "kind": "ooh",
+          "width": 1200,
+          "height": 1800,
+          "unit": "mm",
+          "ratio": "2:3",
+          "delivery_px": {
+            "width": 3543,
+            "height": 5315
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 1140,
+            "height": 1710,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 2,
+          "source": "https://www.bauermediaoutdoor.co.uk/resources/specifications/adshel-6-sheet",
+          "notes": "Bauer: quarter-scale artwork 300 x 450 mm, safe copy 285 x 428 mm at 1/4 (1,140 x 1,710 full), 2 mm bleed, 300 dpi min / 450 best. Station 6-sheet trim differs (1,185 x 1,750 mm).",
+          "verified": true
+        },
+        {
+          "id": "uk-4-sheet",
+          "name": "4-sheet",
+          "kind": "ooh",
+          "width": 1016,
+          "height": 1524,
+          "unit": "mm",
+          "ratio": "2:3",
+          "delivery_px": {
+            "width": 3000,
+            "height": 4500
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 945,
+            "height": 1453,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 2,
+          "source": "https://global.com/wp-content/uploads/2020/10/4-Sheets.pdf",
+          "notes": "Global: overall 1,524 x 1,016 mm, display 1,453 x 945 mm (Global lists the long side first; recorded here as portrait 40 x 60 in). Quarter-scale artwork 381 x 254 mm, 2 mm bleed.",
+          "verified": false
+        },
+        {
+          "id": "uk-d6",
+          "name": "Digital 6-sheet (D6) / Adshel Live",
+          "kind": "ooh",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": [
+            "https://www.jcdecaux.co.uk/digital-technical-specifications",
+            "https://www.clearchannel.co.uk/help/templates/adshel"
+          ],
+          "notes": "JCDecaux UK: roadside D6 1080x1920 portrait, 12 s, static JPEG only; mall/rail/supermarket 6 s, static or motion 25 fps MP4. Adshel Live (Bauer): 1080x1920, 10 s, subtle animation only. No safe zone published.",
+          "verified": true
+        },
+        {
+          "id": "uk-d48-jcdecaux",
+          "name": "Digital 48-sheet (D48), JCDecaux UK roadside Drive",
+          "kind": "ooh",
+          "width": 612,
+          "height": 306,
+          "unit": "px",
+          "ratio": "2:1",
+          "delivery_px": {
+            "width": 612,
+            "height": 306
+          },
+          "source": "https://www.jcdecaux.co.uk/digital-technical-specifications",
+          "notes": "Static JPEG, 12 s slot. Physical face nominally 6 x 3 m (Outsmart large-format code). JCDecaux rail D48 (Transvision) is 1440x720, 20 s, static or motion.",
+          "verified": true
+        },
+        {
+          "id": "uk-d48-global",
+          "name": "Digital 48-sheet (D48), Global UK Spec A",
+          "kind": "ooh",
+          "width": 576,
+          "height": 288,
+          "unit": "px",
+          "ratio": "2:1",
+          "delivery_px": {
+            "width": 576,
+            "height": 288
+          },
+          "source": [
+            "https://global.com/wp-content/uploads/2020/10/D48_SpecA.pdf",
+            "https://global.com/outdoor/artwork-specs/"
+          ],
+          "notes": "Global UK runs several D48 specs per site: A 576x288, B 600x280, C 720x384, D 864x432. Spec A: 25 fps, 10 s slot, JPEG, max 15 MB. Confirm the spec per site.",
+          "verified": true
+        },
+        {
+          "id": "ie-d48-jcdecaux",
+          "name": "Digital 48-sheet, JCDecaux Ireland Digi48",
+          "kind": "ooh",
+          "width": 760,
+          "height": 380,
+          "unit": "px",
+          "ratio": "2:1",
+          "delivery_px": {
+            "width": 760,
+            "height": 380
+          },
+          "source": "https://www.jcdecaux.ie/jcdecaux/download-file?url=public%3A%2F%2Fblocks%2Fdownloadable_file%2F2024-11%2FDigi48+Specs.pdf",
+          "notes": "Two artworks required: 760x380 and 912x456. Static only, JPEG, RGB, max 10 MB.",
+          "verified": true
+        },
+        {
+          "id": "ie-d48-global",
+          "name": "Digital 48-sheet, Global Ireland roadside",
+          "kind": "ooh",
+          "width": 912,
+          "height": 432,
+          "unit": "px",
+          "ratio": "19:9",
+          "delivery_px": {
+            "width": 912,
+            "height": 432
+          },
+          "source": "https://global.com/ie/wp-content/uploads/2026/04/Global-Digital-48-Sheet-Specsheet.pdf",
+          "notes": "912x432, JPEG, static, no sound, 2 GB max (2026 sheet).",
+          "verified": true
+        },
+        {
+          "id": "ie-48-sheet-hd",
+          "name": "48-sheet HD (JCDecaux Ireland)",
+          "kind": "ooh",
+          "width": 6030,
+          "height": 3060,
+          "unit": "mm",
+          "ratio": "~2:1",
+          "delivery_px": {
+            "width": 7122,
+            "height": 3614
+          },
+          "safe_area": {
+            "type": "insets",
+            "top": 100,
+            "right": 100,
+            "bottom": 100,
+            "left": 100,
+            "unit": "mm"
+          },
+          "source": "https://www.jcdecaux.ie/jcdecaux/download-file?url=public://blocks/downloadable_file/2024-03/48+Sheet+HD+Specs.pdf",
+          "notes": "Visual area 5,950 x 2,950 mm; 100 mm safe copy margin each side (whether measured from full or visual edge is not clear); artwork at 1/10 (603 x 306 mm). Read from search snippet of the PDF, not the full file.",
+          "verified": false
+        },
+        {
+          "id": "ie-retail-6-sheet",
+          "name": "Retail 6-sheet (JCDecaux Ireland)",
+          "kind": "ooh",
+          "width": 1200,
+          "height": 1800,
+          "unit": "mm",
+          "ratio": "2:3",
+          "delivery_px": {
+            "width": 7087,
+            "height": 10630
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 1100,
+            "height": 1700,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "source": "https://www.jcdecaux.ie/jcdecaux/download-file?url=public%3A%2F%2Fblocks%2Fdownloadable_file%2F2017-08%2Fretail6sheetspecs.pdf",
+          "notes": "Visible 1,168 x 1,776 mm; safe copy 1,100 x 1,700 mm; artwork at half scale (600 x 900 mm). Read from search snippet (2017 PDF).",
+          "verified": false
+        },
+        {
+          "id": "uk-bus-tside",
+          "name": "Bus T-side (Global, forward stem)",
+          "kind": "ooh",
+          "width": 7274,
+          "height": 1801,
+          "unit": "mm",
+          "ratio": "~4:1",
+          "delivery_px": {
+            "width": 8591,
+            "height": 2127
+          },
+          "bleed_mm": 3,
+          "source": "https://global.com/wp-content/uploads/2025/12/T-Sides-Forward-Stem.pdf",
+          "notes": "T-shaped: overall width 7,274 mm; horizontal band 653 mm high; stem 1,166 mm wide x 1,801 mm high. Display area at 1/10: 722.2 x 174.9 mm (band 60.1 mm, stem 111.4 mm). Avoid safety stud. 1/10-scale artwork, 3 mm bleed, 300 dpi. Off-centre stem variant exists.",
+          "verified": true
+        },
+        {
+          "id": "uk-bus-streetliner-13ft",
+          "name": "Bus streetliner, 13 ft (Global)",
+          "kind": "ooh",
+          "width": 3962,
+          "height": 508,
+          "unit": "mm",
+          "ratio": "~7.8:1",
+          "delivery_px": {
+            "width": 9359,
+            "height": 1200
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 3911,
+            "height": 456,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 3,
+          "source": "https://global.com/wp-content/uploads/2025/12/Streetliners-13-foot.pdf",
+          "notes": "1/5-scale artwork 792.4 x 101.6 mm (display 782.2 x 91.2). A 477 mm-deep variant and a 10 ft streetliner also exist.",
+          "verified": true
+        },
+        {
+          "id": "uk-bus-superside",
+          "name": "Bus superside (Global)",
+          "kind": "ooh",
+          "width": 6116,
+          "height": 658,
+          "unit": "mm",
+          "ratio": "~9.3:1",
+          "delivery_px": {
+            "width": 7224,
+            "height": 777
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 6056,
+            "height": 601,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 3,
+          "source": "https://global.com/wp-content/uploads/2025/12/Supersides.pdf",
+          "notes": "Four sections, each 1,529 mm wide (display 1,514 mm). 1/10-scale artwork 611.6 x 65.8 mm. Market-specific variants (Reading, Bristol/Blackpool chevron).",
+          "verified": true
+        },
+        {
+          "id": "uk-bus-rear-standard",
+          "name": "Bus rear, standard 48 x 18 in (Global)",
+          "kind": "ooh",
+          "width": 1217,
+          "height": 455,
+          "unit": "mm",
+          "ratio": "~2.7:1",
+          "delivery_px": {
+            "width": 3594,
+            "height": 1344
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 1165,
+            "height": 403,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 3,
+          "source": "https://global.com/wp-content/uploads/2025/12/Standard-Rears-48-x-18.pdf",
+          "notes": "Quarter-scale artwork 304.25 x 113.75 mm. Variants: super rear 60 x 20 in, non-standard 48 x 20 and 60 x 12 in.",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "print",
+      "name": "Print",
+      "formats": [
+        {
+          "id": "iso-a0",
+          "name": "A0 (ISO 216)",
+          "kind": "print",
+          "width": 841,
+          "height": 1189,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 9933,
+            "height": 14043
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "iso-a1",
+          "name": "A1 (ISO 216)",
+          "kind": "print",
+          "width": 594,
+          "height": 841,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 7016,
+            "height": 9933
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "iso-a2",
+          "name": "A2 (ISO 216)",
+          "kind": "print",
+          "width": 420,
+          "height": 594,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 4961,
+            "height": 7016
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "iso-a3",
+          "name": "A3 (ISO 216)",
+          "kind": "print",
+          "width": 297,
+          "height": 420,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 3508,
+            "height": 4961
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "iso-a4",
+          "name": "A4 (ISO 216)",
+          "kind": "print",
+          "width": 210,
+          "height": 297,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 2480,
+            "height": 3508
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "iso-a5",
+          "name": "A5 (ISO 216)",
+          "kind": "print",
+          "width": 148,
+          "height": 210,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 1748,
+            "height": 2480
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "iso-a6",
+          "name": "A6 (ISO 216)",
+          "kind": "print",
+          "width": 105,
+          "height": 148,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 1240,
+            "height": 1748
+          },
+          "bleed_mm": 3,
+          "source": "https://www.iso.org/standard/36631.html",
+          "notes": "Trim size; delivery_px = trim at 300 dpi (add ~35 px per side for 3 mm bleed). 3 mm bleed is the trade convention, not part of ISO 216.",
+          "verified": false
+        },
+        {
+          "id": "mag-a4-full-page",
+          "name": "Magazine full page (A4 trim)",
+          "kind": "print",
+          "width": 210,
+          "height": 297,
+          "unit": "mm",
+          "ratio": "1:√2",
+          "delivery_px": {
+            "width": 2480,
+            "height": 3508
+          },
+          "safe_area": {
+            "type": "box",
+            "width": 190,
+            "height": 277,
+            "unit": "mm",
+            "basis": "full_size",
+            "anchor": "centre"
+          },
+          "bleed_mm": 5,
+          "source": "https://passivehouseplus.co.uk/info/mechanical-data",
+          "notes": "Example title (Passive House Plus): trim 210 x 297, type area 190 x 277, bleed size 220 x 307 (5 mm bleed). Page sizes vary by title; confirm with publisher.",
+          "verified": true
+        },
+        {
+          "id": "mag-a4-dps",
+          "name": "Magazine double-page spread (A4 trim)",
+          "kind": "print",
+          "width": 420,
+          "height": 297,
+          "unit": "mm",
+          "ratio": "~1.41:1",
+          "delivery_px": {
+            "width": 4961,
+            "height": 3508
+          },
+          "bleed_mm": 5,
+          "source": "https://passivehouseplus.co.uk/info/mechanical-data",
+          "notes": "Passive House Plus lists DPS trim 425 x 297 (bleed 435 x 307) - their DPS is wider than 2 x A4; keep gutter clear. Varies by title.",
+          "verified": false
+        },
+        {
+          "id": "mag-a4-half-h",
+          "name": "Magazine half page horizontal (A4 title)",
+          "kind": "print",
+          "width": 190,
+          "height": 135,
+          "unit": "mm",
+          "ratio": "~1.41:1",
+          "delivery_px": {
+            "width": 2244,
+            "height": 1594
+          },
+          "source": "https://passivehouseplus.co.uk/info/mechanical-data",
+          "notes": "Type-area ad, no bleed. Varies by title.",
+          "verified": true
+        },
+        {
+          "id": "mag-a4-half-v",
+          "name": "Magazine half page vertical (A4 title)",
+          "kind": "print",
+          "width": 93,
+          "height": 277,
+          "unit": "mm",
+          "ratio": "~1:3",
+          "delivery_px": {
+            "width": 1098,
+            "height": 3272
+          },
+          "source": "https://passivehouseplus.co.uk/info/mechanical-data",
+          "notes": "Strip, type-area ad, no bleed. Varies by title.",
+          "verified": true
+        },
+        {
+          "id": "mag-230-full-page",
+          "name": "Magazine full page (230 x 300 glossy)",
+          "kind": "print",
+          "width": 230,
+          "height": 300,
+          "unit": "mm",
+          "ratio": "~0.77:1",
+          "delivery_px": {
+            "width": 2717,
+            "height": 3543
+          },
+          "bleed_mm": 3,
+          "source": "https://www.ukimediaevents.com/guidelines/ptw.htm",
+          "notes": "Example: Passenger Terminal World Annual Review; 3 mm bleed all sides, 300 dpi CMYK PDF.",
+          "verified": true
+        },
+        {
+          "id": "mag-230-dps",
+          "name": "Magazine DPS (460 x 300)",
+          "kind": "print",
+          "width": 460,
+          "height": 300,
+          "unit": "mm",
+          "ratio": "~1.53:1",
+          "delivery_px": {
+            "width": 5433,
+            "height": 3543
+          },
+          "bleed_mm": 3,
+          "source": "https://www.ukimediaevents.com/guidelines/ptw.htm",
+          "notes": "Example: PTW Annual Review.",
+          "verified": true
+        },
+        {
+          "id": "mag-230-half-h",
+          "name": "Magazine half page horizontal (230 x 300 title)",
+          "kind": "print",
+          "width": 200,
+          "height": 132,
+          "unit": "mm",
+          "ratio": "~1.52:1",
+          "delivery_px": {
+            "width": 2362,
+            "height": 1559
+          },
+          "source": "https://www.ukimediaevents.com/guidelines/ptw.htm",
+          "notes": "Example: PTW Annual Review.",
+          "verified": true
+        },
+        {
+          "id": "mag-230-half-v",
+          "name": "Magazine half page vertical (230 x 300 title)",
+          "kind": "print",
+          "width": 100,
+          "height": 270,
+          "unit": "mm",
+          "ratio": "~1:2.7",
+          "delivery_px": {
+            "width": 1181,
+            "height": 3189
+          },
+          "source": "https://www.ukimediaevents.com/guidelines/ptw.htm",
+          "notes": "Example: PTW Annual Review.",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "display",
+      "name": "Digital display (IAB)",
+      "formats": [
+        {
+          "id": "iab-300x250",
+          "name": "Medium rectangle (MPU)",
+          "kind": "display",
+          "width": 300,
+          "height": 250,
+          "unit": "px",
+          "ratio": "6:5",
+          "delivery_px": {
+            "width": 300,
+            "height": 250
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 150 kB (gzipped). Sizes are specified at 1x; IAB computes weight on 2x (retina) pixels.",
+          "verified": true
+        },
+        {
+          "id": "iab-728x90",
+          "name": "Leaderboard",
+          "kind": "display",
+          "width": 728,
+          "height": 90,
+          "unit": "px",
+          "ratio": "~8:1",
+          "delivery_px": {
+            "width": 728,
+            "height": 90
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 150 kB (gzipped).",
+          "verified": true
+        },
+        {
+          "id": "iab-160x600",
+          "name": "Wide skyscraper",
+          "kind": "display",
+          "width": 160,
+          "height": 600,
+          "unit": "px",
+          "ratio": "~1:3.75",
+          "delivery_px": {
+            "width": 160,
+            "height": 600
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 150 kB (gzipped).",
+          "verified": true
+        },
+        {
+          "id": "iab-300x600",
+          "name": "Half page",
+          "kind": "display",
+          "width": 300,
+          "height": 600,
+          "unit": "px",
+          "ratio": "1:2",
+          "delivery_px": {
+            "width": 300,
+            "height": 600
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "Listed in IAB's 2017 sizing grid as a previous IAB fixed size (initial load 250 kB); not in the 2017 recommended list.",
+          "verified": true
+        },
+        {
+          "id": "iab-970x250",
+          "name": "Billboard",
+          "kind": "display",
+          "width": 970,
+          "height": 250,
+          "unit": "px",
+          "ratio": "~3.9:1",
+          "delivery_px": {
+            "width": 970,
+            "height": 250
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 250 kB (gzipped).",
+          "verified": true
+        },
+        {
+          "id": "iab-970x90",
+          "name": "Super leaderboard / pushdown",
+          "kind": "display",
+          "width": 970,
+          "height": 90,
+          "unit": "px",
+          "ratio": "~10.8:1",
+          "delivery_px": {
+            "width": 970,
+            "height": 90
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 200 kB (gzipped).",
+          "verified": true
+        },
+        {
+          "id": "iab-300x1050",
+          "name": "Portrait",
+          "kind": "display",
+          "width": 300,
+          "height": 1050,
+          "unit": "px",
+          "ratio": "2:7",
+          "delivery_px": {
+            "width": 300,
+            "height": 1050
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 250 kB (gzipped).",
+          "verified": true
+        },
+        {
+          "id": "iab-320x50",
+          "name": "Smartphone banner",
+          "kind": "display",
+          "width": 320,
+          "height": 50,
+          "unit": "px",
+          "ratio": "32:5",
+          "delivery_px": {
+            "width": 320,
+            "height": 50
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 50 kB (gzipped). IAB also lists 300x50.",
+          "verified": true
+        },
+        {
+          "id": "iab-320x100",
+          "name": "Large mobile banner",
+          "kind": "display",
+          "width": 320,
+          "height": 100,
+          "unit": "px",
+          "ratio": "16:5",
+          "delivery_px": {
+            "width": 320,
+            "height": 100
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "Widely sold (e.g. Google Ad Manager) but not in IAB's 2017 fixed-size list; not verified against an IAB primary source.",
+          "verified": false
+        },
+        {
+          "id": "iab-interstitial-1080x1920",
+          "name": "Mobile phone interstitial",
+          "kind": "display",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": "https://www.iab.com/wp-content/uploads/2019/04/IABNewAdPortfolio_LW_FixedSizeSpec.pdf",
+          "notes": "IAB max initial load 300 kB (gzipped). IAB also lists 640x1136 and 750x1334.",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "film",
+      "name": "Film",
+      "formats": [
+        {
+          "id": "film-16x9",
+          "name": "Film 16:9 (landscape master)",
+          "kind": "video",
+          "width": 1920,
+          "height": 1080,
+          "unit": "px",
+          "ratio": "16:9",
+          "delivery_px": {
+            "width": 1920,
+            "height": 1080
+          },
+          "source": [
+            "https://support.google.com/youtube/answer/6375112",
+            "https://support.google.com/google-ads/answer/13547298"
+          ],
+          "notes": "Storyboard frame ratio 16:9. UHD master 3840x2160 per YouTube encode ladder.",
+          "verified": true
+        },
+        {
+          "id": "film-9x16",
+          "name": "Film 9:16 (vertical)",
+          "kind": "video",
+          "width": 1080,
+          "height": 1920,
+          "unit": "px",
+          "ratio": "9:16",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1920
+          },
+          "source": "https://support.google.com/google-ads/answer/13547298",
+          "notes": "Meta Reels/Stories recommend 1440x2560; use meta-reels safe insets when cutting for Meta.",
+          "verified": true
+        },
+        {
+          "id": "film-1x1",
+          "name": "Film 1:1 (square)",
+          "kind": "video",
+          "width": 1080,
+          "height": 1080,
+          "unit": "px",
+          "ratio": "1:1",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1080
+          },
+          "source": "https://support.google.com/google-ads/answer/13547298",
+          "verified": true
+        },
+        {
+          "id": "film-4x5",
+          "name": "Film 4:5 (portrait feed)",
+          "kind": "video",
+          "width": 1080,
+          "height": 1350,
+          "unit": "px",
+          "ratio": "4:5",
+          "delivery_px": {
+            "width": 1080,
+            "height": 1350
+          },
+          "source": [
+            "https://www.linkedin.com/help/lms/answer/a424737",
+            "https://www.facebook.com/business/ads-guide/update/video/facebook-feed"
+          ],
+          "notes": "LinkedIn max 1080x1350; Meta now recommends 1440x1800 for 4:5.",
+          "verified": true
+        }
+      ]
+    }
+  ]
+}
