@@ -51,8 +51,8 @@ export function flatten(r: ElementRecord): Map<string, unknown> {
   return out
 }
 
-/** The record an 'el' map holds, or undefined when it holds none yet. */
-export function unflatten(id: string, el: Y.Map<unknown>): ElementRecord | undefined {
+/** The record an 'el' map (or the same keys in a plain Map) holds, or undefined when it holds none yet. */
+export function unflatten(id: string, el: Pick<Y.Map<unknown>, 'has' | 'forEach'> | Map<string, unknown>): ElementRecord | undefined {
   if (!el.has('kind')) return undefined
   const r: Record<string, unknown> = { id, typeName: 'el', ...structuredClone(DEFAULTS), style: {}, props: {} }
   el.forEach((v, k) => {
