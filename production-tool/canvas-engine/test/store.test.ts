@@ -24,12 +24,14 @@ function pair() {
 }
 
 describe('the Y layout', () => {
-  it('holds each small field as its own key; style as s:<key>, props as p:<key>', () => {
+  it('holds each small field as its own key (x,y and w,h as pairs, defaults left out); style as s:<key>, props as p:<key>', () => {
     const doc = new Y.Doc()
     const map = elementsMap(doc)
     doc.transact(() => writeElement(map, rect('r')))
     const el = map.get('r')!.get('el') as Y.Map<unknown>
-    expect(el.get('x')).toBe(0)
+    expect(el.get('xy')).toEqual([0, 0])
+    expect(el.get('wh')).toEqual([100, 50])
+    expect(el.has('rotation') || el.has('locked') || el.has('opacity') || el.has('parentId')).toBe(false)
     expect(el.get('s:stroke')).toBe('#000')
     expect(el.get('p:geo')).toBe('rect')
     expect(el.get('customData')).toEqual({ kind: 'sketch', id: 's1' })
@@ -44,7 +46,7 @@ describe('the Y layout', () => {
     doc.transact(() => {
       written = writeElement(map, { ...rect('r'), x: 5, style: { stroke: '#000' } })
     })
-    expect(written.sort()).toEqual(['s:width', 'x'])
+    expect(written.sort()).toEqual(['s:width', 'xy'])
   })
 
   it('points are written once', () => {
@@ -76,7 +78,7 @@ describe('SceneStore', () => {
     s.seed([rect('r')])
     const step = s.change((tx) => tx.put([{ ...tx.get('r')!, x: 40, y: 7 }]))
     expect(origins).toEqual([SYSTEM, LOCAL])
-    expect(step?.changes).toEqual([{ id: 'r', field: 'x', before: 0, after: 40 }, { id: 'r', field: 'y', before: 0, after: 7 }])
+    expect(step?.changes).toEqual([{ id: 'r', field: 'xy', before: [0, 0], after: [40, 7] }])
     expect(steps).toEqual([step])
     expect(Object.keys(s).some((k) => /undo|history|stack/i.test(k))).toBe(false)
   })

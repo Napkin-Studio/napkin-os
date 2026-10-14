@@ -2,8 +2,9 @@
 // F1's per-element wrapper, split per field):
 //
 //   doc.getMap('elements'): Y.Map<elementId, Y.Map{
-//     el:  Y.Map<field, value>   one key per small field: the common fields,
-//                                style as 's:<key>', props as 'p:<key>'
+//     el:  Y.Map<field, value>   one key per small field: the common fields (x,y as
+//                                'xy' and w,h as 'wh', fields at their default left
+//                                out), style as 's:<key>', props as 'p:<key>'
 //     pts: Uint8Array            a stroke's points (src/model/points.ts), written once
 //   }>
 //   doc.getMap('meta'): { schemaVersion: 1, sequence: <migrations applied> }
@@ -26,15 +27,25 @@ export const SYSTEM = 'system'
 
 const STYLE = 's:'
 const PROP = 'p:'
-const SCALAR = COMMON_FIELDS.filter((f) => f !== 'style' && f !== 'props')
+/** Position and size travel as pairs: a move is one key ('xy'), a resize one or two. */
+const PAIRS = { xy: ['x', 'y'], wh: ['w', 'h'] } as const
+/** Fields at their default are not stored (most elements are unrotated, unlocked, opaque, ungrouped). */
+const DEFAULTS: Partial<Record<(typeof COMMON_FIELDS)[number], unknown>> = {
+  rotation: 0, flipX: false, flipY: false, parentId: null, groupIds: [], locked: false, opacity: 1, customData: null,
+}
+const PAIRED = new Set<string>(Object.values(PAIRS).flat())
+const SCALAR = COMMON_FIELDS.filter((f) => f !== 'style' && f !== 'props' && !PAIRED.has(f))
 
 export const elementsMap = (doc: Y.Doc) => doc.getMap<Y.Map<unknown>>(ELEMENTS)
 export const metaMap = (doc: Y.Doc) => doc.getMap<unknown>(META)
 
+const isDefault = (f: string, v: unknown) => f in DEFAULTS && JSON.stringify(DEFAULTS[f as keyof typeof DEFAULTS]) === JSON.stringify(v)
+
 /** The flat key/value form of a record, as 'el' holds it. */
 export function flatten(r: ElementRecord): Map<string, unknown> {
   const out = new Map<string, unknown>()
-  for (const f of SCALAR) out.set(f, r[f])
+  for (const [key, [a, b]] of Object.entries(PAIRS)) out.set(key, [r[a], r[b]])
+  for (const f of SCALAR) if (!isDefault(f, r[f])) out.set(f, r[f])
   for (const [k, v] of Object.entries(r.style)) if (v !== undefined) out.set(STYLE + k, v)
   for (const [k, v] of Object.entries(r.props)) if (v !== undefined) out.set(PROP + k, v)
   return out
@@ -43,11 +54,16 @@ export function flatten(r: ElementRecord): Map<string, unknown> {
 /** The record an 'el' map holds, or undefined when it holds none yet. */
 export function unflatten(id: string, el: Y.Map<unknown>): ElementRecord | undefined {
   if (!el.has('kind')) return undefined
-  const r: Record<string, unknown> = { id, typeName: 'el', style: {}, props: {} }
+  const r: Record<string, unknown> = { id, typeName: 'el', ...structuredClone(DEFAULTS), style: {}, props: {} }
   el.forEach((v, k) => {
     if (k.startsWith(STYLE)) (r.style as Record<string, unknown>)[k.slice(STYLE.length)] = v
     else if (k.startsWith(PROP)) (r.props as Record<string, unknown>)[k.slice(PROP.length)] = v
-    else r[k] = v
+    else if (k in PAIRS) {
+      const [a, b] = PAIRS[k as keyof typeof PAIRS]
+      const [va, vb] = v as [number, number]
+      r[a] = va
+      r[b] = vb
+    } else r[k] = v
   })
   return r as unknown as ElementRecord
 }
