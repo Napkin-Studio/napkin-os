@@ -160,3 +160,17 @@ def test_settle_keeps_new_beats_inside_the_length():
 def test_the_prompt_file_is_versioned_and_says_no_chat():
     text = (Path(__file__).parent.parent / "prompts" / "skye.v1.md").read_text()
     assert "You never chat" in text and "No prices, no costs" in text
+
+
+def test_make_finds_the_model_port_inside_the_claude_director():
+    # ClaudeDirector keeps the port on its inner Director; Skye fell back to the passthrough
+    # whenever a model was configured until make() looked there.
+    import writer
+    from director.claude import ClaudeDirector
+
+    class Inner:
+        per_click_model, prompt_version = "m", "v"
+        port = FakePort({"writes": []})
+
+    assert isinstance(writer.make(ClaudeDirector(Inner())), ModelWriter)
+    assert isinstance(writer.make(object()), PassthroughWriter)

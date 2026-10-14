@@ -142,7 +142,8 @@ class PassthroughWriter:
 
 def make(director) -> PassthroughWriter | ModelWriter:
     """Skye on the director's model port, or the passthrough when the relay has no model."""
-    port = getattr(director, "port", None)
+    inner = getattr(director, "director", director)   # ClaudeDirector wraps the harness lane's Director
+    port = getattr(inner, "port", None)
     if port is None:
         return PassthroughWriter()
     from contracts_dir import contracts_dir
