@@ -123,3 +123,7 @@
 /* Light / Dark / System in the account menu: the segmented switch, compact. */
 .pt-menu .pt-theme button { height: 26px; padding: 0 10px; }
 
+/* Dark (features/theme-and-pencil.clan): the warm and coral fills above carried light text on pale paper. */
+:root[data-theme='dark'] .pt-status.warm { background: var(--warn-bg); }
+:root[data-theme='dark'] .pt-asks { background: var(--create-soft); border-color: rgba(255, 79, 46, 0.35); color: var(--ink); }
+:root[data-theme='dark'] .pt-asks b, :root[data-theme='dark'] .pt-asks .pos { color: #FF8A70; }

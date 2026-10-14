@@ -163,3 +163,9 @@
 .bl-poster img, .bl-poster video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bl-len { position: absolute; right: 6px; bottom: 6px; font-family: var(--f-mono); font-size: 10px; color: #FFFFFF; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 .bl-facts { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }
+
+/* ── Dark (features/theme-and-pencil.clan): the light-only fills above, in the dark tokens ── */
+/* The tool in use: near-black on the dark bar was invisible; light ink on it instead. */
+:root[data-theme='dark'] .tb-tool.on { background: var(--ink); color: var(--paper); }
+:root[data-theme='dark'] .canvas-wrap .toolbar { background: rgba(22, 26, 31, 0.96); }
+:root[data-theme='dark'] .popover.send-tray { background: rgba(22, 26, 31, 0.98); }
