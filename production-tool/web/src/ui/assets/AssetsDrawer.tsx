@@ -15,6 +15,7 @@ import { keyNamed, keysList, refsList } from '../../model/selectors'
 import { RelayError } from '../../relay'
 import { useBlobUrl } from '../hooks'
 import { InlineConfirm } from '../Undo'
+import { CharacterCard } from './CharacterCard'
 import './assets.css'
 
 type Tab = 'project' | 'library' | 'upload' | 'napkin'
@@ -41,6 +42,7 @@ export function AssetsDrawer({ ctrl, onClose, onBoards, onPicture, onCanvas }: {
   const ui = useUi()
   const [tab, setTab] = useState<Tab>('project')
   const [query, setQuery] = useState('')
+  const [card, setCard] = useState<string | null>(null)
   const keys = keysList(doc)
   const q = query.trim().toLowerCase()
   const shown = keys.filter((k) => !q || k.key.includes(q))
@@ -70,7 +72,7 @@ export function AssetsDrawer({ ctrl, onClose, onBoards, onPicture, onCanvas }: {
             return (
               <section key={g.title}>
                 <div className="pt-label ad-section"><span>{g.title}</span><span>{mine.length}</span></div>
-                {mine.map((k) => <KeyCard key={k.key} k={k} ctrl={ctrl} />)}
+                {mine.map((k) => <KeyCard key={k.key} k={k} ctrl={ctrl} onCard={() => setCard(k.key)} />)}
               </section>
             )
           })}
@@ -89,12 +91,13 @@ export function AssetsDrawer({ ctrl, onClose, onBoards, onPicture, onCanvas }: {
           <p className="ad-empty">Nothing from Brief Maker or Research yet. When a brief or research is sent here, it waits under this tab until you bring it in.</p>
         </div>
       )}
+      {card && keys.find((k) => k.key === card) && <CharacterCard k={keys.find((k) => k.key === card)!} onClose={() => setCard(null)} />}
       <div className="ad-foot">{ui.me?.team ? `Shared with everyone at ${ui.me.team}` : 'Your library is yours until you sign in with your agency'}</div>
     </aside>
   )
 }
 
-function KeyCard({ k, ctrl }: { k: KeyEntry; ctrl: CanvasController | null }) {
+function KeyCard({ k, ctrl, onCard }: { k: KeyEntry; ctrl: CanvasController | null; onCard: () => void }) {
   const doc = useDoc()
   const { controls } = useConfig()
   const [busy, setBusy] = useState<string | null>(null)
@@ -117,7 +120,7 @@ function KeyCard({ k, ctrl }: { k: KeyEntry; ctrl: CanvasController | null }) {
     <div className="ad-key">
       <div className="ad-thumbs">{refs.slice(0, 3).map((r) => <Thumb key={r.id} r={r} onShow={() => r.node && ctrl?.scrollTo(r.node)} />)}</div>
       <div className="ad-keytext">
-        <span className="pt-ref">@{k.key}</span>
+        <button type="button" className="pt-ref ad-name" onClick={onCard} title="Open its card: views, voice, wardrobe, where it is used">@{k.key}</button>
         <span className="ad-meta">
           <select className="ad-role" aria-label={`What ${k.key} is`} value={k.role} onChange={(e) => ctrl?.setRole(k.key, e.target.value as RefRole)}>
             {REF_ROLES.map((r) => <option key={r} value={r}>{roleWord(r)}</option>)}

@@ -40,6 +40,7 @@ import { personOf } from '../projects/session'
 import { currentRender, currentTake, mainStoryboard, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
 import './video.css'
+import { SoundView } from './SoundView'
 import { addTakeNote, pickTake } from './videoEdits'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
@@ -50,6 +51,8 @@ const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
 
 export function Video() {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  /** Picture or Sound (ui-behaviour 3.21): Sound is a shell until the audio features land. */
+  const [view, setView] = useState<'picture' | 'sound'>('picture')
   const doc = useDoc()
   const ui = useUi()
   const { controls, config } = useConfig()
@@ -124,6 +127,7 @@ export function Video() {
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
         title={`Video · ${mainStoryboard(doc)?.title ?? 'Video'}`}
         meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>}
+        middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
         right={<button className="btn" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
         primary={controls.stitch ? (
           <button className="btn primary" disabled={rendering || !!renderBlocked} onClick={() => void render()} title={renderBlocked ?? 'Join the clips into one ad with the end card'}>
@@ -132,7 +136,7 @@ export function Video() {
         ) : undefined} />
       <div className="panel ve-body pt-grid">
         {error && <div role="alert" className="ve-error">{error}</div>}
-        <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}
+        {view === 'sound' ? <SoundView /> : <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}
           strip={(
             <div className="ve-timeline pt-card">
               <div className="ve-tlhead"><b>Timeline</b><span className="pt-pill ok">{taken} of {shots.length} clips</span><span className="pt-grow" />
@@ -154,7 +158,7 @@ export function Video() {
           {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobSlot jobId={stitchJob} /></div>}
           {latestAd && <AdResult sha={latestAd.asset} />}
           {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
-        </Player>
+        </Player>}
       </div>
     </div>
   )
