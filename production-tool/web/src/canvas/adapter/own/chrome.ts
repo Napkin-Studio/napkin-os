@@ -20,6 +20,7 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       const t = a.activeTool()
       return t.type === 'native' ? FROM_ENGINE[t.id] ?? null : null
     },
+    supports: (t) => !!TO_ENGINE[t],
     setTool: (t) => {
       const id = TO_ENGINE[t]
       if (id) a.setActiveTool({ type: 'native', id })

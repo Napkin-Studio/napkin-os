@@ -11,12 +11,19 @@ import { rowLabel, type BoardRow } from './boards'
 // ⌥1…⌥9 and ⌥0 (ui-behaviour 3.2): one reading of the keys for the rail and the own engine's boards.
 import { boardKey } from '../boards/boards'
 import type { CanvasChrome, ChromeTool } from './controls'
+import { canvasActions } from './actions'
 import './canvas.css'
+
+/** What the canvas below can do through the chrome's actions (actions.ts), kept current. */
+function useActions() {
+  useSyncExternalStore(canvasActions.subscribe, canvasActions.version, canvasActions.version)
+  return { canNode: canvasActions.canNode(), canBoard: canvasActions.canBoard(), mode: canvasActions.mode(), pending: canvasActions.pending() }
+}
 
 function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom: number } {
   const sub = useCallback((cb: () => void) => (chrome ? chrome.onChange(cb) : () => {}), [chrome])
-  const tool = useSyncExternalStore(sub, () => chrome?.tool() ?? 'select')
-  const zoom = useSyncExternalStore(sub, () => chrome?.zoom() ?? 1)
+  const tool = useSyncExternalStore(sub, () => chrome?.tool() ?? 'select', () => chrome?.tool() ?? 'select')
+  const zoom = useSyncExternalStore(sub, () => chrome?.zoom() ?? 1, () => chrome?.zoom() ?? 1)
   return { tool, zoom }
 }
 
@@ -51,6 +58,15 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys =
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [keys])
+  const actions = useActions()
+  // A board just made ("+ New board"): picked (made current, jumped to) once its row is listed.
+  useEffect(() => {
+    if (!actions.pending) return
+    const row = rows.find((r) => r.id === actions.pending)
+    if (!row) return
+    canvasActions.pickWhenListed(null)
+    pick.current(row)
+  }, [actions.pending, rows])
   const [open, setOpen] = useState(false)
   const pillRef = useRef<HTMLButtonElement>(null)
   const items = rows.map((r, i) => (
@@ -61,7 +77,9 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys =
       {narrow && r.count ? <span className="br-key">{r.count}</span> : null}
     </button>
   ))
-  const newBoard = <button type="button" className="br-new" disabled title="New boards come with board frames on the canvas">+ New board</button>
+  const newBoard = actions.canBoard
+    ? <button type="button" className="br-new" data-tip="New board (B): name it, pick what it is for" onClick={() => { setOpen(false); canvasActions.board() }}>+ New board</button>
+    : <button type="button" className="br-new" aria-disabled="true" data-tip="New boards need the new canvas (it has boards as frames)">+ New board</button>
   if (narrow) {
     const cur = rows.find((r) => r.id === current)
     return (
@@ -107,16 +125,70 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   chrome: CanvasChrome | null
   /** The storyboard's ratio: the sketch area's shape (ui-behaviour 3.7). */
   ratio: string
+  /** A node the canvas cannot make itself (a picture, a sketch area; on Excalidraw, a node to open). */
   onNode: (kind: NewNode) => void
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
   const { tool } = useChrome(chrome)
+  const actions = useActions()
   const nodeRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
-  const t = (id: ChromeTool, label: string, key: string, body: ReactNode = ICON[id]) => (
-    <button type="button" className={`tb-tool ${tool === id ? 'on' : ''}`} aria-pressed={tool === id} aria-label={`${label} (${key})`} title={`${label} (${key})`}
-      onClick={() => chrome?.setTool(id)}>{body}{vertical && <span className="tb-name">{label}</span>}</button>
+  // A chrome tool (Board, Link) is on: the engine's tool shows as not pressed. Picking an engine tool ends it.
+  const shown = actions.mode ? null : tool
+  useEffect(() => {
+    if (!actions.mode || !chrome) return
+    const was = chrome.tool()
+    return chrome.onChange(() => { if (chrome.tool() !== was) canvasActions.setMode(null) })
+  }, [actions.mode, chrome])
+  const has = (id: ChromeTool) => !chrome?.supports || chrome.supports(id)
+  /** Every button's tooltip: its name and key, or why it is off (ui-behaviour 7; no dead buttons). */
+  const t = (id: ChromeTool, label: string, key: string, body: ReactNode = ICON[id], tip = `${label} (${key})`) => {
+    const on = has(id)
+    return (
+      <button type="button" className={`tb-tool ${shown === id ? 'on' : ''}`} aria-pressed={shown === id} aria-label={`${label} (${key})`}
+        aria-disabled={on ? undefined : 'true'} data-tip={on ? tip : `${label} (${key}) · not on this canvas yet`}
+        onClick={() => {
+          if (!on) return
+          canvasActions.setMode(null)
+          chrome?.setTool(id)
+        }}>{body}{vertical && <span className="tb-name">{label}</span>}</button>
+    )
+  }
+  const mode = (m: 'board' | 'link', label: string, key: string, can: boolean, tip: string, off: string) => (
+    <button type="button" className={`tb-tool ${actions.mode === m ? 'on' : ''}`} aria-pressed={actions.mode === m} aria-label={`${label} (${key})`}
+      aria-disabled={can ? undefined : 'true'} data-tip={can ? tip : off} onClick={() => { if (can) canvasActions.toggle(m) }}>
+      {ICON[m]}{vertical && <span className="tb-name">{label}</span>}
+    </button>
+  )
+  const NAME: Record<'script' | 'storyboard' | 'video', string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+  const newKind = (k: 'script' | 'storyboard' | 'video') => {
+    setMenu(false)
+    if (!canvasActions.node(k)) onNode(k)
+  }
+  const row = (key: string, label: ReactNode, hint: string | null, can: boolean, why: string, run: () => void) => (
+    <button key={key} type="button" role="menuitem" className="pt-menurow" aria-disabled={can ? undefined : 'true'} data-tip={can ? undefined : why}
+      onClick={() => { if (!can) return; setMenu(false); run() }}>
+      {label}{hint && <span className="hint">{hint}</span>}
+    </button>
+  )
+  const sketchIcon = <svg width="16" height="16" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>
+  const menuItems = (
+    <>
+      {(['script', 'storyboard', 'video'] as const).map((k) => (
+        <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => newKind(k)}>
+          <NodeIcon kind={k} size={16} />{NAME[k]}<span className="hint">{actions.canNode ? 'new' : 'open'}</span>
+        </button>
+      ))}
+      <div className="pt-menusep" />
+      {row('picture', <>{ICON.image}A picture</>, null, has('image'), 'Pictures are not on this canvas yet', () => onNode('picture'))}
+      {row('sketch', <>{sketchIcon}A sketch area</>, ratio, has('sketch'), 'Sketch areas are not on this canvas yet', () => onNode('sketch'))}
+      {row('board', <>{ICON.board}A board</>, 'B', actions.canBoard, 'New boards need the new canvas (it has boards as frames)', () => canvasActions.board())}
+    </>
+  )
+  const nodeButton = (
+    <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} data-tip="Add a script, storyboard, video, picture or board"
+      onClick={() => setMenu(!menu)}>{vertical ? <><b>+</b>Node</> : '+ Node'}</button>
   )
   if (vertical) {
     return (
@@ -125,20 +197,15 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
         {t('eraser', 'Eraser', 'E')}
         {t('select', 'Select', 'V')}
         {t('hand', 'Hand', 'H')}
-        {t('sketch', ratio, 'S', <svg width="20" height="14" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>)}
+        {t('sketch', ratio, 'S', <svg width="20" height="14" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>, `Sketch area ${ratio} (S)`)}
         {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
         {t('image', 'Picture', 'I', ICON.image)}
+        {mode('board', 'Board', 'B', actions.canBoard, 'Board (B): drag out a board', 'Board (B) · needs the new canvas')}
+        {mode('link', 'Link', 'L', actions.canNode, 'Link (L): tap a node, then the node it feeds', 'Link (L) · needs the new canvas')}
         <span aria-hidden="true" className="tb-sep" />
         <span className="tb-undo"><UndoButtons bare /></span>
-        <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}><b>+</b>Node</button>
-        <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="start" label="Add" className="pt-menu">
-          {(['script', 'storyboard', 'video'] as const).map((k) => (
-            <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode(k) }}>
-              <NodeIcon kind={k} size={16} />{k === 'script' ? 'Script' : k === 'storyboard' ? 'Storyboard' : 'Video'}
-            </button>
-          ))}
-          <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode('picture') }}>{ICON.image}A picture</button>
-        </Float>
+        {nodeButton}
+        <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="start" label="Add" className="pt-menu">{menuItems}</Float>
       </div>
     )
   }
@@ -149,29 +216,22 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {t('pen', 'Pen', 'P')}
       {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
       <span aria-hidden="true" className="tb-sep" />
-      <button type="button" className={`tb-tool wide ${tool === 'sketch' ? 'on' : ''}`} aria-pressed={tool === 'sketch'} aria-label={`Sketch area ${ratio} (S)`}
-        title={`Sketch area: drag to draw, then Generate brings back a picture at its shape (S)`} onClick={() => chrome?.setTool('sketch')}>
-        <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{ratio}
-      </button>
-      <button type="button" className="tb-tool" disabled aria-label="Board (B)" title="Boards come with board frames on the canvas">{ICON.board}</button>
-      {t('image', 'Add a picture', 'I', ICON.image)}
-      <button type="button" className="tb-tool" disabled aria-label="Link two nodes (L)" title="Links come with nodes on the canvas">{ICON.link}</button>
-      <span aria-hidden="true" className="tb-sep" />
-      <button ref={nodeRef} type="button" className="tb-node" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>+ Node</button>
-      <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="end" label="Add" className="pt-menu">
-        {(['script', 'storyboard', 'video'] as const).map((k) => (
-          <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode(k) }}>
-            <NodeIcon kind={k} size={16} />{k === 'script' ? 'Script' : k === 'storyboard' ? 'Storyboard' : 'Video'}<span className="hint">open</span>
+      {(() => {
+        const on = has('sketch')
+        return (
+          <button type="button" className={`tb-tool wide ${shown === 'sketch' ? 'on' : ''}`} aria-pressed={shown === 'sketch'} aria-label={`Sketch area ${ratio} (S)`}
+            aria-disabled={on ? undefined : 'true'} data-tip={on ? `Sketch area ${ratio} (S): drag to draw, then Generate brings back a picture at its shape` : `Sketch area (S) · not on this canvas yet`}
+            onClick={() => { if (!on) return; canvasActions.setMode(null); chrome?.setTool('sketch') }}>
+            <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{ratio}
           </button>
-        ))}
-        <div className="pt-menusep" />
-        <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode('picture') }}>{ICON.image}A picture</button>
-        <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onNode('sketch') }}>
-          <svg width="16" height="16" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>A sketch area<span className="hint">{ratio}</span>
-        </button>
-        <button type="button" role="menuitem" className="pt-menurow" disabled title="Documents come with nodes on the canvas">A document</button>
-        <button type="button" role="menuitem" className="pt-menurow" disabled title="Boards come with board frames on the canvas">A board</button>
-      </Float>
+        )
+      })()}
+      {mode('board', 'Board', 'B', actions.canBoard, 'Board (B): drag out a board, or click for one', 'Board (B) · needs the new canvas (it has boards as frames)')}
+      {t('image', 'Add a picture', 'I', ICON.image)}
+      {mode('link', 'Link two nodes', 'L', actions.canNode, 'Link (L): click a node, then the node it feeds', 'Link (L) · needs the new canvas (it has nodes on it)')}
+      <span aria-hidden="true" className="tb-sep" />
+      {nodeButton}
+      <Float anchor={nodeRef} open={menu} onClose={() => setMenu(false)} side="above" align="end" label="Add" className="pt-menu">{menuItems}</Float>
     </div>
   )
 }
@@ -183,9 +243,9 @@ export function ZoomPill({ chrome, touch = false }: { chrome: CanvasChrome | nul
   return (
     <div className={`zoom-pill ${touch ? 'touch' : ''}`} role="group" aria-label="Undo and zoom">
       {!touch && <><UndoButtons bare /><span aria-hidden="true" className="zp-sep" /></>}
-      <button type="button" aria-label="Zoom out" onClick={() => chrome?.zoomBy(-1)}>−</button>
-      <button type="button" className="zp-value" title="Fit everything (⌥0)" onClick={() => chrome?.fitAll()}>{Math.round(zoom * 100)}%</button>
-      <button type="button" aria-label="Zoom in" onClick={() => chrome?.zoomBy(1)}>+</button>
+      <button type="button" aria-label="Zoom out" data-tip="Zoom out (Ctrl −)" onClick={() => chrome?.zoomBy(-1)}>−</button>
+      <button type="button" className="zp-value" aria-label={`Zoom ${Math.round(zoom * 100)}%: fit everything (${OPTION}0)`} data-tip={`Fit everything (${OPTION}0)`} onClick={() => chrome?.fitAll()}>{Math.round(zoom * 100)}%</button>
+      <button type="button" aria-label="Zoom in" data-tip="Zoom in (Ctrl +)" onClick={() => chrome?.zoomBy(1)}>+</button>
       {touch && <><span aria-hidden="true" className="zp-sep" /><button type="button" className="zp-fit" onClick={() => chrome?.fitAll()}>Fit</button></>}
     </div>
   )
