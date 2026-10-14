@@ -32,7 +32,7 @@
   display: flex; align-items: center; gap: 4px; padding: 6px;
   background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-pop);
 }
-@media (prefers-color-scheme: dark) { .canvas-toolbar, .zoom-pill { background: rgba(22, 26, 31, 0.94); } }
+:root[data-theme='dark'] .canvas-toolbar, :root[data-theme='dark'] .zoom-pill { background: rgba(22, 26, 31, 0.94); }
 .tb-tool {
   width: 36px; height: 36px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink);
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0; font-size: 12px;

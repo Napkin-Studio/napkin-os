@@ -1,44 +1,106 @@
-/* Napkin OS tokens, copied from app/src/index.css (the apps don't import
-   across each other). Light by default; dark follows prefers-color-scheme. */
-:root {
+/* The tokens. The Napkin OS shell's palette first, value for value from app/src/index.css (the apps
+   don't import across each other; tokens.test.ts fails if one drifts). `data-theme` on <html> picks
+   light or dark, set by theme.ts from the same stored choice as the shell (napkin.theme), the OS
+   only when there is none. Then the tool's own tokens, and the owner's deliberate differences from
+   the shell (ui-behaviour 9, approved 2026-10-14), each marked "approved difference". */
+:root,
+:root[data-theme='light'] {
+  /* ── The shell's design tokens (app/src/index.css) ── */
   --paper: #FFFFFF;
   --card: #FFFFFF;
   --soft: #F5F6F8;
   --soft-2: #F2F3F6;
-  --frost: rgba(255, 255, 255, 0.86);
+  --frost: rgba(255, 255, 255, 0.82);
   --line: #D6DAE2;
   --line-soft: #E7E9EE;
   --ink: #14161B;
   --ink2: #4A4F5C;
-  /* Grey text: #6B7180 meets 4.5:1 on white and on --soft (ui-behaviour 9; #737987 did not). */
-  --ink3: #6B7180;
   --ink-fixed: #14161B;
-  --plan: #14161B;
-  --create: #FF4F2E;
-  --create-fg: #FFFFFF;
-  --create-soft: rgba(255, 79, 46, 0.1);
-  /* The primary button (ui-behaviour 9): white on #D63B1F is 4.66:1; brand orange (--create) carries no text. */
-  --action: #D63B1F;
-  --action-hover: #B8321A;
-  --action-fg: #FFFFFF;
-  --produce: #8B919E;
-  --learn: #DADDE3;
+  --plan: #14161B;    --plan-fg: #FFFFFF;    --plan-eye: #FFFFFF;
+  --create: #FF4F2E;  --create-fg: #FFFFFF;  --create-eye: #14161B;
+  --produce: #8B919E; --produce-fg: #FFFFFF; --produce-eye: #14161B;
+  --learn: #DADDE3;   --learn-fg: #14161B;   --learn-eye: #14161B;
+  --desk: #14161B;    --desk-fg: #FFFFFF;    --desk-eye: #FFFFFF;
   --status-green: #22C55E;
   --status-amber: #F5A524;
   --status-red: #FF4F2E;
-  --success: #166534;
+  --shadow-soft: 0 10px 30px rgba(20, 30, 60, 0.08);
+  --shadow-pill: 0 1px 3px rgba(20, 22, 27, 0.1);
+  --warn: #b45309;
   --danger: #b91c1c;
   --ok-bg: #e7f6ed;
+  --ok-border: #a7d8ba;
   --warn-bg: #fdf3e3;
+  --warn-border: #e0b473;
+
+  /* ── Approved differences from the shell (ui-behaviour 9; features/production-ui.clan) ── */
+  /* Grey text: #6B7180 meets 4.5:1 on white and on --soft (the shell's #737987 does not). */
+  --ink3: #6B7180;
+  /* Green (ok) text, also on --ok-bg. */
+  --success: #166534;
+  --ok-fg: #166534;
+
+  /* ── The tool's own ── */
+  --create-soft: rgba(255, 79, 46, 0.1);
+  /* The primary button (approved difference): white on #D63B1F is 4.66:1; brand orange carries no text. */
+  --action: #D63B1F;
+  --action-hover: #B8321A;
+  --action-fg: #FFFFFF;
   --danger-bg: #fdecea;
-  --shadow-soft: 0 10px 30px rgba(20, 30, 60, 0.08);
   --shadow-pop: 0 12px 32px rgba(20, 30, 60, 0.16), 0 2px 6px rgba(20, 30, 60, 0.08);
-  --shadow-pill: 0 1px 3px rgba(20, 22, 27, 0.1);
   --canvas-bg: #FAFAFB;
   --canvas-dot: #D6DAE2;
-  --r-board: 16px;
   --frost-panel: rgba(255, 255, 255, 0.9);
+  /* The tool's colour, the way the OS bar shows Brief Maker in amber. Fills (selection, focus, glows). */
+  --tool: #2F64F5;
+  /* Tool-blue text (approved difference), also on a 10-12% blue tint. */
+  --tool-ink: #1E4ED8;
+  --tool-soft: rgba(47, 100, 245, 0.10);
+  color-scheme: light;
+}
 
+:root[data-theme='dark'] {
+  /* ── The shell's design tokens, dark (app/src/index.css) ── */
+  --paper: #0F1114;
+  --card: #161A1F;
+  --soft: #1B1F25;
+  --soft-2: #22262D;
+  --frost: rgba(15, 17, 20, 0.8);
+  --line: #2A2F38;
+  --line-soft: #22262D;
+  --ink: #F2F3F5;
+  --ink2: #A6ACB8;
+  --ink3: #7A808C;
+  --plan: #F2F3F5;    --plan-fg: #0F1114;    --plan-eye: #0F1114;
+  --learn: #3A3F48;   --learn-fg: #F2F3F5;   --learn-eye: #F2F3F5;
+  --desk: #F2F3F5;    --desk-fg: #0F1114;    --desk-eye: #0F1114;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --success: #4ade80;
+  --warn: #f59e0b;
+  --danger: #f87171;
+  --ok-bg: #1e3a2f;
+  --ok-fg: #4ade80;
+  --ok-border: #166534;
+  --warn-bg: #3a2a1e;
+  --warn-border: #92400e;
+
+  /* ── The tool's own, dark ── */
+  --create-soft: rgba(255, 79, 46, 0.16);
+  --action: #E2502F;
+  --action-hover: #C8411F;
+  --danger-bg: #3a1e1e;
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --canvas-bg: #121417;
+  --canvas-dot: #2A2F38;
+  --frost-panel: rgba(22, 26, 31, 0.9);
+  --tool-ink: #8FB0FF;
+  --tool-soft: rgba(47, 100, 245, 0.22);
+  color-scheme: dark;
+}
+
+:root {
+  /* The shell's type, radii and motion. */
   --f-display: 'Geist', 'Helvetica Neue', Arial, sans-serif;
   --f-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
   --r-pill: 999px;
@@ -47,53 +109,10 @@
   --blur: saturate(1.4) blur(14px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 0.35s;
+  --dur-slow: 0.45s;
+  /* The tool's. */
+  --r-board: 16px;
   --topbar-h: 48px;
-  /* The tool's own colour, the way the OS bar shows Brief Maker in amber
-     (app/src/components/chrome.css .ch-brand-tool). Blue is identity only:
-     the name, the current stage, the selected item, Dex. Actions stay --create. */
-  --tool: #2F64F5;
-  /* Tool-blue text, also on a 10-12% blue tint (ui-behaviour 9). Fills stay --tool. */
-  --tool-ink: #1E4ED8;
-  --tool-soft: rgba(47, 100, 245, 0.10);
-  --plan-eye: #FFFFFF;
-  --warn: #b45309;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0F1114;
-    --card: #161A1F;
-    --soft: #1B1F25;
-    --soft-2: #22262D;
-    --frost: rgba(15, 17, 20, 0.84);
-    --line: #2A2F38;
-    --line-soft: #22262D;
-    --ink: #F2F3F5;
-    --ink2: #A6ACB8;
-    --ink3: #7A808C;
-    --plan: #F2F3F5;
-    --learn: #3A3F48;
-    --create-soft: rgba(255, 79, 46, 0.16);
-    --success: #4ade80;
-    --danger: #f87171;
-    --ok-bg: #1e3a2f;
-    --warn-bg: #3a2a1e;
-    --danger-bg: #3a1e1e;
-    --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
-    --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
-    --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --canvas-bg: #121417;
-    --tool-ink: #8FB0FF;
-    --frost-panel: rgba(22, 26, 31, 0.9);
-    --canvas-dot: #2A2F38;
-    --action: #E2502F;
-    --action-hover: #C8411F;
-    --tool-soft: color-mix(in oklab, var(--tool) 22%, transparent);
-    --plan-eye: #14161B;
-    --warn: #fbbf24;
-    color-scheme: dark;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -260,7 +279,8 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* ── Character stage ─────────────────────────────────────────────────────── */
 .character { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .canvas-wrap { flex: 1; position: relative; min-height: 0; }
-.canvas-wrap .excalidraw { --color-primary: var(--create); --color-primary-darker: #e8401f; --color-primary-darkest: #c9351a; --color-primary-light: var(--create-soft); }
+/* Excalidraw's own accent (its variables, not ours): selection and its panel in the tool's blue. */
+.canvas-wrap .excalidraw { --color-primary: var(--tool); --color-primary-darker: #2453D6; --color-primary-darkest: #1E4ED8; --color-primary-light: var(--tool-soft); }
 .overlay-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
 .overlay-layer > * { pointer-events: auto; }
 .refchips { position: absolute; display: flex; gap: 4px; align-items: center; transform: translateY(calc(-100% - 6px)); white-space: nowrap; }

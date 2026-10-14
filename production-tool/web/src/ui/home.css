@@ -3,20 +3,7 @@
    amber. Classes are hm-* so nothing here reaches the stages. */
 
 .home-view {
-  --tool: #2F64F5;
-  --tool-ink: color-mix(in oklab, var(--tool) 78%, var(--ink));
-  --tool-soft: color-mix(in oklab, var(--tool) 10%, transparent);
-  --plan-eye: #FFFFFF;
-  --warn: #b45309;
   flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper);
-}
-@media (prefers-color-scheme: dark) {
-  .home-view {
-    --tool-ink: color-mix(in oklab, var(--tool) 70%, white);
-    --tool-soft: color-mix(in oklab, var(--tool) 22%, transparent);
-    --plan-eye: #14161B;
-    --warn: #fbbf24;
-  }
 }
 
 /* The Napkin mark in a project's bar goes back to Home. */
@@ -28,7 +15,7 @@
   height: 48px; flex-shrink: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; padding: 0 16px;
   background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid var(--line-soft); position: relative; z-index: 5;
 }
-@media (prefers-color-scheme: dark) { .hm-bar { background: rgba(15, 17, 20, 0.92); } }
+:root[data-theme='dark'] .hm-bar { background: rgba(15, 17, 20, 0.92); }
 .hm-brand { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
 .hm-studio { font-weight: 600; letter-spacing: -0.01em; font-size: 14px; }
 .hm-tool { font-weight: 600; letter-spacing: -0.01em; font-size: 14px; color: var(--tool-ink); }

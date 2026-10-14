@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
 import { oneAtATime } from '../lib/guard'
+import { getTheme, onThemeChange, type Theme } from '../theme'
 import { placeFloating, type Anchor } from '../lib/place'
 
 /** An object URL for a content hash from the local blob store. */
@@ -60,17 +61,9 @@ export function fmtTime(s: number): string {
 }
 
 /** Light or dark, following the OS. */
-export function useColorScheme(): 'light' | 'dark' {
-  const q = '(prefers-color-scheme: dark)'
-  const [dark, setDark] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(q).matches)
-  useEffect(() => {
-    const m = window.matchMedia?.(q)
-    if (!m) return
-    const fn = (e: MediaQueryListEvent) => setDark(e.matches)
-    m.addEventListener('change', fn)
-    return () => m.removeEventListener('change', fn)
-  }, [])
-  return dark ? 'dark' : 'light'
+/** The theme the shell's switch picked (theme.ts), for what draws its own colours (Excalidraw). */
+export function useColorScheme(): Theme {
+  return useSyncExternalStore(onThemeChange, getTheme, () => 'light')
 }
 
 /** Whether a media query matches now, kept up to date (phone and tablet layouts, ui-behaviour 2.5). */
