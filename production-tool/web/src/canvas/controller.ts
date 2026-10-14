@@ -77,6 +77,7 @@ export class CanvasController {
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
+    void this.sync.nodes(this.els())
   }
 
   private els(): El[] {
@@ -153,11 +154,12 @@ export class CanvasController {
     this.syncTimer = null
     void this.sync.gens(this.els())
     void this.sync.sketches(this.els())
+    void this.sync.nodes(this.els())
   }
 
   // ── delete and undo ──
 
-  /** What deleting these elements takes with it: a drawing's strokes, and the arrows to and from them. */
+  /** What deleting these elements takes with it: a drawing's strokes, and the arrows and links to and from them. */
   private deletionOf(ids: string[]): string[] {
     const els = alive(this.els())
     const out = new Set(ids)
@@ -168,6 +170,9 @@ export class CanvasController {
     for (const e of els) {
       const c = cd(e)
       if (c?.kind === 'provenance' && (owned.has(c.from) || owned.has(c.to))) out.add(e.id)
+      // A link or arrow bound to something that goes, goes with it (canvas-edit-tools).
+      const b = e as El & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      if ((b.startBinding?.elementId && out.has(b.startBinding.elementId)) || (b.endBinding?.elementId && out.has(b.endBinding.elementId))) out.add(e.id)
     }
     return [...out]
   }
