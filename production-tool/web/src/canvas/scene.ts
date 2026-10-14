@@ -1,30 +1,26 @@
 // Helpers over the canvas scene: reading our customData, making the tool's
 // own elements (drawn frames, gen placeholders, curved provenance arrows) and
-// image files. Every element the tool owns carries customData per
+// pictures' bytes. Every element the tool owns carries customData per
 // customdata.schema.json; elements without it are the user's own drawing.
-// The engine's calls go through the CanvasAdapter (features/canvas-core.clan);
+// The engine's calls go through CanvasAdapter v2 over the engine-neutral
+// CanvasElement (features/canvas-core.clan, features/engine-adapter.clan);
 // the pure readers live in sceneRead.ts and are re-exported here.
 
 import type { CustomData, GenOp, View } from '../contracts/types'
-import { hexOf } from '../lib/hash'
-import { commonBounds, type FileData, type FileId, type FileMap, type SceneElement } from './adapter/excalidraw'
-import type { CanvasAdapter } from './core/canvasAdapter'
+import type { CanvasAdapter, CanvasAsset, CanvasElement } from './core/canvasAdapter'
+import { elementBounds } from './core/geometry'
 import { bendAway, curvePoints } from './curve'
 import { alive, cd } from './sceneRead'
 
 export { alive, byOwnId, cd, childrenOf, idOf, imageOf, isText, isUserDrawing, textOf } from './sceneRead'
 
-export type El = SceneElement
-/** The canvas as the tool uses it: the adapter over today's engine's elements and files. */
-export type Canvas = CanvasAdapter<El, FileData>
+export type El = CanvasElement
+/** The canvas as the tool uses it: whichever engine is mounted, behind CanvasAdapter v2. */
+export type Canvas = CanvasAdapter
 export const ACCENT = '#FF4F2E'
 
 export function bounds(els: readonly El[]) {
-  return commonBounds(els)
-}
-
-export function fileIdFor(sha: string): FileId {
-  return hexOf(sha).slice(0, 40) as FileId
+  return elementBounds(els)
 }
 
 export function blobToDataURL(blob: Blob): Promise<string> {
@@ -41,27 +37,23 @@ export async function dataURLToBlob(dataURL: string): Promise<Blob> {
   return await res.blob()
 }
 
-export async function fileData(sha: string, blob: Blob): Promise<FileData> {
-  return {
-    id: fileIdFor(sha),
-    dataURL: (await blobToDataURL(blob)) as FileData['dataURL'],
-    mimeType: (blob.type || 'image/png') as FileData['mimeType'],
-    created: Date.now(),
-  }
+/** A picture's bytes for the canvas, keyed by its sha256. */
+export async function assetData(sha: string, blob: Blob): Promise<CanvasAsset> {
+  return { sha256: sha, dataURL: await blobToDataURL(blob), mimeType: blob.type || 'image/png' }
 }
 
 export { downscale } from '../lib/fitImage'
 
 /** Export some elements to a PNG, without the tool's labels and arrows. */
-export async function exportElements(canvas: Canvas, els: readonly El[], files: FileMap): Promise<Blob> {
+export async function exportElements(canvas: Canvas, els: readonly El[]): Promise<Blob> {
   const drawn = els.filter((e) => !e.isDeleted && e.type !== 'arrow' && e.type !== 'text' && cd(e)?.kind !== 'provenance')
-  return await canvas.exportPng(drawn, files, { padding: 24, background: '#ffffff' })
+  return await canvas.exportPng(drawn, { padding: 24, background: '#ffffff' })
 }
 
 export function makeGenPlaceholder(canvas: Canvas, jobId: string, op: GenOp, parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View): El {
   const customData: CustomData = { kind: 'gen', id: jobId, op, parentIds, state: 'queued' }
   if (view) customData.view = view
-  return canvas.imageNode({ id: jobId, x: at.x, y: at.y, width: size.w, height: size.h, fileId: null, customData, status: 'pending', keepIds: true })
+  return canvas.imageNode({ id: jobId, x: at.x, y: at.y, width: size.w, height: size.h, assetSha: null, customData, status: 'pending', keepIds: true })
 }
 
 /**

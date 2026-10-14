@@ -206,6 +206,44 @@ describe('ClanDocumentStore (contract 3) against the real napkin-wasm', () => {
     expect(posts.every((p) => p.size > 1000)).toBe(true)
   })
 
+  it('writeAsset is quiet: the member is there, with no decision entry and no text sidecar (features/engine-store.clan)', async () => {
+    const s = store()
+    await s.create({ person: MAYA })
+    const before = (await s.chain()).length
+    const bytes = new Uint8Array([0x4e, 0x43, 0x59, 1, 9, 8, 7, 6])
+    await s.writeAsset('canvas.ybin.zst', bytes)
+    await s.writeAsset('canvas.ybin.zst', bytes)
+    expect((await s.chain()).length).toBe(before)
+    expect(await s.readAsset('canvas.ybin.zst')).toEqual(bytes)
+    expect(await s.readAsset('nothing.bin')).toBeNull()
+    const names = Object.keys(unzipSync(await s.exportClan()))
+    expect(names).toContain('human/assets/canvas.ybin.zst')
+    expect(names.filter((n) => n.includes('.extracted'))).toEqual([])
+  })
+
+  it('runs beforeBytes at each checkpoint moment, before the bytes leave, and not on other writes', async () => {
+    const s = store()
+    await s.create({ person: MAYA })
+    const moments: string[] = []
+    s.setBeforeBytes(async (reason) => {
+      moments.push(reason)
+      await s.writeAsset('canvas.ybin.zst', new Uint8Array([reason.length]))
+    })
+    const posted: number[] = []
+    const stop = s.startMirror(async (bytes) => {
+      posted.push(unzipSync(bytes)['human/assets/canvas.ybin.zst']?.[0] ?? -1)
+    }, { everyMs: 60_000 })
+    await s.patch({ project: { title: 'Rain' } }, { action: 'set project title' })
+    expect(moments).toEqual([])
+    await s.mirrorNow('accept')
+    await s.mirrorNow('handoff')
+    const exported = await s.exportClan()
+    expect(moments).toEqual(['accept', 'handoff', 'export'])
+    expect(posted).toEqual(['accept'.length, 'handoff'.length])
+    expect(unzipSync(exported)['human/assets/canvas.ybin.zst'][0]).toBe('export'.length)
+    stop()
+  })
+
   it('builds the export zip: <title>.clan plus assets/<sha256>.<ext>, hashes checked', async () => {
     const s = store()
     await s.create({ person: MAYA, title: 'Rain' })

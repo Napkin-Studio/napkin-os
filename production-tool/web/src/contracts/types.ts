@@ -315,6 +315,8 @@ export interface Flags {
   dogfood?: boolean
   /** Fix this moment, op clip_patch (features/clip-moment-edit.clan). Optional; absent means off. */
   clipPatch?: boolean
+  /** Our own canvas engine for new projects (features/canvas-engine.clan). Optional; absent means off. */
+  ownCanvas?: boolean
 }
 
 /** Fix this moment's settings (config.schema clipPatch); every key optional. */

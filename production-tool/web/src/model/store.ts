@@ -10,10 +10,11 @@
 // LocalUndo's, kept in ProjectUi.undo so it survives a reload.
 
 import {
-  ClanDocumentStore, indexedDbPersistence, LocalPatchBus, LocalTextBus, LocalUndo, recordJobOutcome, TERMINAL, TEXT_OWNED,
-  type ChainEntry, type JobEntry, type Person, type Persistence, type SerializedUndo,
+  LocalPatchBus, LocalTextBus, LocalUndo, recordJobOutcome, TERMINAL, TEXT_OWNED,
+  type ChainEntry, type ClanStoreApi, type JobEntry, type Person, type Persistence, type SerializedUndo,
 } from '../../../clan-store/src'
 import { TypingBursts } from '../script/typing'
+import { browserClanStore } from '../store/browser'
 import type { ProductionDocument } from '../contracts/types'
 import { record as recordEvent } from '../dogfood/recorder'
 import type { Doc, DocumentStore, UndoResult, WriteWhy } from '../doc/types'
@@ -38,7 +39,7 @@ export interface ModelStoreOptions {
 }
 
 export class ModelStore implements DocumentStore {
-  readonly clan: ClanDocumentStore
+  readonly clan: ClanStoreApi
   readonly bus: LocalPatchBus
   readonly text: LocalTextBus
   readonly undoer: LocalUndo
@@ -57,7 +58,7 @@ export class ModelStore implements DocumentStore {
   /** The last write the .clan refused, if any. */
   trouble: string | null = null
 
-  constructor(clan: ClanDocumentStore, opts: ModelStoreOptions = {}) {
+  constructor(clan: ClanStoreApi, opts: ModelStoreOptions = {}) {
     this.clan = clan
     this.bus = new LocalPatchBus(clan)
     this.text = new LocalTextBus(this.bus)
@@ -69,9 +70,9 @@ export class ModelStore implements DocumentStore {
     this.undoer.beforePush = () => this.typing.closeAll()
   }
 
-  /** The browser default: the project's own IndexedDB database, napkin-wasm beside the bundle. */
+  /** The browser default: the project's own IndexedDB database, through the project's store Worker (features/engine-store.clan). */
   static inBrowser(person: Person, opts: ModelStoreOptions & { persistence?: Persistence } = {}): ModelStore {
-    return new ModelStore(new ClanDocumentStore({ person, persistence: opts.persistence ?? indexedDbPersistence(CLAN_DB) }), opts)
+    return new ModelStore(browserClanStore(opts.persistence?.idbName ?? CLAN_DB, person), opts)
   }
 
   // ── opening ──

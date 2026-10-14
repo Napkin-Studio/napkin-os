@@ -110,12 +110,23 @@ describe('reads and writes', () => {
   it('undoable true is one step of the undo (IMMEDIATELY); false is a system write (NEVER)', () => {
     const { adapter, log } = make()
     const els = [el({ id: 'a' })]
-    adapter.commit(els, { undoable: true })
-    adapter.commit(els, { undoable: false })
-    expect(log.map((l) => l.args[0])).toEqual([
+    adapter.transact(() => els, { undoable: true })
+    adapter.transact(() => els, { undoable: false })
+    expect(log.filter((l) => l.method === 'updateScene').map((l) => l.args[0])).toEqual([
       { elements: els, captureUpdate: 'IMMEDIATELY' },
       { elements: els, captureUpdate: 'NEVER' },
     ])
+  })
+
+  it('a gesture holds its writes (EVENTUALLY) and closes them as one IMMEDIATELY', () => {
+    const { adapter, log } = make()
+    const a = [el({ id: 'a' })]
+    const b = [el({ id: 'b' })]
+    adapter.gesture(() => {
+      adapter.transact(() => a, { undoable: true })
+      adapter.transact(() => b, { undoable: true })
+    })
+    expect(log.filter((l) => l.method === 'updateScene').map((l) => (l.args[0] as Rec).captureUpdate)).toEqual(['EVENTUALLY', 'EVENTUALLY', 'IMMEDIATELY'])
   })
 
   it('patch is newElementWith with the fields', () => {
@@ -130,7 +141,7 @@ describe('the intent factories make the elements the old factories made', () => 
   it('a gen placeholder: kept id (regenerateIds false), pending, no file', () => {
     const { adapter } = make()
     const customData = { kind: 'gen', id: 'job_1', op: 'generate', parentIds: ['n'], state: 'queued' }
-    const out = adapter.imageNode({ id: 'job_1', x: 1, y: 2, width: 300, height: 400, fileId: null, customData, status: 'pending', keepIds: true })
+    const out = adapter.imageNode({ id: 'job_1', x: 1, y: 2, width: 300, height: 400, assetSha: null, customData, status: 'pending', keepIds: true })
     expect(calls.convert).toEqual([[
       [{ type: 'image', id: 'job_1', x: 1, y: 2, width: 300, height: 400, fileId: null, customData }],
       { regenerateIds: false },
@@ -142,8 +153,8 @@ describe('the intent factories make the elements the old factories made', () => 
   it('a library picture: a new id (no options), saved, its file', () => {
     const { adapter } = make()
     const customData = { kind: 'pic', id: 'node_1', asset: 'sha256:a' }
-    adapter.imageNode({ x: 5, y: 6, width: 300, height: 200, fileId: 'abc', customData, status: 'saved' })
-    expect(calls.convert).toEqual([[[{ type: 'image', x: 5, y: 6, width: 300, height: 200, fileId: 'abc', customData }]]])
+    adapter.imageNode({ x: 5, y: 6, width: 300, height: 200, assetSha: 'sha256:' + 'ab'.repeat(32), customData, status: 'saved' })
+    expect(calls.convert).toEqual([[[{ type: 'image', x: 5, y: 6, width: 300, height: 200, fileId: 'ab'.repeat(20), customData }]]])
     expect(calls.convert[0]).toHaveLength(1)
     expect(calls.newWith[0][1]).toEqual({ status: 'saved' })
   })
@@ -187,13 +198,43 @@ describe('the intent factories make the elements the old factories made', () => 
   })
 })
 
-describe('files and view', () => {
-  it('files and addFiles go straight through', () => {
+describe('pictures by sha256, and view', () => {
+  const SHA = 'sha256:' + 'cd'.repeat(32)
+  const FID = 'cd'.repeat(20)
+
+  it('addAssets files a picture under its sha256 file id, once', () => {
     const { adapter, log } = make()
-    expect(adapter.files()).toEqual({ f1: { id: 'f1' } })
-    const f = { id: 'f2', dataURL: 'data:', mimeType: 'image/png', created: 1 }
-    adapter.addFiles([f as never])
-    expect(log.at(-1)).toEqual({ method: 'addFiles', args: [[f]] })
+    adapter.addAssets([{ sha256: SHA, dataURL: 'data:', mimeType: 'image/png' }])
+    const add = log.filter((l) => l.method === 'addFiles')
+    expect(add).toHaveLength(1)
+    expect(add[0].args[0]).toEqual([{ id: FID, dataURL: 'data:', mimeType: 'image/png', created: expect.any(Number) }])
+  })
+
+  it('addAssets also files it under the id an element already shows it by (a dropped picture keeps its own)', () => {
+    const { adapter, api, log } = make()
+    api.getSceneElementsIncludingDeleted = (() => [el({ id: 'p', type: 'image', fileId: 'dropped', customData: { kind: 'pic', id: 'n', asset: SHA } })]) as never
+    adapter.addAssets([{ sha256: SHA, dataURL: 'data:', mimeType: 'image/png' }])
+    expect((log.find((l) => l.method === 'addFiles')!.args[0] as Rec[]).map((f) => f.id).sort()).toEqual([FID, 'dropped'].sort())
+  })
+
+  it('imageOf: the sha256 from customData, a known asset, or none; loaded when its file is there', () => {
+    const { adapter } = make()
+    expect(adapter.imageOf(el({ type: 'rectangle' }))).toBeNull()
+    expect(adapter.imageOf(el({ type: 'image', fileId: 'f1', customData: { asset: SHA } }))).toEqual({ sha256: SHA, loaded: true })
+    expect(adapter.imageOf(el({ type: 'image', fileId: FID }), [SHA])).toEqual({ sha256: SHA, loaded: false })
+    expect(adapter.imageOf(el({ type: 'image', fileId: 'zz' }))).toEqual({ sha256: null, loaded: false })
+  })
+
+  it('withAsset points the element at the picture and marks it saved', () => {
+    const { adapter } = make()
+    expect(adapter.withAsset(el({ type: 'image', status: 'pending', fileId: null }), SHA)).toMatchObject({ fileId: FID, status: 'saved' })
+  })
+
+  it('serialize keeps the live elements and only the files they use', () => {
+    const { adapter, api } = make()
+    api.getSceneElements = (() => [el({ id: 'p', type: 'image', fileId: 'f1' })]) as never
+    api.getFiles = (() => ({ f1: { id: 'f1' }, f9: { id: 'f9' } })) as never
+    expect(adapter.serialize()).toEqual({ elements: [el({ id: 'p', type: 'image', fileId: 'f1' })], files: { f1: { id: 'f1' } } })
   })
 
   it('view() is plain numbers and the selected ids', () => {
@@ -272,9 +313,9 @@ describe('the rest', () => {
   it('exportPng: a PNG with the padding and a white, light background', async () => {
     const { adapter } = make()
     const els = [el({ id: 'a' })]
-    await adapter.exportPng(els, { f: {} } as never, { padding: 24, background: '#ffffff' })
+    await adapter.exportPng(els, { padding: 24, background: '#ffffff' })
     expect(calls.exportBlob).toEqual([[{
-      elements: els, files: { f: {} }, mimeType: 'image/png', exportPadding: 24,
+      elements: els, files: { f1: { id: 'f1' } }, mimeType: 'image/png', exportPadding: 24,
       appState: { exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
     }]])
   })
@@ -296,7 +337,7 @@ describe('frame-aspect amendments (CanvasAdapter v1)', () => {
     const { adapter, api, log } = make()
     const scene = [el({ id: 'in', type: 'freedraw' }), el({ id: 'cross', type: 'line', x: 150, width: 900 }), el({ id: 'other' })]
     api.getSceneElements = (() => scene) as never
-    await adapter.exportRegion({ rect: { x: 0, y: 0, w: 320, h: 180 }, elementIds: ['in', 'cross'], outW: 1536, outH: 864, background: '#ffffff' }, { f: {} } as never)
+    await adapter.exportRegion({ rect: { x: 0, y: 0, w: 320, h: 180 }, elementIds: ['in', 'cross'], outW: 1536, outH: 864, background: '#ffffff' })
     expect(calls.convert).toEqual([[[{ type: 'frame', x: 0, y: 0, width: 320, height: 180, name: '', children: [] }]]])
     const [[opts]] = calls.exportBlob as [Rec][]
     const frame = (opts.elements as Rec[])[0]
@@ -304,7 +345,7 @@ describe('frame-aspect amendments (CanvasAdapter v1)', () => {
     expect((opts.elements as Rec[]).slice(1).map((e) => [e.id, e.frameId])).toEqual([['in', 'made-id'], ['cross', 'made-id']])
     expect(opts.exportingFrame).toBe(frame)
     expect(opts.exportPadding).toBe(0)
-    expect(opts.files).toEqual({ f: {} })
+    expect(opts.files).toEqual({ f1: { id: 'f1' } })
     expect((opts.getDimensions as (w: number, h: number) => Rec)(5000, 5000)).toEqual({ width: 1536, height: 864, scale: 4.8 })
     expect(opts.appState).toEqual({
       exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false,
@@ -317,7 +358,7 @@ describe('frame-aspect amendments (CanvasAdapter v1)', () => {
 
   it('exportRegion refuses an export past 4096 x 4096', async () => {
     const { adapter } = make()
-    await expect(adapter.exportRegion({ rect: { x: 0, y: 0, w: 10, h: 10 }, elementIds: [], outW: 5000, outH: 4000, background: '#fff' }, {} as never))
+    await expect(adapter.exportRegion({ rect: { x: 0, y: 0, w: 10, h: 10 }, elementIds: [], outW: 5000, outH: 4000, background: '#fff' }))
       .rejects.toThrow('too large')
     expect(calls.exportBlob).toEqual([])
   })

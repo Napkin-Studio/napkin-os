@@ -61,16 +61,21 @@ RUN npm run build
 # and talking to the relay through napkin-web's /production/api proxy
 # (features/os-sign-in.clan). It bundles the CLAN store
 # (production-tool/clan-store), which loads napkin-wasm: the device stage's
-# bindings, so there is no second Rust build. Both packages resolve their own
+# bindings, so there is no second Rust build. It also bundles our own canvas
+# engine (production-tool/canvas-engine, features/canvas-engine.clan), which
+# the app's src/canvas/adapter/own imports. Each package resolves its own
 # node_modules, and the app imports ../contracts.
 FROM node:20-bookworm-slim AS production
 WORKDIR /src/production-tool
 COPY production-tool/clan-store/package.json production-tool/clan-store/package-lock.json ./clan-store/
+COPY production-tool/canvas-engine/package.json production-tool/canvas-engine/package-lock.json ./canvas-engine/
 COPY production-tool/web/package.json production-tool/web/package-lock.json ./web/
 RUN cd clan-store && npm ci --no-audit --no-fund \
+ && cd ../canvas-engine && npm ci --no-audit --no-fund --omit=dev \
  && cd ../web && npm ci --no-audit --no-fund
 COPY production-tool/contracts/ ./contracts/
 COPY production-tool/clan-store/ ./clan-store/
+COPY production-tool/canvas-engine/ ./canvas-engine/
 COPY production-tool/web/ ./web/
 COPY --from=device /out/wasm/ ./clan-store/src/wasm/
 WORKDIR /src/production-tool/web

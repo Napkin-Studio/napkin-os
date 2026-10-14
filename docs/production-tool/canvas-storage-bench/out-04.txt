@@ -1,0 +1,6 @@
+none                 frames 720  missed 0  longest stall 3.6 ms  p99 late 0.5 ms | 0 saves, main-thread cost per save median 0.00 ms max 0.0 ms
+beside-json          frames 717  missed 4  longest stall 27.0 ms  p99 late 0.6 ms | 5 saves, main-thread cost per save median 22.98 ms max 25.0 ms
+beside-ybin          frames 712  missed 9  longest stall 59.0 ms  p99 late 0.4 ms | 5 saves, main-thread cost per save median 33.68 ms max 57.0 ms
+inside-main          frames 685  missed 36  longest stall 142.1 ms  p99 late 0.3 ms | 5 saves, main-thread cost per save median 125.50 ms max 140.0 ms
+inside-encode-main   frames 716  missed 5  longest stall 28.2 ms  p99 late 0.1 ms | 5 saves, main-thread cost per save median 24.10 ms max 26.2 ms | worker checkpoint median 106.0 ms, .clan 1809 KB
+inside-worker        frames 720  missed 0  longest stall 2.3 ms  p99 late 0.6 ms | 5 saves, main-thread cost per save median 0.04 ms max 0.0 ms | worker checkpoint median 133.1 ms, .clan 1809 KB | postMessage per update 33.9 µs

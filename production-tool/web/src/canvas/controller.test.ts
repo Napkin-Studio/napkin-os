@@ -4,20 +4,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The engine does not load in node: the scene helpers need only its bounds.
-vi.mock('./adapter/excalidraw', () => ({
-  commonBounds: (els: { x: number; y: number; width: number; height: number }[]) => {
-    const minX = Math.min(...els.map((e) => e.x))
-    const minY = Math.min(...els.map((e) => e.y))
-    const maxX = Math.max(...els.map((e) => e.x + e.width))
-    const maxY = Math.max(...els.map((e) => e.y + e.height))
-    return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY }
-  },
-}))
-// No FileReader in node: a file's data URL is not read here.
+// No FileReader in node: a picture's data URL is not read here.
 vi.mock('./scene', async (importOriginal) => {
   const real = await importOriginal<typeof import('./scene')>()
-  return { ...real, fileData: async (sha: string) => ({ id: real.fileIdFor(sha), dataURL: 'data:image/png;base64,', mimeType: 'image/png', created: 0 }) }
+  return { ...real, assetData: async (sha: string) => ({ sha256: sha, dataURL: 'data:image/png;base64,', mimeType: 'image/png' }) }
 })
 vi.mock('../jobs/assets', () => ({
   assetRef: async (_relay: unknown, sha: string) => ({ sha256: sha, url: `https://cdn.test/${sha}`, mime: 'image/png' }),
@@ -39,31 +29,59 @@ import { lineage } from '../model/lineage'
 import { purposeNode, purposeOf, purposeWords } from '../model/purpose'
 import { mockImageSize } from '../relay/mockRender'
 import { CanvasController, nodeSize } from './controller'
-import type { CanvasAdapter, FrameIntent, ImageNodeIntent, RegionExport } from './core/canvasAdapter'
+import type { CanvasAdapter, CanvasAsset, FrameIntent, ImageNodeIntent, RegionExport } from './core/canvasAdapter'
 import type { El } from './scene'
 
 type Rec = Record<string, unknown>
 const SHA = (c: string) => `sha256:${c.repeat(64)}`
 
 /** CanvasAdapter over plain objects: it records commits and region exports. */
-class FakeCanvas implements CanvasAdapter<El, never> {
+class FakeCanvas implements CanvasAdapter {
+  readonly engine = 'own' as const
   els: El[] = []
   commits: { undoable: boolean; n: number }[] = []
   exports: RegionExport[] = []
+  assets = new Map<string, CanvasAsset>()
   private n = 0
   elements(opts: { includeDeleted?: boolean } = {}) { return opts.includeDeleted ? [...this.els] : this.els.filter((e) => !e.isDeleted) }
-  commit(els: readonly El[], opts: { undoable: boolean }) { this.els = [...els]; this.commits.push({ undoable: opts.undoable, n: els.length }) }
+  transact(fn: (els: readonly El[]) => readonly El[], opts: { undoable: boolean }) {
+    const els = fn(this.els)
+    this.els = [...els]
+    this.commits.push({ undoable: opts.undoable, n: els.length })
+  }
+  gesture<T>(fn: () => T) { return fn() }
+  onStep() { return () => {} }
   patch(el: El, fields: Partial<El>) { return { ...el, ...fields } as El }
+  childrenOf(id: string) { return this.elements().filter((e) => e.frameId === id) }
+  anchors() { return [] }
+  setEmphasis() {}
+  emphasis() { return {} }
+  addAssets(a: CanvasAsset[]) { for (const x of a) this.assets.set(x.sha256, x) }
+  imageOf(el: El) {
+    if (el.type !== 'image') return null
+    const sha = (el as El & { assetSha?: string }).assetSha ?? (el.customData as { asset?: string } | undefined)?.asset ?? null
+    return { sha256: sha, loaded: !!sha && this.assets.has(sha) }
+  }
+  imageDataURL() { return null }
+  withAsset(el: El, sha: string) { return { ...el, assetSha: sha, status: 'saved' } as El }
+  capabilities() { return { coalesced: false, predicted: false, tilt: false, pressure: false } }
+  async exportSvg() { return '<svg/>' }
+  serialize() { return { engine: 'own' as const, elements: this.elements(), files: {} } }
+  setTheme() {}
+  destroy() {}
   private make(o: Rec): El { return { id: `el${++this.n}`, x: 0, y: 0, width: 0, height: 0, isDeleted: false, frameId: null, ...o } as unknown as El }
   imageNode(i: ImageNodeIntent) { return this.make({ type: 'image', ...i, ...(i.id ? { id: i.id } : {}) }) }
   provenanceArrow(i: { origin: { x: number; y: number }; customData: unknown }) { return this.make({ type: 'arrow', x: i.origin.x, y: i.origin.y, points: [[0, 0], [1, 1]], customData: i.customData }) }
   bindArrow(els: readonly El[]) { return [...els] }
   frameAround(i: FrameIntent) { return this.make({ type: 'frame', ...i }) }
+  node(i: { id?: string; x: number; y: number; width: number; height: number; customData: unknown }) { return this.make({ type: 'rectangle', ...i }) }
+  link(i: { linkId: string }) { return this.make({ type: 'arrow', customData: { kind: 'link', id: i.linkId } }) }
+  board(i: { id?: string; x: number; y: number; width: number; height: number; title: string; boardId: string }) {
+    return this.make({ type: 'frame', x: i.x, y: i.y, width: i.width, height: i.height, name: i.title, customData: { kind: 'board', id: i.boardId } })
+  }
   sketchArea(i: { x: number; y: number; w: number; h: number; sketchId: string }) {
     return this.make({ type: 'rectangle', x: i.x, y: i.y, width: i.w, height: i.h, backgroundColor: '#ffffff', customData: { kind: 'sketch', id: i.sketchId } })
   }
-  files() { return {} }
-  addFiles() {}
   view() { return { scrollX: 0, scrollY: 0, zoom: 1, offsetLeft: 0, offsetTop: 0, selectedIds: [] } }
   select() {}
   visibleBounds() { return { minX: 0, minY: 0, maxX: 2000, maxY: 2000 } }
@@ -99,7 +117,7 @@ function setup() {
     doc, runner, relay: {}, project: { canvasKey: 'k' },
     ui: { get: () => ({ me: { participantId: 'p_1' } }) },
   } as unknown as Services
-  const ctrl = new CanvasController(canvas as unknown as CanvasAdapter<El, never>, services)
+  const ctrl = new CanvasController(canvas, services)
   return { canvas, doc, sent, ctrl }
 }
 

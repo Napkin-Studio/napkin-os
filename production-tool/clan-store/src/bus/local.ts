@@ -1,4 +1,4 @@
-// LocalPatchBus: PatchBus over ClanDocumentStore in one browser
+// LocalPatchBus: PatchBus over the .clan store (ClanStoreApi: ClanDocumentStore, or the store Worker's proxy) in one browser
 // (contracts/collab.md §7-8). A batch is checked (shape, leaves, owners,
 // versions), applied to a copy, written as one merge patch through the store
 // (which validates the whole document and records one decision with the
@@ -8,7 +8,7 @@ import addFormats from 'ajv-formats'
 import common from '../../../contracts/common.schema.json'
 import patchSchema from '../../../contracts/patch.schema.json'
 import { deepEqual, diffMergePatch } from '../merge-patch'
-import type { ClanDocumentStore } from '../store'
+import type { ClanStoreApi } from '../store'
 import type { Doc, Entity } from '../types'
 import { InvalidDocument } from '../validate'
 import { entityAddress, leafAddress, leafProblem, newestFieldV, readPath, textOwned, writePath } from './leaf'
@@ -50,9 +50,9 @@ export class LocalPatchBus implements PatchBus {
   private readonly listeners = new Set<(r: PatchResult, batch: PatchBatch) => void>()
   undo: LocalUndo | null = null
 
-  readonly store: ClanDocumentStore
+  readonly store: ClanStoreApi
 
-  constructor(store: ClanDocumentStore) {
+  constructor(store: ClanStoreApi) {
     this.store = store
   }
 

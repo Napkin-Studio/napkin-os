@@ -1,0 +1,45 @@
+/* The node layer (features/canvas-nodes.clan). The cards' own look is the chrome's
+   (feat/production-ui canvas.css, bl-*); these are low-specificity fallbacks
+   (:where) so the cards read on a branch without it, plus the layer's own
+   behaviour: cards take no pointer except their buttons and ports, so the canvas
+   below selects, moves and draws through them. */
+
+.node-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.node-layer .bl-cardbox { position: absolute; transform-origin: 0 0; pointer-events: none; }
+.node-layer .bl-card { pointer-events: none; }
+.node-layer .bl-card button, .node-layer .nl-port { pointer-events: auto; }
+.node-layer .bl-cardbox.selected .bl-card { outline: 2px solid var(--tool); outline-offset: 2px; }
+.node-layer .nl-port {
+  position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--tool); cursor: crosshair; touch-action: none;
+}
+.node-layer .nl-drag { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.node-layer .nl-drag line { stroke: var(--tool); stroke-width: 1.6; stroke-dasharray: 6 5; }
+.node-layer .nl-refusal {
+  position: absolute; transform: translate(12px, 12px); padding: 4px 10px; border-radius: var(--r-pill);
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-pill); font-size: 12px; color: var(--ink2); white-space: nowrap;
+}
+
+:where(.node-layer) :where(.bl-card) {
+  position: absolute; left: 16px; right: 16px; top: 22px; box-sizing: border-box;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; color: var(--ink);
+}
+:where(.node-layer) :where(.bl-cardhead) { display: flex; align-items: center; gap: 8px; }
+:where(.node-layer) :where(.bl-cardhead b) { font-weight: 600; font-size: 14px; white-space: nowrap; }
+:where(.node-layer) :where(.pt-grow) { flex: 1; }
+:where(.node-layer) :where(.pt-mono) { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
+:where(.node-layer) :where(.pt-mention) { color: var(--tool-ink); }
+:where(.node-layer) :where(.bl-excerpt) { margin: 0; font-size: 12.5px; line-height: 1.5; }
+:where(.node-layer) :where(.bl-excerpt.faint, .bl-meta) { font-size: 12px; color: var(--ink3); }
+:where(.node-layer) :where(.bl-av) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; font-size: 11.5px; }
+:where(.node-layer) :where(.bl-avhead, .bl-avcell) { padding: 6px 8px; }
+:where(.node-layer) :where(.bl-strip) { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+:where(.node-layer) :where(.bl-frame) { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+:where(.node-layer) :where(.bl-frame img, .bl-noframe) { width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); font-size: 10px; color: var(--ink3); }
+:where(.node-layer) :where(.bl-line, .bl-atwork) { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); }
+:where(.node-layer) :where(.bl-videorow) { display: flex; gap: 10px; }
+:where(.node-layer) :where(.bl-poster) { position: relative; width: 150px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--soft); flex: none; }
+:where(.node-layer) :where(.bl-poster img, .bl-poster video) { width: 100%; height: 100%; object-fit: cover; display: block; }
+:where(.node-layer) :where(.bl-len) { position: absolute; right: 6px; bottom: 6px; font-family: var(--f-mono); font-size: 10px; color: #FFFFFF; }
+:where(.node-layer) :where(.bl-facts) { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }

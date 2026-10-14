@@ -6,7 +6,7 @@
 // A project made under another contract is refused (ProjectRefused): said,
 // never created over, its bytes left where they are.
 
-import { ClanDocumentStore, type Persistence, type Person } from '../../../clan-store/src'
+import { type Persistence, type Person } from '../../../clan-store/src'
 import type { ProjectHandle, Services } from '../app/context'
 import type { CanvasSnapshot } from '../canvas/controller'
 import type { Config, Me } from '../contracts/types'
@@ -17,6 +17,7 @@ import { JobRunner } from '../jobs/runner'
 import { CONFIGS } from '../contracts/load'
 import { resumeChains, wireJobs } from '../jobs/wire'
 import { ModelStore, type ModelStoreOptions } from '../model/store'
+import { browserClanStore } from '../store/browser'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
 import type { ProjectServer } from './server'
@@ -29,8 +30,11 @@ import { ProjectUiStore } from './uiStore'
  *  `person` is who writes (absent: only to read it); `undo` where its undo steps are kept. */
 export type MakeClan = (persistence: Persistence, opts?: { person?: Person; undo?: ModelStoreOptions['undo'] }) => ModelStore
 
-export const browserClan: MakeClan = (persistence, opts = {}) =>
-  new ModelStore(new ClanDocumentStore({ person: opts.person, persistence }), { undo: opts.undo })
+/** In the browser the .clan lives in the project's store Worker, the one writer (features/engine-store.clan). */
+export const browserClan: MakeClan = (persistence, opts = {}) => {
+  if (!persistence.idbName) throw new Error('the browser store needs an IndexedDB database')
+  return new ModelStore(browserClanStore(persistence.idbName, opts.person), { undo: opts.undo })
+}
 
 /** Who writes when nobody is signed in (the in-browser mock, or a relay that cannot say who). */
 export const LOCAL_PERSON: Person = { id: 'p_local', handle: 'guest', tenant_id: '00000000-0000-0000-0000-000000000000' }

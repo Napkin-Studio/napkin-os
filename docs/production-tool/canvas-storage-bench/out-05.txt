@@ -1,0 +1,7 @@
+clan clan 1.2.1; start .clan 25534 B
+asset-quiet                first 95 ms | steady median 89 ms p90 102 ms | .clan 1793 KB -> 1945 KB after 20
+asset-decision             first 85 ms | steady median 85 ms p90 96 ms | .clan 1794 KB -> 1946 KB after 20
+data-member                first 578 ms | steady median 994 ms p90 3179 ms | .clan 2061 KB -> 2221 KB after 20
+300 previews uploaded into the .clan through wasm in 27067 ms total (each upload repacks the archive)
+.clan with previews: 8.48 MB
+asset-quiet+previews       first 205 ms | steady median 196 ms p90 206 ms | .clan 10453 KB -> 10605 KB after 20

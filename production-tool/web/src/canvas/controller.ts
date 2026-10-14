@@ -5,8 +5,7 @@
 // key_variant (maya_front), set as a key's front, and turned into the other
 // views. The React component only renders overlays and calls in.
 
-import type { FileData, FileMap, ImageElement, SceneElement } from './adapter/excalidraw'
-import type { CanvasAdapter } from './core/canvasAdapter'
+import type { CanvasAdapter, CanvasAsset } from './core/canvasAdapter'
 import {
   AGENCY_SHELF, type Ask, type Aspect, type CustomData, type Job, type JobInput, type JobInputRef, type Key, type LibraryEntry, type Mime, type NamedRef,
   type ProductionDocument, type Ratio, type RefRole, type Variant, type View, type ModelChoice,
@@ -29,18 +28,15 @@ import { cropLoss } from '../lib/runwaySizes'
 import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
 import { SKETCH_ASK, sketchAsk } from '../ui/asks'
 import {
-  alive, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, fileData, fileIdFor, idOf,
+  alive, assetData, bounds, byOwnId, cd, childrenOf, dataURLToBlob, downscale, exportElements, idOf,
   imageOf, isText, makeArrow, makeGenPlaceholder, nextSlot, textOf, type El,
 } from './scene'
 import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
 import { frameText } from './text'
 
-
-export interface CanvasSnapshot {
-  elements: SceneElement[]
-  files: FileMap
-}
+/** The scene as this browser keeps it (engine-owned shape; core/canvasAdapter.ts). */
+export type { CanvasSnapshot } from './core/canvasAdapter'
 
 export const OTHER_VIEWS: View[] = ['three-quarter', 'side', 'back']
 const NODE = { w: 300, h: 400 }
@@ -65,17 +61,17 @@ export type GenerateResult = { jobId: string } | { ask: Ask }
 const ONE_AREA = 'Pick one sketch area for one Generate.'
 
 export class CanvasController {
-  private readonly canvas: CanvasAdapter<SceneElement, FileData>
+  private readonly canvas: CanvasAdapter
   private readonly s: Services
   private readonly processing = new Set<string>()
-  /** File ids restoreFiles has looked for once already. */
+  /** Pictures (by sha256) restoreFiles has looked for once already. */
   private readonly restoreTried = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private syncTimer: ReturnType<typeof setTimeout> | null = null
   /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
   readonly sync: CanvasDocSync
 
-  constructor(canvas: CanvasAdapter<SceneElement, FileData>, services: Services) {
+  constructor(canvas: CanvasAdapter, services: Services) {
     this.canvas = canvas
     this.s = services
     this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
@@ -93,7 +89,7 @@ export class CanvasController {
   }
 
   private setEls(els: El[], undoable = true) {
-    this.canvas.commit(els, { undoable })
+    this.canvas.transact(() => els, { undoable })
   }
 
   private patchEl(id: string, fn: (e: El) => El, undoable = false) {
@@ -114,23 +110,23 @@ export class CanvasController {
   /**
    * Put back the pictures of image elements whose file the scene lacks: a canvas that came from the
    * server (features/personal-workspaces.clan) carries its elements only. Each picture is found by
-   * the node's asset, else by the file id made from its hash, among this browser's blobs.
+   * the node's asset, else by the document's assets the engine recognises it as, among this browser's blobs.
    */
   async restoreFiles(): Promise<number> {
-    const files = this.canvas.files()
-    const lacking = alive(this.els()).filter((e) => e.type === 'image' && (e as ImageElement).fileId
-      && !files[(e as ImageElement).fileId!] && !this.restoreTried.has((e as ImageElement).fileId!)) as ImageElement[]
-    if (!lacking.length) return 0
-    for (const el of lacking) this.restoreTried.add(el.fileId!)
-    const byFileId = new Map(Object.keys(this.doc().assets).map((sha) => [fileIdFor(sha) as string, sha]))
-    const add: FileData[] = []
-    for (const el of lacking) {
-      const c = cd(el) as { asset?: string } | undefined
-      const sha = c?.asset ?? byFileId.get(el.fileId!)
-      const blob = sha ? await getBlob(sha) : undefined
-      if (sha && blob) add.push({ ...(await fileData(sha, blob)), id: el.fileId! })
+    const known = Object.keys(this.doc().assets)
+    const lacking = new Set<string>()
+    for (const e of alive(this.els())) {
+      const img = this.canvas.imageOf(e, known)
+      if (img?.sha256 && !img.loaded && !this.restoreTried.has(img.sha256)) lacking.add(img.sha256)
     }
-    if (add.length) this.canvas.addFiles(add)
+    if (!lacking.size) return 0
+    for (const sha of lacking) this.restoreTried.add(sha)
+    const add: CanvasAsset[] = []
+    for (const sha of lacking) {
+      const blob = await getBlob(sha)
+      if (blob) add.push(await assetData(sha, blob))
+    }
+    if (add.length) this.canvas.addAssets(add)
     return add.length
   }
 
@@ -140,11 +136,7 @@ export class CanvasController {
   }
 
   async save() {
-    const elements = this.els().filter((e) => !e.isDeleted)
-    const used = new Set(elements.map((e) => (e as ImageElement).fileId).filter(Boolean) as string[])
-    const files: FileMap = {}
-    for (const [k, v] of Object.entries(this.canvas.files())) if (used.has(k)) files[k] = v
-    await idbPut('kv', this.s.project.canvasKey, { elements, files } satisfies CanvasSnapshot)
+    await idbPut('kv', this.s.project.canvasKey, this.canvas.serialize())
   }
 
   /** Called on every scene change (throttled by the component). */
@@ -216,25 +208,16 @@ export class CanvasController {
   }
 
   private async intakePictures() {
-    const files = this.canvas.files()
-    const fresh = alive(this.els()).filter(
-      (e) => e.type === 'image' && !cd(e) && (e as ImageElement).fileId && files[(e as ImageElement).fileId!] && !this.processing.has(e.id),
-    ) as ImageElement[]
+    const fresh = alive(this.els()).filter((e) => e.type === 'image' && !cd(e) && !this.processing.has(e.id) && this.canvas.imageDataURL(e))
     for (const el of fresh) {
       this.processing.add(el.id)
       try {
-        const file = files[el.fileId!]
-        const original = await dataURLToBlob(file.dataURL)
-        const { blob, w, h, changed } = await downscale(original)
+        const original = await dataURLToBlob(this.canvas.imageDataURL(el)!)
+        const { blob, w, h } = await downscale(original)
         const sha = await putBlob(blob)
-        let fileId = el.fileId!
-        if (changed) {
-          const data = await fileData(sha, blob)
-          this.canvas.addFiles([data])
-          fileId = data.id
-        }
+        this.canvas.addAssets([await assetData(sha, blob)])
         const customData: CustomData = { kind: 'pic', id: newId('node'), asset: sha }
-        this.patchEl(el.id, (e) => this.canvas.patch(e, { fileId, status: 'saved', customData } as Partial<ImageElement>), true)
+        this.patchEl(el.id, (e) => this.canvas.patch(this.canvas.withAsset(e, sha), { customData }), true)
         this.addAsset(sha, blob, 'uploaded', { w, h })
       } catch (e) {
         console.warn('Could not take in a picture', e)
@@ -251,7 +234,7 @@ export class CanvasController {
     if (!strokes.length) return null
     const b = bounds(strokes)
     const pad = 16
-    const blob = (await downscale(await exportElements(this.canvas, strokes, this.canvas.files()))).blob
+    const blob = (await downscale(await exportElements(this.canvas, strokes))).blob
     const sha = await putBlob(blob)
     const frame = this.canvas.frameAround(
       { x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', customData: { kind: 'drawn', id: newId('node'), asset: sha } },
@@ -269,7 +252,7 @@ export class CanvasController {
       const c = cd(f) as Extract<CustomData, { kind: 'drawn' }>
       const kids = childrenOf(els, f.id).filter((k) => k.type !== 'text')
       if (!kids.length) continue
-      const blob = (await downscale(await exportElements(this.canvas, kids, this.canvas.files()))).blob
+      const blob = (await downscale(await exportElements(this.canvas, kids))).blob
       const sha = await putBlob(blob)
       if (sha === c.asset) continue
       this.patchEl(f.id, (e) => this.canvas.patch(e, { customData: { ...c, asset: sha } }))
@@ -484,7 +467,7 @@ export class CanvasController {
     await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
     const members = membersOf(els as unknown as Boxed[], rect).filter((e) => e.id !== areaEl.id)
     const ex = exportPlan(rect, aspect)
-    const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' }, this.canvas.files())
+    const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' })
     const sha = await putBlob(blob)
     this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
     const refs: JobInputRef[] = [{ id: s.sketchId, role: 'layout', kind: 'drawing', asset: await assetRef(this.s.relay, sha) }]
@@ -672,19 +655,19 @@ export class CanvasController {
    * document already has are replaced, and what was made from them is marked out of date.
    */
   async importEntry(entry: LibraryEntry) {
-    const files: FileData[] = []
+    const pictures: CanvasAsset[] = []
     const got: { variant: Variant; sha: string; w: number; h: number }[] = []
     for (const r of entry.refs ?? []) {
       const blob = await this.s.relay.fetchOutput(r.asset)
       const sha = await putBlob(blob)
       await putBlobAs(r.asset.sha256, blob)
-      files.push(await fileData(sha, blob))
+      pictures.push(await assetData(sha, blob))
       const bmp = await createImageBitmap(blob).catch(() => null)
       got.push({ variant: r.variant, sha, w: bmp?.width ?? NODE.w, h: bmp?.height ?? NODE.h })
       bmp?.close?.()
       this.addAsset(sha, blob, 'uploaded', bmp ? { w: bmp.width, h: bmp.height } : undefined)
     }
-    this.canvas.addFiles(files)
+    this.canvas.addAssets(pictures)
     const { minX: vx0, minY: vy0 } = this.canvas.visibleBounds()
     const start = nextSlot(this.els(), { maxX: vx0, minY: vy0 + 40 }, { w: (NODE.w + 40) * got.length, h: NODE.h })
     const nodes: { nodeId: string; variant: Variant; sha: string }[] = []
@@ -693,7 +676,7 @@ export class CanvasController {
       const nodeId = newId('node')
       const h = Math.round((NODE.w * g.h) / Math.max(1, g.w))
       added.push(this.canvas.imageNode(
-        { x: start.x + i * (NODE.w + 40), y: start.y, width: NODE.w, height: h, fileId: fileIdFor(g.sha), customData: { kind: 'pic', id: nodeId, asset: g.sha }, status: 'saved' },
+        { x: start.x + i * (NODE.w + 40), y: start.y, width: NODE.w, height: h, assetSha: g.sha, customData: { kind: 'pic', id: nodeId, asset: g.sha }, status: 'saved' },
       ))
       nodes.push({ nodeId, variant: g.variant, sha: g.sha })
     })
@@ -792,14 +775,13 @@ export class CanvasController {
     const blob = await getBlob(out.sha256)
     if (!blob) return
     await putBlobAs(out.sha256, blob)
-    const data = await fileData(out.sha256, blob)
-    this.canvas.addFiles([data])
+    this.canvas.addAssets([await assetData(out.sha256, blob)])
     const c = cd(el) as Extract<CustomData, { kind: 'gen' }>
     const h = out.w && out.h ? Math.round((el.width * out.h) / out.w) : el.height
-    this.patchEl(el.id, (e) => this.canvas.patch(e, {
-      fileId: fileIdFor(out.sha256), status: 'saved', height: h,
+    this.patchEl(el.id, (e) => this.canvas.patch(this.canvas.withAsset(e, out.sha256), {
+      height: h,
       customData: { ...c, state: 'completed', asset: out.sha256, ...(job.kind === 'mock' ? { mock: true } : {}) },
-    } as Partial<ImageElement>))
+    }))
     // The landing is the crew's decision, citing the job and the refs it used, as for frames and clips.
     const why = landingWhy(this.s.doc, job.jobId, c.op === 'view' && c.view ? `the ${c.view} view on the canvas` : 'a picture on the canvas')
     if (this.s.doc.record) {

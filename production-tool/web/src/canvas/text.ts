@@ -1,11 +1,12 @@
 // The words written on the canvas. Text never goes into an exported picture
 // (Runway fails on lettering in an input image: INTERNAL.BAD_OUTPUT.01), so the
-// words travel as `input.text` instead. Pure helpers, no Excalidraw runtime.
+// words travel as `input.text` instead. Pure helpers over the engine-neutral
+// CanvasElement (features/engine-adapter.clan): containerId is the text's boundTo.
 
-import type { SceneElement } from './adapter/excalidraw/types'
+import type { CanvasElement } from './core/canvasAdapter'
 
-type El = SceneElement
-type TextEl = El & { type: 'text'; text: string; originalText?: string; containerId?: string | null }
+type El = CanvasElement
+type TextEl = El & { type: 'text'; text: string }
 
 /** The contract's limit on input.text (relay-api.schema.json JobInput.text). */
 export const MAX_TEXT = 1000

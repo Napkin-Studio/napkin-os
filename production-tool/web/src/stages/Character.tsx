@@ -1,4 +1,4 @@
-// Stage 1: a free canvas (Excalidraw). Draw, write or drop pictures anywhere;
+// Stage 1: a free canvas (Excalidraw, or our own engine behind the flag). Draw, write or drop pictures anywhere;
 // every picture, drawing, note and result is a node. Select any of them and the
 // floating toolbar offers Generate (the result lands beside them, or where you
 // click), Name (key_variant, like @maya_laughing), Set as front, and Make the
@@ -6,7 +6,7 @@
 // below lists the named references (solid keys), publishes them to the
 // person's library (their own, from any project), imports from it, and cleans up unused pictures.
 
-import { CanvasView } from '../canvas/adapter/excalidraw/CanvasView'
+import { CanvasMount } from '../canvas/CanvasMount'
 import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
@@ -63,7 +63,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const { runner, doc: docStore, ui: uiStore, project } = services
   const router = useRouter()
   const panels = usePanels()
-  const [chrome, setChrome] = useState<CanvasChrome | null>(null)
+  const [chrome] = useState<CanvasChrome | null>(null)
   const [board, setBoard] = useState<string | null>(null)
   const narrow = useMedia(TABLET)
   const doc = useDoc()
@@ -315,7 +315,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     <div className="character">
       <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
-        <CanvasView initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} />
+        <CanvasMount initial={initial} onReady={setCanvas} onChange={onChange} theme={theme} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <div className="overlay-layer">
           <FlowArrows els={els} toView={toView} />
