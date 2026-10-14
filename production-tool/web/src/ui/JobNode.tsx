@@ -12,7 +12,8 @@ import { shotNumber } from '../model/selectors'
 import { AskCard } from './AskCard'
 import { cancelText, mayStillCharge } from './cancel'
 import { AgentFigure } from './agents/AgentFigure'
-import { whoIsWorking } from './agents/cast'
+import { sayer, whoIsWorking, workOf } from './agents/cast'
+import { NapkinLoader } from './loader/NapkinLoader'
 import { Float } from './Float'
 import { otherModels } from './modelChoice'
 import { ModelItems } from './ModelPick'
@@ -136,7 +137,9 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   return (
     <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
-      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+      {/* The logo at work, its leading card the department; the figure signs who (ui-behaviour 6, 5.1). */}
+      <NapkinLoader work={workOf(job.op, state)} state={state === 'queued' ? 'queued' : 'run'} size={compact ? 24 : 32} />
+      <div className="pt-say"><AgentFigure agent={who.agent} state={who.state} size={20} decorative /><span className="who">{sayer(who.agent)}</span></div>
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
         {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}

@@ -11,7 +11,8 @@ import type { UiStore } from '../projects/uiStore'
 import { ctxReader } from '../jobs/runner'
 import { jobsList, shotNumber } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
-import { whoIsWorking } from './agents/cast'
+import { whoIsWorking, workOf } from './agents/cast'
+import { NapkinLoader } from './loader/NapkinLoader'
 import { Float } from './Float'
 import { fmtElapsed, useElapsed } from './hooks'
 import { trayGroups, trayLabel, WAITING, whereIs, type TrayRow } from './tray'
@@ -39,7 +40,8 @@ export function JobTray() {
       {!empty && (
         <button ref={ref} className={`pt-status tray ${busy ? 'busy' : ''} ${!busy && !g.waiting.length ? 'bad' : ''} ${open ? 'open' : ''}`} aria-live="polite" aria-haspopup="dialog" aria-expanded={open}
           title="What is being made, and what needs you" onClick={() => setOpen(!open)}>
-          {faces.length > 0 && (
+          {g.working[0] && <NapkinLoader work={workOf(g.working[0].job.op, g.working[0].state)} size={20} />}
+          {!g.working[0] && faces.length > 0 && (
             <span className="faces" aria-hidden="true">
               {faces.slice(0, 3).map((a) => <AgentFigure key={a} agent={a} size={20} state={needsYou(a) ? 'needs-you' : 'working'} decorative />)}
             </span>

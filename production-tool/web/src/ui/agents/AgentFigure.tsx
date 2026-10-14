@@ -203,7 +203,7 @@ export function AgentFigure({ agent, size = 64, state = 'idle', walking = false,
   const look = a.look
   const body = BODIES[look.shape]
   const label = `${a.given}, ${a.role}${state === 'needs-you' ? ' — needs you' : state === 'working' ? ' — working' : ''}`
-  const delay = { '--af-phase': phaseOf(agent) } as CSSProperties
+  const delay = { '--af-phase': a.phase ?? phaseOf(agent) } as CSSProperties
 
   const leg = (side: 'l' | 'r') => {
     const x = CX + (side === 'l' ? -LEG_DX : LEG_DX)

@@ -107,5 +107,10 @@
 .pt-savebtn:hover:not(:disabled) { background: var(--soft); color: var(--ink2); }
 .pt-savebtn.failed { color: var(--danger); }
 
+/* Reduce motion (ui-behaviour 6.6): the system setting or the account menu's switch. */
+[data-motion='still'] .pending { animation: none; }
+[data-motion='still'] .agent-figure, [data-motion='still'] .agent-figure * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .pending { animation: none; } }
+
 /* The dot grid every canvas-like surface sits on. */
 .pt-grid { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }

@@ -37,7 +37,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
       { text: 'make her wave', refs: [{ id: 'ref_maya', name: 'maya_front', role: 'character', kind: 'picture', asset: asset('m') }, { id: 'node_draw', role: 'character', kind: 'drawing', asset: asset('d') }] },
     )
     const card = arrowCard(doc, ui, { from: 'node_draw', to: 'job_g' }, { kindOf, fmtTime })
-    expect(card.who).toBe('Dex · Gemini 3 Pro (runway)')
+    expect(card.who).toBe('Wren · Gemini 3 Pro (runway)')
     expect(card.from).toEqual([{ label: '@maya_front', here: false }, { label: 'drawing', here: true }])
     expect(card.words).toBe('make her wave')
     expect(card.told).toBe('@maya_front waving, pose from @image2')
@@ -65,7 +65,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
     expect(card.title).toBe('The side view')
     expect(card.changed).toBe('Turned @maya_front to the side view')
     expect(card.from).toEqual([{ label: '@maya_front', here: true }])
-    expect(card.who).toBe('Dex · Gemini 3.1 Flash (runway)')
+    expect(card.who).toBe('Wren · Gemini 3.1 Flash (runway)')
   })
 
   it('a region edit names the box and its note', () => {
@@ -87,7 +87,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
       { provider: 'mock', model: 'mock-hq' },
     )
     const card = arrowCard(doc, ui, { from: 'node_note', to: 'job_f' }, { kindOf })
-    expect(card.who).toBe('Dex · Gemini 3 Pro (runway)')
+    expect(card.who).toBe('Wren · Gemini 3 Pro (runway)')
     expect(card.fallback).toBe('Made on Runway: mock could not take Mock HQ')
     expect(cardLines(card)[2]).toBe(card.fallback)
   })
@@ -95,7 +95,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
   it('a job a document recorded on a provider no longer routed names it as recorded', () => {
     // madeBy is free text (features/drop-hackathon-extras.clan): older projects still load and say what made them.
     const { doc, ui } = setup({ id: 'job_o', op: 'generate', provider: 'oldco', model: 'old-model' }, { text: 'a cat', refs: [] })
-    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_o' }, { kindOf }).who).toBe('Dex · old-model (oldco)')
+    expect(arrowCard(doc, ui, { from: 'node_note', to: 'job_o' }, { kindOf }).who).toBe('Wren · old-model (oldco)')
   })
 
   it('a job with no director block went as written', () => {
@@ -103,7 +103,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
     const card = arrowCard(doc, ui, { from: 'node_note', to: 'job_p' }, { kindOf })
     expect(card.told).toBeUndefined()
     expect(card.passthrough).toBe('No director: your words went to the model as written.')
-    expect(card.who).toBe('Dex · the mock (no model)')
+    expect(card.who).toBe('Wren · the mock (no model)')
     doc.jobs.job_p.cost = { estimate: 0.04, currency: 'USD', unknown: false }
     expect(cardLines(arrowCard(doc, ui, { from: 'node_note', to: 'job_p' })).join(' ')).not.toMatch(/\$/)
   })
@@ -112,7 +112,7 @@ describe('arrowCard: what the step behind an arrow did', () => {
     const { doc, ui } = setup({ id: 'job_q', op: 'generate', state: 'queued' }, { text: 'a cat' })
     const running = arrowCard(doc, ui, { from: 'node_note', to: 'job_q' }, { kindOf })
     expect(running.state).toBe('Still being made.')
-    expect(running.who).toBe('Dex · model not known yet')
+    expect(running.who).toBe('Wren · model not known yet')
     expect(running.passthrough).toBeUndefined()
     const missing = arrowCard(doc, { jobs: {} }, { from: 'node_x', to: 'job_gone' })
     expect(missing.state).toBe('No record of this step in the document.')

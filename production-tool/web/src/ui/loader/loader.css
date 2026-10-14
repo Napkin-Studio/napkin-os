@@ -1,0 +1,76 @@
+/* The Napkin loader (ui-behaviour 6), copied as is from the approved artboard
+   docs/production-tool/ui-mocks/Loader.dc.html; NapkinLoader.tsx draws its SVG. */
+/* napkin-loader */
+/* The Napkin loader: the Napkin logo (ui/Mark.tsx) at work. Copy this whole
+   block, and the <svg class="napkin-loader"> pattern marked "copy verbatim",
+   as they are; change only width/height, data-work and data-state.
+   The logo: a disc of four quadrants turned -45deg, always in the Napkin
+   colours: create #FF4F2E (top), produce #8B919E (right), learn #DADDE3
+   (bottom), plan #14161B (left). A centre pin (ink dot, white ring) is the
+   axis everything turns on.
+   The markup has four card slots, painted back to front (.nl-c3 ... .nl-c0),
+   so the leading card .nl-c0 is always on top and each trailing card lies
+   UNDER the one ahead of it. data-work picks which quadrant leads; the
+   trailing cards are the logo's others in its fixed order (counter-clockwise
+   from the leader), each card always sits at its own logo position.
+   One 4 s loop (--nl-t):
+     0.0-0.2 s  only the pin and the leading card
+     0.2-1.8 s  the leader revolves one turn clockwise round the pin; the
+                cards behind it fan out one after another, each sliding out
+                from under the one ahead, until the circle closes (the logo)
+     1.8-2.8 s  the whole logo spins one turn round the pin
+     2.8-4.0 s  the cards fold back, each sliding under the one ahead, until
+                only the leader is left; repeat
+   data-work (who leads):
+     create  (orange) generating | rendering | retouching | create (default)
+     plan    (ink)    planning | writing | directing | plan
+     learn   (light)  reading | researching | checking | learn
+     produce (grey)   cutting | producing | exporting | sizes | produce
+   data-state: run (default) | finish (the full logo, still: hold it 0.6 s,
+               then show the done state) | queued (the full logo, still)
+   Reduced motion (prefers-reduced-motion, or [data-motion="still"] on any
+   ancestor): the full logo, still; the leading quadrant pulses in opacity.
+   .nl-flat: the full logo, still, no pulse (legends, swatches).
+   .nl-at + style="--nl-at:-1.2s": a paused poster frame at that point. */
+.napkin-loader{display:block;flex-shrink:0;overflow:visible;--nl-t:4s;--nl-h:0deg;--nl-f0:#FF4F2E;--nl-f1:#14161B;--nl-f2:#DADDE3;--nl-f3:#8B919E}
+.napkin-loader[data-work="plan"],.napkin-loader[data-work="planning"],.napkin-loader[data-work="writing"],.napkin-loader[data-work="directing"]{--nl-h:270deg;--nl-f0:#14161B;--nl-f1:#DADDE3;--nl-f2:#8B919E;--nl-f3:#FF4F2E}
+.napkin-loader[data-work="learn"],.napkin-loader[data-work="reading"],.napkin-loader[data-work="researching"],.napkin-loader[data-work="checking"]{--nl-h:180deg;--nl-f0:#DADDE3;--nl-f1:#8B919E;--nl-f2:#FF4F2E;--nl-f3:#14161B}
+.napkin-loader[data-work="produce"],.napkin-loader[data-work="cutting"],.napkin-loader[data-work="producing"],.napkin-loader[data-work="exporting"],.napkin-loader[data-work="sizes"]{--nl-h:90deg;--nl-f0:#8B919E;--nl-f1:#FF4F2E;--nl-f2:#14161B;--nl-f3:#DADDE3}
+.napkin-loader .nl-spin,.napkin-loader .nl-c,.napkin-loader .nl-s{transform-box:view-box;transform-origin:center}
+.napkin-loader .nl-c0{transform:rotate(var(--nl-h))}
+.napkin-loader .nl-c1{transform:rotate(calc(var(--nl-h) - 90deg))}
+.napkin-loader .nl-c2{transform:rotate(calc(var(--nl-h) - 180deg))}
+.napkin-loader .nl-c3{transform:rotate(calc(var(--nl-h) - 270deg))}
+.napkin-loader .nl-c0 .nl-s{fill:var(--nl-f0)}
+.napkin-loader .nl-c1 .nl-s{fill:var(--nl-f1)}
+.napkin-loader .nl-c2 .nl-s{fill:var(--nl-f2)}
+.napkin-loader .nl-c3 .nl-s{fill:var(--nl-f3)}
+.napkin-loader .nl-pin{fill:#14161B;stroke:#FFFFFF;stroke-width:1.5px}
+.napkin-loader .nl-spin{animation:nl-spin var(--nl-t) linear infinite}
+.napkin-loader .nl-s{animation:var(--nl-t) linear infinite}
+.napkin-loader .nl-c0 .nl-s{animation-name:nl-k0}
+.napkin-loader .nl-c1 .nl-s{animation-name:nl-k1}
+.napkin-loader .nl-c2 .nl-s{animation-name:nl-k2}
+.napkin-loader .nl-c3 .nl-s{animation-name:nl-k3}
+.napkin-loader.nl-at .nl-spin,.napkin-loader.nl-at .nl-s{animation-play-state:paused;animation-delay:var(--nl-at,0s)}
+@keyframes nl-k0{0%{transform:rotate(90deg)}7.25%{transform:rotate(90.2deg)}8.75%{transform:rotate(91.1deg)}10.25%{transform:rotate(93deg)}11.75%{transform:rotate(96.3deg)}13.25%{transform:rotate(101.5deg)}14.75%{transform:rotate(109deg)}16%{transform:rotate(117.3deg)}17.25%{transform:rotate(127.6deg)}18.25%{transform:rotate(137.6deg)}19.5%{transform:rotate(152.4deg)}20.5%{transform:rotate(166.3deg)}21.5%{transform:rotate(182deg)}22.5%{transform:rotate(199.8deg)}23.25%{transform:rotate(214.5deg)}24.5%{transform:rotate(240.6deg)}25.75%{transform:rotate(263.8deg)}27%{transform:rotate(283.7deg)}28.25%{transform:rotate(300.7deg)}29.75%{transform:rotate(317.6deg)}31.25%{transform:rotate(330.8deg)}33%{transform:rotate(342.4deg)}34.75%{transform:rotate(350.5deg)}36%{transform:rotate(354.4deg)}37.25%{transform:rotate(357deg)}38.75%{transform:rotate(358.9deg)}40.5%{transform:rotate(359.8deg)}78%{transform:rotate(360deg)}79.75%{transform:rotate(360.5deg)}81.25%{transform:rotate(362deg)}82.5%{transform:rotate(364.4deg)}83.75%{transform:rotate(368.4deg)}84.75%{transform:rotate(372.9deg)}85.75%{transform:rotate(378.8deg)}86.75%{transform:rotate(386.2deg)}87.5%{transform:rotate(392.9deg)}89.25%{transform:rotate(412deg)}90.25%{transform:rotate(421.7deg)}91.5%{transform:rotate(431.2deg)}92.75%{transform:rotate(438.3deg)}94.25%{transform:rotate(444.2deg)}95.75%{transform:rotate(447.7deg)}97.5%{transform:rotate(449.5deg)}100%{transform:rotate(450deg)}}
+@keyframes nl-k1{0%{transform:rotate(180deg);opacity:0}9%{transform:rotate(180deg);opacity:0}9.25%{transform:rotate(180deg);opacity:1}11.25%{transform:rotate(180deg)}13.75%{transform:rotate(180.9deg)}15.25%{transform:rotate(182.7deg)}16.5%{transform:rotate(185.2deg)}17.75%{transform:rotate(189.1deg)}19%{transform:rotate(194.4deg)}20.25%{transform:rotate(201.5deg)}21.25%{transform:rotate(208.6deg)}22.5%{transform:rotate(219.5deg)}23.5%{transform:rotate(229.9deg)}24.75%{transform:rotate(245.5deg)}26%{transform:rotate(268deg)}26.75%{transform:rotate(280deg)}27.5%{transform:rotate(290.9deg)}28.75%{transform:rotate(306.8deg)}30.25%{transform:rotate(322.4deg)}31.5%{transform:rotate(332.7deg)}33%{transform:rotate(342.4deg)}34.5%{transform:rotate(349.5deg)}36.25%{transform:rotate(355deg)}38.5%{transform:rotate(358.7deg)}41%{transform:rotate(359.9deg)}75.5%{transform:rotate(360.1deg)}77.75%{transform:rotate(362.2deg)}79.5%{transform:rotate(366.8deg)}80.75%{transform:rotate(372.6deg)}81.75%{transform:rotate(379.1deg)}83%{transform:rotate(389.9deg)}84%{transform:rotate(401deg)}85%{transform:rotate(414.5deg)}85.75%{transform:rotate(426.5deg)}86.5%{transform:rotate(440deg)}87.75%{transform:rotate(464.7deg)}88.25%{transform:rotate(473.5deg)}89%{transform:rotate(485.5deg)}90.25%{transform:rotate(502deg)}91%{transform:rotate(510.1deg)}91.75%{transform:rotate(517deg)}92.5%{transform:rotate(522.7deg)}93.5%{transform:rotate(528.8deg)}94.25%{transform:rotate(532.2deg)}94.75%{transform:rotate(534.1deg);opacity:1}95%{transform:rotate(534.9deg);opacity:0}95.25%{transform:rotate(535.6deg)}97.25%{transform:rotate(539.1deg)}100%{transform:rotate(540deg);opacity:0}}
+@keyframes nl-k2{0%{transform:rotate(270deg);opacity:0}14.25%{transform:rotate(270deg);opacity:0}14.5%{transform:rotate(270deg);opacity:1}17.5%{transform:rotate(270.1deg)}20%{transform:rotate(271.7deg)}22%{transform:rotate(275deg)}23.25%{transform:rotate(278.5deg)}24.25%{transform:rotate(282.3deg)}25.25%{transform:rotate(287deg)}26.25%{transform:rotate(292.7deg)}27.75%{transform:rotate(303.6deg)}30.5%{transform:rotate(328.4deg)}31.5%{transform:rotate(335.7deg)}32.75%{transform:rotate(343deg)}33.75%{transform:rotate(347.7deg)}35%{transform:rotate(352.3deg)}36.25%{transform:rotate(355.5deg)}37.75%{transform:rotate(358deg)}39.5%{transform:rotate(359.5deg)}41.5%{transform:rotate(360deg)}72%{transform:rotate(360.1deg)}74.25%{transform:rotate(361.9deg)}76%{transform:rotate(366.2deg)}77.5%{transform:rotate(373.3deg)}78.25%{transform:rotate(378.2deg)}79%{transform:rotate(384.2deg)}79.75%{transform:rotate(391.5deg)}80.5%{transform:rotate(400deg)}81.25%{transform:rotate(410deg)}81.75%{transform:rotate(417.4deg)}82.75%{transform:rotate(434.6deg)}83.75%{transform:rotate(454.8deg)}84.75%{transform:rotate(478.4deg)}85.75%{transform:rotate(505.1deg)}86.5%{transform:rotate(523.8deg)}87%{transform:rotate(535.2deg)}87.75%{transform:rotate(550.7deg)}88.5%{transform:rotate(564.4deg)}89.25%{transform:rotate(576.4deg)}90%{transform:rotate(586.8deg)}90.75%{transform:rotate(595.8deg)}91%{transform:rotate(598.5deg);opacity:1}91.25%{transform:rotate(601.1deg);opacity:0}91.75%{transform:rotate(605.8deg)}92.75%{transform:rotate(613.6deg)}93.75%{transform:rotate(619.5deg)}94.75%{transform:rotate(623.8deg)}95.75%{transform:rotate(626.7deg)}97%{transform:rotate(628.8deg)}100%{transform:rotate(630deg);opacity:0}}
+@keyframes nl-k3{0%{transform:rotate(360deg);opacity:0}19.75%{transform:rotate(360deg);opacity:0}20%{transform:rotate(360deg);opacity:1}68.25%{transform:rotate(360deg)}70.75%{transform:rotate(361.4deg)}71.75%{transform:rotate(363.2deg)}72.75%{transform:rotate(366.1deg)}73.75%{transform:rotate(370.2deg)}74.5%{transform:rotate(374.4deg)}75.5%{transform:rotate(381.5deg)}76.25%{transform:rotate(388.1deg)}77.25%{transform:rotate(398.9deg)}78%{transform:rotate(408.6deg)}78.75%{transform:rotate(419.7deg)}79.5%{transform:rotate(432.5deg)}80.25%{transform:rotate(446.9deg)}80.75%{transform:rotate(457.6deg)}81.75%{transform:rotate(481.4deg)}82.5%{transform:rotate(501.6deg)}83%{transform:rotate(516.2deg)}84%{transform:rotate(548.2deg);opacity:1}84.25%{transform:rotate(556.1deg);opacity:0}85%{transform:rotate(574.9deg)}86%{transform:rotate(601.6deg)}86.5%{transform:rotate(613.8deg)}87.25%{transform:rotate(630.6deg)}88.25%{transform:rotate(650deg)}89%{transform:rotate(662.6deg)}90%{transform:rotate(676.8deg)}91%{transform:rotate(688.5deg)}92%{transform:rotate(697.9deg)}93%{transform:rotate(705.2deg)}94.25%{transform:rotate(711.8deg)}95.5%{transform:rotate(716.1deg)}96.75%{transform:rotate(718.5deg)}98.25%{transform:rotate(719.8deg)}100%{transform:rotate(720deg);opacity:0}}
+@keyframes nl-spin{0%,42.5%{transform:rotate(0deg);animation-timing-function:cubic-bezier(.65,0,.35,1)}67.5%,100%{transform:rotate(360deg)}}
+@keyframes nl-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.napkin-loader[data-state="finish"] .nl-spin,.napkin-loader[data-state="finish"] .nl-s,.napkin-loader[data-state="queued"] .nl-spin,.napkin-loader[data-state="queued"] .nl-s,.napkin-loader.nl-flat .nl-spin,.napkin-loader.nl-flat .nl-s{animation:none;transform:none;opacity:1}
+[data-motion="still"] .napkin-loader:not(.nl-at) .nl-spin,[data-motion="still"] .napkin-loader:not(.nl-at) .nl-s{animation:none;transform:none;opacity:1}
+[data-motion="still"] .napkin-loader:not(.nl-at):not(.nl-flat):not([data-state="finish"]):not([data-state="queued"]) .nl-c0 .nl-s{animation:nl-pulse 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){
+.napkin-loader:not(.nl-at) .nl-spin,.napkin-loader:not(.nl-at) .nl-s{animation:none;transform:none;opacity:1}
+.napkin-loader:not(.nl-at):not(.nl-flat):not([data-state="finish"]):not([data-state="queued"]) .nl-c0 .nl-s{animation:nl-pulse 2.4s ease-in-out infinite}
+}
+/* /napkin-loader */
+
+/* The busy pointer (ui-behaviour 6.7): positioned by transform on pointermove, never in the way. */
+.busy-pointer { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; display: flex; align-items: center; gap: 6px; will-change: transform; }
+.busy-pointer .bp-disc { width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(20, 22, 27, 0.25); }
+.busy-pointer .bp-count { position: absolute; left: 12px; top: -6px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--ink-fixed, #14161B); color: #FFFFFF; font: 600 9px/14px var(--f-mono); text-align: center; }
+.busy-pointer .bp-label { padding: 3px 10px; border-radius: 999px; background: #14161B; color: #FFFFFF; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+@media (hover: none) { .busy-pointer { display: none; } }
