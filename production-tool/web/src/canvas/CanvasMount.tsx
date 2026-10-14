@@ -99,7 +99,7 @@ export function CanvasMount({ initial, onReady, onChrome, onChange, theme, railI
   return (
     <div ref={host} style={{ position: 'absolute', inset: 0 }}>
       {own && <NodeLayer canvas={own} tick={tick} />}
-      {own && <BoardLayer canvas={own} inset={railInset} />}
+      {own && <BoardLayer canvas={own} inset={railInset} tick={tick} />}
     </div>
   )
 }

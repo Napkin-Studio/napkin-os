@@ -1,20 +1,43 @@
-// The boards on our own canvas (features/art-boards.clan): seeds the Ad template's
-// seven boards once (document boards and board frames, with the nodes in theirs)
-// and takes the rail's ⌥1…⌥9 and ⌥0 jumps onto the real frames. It draws
-// nothing itself: the engine draws the frames; the rail is the chrome's.
+// The boards on our own canvas (features/art-boards.clan; ui-behaviour 3.2): seeds
+// the Ad template's seven boards once (document boards and board frames, with the
+// nodes in theirs), takes the rail's ⌥1…⌥9 and ⌥0 jumps onto the real frames, keeps
+// the document's boards in step with the frames (a deleted board leaves the rail;
+// undo brings it back), makes boards ("+ New board", the Board tool B and a drag)
+// with their title open in place and a purpose picker, renames a board on a
+// double-click of its title, and asks before deleting a board with things on it.
+// The engine draws the frames; the rail is the chrome's.
 
-import { useEffect, useRef } from 'react'
-import { useServices } from '../../app/context'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useDoc, useServices } from '../../app/context'
 import { systemUpdate } from '../../doc/store'
-import type { CanvasAdapter } from '../core/canvasAdapter'
-import { boardKey, jumpTo, seedBoards } from './boards'
+import type { Board, BoardPurpose } from '../../contracts/types'
+import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
+import { canvasActions, toolLetter } from '../chrome/actions'
+import { boardIdOf, boardKey, contentsOf, deleteBoards, isBoard, jumpTo, newBoard, NEW_BOARD, PURPOSES, reconcileBoards, seedBoards } from './boards'
+import './boards.css'
 
-export function BoardLayer({ canvas, inset = 0 }: { canvas: CanvasAdapter; inset?: number }) {
+type Local = { x: number; y: number }
+type FrameEl = CanvasElement & { name?: string; purpose?: string }
+/** A drag smaller than this (screen pixels) makes a board of the default size where it started. */
+const MIN_DRAG = 24
+const typing = (t: EventTarget | null) => !!(t as { closest?: (s: string) => unknown } | null)?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+
+export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdapter; inset?: number; tick?: number }) {
   const keep = useRef(inset)
   useEffect(() => {
     keep.current = inset
   }, [inset])
+  const root = useRef<HTMLDivElement>(null)
   const services = useServices()
+  const doc = useDoc()
+  const mode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode())
+  const memory = useRef(new Map<string, Board>())
+  // The board whose title is open in place, and whether it was just made (its purpose picker shows).
+  const [editing, setEditing] = useState<{ frameId: string; fresh: boolean } | null>(null)
+  // A board delete waiting on the question (ui-behaviour 3.2).
+  const [asking, setAsking] = useState<{ frames: string[]; also: string[]; count: number } | null>(null)
+  const [draw, setDraw] = useState<{ a: Pt; b: Pt } | null>(null)
+  void tick
 
   useEffect(() => {
     const seeded = seedBoards(canvas, services.doc.get())
@@ -38,5 +61,238 @@ export function BoardLayer({ canvas, inset = 0 }: { canvas: CanvasAdapter; inset
     return () => window.removeEventListener('keydown', onKey)
   }, [canvas, services])
 
-  return null
+  // The document's boards follow the frames: a delete, its undo, a rename (system writes: the
+  // person's step is the frame's).
+  useEffect(() => {
+    const { remove, restore, retitle } = reconcileBoards(canvas.elements(), doc, memory.current)
+    if (!remove.length && !restore.length && !retitle.length) return
+    void systemUpdate(services.doc, (d) => {
+      for (const id of remove) delete d.boards[id]
+      for (const b of restore) d.boards[b.id] = b
+      for (const r of retitle) {
+        const b = d.boards[r.id]
+        if (!b) continue
+        b.title = r.title
+        if (r.purpose) b.purpose = r.purpose
+      }
+    }, remove.length ? 'remove a board' : restore.length ? 'restore a board' : 'rename a board').catch((e) => console.warn('could not keep the boards in step', e))
+  }, [canvas, doc, services, tick])
+
+  /** Make a board: its document entry first (so the rail never lists a frame without one), then its frame. */
+  const create = useCallback(async (rect?: { x: number; y: number; w: number; h: number }, jump = true) => {
+    const { board, frame } = newBoard(canvas, services.doc.get(), rect ? { rect } : {})
+    await systemUpdate(services.doc, (d) => { d.boards[board.id] = board }, 'add a board')
+    memory.current.set(board.id, board)
+    canvas.transact((els) => [frame, ...els], { undoable: true })
+    canvas.select([])
+    if (jump) canvasActions.pickWhenListed(board.id)
+    setEditing({ frameId: frame.id, fresh: true })
+  }, [canvas, services])
+
+  useEffect(() => canvasActions.register({
+    board: () => void create().catch((e) => console.warn('the board was not made', e)),
+  }), [create])
+
+  /** Give the keys back to the canvas (its undo, Delete, tool letters) once a question or a field closes. */
+  const refocus = () => (root.current?.parentElement?.querySelector(':scope > [tabindex]') as HTMLElement | null)?.focus({ preventScroll: true })
+  const view = canvas.view()
+  const toLocal = (p: Pt): Local => ({ x: (p.x + view.scrollX) * view.zoom, y: (p.y + view.scrollY) * view.zoom })
+  const fromClient = (cx: number, cy: number) => canvas.viewportToScene({ x: cx, y: cy }, canvas.view())
+  const frameById = (id: string) => canvas.elements().find((e) => e.id === id && isBoard(e)) as FrameEl | undefined
+  const titleAt = (p: Pt) => {
+    const z = canvas.view().zoom
+    return canvas.elements().filter((e) => isBoard(e) && p.x >= e.x && p.x <= e.x + e.width && p.y >= e.y - 28 / z && p.y <= e.y + 4 / z).at(-1)
+  }
+
+  // Keys: B the Board tool; Delete on a selected board asks first when things sit on it; Esc closes.
+  // Capture, so the question comes before the engine's own Delete.
+  useEffect(() => {
+    const host = root.current?.parentElement
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (asking || draw || canvasActions.mode() === 'board') {
+          e.preventDefault()
+          if (asking) refocus()
+          setAsking(null)
+          setDraw(null)
+          canvasActions.setMode(null)
+        }
+        return
+      }
+      if (toolLetter(e) === 'b') {
+        e.preventDefault()
+        canvasActions.toggle('board')
+        return
+      }
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      // Only where the engine's own Delete would act: a key on the canvas, not in a field.
+      if (!host || !(e.target instanceof Node) || !host.contains(e.target) || typing(e.target)) return
+      const sel = canvas.view().selectedIds
+      const els = canvas.elements()
+      const frames = sel.filter((id) => els.some((x) => x.id === id && isBoard(x)))
+      if (!frames.length) return
+      e.preventDefault()
+      e.stopPropagation()
+      const also = sel.filter((id) => !frames.includes(id))
+      const count = frames.flatMap((f) => contentsOf(els, f)).filter((x) => !sel.includes(x.id)).length
+      if (!count) deleteBoards(canvas, frames, false, also)
+      else setAsking({ frames, also, count })
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [canvas, asking, draw])
+
+  // Double-click a board's title to rename it in place (ui-behaviour 3.2 Rename).
+  useEffect(() => {
+    const host = root.current?.parentElement
+    if (!host) return
+    const onDbl = (e: MouseEvent) => {
+      const f = titleAt(fromClient(e.clientX, e.clientY))
+      if (!f) return
+      e.preventDefault()
+      e.stopPropagation()
+      setEditing({ frameId: f.id, fresh: false })
+    }
+    host.addEventListener('dblclick', onDbl, true)
+    return () => host.removeEventListener('dblclick', onDbl, true)
+  })
+
+  const rename = (frameId: string, title: string) => {
+    const f = frameById(frameId)
+    const t = title.trim()
+    if (!f || !t || t === f.name) return
+    canvas.transact((els) => els.map((e) => (e.id === frameId ? canvas.patch(e, { name: t } as Partial<CanvasElement>) : e)), { undoable: true })
+  }
+  const setPurpose = (frameId: string, purpose: BoardPurpose) => {
+    const f = frameById(frameId)
+    if (!f || f.purpose === purpose) return
+    canvas.transact((els) => els.map((e) => (e.id === frameId ? canvas.patch(e, { purpose } as Partial<CanvasElement>) : e)), { undoable: true })
+  }
+
+  // The Board tool's surface: drag out a board, or click for one of the default size.
+  const at = (e: React.PointerEvent): Pt => fromClient(e.clientX, e.clientY)
+  const down = (e: React.PointerEvent) => {
+    e.preventDefault()
+    ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    const p = at(e)
+    setDraw({ a: p, b: p })
+  }
+  const move = (e: React.PointerEvent) => {
+    if (draw) setDraw({ ...draw, b: at(e) })
+  }
+  const up = (e: React.PointerEvent) => {
+    if (!draw) return
+    const b = at(e)
+    setDraw(null)
+    canvasActions.setMode(null)
+    const z = canvas.view().zoom
+    const w = Math.abs(b.x - draw.a.x)
+    const h = Math.abs(b.y - draw.a.y)
+    const rect = w * z < MIN_DRAG || h * z < MIN_DRAG
+      ? { x: draw.a.x, y: draw.a.y, ...NEW_BOARD }
+      : { x: Math.min(draw.a.x, b.x), y: Math.min(draw.a.y, b.y), w, h }
+    void create(rect, false).catch((err) => console.warn('the board was not made', err))
+  }
+
+  /** The delete question's answer: the board only, all of it, or neither (null). */
+  const answer = (all: boolean | null) => {
+    if (asking && all !== null) deleteBoards(canvas, asking.frames, all, asking.also)
+    setAsking(null)
+    refocus()
+  }
+
+  const editFrame = editing ? frameById(editing.frameId) : undefined
+  const editBoard = editFrame ? doc.boards?.[boardIdOf(editFrame) ?? ''] : undefined
+  const askFrame = asking ? frameById(asking.frames[0]) : undefined
+  return (
+    <div className="board-layer" ref={root}>
+      {mode === 'board' && (
+        <div className="bd-tool" role="application" aria-label="Board tool: drag out a board, or click for one" onPointerDown={down} onPointerMove={move} onPointerUp={up}>
+          <div className="bd-hint" role="status"><b>Board</b><span>Drag out a board, or click for one</span><span className="bd-key">Esc cancels</span></div>
+        </div>
+      )}
+      {draw && (() => {
+        const a = toLocal({ x: Math.min(draw.a.x, draw.b.x), y: Math.min(draw.a.y, draw.b.y) })
+        return <div className="bd-draft" style={{ left: a.x, top: a.y, width: Math.abs(draw.b.x - draw.a.x) * view.zoom, height: Math.abs(draw.b.y - draw.a.y) * view.zoom }} />
+      })()}
+      {editFrame && (
+        <TitleEditor key={editFrame.id} at={toLocal({ x: editFrame.x, y: editFrame.y })} width={editFrame.width * view.zoom}
+          room={(canvas.visibleBounds().maxY - editFrame.y) * view.zoom}
+          title={editFrame.name || editBoard?.title || 'New board'} purpose={(editFrame.purpose as BoardPurpose | undefined) ?? editBoard?.purpose ?? 'none'} fresh={editing!.fresh}
+          onTitle={(t) => rename(editFrame.id, t)} onPurpose={(p) => setPurpose(editFrame.id, p)} onDone={() => { setEditing(null); refocus() }} />
+      )}
+      {asking && askFrame && (() => {
+        const p = toLocal({ x: askFrame.x, y: askFrame.y })
+        const n = asking.frames.length
+        const things = `${asking.count} ${asking.count === 1 ? 'thing' : 'things'}`
+        return (
+          <div className="bd-ask pt-panel" role="alertdialog" aria-label="Delete the board?" style={{ left: Math.max(8, p.x), top: Math.max(8, p.y + 8) }}>
+            <p>{n === 1 ? `Delete the board and the ${things} on it?` : `Delete ${n} boards and the ${things} on them?`}</p>
+            <div className="bd-row">
+              <button type="button" className="btn sm" autoFocus onClick={() => answer(false)}>Delete board only</button>
+              <button type="button" className="btn sm danger" onClick={() => answer(true)}>Delete all</button>
+              <button type="button" className="btn sm ghost" onClick={() => answer(null)}>Cancel</button>
+            </div>
+            <span className="bd-note">{n === 1 ? 'Delete board only keeps what is on it, on no board.' : 'Delete boards only keeps what is on them, on no board.'}</span>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+/** A board's title, open in place, with its purpose when it was just made (ui-behaviour 3.2). */
+function TitleEditor({ at, width, room, title, purpose, fresh, onTitle, onPurpose, onDone }: {
+  at: Local
+  width: number
+  /** Screen pixels below the title: too few, and the purpose picker opens above it. */
+  room: number
+  title: string
+  purpose: BoardPurpose
+  fresh: boolean
+  onTitle: (t: string) => void
+  onPurpose: (p: BoardPurpose) => void
+  onDone: () => void
+}) {
+  const [value, setValue] = useState(title)
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    input.current?.focus()
+    input.current?.select()
+  }, [])
+  const commit = () => onTitle(value)
+  return (
+    <div className={`bd-edit ${room < 260 ? 'above' : ''}`} style={{ left: at.x, top: at.y - 14, minWidth: Math.min(Math.max(width, 260), 420) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation()
+          onDone()
+        }
+      }}>
+      <input ref={input} className="bd-title" aria-label="Board title" value={value} maxLength={80}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit()
+            if (!fresh) onDone()
+          }
+        }}
+        onBlur={() => {
+          commit()
+          if (!fresh) onDone()
+        }} />
+      {fresh && (
+        <div className="bd-purpose pt-panel" role="radiogroup" aria-label="What the board is for">
+          <span className="pt-label">What is it for?</span>
+          <div className="bd-chips">
+            {PURPOSES.map((p) => (
+              <button key={p.purpose} type="button" role="radio" aria-checked={purpose === p.purpose} className={`bd-chip ${purpose === p.purpose ? 'on' : ''}`}
+                onMouseDown={(e) => e.preventDefault()} onClick={() => onPurpose(p.purpose)}>{p.label}</button>
+            ))}
+          </div>
+          <button type="button" className="btn sm primary" onMouseDown={(e) => e.preventDefault()} onClick={() => { commit(); onDone() }}>Done</button>
+        </div>
+      )}
+    </div>
+  )
 }
