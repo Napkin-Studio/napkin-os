@@ -35,7 +35,6 @@ import functools
 import json
 import os
 import re
-import shutil
 import sys
 from pathlib import Path
 
@@ -45,8 +44,6 @@ import engine_env  # noqa: E402
 engine_env.load()
 import brief_llm  # noqa: E402
 from brief_llm import (  # noqa: E402,F401
-    CLI_FALLBACK_TTL_S,
-    CLI_TIMEOUT_S,
     GROUNDED_FIELDS,
     HAIKU,
     HERO_FIELDS,
@@ -61,9 +58,6 @@ from brief_llm import (  # noqa: E402,F401
     ROUTE_EFFORT,
     THINKING_HEADROOM,
     _CHAIN_LOGGED,
-    _CLI_DEFAULT_EFFORT,
-    _CLI_FALLBACK,
-    _CLI_FALLBACK_LOCK,
     _COOLDOWN_SECS,
     _DEFAULT_CHAIN,
     _EFFORT_TL,
@@ -81,14 +75,10 @@ from brief_llm import (  # noqa: E402,F401
     _THINKING_MODELS,
     _Truncated,
     _allow_nonclaude,
-    _api_account_failure,
     _call_link,
     _chat,
     _chat_anthropic,
-    _chat_claude_cli,
     _chat_openai_compatible,
-    _claude_transport,
-    _cli_fallback_active,
     _cooldown,
     _json_call,
     _ledger,
@@ -105,7 +95,6 @@ from brief_llm import (  # noqa: E402,F401
     _stats_scope,
     _stats_snapshot,
     _stats_usage,
-    _switch_to_cli,
     _thinking_headroom,
     judge_route,
     list_models,
@@ -3142,22 +3131,15 @@ def _warm_validator() -> None:
 
 def _require_claude(provider: str) -> None:
     """Raise NoClaudeAvailable when the lead provider is anthropic, non-Claude links are not
-    allowed (BRIEF_ALLOW_NONCLAUDE unset) and the chosen transport has no way to reach Claude:
-    `api` needs ANTHROPIC_API_KEY, `cli` needs the `claude` CLI, `auto` needs either. A
-    no-op for any other provider. Checked once at the start of run()."""
-    if provider != "anthropic" or _allow_nonclaude():
-        return
-    t = _claude_transport()
-    have_key, have_cli = bool(os.environ.get("ANTHROPIC_API_KEY")), bool(shutil.which("claude"))
-    if (t == "api" and have_key) or (t == "cli" and have_cli) or (t == "auto" and (have_key or have_cli)):
+    allowed (BRIEF_ALLOW_NONCLAUDE unset) and there is no ANTHROPIC_API_KEY: the real key, or
+    `local` from scripts/model-local's env (the one local model backend, on the developer's
+    Claude Code login). A no-op for any other provider. Checked once at the start of run()."""
+    if provider != "anthropic" or _allow_nonclaude() or os.environ.get("ANTHROPIC_API_KEY"):
         return
     raise NoClaudeAvailable(
-        f"no Claude available on transport '{t}': "
-        + ("set ANTHROPIC_API_KEY" if t == "api" else
-           "install and log in to Claude Code (`claude`)" if t == "cli" else
-           "set ANTHROPIC_API_KEY or install Claude Code")
-        + ", or BRIEF_CLAUDE_TRANSPORT=cli|auto, or BRIEF_ALLOW_NONCLAUDE=1 to let a non-Claude "
-          "link write the brief (not for production).")
+        "no Claude available: set ANTHROPIC_API_KEY, or run on your Claude Code login through the "
+        "local model backend (scripts/model-local run …, or source scripts/model-local-env.sh), or "
+        "BRIEF_ALLOW_NONCLAUDE=1 to let a non-Claude link write the brief (not for production).")
 
 
 class _Inline:

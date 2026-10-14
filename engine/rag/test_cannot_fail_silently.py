@@ -503,20 +503,16 @@ def test_anthropic_pin_has_no_silent_nonclaude_links(monkeypatch):
 
 
 def test_run_raises_a_clear_error_with_no_route_to_claude(monkeypatch):
-    """Claude-only chain, transport api, no key, no CLI: run() raises NoClaudeAvailable
-    before any call — never a brief written by another model."""
+    """Claude-only chain, no key: run() raises NoClaudeAvailable before any call, naming the
+    local model backend as the way onto the Claude Code login — never a brief written by
+    another model."""
     monkeypatch.setenv("BRIEF_PROVIDER", "anthropic")
-    monkeypatch.setenv("BRIEF_CLAUDE_TRANSPORT", "api")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("BRIEF_ALLOW_NONCLAUDE", raising=False)
-    monkeypatch.setattr(pb.shutil, "which", lambda name: None)
-    with pytest.raises(pb.NoClaudeAvailable, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(pb.NoClaudeAvailable, match="ANTHROPIC_API_KEY.*scripts/model-local"):
         pb.run(None, raw_text=BRIEF)
-    monkeypatch.setenv("BRIEF_CLAUDE_TRANSPORT", "cli")
-    with pytest.raises(pb.NoClaudeAvailable, match="Claude Code"):
-        pb.run(None, raw_text=BRIEF)
-    monkeypatch.setattr(pb.shutil, "which", lambda name: "/usr/local/bin/claude")
-    pb._require_claude("anthropic")                    # cli + claude installed: fine
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "local")
+    pb._require_claude("anthropic")                    # the local backend's key: fine
 
 
 def _stub_capture(monkeypatch, answered=()):
@@ -840,7 +836,6 @@ def test_a_run_where_no_claude_call_answered_is_an_error(monkeypatch):
         pb._stats_call(f"anthropic:{model}", 10)
         raise RuntimeError("usage limit reached")
     monkeypatch.setattr(pb, "_chat_anthropic", dead)
-    monkeypatch.setenv("BRIEF_CLAUDE_TRANSPORT", "api")
     try:
         pb.run(None, raw_text="Acme sells packs. The brief is short.", golden=True)
     except pb.NoClaudeAvailable as e:

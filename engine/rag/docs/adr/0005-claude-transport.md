@@ -1,8 +1,18 @@
 # ADR 0005 — Claude transport: API key or Claude Code login, switchable per run
 
-Status: accepted (Sai, 2026-09-24) · Code: `engine/parse_brief.py` (`_claude_transport`,
-`_chat_claude_cli`, `_call_link`, `transport_used`), `serve.py`, `engine/rag/e2e_eval.py` ·
-Tests: `engine/rag/test_claude_cli_transport.py`
+Status: **superseded 2026-10-15** (features/model-mock.clan, approved by Shrey) · was accepted
+(Sai, 2026-09-24)
+
+> **Superseded.** `BRIEF_CLAUDE_TRANSPORT`, `_chat_claude_cli`, the `auto` switch and
+> `e2e_eval.py --transport` are gone. Every `anthropic:` link now goes over the Messages API
+> (`_chat_anthropic`); to run on the Claude Code login, point it at the one local model
+> backend: `scripts/model-local run …` (or source `scripts/model-local-env.sh` / `.fish`) sets
+> `ANTHROPIC_BASE_URL=http://127.0.0.1:8797` and `ANTHROPIC_API_KEY=local`, and mock-backend
+> answers through `claude -p` (docs/contracts/peripherals.md §5). `serve.py --claude-code` does
+> this. `meta.claude_transport` is now `local` or `api`. What the engine's own wrapper did that
+> the mock does not: thinking off for Opus 4.6 (`MAX_THINKING_TOKENS=0`) and an output cap
+> through `CLAUDE_CODE_MAX_OUTPUT_TOKENS`; the mock applies `max_tokens` after the reply instead
+> (mock-backend/README.md, Divergences). The rest of this record is the history.
 
 ## Context
 

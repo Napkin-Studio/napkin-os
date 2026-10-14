@@ -127,6 +127,17 @@ def _corpus_track(gist: dict) -> list[dict]:
     return findings
 
 
+def cli_env() -> dict:
+    """The environment for this tool-using `claude -p` run: the parent's, minus the variables that
+    point the engine's own Messages calls at the local model backend (scripts/model-local) or bill a
+    key. The CLI runs on the developer's Claude Code login, and a WebSearch run cannot go through
+    the backend, which refuses tools."""
+    env = {**os.environ}
+    for k in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"):
+        env.pop(k, None)
+    return env
+
+
 def _web_track(gist: dict) -> list[dict]:
     """Return live web findings for the brief's client/market/problem/competitors, by shelling
     out to headless `claude -p` with WebSearch, when RESEARCH_WEB=claude; otherwise returns [].
@@ -147,7 +158,7 @@ def _web_track(gist: dict) -> list[dict]:
         proc = subprocess.run(
             ["claude", "-p", prompt, "--output-format", "json",
              "--allowedTools", "WebSearch", "--max-turns", "6"],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True, text=True, timeout=180, env=cli_env(),
         )
         if proc.returncode != 0:
             print(f"[i] web track: claude exited {proc.returncode}", file=sys.stderr)

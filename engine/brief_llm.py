@@ -8,9 +8,10 @@ Everything between a pipeline stage and a model's reply lives here:
   model routes              ROUTES / ROUTE_EFFORT / route_models: each call names its job and
                             the job picks [model, fallback]; a judge never runs on its writer
                             (ADR 0011)
-  transports                _chat_anthropic (API key), _chat_claude_cli (the Claude Code
-                            login, `claude -p`), _chat_openai_compatible (NIM, Groq, Cerebras,
-                            Gemini, OpenAI, Ollama); BRIEF_CLAUDE_TRANSPORT picks api | cli | auto
+  transports                _chat_anthropic (the Messages API: the key, or, locally, the one
+                            local model backend that ANTHROPIC_BASE_URL points at, answered by
+                            `claude -p` on the developer's login: scripts/model-local),
+                            _chat_openai_compatible (NIM, Groq, Cerebras, Gemini, OpenAI, Ollama)
   calls                     _call_link (one link), _json_call (a chain walk that must return
                             JSON: retries, truncation, refusals, accept checks), _chat (text)
   JSON readers              _loads_lenient (whole-object or salvaging)
@@ -220,8 +221,8 @@ class _NoEvidence(RuntimeError):
 
 
 class NoClaudeAvailable(RuntimeError):
-    """The chain is Claude-only and no route to Claude exists (no API key for transport
-    api, no `claude` CLI for transport cli). Raised by run() before any call, so a brief is
+    """The chain is Claude-only and no route to Claude exists (no ANTHROPIC_API_KEY: the real
+    key, or `local` from scripts/model-local's env). Raised by run() before any call, so a brief is
     never quietly written by another model (Sai, 2026-09-25), and at the end of a run in
     which not one Claude call answered, so a heuristic brief is never returned as normal."""
 
@@ -558,24 +559,6 @@ def _model_chain(model=None) -> list:
     return live or chain
 
 
-# BRIEF_CLAUDE_TRANSPORT=cli sends every `anthropic:` link through the Claude Code CLI
-# (`claude -p`, the logged-in Claude Code account) instead of the API key — the route
-# serve.py already uses for the mock agent. Chains, model pins, labels and pricing are
-# unchanged, so a run is comparable with an API run; only the transport differs. Parity
-# with the API path: no tools, one turn, no session file, no user/project settings or MCP
-# servers; thinking off for models that do not think by default on the API (Opus 4.6), and
-# the API's default effort for those that do (Opus 5.5 medium, others high); the caller's
-# max_tokens (plus the same thinking headroom) as the output cap.
-CLI_TIMEOUT_S = float(os.environ.get("BRIEF_CLI_TIMEOUT", "240"))
-# A --json-schema call answers through Claude Code's structured-output tool, which takes a
-# turn of its own, and takes another when its first reply does not match the schema. At
-# --max-turns 1 such a call ended "claude CLI failed (exit 1)" with stop_reason tool_use
-# (2026-09-28: 2 of 3 judge rounds lost, a synthesis pushed to its fallback). With no
-# other tools offered (--tools ""), extra turns can only be structured-output attempts.
-CLI_SCHEMA_TURNS = "3"
-_CLI_DEFAULT_EFFORT = {"claude-opus-5-5": "medium"}
-
-
 # ---------------------------------------------------------------------------
 # Model routes (Sai, 2026-09-26; ADR 0011). Each call names its JOB, and the job picks
 # the model: one model everywhere forced one trade-off everywhere (Opus 4.6 invents
@@ -639,176 +622,25 @@ def model_routes() -> dict:
     return {r: route_models(r) for r in ROUTES} if routes_active() else {}
 
 
-# Set once `auto` has switched this process to the CLI (credit/auth failure on the API).
-# The switch expires after CLI_FALLBACK_TTL_S so a server re-checks the API instead of
-# staying on the slower CLI until restart after one auth hiccup (audit critic-G11).
-_CLI_FALLBACK = {"on": False, "since": 0.0}
-_CLI_FALLBACK_LOCK = threading.Lock()
-CLI_FALLBACK_TTL_S = float(os.environ.get("BRIEF_CLI_FALLBACK_TTL", "600"))
-
-
-def _switch_to_cli(reason: str) -> None:
-    """Move every later `anthropic:` call in this process to the CLI (transport `auto`)
-    for CLI_FALLBACK_TTL_S seconds, announcing it once on stderr. Idempotent and
-    thread-safe: parallel calls that fail at the same moment switch once and print once."""
-    import time
-    with _CLI_FALLBACK_LOCK:
-        if _cli_fallback_active():
-            return
-        _CLI_FALLBACK["on"] = True
-        _CLI_FALLBACK["since"] = time.monotonic()
-    print(f"[!] BRIEF_CLAUDE_TRANSPORT=auto: the API key cannot be used ({reason}); "
-          f"this process continues on the Claude Code CLI for {int(CLI_FALLBACK_TTL_S)} s, "
-          f"then re-tries the API.", file=sys.stderr)
-
-
-def _cli_fallback_active() -> bool:
-    """True while an `auto` switch to the CLI is in force (set and younger than the TTL)."""
-    import time
-    if not _CLI_FALLBACK.get("on"):
-        return False
-    if time.monotonic() - float(_CLI_FALLBACK.get("since") or 0.0) > CLI_FALLBACK_TTL_S:
-        _CLI_FALLBACK["on"] = False
-        return False
-    return True
-
-
-def _claude_transport() -> str:
-    """The transport for `anthropic:` links, from BRIEF_CLAUDE_TRANSPORT:
-      api   the API key (the default; unchanged behaviour),
-      cli   the Claude Code CLI (`claude -p`, the logged-in account),
-      auto  the API, switching this process to the CLI on a credit or auth failure, or
-            straight away when no ANTHROPIC_API_KEY is set but `claude` is installed.
-    Anything else reads as 'api', so a typo never silently moves traffic."""
-    t = os.environ.get("BRIEF_CLAUDE_TRANSPORT", "").strip().lower()
-    return t if t in ("api", "cli", "auto") else "api"
-
-
-def _api_account_failure(exc: Exception) -> bool:
-    """True when an API error means the KEY cannot be used (no credit, bad or missing key),
-    as opposed to a transient or request error that the next chain link should handle."""
-    name, msg = exc.__class__.__name__, str(exc)
-    return (name in ("AuthenticationError", "PermissionDeniedError")
-            or (name == "BadRequestError" and "credit balance" in msg.lower())
-            or isinstance(exc, KeyError) and "ANTHROPIC_API_KEY" in msg)
-
-
 def transport_used() -> str:
-    """What `anthropic:` links actually ran on in this process: 'api', 'cli', or
-    'api→cli' once `auto` has switched. Written into run outputs so API and Claude Code
-    runs are never compared as if they were the same thing."""
-    t = _claude_transport()
-    if t == "auto":
-        return "api→cli" if _cli_fallback_active() else "api"
-    return t
-
-
-_CLI_WORKDIR: str | None = None
-
-
-def _cli_workdir() -> str:
-    """The folder every `claude -p` call runs in: an empty temp folder made once per
-    process. Claude Code adds context about the folder it starts in, and from ~ (used until
-    2026-09-29) that included the home folder's auto-memory (MEMORY.md with personal notes),
-    about 110 input tokens on every brief call and text the brief has no business seeing
-    (audit N7, measured through a logging proxy). What remains cannot be switched off without
-    --bare, which needs an API key: a billing line, an Agent SDK identity line, the folder,
-    platform, model name, account email and date, about 375 tokens a call."""
-    global _CLI_WORKDIR
-    if _CLI_WORKDIR is None or not os.path.isdir(_CLI_WORKDIR):
-        import tempfile
-        _CLI_WORKDIR = tempfile.mkdtemp(prefix="napkin-engine-cli-")
-    return _CLI_WORKDIR
-
-
-def _chat_claude_cli(user, system=None, max_tokens=None, schema=None, model=None):
-    """The Anthropic link over the Claude Code CLI: one `claude -p` call, prompt on stdin.
-
-    Returns the reply text (for a `schema` call, the CLI's validated structured output
-    re-serialised as JSON, so _json_call parses it the same way). Raises _RateLimited when
-    the account's usage limit is hit and RuntimeError on any other failure, so the chain
-    advances exactly as it does for an API error. Usage is recorded under the same
-    `anthropic:<model>` label as the API path, with the CLI's own token counts."""
-    import shutil
-    import subprocess
-    model = model or model_for("anthropic")
-    if not shutil.which("claude"):
-        raise RuntimeError("claude CLI not on PATH (BRIEF_CLAUDE_TRANSPORT=cli)")
-    _stats_call(f"anthropic:{model}", len(system or DEFAULT_SYSTEM) + len(user))
-    cmd = ["claude", "-p", "--model", model, "--system-prompt", system or DEFAULT_SYSTEM,
-           "--tools", "", "--max-turns", CLI_SCHEMA_TURNS if schema else "1", "--output-format", "json",
-           "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config"]
-    env = {**os.environ,
-           "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(int(max_tokens or MAXTOK_EXTRACT) + _thinking_headroom(model))}
-    if _thinking_headroom(model):
-        cmd += ["--effort", os.environ.get("BRIEF_CLI_EFFORT") or getattr(_EFFORT_TL, "effort", None)
-                or _CLI_DEFAULT_EFFORT.get(model, "high")]
-    else:
-        env["MAX_THINKING_TOKENS"] = "0"          # the API path does not think on these models
-    if schema:
-        cmd += ["--json-schema", json.dumps(schema)]
-    # The CLI must not inherit an API key: with one set it bills the key (which may have no
-    # credit) instead of the logged-in account this transport exists to use.
-    env.pop("ANTHROPIC_API_KEY", None)
-    try:
-        proc = subprocess.run(cmd, input=user, capture_output=True, text=True,
-                              timeout=CLI_TIMEOUT_S, env=env, cwd=_cli_workdir())
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"claude CLI timed out after {CLI_TIMEOUT_S:.0f}s") from e
-    try:
-        env_out = json.loads(proc.stdout or "{}")
-    except json.JSONDecodeError:
-        env_out = {}
-    if proc.returncode != 0 or env_out.get("is_error") or env_out.get("subtype") not in (None, "success"):
-        detail = str(env_out.get("result") or proc.stderr or proc.stdout or "")[:300]
-        if re.search(r"usage limit|rate limit|429|overloaded", detail, re.I):
-            raise _RateLimited(f"claude CLI: {detail}")
-        raise RuntimeError(f"claude CLI failed (exit {proc.returncode}): {detail}")
-    so = env_out.get("structured_output")
-    text = json.dumps(so, ensure_ascii=False) if (schema and so is not None) else str(env_out.get("result") or "")
-    u = env_out.get("usage") or {}
-    # Cache reads and writes are recorded apart from the uncached input: they are priced
-    # differently (reads at 0.1x), and folding them into prompt_tokens overstated CLI runs
-    # by ~35-40% (audit BW13/CC9).
-    _stats_usage({"prompt_tokens": int(u.get("input_tokens") or 0),
-                  "completion_tokens": int(u.get("output_tokens") or 0),
-                  "cache_read_tokens": int(u.get("cache_read_input_tokens") or 0),
-                  "cache_creation_tokens": int(u.get("cache_creation_input_tokens") or 0)}, len(text))
-    stop = env_out.get("stop_reason")
-    if stop == "max_tokens" or re.search(r"exceeded .*output token", text[:200], re.I):
-        _stats_bump("truncations")
-        raise _Truncated(f"claude-cli:{model}: reply hit the output cap")
-    if stop == "refusal":
-        _stats_bump("refusals")
-        raise _Refused(f"claude-cli:{model}: the model declined")
-    if not text:
-        print(f"[i] claude-cli:{model} returned no text (stop_reason={stop or '?'}); next link…",
-              file=sys.stderr)
-    return text
+    """Where `anthropic:` links go in this process: 'local' when ANTHROPIC_BASE_URL is a loopback
+    URL (the one local model backend, scripts/model-local, answered by Claude Code on the
+    developer's login), else 'api'. Written into run outputs so local and API runs are never
+    compared as if they were the same thing."""
+    from urllib.parse import urlsplit
+    url = os.environ.get("ANTHROPIC_BASE_URL", "").strip()
+    host = (urlsplit(url).hostname or "") if url else ""
+    return "local" if host in ("localhost", "::1") or host.startswith("127.") else "api"
 
 
 def _call_link(provider: str, model: str, user, system=None, max_tokens=None,
                json_mode=False, schema=None) -> "str | None":
     """Call exactly ONE (provider, model) link. Raises on failure so the chain advances.
-    An `anthropic` link goes over the API or the Claude Code CLI per BRIEF_CLAUDE_TRANSPORT
-    (see _claude_transport and _chat_claude_cli)."""
+    An `anthropic` link goes over the Messages API (_chat_anthropic): the key, or the local
+    model backend when ANTHROPIC_BASE_URL points at it."""
     if provider == "anthropic":
-        kw = dict(system=system, max_tokens=max_tokens, schema=schema if json_mode else None, model=model)
-        t = _claude_transport()
-        if t == "cli" or (t == "auto" and _cli_fallback_active()):
-            return _chat_claude_cli(user, **kw)
-        if t == "auto" and not os.environ.get("ANTHROPIC_API_KEY"):
-            import shutil
-            if shutil.which("claude"):
-                _switch_to_cli("no ANTHROPIC_API_KEY set")
-                return _chat_claude_cli(user, **kw)
-        try:
-            return _chat_anthropic(user, **kw)
-        except Exception as e:
-            if t == "auto" and _api_account_failure(e):
-                _switch_to_cli(f"{e.__class__.__name__}: {str(e)[:120]}")
-                return _chat_claude_cli(user, **kw)
-            raise
+        return _chat_anthropic(user, system=system, max_tokens=max_tokens,
+                               schema=schema if json_mode else None, model=model)
     cfg = PROVIDERS.get(provider)
     if not cfg:
         raise RuntimeError(f"unknown provider '{provider}'")
@@ -994,8 +826,6 @@ def _loads_lenient(raw, whole=False):
 
 # Names parse_brief re-exports and forwards assignments for (see parse_brief._ForwardingModule).
 MOVED_NAMES = (
-    'CLI_FALLBACK_TTL_S',
-    'CLI_TIMEOUT_S',
     'GROUNDED_FIELDS',
     'HAIKU',
     'HERO_FIELDS',
@@ -1010,9 +840,6 @@ MOVED_NAMES = (
     'ROUTE_EFFORT',
     'THINKING_HEADROOM',
     '_CHAIN_LOGGED',
-    '_CLI_DEFAULT_EFFORT',
-    '_CLI_FALLBACK',
-    '_CLI_FALLBACK_LOCK',
     '_COOLDOWN_SECS',
     '_DEFAULT_CHAIN',
     '_EFFORT_TL',
@@ -1030,14 +857,10 @@ MOVED_NAMES = (
     '_THINKING_MODELS',
     '_Truncated',
     '_allow_nonclaude',
-    '_api_account_failure',
     '_call_link',
     '_chat',
     '_chat_anthropic',
-    '_chat_claude_cli',
     '_chat_openai_compatible',
-    '_claude_transport',
-    '_cli_fallback_active',
     '_cooldown',
     '_json_call',
     '_ledger',
@@ -1054,7 +877,6 @@ MOVED_NAMES = (
     '_stats_scope',
     '_stats_snapshot',
     '_stats_usage',
-    '_switch_to_cli',
     '_thinking_headroom',
     'judge_route',
     'list_models',

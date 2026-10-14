@@ -109,7 +109,8 @@ runs: −15.6 s per brief on Opus 4.6 (up to −37 s), −7.2 s on Opus 5.5, sam
 input by `e2e_eval._usd`. The stats snapshot is a deep copy. Each run records into its own
 ledger (`_stats_scope`, carried into worker threads by `_scoped`); the agent-server's name
 derivation, regeneration and research calls use their own scopes. An `auto` switch to the
-CLI expires after `BRIEF_CLI_FALLBACK_TTL` (600 s) so a server re-tries the API.
+CLI expires after `BRIEF_CLI_FALLBACK_TTL` (600 s) so a server re-tries the API. (The CLI transport and its
+switch were removed on 2026-10-15; see ADR 0005.)
 
 **The test mock behaves like the engine.** `mock-agent` filters replies to schema keys of
 the right JSON type, drops locked fields in code, requires the regenerated field, runs
