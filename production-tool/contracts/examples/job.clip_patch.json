@@ -34,9 +34,11 @@
   ],
   "kind": "generated",
   "patch": {
+    "send": "range",
     "window": { "from_s": 2, "to_s": 4 },
-    "cut": { "from_s": 2, "to_s": 4 },
-    "keyframe": "none",
+    "cut": { "from_s": 0, "to_s": 6 },
+    "range": { "start_s": 2, "end_s": 4 },
+    "keyframe": "still",
     "model": "aleph2",
     "exact": true,
     "seams": [

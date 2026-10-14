@@ -646,8 +646,15 @@
         },
         "patch": {
           "type": "object",
-          "description": "clip_patch only (features/clip-moment-edit.clan): what was patched and how. window: the note's window in take time. cut: the seconds cut from the parent and sent to the model (the window, plus contextS each side). range: the keyframe's whole-second range inside the cut, when one was sent. keyframe: none (the whole cut is the edit), still (the frame at atS) or edited (the review's edited still). model: what made the window. exact: every parent GOP away from the window was copied untouched (false: the whole take was re-encoded once). seams: Jude's check of both seams (relative SSIM; ok when at or above clipPatch.seamMin). rawOutput: the model's own output, kept when the splice failed.",
+          "description": "clip_patch only (features/clip-moment-edit.clan): what was patched and how. send: range (the whole take went, with the window as the keyframe's range; Aleph 2 edits and bills only the range) or cut (only the window, plus contextS, was cut out and sent) or frames (a first/last-frame model made the window from the frames at its ends). window: the note's window in take time. cut: the take seconds sent to the model. range: the keyframe's whole-second range in the seconds sent, when one was sent. keyframe: none (the whole cut is the edit), still (the frame at atS) or edited (the review's edited still). model: what made the window. exact: every parent GOP away from the window was copied untouched (false: the whole take was re-encoded once). seams: Jude's check of both seams (relative SSIM; ok when at or above clipPatch.seamMin). rawOutput: the model's own output, kept when the splice failed. The landed take always keeps the take's own sound (Aleph keeps its input audio; a cut send's splice copies it), so a visual change that needs new sound is the sound mix's to make.",
           "properties": {
+            "send": {
+              "enum": [
+                "range",
+                "cut",
+                "frames"
+              ]
+            },
             "window": {
               "type": "object",
               "properties": {

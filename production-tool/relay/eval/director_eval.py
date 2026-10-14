@@ -16,6 +16,11 @@ add it.
 Change this frame (features/frame-change-edit.clan): the frame_edit cases (`since` director.v7) send
 Dex their still from eval/fixtures/frames/ as one picture, as the relay does, and score the whole
 output: reading, camera, ask, no_continuity, words_first and length. v7 replies replay under v7.
+
+Fix this moment (features/clip-moment-edit.clan): the clip_patch cases (`since` director.v7) send Dex
+the still at the note's moment (`frame`), as the relay does, and score route (a job, or the fix/remake
+ask exactly when the case expects one), ask, words_first, relay_keyframe (no keyframe, mask, region or
+ratio of Dex's own), take (the take as the one `current` ref) and length.
 """
 
 from __future__ import annotations
@@ -60,7 +65,8 @@ def frame_bytes(data: dict, key: str) -> bytes | None:
 
 def frame_images(case: dict, data: dict) -> list | None:
     """What Dex sees with a frame_edit: its current frame as the relay sends it (one 768 px JPEG)."""
-    raw = frame_bytes(data, case["input"].get("image")) if case["op"] == "frame_edit" else None
+    key = {"frame_edit": case["input"].get("image"), "clip_patch": case.get("frame")}.get(case["op"])
+    raw = frame_bytes(data, key) if key else None
     if raw is None:
         return None
     from cards import downscale
@@ -78,6 +84,8 @@ def job_input(case: dict, data: dict) -> dict:
     for field in ("image", "mask", "anchorFrame", "previousFrame", "video"):
         if isinstance(inp.get(field), str):
             inp[field] = asset(inp[field])
+    if case["op"] == "clip_patch":
+        inp["video"]["mime"] = "video/mp4"
     for r in inp.get("refs") or []:
         r["asset"] = asset(r["asset"])
         if r.get("card"):
@@ -141,6 +149,8 @@ def score(case: dict, out: dict) -> dict:
         return {"valid": False}
     if case["op"] == "frame_edit":
         return _score_frame_edit(case, out)
+    if case["op"] == "clip_patch":
+        return _score_clip_patch(case, out)
     job = out.get("providerJob") or {}
     prompt = _words(job.get("prompt"))
     roles = {r["name"]: r["role"] for r in job.get("refs") or []}
@@ -182,6 +192,26 @@ def _score_frame_edit(case: dict, out: dict) -> dict:
         r["name"] in ("anchor", "previous") for r in job.get("refs") or [])
     res["words_first"] = not job or _starts_with(prompt, text)
     res["length"] = len(prompt) - _given_words(prompt, case["input"]) <= case.get("budget", 500)
+    return res
+
+
+def _score_clip_patch(case: dict, out: dict) -> dict:
+    """Fix this moment: route (a job, or an ask exactly when expected), ask (a nudge whose options are fix and
+    remake), words_first, relay_keyframe (the keyframe, its range and the shape are the relay's), take (the
+    take is the one ref, as current) and length."""
+    want = case["expect"]["route"]
+    question = out.get("question")
+    job = out.get("providerJob") or {}
+    prompt = job.get("prompt") or ""
+    routes = {(o.get("value") or {}).get("route") for o in (question or {}).get("options") or []}
+    res = {"valid": True}
+    res["route"] = question is not None if want == "ask" else bool(job) and question is None
+    res["ask"] = (question is not None and question["kind"] == "nudge" and routes == {"fix", "remake"}) \
+        if want == "ask" else question is None
+    res["words_first"] = not job or _starts_with(prompt, case["input"].get("text") or "")
+    res["relay_keyframe"] = not any(k in job for k in ("keyframe", "keyframes", "mask", "region", "ratio"))
+    res["take"] = not job or [r.get("role") for r in job.get("refs") or []] == ["current"]
+    res["length"] = len(prompt) - _given_words(prompt, case["input"]) <= case.get("budget", 250)
     return res
 
 

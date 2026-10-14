@@ -61,5 +61,6 @@ def test_note_to_take_window(case):
 @pytest.mark.parametrize("case", PATCHES["patchPlan"], ids=lambda c: c["why"])
 def test_patch_plan(case):
     i = case["in"]
-    got = time_rules.patch_plan(i["window"], i["atS"], i["takeS"], i.get("contextS", 0), i.get("edited", False))
+    got = time_rules.patch_plan(i["window"], i["atS"], i["takeS"], i.get("contextS", 0), i.get("edited", False),
+                                i.get("send", "range"), i.get("maxInputS", time_rules.MAX_INPUT_S))
     assert got == case["want"]

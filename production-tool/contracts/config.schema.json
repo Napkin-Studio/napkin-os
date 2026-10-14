@@ -81,6 +81,7 @@
       "description": "Fix this moment's settings (features/clip-moment-edit.clan). Optional, every key too: absent means the defaults shown. model: which of the sheet's clip_patch models makes the window (aleph2; an alternate such as veo3.1 once it is on the sheet), chosen before the job runs. contextS: whole seconds of the take cut each side of the window and sent with it (0 keeps the price at the window's; 1 is an eval variant). crossfadeS: each seam's crossfade, inside the window. seamMin: Jude's relative-SSIM line for a seam; below it the take still lands, with his warning.",
       "properties": {
         "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "send": { "enum": ["range", "cut"], "description": "range (the default): the whole take goes to Aleph 2 with the window as its keyframe's range, which Aleph edits and bills alone (pathway tests 2026-10-13). cut: only the window (plus contextS) is cut out and sent. A take longer than Aleph takes is always cut." },
         "contextS": { "type": "integer", "minimum": 0, "maximum": 2 },
         "crossfadeS": { "type": "number", "minimum": 0, "maximum": 1 },
         "seamMin": { "type": "number", "minimum": 0, "maximum": 1 }

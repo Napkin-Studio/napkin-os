@@ -57,6 +57,10 @@ log = logging.getLogger("relay.local")
 def default_config() -> dict:
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     cfg["routing"] = {op: ([] if op in ("shot_list", "stitch") else ["mock"]) for op in cfg["routing"]}
+    # Fix this moment runs here end to end on the mock (an MP4 back as it went) and the real stitch:
+    # on, and on the mock's own model (features/clip-moment-edit.clan).
+    cfg["flags"]["clipPatch"] = True
+    cfg.setdefault("clipPatch", {}).pop("model", None)
     return cfg
 
 

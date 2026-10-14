@@ -72,14 +72,25 @@ def note_to_take_window(note: dict, take_s: float, item: dict | None = None) -> 
     return {"window": {"from_s": lo, "to_s": hi}, "atS": at, "inCut": lo < cut_end - EPS and hi > in_s + EPS}
 
 
-def patch_plan(window: dict, at_s: float, take_s: float, context_s: int = 0, edited: bool = False) -> dict:
-    """What a clip_patch sends: the cut (the window plus context_s each side, inside the take), its length,
-    the keyframe kind and time, and the keyframe's whole-second range with context_s > 0."""
+MAX_INPUT_S = 30  # Aleph 2's longest input; a longer take is cut
+
+
+def patch_plan(window: dict, at_s: float, take_s: float, context_s: int = 0, edited: bool = False,
+               send: str = "range", max_input_s: float = MAX_INPUT_S) -> dict:
+    """What a clip_patch sends. range (the default): the whole take, one keyframe (the edited still or the
+    frame at t) whose range is the window; Aleph bills only the range. cut: the window plus context_s each
+    side, inside the take, with a keyframe only for an edited still at context 0. `seconds` is what Aleph
+    bills before its minimum."""
     a, b = window["from_s"], window["to_s"]
+    send = "range" if send == "range" and take_s <= max_input_s + EPS else "cut"
+    if send == "range":
+        return {"send": send, "cut": {"from_s": 0, "to_s": _r3(take_s)}, "seconds": b - a,
+                "keyframe": "edited" if edited else "still", "keyframeS": _r3(min(max(at_s, a), b - KEYFRAME_EPS_S)),
+                "range": {"start_s": a, "end_s": b}}
     frm = max(0, a - context_s)
     to = _r3(min(take_s, b + context_s))
     seconds = _r3(to - frm)
-    plan: dict = {"cut": {"from_s": frm, "to_s": to}, "seconds": seconds, "keyframe": "none"}
+    plan: dict = {"send": send, "cut": {"from_s": frm, "to_s": to}, "seconds": seconds, "keyframe": "none"}
     if context_s > 0:
         plan["range"] = {"start_s": a - frm, "end_s": b - frm}
         plan["keyframe"] = "edited" if edited else "still"

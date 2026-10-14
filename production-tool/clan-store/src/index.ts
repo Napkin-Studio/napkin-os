@@ -28,6 +28,6 @@ export { rankBetween, ranksBetween, isValidRank, validateRank, byRank, RankError
 export { noteWindow, windowProblem, MIN_WINDOW_S, type NoteWindow } from './time'
 // Fix this moment (features/clip-moment-edit.clan)
 export {
-  noteToTakeWindow, patchPlan, spliceSegments, patchedRanges, applyPatchTake, KEYFRAME_EPS_S, MAX_SEGMENTS, MAX_ALTERNATES,
-  type TakeWindow, type PatchPlan, type KeyframeKind, type Segment, type PatchTake, type PatchDoc, type PatchJob, type NoteLike, type CutItemLike,
+  noteToTakeWindow, patchPlan, spliceSegments, patchedRanges, applyPatchTake, KEYFRAME_EPS_S, MAX_SEGMENTS, MAX_ALTERNATES, MAX_INPUT_S,
+  type TakeWindow, type PatchPlan, type PatchSend, type KeyframeKind, type Segment, type PatchTake, type PatchDoc, type PatchJob, type NoteLike, type CutItemLike,
 } from './patch'

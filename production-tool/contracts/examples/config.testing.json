@@ -11,5 +11,5 @@
   "spend": { "capUsd": 200, "warnUsd": 150 },
   "flags": { "storyboard": true, "video": true, "stitch": true, "regionEditFrames": true, "regionEditCanvas": false, "videoRegionEdit": false, "feelEdit": false, "clickSelect": false, "moreOptions": false, "clipPatch": false },
   "banner": "",
-  "clipPatch": { "model": "aleph2", "contextS": 0, "crossfadeS": 0.25, "seamMin": 0.85 }
+  "clipPatch": { "model": "aleph2", "send": "range", "contextS": 0, "crossfadeS": 0.25, "seamMin": 0.85 }
 }

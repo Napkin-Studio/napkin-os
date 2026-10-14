@@ -1,0 +1,36 @@
+{
+  "op": "clip_patch",
+  "provider": "runway",
+  "input": {
+    "text": "her eyes should open here",
+    "video": {
+      "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "url": "https://hack.napkin.ie/in/sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "mime": "video/mp4"
+    },
+    "window": {
+      "from_s": 2,
+      "to_s": 4
+    },
+    "atS": 3.2
+  },
+  "reply": {
+    "op": "clip_patch",
+    "providerJob": {
+      "provider": "runway",
+      "model": "aleph2",
+      "prompt": "her eyes should open here. Everything else stays exactly as it is: the people, the place, the light and the camera.",
+      "refs": [
+        {
+          "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "name": "current",
+          "role": "current"
+        }
+      ],
+      "audio": false
+    },
+    "question": null,
+    "rationale": "The note changes one thing in the moment; the relay adds the keyframe and the range.",
+    "confidence": 0.85
+  }
+}

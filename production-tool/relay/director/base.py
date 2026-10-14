@@ -126,6 +126,8 @@ class PassthroughDirector:
             return self._shot_list(job_request)
         if op == "frame_edit":
             return self._frame_edit(job_request, sheet)
+        if op == "clip_patch":
+            return self._clip_patch(job_request, sheet)
         provider = (sheet or {}).get("provider", "mock")
         model = ((sheet or {}).get("ops", {}).get(op) or {}).get("model", "unknown")
         refs = []
@@ -186,6 +188,20 @@ class PassthroughDirector:
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}
+
+    def _clip_patch(self, job_request: dict, sheet: dict | None) -> dict:
+        """Fix this moment with no model (features/clip-moment-edit.clan): the note's words, as they are,
+        on what the relay sends (input.video: the whole take on a range send, the cut on a cut send).
+        The relay adds the keyframe and its range."""
+        inp = job_request.get("input", {})
+        provider = (sheet or {}).get("provider", "mock")
+        model = ((sheet or {}).get("ops", {}).get("clip_patch") or {}).get("model", "unknown")
+        video = inp.get("video")
+        refs = [{"sha256": video["sha256"], "name": "current", "role": "current"}] if video else []
+        words = inp.get("text") or (inp.get("shot") or {}).get("action") or "the same moment"
+        job = {"provider": provider, "model": model, "prompt": words, "refs": refs, "audio": False, "outputs": 1}
+        return {"op": "clip_patch", "providerJob": job, "question": None, "confidence": 0.1,
+                "rationale": "passthrough: your words went to the model as they are, on the window only"}
 
     def _frame_edit(self, job_request: dict, sheet: dict | None) -> dict:
         """Change this frame with no model (features/frame-change-edit.clan): the cameraWords lexicon

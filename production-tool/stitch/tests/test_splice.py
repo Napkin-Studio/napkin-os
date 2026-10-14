@@ -100,9 +100,12 @@ def media(tmp_path_factory) -> Store:
     return Store(root)
 
 
-def cut_event(**over) -> dict:
-    return {"jobId": "job_t", "mode": "cut", "key": "parent.mp4", "fromS": 2, "toS": 4, "stillAtS": 3.2,
-            "outKey": "cut.mp4", "stillKey": "still.png", "resultKey": "cut.json", **over}
+def cut_event(fromS=2, toS=4, outKey="cut.mp4", stills=(3.2,), resultKey="cut.json") -> dict:
+    ev = {"jobId": "job_t", "mode": "cut", "key": "parent.mp4", "resultKey": resultKey,
+          "stills": [{"atS": at, "key": f"still{i}.png"} for i, at in enumerate(stills)]}
+    if outKey:
+        ev["clip"] = {"fromS": fromS, "toS": toS, "outKey": outKey}
+    return ev
 
 
 def splice_event(patch: str, **over) -> dict:
@@ -125,8 +128,8 @@ def patch_from_cut(media: Store, name: str, vf: str, extra: tuple[str, ...] = ()
 def test_cut_is_frame_accurate_and_grabs_the_still(media, tmp_path):
     res = media.run(cut_event())
     assert res["ok"] and media.results["cut.json"] == res
-    assert (res["w"], res["h"], res["fps"], res["durationS"]) == (320, 180, 24.0, 2.0)
-    assert res["sha256"].startswith("sha256:") and res["still"]["sha256"].startswith("sha256:")
+    assert (res["w"], res["h"], res["fps"], res["takeS"], res["clip"]["durationS"]) == (320, 180, 24.0, 6.0, 2.0)
+    assert res["clip"]["sha256"].startswith("sha256:") and res["stills"][0]["sha256"].startswith("sha256:")
     cut, parent = media.root / "cut.mp4", media.root / "parent.mp4"
     assert len(decoded(cut)) == 2 * FPS
     # The cut's first and last frames are the take's 48 and 95 (the testsrc counter moves every frame).
@@ -139,15 +142,23 @@ def test_cut_is_frame_accurate_and_grabs_the_still(media, tmp_path):
         first.append(psnr(cut, tmp_path / f"n{shift}.mp4", 0, 1, tmp_path)[0])
     assert first.index(max(first)) == 1, first
     # The still is a lossless PNG of the frame at 3.2 s (the take's frame 77, the first at or after it).
-    still = media.root / "still.png"
+    still = media.root / "still0.png"
     assert still.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     ff("-i", str(parent), "-vf", "trim=start_frame=77:end_frame=78", "-frames:v", "1", str(tmp_path / "f77.png"))
     assert still.read_bytes() == (tmp_path / "f77.png").read_bytes()
 
 
+def test_reading_the_take_alone_gives_its_length_and_the_stills(media, tmp_path):
+    # The range send: no sub-clip, only the take's length and the frames at a and b.
+    res = media.run(cut_event(outKey=None, stills=(2, 3.958), resultKey="read.json"))
+    assert res["ok"] and "clip" not in res and res["takeS"] == 6.0 and len(res["stills"]) == 2
+    ff("-i", str(media.root / "parent.mp4"), "-vf", "trim=start_frame=48:end_frame=49", "-frames:v", "1", str(tmp_path / "f48.png"))
+    assert (media.root / "still0.png").read_bytes() == (tmp_path / "f48.png").read_bytes()
+
+
 def test_a_cut_past_the_take_fails_with_words_not_ffmpeg(media):
     res = media.run(cut_event(fromS=5, toS=4, resultKey="bad.json"))
-    assert res == {"ok": False, "error": "Could not cut the moment out of the take."}
+    assert res == {"ok": False, "error": "Could not get the take ready for the fix."}
 
 
 # ── splice ──────────────────────────────────────────────────────────────────
@@ -225,7 +236,7 @@ def test_a_window_at_the_takes_start_copies_the_rest(media, tmp_path):
     # [0, 2): the span is the first GOP and the next; the copied tail's keyframes carry the take's
     # parameter sets in band (they grow by those bytes), every other packet and every picture after 3 s
     # is the take's.
-    ev = cut_event(fromS=0, toS=2, outKey="cut0.mp4", stillAtS=None, resultKey="cut0.json")
+    ev = cut_event(fromS=0, toS=2, outKey="cut0.mp4", stills=(), resultKey="cut0.json")
     assert media.run(ev)["ok"]
     ff("-i", str(media.root / "cut0.mp4"), "-vf", "negate", "-c:v", "libx264", "-crf", "16", str(media.root / "neg0.mp4"))
     res = media.run(splice_event("neg0.mp4", cutFromS=0, windowFromS=0, windowToS=2))
@@ -266,6 +277,23 @@ def test_a_take_without_audio_splices(tmp_path):
 def test_an_unknown_mode_fails_cleanly(media):
     res = media.run({"jobId": "j", "mode": "trim", "resultKey": "x.json"})
     assert res["ok"] is False and media.results["x.json"] == res
+
+
+def test_the_range_send_splices_the_window_out_of_a_whole_take(media, tmp_path):
+    # Aleph 2 with a keyframe range returns the whole take re-encoded, with only the range changed
+    # (pathway tests 2026-10-13). The window comes from it; everything away from the window is the take's
+    # own packets, not Aleph's re-encode.
+    whole = media.root / "aleph_whole.mp4"
+    ff("-i", str(media.root / "parent.mp4"), "-vf", "hue=h=90:enable='between(n,48,95)'", "-an", "-c:v", "libx264",
+       "-crf", "20", "-r", "30", str(whole))  # at another rate too, as Aleph's may be
+    res = media.run(splice_event("aleph_whole.mp4", cutFromS=0))
+    out, parent = media.root / "out-aleph_whole.mp4", media.root / "parent.mp4"
+    assert res["ok"] and res["exact"] and res["durationS"] == 6.0
+    got, want = packets(out), packets(parent)
+    assert got[:GOP] == want[:GOP] and got[3 * GOP:] == want[3 * GOP:]
+    assert max(psnr(out, parent, 60, 84, tmp_path)) < 40  # inside the window: the changed frames
+    # The synthetic change starts abruptly at the window's edge, so Jude rightly marks both seams.
+    assert [s["at_s"] for s in res["seams"]] == [2.0, 4.0] and not any(s["ok"] for s in res["seams"])
 
 
 # ── the ad is unchanged ─────────────────────────────────────────────────────

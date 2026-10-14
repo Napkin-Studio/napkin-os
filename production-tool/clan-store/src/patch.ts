@@ -62,33 +62,51 @@ export function noteToTakeWindow(note: NoteLike, take: { duration_s: number }, i
 }
 
 export type KeyframeKind = 'none' | 'still' | 'edited'
+/** range: the whole take goes with the window as the keyframe's range (Aleph edits and bills only the
+ *  range: pathway tests 2026-10-13). cut: only the window (plus contextS) is cut out and sent. */
+export type PatchSend = 'range' | 'cut'
+/** Aleph 2 takes at most this long an input; a longer take is cut. */
+export const MAX_INPUT_S = 30
 export interface PatchPlan {
-  /** Take seconds cut and sent to the model: the window plus contextS each side, inside the take. */
+  send: PatchSend
+  /** Take seconds sent to the model: the whole take (range), or the window plus contextS each side (cut). */
   cut: { from_s: number; to_s: number }
-  /** How long the cut is (what Aleph 2 bills, before its 2 s minimum). */
+  /** The seconds Aleph 2 bills, before its 2 s minimum: the range (range send) or the cut. */
   seconds: number
   keyframe: KeyframeKind
   /** The keyframe's time inside the cut, when there is one. */
   keyframeS?: number
-  /** The keyframe's whole-second range inside the cut (end exclusive), with contextS > 0 only. */
+  /** The keyframe's whole-second range in what is sent (end exclusive): the window on a range send; on a cut
+   *  send, only with contextS > 0. */
   range?: { start_s: number; end_s: number }
 }
 
 /**
- * What a clip_patch sends. At contextS 0 the cut is the window and the whole cut is the edit: no keyframe
- * unless the person edited the still (an unedited frame would anchor "no change"), and an edited still is
- * one keyframe at t with no range. With contextS > 0 (an eval variant) one keyframe, the edited still or
- * the frame at t, carries the window as a whole-second range so only the window changes. A keyframe sits
- * inside [range start, range end - 0.05] (Runway's range is end exclusive).
+ * What a clip_patch sends. The range send (the default) sends the whole take with one keyframe, the
+ * edited still or the frame at t, whose whole-second range is the window: Aleph changes and bills only
+ * the window and snaps back after it, so its own frames meet the take's. A take longer than
+ * maxInputS is cut instead. The cut send at contextS 0 sends only the window and the whole cut is the
+ * edit: no keyframe unless the person edited the still (an unedited frame would anchor "no change"),
+ * and an edited still is one keyframe at t with no range. With contextS > 0 one keyframe carries the
+ * window as its range inside the cut. A keyframe sits inside [range start, range end - 0.05] (Runway's
+ * range is end exclusive).
  */
-export function patchPlan(p: { window: NoteWindow; atS: number; takeS: number; contextS?: number; edited?: boolean }): PatchPlan {
-  const k = p.contextS ?? 0
+export function patchPlan(p: { window: NoteWindow; atS: number; takeS: number; contextS?: number; edited?: boolean; send?: PatchSend; maxInputS?: number }): PatchPlan {
   const a = p.window.from_s
   const b = p.window.to_s
+  const send: PatchSend = (p.send ?? 'range') === 'range' && p.takeS <= (p.maxInputS ?? MAX_INPUT_S) + EPS ? 'range' : 'cut'
+  if (send === 'range') {
+    const hi = b - KEYFRAME_EPS_S
+    return {
+      send, cut: { from_s: 0, to_s: r3(p.takeS) }, seconds: b - a, keyframe: p.edited ? 'edited' : 'still',
+      keyframeS: r3(Math.min(Math.max(p.atS, a), hi)), range: { start_s: a, end_s: b },
+    }
+  }
+  const k = p.contextS ?? 0
   const from = Math.max(0, a - k)
   const to = r3(Math.min(p.takeS, b + k))
   const seconds = r3(to - from)
-  const plan: PatchPlan = { cut: { from_s: from, to_s: to }, seconds, keyframe: 'none' }
+  const plan: PatchPlan = { send, cut: { from_s: from, to_s: to }, seconds, keyframe: 'none' }
   if (k > 0) {
     plan.range = { start_s: a - from, end_s: b - from }
     plan.keyframe = p.edited ? 'edited' : 'still'

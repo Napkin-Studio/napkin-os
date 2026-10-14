@@ -550,3 +550,51 @@ def test_the_ask_carries_each_refs_card():
     asked = json.loads(wire.calls[0]["turns"][0]["text"].split("<input>\n")[1].split("\n</input>")[0])
     assert asked["input"]["refs"][0]["card"] == card
     assert all("card" not in r for r in asked["input"]["refs"][1:])
+
+
+# --- clip_patch: Fix this moment (features/clip-moment-edit.clan) -------------
+
+def test_clip_patch_writes_the_prompt_on_the_take_and_leaves_the_keyframe_to_the_relay():
+    res = attempt("clip_patch_runway")
+    job = res.output["providerJob"]
+    take = fixture("clip_patch_runway")["input"]["video"]["sha256"]
+    assert job["model"] == "aleph2" and job["refs"] == [{"sha256": take, "name": "current", "role": "current"}]
+    assert job["audio"] is False and "keyframe" not in job and "ratio" not in job
+    assert job["prompt"].startswith("her eyes should open here")
+
+
+def test_clip_patch_puts_the_take_first_when_the_model_leaves_it_out():
+    job = attempt("clip_patch_runway", job_edit(refs=[])).output["providerJob"]
+    assert [r["role"] for r in job["refs"]] == ["current"]
+
+
+@pytest.mark.parametrize("field", ["keyframe", "keyframes"])
+def test_a_clip_patch_keyframe_written_by_the_model_is_refused(field):
+    still = "sha256:" + "5" * 64
+    value = {"sha256": still, "atS": 3.2, "startS": 2, "endS": 4}
+    refuses("relay's", "clip_patch_runway", job_edit(**{field: value if field == "keyframe" else [value]}),
+            extra_hashes=(still,))
+
+
+def test_a_whole_shot_note_asks_fix_or_remake():
+    out = attempt("clip_patch_runway_ask").output
+    assert "providerJob" not in out and {o["value"]["route"] for o in out["question"]["options"]} == {"fix", "remake"}
+
+
+def test_a_clip_patch_ask_without_fix_and_remake_is_refused():
+    def other(r):
+        r["question"]["options"] = [{"id": "camera", "label": "Wider", "value": {"route": "camera"}},
+                                    {"id": "local", "label": "Here", "value": {"route": "local"}}]
+    refuses("fix and remake", "clip_patch_runway_ask", other)
+
+
+def test_the_v7_prompt_has_a_clip_patch_section_that_owns_no_keyframe():
+    d, _ = make(prompt_version="director.v7")
+    system = d.system_for("clip_patch")
+    assert "## clip_patch" in system and "## clip_edit" not in system and "## frame_edit" not in system
+    assert "Never `keyframe`" in system and "`remake`" in system
+
+
+def test_a_clip_patch_that_asks_again_after_fix_is_refused():
+    answer = {"contractVersion": "3", "questionId": "q_" + "0" * 26, "optionId": "fix"}
+    refuses("asked again", "clip_patch_runway_ask", edit_input=lambda p: p.update(answer=answer))

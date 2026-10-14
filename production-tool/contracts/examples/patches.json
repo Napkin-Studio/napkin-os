@@ -1,71 +1,1039 @@
 {
-  "description": "Fix this moment's arithmetic (features/clip-moment-edit.clan). clan-store/src/patch.ts (vitest) passes every section; relay/time_rules.py (pytest) passes noteToTakeWindow and patchPlan, and relay/service.py's clip_patch reservation passes estimates. Times are seconds; a window is whole seconds of take time.",
-  "noteToTakeWindow": [
-    { "why": "a note on a take is in take time and passes through", "note": { "target": { "kind": "take" }, "at_s": 3.2, "window": { "from_s": 2, "to_s": 5 } }, "take_s": 6, "item": null, "want": { "window": { "from_s": 2, "to_s": 5 }, "atS": 3.2, "inCut": true } },
-    { "why": "a timeline note in shot time, the take uncut", "note": { "target": { "kind": "video" }, "at_s": 3.2, "window": { "from_s": 2, "to_s": 5 } }, "take_s": 6, "item": { "in_s": 0 }, "want": { "window": { "from_s": 2, "to_s": 5 }, "atS": 3.2, "inCut": true } },
-    { "why": "shot time moves by the cut's in_s", "note": { "target": { "kind": "video" }, "at_s": 3, "window": { "from_s": 2, "to_s": 4 } }, "take_s": 8, "item": { "in_s": 1 }, "want": { "window": { "from_s": 3, "to_s": 5 }, "atS": 4, "inCut": true } },
-    { "why": "a fractional in_s widens the window to whole seconds", "note": { "target": { "kind": "video" }, "at_s": 3, "window": { "from_s": 2, "to_s": 4 } }, "take_s": 8, "item": { "in_s": 0.5 }, "want": { "window": { "from_s": 2, "to_s": 5 }, "atS": 3.5, "inCut": true } },
-    { "why": "a take longer than its shot: a note in the trimmed tail is not in the cut", "note": { "target": { "kind": "take" }, "at_s": 7.5, "window": { "from_s": 6, "to_s": 8 } }, "take_s": 9, "item": { "in_s": 0, "out_s": 5 }, "want": { "window": { "from_s": 6, "to_s": 8 }, "atS": 7.5, "inCut": false } },
-    { "why": "a window at the start of the take", "note": { "target": { "kind": "video" }, "at_s": 0.3, "window": { "from_s": 0, "to_s": 2 } }, "take_s": 6, "item": { "in_s": 0 }, "want": { "window": { "from_s": 0, "to_s": 2 }, "atS": 0.3, "inCut": true } },
-    { "why": "a window past the take's end shifts inward and the moment stays inside it", "note": { "target": { "kind": "video" }, "at_s": 5.8, "window": { "from_s": 4, "to_s": 6 } }, "take_s": 6.5, "item": { "in_s": 1 }, "want": { "window": { "from_s": 4, "to_s": 6 }, "atS": 6, "inCut": true } },
-    { "why": "a take only 2 s long", "note": { "target": { "kind": "take" }, "at_s": 1, "window": { "from_s": 0, "to_s": 2 } }, "take_s": 2, "item": null, "want": { "window": { "from_s": 0, "to_s": 2 }, "atS": 1, "inCut": true } },
-    { "why": "a window wider than the take is cut to the take", "note": { "target": { "kind": "take" }, "at_s": 1, "window": { "from_s": 0, "to_s": 3 } }, "take_s": 2.4, "item": null, "want": { "window": { "from_s": 0, "to_s": 2 }, "atS": 1, "inCut": true } },
-    { "why": "a take too short to hold 2 whole seconds", "note": { "target": { "kind": "take" }, "at_s": 1, "window": { "from_s": 0, "to_s": 2 } }, "take_s": 1.5, "item": null, "want": null },
-    { "why": "a note with no window", "note": { "target": { "kind": "take" }, "at_s": 1 }, "take_s": 6, "item": null, "want": null }
-  ],
-  "patchPlan": [
-    { "why": "context 0, no edited still: the whole cut is the edit, no keyframe", "in": { "window": { "from_s": 2, "to_s": 4 }, "atS": 3.2, "takeS": 6, "contextS": 0, "edited": false }, "want": { "cut": { "from_s": 2, "to_s": 4 }, "seconds": 2, "keyframe": "none" } },
-    { "why": "context 0, an edited still: one keyframe at t, no range", "in": { "window": { "from_s": 2, "to_s": 4 }, "atS": 3.2, "takeS": 6, "contextS": 0, "edited": true }, "want": { "cut": { "from_s": 2, "to_s": 4 }, "seconds": 2, "keyframe": "edited", "keyframeS": 1.2 } },
-    { "why": "t at the take's end: the keyframe sits inside the end (exclusive)", "in": { "window": { "from_s": 4, "to_s": 6 }, "atS": 6, "takeS": 6, "contextS": 0, "edited": true }, "want": { "cut": { "from_s": 4, "to_s": 6 }, "seconds": 2, "keyframe": "edited", "keyframeS": 1.95 } },
-    { "why": "t = 0", "in": { "window": { "from_s": 0, "to_s": 2 }, "atS": 0, "takeS": 6, "contextS": 0, "edited": true }, "want": { "cut": { "from_s": 0, "to_s": 2 }, "seconds": 2, "keyframe": "edited", "keyframeS": 0 } },
-    { "why": "a 3 s window", "in": { "window": { "from_s": 2, "to_s": 5 }, "atS": 3.2, "takeS": 6, "contextS": 0, "edited": false }, "want": { "cut": { "from_s": 2, "to_s": 5 }, "seconds": 3, "keyframe": "none" } },
-    { "why": "context 1 (eval): the frame at t with the window as its range", "in": { "window": { "from_s": 2, "to_s": 4 }, "atS": 3.2, "takeS": 6, "contextS": 1, "edited": false }, "want": { "cut": { "from_s": 1, "to_s": 5 }, "seconds": 4, "keyframe": "still", "keyframeS": 2.2, "range": { "start_s": 1, "end_s": 3 } } },
-    { "why": "context 1, a whole t and an edited still", "in": { "window": { "from_s": 2, "to_s": 4 }, "atS": 3, "takeS": 6, "contextS": 1, "edited": true }, "want": { "cut": { "from_s": 1, "to_s": 5 }, "seconds": 4, "keyframe": "edited", "keyframeS": 2, "range": { "start_s": 1, "end_s": 3 } } },
-    { "why": "context 1 at the take's start: the cut starts at 0", "in": { "window": { "from_s": 0, "to_s": 2 }, "atS": 0.5, "takeS": 6, "contextS": 1, "edited": false }, "want": { "cut": { "from_s": 0, "to_s": 3 }, "seconds": 3, "keyframe": "still", "keyframeS": 0.5, "range": { "start_s": 0, "end_s": 2 } } },
-    { "why": "context 1 at a fractional take end, t at the window's end", "in": { "window": { "from_s": 4, "to_s": 6 }, "atS": 6, "takeS": 6.4, "contextS": 1, "edited": false }, "want": { "cut": { "from_s": 3, "to_s": 6.4 }, "seconds": 3.4, "keyframe": "still", "keyframeS": 2.95, "range": { "start_s": 1, "end_s": 3 } } }
-  ],
-  "estimates": {
-    "about": "The relay's clip_patch reservation: max(minS, ceil(seconds)) x usdPerS, read from capabilities/runway.json ops.clip_patch (minS 2, usdPerS 0.28). Never shown to a person (owner decision 2026-10-13): recorded on the job for History.",
-    "cases": [
-      { "seconds": 2, "usd": 0.56 },
-      { "seconds": 3, "usd": 0.84 },
-      { "seconds": 3.4, "usd": 1.12 },
-      { "seconds": 4, "usd": 1.12 }
-    ]
+ "description": "Fix this moment's arithmetic (features/clip-moment-edit.clan). clan-store/src/patch.ts (vitest) passes every section; relay/time_rules.py (pytest) passes noteToTakeWindow and patchPlan, and relay/service.py's clip_patch reservation passes estimates. Times are seconds; a window is whole seconds of take time.",
+ "noteToTakeWindow": [
+  {
+   "why": "a note on a take is in take time and passes through",
+   "note": {
+    "target": {
+     "kind": "take"
+    },
+    "at_s": 3.2,
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    }
+   },
+   "take_s": 6,
+   "item": null,
+   "want": {
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "atS": 3.2,
+    "inCut": true
+   }
   },
-  "spliceSegments": [
-    { "why": "the first patch of an unpatched take", "parent": { "id": "take_P", "duration_s": 6, "segments": [] }, "takeId": "take_T", "window": { "from_s": 2, "to_s": 4 }, "jobId": "job_02",
-      "want": [ { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_T", "in_s": 2, "out_s": 4, "job_id": "job_02" }, { "source_take": "take_P", "in_s": 4, "out_s": 6 } ] },
-    { "why": "a chained patch overlapping the last one", "parent": { "id": "take_T1", "duration_s": 6, "segments": [ { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_T1", "in_s": 2, "out_s": 4, "job_id": "job_01" }, { "source_take": "take_P", "in_s": 4, "out_s": 6 } ] }, "takeId": "take_T2", "window": { "from_s": 3, "to_s": 5 }, "jobId": "job_02",
-      "want": [ { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_T1", "in_s": 2, "out_s": 3, "job_id": "job_01" }, { "source_take": "take_T2", "in_s": 3, "out_s": 5, "job_id": "job_02" }, { "source_take": "take_P", "in_s": 5, "out_s": 6 } ] },
-    { "why": "a patch over the same window replaces the last one", "parent": { "id": "take_T1", "duration_s": 6, "segments": [ { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_T1", "in_s": 2, "out_s": 4, "job_id": "job_01" }, { "source_take": "take_P", "in_s": 4, "out_s": 6 } ] }, "takeId": "take_T2", "window": { "from_s": 2, "to_s": 4 }, "jobId": "job_02",
-      "want": [ { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_T2", "in_s": 2, "out_s": 4, "job_id": "job_02" }, { "source_take": "take_P", "in_s": 4, "out_s": 6 } ] },
-    { "why": "adjacent pieces from one source merge", "parent": { "id": "take_P", "duration_s": 6, "segments": [ { "source_take": "take_P", "in_s": 0, "out_s": 3 }, { "source_take": "take_P", "in_s": 3, "out_s": 6 } ] }, "takeId": "take_T", "window": { "from_s": 4, "to_s": 6 }, "jobId": "job_02",
-      "want": [ { "source_take": "take_P", "in_s": 0, "out_s": 4 }, { "source_take": "take_T", "in_s": 4, "out_s": 6, "job_id": "job_02" } ] },
-    { "why": "past 16 pieces the oldest patch folds with its neighbour into this take, with no job", "parent": { "id": "take_X8", "duration_s": 32, "segments": [
-        { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_X1", "in_s": 2, "out_s": 4, "job_id": "job_01" },
-        { "source_take": "take_P", "in_s": 4, "out_s": 6 }, { "source_take": "take_X2", "in_s": 6, "out_s": 8, "job_id": "job_02" },
-        { "source_take": "take_P", "in_s": 8, "out_s": 10 }, { "source_take": "take_X3", "in_s": 10, "out_s": 12, "job_id": "job_03" },
-        { "source_take": "take_P", "in_s": 12, "out_s": 14 }, { "source_take": "take_X4", "in_s": 14, "out_s": 16, "job_id": "job_04" },
-        { "source_take": "take_P", "in_s": 16, "out_s": 18 }, { "source_take": "take_X5", "in_s": 18, "out_s": 20, "job_id": "job_05" },
-        { "source_take": "take_P", "in_s": 20, "out_s": 22 }, { "source_take": "take_X6", "in_s": 22, "out_s": 24, "job_id": "job_06" },
-        { "source_take": "take_P", "in_s": 24, "out_s": 26 }, { "source_take": "take_X7", "in_s": 26, "out_s": 28, "job_id": "job_07" },
-        { "source_take": "take_P", "in_s": 28, "out_s": 30 }, { "source_take": "take_X8", "in_s": 30, "out_s": 32, "job_id": "job_08" } ] },
-      "takeId": "take_T", "window": { "from_s": 3, "to_s": 5 }, "jobId": "job_09",
-      "want": [
-        { "source_take": "take_T", "in_s": 0, "out_s": 3 }, { "source_take": "take_T", "in_s": 3, "out_s": 5, "job_id": "job_09" },
-        { "source_take": "take_P", "in_s": 5, "out_s": 6 }, { "source_take": "take_X2", "in_s": 6, "out_s": 8, "job_id": "job_02" },
-        { "source_take": "take_P", "in_s": 8, "out_s": 10 }, { "source_take": "take_X3", "in_s": 10, "out_s": 12, "job_id": "job_03" },
-        { "source_take": "take_P", "in_s": 12, "out_s": 14 }, { "source_take": "take_X4", "in_s": 14, "out_s": 16, "job_id": "job_04" },
-        { "source_take": "take_P", "in_s": 16, "out_s": 18 }, { "source_take": "take_X5", "in_s": 18, "out_s": 20, "job_id": "job_05" },
-        { "source_take": "take_P", "in_s": 20, "out_s": 22 }, { "source_take": "take_X6", "in_s": 22, "out_s": 24, "job_id": "job_06" },
-        { "source_take": "take_P", "in_s": 24, "out_s": 26 }, { "source_take": "take_X7", "in_s": 26, "out_s": 28, "job_id": "job_07" },
-        { "source_take": "take_P", "in_s": 28, "out_s": 30 }, { "source_take": "take_X8", "in_s": 30, "out_s": 32, "job_id": "job_08" } ] }
-  ],
-  "patchedRanges": [
-    { "segments": [ { "source_take": "take_P", "in_s": 0, "out_s": 2 }, { "source_take": "take_T1", "in_s": 2, "out_s": 3, "job_id": "job_01" }, { "source_take": "take_T2", "in_s": 3, "out_s": 5, "job_id": "job_02" }, { "source_take": "take_P", "in_s": 5, "out_s": 6 } ],
-      "want": [ { "from_s": 2, "to_s": 3, "job_id": "job_01", "label": "patched 0:02-0:03" }, { "from_s": 3, "to_s": 5, "job_id": "job_02", "label": "patched 0:03-0:05" } ] },
-    { "segments": [ { "source_take": "take_T", "in_s": 75, "out_s": 77, "job_id": "job_03" } ], "want": [ { "from_s": 75, "to_s": 77, "job_id": "job_03", "label": "patched 1:15-1:17" } ] },
-    { "segments": [], "want": [] }
+  {
+   "why": "a timeline note in shot time, the take uncut",
+   "note": {
+    "target": {
+     "kind": "video"
+    },
+    "at_s": 3.2,
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    }
+   },
+   "take_s": 6,
+   "item": {
+    "in_s": 0
+   },
+   "want": {
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "atS": 3.2,
+    "inCut": true
+   }
+  },
+  {
+   "why": "shot time moves by the cut's in_s",
+   "note": {
+    "target": {
+     "kind": "video"
+    },
+    "at_s": 3,
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    }
+   },
+   "take_s": 8,
+   "item": {
+    "in_s": 1
+   },
+   "want": {
+    "window": {
+     "from_s": 3,
+     "to_s": 5
+    },
+    "atS": 4,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a fractional in_s widens the window to whole seconds",
+   "note": {
+    "target": {
+     "kind": "video"
+    },
+    "at_s": 3,
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    }
+   },
+   "take_s": 8,
+   "item": {
+    "in_s": 0.5
+   },
+   "want": {
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "atS": 3.5,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a take longer than its shot: a note in the trimmed tail is not in the cut",
+   "note": {
+    "target": {
+     "kind": "take"
+    },
+    "at_s": 7.5,
+    "window": {
+     "from_s": 6,
+     "to_s": 8
+    }
+   },
+   "take_s": 9,
+   "item": {
+    "in_s": 0,
+    "out_s": 5
+   },
+   "want": {
+    "window": {
+     "from_s": 6,
+     "to_s": 8
+    },
+    "atS": 7.5,
+    "inCut": false
+   }
+  },
+  {
+   "why": "a window at the start of the take",
+   "note": {
+    "target": {
+     "kind": "video"
+    },
+    "at_s": 0.3,
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    }
+   },
+   "take_s": 6,
+   "item": {
+    "in_s": 0
+   },
+   "want": {
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "atS": 0.3,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a window past the take's end shifts inward and the moment stays inside it",
+   "note": {
+    "target": {
+     "kind": "video"
+    },
+    "at_s": 5.8,
+    "window": {
+     "from_s": 4,
+     "to_s": 6
+    }
+   },
+   "take_s": 6.5,
+   "item": {
+    "in_s": 1
+   },
+   "want": {
+    "window": {
+     "from_s": 4,
+     "to_s": 6
+    },
+    "atS": 6,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a take only 2 s long",
+   "note": {
+    "target": {
+     "kind": "take"
+    },
+    "at_s": 1,
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    }
+   },
+   "take_s": 2,
+   "item": null,
+   "want": {
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "atS": 1,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a window wider than the take is cut to the take",
+   "note": {
+    "target": {
+     "kind": "take"
+    },
+    "at_s": 1,
+    "window": {
+     "from_s": 0,
+     "to_s": 3
+    }
+   },
+   "take_s": 2.4,
+   "item": null,
+   "want": {
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "atS": 1,
+    "inCut": true
+   }
+  },
+  {
+   "why": "a take too short to hold 2 whole seconds",
+   "note": {
+    "target": {
+     "kind": "take"
+    },
+    "at_s": 1,
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    }
+   },
+   "take_s": 1.5,
+   "item": null,
+   "want": null
+  },
+  {
+   "why": "a note with no window",
+   "note": {
+    "target": {
+     "kind": "take"
+    },
+    "at_s": 1
+   },
+   "take_s": 6,
+   "item": null,
+   "want": null
+  }
+ ],
+ "patchPlan": [
+  {
+   "why": "range send (the default): the whole take, the frame at t as the keyframe, the window its range, the window billed",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "atS": 3.2,
+    "takeS": 6,
+    "edited": false
+   },
+   "want": {
+    "send": "range",
+    "cut": {
+     "from_s": 0,
+     "to_s": 6
+    },
+    "seconds": 2,
+    "keyframe": "still",
+    "keyframeS": 3.2,
+    "range": {
+     "start_s": 2,
+     "end_s": 4
+    }
+   }
+  },
+  {
+   "why": "range send with an edited still",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "atS": 3.2,
+    "takeS": 6.4,
+    "edited": true
+   },
+   "want": {
+    "send": "range",
+    "cut": {
+     "from_s": 0,
+     "to_s": 6.4
+    },
+    "seconds": 3,
+    "keyframe": "edited",
+    "keyframeS": 3.2,
+    "range": {
+     "start_s": 2,
+     "end_s": 5
+    }
+   }
+  },
+  {
+   "why": "range send, t at the window's end: the keyframe sits inside it (end exclusive)",
+   "in": {
+    "window": {
+     "from_s": 4,
+     "to_s": 6
+    },
+    "atS": 6,
+    "takeS": 6,
+    "edited": false
+   },
+   "want": {
+    "send": "range",
+    "cut": {
+     "from_s": 0,
+     "to_s": 6
+    },
+    "seconds": 2,
+    "keyframe": "still",
+    "keyframeS": 5.95,
+    "range": {
+     "start_s": 4,
+     "end_s": 6
+    }
+   }
+  },
+  {
+   "why": "range send asked of a take longer than Aleph 2 takes: it is cut",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "atS": 3.2,
+    "takeS": 31,
+    "edited": false,
+    "send": "range"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "seconds": 2,
+    "keyframe": "none"
+   }
+  },
+  {
+   "why": "cut send, context 0, no edited still: the whole cut is the edit, no keyframe",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "atS": 3.2,
+    "takeS": 6,
+    "contextS": 0,
+    "edited": false,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "seconds": 2,
+    "keyframe": "none"
+   }
+  },
+  {
+   "why": "cut send, context 0, an edited still: one keyframe at t, no range",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "atS": 3.2,
+    "takeS": 6,
+    "contextS": 0,
+    "edited": true,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "seconds": 2,
+    "keyframe": "edited",
+    "keyframeS": 1.2
+   }
+  },
+  {
+   "why": "cut send, t at the take's end: the keyframe sits inside the end (exclusive)",
+   "in": {
+    "window": {
+     "from_s": 4,
+     "to_s": 6
+    },
+    "atS": 6,
+    "takeS": 6,
+    "contextS": 0,
+    "edited": true,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 4,
+     "to_s": 6
+    },
+    "seconds": 2,
+    "keyframe": "edited",
+    "keyframeS": 1.95
+   }
+  },
+  {
+   "why": "cut send, t = 0",
+   "in": {
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "atS": 0,
+    "takeS": 6,
+    "contextS": 0,
+    "edited": true,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "seconds": 2,
+    "keyframe": "edited",
+    "keyframeS": 0
+   }
+  },
+  {
+   "why": "cut send, a 3 s window",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "atS": 3.2,
+    "takeS": 6,
+    "contextS": 0,
+    "edited": false,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 2,
+     "to_s": 5
+    },
+    "seconds": 3,
+    "keyframe": "none"
+   }
+  },
+  {
+   "why": "cut send, context 1 (eval): the frame at t with the window as its range",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "atS": 3.2,
+    "takeS": 6,
+    "contextS": 1,
+    "edited": false,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 1,
+     "to_s": 5
+    },
+    "seconds": 4,
+    "keyframe": "still",
+    "keyframeS": 2.2,
+    "range": {
+     "start_s": 1,
+     "end_s": 3
+    }
+   }
+  },
+  {
+   "why": "cut send, context 1, a whole t and an edited still",
+   "in": {
+    "window": {
+     "from_s": 2,
+     "to_s": 4
+    },
+    "atS": 3,
+    "takeS": 6,
+    "contextS": 1,
+    "edited": true,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 1,
+     "to_s": 5
+    },
+    "seconds": 4,
+    "keyframe": "edited",
+    "keyframeS": 2,
+    "range": {
+     "start_s": 1,
+     "end_s": 3
+    }
+   }
+  },
+  {
+   "why": "cut send, context 1 at the take's start: the cut starts at 0",
+   "in": {
+    "window": {
+     "from_s": 0,
+     "to_s": 2
+    },
+    "atS": 0.5,
+    "takeS": 6,
+    "contextS": 1,
+    "edited": false,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 0,
+     "to_s": 3
+    },
+    "seconds": 3,
+    "keyframe": "still",
+    "keyframeS": 0.5,
+    "range": {
+     "start_s": 0,
+     "end_s": 2
+    }
+   }
+  },
+  {
+   "why": "cut send, context 1 at a fractional take end, t at the window's end",
+   "in": {
+    "window": {
+     "from_s": 4,
+     "to_s": 6
+    },
+    "atS": 6,
+    "takeS": 6.4,
+    "contextS": 1,
+    "edited": false,
+    "send": "cut"
+   },
+   "want": {
+    "send": "cut",
+    "cut": {
+     "from_s": 3,
+     "to_s": 6.4
+    },
+    "seconds": 3.4,
+    "keyframe": "still",
+    "keyframeS": 2.95,
+    "range": {
+     "start_s": 1,
+     "end_s": 3
+    }
+   }
+  }
+ ],
+ "estimates": {
+  "about": "The relay's clip_patch reservation: max(minS, ceil(seconds)) x usdPerS, read from capabilities/runway.json ops.clip_patch (minS 2, usdPerS 0.28). Never shown to a person (owner decision 2026-10-13): recorded on the job for History.",
+  "cases": [
+   {
+    "seconds": 2,
+    "usd": 0.56
+   },
+   {
+    "seconds": 3,
+    "usd": 0.84
+   },
+   {
+    "seconds": 3.4,
+    "usd": 1.12
+   },
+   {
+    "seconds": 4,
+    "usd": 1.12
+   }
   ]
+ },
+ "spliceSegments": [
+  {
+   "why": "the first patch of an unpatched take",
+   "parent": {
+    "id": "take_P",
+    "duration_s": 6,
+    "segments": []
+   },
+   "takeId": "take_T",
+   "window": {
+    "from_s": 2,
+    "to_s": 4
+   },
+   "jobId": "job_02",
+   "want": [
+    {
+     "source_take": "take_P",
+     "in_s": 0,
+     "out_s": 2
+    },
+    {
+     "source_take": "take_T",
+     "in_s": 2,
+     "out_s": 4,
+     "job_id": "job_02"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 4,
+     "out_s": 6
+    }
+   ]
+  },
+  {
+   "why": "a chained patch overlapping the last one",
+   "parent": {
+    "id": "take_T1",
+    "duration_s": 6,
+    "segments": [
+     {
+      "source_take": "take_P",
+      "in_s": 0,
+      "out_s": 2
+     },
+     {
+      "source_take": "take_T1",
+      "in_s": 2,
+      "out_s": 4,
+      "job_id": "job_01"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 4,
+      "out_s": 6
+     }
+    ]
+   },
+   "takeId": "take_T2",
+   "window": {
+    "from_s": 3,
+    "to_s": 5
+   },
+   "jobId": "job_02",
+   "want": [
+    {
+     "source_take": "take_P",
+     "in_s": 0,
+     "out_s": 2
+    },
+    {
+     "source_take": "take_T1",
+     "in_s": 2,
+     "out_s": 3,
+     "job_id": "job_01"
+    },
+    {
+     "source_take": "take_T2",
+     "in_s": 3,
+     "out_s": 5,
+     "job_id": "job_02"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 5,
+     "out_s": 6
+    }
+   ]
+  },
+  {
+   "why": "a patch over the same window replaces the last one",
+   "parent": {
+    "id": "take_T1",
+    "duration_s": 6,
+    "segments": [
+     {
+      "source_take": "take_P",
+      "in_s": 0,
+      "out_s": 2
+     },
+     {
+      "source_take": "take_T1",
+      "in_s": 2,
+      "out_s": 4,
+      "job_id": "job_01"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 4,
+      "out_s": 6
+     }
+    ]
+   },
+   "takeId": "take_T2",
+   "window": {
+    "from_s": 2,
+    "to_s": 4
+   },
+   "jobId": "job_02",
+   "want": [
+    {
+     "source_take": "take_P",
+     "in_s": 0,
+     "out_s": 2
+    },
+    {
+     "source_take": "take_T2",
+     "in_s": 2,
+     "out_s": 4,
+     "job_id": "job_02"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 4,
+     "out_s": 6
+    }
+   ]
+  },
+  {
+   "why": "adjacent pieces from one source merge",
+   "parent": {
+    "id": "take_P",
+    "duration_s": 6,
+    "segments": [
+     {
+      "source_take": "take_P",
+      "in_s": 0,
+      "out_s": 3
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 3,
+      "out_s": 6
+     }
+    ]
+   },
+   "takeId": "take_T",
+   "window": {
+    "from_s": 4,
+    "to_s": 6
+   },
+   "jobId": "job_02",
+   "want": [
+    {
+     "source_take": "take_P",
+     "in_s": 0,
+     "out_s": 4
+    },
+    {
+     "source_take": "take_T",
+     "in_s": 4,
+     "out_s": 6,
+     "job_id": "job_02"
+    }
+   ]
+  },
+  {
+   "why": "past 16 pieces the oldest patch folds with its neighbour into this take, with no job",
+   "parent": {
+    "id": "take_X8",
+    "duration_s": 32,
+    "segments": [
+     {
+      "source_take": "take_P",
+      "in_s": 0,
+      "out_s": 2
+     },
+     {
+      "source_take": "take_X1",
+      "in_s": 2,
+      "out_s": 4,
+      "job_id": "job_01"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 4,
+      "out_s": 6
+     },
+     {
+      "source_take": "take_X2",
+      "in_s": 6,
+      "out_s": 8,
+      "job_id": "job_02"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 8,
+      "out_s": 10
+     },
+     {
+      "source_take": "take_X3",
+      "in_s": 10,
+      "out_s": 12,
+      "job_id": "job_03"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 12,
+      "out_s": 14
+     },
+     {
+      "source_take": "take_X4",
+      "in_s": 14,
+      "out_s": 16,
+      "job_id": "job_04"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 16,
+      "out_s": 18
+     },
+     {
+      "source_take": "take_X5",
+      "in_s": 18,
+      "out_s": 20,
+      "job_id": "job_05"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 20,
+      "out_s": 22
+     },
+     {
+      "source_take": "take_X6",
+      "in_s": 22,
+      "out_s": 24,
+      "job_id": "job_06"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 24,
+      "out_s": 26
+     },
+     {
+      "source_take": "take_X7",
+      "in_s": 26,
+      "out_s": 28,
+      "job_id": "job_07"
+     },
+     {
+      "source_take": "take_P",
+      "in_s": 28,
+      "out_s": 30
+     },
+     {
+      "source_take": "take_X8",
+      "in_s": 30,
+      "out_s": 32,
+      "job_id": "job_08"
+     }
+    ]
+   },
+   "takeId": "take_T",
+   "window": {
+    "from_s": 3,
+    "to_s": 5
+   },
+   "jobId": "job_09",
+   "want": [
+    {
+     "source_take": "take_T",
+     "in_s": 0,
+     "out_s": 3
+    },
+    {
+     "source_take": "take_T",
+     "in_s": 3,
+     "out_s": 5,
+     "job_id": "job_09"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 5,
+     "out_s": 6
+    },
+    {
+     "source_take": "take_X2",
+     "in_s": 6,
+     "out_s": 8,
+     "job_id": "job_02"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 8,
+     "out_s": 10
+    },
+    {
+     "source_take": "take_X3",
+     "in_s": 10,
+     "out_s": 12,
+     "job_id": "job_03"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 12,
+     "out_s": 14
+    },
+    {
+     "source_take": "take_X4",
+     "in_s": 14,
+     "out_s": 16,
+     "job_id": "job_04"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 16,
+     "out_s": 18
+    },
+    {
+     "source_take": "take_X5",
+     "in_s": 18,
+     "out_s": 20,
+     "job_id": "job_05"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 20,
+     "out_s": 22
+    },
+    {
+     "source_take": "take_X6",
+     "in_s": 22,
+     "out_s": 24,
+     "job_id": "job_06"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 24,
+     "out_s": 26
+    },
+    {
+     "source_take": "take_X7",
+     "in_s": 26,
+     "out_s": 28,
+     "job_id": "job_07"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 28,
+     "out_s": 30
+    },
+    {
+     "source_take": "take_X8",
+     "in_s": 30,
+     "out_s": 32,
+     "job_id": "job_08"
+    }
+   ]
+  }
+ ],
+ "patchedRanges": [
+  {
+   "segments": [
+    {
+     "source_take": "take_P",
+     "in_s": 0,
+     "out_s": 2
+    },
+    {
+     "source_take": "take_T1",
+     "in_s": 2,
+     "out_s": 3,
+     "job_id": "job_01"
+    },
+    {
+     "source_take": "take_T2",
+     "in_s": 3,
+     "out_s": 5,
+     "job_id": "job_02"
+    },
+    {
+     "source_take": "take_P",
+     "in_s": 5,
+     "out_s": 6
+    }
+   ],
+   "want": [
+    {
+     "from_s": 2,
+     "to_s": 3,
+     "job_id": "job_01",
+     "label": "patched 0:02-0:03"
+    },
+    {
+     "from_s": 3,
+     "to_s": 5,
+     "job_id": "job_02",
+     "label": "patched 0:03-0:05"
+    }
+   ]
+  },
+  {
+   "segments": [
+    {
+     "source_take": "take_T",
+     "in_s": 75,
+     "out_s": 77,
+     "job_id": "job_03"
+    }
+   ],
+   "want": [
+    {
+     "from_s": 75,
+     "to_s": 77,
+     "job_id": "job_03",
+     "label": "patched 1:15-1:17"
+    }
+   ]
+  },
+  {
+   "segments": [],
+   "want": []
+  }
+ ]
 }

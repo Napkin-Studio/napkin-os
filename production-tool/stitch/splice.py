@@ -3,10 +3,11 @@ take, and splice the model's new window back into it.
 
 The relay invokes stitch.py's handler with `mode` set (an event with no mode is the ad, as before):
 
-  cut    {jobId, mode: "cut", key, fromS, toS, stillAtS?, outKey, stillKey?, resultKey}
-         -> {ok, sha256, bytes, w, h, fps, durationS, still?: {sha256, bytes}}
-         The take's [fromS, toS) re-encoded with an accurate seek (never a stream copy, which starts
-         at a keyframe), no audio, and a lossless PNG of the frame at stillAtS.
+  cut    {jobId, mode: "cut", key, clip?: {fromS, toS, outKey}, stills: [{atS, key}], resultKey}
+         -> {ok, takeS, w, h, fps, clip?: {sha256, bytes, durationS}, stills: [{sha256, bytes}]}
+         Reads the take (its length decides what is sent). With clip: the take's [fromS, toS)
+         re-encoded with an accurate seek (never a stream copy, which starts at a keyframe), no audio.
+         Each still: a lossless PNG of the frame at atS (the keyframe; a and b for a first/last model).
 
   splice {jobId, mode: "splice", parentKey, patchKey, cutFromS, windowFromS, windowToS, crossfadeS,
           seamMin?, outKey, resultKey}
@@ -108,31 +109,37 @@ def _rate(rate: Fraction) -> str:
 # ── cut ─────────────────────────────────────────────────────────────────────
 
 def cut(event: dict, *, get, put, ffmpeg: str, ffprobe: str, tmp: str) -> dict:
+    """Read the take: its length and shape always, the sub-clip [clip.fromS, clip.toS) when asked (the
+    cut send), and a lossless PNG of the frame at each still's atS (the keyframe at t; a and b for a
+    first/last-frame model)."""
     src = os.path.join(tmp, "take.mp4")
     get(event["key"], src)
     p = probe(ffprobe, src)
-    frm, to = float(event["fromS"]), float(event["toS"])
-    if not 0 <= frm < to:
-        raise SpliceError(f"the cut {frm}-{to} s is empty")
-    n = round((to - frm) * p["rate"])
-    out = os.path.join(tmp, "cut.mp4")
-    # -ss after -i: decoded from the keyframe before and dropped up to frm, so the cut starts on the frame.
-    _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-ss", f"{frm:.6f}",
-          "-map", "0:v:0", "-frames:v", str(n), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(CUT_CRF),
-          "-pix_fmt", "yuv420p", "-r", _rate(p["rate"]), "-movflags", "+faststart", out])
-    sha, size = _sha(out)
-    q = probe(ffprobe, out)
-    put(event["outKey"], out, "video/mp4")
-    result = {"ok": True, "sha256": sha, "bytes": size, "w": q["w"], "h": q["h"], "fps": round(q["fps"], 3),
-              "durationS": round(q["frames"] / q["fps"], 3)}
-    if event.get("stillAtS") is not None and event.get("stillKey"):
-        at = min(max(float(event["stillAtS"]), 0.0), (p["frames"] - 1) / p["fps"])
-        still = os.path.join(tmp, "still.png")
+    result: dict = {"ok": True, "takeS": round(p["frames"] / p["fps"], 3), "w": p["w"], "h": p["h"],
+                    "fps": round(p["fps"], 3), "stills": []}
+    clip = event.get("clip")
+    if clip:
+        frm, to = float(clip["fromS"]), float(clip["toS"])
+        if not 0 <= frm < to:
+            raise SpliceError(f"the cut {frm}-{to} s is empty")
+        n = round((to - frm) * p["rate"])
+        out = os.path.join(tmp, "cut.mp4")
+        # -ss after -i: decoded from the keyframe before and dropped up to frm, so the cut starts on the frame.
+        _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-ss", f"{frm:.6f}",
+              "-map", "0:v:0", "-frames:v", str(n), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(CUT_CRF),
+              "-pix_fmt", "yuv420p", "-r", _rate(p["rate"]), "-movflags", "+faststart", out])
+        sha, size = _sha(out)
+        q = probe(ffprobe, out)
+        put(clip["outKey"], out, "video/mp4")
+        result["clip"] = {"sha256": sha, "bytes": size, "durationS": round(q["frames"] / q["fps"], 3)}
+    for i, s in enumerate(event.get("stills") or []):
+        at = min(max(float(s["atS"]), 0.0), (p["frames"] - 1) / p["fps"])
+        still = os.path.join(tmp, f"still{i}.png")
         _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-ss", f"{at:.6f}",
               "-map", "0:v:0", "-frames:v", "1", still])
         sha, size = _sha(still)
-        put(event["stillKey"], still, "image/png")
-        result["still"] = {"sha256": sha, "bytes": size}
+        put(s["key"], still, "image/png")
+        result["stills"].append({"sha256": sha, "bytes": size})
     return result
 
 
@@ -358,7 +365,7 @@ def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
             result = step(event, get=get, put=put, ffmpeg=ffmpeg, ffprobe=ffprobe, tmp=tmp)
     except Exception as e:  # the relay retries a failed splice once, and fails a cut with a refund
         print(json.dumps({"kind": f"stitch_{mode}_failed", "jobId": event.get("jobId"), "error": str(e)[:1500]}))
-        word = "cut the moment out of the take" if mode == "cut" else "splice the fix back into the take"
+        word = "get the take ready for the fix" if mode == "cut" else "splice the fix back into the take"
         result = {"ok": False, "error": f"Could not {word}."}
     put_json(event["resultKey"], result)
     print(json.dumps({"kind": f"stitch_{mode}", "jobId": event.get("jobId"), **result}))

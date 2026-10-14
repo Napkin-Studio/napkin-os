@@ -137,4 +137,15 @@ Change this frame. `input.text` is what the person wants changed. `input.image` 
 
 - The clip being changed is the `current` ref. The prompt is the words, plus what changes in plain words. With `input.region` and `input.atS`: where the sheet's `video.regionEdit` is "mask" send `mask`; where it is "temporal_keyframe" send a `keyframe` with the edited frame's hash and `atS`, and whole-second `startS` and `endS` together or neither; otherwise say the change in words. With `input.feel`, send `strength` where the sheet's `video.feelEdit` is "strength", else say it in words. `audio` is false.
 
+<!-- ops: clip_patch -->
+## clip_patch
+
+Fix this moment. A person left a note on one moment of a clip. `input.text` is the note. `input.video` is the take, the `current` ref. `input.window` is the seconds of it that are made again (take time) and `input.atS` is the note's moment inside them; you see the frame at that moment, attached. The relay sends the take with the window as the edit's range and adds the keyframe itself, so you write only the prompt.
+
+- The prompt starts with the note's words, exactly as written, with a full stop after them when they have none, then "Everything else stays exactly as it is: the people, the place, the light and the camera." Nothing more: never the window, a time, or what the rest of the clip does.
+- When `input.still` is given, the person has drawn the moment as it should look and the relay sends it as the keyframe: the words still go first, as they are, and you add nothing about the drawing.
+- Refs: `@current` (`input.video`, role `current`) only. Never `keyframe`, `keyframes`, `mask`, `region` or `ratio`. `audio` is false.
+- Ask instead only when the note is about the whole shot, not this moment: it changes the camera, the whole clip's action or pace, or the look of all of it ("make it a wide shot", "the whole thing should be slower", "redo it at night"). Then `kind` `nudge`, a short `text` ("Fix only this moment, or remake the whole clip?"), options `fix` with value `{"route": "fix"}` and `remake` with value `{"route": "remake"}`, `recommended_option_id` `remake`, `allow_text` true. The relay writes the buttons' labels itself. A change to something in the moment (a face, a hand, an object, the weather there) is never a question.
+- With `input.answer` the person chose to fix this moment (`optionId` `fix`, or words of their own, which go after the note's): make the job as above, and never ask again.
+
 Answer with the JSON only.

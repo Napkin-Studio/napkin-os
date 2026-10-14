@@ -46,6 +46,7 @@ import identity
 import library
 import names
 import projects
+import time_rules
 from contracts import Contracts, api
 from director.base import Director, PassthroughDirector, PromptTooOld, new_id
 from providers import Registry
@@ -99,7 +100,8 @@ STALE_BUILD = "This build reads contract 3; reload the page."
 QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
 INTERNAL_OPS = {"shot_list", "stitch"}  # no provider: the director, or the stitch Lambda
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
-BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "stitch"}
+BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch",
+             "stitch"}
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
@@ -141,6 +143,34 @@ STATUS_ERRORS = {
     "moderated": 422, "provider_failed": 502, "provider_unavailable": 503, "timeout": 504,
     "uncertain": 409, "conflict": 409, "internal": 500,
 }
+
+# ── Fix this moment (features/clip-moment-edit.clan) ─────────────────────────
+# A clip_patch is one job in three stages: stitch reads the take (and on a cut send cuts the window out),
+# the model remakes the window (a range send: the whole take, with the window as the keyframe's range,
+# owner 2026-10-14), and stitch splices the window back. Each stage has its own clock.
+CUT_TIMEOUT_S = 120
+SPLICE_TIMEOUT_S = 180
+SPLICE_TRIES = 2  # a failed splice is tried once more, then the job fails with the model's output kept
+PATCH_DEFAULTS = {"model": None, "contextS": 0, "crossfadeS": 0.25, "seamMin": 0.85}
+PATCH_BUSY = "A fix is already running on this take ({window}). Wait for it to land, then fix again."
+PATCH_UNAVAILABLE = ("Aleph 2 on Runway isn't available on our account right now, so nothing was made. "
+                     "Try again later, or remake the whole clip.")
+PATCH_SPLICE_FAILED = "The fix was made, but it could not be put back into the take. Fix this moment again."
+PATCH_ROUTES = ("fix", "remake")
+
+
+def mss(s: float) -> str:
+    return f"{int(s) // 60}:{int(s) % 60:02d}"
+
+
+def provider_op_for(op: str, spec: dict | None) -> str:
+    """The op the provider's adapter runs for a job (features/clip-moment-edit.clan): a clip_patch runs
+    as clip_edit (Aleph 2 edits the cut), or as clip for a model that makes the window from its first and
+    last frames (an alternate with mode first_last, Veo 3.1). Every other op runs as itself, so no
+    clip_patch ever reaches an adapter, whose unknown ops fall through to its image builder."""
+    if op != "clip_patch":
+        return op
+    return "clip" if (spec or {}).get("mode") == "first_last" else "clip_edit"
 
 
 class Raw:
@@ -671,6 +701,8 @@ class Relay:
             off = "Video is switched off for now."
         elif op == "stitch" and not flags["stitch"]:
             off = "Stitching is switched off for now."
+        elif op == "clip_patch" and not flags.get("clipPatch"):  # absent means off (config.schema)
+            off = "Fix this moment is switched off for now."
         elif op == "region_edit" and not (flags["regionEditFrames"] or flags["regionEditCanvas"]):
             off = "Region edits are switched off for now."
         elif op == "clip_edit" and (inp.get("region") or inp.get("mask")) and not flags["videoRegionEdit"]:
@@ -683,12 +715,29 @@ class Relay:
         if off:
             raise ApiError("flag_off", off)
 
-    def _estimate(self, op: str, provider: str, model: str | None = None) -> tuple[float, bool]:
+    def _estimate(self, op: str, provider: str, model: str | None = None,
+                  seconds: float | None = None) -> tuple[float, bool]:
         sheet = self.registry.sheet(provider)
         if sheet and op in sheet.get("ops", {}):
             sheet = effective_sheet(sheet, op, model)
-        price = ((sheet or {}).get("ops", {}).get(op) or {}).get("estimateUsd")
+        spec = (sheet or {}).get("ops", {}).get(op) or {}
+        if op == "clip_patch" and seconds is not None and spec.get("usdPerS") is not None:
+            return self._patch_estimate(spec, seconds), False
+        price = spec.get("estimateUsd")
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
+
+    @staticmethod
+    def _patch_estimate(spec: dict, seconds: float) -> float:
+        """A clip_patch's price from the sheet (examples/patches.json estimates): billed by the second
+        of the cut, at least minS. The one place it is computed; runway-sheet-sync's pricing.op_usd
+        with settings {inputS: seconds} replaces it when the two branches meet."""
+        billed = max(spec.get("minS", 0), math.ceil(seconds - 1e-9))
+        return round(billed * float(spec["usdPerS"]), 4)
+
+    @staticmethod
+    def _cut_seconds(job: dict) -> float | None:
+        """The seconds a clip_patch is billed by: the range on a range send, the cut on a cut send."""
+        return (job.get("_patch") or {}).get("seconds")
 
     @staticmethod
     def _check_frame(req: dict) -> None:
@@ -719,13 +768,15 @@ class Relay:
             names.to_wire(op, req["input"])
         except (names.UnknownName, ValueError) as e:
             raise ApiError("invalid_input", str(e)) from None
+        patch = self._patch_admit(cfg, req) if op == "clip_patch" else None
         estimate, unknown = 0.0, False
         if op not in INTERNAL_OPS:
             # Reserved at the dearest provider it may run on.
             candidates = self._chain(cfg, op, pick)
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
-            prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None) for p in candidates]
+            prices = [self._estimate(op, p, patch["model"] if patch else pick["model"] if pick and p == pick["provider"] else None,
+                                     seconds=patch["seconds"] if patch else None) for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
         # Admitted only when this job fits under the cap: "spent < cap" let the last jobs pass it.
@@ -733,13 +784,17 @@ class Relay:
             raise ApiError("spend_stop", "The generation budget is used up.")
 
         pid = who["pid"]
+        if patch:  # one patch per take at a time: a claim that expires, so a missed release frees itself
+            self._claim_take(cfg, req["jobId"], patch["lock"])
         if not self.store.incr(f"inflight#{pid}", "n", 1, cfg["inFlightPerParticipant"]):
+            self._release_take(patch, req["jobId"])
             raise ApiError("queue_full", f"You have {cfg['inFlightPerParticipant']} jobs running; wait for one to finish.",
                            retryable=True, retry_after=10)
         day = self._day()
         counted = qclass in cfg["quotas"]
         if counted and not self.store.incr(f"{pid}#{day}", qclass, 1, cfg["quotas"][qclass]):
             self.store.incr(f"inflight#{pid}", "n", -1)
+            self._release_take(patch, req["jobId"])
             raise ApiError("quota_exhausted", f"You have used today's {qclass} quota.")
         if estimate > 0:
             self.store.incr("spend", "usd", estimate)
@@ -757,6 +812,8 @@ class Relay:
         }
         if pick:  # where the job meant to run, for fallbackFrom
             job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
+        if patch:  # the model is chosen before the job runs, and shown on it from the start
+            job.update(model=patch["model"], patch=patch["record"], _patch=patch["settings"], _lock=patch["lock"])
         if not self.store.create_job(job):  # the same jobId raced in: undo, return theirs
             self.store.incr(f"inflight#{pid}", "n", -1)
             if counted:
@@ -805,6 +862,7 @@ class Relay:
                            queuePosition=None, **changes)
         if saved is None:
             return self._reload(job)
+        self._release_take(job, job["jobId"])  # a clip_patch's take is free for the next fix, whatever the end
         if not job.get("_released"):
             self.store.incr(f"inflight#{job['participantId']}", "n", -1)
             if job.get("_slot"):
@@ -883,6 +941,8 @@ class Relay:
             return self._run_shot_list(job, cfg)
         if op == "stitch":
             return self._run_stitch(job, cfg)
+        if op == "clip_patch" and not job.get("_stage"):
+            return self._run_cut(job, cfg)
         if job.get("_notBefore", 0) > self.clock():  # its provider asked us to wait (a 429's Retry-After)
             return self._with_poll(job)
         cls = self._slot_class(op)
@@ -977,8 +1037,10 @@ class Relay:
         # A picked model runs on its own provider; anywhere else (the floor) the default runs.
         pick = job["_req"].get("modelChoice")
         picked = pick["model"] if pick and pick["provider"] == provider else None
+        if job["op"] == "clip_patch":  # chosen before the job ran (config clipPatch.model), the price by the cut's length
+            picked = job.get("model")
         sheet = effective_sheet(self.registry.sheet(provider), job["op"], picked)
-        estimate, unknown = self._estimate(job["op"], provider, picked)
+        estimate, unknown = self._estimate(job["op"], provider, picked, seconds=self._cut_seconds(job))
         refused = self._floor_admission(job, cfg, estimate)
         if refused is not None:
             self.store.incr(slot, "n", -1)
@@ -1015,7 +1077,13 @@ class Relay:
                                     paid=False, refund=True)
             job = self._reserve_as(job, provider, run_as)
         pjob = directed["providerJob"]
-        set_job_context(run_as, asset_refs(job["_req"]["input"]))
+        made = []  # the relay's own artifacts the provider reads (a clip_patch's cut and still)
+        if job["op"] == "clip_patch":
+            try:
+                run_as, pjob, made = self._patch_provider_job(job, pjob, provider)
+            except ApiError as e:
+                return self._fail(job, e.code, e.message, paid=False, refund=True, director=block)
+        set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
         try:
             request_id = self._adapter(job, provider).submit(pjob)
         except Moderated as e:
@@ -1025,6 +1093,11 @@ class Relay:
             if e.accepted:
                 return self._fall_back(job, cfg, "uncertain", "The provider may have this job; it will not be sent again.",
                                        provider_code=e.provider_code, director=block, may_charge=True)
+            if job["op"] == "clip_patch" and e.provider_code in ("401", "403"):
+                # Aleph 2 not on our key (an entitlement refusal): nothing was made, so nothing is kept. Choosing
+                # another model is config clipPatch.model, before a job runs (owner, 2026-10-13).
+                return self._fail(job, "provider_failed", PATCH_UNAVAILABLE, provider_code=e.provider_code,
+                                  paid=False, refund=True, director=block)
             if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
                 # A sheet refusal is about the request; an outage or a full queue is about the provider.
                 sheet = isinstance(e, CapabilityMissing) or e.code == "capability_missing"
@@ -1086,7 +1159,7 @@ class Relay:
     # A frame_edit's current frame reaches Dex within this, or the words go as they are (features/frame-change-edit.clan).
     FRAME_FETCH_S = 3.0
 
-    def _frame_image(self, job: dict) -> tuple[list | None, str | None]:
+    def _frame_image(self, job: dict, url: str | None = None) -> tuple[list | None, str | None]:
         """The current frame, downscaled as a character card's picture (cards.downscale), for a director
         that looks at it: ([image], None), or (None, why the passthrough makes the job instead). Only
         pictures in our own store, within FRAME_FETCH_S; an agency that has turned Claude off
@@ -1097,7 +1170,7 @@ class Relay:
         allow = item.get("allow") or (item.get("body") or {}).get("allow") or {}
         if allow.get("claude") is False:
             return None, "your agency keeps its pictures from Claude"
-        url = ((job["_req"].get("input") or {}).get("image") or {}).get("url") or ""
+        url = url or ((job["_req"].get("input") or {}).get("image") or {}).get("url") or ""
         if self.blobs.key_for_url(url) is None:
             return None, "the frame is not one of ours"
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FetchTimeout
@@ -1125,8 +1198,15 @@ class Relay:
             if use_config:  # config.json's director block: the model ids and prompt version
                 use_config(self.config().get("director") or {})
             req = job["_req"]
+            raw = req.get("input") or {}
+            if req["op"] == "clip_patch":
+                # Dex writes for the cut, never the whole take: the window the relay cut out, and the frame
+                # at the note's moment (the edited still when the person made one).
+                cut = job.get("_cut") or {}
+                raw = {**raw, "video": cut.get("video") or raw.get("video"),
+                       **({"still": raw.get("still") or cut["still"]} if raw.get("still") or cut.get("still") else {})}
             # Extra views over this provider's ref limits are left out, not refused (names.fit_refs).
-            inp, dropped = names.fit_refs(req["op"], req.get("input") or {}, sheet)
+            inp, dropped = names.fit_refs(req["op"], raw, sheet)
             if dropped:
                 log.info("job %s: left out %s for %s's ref limits", job["jobId"], ", ".join(dropped), job.get("provider"))
             inp, kinds = self._with_cards(job, inp)
@@ -1146,6 +1226,10 @@ class Relay:
                     kw = {"images": images}
                 elif unseen:  # Dex cannot see the frame: the words go as they are, and the History says why
                     director = PassthroughDirector()
+            elif req["op"] == "clip_patch" and inp.get("still"):
+                images, _ = self._frame_image(job, inp["still"]["url"])  # Dex looks at the moment; without it, the words
+                if images:
+                    kw = {"images": images}
             out = dict(director.direct({**req, "input": wired}, sheet, **kw))
             if unseen:
                 out["rationale"] = f"Dex could not look at the frame ({unseen}), so your words went as they are."[:300]
@@ -1205,12 +1289,15 @@ class Relay:
             # No price on an option (owner decision 2026-10-13): what the chosen change costs is recorded
             # with the job, for History. Whatever Dex wrote is dropped.
             q["options"] = [{k: v for k, v in o.items() if k != "cost"} for o in q.get("options") or []]
+        if job["op"] == "clip_patch":
+            q = self._patch_question(job, q)
         cost = {**job["cost"], "reserved": 0.0}
         saved = self._save(job, state="needs_input", question=q, director=block, cost=cost, _queue=None,
                            _released=True, queuePosition=None, _slot=None, provider=None, model=None,
                            requestId=None, fallbackFrom=None)
         if saved is None:
             return self._reload(job)
+        self._release_take(job, job["jobId"])  # waiting for a person holds nothing, the take included
         if not job.get("_released"):
             self.store.incr(f"inflight#{job['participantId']}", "n", -1)
             if job.get("_slot"):
@@ -1245,12 +1332,18 @@ class Relay:
             raise ApiError("invalid_input", "That is not one of the question's options.")
         if "text" in body and not q.get("allow_text"):
             raise ApiError("invalid_input", "This question takes one of its options, not words.")
+        cfg = self.config()
+        chose = next((o for o in q.get("options", []) if o["id"] == body.get("optionId")), None)
+        remake = job["op"] == "clip_patch" and ((chose or {}).get("value") or {}).get("route") == "remake"
+        if job["op"] == "clip_patch" and not remake:
+            self._claim_take(cfg, job["jobId"], job["_lock"])  # the take again, or 409 while another fix runs
         req = json.loads(json.dumps(job["_req"]))
         req["input"] = {**req["input"], "answer": {k: v for k, v in body.items()}}
         saved = self._save(job, answeredBy=f"human:{who['pid']}", answer=self._answer_of(body), _req=req)
         if saved is None:  # someone else's answer got in first
             return self._answer_conflict(self.store.get_job(job["jobId"]))
-        cfg = self.config()
+        if remake:  # the whole clip, through the send tray: this job ends here, free, the quota back
+            return 200, public(self._cancel_waiting(saved, handoff={"op": "clip"}))
         starter = saved["participantId"]
         if not self.store.incr(f"inflight#{starter}", "n", 1, cfg["inFlightPerParticipant"]):
             failed = self._fail(saved, "queue_full", "Its starter has too many jobs running; answer again soon.",
@@ -1272,6 +1365,295 @@ class Relay:
             if parent and (parent.get("question") or {}).get("id") == qid:
                 return parent["question"]
         return None
+
+    # ── Fix this moment: clip_patch (features/clip-moment-edit.clan) ───────────
+    def _patch_admit(self, cfg: dict, req: dict) -> dict:
+        """Refuse what cannot work before any quota or spend, and plan the job: the model (config
+        clipPatch.model, else the sheet's), the cut and the keyframe (time_rules.patch_plan), the
+        seconds it is priced by, and the take's claim key."""
+        inp = req["input"]
+        a, b = inp["window"]["from_s"], inp["window"]["to_s"]
+        at = float(inp["atS"])
+        if b - a < time_rules.MIN_WINDOW_S:
+            raise ApiError("invalid_input", f"A fix needs a window of at least {time_rules.MIN_WINDOW_S} s.")
+        if not a <= at <= b:
+            raise ApiError("invalid_input", f"The note's moment ({at:g} s) is outside its window ({mss(a)}-{mss(b)}).")
+        video = inp["video"]
+        if not str(video.get("mime", "")).startswith("video/"):
+            raise ApiError("invalid_input", "Fix this moment needs the take's video.")
+        if self.blobs.key_for_url(video["url"]) is None:
+            raise ApiError("invalid_input", "This take is not one of ours; upload it first.")
+        settings = {**PATCH_DEFAULTS, **(cfg.get("clipPatch") or {})}
+        chain = self._chain(cfg, "clip_patch", None)
+        sheet = self.registry.sheet(chain[0]) if chain else None
+        if not sheet:
+            raise ApiError("capability_missing", "No provider can do this step right now.")
+        models = op_models(sheet, "clip_patch")
+        model = settings["model"] or models[0]
+        if model not in models:
+            raise ApiError("capability_missing", f"Fix this moment's model {model} is not on {chain[0]}'s sheet.")
+        spec = effective_sheet(sheet, "clip_patch", model)["ops"]["clip_patch"]
+        k = int(settings["contextS"])
+        first_last = spec.get("mode") == "first_last"
+        if first_last:
+            # It makes whole clips from a first and a last frame: the window widens, inside the shot, to the
+            # shortest clip it makes, so both seams sit on the take's own frames (approved 2026-10-13).
+            need, k = int((spec.get("durationsS") or [4])[0]), 0
+            shot_s = (inp.get("shot") or {}).get("duration_s")
+            end = math.floor(shot_s + 1e-9) if shot_s else None
+            if end is not None and end < need:
+                raise ApiError("invalid_input", f"This shot is shorter than {need} s; remake the whole clip instead.")
+            if b - a < need:
+                a = max(0, a - (need - (b - a)) // 2)
+                if end is not None:
+                    a = min(a, end - need)
+                b = a + need
+            at = min(max(at, a), b)
+        if spec.get("maxS") is not None and b - a > spec["maxS"]:
+            raise ApiError("invalid_input", f"A fix is at most {spec['maxS']:g} s; narrow the window.")
+        # The take's length is not in the request: planned on its shot's, else as ending at the window (a range
+        # send bills the range whatever the take's length), and planned again once stage 1 has read the take.
+        take_s = (inp.get("shot") or {}).get("duration_s") or b + k
+        asked = "frames" if first_last else settings.get("send") or "range"
+        plan = time_rules.patch_plan({"from_s": a, "to_s": b}, at, max(float(take_s), b), k, edited=bool(inp.get("still")),
+                                     send="cut" if first_last else asked)
+        if first_last:
+            plan = {**{x: v for x, v in plan.items() if x not in ("keyframeS", "range")}, "keyframe": "none", "send": "frames"}
+        record = {"send": plan["send"], "window": {"from_s": a, "to_s": b}, "cut": plan["cut"], "keyframe": plan["keyframe"],
+                  "model": model, **({"range": plan["range"]} if "range" in plan else {})}
+        return {"model": model, "seconds": plan["seconds"], "record": record, "lock": f"patch#{video['sha256']}",
+                "settings": {"send": asked, "contextS": k, "crossfadeS": float(settings["crossfadeS"]),
+                             "seamMin": float(settings["seamMin"]), "atS": at, "firstLast": first_last,
+                             "keyframeS": plan.get("keyframeS"), "seconds": plan["seconds"]}}
+
+    def _patch_hold_s(self, cfg: dict) -> float:
+        """How long a claim on a take may outlive a missed release: every stage's clock, end to end."""
+        wait = (cfg.get("queueTimeoutS") or QUEUE_TIMEOUT_S)["video"]
+        return wait + CUT_TIMEOUT_S + cfg["jobTimeoutS"]["video"] + SPLICE_TIMEOUT_S * SPLICE_TRIES + 60
+
+    def _claim_take(self, cfg: dict, job_id: str, key: str) -> None:
+        now = self.clock()
+        if self.store.claim(key, job_id, now + self._patch_hold_s(cfg), now):
+            return
+        holder = self.store.claimed_by(key, now)
+        window = ((self.store.get_job(holder) if holder else None) or {}).get("patch", {}).get("window")
+        where = f"{mss(window['from_s'])}-{mss(window['to_s'])}" if window else "another moment"
+        raise ApiError("conflict", PATCH_BUSY.format(window=where))
+
+    def _release_take(self, holder: dict | None, job_id: str) -> None:
+        key = (holder or {}).get("_lock") or (holder or {}).get("lock")
+        if key:
+            self.store.release(key, job_id)
+
+    @staticmethod
+    def _scratch(job: dict) -> str:
+        """Where a clip_patch's working files go (a lifecycle rule clears ads/scratch/ after 7 days)."""
+        return f"ads/scratch/{job['jobId']}"
+
+    @staticmethod
+    def _cut_result_key(job: dict) -> str:
+        """Stage 1's result: cut.json, or cut-2.json for the second read of a take too long to send whole."""
+        return f"ads/scratch/{job['jobId']}/" + ("cut-2.json" if job.get("_recut") else "cut.json")
+
+    def _run_cut(self, job: dict, cfg: dict) -> dict:
+        """Stage 1: stitch reads the take (its real length decides the send), grabs the still at the moment
+        (the keyframe; the window's first and last frames for a first/last model), and on a cut send cuts the
+        window (plus contextS) out. No provider slot is held; nothing is paid if it fails."""
+        if self.stitch is None:
+            return self._fail(job, "provider_unavailable", "Fixing a moment is not available here.", paid=False, refund=True)
+        inp, rec, settings = job["_req"]["input"], job["patch"], job["_patch"]
+        scratch = self._scratch(job)
+        stills = [{"atS": settings["atS"], "key": f"{scratch}/still.png"}]
+        if settings.get("firstLast"):  # the window's first and last frames, for a model that makes it from them
+            stills = [{"atS": rec["window"]["from_s"], "key": f"{scratch}/still.png"},
+                      {"atS": rec["window"]["to_s"], "key": f"{scratch}/last.png"}]
+        event = {"jobId": job["jobId"], "mode": "cut", "key": self.blobs.key_for_url(inp["video"]["url"]),
+                 "stills": stills, "resultKey": self._cut_result_key(job)}
+        if rec["send"] == "cut":  # a range send goes whole, and a first/last model is sent only frames
+            event["clip"] = {"fromS": rec["cut"]["from_s"], "toS": rec["cut"]["to_s"], "outKey": f"{scratch}/cut.mp4"}
+        now = self.clock()
+        saved = self._save(job, state="submitted", _stage="cut", _stageAt=now, _queue="r")
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception as e:
+            log.exception("stitch cut invoke failed")
+            return self._fail(saved, "provider_unavailable", f"Getting the take ready for the fix could not start ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        return self._with_poll(saved)
+
+    def _advance_patch(self, job: dict, cfg: dict, now: float) -> dict:
+        scratch = self._scratch(job)
+        if job["_stage"] == "cut":
+            result = self.blobs.get_json(self._cut_result_key(job))
+            if result is None:
+                if now - job["_stageAt"] > CUT_TIMEOUT_S:
+                    return self._fail(job, "timeout", "Getting the take ready for the fix took too long. Try again.",
+                                      retryable=True, paid=False, refund=True)
+                return self._with_poll(job)
+            if not result.get("ok"):
+                return self._fail(job, "provider_failed", result.get("error", "The take could not be read for the fix.")[:300],
+                                  retryable=True, paid=False, refund=True)
+            return self._after_cut(job, cfg, result, now)
+        tries = job.get("_spliceTries", 1)
+        result = self.blobs.get_json(f"{scratch}/splice-{tries}.json")
+        if result is None and now - job["_stageAt"] <= SPLICE_TIMEOUT_S:
+            return self._with_poll(job)
+        if result and result.get("ok"):
+            out = {"sha256": result["sha256"], "url": self.blobs.public_url(f"ads/patch/{job['jobId']}.mp4"),
+                   "mime": "video/mp4", "bytes": result["bytes"]}
+            for k in ("w", "h", "durationS"):
+                if result.get(k) is not None:
+                    out[k] = result[k]
+            seams = [{"at_s": s["at_s"], "score": s["score"], "ok": s["ok"]} for s in result.get("seams") or []]
+            patch = {**job["patch"], "exact": bool(result.get("exact")), "seams": seams}
+            kind = "mock" if job.get("provider") == "mock" else "generated"
+            return self._finish(job, "completed", outputs=[out], kind=kind, patch=patch, confirmed=job.get("_confirmed"))
+        log.warning("job %s: splice %s failed (%s)", job["jobId"], tries,
+                    (result or {}).get("error") or f"no result in {SPLICE_TIMEOUT_S} s")
+        if tries < SPLICE_TRIES:
+            return self._run_splice(job, job["_raw"], job.get("_confirmed"), tries + 1)
+        # The model made it and Runway billed it: the charge stands (silently, owner 2026-10-13), and its
+        # output stays on the job for whoever fixes this next.
+        patch = {**job["patch"], "rawOutput": job["_raw"]}
+        return self._fail(job, "provider_failed", PATCH_SPLICE_FAILED, retryable=True, patch=patch,
+                          confirmed=job.get("_confirmed"))
+
+    def _after_cut(self, job: dict, cfg: dict, result: dict, now: float) -> dict:
+        """The take is read: the send is planned again on its real length (a take longer than Aleph takes is
+        cut, and goes back to stitch once for that), the reservation is re-priced by the billed seconds, and
+        the job queues for a provider slot (stage 2)."""
+        scratch = self._scratch(job)
+        inp = job["_req"]["input"]
+        rec, settings = job["patch"], dict(job["_patch"])
+        take_s = float(result["takeS"])
+        cut = {"w": result.get("w"), "h": result.get("h"), "takeS": take_s}
+        for name, s in zip(("still", "last"), result.get("stills") or []):
+            cut[name] = {"sha256": s["sha256"], "url": self.blobs.public_url(f"{scratch}/{name}.png"), "mime": "image/png"}
+        patch = dict(rec)
+        if settings.get("firstLast"):  # the window is made whole from its two frames; nothing else is sent
+            seconds = settings["seconds"]
+        else:
+            plan = time_rules.patch_plan(rec["window"], settings["atS"], take_s, settings["contextS"],
+                                         edited=bool(inp.get("still")), send=settings["send"])
+            if plan["send"] == "cut" and not result.get("clip"):
+                # Planned whole, but the take is longer than Aleph takes: stitch cuts the window out after all.
+                patch.update(send="cut", cut=plan["cut"], keyframe=plan["keyframe"])
+                patch.pop("range", None)
+                if "range" in plan:
+                    patch["range"] = plan["range"]
+                settings.update(keyframeS=plan.get("keyframeS"), seconds=plan["seconds"])
+                saved = self._save(job, patch=patch, _patch=settings, _recut=True)
+                return self._run_cut(saved, cfg) if saved else self._reload(job)
+            if plan["send"] == "cut":  # the sub-clip stitch made: the cut is as long as it really is
+                clip = result["clip"]
+                frm = plan["cut"]["from_s"]
+                to = round(frm + float(clip["durationS"]), 3)
+                cut["video"] = {"sha256": clip["sha256"], "url": self.blobs.public_url(f"{scratch}/cut.mp4"),
+                                "mime": "video/mp4"}
+                plan = time_rules.patch_plan(rec["window"], settings["atS"], to, settings["contextS"],
+                                             edited=bool(inp.get("still")), send="cut")
+                plan["cut"], plan["seconds"] = {"from_s": frm, "to_s": to}, round(to - frm, 3)
+            else:  # range: the take itself goes, and Aleph edits the window alone
+                cut["video"] = {k: inp["video"][k] for k in ("sha256", "url", "mime")}
+            patch.update(send=plan["send"], cut=plan["cut"], keyframe=plan["keyframe"])
+            patch.pop("range", None)
+            if "range" in plan:
+                patch["range"] = plan["range"]
+            seconds = plan["seconds"]
+            settings.update(keyframeS=plan.get("keyframeS"), seconds=seconds)
+        cost = dict(job["cost"])
+        prices = [self._estimate("clip_patch", p, job.get("model"), seconds=seconds)
+                  for p in self._job_candidates(cfg, job)]
+        estimate = max((p for p, _ in prices), default=cost["reserved"])
+        delta = estimate - cost.get("reserved", 0)
+        cost.update(estimate=estimate, reserved=estimate)
+        saved = self._save(job, state="queued", _stage="provider", _stageAt=now, _queue="q", _queuedAt=now,
+                           _cut=cut, patch=patch, _patch=settings, cost=cost)
+        if saved is None:
+            return self._reload(job)
+        if delta:
+            self.store.incr("spend", "usd", delta)
+        return self._dispatch(saved, cfg)
+
+    def _patch_provider_job(self, job: dict, directed: dict, provider: str) -> tuple[str, dict, list]:
+        """Stage 2's provider job, built by the relay from Dex's prompt: the op the adapter runs
+        (provider_op_for), what is sent (the whole take on a range send, the cut on a cut send, two frames
+        for a first/last model), and the keyframe the relay's policy gives (none, the edited still, or the
+        frame at the moment, with the window as its range). It passes
+        Director._check_keyframe and check_capabilities, which otherwise run only inside the director.
+        (run_as, providerJob, the relay's own assets it names)."""
+        from director.director import Director as Checks, DirectorError
+        from providers import ProviderJob, check_capabilities
+        from providers.types import CapabilityMissing
+
+        model = job.get("model")
+        spec = effective_sheet(self.registry.sheet(provider), "clip_patch", model)["ops"]["clip_patch"]
+        run_as = provider_op_for("clip_patch", spec)
+        cut, rec, settings = job["_cut"], job["patch"], job["_patch"]
+        pjob = {"provider": provider, "model": model or spec["model"], "prompt": directed["prompt"]}
+        made = [cut["video"]] if cut.get("video") else []
+        if run_as == "clip_edit":
+            pjob["refs"] = [{"sha256": cut["video"]["sha256"], "name": "current", "role": "current"}]
+            if rec["keyframe"] != "none":
+                image = job["_req"]["input"].get("still") if rec["keyframe"] == "edited" else cut.get("still")
+                if not image:
+                    raise ApiError("internal", "The still for the fix's keyframe is missing.")
+                kf = {"sha256": image["sha256"], "atS": settings["keyframeS"]}
+                if rec.get("range"):
+                    kf.update(startS=rec["range"]["start_s"], endS=rec["range"]["end_s"])
+                pjob["keyframe"] = kf
+                made.append(image)
+        else:  # first_last: the window made whole from its own first and last frames
+            if not cut.get("still") or not cut.get("last"):
+                raise ApiError("internal", "The window's first and last frames are missing.")
+            from director.director import RUNWAY_CLIP_RATIOS
+            from providers.types import nearest_ratio
+            ratio = nearest_ratio(f"{cut.get('w') or 16}:{cut.get('h') or 9}", tuple(sorted(RUNWAY_CLIP_RATIOS)))
+            pjob.update(refs=[], firstFrame=cut["still"]["sha256"], lastFrame=cut["last"]["sha256"], ratio=ratio,
+                        durationS=(spec.get("durationsS") or [4])[0], audio=False)
+            made += [cut["still"], cut["last"]]
+        try:
+            if "keyframe" in pjob:
+                Checks._check_keyframe(pjob["keyframe"])
+            sheet = effective_sheet(self.registry.sheet(provider), run_as, pjob["model"])
+            check_capabilities(sheet, ProviderJob.from_director(run_as, pjob))
+        except (DirectorError, CapabilityMissing) as e:
+            raise ApiError("capability_missing", sheet_refusal("clip_patch", f"{provider}: {e}")) from e
+        return run_as, pjob, made
+
+    def _run_splice(self, job: dict, raw: dict, cost_usd: float | None, tries: int = 1) -> dict:
+        """Stage 3: stitch splices the model's window back into the take. The provider's slot is free
+        now; its bill (confirmed) is kept for the landing."""
+        rec, settings = job["patch"], job["_patch"]
+        scratch = self._scratch(job)
+        if job.get("_slot"):
+            self.store.incr(job["_slot"], "n", -1)
+        event = {"jobId": job["jobId"], "mode": "splice", "parentKey": self.blobs.key_for_url(job["_req"]["input"]["video"]["url"]),
+                 "patchKey": self.blobs.key_for_url(raw["url"]), "cutFromS": rec["cut"]["from_s"],
+                 "windowFromS": rec["window"]["from_s"], "windowToS": rec["window"]["to_s"],
+                 "crossfadeS": settings["crossfadeS"], "seamMin": settings["seamMin"],
+                 "outKey": f"ads/patch/{job['jobId']}.mp4", "resultKey": f"{scratch}/splice-{tries}.json"}
+        now = self.clock()
+        saved = self._save(job, state="submitted", _stage="splice", _stageAt=now, _spliceTries=tries, _raw=raw,
+                           _confirmed=cost_usd, _slot=None, _queue="r", _leaseUntil=None)
+        if saved is None:
+            return self._reload(job)
+        try:
+            self.stitch(event)
+        except Exception:
+            log.exception("stitch splice invoke failed")  # no result comes: the splice clock retries it
+        return self._with_poll(saved)
+
+    def _patch_question(self, job: dict, q: dict) -> dict:
+        """Dex judged the note to be about the whole shot: the ask is always the same two buttons and words
+        (ui-behaviour 3.13), whatever the model wrote; no price on either (owner, 2026-10-13)."""
+        w = job["patch"]["window"]
+        out = {**q, "kind": "nudge", "allow_text": True, "recommended_option_id": "remake",
+               "options": [{"id": "fix", "label": f"Fix only {mss(w['from_s'])}-{mss(w['to_s'])}", "value": {"route": "fix"}},
+                           {"id": "remake", "label": "Remake the whole clip", "value": {"route": "remake"}}]}
+        return out
 
     def _run_stitch(self, job: dict, cfg: dict) -> dict:
         if self.stitch is None:
@@ -1327,6 +1709,8 @@ class Relay:
         # submitted, or fetching with an expired lease
         if job["op"] == "stitch":
             return self._advance_stitch(job, cfg, now)
+        if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
+            return self._advance_patch(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
             try:
                 self._adapter(job).cancel(job["requestId"])
@@ -1400,6 +1784,8 @@ class Relay:
                                   retryable=True)
             back = self._save(claimed, state="submitted", _fetchErrors=attempts, _nextCheckAt=now + 2)
             return self._with_poll(back or claimed)
+        if job["op"] == "clip_patch":  # the model's window, spliced back into the take before it lands
+            return self._run_splice(claimed, outputs[0], st.cost_usd)
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(claimed, "completed", outputs=outputs, kind=kind, confirmed=st.cost_usd)
 
@@ -1444,15 +1830,23 @@ class Relay:
                 out[k] = result[k]
         return self._finish(job, "completed", outputs=[out], kind="generated", paid=False)
 
+    def _cancel_waiting(self, job: dict, **changes) -> dict:
+        """A job waiting for a person, cancelled: it held nothing but the day's quota, which comes back."""
+        out = self._finish(job, "cancelled", paid=False, **changes)
+        if out["state"] == "cancelled" and job.get("_counted"):
+            self.store.incr(f"{job['participantId']}#{job['_day']}", job["quotaClass"], -1)
+        return out
+
     def cancel(self, job: dict) -> dict:
         state = job["state"]
         if state == "queued":
             return self._finish(job, "cancelled", paid=False, refund=True)
         if state == "needs_input":  # holds nothing but the day's quota, which comes back
-            out = self._finish(job, "cancelled", paid=False)
-            if out["state"] == "cancelled" and job.get("_counted"):
-                self.store.incr(f"{job['participantId']}#{job['_day']}", job["quotaClass"], -1)
-            return out
+            return self._cancel_waiting(job)
+        if state == "submitted" and job["op"] == "clip_patch" and job.get("_stage") == "cut":
+            return self._finish(job, "cancelled", paid=False, refund=True)  # only our own cut ran: nothing to pay
+        if state == "submitted" and job["op"] == "clip_patch" and job.get("_stage") == "splice":
+            return self._finish(job, "cancelled", confirmed=job.get("_confirmed"))  # the model's work is done and billed
         if state in ("submitted", "uncertain"):
             if job["op"] == "stitch":  # our own Lambda, no provider bill: the render comes back
                 return self._finish(job, "cancelled", paid=False, refund=True)

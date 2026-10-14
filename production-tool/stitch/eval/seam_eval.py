@@ -62,7 +62,7 @@ class _Folder:
 
 def _patch(f: _Folder, parent: str, window: tuple[int, int], vf: str, name: str) -> str:
     a, b = window
-    cut = f.run({"jobId": name, "mode": "cut", "key": parent, "fromS": a, "toS": b, "outKey": f"{name}-cut.mp4",
+    cut = f.run({"jobId": name, "mode": "cut", "key": parent, "clip": {"fromS": a, "toS": b, "outKey": f"{name}-cut.mp4"},
                  "resultKey": "c.json"})
     if not cut["ok"]:
         raise RuntimeError(cut["error"])
