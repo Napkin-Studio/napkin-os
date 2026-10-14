@@ -10,6 +10,7 @@ import { encodePoints, localPoints, type InkPoint } from '../model/points'
 import { element, type ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import { zTop } from '../model/z'
+import { strokeScale } from '../render/renderer'
 
 export type InkTool = 'pen' | 'highlighter' | 'eraser'
 
@@ -144,7 +145,9 @@ export class Ink {
       const pts = this.scene.points(r.id)
       if (!pts) continue
       const local = localPoints(pts)
-      if (points.some((p) => local.some((q) => Math.hypot(r.x + q.x - p.x, r.y + q.y - p.y) <= reach))) this.erased.add(r.id)
+      // A stroke the handles scaled is where it is drawn.
+      const { sx, sy } = strokeScale(r, pts)
+      if (points.some((p) => local.some((q) => Math.hypot(r.x + q.x * sx - p.x, r.y + q.y * sy - p.y) <= reach))) this.erased.add(r.id)
     }
   }
 }

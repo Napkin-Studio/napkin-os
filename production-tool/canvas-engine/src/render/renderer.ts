@@ -39,6 +39,7 @@ export interface DrawContext {
   save(): void
   restore(): void
   translate(x: number, y: number): void
+  scale?(x: number, y: number): void
   fillRect(x: number, y: number, w: number, h: number): void
   clearRect?(x: number, y: number, w: number, h: number): void
   strokeRect(x: number, y: number, w: number, h: number): void
@@ -81,6 +82,42 @@ export interface DrawStats {
 }
 
 const DEFAULT_INK = '#1e1e1e'
+
+/** The selection's frame (canvas-edit-tools; mock SketchInk): dashed round a group, corner handles when it scales. */
+export interface SelectionFrame {
+  box: { x: number; y: number; w: number; h: number }
+  dashed: boolean
+  handles: boolean
+  /** Above the box ("Ink · 9 strokes · one group"). */
+  label?: string
+}
+
+export const FRAME_COLOUR = '#2F64F5'
+const LABEL_COLOUR = '#1E4ED8'
+
+const naturalSizes = new WeakMap<Uint8Array, { w: number; h: number }>()
+
+/** The extent of a stroke's own points: its record's w/h over this is the scale it is drawn at. */
+export function naturalSize(pts: Uint8Array): { w: number; h: number } {
+  let n = naturalSizes.get(pts)
+  if (!n) {
+    let w = 0
+    let h = 0
+    for (const p of localPoints(pts)) {
+      w = Math.max(w, p.x)
+      h = Math.max(h, p.y)
+    }
+    n = { w, h }
+    naturalSizes.set(pts, n)
+  }
+  return n
+}
+
+/** The scale a stroke record is drawn at (1 on an axis its points do not span). */
+export function strokeScale(r: { w: number; h: number }, pts: Uint8Array): { sx: number; sy: number } {
+  const n = naturalSize(pts)
+  return { sx: n.w > 1e-6 ? r.w / n.w : 1, sy: n.h > 1e-6 ? r.h / n.h : 1 }
+}
 
 /** A stroke's filled outline, from its points relative to its origin. */
 export function strokeOutline(pts: Uint8Array, size: number): number[][] {
@@ -145,6 +182,10 @@ export class Renderer {
   selected = new Set<string>()
   /** A move being dragged (select tool): drawn offset, never written until release. */
   moving: { ids: ReadonlySet<string>; dx: number; dy: number } | null = null
+  /** A scale being dragged (select tool's handles): drawn scaled round (ox, oy), never written until release. */
+  scaling: { ids: ReadonlySet<string>; ox: number; oy: number; s: number } | null = null
+  /** The selection's frame, drawn on top; a dashed group box replaces the members' own outlines. */
+  frame: SelectionFrame | null = null
   boardLook: BoardLook | null = null
   linkLook: LinkLook | null = null
   currentBoard: string | null = null
@@ -261,21 +302,54 @@ export class Renderer {
       stats.drawn++
       ctx.globalAlpha = r.opacity
       const moving = r.kind !== 'link' && this.moving?.ids.has(r.id) ? this.moving : null
-      if (moving) {
-        ctx.save()
-        ctx.translate(moving.dx, moving.dy)
+      const scaling = r.kind !== 'link' && ctx.scale && this.scaling?.ids.has(r.id) ? this.scaling : null
+      if (moving || scaling) ctx.save()
+      if (moving) ctx.translate(moving.dx, moving.dy)
+      if (scaling) {
+        ctx.translate(scaling.ox, scaling.oy)
+        ctx.scale!(scaling.s, scaling.s)
+        ctx.translate(-scaling.ox, -scaling.oy)
       }
       this.drawOne(ctx, r, cam, level, stats)
-      if (this.selected.has(r.id)) {
+      if (this.selected.has(r.id) && !this.frame?.dashed) {
         ctx.strokeStyle = '#4a7fd4'
-        ctx.lineWidth = 2 / cam.zoom
-        ctx.strokeRect(r.x - 4 / cam.zoom, r.y - 4 / cam.zoom, r.w + 8 / cam.zoom, r.h + 8 / cam.zoom)
+        ctx.lineWidth = 2 / (cam.zoom * (scaling?.s ?? 1))
+        const pad = 4 / (cam.zoom * (scaling?.s ?? 1))
+        ctx.strokeRect(r.x - pad, r.y - pad, r.w + pad * 2, r.h + pad * 2)
       }
-      if (moving) ctx.restore()
+      if (moving || scaling) ctx.restore()
     }
     ctx.globalAlpha = 1
+    if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
+  }
+
+  /** The selection's frame: a dashed group box (1.5 px, 6 px out) or a plain one, and white corner handles. */
+  private drawFrame(ctx: DrawContext, f: SelectionFrame, cam: Camera) {
+    const k = 1 / cam.zoom
+    const pad = 6 * k
+    const { x, y, w, h } = f.box
+    ctx.strokeStyle = FRAME_COLOUR
+    ctx.lineWidth = 1.5 * k
+    if (f.dashed) {
+      ctx.setLineDash?.([5 * k, 4 * k])
+      ctx.strokeRect(x - pad, y - pad, w + pad * 2, h + pad * 2)
+      ctx.setLineDash?.([])
+    }
+    if (f.handles) {
+      const hs = 8 * k
+      for (const [cx, cy] of [[x - pad, y - pad], [x + w + pad, y - pad], [x - pad, y + h + pad], [x + w + pad, y + h + pad]]) {
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs)
+        ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs)
+      }
+    }
+    if (f.label && cam.zoom > 0.15) {
+      ctx.fillStyle = LABEL_COLOUR
+      ctx.font = `${11 * k}px 'Geist Mono', monospace`
+      ctx.fillText(f.label, x - pad, y - pad - 10 * k)
+    }
   }
 
   /** A board in the host's look: rounded, softly filled, its title in a chip on the top edge. */
@@ -333,6 +407,9 @@ export class Renderer {
         const p = this.pathOf(pts, r.style.width ?? 4, stats)
         ctx.save()
         ctx.translate(r.x, r.y)
+        // A stroke scaled by the handles keeps its points: its box over theirs is its scale.
+        const { sx, sy } = strokeScale(r, pts)
+        if (ctx.scale && (Math.abs(sx - 1) > 1e-6 || Math.abs(sy - 1) > 1e-6)) ctx.scale(sx, sy)
         ctx.fillStyle = stroke
         ctx.fill(p)
         ctx.restore()
@@ -370,6 +447,12 @@ export class Renderer {
             ctx.font = `${13 / cam.zoom}px Geist, sans-serif`
             ctx.fillText(hint, r.x + 16 / cam.zoom, r.y + r.h / 2)
           }
+        }
+        // A sketch area says its ratio is held (ui-behaviour 3.7: "16:9 locked").
+        if (r.kind === 'sketch' && typeof r.props.ratio === 'string' && cam.zoom > 0.2) {
+          ctx.fillStyle = '#6B7180'
+          ctx.font = `${11 / cam.zoom}px 'Geist Mono', monospace`
+          ctx.fillText(`${r.props.ratio} locked`, r.x + 10 / cam.zoom, r.y + r.h - 10 / cam.zoom)
         }
         const name = typeof r.props.name === 'string' ? r.props.name : ''
         if (name && cam.zoom > 0.08) {

@@ -9,6 +9,10 @@
 // - A press on empty space starts a marquee (mouse, touch) or a lasso (pen); at
 //   release it selects what lies inside (the whole box for a marquee, the centre
 //   for a lasso), added to the selection with shift.
+// - A drag on a corner handle scales the selection round the opposite corner, one
+//   scale for both axes, so a group scales as one and a sketch area keeps its
+//   ratio (ui-behaviour 3.7: only the ratio picker changes it). Nodes, boards and
+//   links have no handles.
 // - A drag that starts on the selection moves it: the movement is a preview the
 //   renderer draws (nothing is written to Y while dragging), then one undoable
 //   step at release. Locked elements are selected but never moved or deleted.
@@ -26,6 +30,52 @@ export interface MovePreview {
   ids: ReadonlySet<string>
   dx: number
   dy: number
+}
+
+export type Corner = 'nw' | 'ne' | 'sw' | 'se'
+
+/** A scale being dragged: every id round (ox, oy) by s. Drawn by the renderer, written at release. */
+export interface ScalePreview {
+  ids: ReadonlySet<string>
+  ox: number
+  oy: number
+  s: number
+}
+
+export interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** How near a corner (screen pixels) a press takes its handle. */
+export const HANDLE_PX = 8
+/** Kinds the handles never scale: their size is the card's or the board's, or they follow their ends. */
+const UNSCALED = new Set(['node', 'board', 'link'])
+
+/** A ratio 'w:h' as a number, or null. */
+export function ratioValue(ratio: unknown): number | null {
+  if (typeof ratio !== 'string') return null
+  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(ratio)
+  return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : null
+}
+
+const isArea = (r: ElementRecord) => r.kind === 'sketch' || r.customData?.kind === 'sketch'
+
+/** A record scaled round (ox, oy); a sketch area's height then follows its ratio exactly. */
+export function scaled(r: ElementRecord, ox: number, oy: number, s: number, ratio: number | null = null): ElementRecord {
+  const w = r.w * s
+  const h = ratio ? w / ratio : r.h * s
+  return { ...r, x: ox + (r.x - ox) * s, y: oy + (r.y - oy) * s, w, h }
+}
+
+const boxOfAll = (rs: readonly ElementRecord[]): Box => {
+  const x0 = Math.min(...rs.map((r) => Math.min(r.x, r.x + r.w)))
+  const y0 = Math.min(...rs.map((r) => Math.min(r.y, r.y + r.h)))
+  const x1 = Math.max(...rs.map((r) => Math.max(r.x, r.x + r.w)))
+  const y1 = Math.max(...rs.map((r) => Math.max(r.y, r.y + r.h)))
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
 
 const centre = (r: ElementRecord): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
@@ -48,6 +98,8 @@ export class SelectTool {
   preview: MovePreview | null = null
   marquee: { x0: number; y0: number; x1: number; y1: number } | null = null
   lasso: Pt[] | null = null
+  scaling: ScalePreview | null = null
+  private scaleFrom: { box: Box; ox: number; oy: number } | null = null
   private dragFrom: Pt | null = null
   private additive = false
   private readonly cbs = new Set<() => void>()
@@ -146,7 +198,48 @@ export class SelectTool {
     this.changed()
   }
 
-  press(p: Pt, opts: { shift?: boolean; by?: PointerKind } = {}) {
+  /** The selected records, as they are drawn now (moved or scaled while a drag runs). */
+  private shown(): ElementRecord[] {
+    const out: ElementRecord[] = []
+    for (const id of this.selected) {
+      const r = this.scene.get(id)
+      if (!r) continue
+      const sc = this.scaling
+      if (sc?.ids.has(id)) out.push(scaled(r, sc.ox, sc.oy, sc.s))
+      else if (this.preview?.ids.has(id)) out.push({ ...r, x: r.x + this.preview.dx, y: r.y + this.preview.dy })
+      else out.push(r)
+    }
+    return out
+  }
+
+  /** The box round the selection, and whether its handles scale it (no node, board or link in it), or null. */
+  frame(): { box: Box; scalable: boolean } | null {
+    const rs = this.shown().filter((r) => r.kind !== 'link')
+    if (!rs.length) return null
+    return { box: boxOfAll(rs), scalable: rs.every((r) => !UNSCALED.has(r.kind)) && rs.some((r) => !r.locked) }
+  }
+
+  /** The corner handle at a scene point (HANDLE_PX on screen at this zoom), when the selection can be scaled. */
+  handleAt(p: Pt, zoom: number): Corner | null {
+    const f = this.frame()
+    if (!f?.scalable) return null
+    const reach = HANDLE_PX / zoom
+    const { x, y, w, h } = f.box
+    const corners: [Corner, number, number][] = [['nw', x, y], ['ne', x + w, y], ['sw', x, y + h], ['se', x + w, y + h]]
+    return corners.find(([, cx, cy]) => Math.abs(p.x - cx) <= reach && Math.abs(p.y - cy) <= reach)?.[0] ?? null
+  }
+
+  press(p: Pt, opts: { shift?: boolean; by?: PointerKind; zoom?: number } = {}) {
+    const corner = opts.shift ? null : this.handleAt(p, opts.zoom ?? 1)
+    if (corner) {
+      const box = this.frame()!.box
+      const ox = corner === 'nw' || corner === 'sw' ? box.x + box.w : box.x
+      const oy = corner === 'nw' || corner === 'ne' ? box.y + box.h : box.y
+      this.scaleFrom = { box, ox, oy }
+      this.scaling = { ids: new Set(this.selected), ox, oy, s: 1 }
+      this.changed()
+      return
+    }
     const hit = this.hit(p.x, p.y)
     if (hit) {
       const ids = this.withGroup(hit)
@@ -171,7 +264,13 @@ export class SelectTool {
   }
 
   drag(p: Pt) {
-    if (this.preview && this.dragFrom) {
+    if (this.scaling && this.scaleFrom) {
+      const { box, ox, oy } = this.scaleFrom
+      const want = Math.max(Math.abs(p.x - ox) / Math.max(1e-9, box.w), Math.abs(p.y - oy) / Math.max(1e-9, box.h))
+      // Never smaller than 8 px on its long side.
+      const s = Math.max(want, 8 / Math.max(1e-9, box.w, box.h))
+      this.scaling = { ...this.scaling, s }
+    } else if (this.preview && this.dragFrom) {
       this.preview = { ids: this.preview.ids, dx: p.x - this.dragFrom.x, dy: p.y - this.dragFrom.y }
     } else if (this.marquee) {
       this.marquee = { ...this.marquee, x1: p.x, y1: p.y }
@@ -183,7 +282,24 @@ export class SelectTool {
 
   release(p: Pt) {
     this.drag(p)
-    if (this.preview) {
+    if (this.scaling) {
+      const { ids, ox, oy, s } = this.scaling
+      this.scaling = null
+      this.scaleFrom = null
+      if (s !== 1) {
+        this.scene.change((tx) => {
+          const out: ElementRecord[] = []
+          for (const id of ids) {
+            const r = tx.get(id)
+            if (!r || r.locked || UNSCALED.has(r.kind)) continue
+            // A sketch area keeps its ratio: the one it was drawn at, else its shape now.
+            const ratio = isArea(r) ? ratioValue(r.props.ratio) ?? (r.h ? r.w / r.h : null) : null
+            out.push(scaled(r, ox, oy, s, ratio))
+          }
+          if (out.length) tx.put(out)
+        })
+      }
+    } else if (this.preview) {
       const { ids, dx, dy } = this.preview
       this.preview = null
       this.dragFrom = null
@@ -243,6 +359,8 @@ export class SelectTool {
   }
 
   cancel() {
+    this.scaling = null
+    this.scaleFrom = null
     this.preview = null
     this.marquee = null
     this.lasso = null

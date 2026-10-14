@@ -2,10 +2,13 @@
 // adapter/own serves as CanvasElement (the Excalidraw-shaped fields the tool
 // reads: type, width, frameId, containerId, points, status…), and the way back.
 // The way back is the converter (src/import/excalidraw.ts) element by element,
-// keeping each record's z key unless the element moved in the order.
+// keeping each record's z key unless the element moved in the order. A stroke the
+// handles scaled is served with its points scaled (its record's box over the
+// points' own), so the way back keeps its box; a sketch area carries its ratio.
 
 import { convertExcalidraw, type ExcalidrawLike } from '../import/excalidraw'
 import { localPoints } from './points'
+import { strokeScale } from '../render/renderer'
 import type { ElementRecord, Plain } from './records'
 import { zBetween } from './z'
 
@@ -23,7 +26,9 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
   switch (r.kind) {
     case 'stroke': {
       const local = pts ? localPoints(pts) : []
-      return { ...base, type: 'freedraw', points: local.map((p) => [p.x, p.y]), pressures: local.map((p) => p.pressure), tool: r.props.tool ?? 'pen' }
+      // Scaled by the handles: the points as drawn (the record's box over the points' own).
+      const { sx, sy } = pts ? strokeScale(r, pts) : { sx: 1, sy: 1 }
+      return { ...base, type: 'freedraw', points: local.map((p) => [p.x * sx, p.y * sy]), pressures: local.map((p) => p.pressure), tool: r.props.tool ?? 'pen' }
     }
     case 'shape': {
       const geo = r.props.geo
@@ -31,6 +36,7 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
       return { ...base, type: geo === 'ellipse' || geo === 'diamond' ? geo : 'rectangle' }
     }
     case 'sketch':
+      return { ...base, type: 'rectangle', ...(typeof r.props.ratio === 'string' ? { ratio: r.props.ratio } : {}) }
     case 'node':
       return { ...base, type: 'rectangle' }
     case 'board':
@@ -62,7 +68,7 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
  */
 export function recordsFromElements(els: readonly ExcalidrawLike[], current: (id: string) => ElementRecord | undefined): { records: ElementRecord[]; points: Record<string, Uint8Array> } {
   const out = convertExcalidraw({ elements: els })
-  const byId = new Map(els.map((e) => [e.id, e as ExcalidrawLike & { assetSha?: string | null; tool?: string }]))
+  const byId = new Map(els.map((e) => [e.id, e as ExcalidrawLike & { assetSha?: string | null; tool?: string; ratio?: string }]))
   const recs = out.records
   // Keep the longest run of existing keys that is still in order; everything else gets a new key.
   const kept = stayingKeys(recs.map((r) => current(r.id)?.z ?? null))
@@ -88,6 +94,8 @@ export function recordsFromElements(els: readonly ExcalidrawLike[], current: (id
     // What the element knows beyond the Excalidraw fields: its picture and its ink tool.
     if (recs[i].kind === 'image' && typeof e?.assetSha === 'string') props.assetSha = e.assetSha
     if (recs[i].kind === 'stroke' && typeof e?.tool === 'string') props.tool = e.tool
+    // A sketch area's ratio, which only the ratio picker changes (ui-behaviour 3.7).
+    if (recs[i].kind === 'sketch' && typeof e?.ratio === 'string') props.ratio = e.ratio
     recs[i] = { ...recs[i], z, props }
   }
   return { records: recs, points: out.points }
