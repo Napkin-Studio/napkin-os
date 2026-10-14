@@ -14,6 +14,7 @@ import type { CanvasChrome, ChromeTool } from './controls'
 import { PenOptions } from './PenOptions'
 import { usePenChoice } from './penStyle'
 import { canvasActions } from './actions'
+import { copyLabel } from '../core/sketchCopy'
 import { RATIOS, type Ratio } from '../../contracts/types'
 import './canvas.css'
 
@@ -23,11 +24,18 @@ function useActions() {
   return { canNode: canvasActions.canNode(), canBoard: canvasActions.canBoard(), mode: canvasActions.mode(), pending: canvasActions.pending() }
 }
 
-function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom: number } {
+function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom: number; area: string } {
   const sub = useCallback((cb: () => void) => (chrome ? chrome.onChange(cb) : () => {}), [chrome])
   const tool = useSyncExternalStore(sub, () => chrome?.tool() ?? 'select', () => chrome?.tool() ?? 'select')
   const zoom = useSyncExternalStore(sub, () => chrome?.zoom() ?? 1, () => chrome?.zoom() ?? 1)
-  return { tool, zoom }
+  // The one sketch area selected, as "id|ratio" (a stable snapshot), or '' (the picker's copy mode).
+  const area = useSyncExternalStore(sub, () => sketchSig(chrome), () => sketchSig(chrome))
+  return { tool, zoom, area }
+}
+
+const sketchSig = (chrome: CanvasChrome | null) => {
+  const a = chrome?.selectedSketch?.()
+  return a ? `${a.id}|${a.ratio ?? ''}` : ''
 }
 
 // ── The board rail ──────────────────────────────────────────────────────────
@@ -133,7 +141,9 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
-  const { tool } = useChrome(chrome)
+  const { tool, area } = useChrome(chrome)
+  // A sketch area selected: the picker copies it into another shape (owner decision 2026-10-14); it never reshapes it.
+  const areaRatio = area ? area.split('|')[1] || null : null
   // The pen's options: applied to the engine always, shown while the pen is in use.
   const pen = usePenChoice(chrome)
   const actions = useActions()
@@ -236,32 +246,50 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {(() => {
         const on = has('sketch')
         const active = shown === 'sketch'
+        const copying = !!area && !!chrome?.copySketch
         return (
           <>
             <button ref={shapeRef} type="button" className={`tb-tool wide ${active ? 'on' : ''}`} aria-pressed={active} aria-label={`Sketch area ${shape} (S)`}
-              aria-haspopup={on && active ? 'dialog' : undefined} aria-expanded={on && active ? shapes : undefined}
+              aria-haspopup={on && (active || copying) ? 'dialog' : undefined} aria-expanded={on && (active || copying) ? shapes : undefined}
               aria-disabled={on ? undefined : 'true'}
-              data-tip={!on ? 'Sketch area (S) · not on this canvas yet' : active ? `Sketch area ${shape}: press again to pick the shape` : `Sketch area ${shape} (S): drag to draw, then Generate brings back a picture at its shape`}
+              data-tip={!on ? 'Sketch area (S) · not on this canvas yet' : copying ? `Copy this ${areaRatio ?? ''} area into another shape` : active ? `Sketch area ${shape}: press again to pick the shape` : `Sketch area ${shape} (S): drag to draw, then Generate brings back a picture at its shape`}
               onClick={() => {
                 if (!on) return
-                if (active) return setShapes(!shapes)
+                if (active || copying) return setShapes(!shapes)
                 canvasActions.setMode(null)
                 chrome?.setTool('sketch')
               }}>
               <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><rect x="1" y="1" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>{shape}
             </button>
             <Float anchor={shapeRef} open={shapes} onClose={() => setShapes(false)} side="above" align="start" role="dialog" label="Sketch area shape" className="tb-shapes pt-menu">
-              <span className="pt-label">Sketch area shape</span>
-              <div role="radiogroup" aria-label="Sketch area shape">
-                {RATIOS.map((r) => (
-                  <button key={r} type="button" role="radio" aria-checked={shape === r} className={`pt-menurow ${shape === r ? 'on' : ''}`}
-                    onClick={() => { setPicked(r); setShapes(false) }}>
-                    <span className="tb-shape" style={{ aspectRatio: r.replace(':', ' / ') }} aria-hidden="true" />{r}
-                    {r === ratio && <span className="hint">storyboard</span>}
-                  </button>
-                ))}
-              </div>
-              <span className="tb-shapenote">The next area takes this shape; drawn areas keep theirs.</span>
+              {copying ? (
+                <>
+                  <span className="pt-label">Copy this area</span>
+                  <div role="menu" aria-label="Copy this area into a shape">
+                    {RATIOS.map((r) => (
+                      <button key={r} type="button" role="menuitem" className="pt-menurow" aria-disabled={r === areaRatio ? 'true' : undefined}
+                        onClick={() => { if (r === areaRatio) return; setShapes(false); chrome?.copySketch?.(r) }}>
+                        <span className="tb-shape" style={{ aspectRatio: r.replace(':', ' / ') }} aria-hidden="true" />{r === areaRatio ? `${r} · this area` : copyLabel(r)}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="tb-shapenote">A drawn area keeps its shape; the copy takes the new one, with the drawing scaled to fit.</span>
+                </>
+              ) : (
+                <>
+                  <span className="pt-label">Sketch area shape</span>
+                  <div role="radiogroup" aria-label="Sketch area shape">
+                    {RATIOS.map((r) => (
+                      <button key={r} type="button" role="radio" aria-checked={shape === r} className={`pt-menurow ${shape === r ? 'on' : ''}`}
+                        onClick={() => { setPicked(r); setShapes(false) }}>
+                        <span className="tb-shape" style={{ aspectRatio: r.replace(':', ' / ') }} aria-hidden="true" />{r}
+                        {r === ratio && <span className="hint">storyboard</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="tb-shapenote">The next area takes this shape; drawn areas keep theirs.</span>
+                </>
+              )}
             </Float>
           </>
         )

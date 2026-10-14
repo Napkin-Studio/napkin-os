@@ -42,4 +42,31 @@ describe('the sketch area shape picker', () => {
     expect(document.querySelector('[role="radiogroup"]')).toBeNull()
     await act(async () => root.unmount())
   })
+
+  it('with a sketch area selected, offers copies named for each other ratio and never reshapes the area', async () => {
+    const sent: string[] = []
+    const copied: string[] = []
+    const chrome: CanvasChrome = {
+      tool: () => 'select', setTool: () => {}, zoom: () => 1, zoomBy: () => {}, fitAll: () => {}, fitRect: () => {},
+      onChange: () => () => {}, setSketchRatio: (r) => sent.push(r), setPen: () => {},
+      selectedSketch: () => ({ id: 'area_1', ratio: '16:9' }), copySketch: (r) => { copied.push(r); return true },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => root.render(createElement(CanvasToolbar, { chrome, ratio: '16:9', onNode: () => {} })))
+    const button = host.querySelector('button[aria-label^="Sketch area"]') as HTMLButtonElement
+    // One press opens the copies: the tool stays Select.
+    await act(async () => button.click())
+    expect(document.querySelector('[role="radiogroup"]')).toBeNull()
+    const items = [...document.querySelectorAll('[role="menu"][aria-label="Copy this area into a shape"] [role="menuitem"]')] as HTMLButtonElement[]
+    expect(items.map((r) => r.textContent)).toEqual(['16:9 · this area', 'Make a 9:16 copy', 'Make a 1:1 copy', 'Make a 4:5 copy'])
+    expect(items[0].getAttribute('aria-disabled')).toBe('true')
+    await act(async () => items[0].click())
+    expect(copied).toEqual([])
+    await act(async () => items[1].click())
+    expect(copied).toEqual(['9:16'])
+    expect(sent).toEqual([])
+    await act(async () => root.unmount())
+  })
 })

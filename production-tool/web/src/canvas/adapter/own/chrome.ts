@@ -7,6 +7,7 @@
 import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
 import type { OwnAdapter } from './adapter'
 import { canvasActions } from '../../chrome/actions'
+import { areaRatio } from '../../core/sketchCopy'
 
 const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser', sketch: 'sketch' }
 // The highlighter is the pen's other mode (the pen's options), so the pen stays lit.
@@ -36,6 +37,11 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       if (id) a.setActiveTool({ type: 'native', id })
     },
     setPen: (p) => a.setPen(p),
+    selectedSketch: () => {
+      const e = a.selectedSketchArea()
+      return e ? { id: e.id, ratio: areaRatio(e) } : null
+    },
+    copySketch: (r) => !!a.copySketchArea(r),
     zoom: () => a.view().zoom,
     zoomBy: (step) => {
       const v = a.view()
@@ -55,7 +61,7 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       let last = ''
       return a.onChange(() => {
         const t = a.activeTool()
-        const sig = `${t.type}:${t.id}|${a.view().zoom}`
+        const sig = `${t.type}:${t.id}|${a.view().zoom}|${a.selectedSketchArea()?.id ?? ''}`
         if (sig !== last) {
           last = sig
           cb()

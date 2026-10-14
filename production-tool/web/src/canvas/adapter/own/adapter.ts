@@ -11,6 +11,8 @@
 // viewport = (scene + scroll) * zoom + offset.
 
 import * as Y from 'yjs'
+import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
+import { newId } from '../../../lib/ulid'
 import {
   elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardLook, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
@@ -502,6 +504,28 @@ export class OwnAdapter implements CanvasAdapter {
   /** The ratio of the next sketch area (the picker's; ui-behaviour 3.7). An existing area's never changes. */
   setSketchRatio(ratio: string) {
     this.sketch.ratio = ratio
+  }
+
+  /** The one sketch area selected, if that is the selection: the picker then offers copies (owner decision 2026-10-14). */
+  selectedSketchArea(): CanvasElement | null {
+    const ids = [...this.selector.selected]
+    if (ids.length !== 1) return null
+    const e = this.elements().find((x) => x.id === ids[0])
+    return e && isSketchArea(e) ? e : null
+  }
+
+  /**
+   * "Make a 9:16 copy": a new area of `ratio` beside the selected one, its strokes scaled to fit
+   * (canvas/core/sketchCopy), one undo step, the copy selected. The original is untouched. Returns the copy's id.
+   */
+  copySketchArea(ratio: string): string | null {
+    const area = this.selectedSketchArea()
+    if (!area) return null
+    const made = sketchCopy(this.elements(), area, ratio, (p) => (p === 'sketch' ? newId('sketch') : this.opts.newId()))
+    if (!made) return null
+    this.transact((all) => [...all, made.area, ...made.strokes], { undoable: true })
+    this.select([made.area.id])
+    return made.area.id
   }
 
   /** Group the selection (Ctrl/Cmd+G), one step of the person's. Returns the group id, or null. */

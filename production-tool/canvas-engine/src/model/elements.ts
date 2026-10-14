@@ -94,7 +94,7 @@ export function recordsFromElements(els: readonly ExcalidrawLike[], current: (id
     // What the element knows beyond the Excalidraw fields: its picture and its ink tool.
     if (recs[i].kind === 'image' && typeof e?.assetSha === 'string') props.assetSha = e.assetSha
     if (recs[i].kind === 'stroke' && typeof e?.tool === 'string') props.tool = e.tool
-    // A sketch area's ratio, which only the ratio picker changes (ui-behaviour 3.7).
+    // A sketch area's ratio, fixed once drawn (ui-behaviour 3.7; another shape is a copy, web canvas/core/sketchCopy).
     if (recs[i].kind === 'sketch' && typeof e?.ratio === 'string') props.ratio = e.ratio
     recs[i] = { ...recs[i], z, props }
   }

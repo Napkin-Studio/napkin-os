@@ -14,6 +14,10 @@ export interface CanvasChrome {
   setTool(t: ChromeTool): void
   /** The next sketch area's shape (ui-behaviour 3.7's picker); absent where the engine takes it elsewhere. */
   setSketchRatio?(ratio: string): void
+  /** The one sketch area selected (its ratio), else null; absent where the engine has no own areas. */
+  selectedSketch?(): { id: string; ratio: string | null } | null
+  /** "Make a 9:16 copy" of the selected area (the picker's, with an area selected): false when it cannot. */
+  copySketch?(ratio: string): boolean
   /** Does this engine have the tool yet? Absent: every tool. The bar disables the others, with why. */
   supports?(t: ChromeTool): boolean
   /** Zoom, 1 = 100%. */
@@ -26,7 +30,7 @@ export interface CanvasChrome {
   fitRect(r: { x: number; y: number; w: number; h: number }): void
   /** The pen's options (pen or highlighter, ink name, width): what the pen draws with from now on. */
   setPen(p: PenChoice): void
-  /** Called when the tool or the zoom changes. */
+  /** Called when the tool, the zoom or the selected sketch area changes. */
   onChange(cb: () => void): () => void
 }
 
