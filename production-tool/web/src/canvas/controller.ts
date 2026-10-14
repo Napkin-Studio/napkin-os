@@ -185,8 +185,16 @@ export class CanvasController {
     // What the person picked: not the strokes, arrows and links that went along with it.
     const shown = alive(els).filter((e) => gone.includes(e.id) && (ids.includes(e.id) || cd(e)?.kind !== 'link') && cd(e)?.kind !== 'provenance' && !(e.frameId && gone.includes(e.frameId)))
     const node = shown.length === 1 ? cd(shown[0])?.kind : undefined
-    const NODE_WORD: Record<string, string> = { script: 'Script deleted', storyboard: 'Storyboard deleted', video: 'Video deleted', gen: 'Image deleted' }
-    const b = bounds(shown.length ? shown : alive(els).filter((e) => gone.includes(e.id)))
+    const NODE_WORD: Record<string, string> = { script: 'Script deleted', storyboard: 'Storyboard deleted', video: 'Video deleted', gen: 'Image deleted', link: 'Link deleted' }
+    // A link is drawn between its ends, wherever its own box says: the chip goes between them.
+    const byId = new Map(alive(els).map((e) => [e.id, e]))
+    const placed = shown.flatMap((e) => {
+      const ends = e as El & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      const a = cd(e)?.kind === 'link' ? byId.get(ends.startBinding?.elementId ?? '') : undefined
+      const z = cd(e)?.kind === 'link' ? byId.get(ends.endBinding?.elementId ?? '') : undefined
+      return a && z ? [a, z] : [e]
+    })
+    const b = bounds(placed.length ? placed : alive(els).filter((e) => gone.includes(e.id)))
     const label = shown.length === 1 ? NODE_WORD[node ?? ''] ?? 'Deleted' : `${shown.length} deleted`
     this.setEls(els.map((e) => (gone.includes(e.id) ? this.canvas.patch(e, { isDeleted: true }) : e)))
     this.canvas.select([])

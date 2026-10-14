@@ -39,6 +39,13 @@ describe('delete on the own engine', () => {
     expect(a.elements().map((e) => e.id).sort()).toEqual([sc.id, sb.id, link.id].sort())
   })
 
+  it('a link alone says so, and its Undo chip sits between its ends', () => {
+    const { ctrl, link } = setup()
+    const r = ctrl.deleteElements([link.id])!
+    expect(r.label).toBe('Link deleted')
+    expect(r.at).toEqual({ x: 150, y: 200 })
+  })
+
   it('the document follows: the storyboard leaves it, and comes back with the node', async () => {
     const { a, doc, ctrl, sb } = setup()
     const id = mainStoryboard(doc.get())!.id
