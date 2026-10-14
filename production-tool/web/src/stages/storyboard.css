@@ -74,3 +74,12 @@
 .sb-diffrow ins { text-decoration: none; color: var(--success); background: var(--ok-bg); padding: 0 3px; }
 .sb-applyline { align-self: stretch; border-radius: 6px; padding: 4px 8px; }
 .sb-cardfoot { display: flex; justify-content: flex-end; margin-top: -6px; }
+
+/* Delete a shot (ui-behaviour 3.11, 3.3 Delete; item 4): × beside More, shown on hover or focus; the card takes Delete. */
+.sb-del { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; color: var(--ink3); font-size: 15px; opacity: 0; transition: opacity 120ms; }
+.sb-card:hover .sb-del, .sb-card:focus-within .sb-del, .sb-del:focus-visible { opacity: 1; }
+.sb-del:hover { color: var(--danger); background: var(--danger-bg); }
+.sb-card:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+.sb-deleted { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+@media (hover: none) { .sb-del { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sb-del { transition: none; } }

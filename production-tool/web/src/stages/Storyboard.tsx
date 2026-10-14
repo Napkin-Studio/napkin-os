@@ -19,7 +19,7 @@ import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
 import { useBlobUrl } from '../ui/hooks'
 import { JobSlot } from '../ui/JobSlot'
 import { updateDoc } from '../doc/store'
-import { deleteFrom, removeShot, shotDeleteText } from '../doc/remove'
+import { deleteFrom, removeShot, shotDeleteText, shotNeedsConfirm } from '../doc/remove'
 import { InlineConfirm } from '../ui/Undo'
 import { oldWordsLine } from '../ui/behind'
 import { editShot, frameStale, takeStale } from '../jobs/stale'
@@ -59,6 +59,8 @@ export function Storyboard() {
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   const [confirmShot, setConfirmShot] = useState<string | null>(null)
+  /** "Deleted shot 3." with Undo, after a delete (ui-behaviour 3.3 Delete). */
+  const [deleted, setDeleted] = useState<string | null>(null)
   /** The shot whose frame is open in the Image editor (ui-behaviour 3.12). */
   const [editing, setEditing] = useState<string | null>(null)
   const projectName = useProjectName()
@@ -103,6 +105,17 @@ export function Storyboard() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
+  }
+  // Delete a shot (ui-behaviour 3.11, 3.3 Delete; item 4): at once with Undo, or after a confirm when it has
+  // frames or clips. Through the document's removal cascade (doc/remove.ts), one undo step.
+  const removeNow = (shotId: string) => attempt(async () => {
+    const n = shotNumber(docStore.get(), shotId)
+    await deleteFrom(docStore, (d) => removeShot(d, shotId))
+    setDeleted(`Deleted shot ${n}.`)
+  })
+  const deleteShot = (shotId: string) => {
+    if (shotNeedsConfirm(docStore.get(), shotId)) setConfirmShot(shotId)
+    else void removeNow(shotId)
   }
   const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first'))
   const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next'))
@@ -154,6 +167,13 @@ export function Storyboard() {
       </div>
       <div className="panel sb-body pt-grid">
         {error && <div role="alert" className="sb-error">{error}</div>}
+        {deleted && (
+          <div role="status" className="sb-deleted">
+            <span>{deleted}</span>
+            {docStore.undo && <button className="btn xs" onClick={() => { setDeleted(null); void docStore.undo?.() }}>Undo</button>}
+            <button className="btn xs ghost" onClick={() => setDeleted(null)}>OK</button>
+          </div>
+        )}
         {planJob && !shots.length && <div className="sb-planning"><JobSlot jobId={planJob} /></div>}
         {!shots.length && !planJob && (
           <div className="sb-empty pt-card">
@@ -168,10 +188,10 @@ export function Storyboard() {
           {shots.map((s, i) => (
             <ShotCard key={s.id} shot={s} index={i} prev={shots[i - 1]} store={clan} mentions={mentionHooks}
               onOpen={() => setEditing(s.id)} onDraw={() => (i === 0 ? drawFirst() : drawNext(i))} onScript={() => openScript(s.id)}
-              onDelete={shots.length > 2 ? () => setConfirmShot(s.id) : undefined}
-              confirming={confirmShot === s.id} onConfirm={async (yes) => {
+              onDelete={() => deleteShot(s.id)}
+              confirming={confirmShot === s.id} onConfirm={(yes) => {
                 setConfirmShot(null)
-                if (yes) await deleteFrom(docStore, (d) => removeShot(d, s.id)) // Undo puts it back
+                if (yes) void removeNow(s.id) // Undo puts it back
               }}
               ask={shotAsks.get(s.id)} onAsk={(a, option) => void answerAsk(a, s.id, option)} />
           ))}
@@ -238,7 +258,7 @@ function frameChangeOf(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, shotI
 
 function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript, onDelete, confirming, onConfirm, ask, onAsk }: {
   shot: Shot; index: number; prev?: Shot; store: ModelStore | null; mentions?: ReturnType<typeof scriptMentionHooks>
-  onOpen: () => void; onDraw: () => void; onScript: () => void; onDelete?: () => void
+  onOpen: () => void; onDraw: () => void; onScript: () => void; onDelete: () => void
   confirming: boolean; onConfirm: (yes: boolean) => void
   ask?: Ask; onAsk: (a: Ask, option: 'keep' | 'remove') => void
 }) {
@@ -297,7 +317,14 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
     )
   }
   return (
-    <article className={`sb-card ${showChange || changing ? 'on' : ''}`} data-shot-card={shot.id} aria-label={`Shot ${index + 1}`}>
+    <article className={`sb-card ${showChange || changing ? 'on' : ''}`} data-shot-card={shot.id} aria-label={`Shot ${index + 1}`} tabIndex={0}
+      onKeyDown={(e) => {
+        // Delete or Backspace on the focused card (not in its fields) deletes the shot.
+        if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === e.currentTarget) {
+          e.preventDefault()
+          onDelete()
+        }
+      }}>
       {index > 0 && (
         <>
           <button ref={gapRef} type="button" className="sb-gap" aria-label={`Insert between ${index} and ${index + 1}`} aria-haspopup="menu" aria-expanded={gap} onClick={() => setGap(!gap)}>+</button>
@@ -317,6 +344,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         <span className="sb-num">{index + 1}</span>
         <b className="sb-title">{titleOf(shot)}</b>
         <span className="pt-mono sb-dur">{shot.duration_s.toFixed(1)} s</span>
+        <button type="button" className="sb-del" aria-label={`Delete shot ${index + 1}`} title="Delete this shot (Delete)" onClick={onDelete}>×</button>
         <button ref={menuRef} type="button" className="sb-more" aria-label={`More for shot ${index + 1}`} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
         <Float anchor={menuRef} open={menu} onClose={() => setMenu(false)} align="end" label={`Shot ${index + 1}`} className="pt-menu">
           <button type="button" role="menuitem" className="pt-menurow" disabled={!current} onClick={() => { setMenu(false); setChanging(true) }}>Change this frame</button>
@@ -328,7 +356,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
           </label>
           {shown && <DownloadButton items={[shown]} className="pt-menurow" title={`Download v${idx + 1}`} />}
           <div className="pt-menusep" />
-          <button type="button" role="menuitem" className="pt-menurow" disabled={!onDelete} title={onDelete ? undefined : 'A storyboard needs at least 2 shots'} onClick={() => { setMenu(false); onDelete?.() }}>Delete shot</button>
+          <button type="button" role="menuitem" className="pt-menurow" onClick={() => { setMenu(false); onDelete() }}>Delete shot</button>
         </Float>
       </header>
       <div className="sb-frame" style={{ aspectRatio: String(aspect) }}>
@@ -348,7 +376,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
       </div>
       <div className="sb-chips">{chips.map((c) => <span key={c.field} className={`sb-chip ${changedFields.has(c.field) ? 'changing' : ''}`}>{c.label}</span>)}</div>
       <div className="sb-words">
-        {store ? <ShotEditor store={store} shotId={shot.id} name={`Shot ${index + 1}`} compact mentions={mentions} /> : <div className="script-excerpt">{shot.action ?? ''}</div>}
+        {store ? <ShotEditor store={store} shotId={shot.id} name={`Shot ${index + 1}`} compact mentions={mentions} keys={{ remove: (how) => (how === 'command' ? (onDelete(), true) : false) }} /> : <div className="script-excerpt">{shot.action ?? ''}</div>}
       </div>
       <OldWords shot={shot} index={index} />
       {ask && (

@@ -10,13 +10,14 @@ import { effectiveConfig } from '../capabilities'
 import { SHEETS } from '../contracts/load'
 import type { CustomData, DocJob, ProductionDocument, Review } from '../contracts/types'
 import { JobRunner } from '../jobs/runner'
-import { edlItemFor, framesOf, shotNumber, shotsOf } from '../model/selectors'
+import { beatsOf, edlItemFor, framesOf, mainScript, scenesOf, shotNumber, shotsOf } from '../model/selectors'
+import { rankBetween } from '../../../clan-store/src'
 import type { ModelStore } from '../model/store'
 import { addFrame, addShots, addTake, content, id, job, MAYA, modelStore, SHA, T } from '../test/model'
 import { HttpRelay } from '../relay/http'
 import { makeAjv, SCHEMA } from '../test/schemas'
 import { cancelText, mayStillCharge } from '../ui/cancel'
-import { deleteFrom, markStale, removeFrame, removeNote, removeRef, removeShot, removeTake, shotDeleteText } from './remove'
+import { deleteFrom, markStale, removeBeat, removeFrame, removeNote, removeRef, removeScene, removeShot, removeTake, sceneContents, sceneDeleteText, shotDeleteText, shotNeedsConfirm } from './remove'
 import { SnapshotStore, systemUpdate } from './store'
 import { initialUi, type UiState } from './ui'
 
@@ -63,6 +64,79 @@ async function seeded<X>(build: (d: ProductionDocument) => X): Promise<{ s: Mode
 async function entries(s: ModelStore) {
   return (await s.chain()).filter((e) => e.agent === `human:${MAYA.id}` && /^(delete|create again) /.test(e.action)).reverse()
 }
+
+/** A script's scene with words, two shots planned from it (one with a frame), a line tied to a moment. */
+function sceneFixture(d: ProductionDocument) {
+  const script = mainScript(d)!
+  const last = scenesOf(d, script.id).at(-1)?.rank ?? null
+  const scene = { id: id('scene'), v: 1, field_v: {}, script_id: script.id, rank: rankBetween(last, null), heading: 'EXT. BEACH - DAY', text: 'Waves.' }
+  d.scenes[scene.id] = scene
+  const [a, b] = addShots(d, 2, { scene_id: scene.id, action: 'She walks.' })
+  const [c] = addShots(d, 1)
+  const fj = job(d, 'frame', [], SHA('9'))
+  d.jobs[fj.id] = fj
+  addFrame(d, a, SHA('9'), { pick: true, job: fj })
+  const moment = { id: id('beat'), v: 1, field_v: {}, shot_id: b.id, rank: rankBetween(null, null), at_s: 1, kind: 'moment' as const, text: 'eyes open' }
+  const line = { id: id('beat'), v: 1, field_v: {}, shot_id: b.id, rank: rankBetween(moment.rank, null), at_s: 1, kind: 'line' as const, speaker: 'MAYA', text: 'Again.', moment_id: moment.id }
+  d.beats[moment.id] = moment
+  d.beats[line.id] = line
+  return { scene, a, b, c, moment, line }
+}
+
+describe('deleting in the script and the storyboard (scenes, lines, shots)', () => {
+  it('a line goes alone; Undo puts it back with its words', async () => {
+    const { s, b, line, moment } = await seeded(sceneFixture)
+    const before = content(s.get())
+    await deleteFrom(s, (doc) => removeBeat(doc, line.id))
+    await s.flush()
+    expect(s.trouble).toBeNull()
+    expect(beatsOf(s.get(), b.id).map((x) => x.id)).toEqual([moment.id])
+    expect(validate(s.get()), JSON.stringify(validate.errors)).toBe(true)
+    expect((await entries(s)).map((x) => x.action)).toEqual(['delete line in shot 2'])
+    await s.undo()
+    expect(content(s.get())).toEqual(before)
+    expect(s.get().beats[line.id].text).toBe('Again.')
+  })
+
+  it('a moment goes and the line tied to it stays, untied', async () => {
+    const { s, line, moment } = await seeded(sceneFixture)
+    const before = content(s.get())
+    await deleteFrom(s, (doc) => removeBeat(doc, moment.id))
+    await s.flush()
+    expect(s.get().beats[moment.id]).toBeUndefined()
+    expect(s.get().beats[line.id].moment_id).toBeUndefined()
+    await s.undo()
+    expect(content(s.get())).toEqual(before)
+  })
+
+  it('a scene takes its shots, their beats and frames; other shots stay; Undo restores all of it', async () => {
+    const { s, scene, a, b, c } = await seeded(sceneFixture)
+    const before = content(s.get())
+    const what = sceneContents(s.get(), scene.id)
+    expect(what).toEqual({ shots: [a.id, b.id], frames: 1, clips: 0 })
+    expect(sceneDeleteText(2, what)).toBe('Delete scene 2 and its 2 shots, with 1 frame?')
+    await deleteFrom(s, (doc) => removeScene(doc, scene.id))
+    await s.flush()
+    expect(s.trouble).toBeNull()
+    const after = s.get()
+    expect(after.scenes[scene.id]).toBeUndefined()
+    expect(shotsOf(after).map((x) => x.id)).toEqual([c.id])
+    expect(Object.values(after.beats).filter((x) => x.shot_id === b.id)).toEqual([])
+    expect(validate(after), JSON.stringify(validate.errors)).toBe(true)
+    const e = await entries(s)
+    expect(e.map((x) => x.action)).toEqual(['delete scene EXT. BEACH - DAY'])
+    expect(e[0].rationale).toContain('with 2 shots, 1 frame and 0 clips')
+    await s.undo()
+    expect(content(s.get())).toEqual(before)
+  })
+
+  it('an empty scene goes at once; a shot asks first only when it has frames or clips', async () => {
+    const { s, a, b } = await seeded(sceneFixture)
+    expect(sceneDeleteText(1, { shots: [], frames: 0, clips: 0 })).toBeNull()
+    expect(shotNeedsConfirm(s.get(), a.id)).toBe(true)
+    expect(shotNeedsConfirm(s.get(), b.id)).toBe(false)
+  })
+})
 
 describe('delete and undo, in the .clan', () => {
   it('a frame version: the pick moves to the version it came from; Undo puts it back', async () => {

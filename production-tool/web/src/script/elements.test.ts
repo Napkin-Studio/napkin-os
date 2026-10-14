@@ -171,3 +171,36 @@ describe('the caret chain', () => {
     expect(chain.move('shot:2', 'down')).toBe(false)
   })
 })
+
+describe('delete from the keyboard (ui-behaviour 3.10, item 4)', () => {
+  it('Backspace in an empty fragment asks the page to delete its item; with words it does not', () => {
+    const asked: string[] = []
+    const e = editor('shot', { remove: (how) => { asked.push(how); return true } })
+    e.commands.focus()
+    press(e, 'Backspace')
+    expect(asked).toEqual(['empty'])
+    e.commands.insertContent('She walks.')
+    e.commands.focus('start')
+    press(e, 'Backspace')
+    expect(asked).toEqual(['empty'])
+  })
+
+  it('a mention alone is not empty', () => {
+    const asked: string[] = []
+    const e = editor('scene', { remove: (how) => { asked.push(how); return true } })
+    e.commands.setContent({ type: 'doc', content: [{ type: 'action', content: [{ type: 'mention', attrs: { id: 'ref_x', label: 'maya_front' } }] }] })
+    e.commands.focus('start')
+    press(e, 'Backspace')
+    expect(asked).toEqual([])
+  })
+
+  it('⌘⇧⌫ / Ctrl+Shift+Backspace deletes the item anywhere in it', () => {
+    const asked: string[] = []
+    const e = editor('shot', { remove: (how) => { asked.push(how); return true } })
+    e.commands.insertContent('She walks.')
+    e.commands.focus('end')
+    press(e, 'Backspace', { ctrlKey: true, shiftKey: true })
+    expect(asked).toEqual(['command'])
+    expect(e.getText()).toBe('She walks.')
+  })
+})

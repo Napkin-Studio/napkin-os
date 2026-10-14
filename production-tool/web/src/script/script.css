@@ -211,3 +211,26 @@ button.sp-pill { border: 0; cursor: pointer; font: inherit; font-size: 11px; }
 .wmark-why { font-size: 10.5px; color: var(--ink3); text-decoration: underline; cursor: pointer; }
 .warn-text { color: var(--warn); font-weight: 600; }
 .se-link { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; }
+
+/* Delete in the editor (ui-behaviour 3.10; item 4): a × on scenes and lines, shown on hover or focus. */
+.sp-scene { position: relative; }
+.sp-del {
+  border: 0; background: transparent; color: var(--ink3); font-size: 15px; line-height: 1; padding: 2px 6px; border-radius: 6px;
+  cursor: pointer; opacity: 0; transition: opacity 120ms;
+}
+.sp-scene > .sp-del { position: absolute; right: 0; top: 2px; }
+.sp-scene:hover > .sp-del, .sp-beat:hover > .sp-del, .sp-del:focus-visible, .av-audiorow:hover > .sp-del, .sp-beat:focus-within > .sp-del, .av-audiorow:focus-within > .sp-del { opacity: 1; }
+.sp-del:hover { color: var(--danger); background: var(--danger-bg); }
+.sp-delshot { color: var(--ink3); }
+.sp-delshot:hover { color: var(--danger); }
+.se-confirm { background: var(--paper, transparent); }
+@media (hover: none) { .sp-del { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sp-del { transition: none; } }
+
+/* Inputs: what is linked into the script (model/scope.ts; ui-behaviour 3.16). */
+.se-inputs { display: grid; gap: 6px; }
+.se-inputchips { display: flex; flex-wrap: wrap; gap: 4px; }
+.se-inputchip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--soft); border: 1px solid var(--line-soft); color: var(--ink2); }
+.se-ref.unlinked .pt-ref { opacity: 0.75; }
+.se-reflink { font-size: 12px; }
+.se-refvia { font-size: 11px; }

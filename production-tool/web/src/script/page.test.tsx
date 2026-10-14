@@ -21,7 +21,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addShots, MAYA, wasm } from '../test/model'
+import { addShots, asset, id, MAYA, SHA, wasm } from '../test/model'
 import { updateDoc } from '../doc/store'
 import { importFountain } from './edits'
 import { parseFountain } from './fountain'
@@ -170,5 +170,76 @@ describe('the Script editor page', () => {
     await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === '←Canvas')!.click() })
     expect(router.get()).toEqual({ kind: 'none' })
     expect(services.ui.get().stage).toBe('character')
+  })
+
+  it('lists every reference linked to the script, named in it or not, and updates as links come and go (item 1)', async () => {
+    const { services, el, render, scriptId } = await open()
+    const refId = id('ref')
+    const linkId = id('link')
+    await act(async () => {
+      await updateDoc(services.doc, (d) => {
+        d.assets[SHA('7')] = asset(SHA('7'))
+        d.refs[refId] = { id: refId, v: 1, field_v: {}, key: 'loc', variant: 'beach', role: 'location', asset: SHA('7') }
+        d.links[linkId] = { id: linkId, v: 1, field_v: {}, from: { kind: 'ref', id: refId }, to: { kind: 'script', id: scriptId }, role: 'location' }
+      }, 'link')
+      await services.doc.flush()
+    })
+    render()
+    await settle()
+    const refs = () => [...el.querySelectorAll('.se-facts .se-ref')].map((r) => r.textContent)
+    expect(refs()).toEqual(['@loc_beachlocation'])
+    expect(el.querySelector('.se-refs .pt-label')?.textContent).toContain('References · 1')
+    await act(async () => {
+      await updateDoc(services.doc, (d) => { delete d.links[linkId] }, 'unlink')
+      await services.doc.flush()
+    })
+    await settle()
+    expect(refs()).toEqual([])
+  })
+
+  it('deletes a shot from its Delete control, and Undo brings it back (item 4)', async () => {
+    const { services, el, render } = await open()
+    await act(async () => {
+      await updateDoc(services.doc, (d) => { addShots(d, 2, { status: 'planned', action: 'Shot words.' }) }, 'add shots')
+      await services.doc.flush()
+    })
+    render()
+    await settle()
+    await act(async () => { (el.querySelector('.sp-shotline') as HTMLButtonElement).click() })
+    await settle()
+    await act(async () => { (el.querySelector('.sp-delshot') as HTMLButtonElement).click() })
+    await settle()
+    await act(async () => { await services.doc.flush() })
+    await settle()
+    expect(Object.keys(services.doc.get().shots)).toHaveLength(1)
+    expect(el.querySelector('.se-line')?.textContent).toContain('Deleted shot 1.')
+    await act(async () => { [...el.querySelectorAll('.se-line button')].find((b) => b.textContent === 'Undo')!.click() })
+    await settle()
+    expect(Object.keys(services.doc.get().shots)).toHaveLength(2)
+  })
+
+  it('a scene with shots asks first; Delete scene takes it and its shots', async () => {
+    const { services, el, render, scriptId } = await open()
+    const store = services.clan!
+    await act(async () => {
+      await importFountain(store, scriptId, parseFountain('EXT. BEACH - DAWN\n\nMaya walks.\n\nINT. CAR - DAY\n\nShe drives.\n'))
+      await services.doc.flush()
+      const scene = Object.values(store.get().scenes).find((x) => x.heading === 'EXT. BEACH - DAWN')!
+      await updateDoc(services.doc, (d) => { addShots(d, 1, { status: 'planned', action: 'Shot words.', scene_id: scene.id }) }, 'add shots')
+      await services.doc.flush()
+    })
+    render()
+    await settle()
+    const headings = () => [...el.querySelectorAll('.sp-heading')].map((h) => (h as HTMLInputElement).value)
+    expect(headings()).toEqual(['EXT. BEACH - DAWN', 'INT. CAR - DAY'])
+    await act(async () => { (el.querySelector('[aria-label="Delete scene 1"]') as HTMLButtonElement).click() })
+    await settle()
+    expect(el.querySelector('.se-confirm')?.textContent).toContain('Delete scene 1 and its 1 shot?')
+    await act(async () => { [...el.querySelectorAll('.se-confirm button')].find((b) => b.textContent === 'Delete scene')!.click() })
+    await settle()
+    await act(async () => { await services.doc.flush() })
+    await settle()
+    expect(headings()).toEqual(['INT. CAR - DAY'])
+    expect(Object.keys(services.doc.get().shots)).toHaveLength(0)
   })
 })
