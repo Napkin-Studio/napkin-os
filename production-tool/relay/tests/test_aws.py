@@ -99,6 +99,24 @@ def test_dynamo_counters_are_atomic_with_a_limit(aws):
     assert st.counters("nothing") == {}
 
 
+@pytest.mark.parametrize("make", ["memory", "dynamo"])
+def test_a_claim_has_one_owner_until_it_is_released_or_expires(aws, make):
+    """Fix this moment's one patch per take (features/clip-moment-edit.clan), on both stores."""
+    from store import MemoryStore
+    st = MemoryStore() if make == "memory" else DynamoStore("jobs", "quotas", "blocked", client=aws[0])
+    assert st.claim("patch#t", "job_a", until=100, now=0)
+    assert st.claim("patch#t", "job_a", until=120, now=10)  # its owner may claim it again (an answered ask)
+    assert not st.claim("patch#t", "job_b", until=130, now=20) and st.claimed_by("patch#t", 20) == "job_a"
+    st.release("patch#t", "job_b")  # not theirs: nothing happens
+    assert st.claimed_by("patch#t", 20) == "job_a"
+    st.release("patch#t", "job_a")
+    assert st.claimed_by("patch#t", 20) is None and st.claim("patch#t", "job_b", until=200, now=21)
+    assert st.claimed_by("patch#t", 200) is None  # a missed release frees itself at its time
+    assert st.claim("patch#t", "job_c", until=400, now=200)
+    st.release("patch#t", "job_b")  # the expired owner's late release leaves the new claim alone
+    assert st.claimed_by("patch#t", 202) == "job_c"
+
+
 def test_dynamo_blocked(aws):
     ddb, _ = aws
     ddb.put_item(TableName="blocked", Item={"handle": {"S": "mallory"}})

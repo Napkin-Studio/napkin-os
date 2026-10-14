@@ -232,7 +232,7 @@ class DynamoStore:
             self.ddb.put_item(
                 TableName=self.quotas_table,
                 Item={"pk": {"S": f"claim#{key}"}, "owner": {"S": owner}, "until": {"N": str(Decimal(str(until)))}},
-                ConditionExpression="attribute_not_exists(pk) OR #u < :now OR #o = :me",
+                ConditionExpression="attribute_not_exists(pk) OR #u <= :now OR #o = :me",
                 ExpressionAttributeNames={"#u": "until", "#o": "owner"},
                 ExpressionAttributeValues={":now": {"N": str(Decimal(str(now)))}, ":me": {"S": owner}})
             return True
