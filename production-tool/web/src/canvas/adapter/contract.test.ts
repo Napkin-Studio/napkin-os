@@ -297,6 +297,21 @@ describe.each(HARNESSES)('CanvasAdapter v2 contract: $name', (h) => {
     expect(parsed.elements.map((e) => e.id)).toEqual([a.id])
   })
 
+  it('node, link and board intents keep their tags, and a link is bound to its ends', () => {
+    const { adapter } = h.make()
+    const s = adapter.node({ id: 'n_script', x: 0, y: 0, width: 340, height: 440, customData: { kind: 'script', id: 'script_1' } })
+    const b = adapter.node({ x: 0, y: 500, width: 752, height: 236, customData: { kind: 'storyboard', id: 'storyboard_1' } })
+    const l = adapter.link({ fromElId: s.id, toElId: b.id, role: 'drives', linkId: 'link_1' })
+    const board = adapter.board({ x: -20, y: -40, width: 900, height: 900, title: 'Script', boardId: 'board_1' })
+    adapter.transact(() => adapter.bindArrow([board, s, b, l], l), { undoable: false })
+    const by = new Map(adapter.elements().map((e) => [e.id, e as CanvasElement & { startBinding?: { elementId: string }; endBinding?: { elementId: string } }]))
+    expect(by.get('n_script')?.customData).toEqual({ kind: 'script', id: 'script_1' })
+    expect(by.get(l.id)?.customData).toEqual({ kind: 'link', id: 'link_1' })
+    expect(by.get(l.id)?.startBinding?.elementId).toBe(s.id)
+    expect(by.get(l.id)?.endBinding?.elementId).toBe(b.id)
+    expect(by.get(board.id)?.customData).toEqual({ kind: 'board', id: 'board_1' })
+  })
+
   it('capabilities are plain flags', () => {
     const { adapter } = h.make()
     const c = adapter.capabilities()
