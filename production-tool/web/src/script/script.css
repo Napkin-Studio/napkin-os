@@ -215,3 +215,5 @@ button.sp-pill { border: 0; cursor: pointer; font: inherit; font-size: 11px; }
 .sug-bubble .spacer { flex: 1; }
 .wmarks { display: inline-flex; align-items: center; gap: 4px; }
 .wmark-why { font-size: 10.5px; color: var(--ink3); text-decoration: underline; cursor: pointer; }
+.warn-text { color: var(--warn); font-weight: 600; }
+.se-link { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; }

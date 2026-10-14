@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { Editor } from '@tiptap/core'
 import { useDoc, useJobsTick, useRoute, useRouter, useServices, useUi } from '../app/context'
 import { formatRoute, scriptRoute } from '../app/route'
-import type { PMNode as PMNodeLike } from '../../../clan-store/src'
+import { newUlidId, type PMNode as PMNodeLike, type Prose } from '../../../clan-store/src'
 import type { Ask, CameraSize, ProductionDocument, Scene, Shot, WriteIntent, WriteTarget } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { deleteFrom, removeShot } from '../doc/remove'
@@ -37,7 +37,8 @@ import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
 import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeState, startWrite } from './skye'
-import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
+import { answerLocalAsk, nameAsks, settleNameAsks, unknownInShot } from './nameAsks'
+import { isLinked, linkForMention } from '../text/mention/source'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
@@ -358,6 +359,10 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
             <button className="se-handle right" aria-expanded={sheet === 'facts'} onClick={() => setSheet(sheet === 'facts' ? null : 'facts')}>Facts</button>
             <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError}
               skyeWorking={skye.working} skyeOff={skye.off}
+              onLink={(refId) => {
+                const link = linkForMention(doc, { id: refId, kind: 'ref' }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
+                if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link refs[${refId}] to scripts[${scriptId}]` }).then(() => say(`Linked @${doc.refs[refId].key}_${doc.refs[refId].variant} to this script.`, true)))
+              }}
               onNameAnswer={(askId, option) => void attempt(() => answerLocalAsk(store, askId, option, person, (shotId, name) => startWrite(skyeDeps, store, scriptId, { kind: 'shot', id: shotId }, 'cut_name', { name })))} />
           </>
         )}
@@ -693,9 +698,10 @@ function WriterMark({ writer, person, onWhy }: { writer?: string; person: string
 }
 
 /** The right-hand area: only facts about the script. */
-function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeOff, onNameAnswer }: {
+function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeOff, onNameAnswer, onLink }: {
   composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void
   skyeWorking?: string; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
+  onLink: (refId: string) => void
 }) {
   const { doc: docStore } = useServices()
   const sb = composed.storyboard
@@ -716,9 +722,14 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
   }
   const names = refNames(doc)
   const used = new Map<string, number[]>()
+  const missingBy = new Map<string, number[]>()
   shots.forEach((s, i) => {
     for (const r of s.refs ?? []) used.set(r, [...(used.get(r) ?? []), i + 1])
+    for (const u of unknownInShot(doc, s.prose as Prose | undefined)) missingBy.set(u.name, [...(missingBy.get(u.name) ?? []), i + 1])
   })
+  const missing = [...missingBy.entries()]
+  const script = { kind: 'script' as const, id: composed.script.id }
+  const unlinked = Object.values(doc.refs).filter((r) => !isLinked(doc, r.id, script))
   return (
     <aside className="se-facts" aria-label="This script">
       <section>
@@ -785,7 +796,17 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
           const role = doc.refs[id]?.role ?? doc.keys[id]?.role
           return <div key={id} className="se-ref">@{n ? (n.variant ? `${n.key}_${n.variant}` : n.key) : 'gone'} · {role ?? ''} · <span className="faint">{nums.join(' ')}</span></div>
         })}
-        {!used.size && <div className="faint">Name a picture on the canvas, then type @ in a shot.</div>}
+        {missing.map(([name, nums]) => <div key={name} className="se-ref">@{name} · <span className="warn-text">no ref yet</span> · <span className="faint">{nums.join(' ')}</span></div>)}
+        {!used.size && !missing.length && <div className="faint">Name a picture on the canvas, then type @ in a shot.</div>}
+        {unlinked.length > 0 && (
+          <label className="se-link">
+            <span className="linkbtn">+ Link a reference</span>
+            <select className="select xs" aria-label="Link a reference to this script" value="" onChange={(e) => e.target.value && onLink(e.target.value)}>
+              <option value="">Pick one…</option>
+              {unlinked.map((r) => <option key={r.id} value={r.id}>@{r.key}_{r.variant} · {r.role}</option>)}
+            </select>
+          </label>
+        )}
       </section>
     </aside>
   )

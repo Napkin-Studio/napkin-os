@@ -149,6 +149,21 @@ describe('the Script editor page', () => {
     expect(el.querySelector('.av-row.open .av-marker')?.textContent).toBe('0:00')
   })
 
+  it('the facts list a name with no ref yet, with the shots that use it', async () => {
+    const { services, el, render } = await open()
+    const store = services.clan!
+    await act(async () => {
+      await updateDoc(services.doc, (d) => { addShots(d, 1, { status: 'planned' }) }, 'add shots')
+      await services.doc.flush()
+      const shot = Object.keys(store.get().shots)[0]
+      await store.text.replace('shot', shot, { type: 'doc', content: [{ type: 'action', content: [{ type: 'text', text: 'A @jogger runs past.' }] }] }, `human:${MAYA.id}`)
+      await store.flush()
+    })
+    render()
+    await settle()
+    expect(el.querySelector('.se-facts')?.textContent).toContain('@jogger · no ref yet · 1')
+  })
+
   it('← Storyboard leaves the route and opens the Storyboard stage', async () => {
     const { el, router, services } = await open()
     await settle()
