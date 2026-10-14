@@ -12,7 +12,7 @@
 
 import * as Y from 'yjs'
 import {
-  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type BoardLook, type InkTool, type LinkLook, type Intent, type Renderer,
+  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, type BoardLook, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -26,12 +26,15 @@ import { sceneDiff } from '../../core/sceneDiff'
 import { drawElements, svgOf, type Ctx2D } from './draw'
 import { ownChrome } from './chrome'
 import type { CanvasChrome } from '../../chrome/controls'
+import { DEFAULT_PEN, type PenChoice } from '../../chrome/penStyle'
 
 /** What the canvas sits on and how boards look, in a theme (engine.ts reads them from the chrome's tokens). */
 export interface Surface {
   background: string
   board: BoardLook | null
   link: LinkLook | null
+  /** What the ink names mean in this theme (the --pen-* tokens); the light values when absent. */
+  ink?: InkPalette
 }
 
 /** A surface to export onto: a 2D context and how to read it back as a PNG. */
@@ -89,9 +92,14 @@ export class OwnAdapter implements CanvasAdapter {
   /** This person's scene steps (the scene part of the UndoCoordinator; engine-select). */
   readonly undo: SceneUndo
   readonly selector: SelectTool
-  /** The ink tool the drawing tools use (freedraw is the pen). */
+  /** The ink tool the drawing tools use (freedraw is the pen, or the highlighter when the pen's options say so). */
   inkTool: InkTool = 'pen'
-  inkStyle = { color: '#1e1e1e', width: 3 }
+  /** The pen's options (canvas/chrome/penStyle): ink names, painted in the theme's values. */
+  private pen: PenChoice = DEFAULT_PEN
+  /** What the next stroke draws with: the look of the ink tool in use. */
+  get inkStyle(): { color: string; width: number } {
+    return this.inkTool === 'highlighter' ? this.pen.highlighter : this.pen.pen
+  }
   /** Elements deleted this session, so includeDeleted and the inline Undo still see them. */
   private readonly tombstones = new Map<string, CanvasElement>()
   private cache: CanvasElement[] | null = null
@@ -427,12 +435,29 @@ export class OwnAdapter implements CanvasAdapter {
     const id = tool.type === 'native' ? tool.id : ''
     if (id === 'freedraw' || id === 'pen') {
       this.router.tool = 'ink'
-      this.inkTool = 'pen'
+      this.inkTool = this.pen.mode
     } else if (id === 'highlighter' || id === 'eraser') {
       this.router.tool = 'ink'
       this.inkTool = id
     } else this.router.tool = id === 'hand' ? 'hand' : 'select'
     this.changed()
+  }
+
+  /** The pen's options: pen or highlighter, and each one's ink and width. */
+  setPen(p: PenChoice) {
+    this.pen = p
+    if (this.inkTool !== 'eraser') this.inkTool = p.mode
+    this.changed()
+  }
+
+  /** The ink names' values in the current theme (the --pen-* tokens), for the live stroke. */
+  inkPalette(): InkPalette {
+    return this.surfaceNow()?.ink ?? LIGHT_INK
+  }
+
+  private surfaceNow(): Surface | null {
+    if (this.surfaceFor && this.surface?.theme !== this.theme) this.surface = { theme: this.theme, s: this.surfaceFor(this.theme) }
+    return this.surface?.s ?? null
   }
 
   private image = (sha: string) => this.decoded.get(sha)
@@ -549,7 +574,8 @@ export class OwnAdapter implements CanvasAdapter {
     if (this.renderer) {
       this.renderer.selected = this.selector.selected
       this.renderer.moving = this.selector.preview
-      if (this.surfaceFor && this.surface?.theme !== this.theme) this.surface = { theme: this.theme, s: this.surfaceFor(this.theme) }
+      this.surfaceNow()
+      this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK
       this.renderer.boardLook = this.surface?.s.board ?? null
       this.renderer.linkLook = this.surface?.s.link ?? null
       this.renderer.currentBoard = this.currentBoard
@@ -560,7 +586,7 @@ export class OwnAdapter implements CanvasAdapter {
     ctx.fillStyle = this.theme === 'dark' ? '#121212' : '#ffffff'
     ctx.fillRect(0, 0, width * dpr, height * dpr)
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * zoom * scrollX, dpr * zoom * scrollY)
-    drawElements(ctx, this.elements(), this.image, this.theme)
+    drawElements(ctx, this.elements(), this.image, this.theme, this.surfaceNow()?.ink)
   }
 
   onChange(cb: () => void): () => void {

@@ -15,6 +15,7 @@ import { getStroke } from 'perfect-freehand'
 import RBush from 'rbush'
 import { localPoints } from '../model/points'
 import { boundEnds, linkSegment } from './links'
+import { LIGHT_INK, resolveInk, type InkPalette } from '../ink/palette'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
@@ -79,8 +80,6 @@ export interface DrawStats {
   pathsBuilt: number
   ms: number
 }
-
-const DEFAULT_INK = '#1e1e1e'
 
 /** A stroke's filled outline, from its points relative to its origin. */
 export function strokeOutline(pts: Uint8Array, size: number): number[][] {
@@ -148,6 +147,8 @@ export class Renderer {
   boardLook: BoardLook | null = null
   linkLook: LinkLook | null = null
   currentBoard: string | null = null
+  /** What the ink names mean in the host's theme (ink/palette.ts); the light values until it says. */
+  inkPalette: InkPalette = LIGHT_INK
 
   constructor(scene: SceneStore, host: RenderHost) {
     this.scene = scene
@@ -325,7 +326,7 @@ export class Renderer {
   }
 
   private drawOne(ctx: DrawContext, r: ElementRecord, cam: Camera, level: Level, stats: DrawStats) {
-    const stroke = r.style.stroke ?? DEFAULT_INK
+    const stroke = resolveInk(r.style.stroke, this.inkPalette)
     switch (r.kind) {
       case 'stroke': {
         const pts = this.scene.points(r.id)

@@ -3,6 +3,8 @@
 // one small file (adapter/excalidraw/chrome.ts; later adapter/own), and nothing under canvas/chrome
 // imports an engine (features/production-ui.clan).
 
+import type { PenChoice } from './penStyle'
+
 /** The tools the bar offers (ui-behaviour 7: V H P T S, plus a picture and the eraser). */
 export type ChromeTool = 'select' | 'hand' | 'pen' | 'text' | 'sketch' | 'image' | 'eraser'
 
@@ -18,6 +20,8 @@ export interface CanvasChrome {
   fitAll(): void
   /** Fit a scene box (the boards drawn over the canvas, which are not the engine's elements). */
   fitRect(r: { x: number; y: number; w: number; h: number }): void
+  /** The pen's options (pen or highlighter, ink name, width): what the pen draws with from now on. */
+  setPen(p: PenChoice): void
   /** Called when the tool or the zoom changes. */
   onChange(cb: () => void): () => void
 }

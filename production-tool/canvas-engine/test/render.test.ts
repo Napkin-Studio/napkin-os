@@ -10,6 +10,7 @@ import { SceneStore } from '../src/model/store'
 import { BitmapCache } from '../src/render/bitmaps'
 import { backingBytes, deviceClass, drawDpr, MAX_DPR } from '../src/render/caps'
 import { Renderer, type DrawContext, type PathLike } from '../src/render/renderer'
+import { LIGHT_INK } from '../src/ink/palette'
 
 const bm = (w: number, h: number) => {
   const b = { width: w, height: h, closed: false, close() { b.closed = true } }
@@ -124,5 +125,32 @@ describe('Renderer', () => {
     expect(calls.filter((c) => c === 'ellipse')).toHaveLength(8)
     expect(calls).toContain('fillText:Script')
     expect(strokes).toEqual(['#D6DAE2', '#2F64F5'])
+  })
+
+  it('paints a stroke\'s ink name in the host\'s theme, a literal as is, and no colour as ink', () => {
+    const store = new SceneStore(new Y.Doc())
+    const pts = encodePoints([{ x: 0, y: 0, pressure: 0.5 }, { x: 20, y: 10, pressure: 0.5 }], { x: 0, y: 0 })
+    store.seed([
+      element({ id: 's1', kind: 'stroke', z: 'a1', x: 0, y: 0, w: 20, h: 10, style: { stroke: 'ink', width: 3 } }),
+      element({ id: 's2', kind: 'stroke', z: 'a2', x: 0, y: 20, w: 20, h: 10, style: { stroke: 'orange', width: 3 } }),
+      element({ id: 's3', kind: 'stroke', z: 'a3', x: 0, y: 40, w: 20, h: 10, style: { stroke: '#a33b2b', width: 3 } }),
+      element({ id: 's4', kind: 'stroke', z: 'a4', x: 0, y: 60, w: 20, h: 10, style: { width: 3 } }),
+    ], { s1: pts, s2: pts, s3: pts, s4: pts })
+    const r = new Renderer(store, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
+    const fills: unknown[] = []
+    const ctx = new Proxy({} as DrawContext, {
+      get: (_t, k) => (k === 'lineWidth' || k === 'globalAlpha' ? 1 : () => {}),
+      set: (_t, k, v) => {
+        if (k === 'fillStyle') fills.push(v)
+        return true
+      },
+    })
+    const cam = { scrollX: 0, scrollY: 0, zoom: 1 }
+    r.draw(ctx, cam, { width: 800, height: 600 }, 1, 'transparent')
+    expect(fills).toEqual([LIGHT_INK.ink, LIGHT_INK.orange, '#a33b2b', LIGHT_INK.ink])
+    fills.length = 0
+    r.inkPalette = { ...LIGHT_INK, ink: '#F2F3F5', orange: '#FF7A5C' }
+    r.draw(ctx, cam, { width: 800, height: 600 }, 1, 'transparent')
+    expect(fills).toEqual(['#F2F3F5', '#FF7A5C', '#a33b2b', '#F2F3F5'])
   })
 })

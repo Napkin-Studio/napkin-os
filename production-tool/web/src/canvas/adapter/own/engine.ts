@@ -8,7 +8,7 @@
 // drag, tap, undo, redo, long press) is handed on for engine-select.
 
 import * as Y from 'yjs'
-import { drawDpr, liveOutline, Renderer, type Bitmap, type Intent, type RawPointer } from '../../../../../canvas-engine/src'
+import { drawDpr, INK_COLOURS, LIGHT_INK, liveOutline, Renderer, resolveInk, type Bitmap, type InkPalette, type Intent, type RawPointer } from '../../../../../canvas-engine/src'
 import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } from '../../core/canvasAdapter'
 import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
@@ -36,8 +36,11 @@ export function surfaceOf(host: HTMLElement, theme: 'light' | 'dark'): Surface {
   const css = typeof getComputedStyle === 'function' ? getComputedStyle(host) : null
   const v = (name: string) => css?.getPropertyValue(name).trim() ?? ''
   if (!v('--line')) return { background: theme === 'dark' ? '#121212' : '#ffffff', board: null, link: null }
+  // The ink names' values in this theme: --pen-ink, --pen-orange… (styles.css), the light ones when a token is missing.
+  const ink = Object.fromEntries(INK_COLOURS.map((c) => [c, v(`--pen-${c}`) || LIGHT_INK[c]])) as InkPalette
   return {
     background: 'transparent',
+    ink,
     board: {
       fill: theme === 'dark' ? 'rgba(22, 26, 31, 0.45)' : 'rgba(255, 255, 255, 0.55)',
       stroke: v('--line'),
@@ -113,7 +116,7 @@ export const ownEngine: CanvasEngine = {
           for (const q of outline.slice(1)) p.lineTo(q[0], q[1])
           p.closePath()
           lctx.globalAlpha = s.tool === 'highlighter' ? 0.35 : 1
-          lctx.fillStyle = s.style.color
+          lctx.fillStyle = resolveInk(s.style.color, adapter.inkPalette())
           lctx.fill(p)
           lctx.globalAlpha = 1
         }

@@ -1,0 +1,33 @@
+/* The pen's options over the tool bar (features/theme-and-pencil.clan): the mock SketchInk's
+   popover look (18px radius, frosted, the pop shadow), one row above the bar, a column beside
+   the iPad's bar. Colours are tokens, so both themes read. */
+.pen-options {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; white-space: nowrap;
+  box-shadow: var(--shadow-pop); z-index: 1;
+}
+.pen-options.vertical { left: calc(100% + 10px); top: 0; bottom: auto; transform: none; flex-direction: column; padding: 8px 6px; }
+.pen-options .pen-mode button { height: 26px; padding: 0 10px; }
+.pen-options.vertical .pen-mode { flex-direction: column; border-radius: 14px; }
+.pen-sep { width: 1px; height: 20px; background: var(--line-soft); }
+.pen-options.vertical .pen-sep { width: 28px; height: 1px; }
+.pen-swatches, .pen-widths { display: flex; align-items: center; gap: 4px; }
+.pen-options.vertical .pen-swatches { display: grid; grid-template-columns: repeat(2, 28px); }
+.pen-swatch {
+  width: 28px; height: 28px; border-radius: 50%; padding: 0; cursor: pointer; border: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pen-swatch::before {
+  content: ''; width: 18px; height: 18px; border-radius: 50%; background: var(--swatch);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.pen-swatch[aria-checked='true'] { box-shadow: 0 0 0 2px var(--tool); }
+.pen-swatch:hover::before { transform: scale(1.1); }
+.pen-width {
+  width: 34px; height: 28px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pen-width > span { display: block; width: 18px; border-radius: 4px; }
+.pen-width:hover { background: var(--soft); }
+.pen-width[aria-checked='true'] { background: var(--soft-2); box-shadow: inset 0 0 0 1px var(--line); }
+@media (pointer: coarse) { .pen-swatch, .pen-width { width: 44px; height: 44px; } .pen-options.vertical .pen-swatches { grid-template-columns: repeat(2, 44px); } }

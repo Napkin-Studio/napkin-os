@@ -7,7 +7,8 @@ import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } 
 import type { OwnAdapter } from './adapter'
 
 const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser' }
-const FROM_ENGINE: Record<string, ChromeTool> = { selection: 'select', hand: 'hand', freedraw: 'pen', pen: 'pen', eraser: 'eraser' }
+// The highlighter is the pen's other mode (the pen's options), so the pen stays lit.
+const FROM_ENGINE: Record<string, ChromeTool> = { selection: 'select', hand: 'hand', freedraw: 'pen', pen: 'pen', highlighter: 'pen', eraser: 'eraser' }
 
 export function ownChrome(a: OwnAdapter): CanvasChrome {
   const size = () => {
@@ -24,6 +25,7 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       const id = TO_ENGINE[t]
       if (id) a.setActiveTool({ type: 'native', id })
     },
+    setPen: (p) => a.setPen(p),
     zoom: () => a.view().zoom,
     zoomBy: (step) => {
       const v = a.view()

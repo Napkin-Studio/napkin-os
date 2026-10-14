@@ -14,11 +14,13 @@ import { zTop } from '../model/z'
 export type InkTool = 'pen' | 'highlighter' | 'eraser'
 
 export interface InkStyle {
+  /** An ink name (ink/palette.ts: 'ink' follows the theme) or, for imports, a literal colour. */
   color: string
   /** Stroke width in scene pixels. */
   width: number
 }
 
+/** The highlighter's translucency, and its width when the host gives none of its own. */
 export const HIGHLIGHTER = { width: 18, opacity: 0.35 } as const
 /** A stroke this soon after the last one, this close to it, joins its group. */
 export const GROUP_MS = 1500
@@ -60,7 +62,7 @@ export class Ink {
   }
 
   begin(tool: InkTool, at: InkPoint, style: InkStyle) {
-    this.current = { tool, points: [at], style: tool === 'highlighter' ? { ...style, width: Math.max(style.width, HIGHLIGHTER.width) } : style }
+    this.current = { tool, points: [at], style: tool === 'highlighter' && !(style.width > 0) ? { ...style, width: HIGHLIGHTER.width } : style }
     this.erased.clear()
     if (tool === 'eraser') this.eraseAt([at])
   }

@@ -57,12 +57,22 @@ describe('Ink', () => {
     expect(r.z > 'a5').toBe(true)
   })
 
-  it('a highlighter is wide and translucent', () => {
+  it('a highlighter is translucent and keeps the width it is given (the pen options offer three)', () => {
     const { ink } = setup()
     const r = draw(ink, line(0, 0, 50, 0), 'highlighter')!
     expect(r.opacity).toBe(HIGHLIGHTER.opacity)
-    expect(r.style.width).toBe(HIGHLIGHTER.width)
+    expect(r.style.width).toBe(3)
     expect(r.props.tool).toBe('highlighter')
+    ink.begin('highlighter', { x: 0, y: 0, pressure: 0.5 }, { color: 'amber', width: 0 })
+    ink.add([{ x: 40, y: 0, pressure: 0.5 }])
+    expect(ink.end()!.style).toEqual({ stroke: 'amber', width: HIGHLIGHTER.width })
+  })
+
+  it('a stroke keeps its ink name, so it is redrawn in each theme\'s value', () => {
+    const { ink } = setup()
+    ink.begin('pen', { x: 0, y: 0, pressure: 0.5 }, { color: 'ink', width: 4 })
+    ink.add([{ x: 30, y: 10, pressure: 0.5 }])
+    expect(ink.end()!.style.stroke).toBe('ink')
   })
 
   it('strokes close in time and space share a group; far or late ones do not', () => {
