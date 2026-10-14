@@ -16,6 +16,7 @@ import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
 import { cardOf, CARD_KINDS, createNode, linkCheck, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import './nodes.css'
 
 type Local = { x: number; y: number }
@@ -65,6 +66,44 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         .catch((e) => console.warn('the node was not made', e))
     },
   }), [canvas, services, markNew])
+
+  // Pictures (ui-behaviour 3.6, 3.18): the Picture tool's file picker, a dropped file, a pasted image.
+  useEffect(() => {
+    const place = (files: Blob[], at?: Pt) => {
+      if (!files.length) return
+      void placePictures(canvas, services.doc, files, at).catch((e) => console.warn('the pictures were not placed', e))
+    }
+    const off = canvasActions.register({ picture: () => void pickPictureFiles().then((f) => place(imageFiles(f))) })
+    const host = root.current?.parentElement
+    const onOver = (e: DragEvent) => {
+      if ([...(e.dataTransfer?.types ?? [])].includes('Files')) e.preventDefault()
+    }
+    const onDrop = (e: DragEvent) => {
+      const files = imageFiles(e.dataTransfer?.files)
+      if (!files.length) return
+      e.preventDefault()
+      e.stopPropagation()
+      place(files, canvas.viewportToScene({ x: e.clientX, y: e.clientY }, canvas.view()))
+    }
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as { closest?: (s: string) => unknown } | null
+      if (t?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return
+      if (host && e.target instanceof Node && e.target !== document.body && !host.contains(e.target)) return
+      const files = imageFiles([...(e.clipboardData?.items ?? [])].flatMap((i) => (i.kind === 'file' ? [i.getAsFile()].filter((f): f is File => !!f) : [])))
+      if (!files.length) return
+      e.preventDefault()
+      place(files)
+    }
+    host?.addEventListener('dragover', onOver)
+    host?.addEventListener('drop', onDrop, true)
+    window.addEventListener('paste', onPaste)
+    return () => {
+      off()
+      host?.removeEventListener('dragover', onOver)
+      host?.removeEventListener('drop', onDrop, true)
+      window.removeEventListener('paste', onPaste)
+    }
+  }, [canvas, services])
 
   // Seed the nodes once, on a canvas that has none (a system write, nobody's step).
   useEffect(() => {
@@ -154,9 +193,14 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         }
         return
       }
-      if (toolLetter(e) === 'l') {
+      const k = toolLetter(e)
+      if (k === 'l') {
         e.preventDefault()
         canvasActions.toggle('link')
+      } else if (k === 'i' && root.current?.parentElement?.contains(e.target as Node)) {
+        // I: the Picture tool (ui-behaviour 7), from the canvas only.
+        e.preventDefault()
+        canvasActions.picture()
       }
     }
     window.addEventListener('keydown', onKey)

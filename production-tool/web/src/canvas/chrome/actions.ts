@@ -1,9 +1,9 @@
 // What the chrome asks of the canvas below it, when the canvas can do it (features/canvas-nodes.clan,
 // features/art-boards.clan; ui-behaviour 3.2, 3.3, 3.4): + Node making a node, "+ New board" and the
-// Board tool (B) making a board, and the Link tool (L). The canvas that can (our own engine: the node
-// and board layers) registers here while it is mounted; the tool bar and the rail read whether one is
-// registered, so on a canvas that cannot they fall back (Excalidraw: + Node opens the editor) or are
-// disabled with the reason. One bus per page: only one canvas is mounted at a time.
+// Board tool (B) making a board, the Link tool (L), and the Picture tool on a canvas without its own.
+// The canvas that can (our own engine: the node and board layers) registers here while it is mounted;
+// the tool bar and the rail read whether one is registered, so on a canvas that cannot they fall back
+// (Excalidraw: + Node opens the editor) or are disabled with the reason. One bus per page: only one canvas is mounted at a time.
 
 import type { CardKind } from '../nodes/cardChrome'
 
@@ -15,6 +15,8 @@ export interface CanvasActions {
   node(kind: CardKind): void
   /** Make a new board beside the others, jump to it, and open its title. */
   board(): void
+  /** The Picture tool: ask for picture files and place them in view (a canvas without its own tool). */
+  picture(): void
 }
 
 type Listener = () => void
@@ -22,6 +24,7 @@ type Listener = () => void
 class Bus {
   private nodes: Pick<CanvasActions, 'node'> | null = null
   private boards: Pick<CanvasActions, 'board'> | null = null
+  private pictures: Pick<CanvasActions, 'picture'> | null = null
   private current: CanvasMode = null
   private pick: string | null = null
   private readonly listeners = new Set<Listener>()
@@ -30,10 +33,12 @@ class Bus {
   register(part: Partial<CanvasActions>): () => void {
     if (part.node) this.nodes = { node: part.node }
     if (part.board) this.boards = { board: part.board }
+    if (part.picture) this.pictures = { picture: part.picture }
     this.emit()
     return () => {
       if (part.node && this.nodes?.node === part.node) this.nodes = null
       if (part.board && this.boards?.board === part.board) this.boards = null
+      if (part.picture && this.pictures?.picture === part.picture) this.pictures = null
       this.current = null
       this.emit()
     }
@@ -45,6 +50,16 @@ class Bus {
 
   canBoard(): boolean {
     return !!this.boards
+  }
+
+  canPicture(): boolean {
+    return !!this.pictures
+  }
+
+  picture(): boolean {
+    if (!this.pictures) return false
+    this.pictures.picture()
+    return true
   }
 
   node(kind: CardKind): boolean {
