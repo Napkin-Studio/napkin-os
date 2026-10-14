@@ -107,4 +107,4 @@ In the probe, that frame matched top level. It is M–L work, including Terrafor
 - **Weak prior-art sources.** The Excalidraw 1 MB Firestore story, the Obsidian plugin format, Penpot's pointer-map and Miro's `.rtb` came through secondary or mirror sources. None of them decides the outcome.
 - **iPad, Safari and WebKit are unmeasured** in every report: WebKit did not launch, and there was no pen input, no IndexedDB in a real browser and no real disk. Every iPad claim is an extrapolation. Measuring on a real iPad is the next check before `designed`.
 
-Evidence and scripts are in `/tmp/claude-1000/-home-batunii-Documents-Code-napkin-studio-production-tool/7bc8bbbd-c824-44c4-8437-6b45cfd195e7/scratchpad/canvas-clan-bench/`, in the `storage/`, `os-sandbox/` and `priorart/` subfolders and in `01`–`05*.mjs` with their `out-*.txt` outputs.
+Evidence and scripts are in `docs/production-tool/canvas-storage-bench/`, in the `storage/`, `os-sandbox/` and `priorart/` subfolders and in `01`–`05*.mjs` with their `out-*.txt` outputs.
