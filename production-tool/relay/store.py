@@ -14,11 +14,14 @@ Tables (infra/envs/hackathon):
           "r" while at a provider, absent once finished
   quotas  pk pk: "<participantId>#<day>" (image/video/render used),
           "inflight#<participantId>" (n), "slots#<provider>#<class>" (n),
-          "spend" (usd: reserved + confirmed)
+          "spend" (usd: reserved + confirmed, the global stop) and "spend#<tenantId>#<YYYY-MM>"
+          (usd: the agency's month), both written only by ledger.py (features/tenant-limits.clan),
+          "has#<tenantId>#<sha256>" (the agency holds these bytes, so it may be told they exist)
   blocked pk handle (lowercase)
-  tenants pk tenantId (features/os-sign-in.clan): agency, enabled, updatedAt, by. Reserved for
-          tenant-limits: capUsdMonthly, allow {claude, models}, adminOverride. The relay only reads
-          it (GetItem); scripts/tenants.py writes it with a person's credentials.
+  tenants pk tenantId (features/os-sign-in.clan): agency, enabled, updatedAt, by, and from
+          tenant-limits capUsdMonthly (number or null), dailyQuotas (bool) and allow {claude, makers};
+          a field the item lacks is contracts/spend-policy.json's. The relay only reads it (GetItem);
+          scripts/tenants.py writes it with a person's credentials.
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ class MemoryStore:
         self._counters: dict[str, dict] = {}
         self.blocked: set[str] = set()
         self.tenants: dict[str, dict] = {}
+        self.held: set[str] = set()
         self._lock = threading.Lock()
 
     def get_job(self, job_id: str) -> dict | None:
@@ -80,6 +84,15 @@ class MemoryStore:
     def is_blocked(self, handle: str) -> bool:
         return handle.lower() in self.blocked
 
+    # ── which agency holds which bytes (features/tenant-limits.clan) ──
+    def hold(self, tenant: str, sha: str) -> None:
+        with self._lock:
+            self.held.add(f"has#{tenant}#{sha}")
+
+    def holds(self, tenant: str, sha: str) -> bool:
+        with self._lock:
+            return f"has#{tenant}#{sha}" in self.held
+
     # ── tenants (features/os-sign-in.clan) ──
     def tenant(self, tenant_id: str) -> dict | None:
         with self._lock:
@@ -124,7 +137,8 @@ class DynamoStore:
         self.tenants_table = tenants_table
 
     # The whole job is one JSON string; only what conditions and indexes need
-    # is a top-level attribute.
+    # is a top-level attribute. tenantId, op, usd and month are for the audit (features/tenant-limits.clan:
+    # who in which agency made what, at what cost, in which month), which tenant-ops indexes by tenant.
     @staticmethod
     def _item(job: dict) -> dict:
         item = {
@@ -137,6 +151,17 @@ class DynamoStore:
         }
         if job.get("_queue"):
             item["queue"] = {"S": job["_queue"]}
+        tenant = job.get("_tenant") or job.get("tenantId")
+        if tenant:
+            item["tenantId"] = {"S": tenant}
+        if job.get("op"):
+            item["op"] = {"S": job["op"]}
+        cost = job.get("cost") or {}
+        usd = cost.get("confirmed", cost.get("reserved"))
+        if usd is not None:
+            item["usd"] = {"N": str(Decimal(str(usd)))}
+        if job.get("_month"):
+            item["month"] = {"S": job["_month"]}
         return item
 
     def get_job(self, job_id: str) -> dict | None:
@@ -200,6 +225,15 @@ class DynamoStore:
 
     def is_blocked(self, handle: str) -> bool:
         r = self.ddb.get_item(TableName=self.blocked_table, Key={"handle": {"S": handle.lower()}})
+        return "Item" in r
+
+    # ── which agency holds which bytes (features/tenant-limits.clan): rows in the quotas table ──
+    def hold(self, tenant: str, sha: str) -> None:
+        self.ddb.put_item(TableName=self.quotas_table, Item={"pk": {"S": f"has#{tenant}#{sha}"}})
+
+    def holds(self, tenant: str, sha: str) -> bool:
+        r = self.ddb.get_item(TableName=self.quotas_table, Key={"pk": {"S": f"has#{tenant}#{sha}"}},
+                              ConsistentRead=True)
         return "Item" in r
 
     # ── tenants (features/os-sign-in.clan): the whole item is one JSON string, as jobs are ──

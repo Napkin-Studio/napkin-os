@@ -45,9 +45,11 @@ import identity
 import library
 import names
 import projects
+from blobs import checksum_header
 from contracts import Contracts, api
-from contracts_dir import pricing
-from director.base import Director, PromptTooOld, fit_duration, new_id
+from contracts_dir import contracts_dir, pricing
+from director.base import Director, PassthroughDirector, PromptTooOld, fit_duration, new_id
+from ledger import Ledger, LimitReached, SpendStop
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
 from providers.types import effective_sheet, op_models
@@ -93,6 +95,15 @@ def _common_defs() -> dict:
 
 
 _COMMON = _common_defs()
+# What every agency gets until its tenant item says otherwise (features/tenant-limits.clan): no cap,
+# daily quotas off, Claude on, makers Runway and Google.
+SPEND_POLICY = json.loads((contracts_dir() / "spend-policy.json").read_text())
+# The plain lines for the agency's limits. No amount and no price: the UI shows none (owner, 2026-10-13).
+LIMIT_REACHED = "Your agency's monthly limit is reached, so nothing new can be made this month."
+BUDGET_USED = "The generation budget is used up."
+CLAUDE_OFF_PLAN = "Dex plans shots with Claude, which your agency has turned off."
+# Each maker's name for the not_allowed line ("made by Google"), from the notice.
+MAKER_NAMES = {e["id"]: e["name"] for e in json.loads((contracts_dir() / "subprocessors.json").read_text())["entries"]}
 CONTRACT = _COMMON["contractVersion"]["const"]  # "3"
 STALE_BUILD = "This build reads contract 3; reload the page."
 # Each op's daily quota class (common opQuotaClass).
@@ -136,8 +147,8 @@ STITCH_BAD_CLIP = "bad_clip"   # stitch.py: a clip it could not read (the result
 FETCH_LEASE_S = 90
 MAX_FETCH_ATTEMPTS = 3
 STATUS_ERRORS = {
-    "invalid_input": 400, "unauthorised": 401, "blocked": 403, "flag_off": 403,
-    "quota_exhausted": 429, "queue_full": 429, "spend_stop": 503, "capability_missing": 422,
+    "invalid_input": 400, "unauthorised": 401, "blocked": 403, "flag_off": 403, "not_allowed": 403,
+    "quota_exhausted": 429, "queue_full": 429, "limit_reached": 429, "spend_stop": 503, "capability_missing": 422,
     "moderated": 422, "provider_failed": 502, "provider_unavailable": 503, "timeout": 504,
     "uncertain": 409, "conflict": 409, "internal": 500,
 }
@@ -237,6 +248,7 @@ class Relay:
         self.stitch = stitch
         self.cards = cards
         self.dogfood = dogfood.Dogfood(blobs, clock)
+        self.ledger = Ledger(store, clock)
         self._tenants: dict[str, tuple[float, dict | None]] = {}
 
     # ── HTTP ────────────────────────────────────────────────────────────────
@@ -295,7 +307,7 @@ class Relay:
             return self.dogfood_route(who, method, path, body)
         if method == "POST" and path == "/uploads":
             self._not_blocked(who)
-            return 200, self.upload(self._json(body, "UploadRequest"))
+            return 200, self.upload(who, self._json(body, "UploadRequest"))
         if method == "POST" and path == "/jobs":
             self._not_blocked(who)
             req = self._json(body, "JobRequest")
@@ -370,6 +382,47 @@ class Relay:
         item = self.store.tenant(tenant_id)
         self._tenants[tenant_id] = (now, item)
         return item
+
+    def _policy(self, tenant_id: str | None) -> dict:
+        """The agency's limits and allowlist (features/tenant-limits.clan): each field from its tenant
+        item when the item holds it, else contracts/spend-policy.json's. {cap, dailyQuotas, allow}."""
+        item = (self._tenant(tenant_id) if tenant_id else None) or {}
+        allow = item.get("allow") if isinstance(item.get("allow"), dict) else SPEND_POLICY["allow"]
+        cap = item["capUsdMonthly"] if "capUsdMonthly" in item else SPEND_POLICY["capUsdMonthly"]
+        return {"cap": None if cap is None else float(cap),
+                "dailyQuotas": bool(item.get("dailyQuotas", SPEND_POLICY["dailyQuotas"])),
+                "allow": {"claude": bool(allow.get("claude", False)),
+                          "makers": [m for m in allow.get("makers") or [] if isinstance(m, str)]}}
+
+    @staticmethod
+    def _maker_on(maker: str | None, allow: dict) -> bool:
+        """An unknown maker is off; Napkin's own (the mock) is always on."""
+        return bool(maker) and (maker in allow["makers"] or maker in SPEND_POLICY["alwaysAllowed"])
+
+    def _model_on(self, provider: str, model: str, allow: dict) -> bool:
+        sheet = self.registry.sheet(provider) or {}
+        return self._maker_on(((sheet.get("models") or {}).get(model) or {}).get("maker"), allow)
+
+    def _run_model(self, provider: str, op: str, pick: dict | None, inp: dict, allow: dict) -> str | None:
+        """The model `provider` runs `op` with, for this agency: the pick on its own provider, else the
+        op's own model, else the op's first alternate whose maker the agency allows. None: nothing it
+        allows (the provider leaves the chain)."""
+        sheet = self.registry.sheet(provider)
+        spec = ((sheet or {}).get("ops") or {}).get(op)
+        if spec is None:
+            return None
+        if pick and pick["provider"] == provider:
+            return pick["model"] if self._model_on(provider, pick["model"], allow) else None
+        if op == "clip_edit" and (inp.get("region") or inp.get("mask")) and spec.get("regionModel"):
+            return spec["regionModel"] if self._model_on(provider, spec["regionModel"], allow) else None
+        return next((m for m in op_models(sheet, op) if self._model_on(provider, m, allow)), None)
+
+    def _picked(self, job: dict, provider: str) -> str | None:
+        """What effective_sheet takes for `provider`: the model to run when it is not the op's own."""
+        model = self._run_model(provider, job["op"], job["_req"].get("modelChoice"), job["_req"].get("input") or {},
+                                self._policy(job.get("_tenant"))["allow"])
+        spec = ((self.registry.sheet(provider) or {}).get("ops") or {}).get(job["op"]) or {}
+        return None if model in (None, spec.get("model"), spec.get("regionModel")) else model
 
     def _tenant_on(self, who: dict) -> None:
         """Only the agencies Napkin has turned on (fail closed: a missing item is off)."""
@@ -502,8 +555,10 @@ class Relay:
         the agency's workspace."""
         pid = who["pid"]
         workspace = self._workspace(who)
+        policy = self._policy(who["tenant"]["id"])
         out = {"participantId": pid, "handle": who["h"], "team": who.get("t") or "", "workspace": workspace,
-               "tenant": dict(who["tenant"]), "quotas": self.remaining(pid),
+               "tenant": dict(who["tenant"]), "allow": policy["allow"],
+               "quotas": self.remaining(pid) if policy["dailyQuotas"] else None,
                "projects": self._projects().count(workspace)}
         if who.get("name"):
             out["name"] = who["name"]
@@ -519,15 +574,23 @@ class Relay:
         used = self.store.counters(f"{pid}#{self._day()}")
         return {c: max(0, int(quotas[c] - used.get(c, 0))) for c in ("image", "video", "render")}
 
-    def upload(self, req: dict) -> dict:
-        key = f"in/{req['sha256']}"
+    def upload(self, who: dict, req: dict) -> dict:
+        """POST /uploads. An agency is told that bytes exist only when it holds them (has#: it uploaded
+        them first, or the relay made them for it), so no agency learns of another's file; anyone else
+        gets a PUT bound to the hash, which S3 refuses for other bytes (features/tenant-limits.clan)."""
+        tenant, sha = who["tenant"]["id"], req["sha256"]
+        key = f"in/{sha}"
         url = self.blobs.public_url(key)
-        if self.blobs.exists(key):
-            return {"exists": True, "url": url}
-        made = f"out/{req['sha256']}"  # the relay made it: the browser need not send it back
-        if self.blobs.exists(made):
-            return {"exists": True, "url": self.blobs.public_url(made)}
-        return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"]), "url": url}
+        if self.store.holds(tenant, sha):
+            if self.blobs.exists(key):
+                return {"exists": True, "url": url}
+            made = f"out/{sha}"  # the relay made it: the browser need not send it back
+            if self.blobs.exists(made):
+                return {"exists": True, "url": self.blobs.public_url(made)}
+        elif not self.blobs.exists(key):
+            self.store.hold(tenant, sha)  # the first upload of these bytes: its agency holds them
+        return {"exists": False, "putUrl": self.blobs.presign_put(key, req["mime"], sha),
+                "putHeaders": {"x-amz-checksum-sha256": checksum_header(sha)}, "url": url}
 
     def _projects(self) -> projects.Projects:
         return projects.Projects(self.blobs, lambda: iso(self.clock()))
@@ -634,14 +697,19 @@ class Relay:
             return None
         return FLOOR
 
-    def _chain(self, cfg: dict, op: str, pick: dict | None) -> list[str]:
-        """Where a job runs, in order: a pick (or the routing), then the floor."""
+    def _chain(self, cfg: dict, op: str, pick: dict | None, allow: dict | None = None,
+               inp: dict | None = None) -> list[str]:
+        """Where a job runs, in order: a pick (or the routing), then the floor. With the agency's
+        allowlist, only the providers with a model it allows (features/tenant-limits.clan)."""
         if pick:
             front = [pick["provider"]] if self.registry.supports(pick["provider"], op) else []
         else:
             front = self._candidates(cfg, op)
         floor = self._floor(cfg, op)
-        return front + ([floor] if floor and floor not in front else [])
+        chain = front + ([floor] if floor and floor not in front else [])
+        if allow is None:
+            return chain
+        return [p for p in chain if self._run_model(p, op, pick, inp or {}, allow)]
 
     # ── a model the person picked (features/model-choice.clan) ──────────────
     def _check_pick(self, cfg: dict, op: str, pick: dict | None) -> None:
@@ -653,8 +721,27 @@ class Relay:
         if op in INTERNAL_OPS or not sheet or model not in op_models(sheet, op):
             raise ApiError("invalid_input", f"{model} on {provider} cannot make this step. Pick another model.")
 
+    def _check_allowed(self, cfg: dict, req: dict, allow: dict) -> None:
+        """Refuse up front, before any quota or spend, what the agency's allowlist rules out
+        (features/tenant-limits.clan): planning without Claude, a pick whose maker is off, a step no
+        allowed model can make."""
+        op, pick = req["op"], req.get("modelChoice")
+        if op == "shot_list" and not allow["claude"]:
+            raise ApiError("not_allowed", CLAUDE_OFF_PLAN)
+        if op in INTERNAL_OPS:
+            return
+        if pick and not self._model_on(pick["provider"], pick["model"], allow):
+            sheet = self.registry.sheet(pick["provider"]) or {}
+            model = (sheet.get("models") or {}).get(pick["model"]) or {}
+            maker = MAKER_NAMES.get(model.get("maker"), model.get("maker") or "an unknown maker")
+            raise ApiError("not_allowed", f"{model.get('label', pick['model'])} is made by {maker}, "
+                           "which your agency has turned off. Pick another model.")
+        if self._chain(cfg, op, pick) and not self._chain(cfg, op, pick, allow, req["input"]):
+            raise ApiError("not_allowed", "Your agency has turned off every model that can make this step.")
+
     def _job_candidates(self, cfg: dict, job: dict) -> list[str]:
-        return self._chain(cfg, job["op"], job["_req"].get("modelChoice"))
+        return self._chain(cfg, job["op"], job["_req"].get("modelChoice"), self._policy(job.get("_tenant"))["allow"],
+                           job["_req"].get("input") or {})
 
     def _sheet(self, job: dict, provider: str | None = None) -> dict | None:
         return self.registry.sheet(provider or job.get("provider"))
@@ -734,6 +821,9 @@ class Relay:
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
         self._check_pick(cfg, op, pick)
+        tenant = who["tenant"]["id"]
+        policy = self._policy(tenant)
+        self._check_allowed(cfg, req, policy["allow"])
         self._check_frame(req)
         try:  # a misspelt @name is the person's to fix: say so now, not as a failed job
             names.to_wire(op, req["input"])
@@ -741,29 +831,31 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         estimate, unknown = 0.0, False
         if op not in INTERNAL_OPS:
-            # Reserved at the dearest provider it may run on.
-            candidates = self._chain(cfg, op, pick)
+            # Reserved at the dearest provider it may run on, with the model it would run there.
+            candidates = self._chain(cfg, op, pick, policy["allow"], req["input"])
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
-            prices = [self._estimate(op, p, pick["model"] if pick and p == pick["provider"] else None, req["input"])
+            prices = [self._estimate(op, p, self._run_model(p, op, pick, req["input"], policy["allow"]), req["input"])
                       for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
-        # Admitted only when this job fits under the cap: "spent < cap" let the last jobs pass it.
-        if estimate > 0 and self.store.counters("spend").get("usd", 0) + estimate > cfg["spend"]["capUsd"]:
-            raise ApiError("spend_stop", "The generation budget is used up.")
+        # Admitted only when this job fits under the agency's month and the global stop, atomically
+        # (ledger.py): two batches at once cannot both take the last of either.
+        month = self._reserve(tenant, estimate, cfg, policy)
 
         pid = who["pid"]
         if not self.store.incr(f"inflight#{pid}", "n", 1, cfg["inFlightPerParticipant"]):
+            self.ledger.adjust(tenant, month, -estimate)
             raise ApiError("queue_full", f"You have {cfg['inFlightPerParticipant']} jobs running; wait for one to finish.",
                            retryable=True, retry_after=10)
         day = self._day()
+        # Counted always, enforced only while the agency's daily quotas are on (off by default).
         counted = qclass in cfg["quotas"]
-        if counted and not self.store.incr(f"{pid}#{day}", qclass, 1, cfg["quotas"][qclass]):
+        limit = cfg["quotas"][qclass] if counted and policy["dailyQuotas"] else None
+        if counted and not self.store.incr(f"{pid}#{day}", qclass, 1, limit):
             self.store.incr(f"inflight#{pid}", "n", -1)
+            self.ledger.adjust(tenant, month, -estimate)
             raise ApiError("quota_exhausted", f"You have used today's {qclass} quota.")
-        if estimate > 0:
-            self.store.incr("spend", "usd", estimate)
 
         now = self.clock()
         job = {
@@ -774,7 +866,7 @@ class Relay:
             "cost": {"estimate": estimate, "reserved": estimate, "currency": "USD", "unknown": unknown},
             "createdAt": iso(now), "updatedAt": iso(now),
             "_req": req, "_day": day, "_counted": counted, "_queue": "q", "_tenant": who["tenant"]["id"],
-            "_released": False, "_tried": [],
+            "_released": False, "_tried": [], "_month": month,
         }
         if pick:  # where the job meant to run, for fallbackFrom
             job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
@@ -782,11 +874,21 @@ class Relay:
             self.store.incr(f"inflight#{pid}", "n", -1)
             if counted:
                 self.store.incr(f"{pid}#{day}", qclass, -1)
-            if estimate > 0:
-                self.store.incr("spend", "usd", -estimate)
+            self.ledger.adjust(tenant, month, -estimate)
             return self._existing(who, self.store.get_job(req["jobId"]))
         self._dog_job(job, None)
         return self._dispatch(job, cfg)
+
+    def _reserve(self, tenant: str, usd: float, cfg: dict, policy: dict | None = None) -> str:
+        """New spend for the agency in the current month, under its cap and the global stop; the month.
+        ApiError limit_reached or spend_stop, with nothing reserved."""
+        policy = policy or self._policy(tenant)
+        try:
+            return self.ledger.reserve(tenant, usd, cap_month=policy["cap"], cap_global=cfg["spend"]["capUsd"])
+        except LimitReached:
+            raise ApiError("limit_reached", LIMIT_REACHED) from None
+        except SpendStop:
+            raise ApiError("spend_stop", BUDGET_USED) from None
 
     def _existing(self, who: dict, job: dict) -> dict:
         if job["participantId"] != who["pid"]:
@@ -832,8 +934,12 @@ class Relay:
                 self.store.incr(job["_slot"], "n", -1)
             if refund and job.get("_counted"):
                 self.store.incr(f"{job['participantId']}#{job['_day']}", job["quotaClass"], -1)
-            if spend_delta:
-                self.store.incr("spend", "usd", spend_delta)
+            # Settled in the month the reservation was made in, at what the provider charged, past any cap.
+            self.ledger.adjust(job.get("_tenant"), job.get("_month"), spend_delta)
+            if paid and confirmed is not None:
+                log.info("job %s settled: confirmed %.4f of reserved %.4f (ratio %.2f)", job["jobId"], confirmed,
+                         job["cost"].get("reserved", 0),
+                         confirmed / job["cost"]["reserved"] if job["cost"].get("reserved") else 0.0)
         return self._with_poll(saved)
 
     def _fail(self, job: dict, code: str, message: str, *, retryable: bool = False,
@@ -947,16 +1053,23 @@ class Relay:
         return self._fail(job, "provider_unavailable", "No provider could take this job. Try again.",
                           retryable=True, paid=False, refund=True)
 
-    def _floor_admission(self, job: dict, cfg: dict, estimate: float) -> dict | None:
-        """A job about to run on the floor after its first provider kept its reservation (it may
-        have charged for its attempt): the spend stop applies to the floor's price now. The failed
-        job, or None when it may run."""
-        if estimate > 0 and job["cost"].get("reserved", 0) == 0:
-            if self.store.counters("spend").get("usd", 0) + estimate > cfg["spend"]["capUsd"]:
-                first = job.get("fallbackReason") or ""
-                return self._fail(job, "spend_stop", f"{first} {PROVIDER_NAMES.get(FLOOR, FLOOR)} could not make it "
-                                  "instead: the generation budget is used up.".strip(), paid=False, refund=True)
-        return None
+    def _floor_admission(self, job: dict, cfg: dict, estimate: float) -> tuple[dict | None, str | None]:
+        """A job holding no reservation about to run: on the floor after its first provider kept its
+        reservation (it may have charged for its attempt), or resumed after an ask. Its price is new
+        spend, admitted in the current month under the agency's cap and the global stop. (the failed
+        job, None) when refused; (None, the month) when it may run; (None, None) when nothing is new."""
+        if estimate <= 0 or job["cost"].get("reserved", 0) != 0:
+            return None, None
+        try:
+            return None, self._reserve(job.get("_tenant"), estimate, cfg)
+        except ApiError as e:
+            first = job.get("fallbackReason")
+            if first:
+                why = "your agency's monthly limit is reached" if e.code == "limit_reached" else "the generation budget is used up"
+                message = f"{first} {PROVIDER_NAMES.get(FLOOR, FLOOR)} could not make it instead: {why}."
+            else:
+                message = e.message
+            return self._fail(job, e.code, message, paid=False, refund=True), None
 
     def _fall_back(self, job: dict, cfg: dict, code: str, message: str, *, paid: bool = True,
                    refund: bool = False, retryable: bool = False, provider_code: str | None = None,
@@ -988,34 +1101,35 @@ class Relay:
             return self._reload(job)
         if job.get("_slot"):
             self.store.incr(job["_slot"], "n", -1)
-        if spend_back:
-            self.store.incr("spend", "usd", spend_back)
+        self.ledger.adjust(job.get("_tenant"), job.get("_month"), spend_back)
         return self._dispatch(saved, cfg)
 
     def _submit(self, job: dict, cfg: dict, provider: str, slot: str) -> dict | None:
         """Director, then provider submit. None means the provider refused before
         accepting and the job is back in the queue for the next provider."""
-        # A picked model runs on its own provider; anywhere else (the floor) the default runs.
-        pick = job["_req"].get("modelChoice")
-        picked = pick["model"] if pick and pick["provider"] == provider else None
+        # A picked model runs on its own provider; anywhere else (the floor) the default runs, or the
+        # first alternate the agency allows when it has turned the default's maker off.
+        picked = self._picked(job, provider)
         sheet = effective_sheet(self.registry.sheet(provider), job["op"], picked)
         estimate, unknown = self._estimate(job["op"], provider, picked, job["_req"]["input"])
-        refused = self._floor_admission(job, cfg, estimate)
+        refused, new_month = self._floor_admission(job, cfg, estimate)
         if refused is not None:
             self.store.incr(slot, "n", -1)
             return refused
+        month = new_month or job.get("_month")
         cost = {**job["cost"], "estimate": estimate, "reserved": estimate, "unknown": unknown}
         model = sheet["ops"][job["op"]]["model"]
         first = job.get("_first") or {"provider": provider, "model": model}
         moved = {"fallbackFrom": first} if first["provider"] != provider else {}
         saved = self._save(job, state="submitting", provider=provider, model=model, _slot=slot,
-                           _queue="r", cost=cost, queuePosition=None, _first=first, **moved)
+                           _queue="r", cost=cost, queuePosition=None, _first=first, _month=month, **moved)
         if saved is None:
             self.store.incr(slot, "n", -1)
+            if new_month:
+                self.ledger.adjust(job.get("_tenant"), new_month, -estimate)
             return self._reload(job)
-        delta = estimate - job["cost"].get("reserved", 0)
-        if delta:
-            self.store.incr("spend", "usd", delta)
+        if not new_month:  # the reservation it holds moves to this provider's price, in its own month
+            self.ledger.adjust(job.get("_tenant"), month, estimate - job["cost"].get("reserved", 0))
         job = saved
 
         try:
@@ -1082,8 +1196,11 @@ class Relay:
 
     def _direct(self, job: dict, sheet: dict | None) -> tuple[dict, dict]:
         start = self.clock()
+        # An agency that turned Claude off gets the passthrough director and no cards (features/tenant-limits.clan).
+        claude = self._policy(job.get("_tenant"))["allow"]["claude"]
+        director = self.director if claude else PassthroughDirector()
         try:
-            use_config = getattr(self.director, "use_config", None)
+            use_config = getattr(director, "use_config", None)
             if use_config:  # config.json's director block: the model ids and prompt version
                 use_config(self.config().get("director") or {})
             req = job["_req"]
@@ -1091,7 +1208,7 @@ class Relay:
             inp, dropped = names.fit_refs(req["op"], req.get("input") or {}, sheet)
             if dropped:
                 log.info("job %s: left out %s for %s's ref limits", job["jobId"], ", ".join(dropped), job.get("provider"))
-            inp, kinds = self._with_cards(job, inp)
+            inp, kinds = self._with_cards(job, inp) if claude else (inp, {})
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
             wired = names.to_wire(req["op"], inp)
             if wired.get("answer"):  # what was asked, and what the person chose, in words the director reads
@@ -1101,15 +1218,15 @@ class Relay:
                 wired = {**wired, "answer": {**a, **({"question": q["text"]} if q.get("text") else {}),
                                               **({"chose": chose["label"]} if chose else {}),
                                               **({"value": chose["value"]} if chose and "value" in chose else {})}}
-            out = dict(self.director.direct({**req, "input": wired}, sheet))
+            out = dict(director.direct({**req, "input": wired}, sheet))
         except PromptTooOld as e:  # a config with director.v5 under contract 3: said plainly, never run
             log.error("%s", e)
             raise ApiError("internal", str(e)) from e
         except Exception as e:
             log.exception("director failed")
             raise ApiError("internal", f"The director failed ({type(e).__name__}).") from e
-        model = out.pop("_model", getattr(self.director, "model", "unknown"))
-        version = out.pop("_promptVersion", getattr(self.director, "prompt_version", "director.v0"))
+        model = out.pop("_model", getattr(director, "model", "unknown"))
+        version = out.pop("_promptVersion", getattr(director, "prompt_version", "director.v0"))
         errors = self.contracts.errors("director.schema.json", out)
         if errors:
             raise ApiError("internal", f"The director's answer did not match its schema: {errors[0]}")
@@ -1164,8 +1281,7 @@ class Relay:
             self.store.incr(f"inflight#{job['participantId']}", "n", -1)
             if job.get("_slot"):
                 self.store.incr(job["_slot"], "n", -1)
-            if job["cost"].get("reserved"):
-                self.store.incr("spend", "usd", -job["cost"]["reserved"])
+            self.ledger.adjust(job.get("_tenant"), job.get("_month"), -job["cost"].get("reserved", 0))
         return self._with_poll(saved)
 
     @staticmethod
@@ -1332,6 +1448,8 @@ class Relay:
                 key = f"out/{sha}"
                 if not self.blobs.exists(key):
                     self.blobs.put(key, data, mime)
+                if job.get("_tenant"):  # made for this agency: it may be told these bytes exist
+                    self.store.hold(job["_tenant"], sha)
                 out = {"sha256": sha, "url": self.blobs.public_url(key), "mime": mime, "bytes": len(data)}
                 for k in ("w", "h", "durationS"):
                     if o.get(k) is not None:

@@ -114,3 +114,32 @@ def test_the_tenants_script_puts_shows_and_lists(h, capsys):
     assert "napkin" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         tenants_script.main(["put", "napkin"], store=h.store)  # on or off must be said
+
+
+def test_the_tenants_script_sets_an_agencys_limits_and_allowlist(h, capsys):
+    """Each agency's cap, daily quotas and allowlist, set by staff on the agency's request
+    (features/tenant-limits.clan); put changes only what it is given."""
+    tid = tenant_id("napkin")
+    assert tenants_script.main(["put", "napkin", "--enabled", "--by", "shrey"], store=h.store) == 0
+    tenants_script.main(["put", "napkin", "--cap", "400", "--daily-quotas", "on", "--by", "shrey"], store=h.store)
+    tenants_script.main(["put", "napkin", "--makers", "runway", "--claude", "off", "--by", "shrey"], store=h.store)
+    item = h.store.tenant(tid)
+    assert (item["enabled"], item["capUsdMonthly"], item["dailyQuotas"]) == (True, 400.0, True)
+    assert item["allow"] == {"claude": False, "makers": ["runway"]}
+    h.relay._tenants.pop(tid, None)
+    assert h.relay._policy(tid) == {"cap": 400.0, "dailyQuotas": True, "allow": {"claude": False, "makers": ["runway"]}}
+    tenants_script.main(["put", "napkin", "--cap", "off", "--by", "shrey"], store=h.store)
+    assert h.store.tenant(tid)["capUsdMonthly"] is None
+    capsys.readouterr()
+    tenants_script.main(["show", "napkin"], store=h.store)
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["applies"]["capUsdMonthly"] is None and shown["applies"]["allow"]["makers"] == ["runway"]
+    tenants_script.main(["put", "napkin", "--defaults", "--by", "shrey"], store=h.store)
+    item = h.store.tenant(tid)
+    assert not {"capUsdMonthly", "dailyQuotas", "allow"} & set(item) and item["enabled"] is True
+    with pytest.raises(SystemExit):
+        tenants_script.main(["put", "napkin", "--makers", "runway,acme"], store=h.store)  # not in the notice
+    with pytest.raises(SystemExit):
+        tenants_script.main(["put", "napkin", "--cap", "lots"], store=h.store)
+    with pytest.raises(SystemExit):
+        tenants_script.main(["put", "newco", "--cap", "10"], store=h.store)  # a new item says on or off first

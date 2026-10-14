@@ -14,7 +14,7 @@ describe('HttpRelay and who is signed in', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('reads GET /me', async () => {
-    const me: Me = { participantId: 'p_1a2b3c4d5e', handle: 'maya', name: 'Maya', team: 'napkin', workspace: 'f283da90-07cd-59ec-b370-b23704a2bc91', tenant: { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 3 }
+    const me: Me = { participantId: 'p_1a2b3c4d5e', handle: 'maya', name: 'Maya', team: 'napkin', workspace: 'f283da90-07cd-59ec-b370-b23704a2bc91', tenant: { id: 'f283da90-07cd-59ec-b370-b23704a2bc91', agency: 'napkin' }, allow: { claude: true, makers: ['runway', 'google'] }, quotas: null, projects: 3 }
     const fetchFn = answer(200, me)
     vi.stubGlobal('fetch', fetchFn)
     expect(await new HttpRelay('http://relay.test/').me()).toEqual(me)

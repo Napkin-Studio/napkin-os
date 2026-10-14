@@ -483,6 +483,11 @@
       "type": "object",
       "description": "One model's checked facts, held to the provider's published schema and price list by relay/tests/test_runway_sheet.py.",
       "properties": {
+        "maker": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$",
+          "description": "The company that makes the model and receives what a job sends it (features/tenant-limits.clan). An agency's allow.makers turns models on or off by maker; an unknown maker is off. 'napkin' is ours (the mock), which no allowlist turns off. Each maker's data terms are in contracts/subprocessors.json. Contract 3."
+        },
         "endpoint": {
           "type": "string"
         },
@@ -606,6 +611,7 @@
         }
       },
       "required": [
+        "maker",
         "label",
         "pricing"
       ],

@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
-import { controlsFor, effectiveConfig, type Controls } from '../capabilities'
+import { controlsFor, effectiveConfig, withAllow, type Controls } from '../capabilities'
 import type { Config, ProductionDocument } from '../contracts/types'
 import { subscribeDoc, type DocumentStore } from '../doc/store'
 import type { UiState } from '../doc/ui'
@@ -80,7 +80,8 @@ export function useConfig(): { config: Config; controls: Controls } {
   const { remoteConfig } = useServices()
   const ui = useUi()
   return useMemo(() => {
-    const config = effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig)
+    // The agency's allowlist from GET /me (features/tenant-limits.clan): models it turned off are not offered.
+    const config = withAllow(effectiveConfig(ui.configChoice, ui.providerChoice, undefined, remoteConfig), ui.me?.allow)
     return { config, controls: controlsFor(config) }
-  }, [ui.configChoice, ui.providerChoice, remoteConfig])
+  }, [ui.configChoice, ui.providerChoice, remoteConfig, ui.me?.allow])
 }

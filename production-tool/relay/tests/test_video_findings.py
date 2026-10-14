@@ -9,6 +9,7 @@ import pytest
 
 from conftest import CDN, Harness, asset, base_config, job_request
 from director import new_id
+from identity import tenant_id
 from providers.base import CapabilityMissing, ProviderError, Status
 from service import QUEUE_TIMEOUT_S, participant_id
 
@@ -215,6 +216,7 @@ def test_an_upload_of_a_blob_the_relay_made_is_already_there(h):
     token = h.as_person()
     sha = "sha256:" + "d" * 64
     h.blobs.put(f"out/{sha}", b"mp4", "video/mp4")
+    h.store.hold(tenant_id("blue"), sha)  # made for this agency (features/tenant-limits.clan)
     _, out = h.call("POST", "/uploads", {"sha256": sha, "mime": "video/mp4", "bytes": 3}, token, expect=200)
     assert out == {"exists": True, "url": f"{CDN}/out/{sha}"}
 

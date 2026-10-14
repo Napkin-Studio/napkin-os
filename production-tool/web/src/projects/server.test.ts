@@ -106,7 +106,7 @@ function browser(fake: FakeRelay) {
   const storage = memoryStorage()
   let t = Date.parse('2026-10-10T09:00:00Z')
   const index = new ProjectIndex(storage, () => new Date((t += 1000)))
-  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 } }, null)
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, allow: { claude: true, makers: ['runway', 'google'] }, quotas: null, projects: 0 } }, null)
   const renderer: MockRenderer = { async render() { return [] } }
   const mock = new MockRelay({ renderer, now: () => 0, delayMs: 10, persistKey: null })
   // The real relay over HTTP, as far as saving is concerned.

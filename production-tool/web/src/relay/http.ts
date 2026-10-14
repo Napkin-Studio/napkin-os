@@ -64,7 +64,9 @@ export class HttpRelay implements Relay {
     if (!res.exists && res.putUrl) {
       let put: Response
       try {
-        put = await fetch(res.putUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mime } })
+        // With the headers the relay names: x-amz-checksum-sha256 binds the PUT to the bytes' hash, so S3
+        // refuses other bytes (features/tenant-limits.clan).
+        put = await fetch(res.putUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': mime, ...res.putHeaders } })
       } catch (_e) {
         throw new RelayError({ code: 'provider_unavailable', message: 'The upload did not go through. Try again.', retryable: true })
       }

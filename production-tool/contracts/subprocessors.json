@@ -1,0 +1,58 @@
+{
+  "contractVersion": "3",
+  "updated": "2026-10-14",
+  "entries": [
+    {
+      "id": "aws",
+      "name": "Amazon Web Services",
+      "does": "Hosts the tool: the relay, the job ledger, saved projects, the library and every uploaded or generated file.",
+      "receives": "Everything the tool keeps for the agency.",
+      "region": { "where": "Ireland (eu-west-1)", "source": "infra/envs/hackathon, the region of every resource" },
+      "control": "always"
+    },
+    {
+      "id": "runway",
+      "name": "Runway",
+      "does": "Generates pictures and video. Every model the tool runs is reached through Runway's API.",
+      "receives": "The words, reference pictures, frames and clips a job sends.",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "google",
+      "name": "Google",
+      "does": "Makes the Gemini picture models and the Veo video models.",
+      "receives": "What a job sends to a Gemini or Veo model.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "ideogram",
+      "name": "Ideogram",
+      "does": "Makes the Ideogram picture-editing model.",
+      "receives": "What a job sends to an Ideogram model.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "magnific",
+      "name": "Magnific",
+      "does": "Makes the Magnific upscalers.",
+      "receives": "The picture or clip a job upscales.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic (Claude on Amazon Bedrock)",
+      "does": "Directs each job and reads reference pictures for the director.",
+      "receives": "The words, the script and the reference pictures of a job.",
+      "via": "aws",
+      "region": { "where": "Amazon Bedrock EU cross-region inference", "source": "production-tool/relay/director/claude.py, whose model ids start eu." },
+      "control": "claude"
+    }
+  ]
+}

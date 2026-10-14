@@ -20,6 +20,8 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 | `capabilities.schema.json` + `capabilities/*.json` | what each provider can do, with which model; the `models` catalogue with each model's checked limits and published price | harness writes; the director, relay and UI read |
 | `pricing.py` + `pricing-cases.schema.json` + `examples/pricing-cases.json` | the one price function: credits and USD for a model and its settings, from the sheet; its vectors | check.py, the relay (bundled), ad_costs.py and provider_reference.py |
 | `cost-model.schema.json` + `cost-model.json` | what one ad costs at list prices: scenarios of jobs (no prices of their own), placeholders, fixed monthly infrastructure, the tier's ceilings | relay/scripts/ad_costs.py, provider_reference.py, later tenant-limits |
+| `spend-policy.schema.json` + `spend-policy.json` | every agency's defaults until its tenant item says otherwise: no monthly cap, daily quotas off, allow {claude, makers} (features/tenant-limits.clan) | the owner decides; the relay (bundled), tenants.py and the web read |
+| `subprocessors.schema.json` + `subprocessors.json` (+ generated `subprocessors.md`, `subprocessors.py`) | who receives an agency's material, what decides it, and where, when confirmed; every sheet maker must be listed | the owner and counsel; the Data sharing sheet, check.py and tenants.py read |
 | `director.schema.json` | the director's strict JSON output and the logged agent block | harness |
 | `document.schema.json` | the CLAN document (shared/data.yaml): the project, and id-keyed maps of boards, sketches, scripts, scenes, storyboards, shots, beats, frames, videos, takes, renders, reviews, links, keys, refs, documents, format sets, sizes, checks, asks, suggestions, spin-ins, jobs, stale marks, exports and assets | clan-store writes through its buses; web, the export and the relay's JobInput read |
 | `patch.schema.json` | the field-level patches PatchBus carries: Patch, PatchBatch (with its decision), PatchResult | clan-store, later the sync service |
@@ -33,8 +35,8 @@ uv run --no-project --with jsonschema --with rfc3339-validator python production
 
 | Route | Body → response | Notes |
 |---|---|---|
-| `GET /me` | → `Me` | Who the relay's identity seam (`relay/identity.py`) says is asking: workspace, today's quotas, saved projects. There is no sign-in of the tool's own: locally a fixed person, elsewhere 401 on every route until the Napkin OS sign-in is wired in (features/os-sign-in). |
-| `POST /uploads` | `UploadRequest` → `UploadResponse` | The browser hashes first; an artifact the relay already has needs no upload. `url` is the CloudFront path that providers read. |
+| `GET /me` | → `Me` | Who the relay's identity seam (`relay/identity.py`) says is asking: workspace, the agency's allowlist, today's quotas (null while the agency's daily quotas are off, the default), saved projects. There is no sign-in of the tool's own: locally a fixed person, elsewhere 401 on every route until the Napkin OS sign-in is wired in (features/os-sign-in). |
+| `POST /uploads` | `UploadRequest` → `UploadResponse` | The browser hashes first; an artifact the agency already holds (it uploaded it first, or the relay made it for the agency) needs no upload, and no agency is told of another's file. `putUrl` is bound to the hash: the browser sends the `putHeaders` the relay names (`x-amz-checksum-sha256`, base64 of the digest) and S3 refuses other bytes (features/tenant-limits.clan). `url` is the CloudFront path that providers read. |
 | `POST /jobs` | `JobRequest` → `Job` | Idempotent on `jobId`: sending the same id again returns the same job and is never paid twice. Quotas are checked here, never on polls. |
 | `GET /jobs/{jobId}` | → `Job` | Poll no faster than `nextPollS`. |
 | `DELETE /jobs/{jobId}` | → `Job` (state `cancelled`) | Also cancels at the provider where it can. |

@@ -48,7 +48,7 @@ class FakeBlobs:
     def exists(self, key):
         return key in self.objects
 
-    def presign_put(self, key, mime):
+    def presign_put(self, key, mime, sha256):
         return f"https://bucket.s3.test/{key}?X-Amz-Signature=x"
 
     def put(self, key, data, mime):
@@ -181,6 +181,15 @@ class Harness:
         """Turn an agency on (or off) in the tenants table; its tenant id. The relay caches 30 s."""
         tid = tenant_id(agency)
         self.store.put_tenant({"tenantId": tid, "agency": agency, "enabled": enabled})
+        self.relay._tenants.pop(tid, None)
+        return tid
+
+    def limits(self, agency: str, **fields) -> str:
+        """Set fields of an agency's tenant item as scripts/tenants.py would (capUsdMonthly, dailyQuotas,
+        allow: features/tenant-limits.clan); its tenant id. The relay's 30 s cache is cleared."""
+        tid = tenant_id(agency)
+        item = self.store.tenant(tid) or {"tenantId": tid, "agency": agency, "enabled": True}
+        self.store.put_tenant({**item, **fields})
         self.relay._tenants.pop(tid, None)
         return tid
 

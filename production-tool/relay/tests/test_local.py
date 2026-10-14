@@ -12,6 +12,20 @@ def allowed() -> set[str]:
 
 def test_preflight_allows_the_headers_the_web_sends():
     assert {"content-type", "x-clan-reason", "x-project-id", "x-project-name", "if-match"} <= allowed()
+    assert "x-amz-checksum-sha256" in allowed()  # the upload's putHeaders (features/tenant-limits.clan)
+
+
+def test_local_agencies_take_the_limits_named_in_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("NAPKIN_LOCAL_USER", "shrey@acme")
+    monkeypatch.delenv("TOKEN_SECRET", raising=False)
+    monkeypatch.delenv("NAPKIN_LOCAL_TENANTS", raising=False)
+    monkeypatch.setenv("NAPKIN_LOCAL_LIMITS", '{"dailyQuotas": true, "allow": {"claude": false, "makers": ["runway"]}}')
+    try:
+        relay, _ = local.build(8797, tmp_path)
+        status, me, _ = relay.http("GET", "/me", {}, None)
+    finally:
+        identity.use_local(None)
+    assert status == 200 and me["allow"] == {"claude": False, "makers": ["runway"]} and me["quotas"]["image"] > 0
 
 
 def test_the_default_local_config_runs_on_mock_and_is_valid():

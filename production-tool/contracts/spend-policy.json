@@ -1,0 +1,8 @@
+{
+  "contractVersion": "3",
+  "decided": "2026-10-13",
+  "capUsdMonthly": null,
+  "dailyQuotas": false,
+  "allow": { "claude": true, "makers": ["runway", "google"] },
+  "alwaysAllowed": ["napkin"]
+}

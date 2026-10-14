@@ -6,8 +6,10 @@
 
 import type { ContractError } from '../contracts/types'
 
-/** The tool's limits and who is signed in: nothing a model or a report can change. */
-const NOT_THE_MODEL = new Set(['quota_exhausted', 'spend_stop', 'flag_off', 'unauthorised', 'blocked'])
+/** The tool's limits and who is signed in: nothing a model or a report can change. limit_reached is
+ *  the agency's own monthly limit; not_allowed a model or step its allowlist turned off, which the menus
+ *  already leave out (features/tenant-limits.clan). */
+const NOT_THE_MODEL = new Set(['quota_exhausted', 'spend_stop', 'limit_reached', 'not_allowed', 'flag_off', 'unauthorised', 'blocked'])
 
 export interface FailedActions {
   otherModel: boolean

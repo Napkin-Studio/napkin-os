@@ -15,6 +15,7 @@ import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
 import { clock, edited, greetName, greeting, menuName, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
+import { DataSharing } from './DataSharing'
 import { sayer, type CastKey } from './agents/cast'
 import { useBlobUrl } from './hooks'
 import { StudioMark } from './Mark'
@@ -165,6 +166,8 @@ function HomeBar() {
   const { relay, app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
   const [menu, setMenu] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const allow = ui.me?.allow
   return (
     <header className="hm-bar">
       <span className="hm-brand">
@@ -181,6 +184,10 @@ function HomeBar() {
           {menu && (
             <span className="menu" role="menu">
               <span className="handle menu-head">{menuName(ui.me)}</span>
+              {/* Who receives the agency's material (features/tenant-limits.clan). */}
+              {allow && (
+                <button className="btn sm ghost" role="menuitem" onClick={() => { setMenu(false); setSharing(true) }}>Data sharing</button>
+              )}
               {/* Napkin OS's sign-out, only when napkin-web serves the tool (features/os-sign-in.clan). */}
               {behindNapkinOs(import.meta.env.VITE_RELAY_URL as string | undefined) && (
                 <button className="btn sm ghost" role="menuitem" onClick={() => void signOut()}>Sign out</button>
@@ -189,6 +196,7 @@ function HomeBar() {
           )}
         </span>
       </span>
+      {sharing && allow && <DataSharing allow={allow} onClose={() => setSharing(false)} />}
     </header>
   )
 }

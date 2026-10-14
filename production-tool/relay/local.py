@@ -48,7 +48,7 @@ from store import MemoryStore
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
 # the request before it leaves the browser.
-CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name"
+CORS_ALLOW_HEADERS = "Content-Type, If-Match, X-Clan-Reason, X-Project-Id, X-Project-Name, x-amz-checksum-sha256"
 # Response headers the web app reads: GET /clan/{project} carries the project's ETag and when it was saved.
 CORS_EXPOSE_HEADERS = "ETag, X-Saved-At"
 log = logging.getLogger("relay.local")
@@ -121,11 +121,13 @@ def local_stitch(blobs: LocalBlobs):
     return run
 
 
-def local_tenants(store: MemoryStore, agencies: list[str]) -> None:
-    """Turn these agencies on in the in-memory tenants table."""
+def local_tenants(store: MemoryStore, agencies: list[str], limits: dict | None = None) -> None:
+    """Turn these agencies on in the in-memory tenants table, each with `limits` (NAPKIN_LOCAL_LIMITS: a
+    JSON object of tenant-item fields, e.g. {"capUsdMonthly": 1, "allow": {"claude": true, "makers": ["runway"]}},
+    features/tenant-limits.clan), as scripts/tenants.py would set them."""
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     for agency in agencies:
-        store.put_tenant({"tenantId": identity.tenant_id(agency), "agency": agency, "enabled": True,
+        store.put_tenant({**(limits or {}), "tenantId": identity.tenant_id(agency), "agency": agency, "enabled": True,
                           "updatedAt": now, "by": "local.py"})
 
 
@@ -149,7 +151,7 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         log.warning("providers/mock.py not found: using the local stub")
     director = load_director()
     store = MemoryStore()
-    local_tenants(store, agencies)
+    local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
     relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
                   stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
@@ -199,7 +201,10 @@ def serve(port: int, data_dir: Path) -> None:
                 return self._relay()  # PUT /clan/{project}/canvas
             key = self.path[len("/_upload/"):].split("?", 1)[0]
             data = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            blobs.put(key, data, self.headers.get("Content-Type", "application/octet-stream"))
+            # As S3 does with the presigned PUT's checksum (features/tenant-limits.clan): other bytes are refused.
+            if not blobs.accept_upload(key, data, self.headers.get("Content-Type", "application/octet-stream"),
+                                       self.headers.get("x-amz-checksum-sha256")):
+                return self._send(400, b'{"error":"BadDigest"}')
             self._send(200, b"{}")
 
         def _relay(self):

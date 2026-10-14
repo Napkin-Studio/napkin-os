@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://napkin.ie/production-tool/contracts/subprocessors.schema.json",
+  "title": "Who receives an agency's material",
+  "description": "The companies the Production Tool sends client material to, and what decides it (features/tenant-limits.clan). The Data sharing sheet is built from this file and the agency's allowlist; subprocessors.md is generated from it (python production-tool/contracts/subprocessors.py --write) and check.py fails when the two differ. A region is given only when it is confirmed, with its source. Contract 3.",
+  "type": "object",
+  "properties": {
+    "contractVersion": { "$ref": "common.schema.json#/$defs/contractVersion" },
+    "updated": { "type": "string", "format": "date" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$", "description": "For control 'maker', the maker id the capability sheets use." },
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "does": { "type": "string", "minLength": 1, "maxLength": 160, "description": "What it does for the tool, in one line." },
+          "receives": { "type": "string", "minLength": 1, "maxLength": 200, "description": "What it receives from a job." },
+          "via": { "type": "string", "description": "The entry whose service carries the material to it (a maker's model reached through Runway's API)." },
+          "region": {
+            "type": ["object", "null"],
+            "description": "Where it processes the material; null until confirmed.",
+            "properties": {
+              "where": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1, "description": "Where this was confirmed: a document, a file in the repository, or a written answer." }
+            },
+            "required": ["where", "source"],
+            "additionalProperties": false
+          },
+          "control": {
+            "enum": ["always", "claude", "maker"],
+            "description": "always: every agency uses it. claude: on while allow.claude is. maker: on while the maker is in allow.makers."
+          }
+        },
+        "required": ["id", "name", "does", "receives", "region", "control"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["contractVersion", "updated", "entries"],
+  "additionalProperties": false
+}
