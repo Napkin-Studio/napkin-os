@@ -56,6 +56,14 @@
   /* Tool-blue text (approved difference), also on a 10-12% blue tint. */
   --tool-ink: #1E4ED8;
   --tool-soft: rgba(47, 100, 245, 0.10);
+  /* The pen's six inks (features/theme-and-pencil.clan): a stroke stores the name, the canvas paints
+     these. Each is at least 3:1 on the canvas in its theme. canvas-engine's LIGHT_INK matches light. */
+  --pen-ink: #14161B;
+  --pen-orange: #E2502F;
+  --pen-blue: #2F64F5;
+  --pen-green: #15803D;
+  --pen-amber: #C27803;
+  --pen-grey: #6B7180;
   color-scheme: light;
 }
 
@@ -96,6 +104,12 @@
   --frost-panel: rgba(22, 26, 31, 0.9);
   --tool-ink: #8FB0FF;
   --tool-soft: rgba(47, 100, 245, 0.22);
+  --pen-ink: #F2F3F5;
+  --pen-orange: #FF6A4F;
+  --pen-blue: #6E95FF;
+  --pen-green: #4ADE80;
+  --pen-amber: #F5A524;
+  --pen-grey: #A6ACB8;
   color-scheme: dark;
 }
 

@@ -11,6 +11,8 @@ import { rowLabel, type BoardRow } from './boards'
 // ⌥1…⌥9 and ⌥0 (ui-behaviour 3.2): one reading of the keys for the rail and the own engine's boards.
 import { boardKey } from '../boards/boards'
 import type { CanvasChrome, ChromeTool } from './controls'
+import { PenOptions } from './PenOptions'
+import { usePenChoice } from './penStyle'
 import './canvas.css'
 
 function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom: number } {
@@ -112,6 +114,9 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   vertical?: boolean
 }) {
   const { tool } = useChrome(chrome)
+  // The pen's options: applied to the engine always, shown while the pen is in use.
+  const pen = usePenChoice(chrome)
+  const penOptions = tool === 'pen' && <PenOptions pen={pen} vertical={vertical} />
   const nodeRef = useRef<HTMLButtonElement>(null)
   const [menu, setMenu] = useState(false)
   const t = (id: ChromeTool, label: string, key: string, body: ReactNode = ICON[id]) => (
@@ -121,6 +126,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   if (vertical) {
     return (
       <div className="canvas-toolbar vertical" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+        {penOptions}
         {t('pen', 'Pen', 'P')}
         {t('eraser', 'Eraser', 'E')}
         {t('select', 'Select', 'V')}
@@ -144,6 +150,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   }
   return (
     <div className="canvas-toolbar" role="toolbar" aria-label="Canvas tools">
+      {penOptions}
       {t('select', 'Select', 'V')}
       {t('hand', 'Hand', 'H')}
       {t('pen', 'Pen', 'P')}

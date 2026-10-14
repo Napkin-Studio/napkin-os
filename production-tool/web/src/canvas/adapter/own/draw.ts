@@ -4,7 +4,11 @@
 // (Spike O's canvas2d, Path2D cache and culling); it draws boxes, images,
 // lines and text plainly, which is enough for the adapter contract and a look.
 
+import { LIGHT_INK, resolveInk, type InkPalette } from '../../../../../canvas-engine/src/ink/palette'
 import type { CanvasElement } from '../../core/canvasAdapter'
+
+/** A bare host's dark ink, when no --pen-* tokens say otherwise. */
+const BARE_DARK: InkPalette = { ...LIGHT_INK, ink: '#e8e8e8' }
 
 export type Ctx2D = Pick<CanvasRenderingContext2D,
   'save' | 'restore' | 'beginPath' | 'rect' | 'clip' | 'fillRect' | 'strokeRect' | 'fillText' | 'moveTo' | 'lineTo' | 'stroke' | 'fill' |
@@ -31,14 +35,18 @@ export function paintOrder(els: readonly CanvasElement[]): CanvasElement[] {
   return els.filter((e) => !e.isDeleted)
 }
 
-export function drawElements(ctx: Ctx2D, els: readonly CanvasElement[], images: (sha: string) => CanvasImageSource | undefined, theme: 'light' | 'dark' = 'light') {
-  const ink = theme === 'dark' ? '#e8e8e8' : '#1e1e1e'
+/**
+ * Paint the elements. Ink names (a stroke's 'ink', 'orange'…) go through `palette`: the theme's on
+ * screen, the light one for exports, which are always on white.
+ */
+export function drawElements(ctx: Ctx2D, els: readonly CanvasElement[], images: (sha: string) => CanvasImageSource | undefined, theme: 'light' | 'dark' = 'light', palette: InkPalette = theme === 'dark' ? BARE_DARK : LIGHT_INK) {
+  const ink = palette.ink
   for (const raw of paintOrder(els)) {
     const e = raw as Styled
     ctx.save()
     ctx.globalAlpha = (e.opacity ?? 100) / 100
     ctx.lineWidth = e.strokeWidth ?? 1
-    ctx.strokeStyle = e.strokeColor && e.strokeColor !== 'transparent' ? e.strokeColor : ink
+    ctx.strokeStyle = e.strokeColor && e.strokeColor !== 'transparent' ? resolveInk(e.strokeColor, palette) : ink
     ctx.setLineDash(e.strokeStyle === 'dashed' ? [8, 6] : [])
     const fill = e.backgroundColor && e.backgroundColor !== 'transparent' ? e.backgroundColor : null
     switch (e.type) {
@@ -61,7 +69,7 @@ export function drawElements(ctx: Ctx2D, els: readonly CanvasElement[], images: 
         if (e.strokeColor !== 'transparent') ctx.stroke()
         break
       case 'text':
-        ctx.fillStyle = e.strokeColor ?? ink
+        ctx.fillStyle = resolveInk(e.strokeColor, palette)
         ctx.font = `${e.fontSize ?? 20}px Geist, sans-serif`
         ;(e.text ?? '').split('\n').forEach((line, i) => ctx.fillText(line, e.x, e.y + (e.fontSize ?? 20) * (i + 1)))
         break
@@ -91,12 +99,12 @@ export function drawElements(ctx: Ctx2D, els: readonly CanvasElement[], images: 
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-/** An SVG of the elements inside `box`, pictures embedded from `dataURL`. */
+/** An SVG of the elements inside `box`, pictures embedded from `dataURL`; ink names in the light values (exports are on white). */
 export function svgOf(els: readonly CanvasElement[], box: { x: number; y: number; w: number; h: number }, background: string, dataURL: (sha: string) => string | undefined): string {
   const parts: string[] = [`<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="${esc(background)}"/>`]
   for (const raw of paintOrder(els)) {
     const e = raw as Styled
-    const stroke = esc(e.strokeColor && e.strokeColor !== 'transparent' ? e.strokeColor : '#1e1e1e')
+    const stroke = esc(e.strokeColor && e.strokeColor !== 'transparent' ? resolveInk(e.strokeColor) : LIGHT_INK.ink)
     const fill = esc(e.backgroundColor && e.backgroundColor !== 'transparent' ? e.backgroundColor : 'none')
     const sw = e.strokeWidth ?? 1
     switch (e.type) {

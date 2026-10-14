@@ -5,6 +5,7 @@
 import { CaptureUpdateAction } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
+import { LIGHT_INK } from '../../../../../canvas-engine/src/ink/palette'
 
 const TO_ENGINE: Record<ChromeTool, string> = {
   select: 'selection', hand: 'hand', pen: 'freedraw', text: 'text', sketch: 'frame', image: 'image', eraser: 'eraser',
@@ -15,6 +16,19 @@ export function excalidrawChrome(api: ExcalidrawImperativeAPI): CanvasChrome {
   return {
     tool: () => FROM_ENGINE[api.getAppState().activeTool.type] ?? null,
     setTool: (t) => api.setActiveTool({ type: TO_ENGINE[t] as never }),
+    // Excalidraw keeps literal colours and draws dark mode through its own invert filter, so the
+    // pen's ink names go in as their light values (its own default ink works the same way).
+    setPen: (p) => {
+      const look = p[p.mode]
+      api.updateScene({
+        appState: {
+          currentItemStrokeColor: LIGHT_INK[look.color],
+          currentItemStrokeWidth: look.width / 2,
+          currentItemOpacity: p.mode === 'highlighter' ? 35 : 100,
+        },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      })
+    },
     zoom: () => api.getAppState().zoom.value,
     zoomBy: (step) => {
       const st = api.getAppState()
