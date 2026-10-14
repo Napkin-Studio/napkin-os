@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The Script editor page, rendered (features/script-editor.clan): it opens on a project's
 // script, shows scenes and shots from one row model, expands the current shot into its
-// editor, imports Fountain as one undo step, and '← Storyboard' leaves the route.
+// editor, imports Fountain as one undo step, and '← Canvas' leaves the route.
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -95,7 +95,7 @@ describe('the Script editor page', () => {
     await settle()
     expect(el.textContent).toContain('Script · ')
     expect(el.textContent).toContain('Paste a script, or write the idea in a line.')
-    expect(el.textContent).toContain('← Storyboard')
+    expect(el.textContent).toContain('←Canvas')
     expect(el.textContent).toContain('Plan shots')
     expect(el.textContent).not.toMatch(/\$|free|cost/i)
   })
@@ -134,7 +134,7 @@ describe('the Script editor page', () => {
     await settle()
     expect(services.ui.get().script).toBeDefined()
     expect(el.querySelectorAll('.av-row:not(.av-headrow)')).toHaveLength(2)
-    expect(el.querySelector('.av-strip-words')?.textContent).toBe('6.0 of 15 s')
+    expect(el.querySelector('.av-strip-words')?.textContent).toBe('15 s target · 6.0 s estimated')
     await act(async () => { (el.querySelector('.av-no') as HTMLButtonElement).click() })
     await settle()
     const row = el.querySelector('.av-row.open')!
@@ -161,14 +161,14 @@ describe('the Script editor page', () => {
     })
     render()
     await settle()
-    expect(el.querySelector('.se-facts')?.textContent).toContain('@jogger · no ref yet · 1')
+    expect(el.querySelector('.se-facts .se-ref')?.textContent).toBe('@joggerno ref yet1')
   })
 
-  it('← Storyboard leaves the route and opens the Storyboard stage', async () => {
+  it('← Canvas leaves the route and goes back to the canvas', async () => {
     const { el, router, services } = await open()
     await settle()
-    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === '← Storyboard')!.click() })
+    await act(async () => { [...el.querySelectorAll('button')].find((b) => b.textContent === '←Canvas')!.click() })
     expect(router.get()).toEqual({ kind: 'none' })
-    expect(services.ui.get().stage).toBe('storyboard')
+    expect(services.ui.get().stage).toBe('character')
   })
 })

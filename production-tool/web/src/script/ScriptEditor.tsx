@@ -25,8 +25,12 @@ import { sayer } from '../ui/agents/cast'
 import { Float, MenuItem } from '../ui/Float'
 import { HistoryPanel, type HistoryFocus } from '../ui/History'
 import { AskOptions } from '../ui/AskCard'
-import { JobSlot } from '../ui/JobSlot'
 import { UndoButtons } from '../ui/UndoButtons'
+import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
+import { AgentFigure } from '../ui/agents/AgentFigure'
+import { NapkinLoader } from '../ui/loader/NapkinLoader'
+import { useBlobUrl } from '../ui/hooks'
+import { CAST, type CastKey } from '../ui/agents/cast'
 import { CaretChain, caretKey } from './caret'
 import { composeScript, roughSeconds, storyboardsOf, type ComposedScript, type ScriptRow } from './compose'
 import { addBeat, addScene, importFountain, insertShot, moveShotTo, setHeading, setShotSeconds, splitScene } from './edits'
@@ -46,6 +50,7 @@ import { scriptMentionHooks } from './mentionHooks'
 import type { MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
 import './script.css'
+import './look.css'
 
 type Doc = ProductionDocument
 type Focus = { key: string; editor: Editor | null } | null
@@ -83,22 +88,25 @@ export function ScriptEditor({ scriptId }: { scriptId: string }) {
   const services = useServices()
   const { clan } = services
   const router = useRouter()
+  // Back to where the editor was opened from (ui-behaviour 2.3): the canvas, or the Storyboard editor.
+  const [from] = useState(() => services.ui.get().stage)
+  const backTo = from === 'storyboard' ? 'Storyboard' : from === 'video' ? 'Video' : 'Canvas'
   const back = useCallback(() => {
-    services.ui.update((u) => { u.stage = 'storyboard' })
+    services.ui.update((u) => { u.stage = from })
     router.leave()
-  }, [router, services.ui])
+  }, [router, services.ui, from])
   if (!clan) {
     return (
       <div className="se" data-script-page="">
-        <header className="se-top"><button className="btn sm ghost" onClick={back}>← Storyboard</button></header>
+        <header className="ptbar se-top"><BackButton label={backTo} onClick={back} /></header>
         <div className="se-empty" role="status">The Script editor needs this browser to keep the project's .clan, and it could not load here. Your script is safe; open it on another browser, or reload.</div>
       </div>
     )
   }
-  return <ScriptPage store={clan} scriptId={scriptId} onBack={back} />
+  return <ScriptPage store={clan} scriptId={scriptId} onBack={back} backTo={backTo} />
 }
 
-function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: string; onBack: () => void }) {
+function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; scriptId: string; onBack: () => void; backTo: string }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -232,7 +240,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
   if (!composed) {
     return (
       <div className="se" data-script-page="">
-        <header className="se-top"><button className="btn sm ghost" onClick={onBack}>← Storyboard</button></header>
+        <header className="ptbar se-top"><BackButton label={backTo} onClick={onBack} /></header>
         <div className="se-empty" role="status">That script is not in this project any more.</div>
       </div>
     )
@@ -270,11 +278,11 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
         void doImport(f)
       }}>
       {!phone && view === 'screenplay' && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say} />}
-      {empty && !phone && <EmptyScript store={store} scriptId={scriptId} chain={chain} setActive={setActive} />}
       {view === 'av' && !phone ? (
         <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
           mentions={mentions} say={say} onError={setError} disabled={!!planning} />
       ) : <div className="sp-rows">
+        {empty && !phone && <EmptyScript store={store} scriptId={scriptId} chain={chain} setActive={setActive} />}
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
             current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions} drafts={drafts} whyOf={whyOf}
@@ -282,7 +290,6 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
             hooksFor={hooksFor} focusOn={focusOn} say={say} onError={setError} />
         ))}
       </div>}
-      {!phone && <KeysLegend />}
       {!phone && (
         <SkyeBar editor={focus?.editor ?? null} target={focusTarget} seconds={focusTarget ? fitSeconds(doc, scriptId, focusTarget) : 0}
           handsOff={!!focusTarget && handsOff(doc, focusTarget)} off={skye.off} quota={skye.quota} working={!!skye.working}
@@ -293,17 +300,19 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
 
   return (
     <div className={`se ${sheet ? `sheet-${sheet}` : ''}`} data-script-page="" data-view={view}>
-      <header className="se-top">
-        <button className="btn sm ghost" onClick={onBack} title="Back to the storyboard (⌘[)">← Storyboard</button>
-        <span className="se-title"><b>Script</b> · {title}</span>
-        <span className={`se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>
-        <span className="spacer" />
+      <header className="ptbar se-top">
+        <BackButton label={backTo} onClick={onBack} />
+        <BarSep />
+        <NodeIcon kind="script" />
+        <h1 className="pt-title">Script · {title}</h1>
+        <span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>
         {!phone && (
-          <span className="se-switch" role="group" aria-label="View">
-            <button className={`chip ${view === 'screenplay' ? 'on' : ''}`} aria-pressed={view === 'screenplay'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'screenplay' } } })}>Screenplay</button>
-            <button className={`chip ${view === 'av' ? 'on' : ''}`} aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
+          <span className="pt-seg se-switch" role="group" aria-label="Script view">
+            <button aria-pressed={view === 'screenplay'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'screenplay' } } })}>Screenplay</button>
+            <button aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
           </span>
         )}
+        <span className="pt-grow" />
         {storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
             <select className="select xs" value={sb?.id ?? ''} onChange={(e) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { view, ...u.script?.[scriptId], storyboard: e.target.value } } })}>
@@ -312,8 +321,8 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
           </label>
         )}
         {!phone && <UndoButtons />}
-        <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} onClick={() => { setHistoryFocus(undefined); setHistory((h) => !h) }} title="Every step, who made it and why">History</button>
-        <button ref={menuRef} className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="More" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
+        <button className={`btn ${history ? 'on' : ''}`} aria-pressed={history} onClick={() => { setHistoryFocus(undefined); setHistory((h) => !h) }} title="Every decision, who made it and why">History</button>
+        <button ref={menuRef} className={`btn icon ${menu ? 'on' : ''}`} aria-label="More" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
         <Float anchor={menuRef} open={menu} onClose={() => setMenu(false)} align="end" label="More">
           {!phone && <MenuItem icon="⇪" onSelect={() => { setMenu(false); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
           <MenuItem icon="🔗" onSelect={() => {
@@ -323,10 +332,11 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
           }}>Copy link to this</MenuItem>
         </Float>
         {!phone && (
-          <button className="btn sm primary" disabled={!sb || !!planning} onClick={() => void plan()}>
+          <button className="btn primary" disabled={!sb || !!planning} onClick={() => void plan()}>
             {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
           </button>
         )}
+        <Account />
         <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
           const f = e.target.files?.[0]
           e.target.value = ''
@@ -346,6 +356,7 @@ function ScriptPage({ store, scriptId, onBack }: { store: ModelStore; scriptId: 
           <>
             <button className="se-handle left" aria-expanded={sheet === 'outline'} onClick={() => setSheet(sheet === 'outline' ? null : 'outline')}>Outline</button>
             <Outline rows={composed.rows} current={current} disabled={!!planning}
+              onAddScene={() => void attempt(() => addScene(store, scriptId).then((id) => chain.focus(caretKey('heading', id), 'end')))}
               onShot={(id) => { setCurrent(id); setSheet(null); chain.focus(caretKey('shot', id), 'end') }}
               onScene={(id) => { setSheet(null); chain.focus(caretKey('heading', id), 'end') }}
               onMove={(id, place) => void attempt(() => moveShotTo(store, id, place))}
@@ -691,7 +702,7 @@ function WriterMark({ writer, person, onWhy }: { writer?: string; person: string
     onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onWhy() } }}>why?</span>
   let mark: ReactNode
   if (writer === person) mark = <span className="wmark you" title="You wrote this last">You</span>
-  else if (writer === 'dex' || writer === 'skye') mark = <span className="wmark" title={`${sayer(writer)} wrote this last`}><AgentAvatar agent={writer} size={20} decorative /></span>
+  else if (writer in CAST) mark = <span className="wmark crew" title={`${sayer(writer as CastKey)} wrote this last`}><AgentFigure agent={writer as CastKey} size={16} decorative /><span className="name">{CAST[writer as CastKey].given}</span></span>
   else if (!writer.startsWith('human:')) mark = <span className="wmark crew" title={`${writer[0].toUpperCase()}${writer.slice(1)} wrote this last`}>{writer[0].toUpperCase()}</span>
   else mark = <span className="wmark person" title="Someone else wrote this last">{writer.slice('human:'.length).replace(/^p_/, '').slice(0, 2).toUpperCase()}</span>
   return <span className="wmarks">{mark}{why}</span>
@@ -710,7 +721,9 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
   const total = composed.total_s
   const rough = !shots.length ? roughSeconds(scriptText(doc, composed.script.id)) : null
   const est = rough ?? total
-  const longest = shots.reduce<Shot | null>((m, s) => (!m || s.duration_s > m.duration_s ? s : m), null)
+  const maxS = Math.max(0, ...shots.map((s) => s.duration_s))
+  // The longest shot is named only when one shot is longer than every other.
+  const longest = shots.filter((s) => s.duration_s === maxS).length === 1 ? shots.find((s) => s.duration_s === maxS) ?? null : null
   const diff = Math.round((target - est) * 10) / 10
   const asks = openAsks(doc).filter((a) => !!askedShot(a) && shots.some((s) => s.id === askedShot(a)))
   const answer = (a: Ask, shotId: string, option: 'keep' | 'remove') => {
@@ -732,36 +745,35 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
   const unlinked = Object.values(doc.refs).filter((r) => !isLinked(doc, r.id, script))
   return (
     <aside className="se-facts" aria-label="This script">
-      <section>
-        <div className="eyebrow">This script</div>
-        <div>{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {sb?.ratio ?? '16:9'}</div>
+      <section className="se-facthead">
+        <b>This script</b>
+        <span className="pt-mono">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {sb?.ratio ?? '16:9'}</span>
       </section>
-      <section aria-label="Length">
-        <div className="se-meterline">{target} s target · {secs(est)} estimated{rough !== null ? ' (rough, from the words)' : ''}</div>
-        {shots.length > 0 && (
-          <div className="se-meter" role="img" aria-label={`${secs(total)} of ${target} s`}>
-            {shots.map((s) => (
-              <span key={s.id} className={`seg ${s.id === current ? 'cur' : ''}`} style={{ flexGrow: s.duration_s }} title={`${secs(s.duration_s)}`} />
-            ))}
-            <span className="target" style={{ left: `${Math.min(100, (target / Math.max(target, total)) * 100)}%` }} />
-          </div>
-        )}
-        <div className="row" style={{ gap: 6 }}>
-          {longest && shots.length > 2 && <span className="faint">longest: shot {shots.indexOf(longest) + 1} · {secs(longest.duration_s)}</span>}
-          <span className="spacer" />
-          {est > 0 && <span className={`pill ${diff >= 0 ? 'ok' : 'warn'}`}>{diff >= 0 ? `${secs(diff)} to spare` : `${secs(-diff)} over`}</span>}
+      <section aria-label="Length" className="se-lengthcard">
+        <div className="se-meterline"><span className="pt-label">Length</span><span>{target} s target · {secs(est)} estimated</span></div>
+        <div className="se-meter" role="img" aria-label={`${secs(est)} of ${target} s`}>
+          {shots.map((s) => (
+            <span key={s.id} className={`seg ${s.id === current ? 'cur' : ''} ${longest && s.id === longest.id && shots.length > 2 ? 'long' : ''}`} style={{ flexGrow: s.duration_s }} title={`${secs(s.duration_s)}`} />
+          ))}
+          {!shots.length && est > 0 && <span className="seg rough" style={{ flexGrow: est }} title="Rough, from the words" />}
+          <span className="seg rest" style={{ flexGrow: Math.max(0, target - est) }} />
+          <span className="target" style={{ left: `${Math.min(100, (target / Math.max(target, est || target)) * 100)}%` }} />
         </div>
+        <div className="se-meterlabels"><span>0 s</span>{longest && shots.length > 2 ? <span>shot {shots.indexOf(longest) + 1} · {secs(longest.duration_s)}</span> : rough !== null && est > 0 ? <span>rough, from the words</span> : <span />}<span>{target} s</span></div>
+        {est > 0 && <span className={`pt-pill ${diff >= 0 ? 'ok' : 'warn'}`}>{diff >= 0 ? `${secs(diff)} to spare` : `${secs(-diff)} over`}</span>}
       </section>
       {planning && (
-        <section aria-label="Dex at work">
-          <div className="eyebrow">{sayer('dex')}</div>
-          <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden' }}><JobSlot jobId={planning} compact /></div>
+        <section aria-label="Dex at work" className="se-atwork">
+          <NapkinLoader work="plan" size={20} />
+          <AgentFigure agent="dex" state="working" size={20} decorative />
+          <span><span className="who">{sayer('dex')}:</span> I'm planning the shots from the script.</span>
         </section>
       )}
       {skyeWorking && (
-        <section aria-label="Skye at work">
-          <div className="eyebrow">{SKYE}</div>
-          <div style={{ minHeight: 96, borderRadius: 12, overflow: 'hidden' }}><JobSlot jobId={skyeWorking} compact /></div>
+        <section aria-label="Skye at work" className="se-atwork">
+          <NapkinLoader work="plan" size={20} />
+          <AgentFigure agent="skye" state="working" size={20} decorative />
+          <span><span className="who">{SKYE}:</span> I'm writing that now.</span>
         </section>
       )}
       {skyeOff && <section className="faint" role="status">{NOT_HERE}</section>}
@@ -789,14 +801,28 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
           })}
         </section>
       )}
-      <section aria-label="References">
-        <div className="eyebrow">References · {used.size}</div>
+      <section aria-label="References" className="se-refs">
+        <div className="pt-label se-refhead"><span>References · {used.size + missing.length}</span><span>Shots</span></div>
         {[...used.entries()].map(([id, nums]) => {
           const n = names[id]
           const role = doc.refs[id]?.role ?? doc.keys[id]?.role
-          return <div key={id} className="se-ref">@{n ? (n.variant ? `${n.key}_${n.variant}` : n.key) : 'gone'} · {role ?? ''} · <span className="faint">{nums.join(' ')}</span></div>
+          return (
+            <div key={id} className="se-ref">
+              <RefThumb sha={doc.refs[id]?.asset} />
+              <span className="pt-ref">@{n ? (n.variant ? `${n.key}_${n.variant}` : n.key) : 'gone'}</span>
+              {role && <span className="pt-pill">{role}</span>}
+              <span className="se-refshots">{nums.join(' ')}</span>
+            </div>
+          )
         })}
-        {missing.map(([name, nums]) => <div key={name} className="se-ref">@{name} · <span className="warn-text">no ref yet</span> · <span className="faint">{nums.join(' ')}</span></div>)}
+        {missing.map(([name, nums]) => (
+          <div key={name} className="se-ref">
+            <span className="se-refthumb missing" />
+            <span className="pt-ref unknown">@{name}</span>
+            <span className="pt-pill warn">no ref yet</span>
+            <span className="se-refshots">{nums.join(' ')}</span>
+          </div>
+        ))}
         {!used.size && !missing.length && <div className="faint">Name a picture on the canvas, then type @ in a shot.</div>}
         {unlinked.length > 0 && (
           <label className="se-link">
@@ -812,9 +838,25 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
   )
 }
 
+/** A reference's picture in the facts list. */
+function RefThumb({ sha }: { sha?: string }) {
+  const url = useBlobUrl(sha)
+  return <span className="se-refthumb">{url && <img src={url} alt="" />}</span>
+}
+
 function KeysLegend({ compact }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="se-keycard" aria-label="Keys">
+        <div className="pt-label">Keys</div>
+        <div><span>Next element</span><kbd>Tab</kbd></div>
+        <div><span>Mention a ref</span><kbd>@</kbd></div>
+        <div><span>Add a moment</span><kbd>⌥M</kbd></div>
+      </div>
+    )
+  }
   return (
-    <div className={`se-keys ${compact ? 'compact' : ''}`} aria-label="Keys">
+    <div className="se-keys" aria-label="Keys">
       <span><kbd>Tab</kbd> next element</span>
       <span><kbd>@</kbd> a reference</span>
       <span><kbd>⌥M</kbd> a moment</span>

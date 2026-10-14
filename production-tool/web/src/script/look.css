@@ -1,0 +1,126 @@
+/* The Script editor in the approved look (docs/production-tool/ui-mocks/ScriptScreenplay,
+   ScriptAV), over script.css: the editor sits on the dot grid, a frosted outline on the left,
+   the page as a white sheet under a floating element bar, a frosted facts panel on the right. */
+.se { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }
+.se-top.ptbar { backdrop-filter: none; }
+.se-top::after { display: none; }
+.se-top .se-switch { margin-left: 12px; }
+.se-body { grid-template-columns: 234px minmax(0, 1fr) 338px; padding: 16px; gap: 0; }
+.se-outline, .se-facts {
+  background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: var(--r-panel); box-shadow: var(--shadow-soft); backdrop-filter: var(--blur);
+}
+.se-outline { padding: 12px; }
+.se-facts { padding: 16px; gap: 16px; }
+.se-page { padding: 0 0 96px; }
+.se-page > .sp-rows, .se-page > .se-emptyline { max-width: 700px; margin: 0 auto; }
+
+/* The element bar: a frosted pill floating over the page. */
+.se-elements {
+  position: sticky; top: 0; width: max-content; max-width: calc(100% - 24px); margin: 2px auto 12px; padding: 4px; gap: 2px; flex-wrap: nowrap;
+  border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.94); box-shadow: var(--shadow-soft);
+}
+.se-elements .chip { height: 28px; padding: 0 12px; border: 0; background: transparent; font-weight: 500; font-size: 13px; color: var(--ink2); }
+.se-elements .chip.on { background: var(--tool-soft); color: var(--tool-ink); font-weight: 600; }
+.se-elements .se-hint { margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--line-soft); font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
+
+/* The page: a white sheet; prose in Geist, headings and shot labels in mono. */
+.sp-rows {
+  padding: 32px 64px 40px 96px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 6px; box-shadow: var(--shadow-soft);
+  font-family: var(--f-display); font-size: 14.5px; line-height: 1.65; counter-reset: scene;
+}
+.sp-scene { position: relative; margin: 28px 0 8px; counter-increment: scene; }
+.sp-scene:first-child { margin-top: 8px; }
+.sp-scene::before { content: counter(scene); position: absolute; left: -64px; top: 3px; font-family: var(--f-mono); font-size: 14px; color: var(--ink3); width: 32px; text-align: right; }
+.sp-heading { font-family: var(--f-mono); font-size: 14px; font-weight: 500; letter-spacing: 0.04em; margin-bottom: 10px; }
+.sp-shot { margin: 10px 0; }
+.sp-shotline { gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
+.sp-shotno { font-family: var(--f-mono); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; color: var(--ink2); }
+.sp-chip { font-size: 11px; padding: 2px 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink2); }
+.sp-shot.open { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 12px; box-shadow: var(--shadow-soft); }
+.sp-shot.open .sp-chip { border-color: var(--tool); background: var(--tool-soft); color: var(--tool-ink); font-weight: 600; font-size: 12px; padding: 3px 10px; }
+.sp-len { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink2); }
+.sp-beat .sp-pill { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-size: 12px; padding: 2px 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+
+/* The outline */
+.ol-head { display: flex; justify-content: space-between; padding: 4px 8px 10px; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); }
+.ol-head span:last-child { text-transform: none; letter-spacing: 0; }
+.ol { flex: none; }
+.ol-scene .ol-btn { font-family: var(--f-display); font-size: 12.5px; font-weight: 600; text-transform: uppercase; color: var(--ink); }
+.ol-shot { padding-left: 14px; }
+.ol-shot .ol-btn { font-size: 13px; }
+.ol-shot.on > .ol-btn { font-weight: 600; }
+.ol-len { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); margin-left: auto; }
+.ol-add { margin: 10px 4px 0; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; text-align: left; font-size: 13px; color: var(--ink2); cursor: pointer; }
+.ol-fill { flex: 1; }
+.se-keycard { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--soft); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.se-keycard > div:not(.pt-label) { display: flex; justify-content: space-between; color: var(--ink); }
+.se-keycard kbd { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+
+/* Who wrote it: a bordered pill, then WHY? */
+.wmarks { gap: 2px; padding: 1px 2px 1px 6px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); }
+.wmark { min-width: 0; height: 18px; background: transparent; font-size: 11px; font-weight: 600; color: var(--ink); gap: 3px; display: inline-flex; align-items: center; }
+.wmark-why { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; color: var(--ink3); padding: 0 4px; }
+.sp-scene .wmarks { position: absolute; right: 0; top: 0; }
+
+/* Facts */
+.se-facthead { display: flex; align-items: baseline; justify-content: space-between; }
+.se-facthead b { font-size: 14px; font-weight: 600; }
+.se-lengthcard { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--r-card); background: var(--card); align-items: flex-start; }
+.se-meterline { width: 100%; display: flex; gap: 16px; align-items: baseline; font-family: var(--f-mono); font-size: 12px; margin: 0; }
+.se-meter { width: 100%; height: 10px; margin: 0; }
+.se-meter .seg { background: #A8AEBB; border-radius: 2px; }
+.se-meter .seg.cur { background: var(--tool); }
+.se-meter .seg.long { background: #FF6A55; }
+.se-meter .seg.rough { background: #C5CAD3; }
+.se-meter .seg.rest { background: transparent; }
+.se-meter .target { background: var(--ink); top: -4px; bottom: -4px; }
+.se-meterlabels { width: 100%; display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
+.se-atwork { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: var(--r-pill); background: #FFF1EE; font-size: 12px; color: var(--ink); }
+.se-atwork .who { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.se-refs { display: flex; flex-direction: column; gap: 4px; }
+.se-refhead { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.se-ref { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+.se-refthumb { width: 26px; height: 26px; border-radius: 6px; overflow: hidden; background: var(--soft-2); flex: none; }
+.se-refthumb.missing { background: transparent; border: 1px dashed var(--line); }
+.se-refthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.se-ref .pt-ref { font-size: 12.5px; }
+.se-ref .pt-ref.unknown { color: var(--warn); text-decoration: underline wavy var(--warn); text-underline-offset: 3px; }
+.se-refshots { margin-left: auto; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink2); }
+.se-link { margin-top: 8px; }
+.se-link .linkbtn { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-pill); text-decoration: none; font-weight: 500; color: var(--ink2); }
+
+/* Skye's floating options: a pill signed by her figure; drafts sit in the text. */
+.skyebar { padding: 4px 6px; border-radius: var(--r-pill); gap: 2px; }
+.skyebar button { border: 0; background: transparent; height: 28px; padding: 0 10px; border-radius: var(--r-pill); font-size: 12.5px; cursor: pointer; color: var(--ink); }
+.skyebar button:hover:not(:disabled) { background: var(--soft); }
+.sug-words ins { text-decoration-color: #FF6A55; }
+
+/* Video · Audio takes the full width on the grid. */
+.se[data-view='av'] .se-body { grid-template-columns: minmax(0, 1fr); }
+.se[data-view='av'] .se-outline, .se[data-view='av'] .se-facts, .se[data-view='av'] .se-handle { display: none; }
+.av { padding: 0 16px 24px; }
+.av-row { border-color: var(--line); border-radius: var(--r-card); padding: 10px 14px; gap: 16px; }
+.av-row.av-headrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; font-weight: 400; color: var(--ink3); }
+.av-strip { background: transparent; top: 0; }
+@media (max-width: 1179px) {
+  .se-body { padding: 0; }
+  .se-outline, .se-facts { border-radius: 0; }
+}
+.sp-rows .se-emptyline { padding: 0; margin: 0; }
+/* In the outline a writer mark is only its figure or initials. */
+.se-outline .wmarks { border: 0; padding: 0; background: transparent; }
+.se-outline .wmark-why, .se-outline .wmark .name, .ol-scene .wmarks { display: none; }
+.se-outline .wmark.you { font-size: 0; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--ink); }
+.se-outline .wmark.you::after { content: "you"; font-size: 8px; font-family: var(--f-mono); }
+/* Video · Audio header (mock ScriptAV): title and facts on the left, the labelled length strip on the right. */
+.av-header { display: flex; align-items: flex-end; gap: 32px; padding: 16px 16px 20px; }
+.av-title { flex: 1; min-width: 0; }
+.av-title h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.av-title span { font-size: 13px; color: var(--ink2); }
+.av-header .av-strip { position: static; width: 600px; flex-direction: column; align-items: stretch; gap: 6px; padding: 0; }
+.av-strip-head { display: flex; justify-content: space-between; }
+.av-strip-words { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink2); }
+.av-header .av-strip-bar { flex: none; height: 22px; gap: 3px; }
+.av-header .av-strip-bar .seg { display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap; border-radius: 4px; background: var(--soft-2); font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.av-header .av-strip-bar .seg.cur { background: var(--tool-soft); color: var(--tool-ink); outline: 1px solid var(--tool); }
+.av-header .av-strip-bar .seg.moving { outline: 1.5px dashed var(--tool); background: transparent; }

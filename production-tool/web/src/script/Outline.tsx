@@ -26,14 +26,17 @@ export interface OutlineProps {
   writer(lastWriter: string | undefined, item: { kind: 'scene' | 'shot'; id: string; label: string }): ReactNode
   disabled?: boolean
   footer?: ReactNode
+  onAddScene?: () => void
 }
 
 const words = (s: CameraSize) => s.replace(/_/g, ' ')
+const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
 
-export function Outline({ rows, current, onShot, onScene, onMove, writer, disabled, footer }: OutlineProps) {
+export function Outline({ rows, current, onShot, onScene, onMove, writer, disabled, footer, onAddScene }: OutlineProps) {
   const shotRows = rows.filter((r): r is Extract<ScriptRow, { kind: 'shot' }> => r.kind === 'shot')
   const ids = useMemo(() => shotRows.map((r) => r.id), [shotRows])
-  const longest = shotRows.reduce<string | null>((m, r) => (!m || r.shot.duration_s > (shotRows.find((x) => x.id === m)?.shot.duration_s ?? 0) ? r.id : m), null)
+  const maxS = Math.max(0, ...shotRows.map((r) => r.shot.duration_s))
+  const longest = shotRows.filter((r) => r.shot.duration_s === maxS).length === 1 ? shotRows.find((r) => r.shot.duration_s === maxS)?.id ?? null : null
   const [active, setActive] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const sensors = useSensors(
@@ -61,6 +64,7 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
   const dragging = active ? shotRows.find((r) => r.id === active) : undefined
   return (
     <nav className="se-outline" aria-label="Outline">
+      <div className="ol-head"><span>Outline</span><span>{rows.filter((r) => r.kind === 'scene').length} scenes · {shotRows.length} shots</span></div>
       <DndContext sensors={sensors} collisionDetection={closestCenter}
         onDragStart={(e: DragStartEvent) => setActive(String(e.active.id))}
         onDragOver={(e: DragOverEvent) => setOver(e.over ? String(e.over.id) : null)}
@@ -88,8 +92,7 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
                   <ShotItem key={r.id} id={r.id} on={r.id === current} disabled={disabled}
                     line={line?.at === r.id ? (line.after ? 'after' : 'before') : null}
                     onPick={() => onShot(r.id)}>
-                    <span className="ol-n">{r.number}</span>
-                    <span className="ol-words">{(r.shot.action ?? '').split('\n')[0] || words(r.shot.camera.size)}</span>
+                    <span className="ol-words">{r.number} · {cap(words(r.shot.camera.size))}</span>
                     <span className={`ol-len ${r.id === longest && shotRows.length > 2 ? 'warn' : ''}`}>{r.shot.duration_s.toFixed(1)} s</span>
                     {writer(r.shot.last_writer, { kind: 'shot', id: r.id, label: `Shot ${r.number}` })}
                   </ShotItem>
@@ -116,6 +119,8 @@ export function Outline({ rows, current, onShot, onScene, onMove, writer, disabl
           )}
         </DragOverlay>
       </DndContext>
+      {onAddScene && <button type="button" className="ol-add" disabled={disabled} onClick={onAddScene}>+ Scene</button>}
+      <span className="ol-fill" />
       {footer}
     </nav>
   )

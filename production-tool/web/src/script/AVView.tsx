@@ -71,11 +71,18 @@ export function AVView(p: AVViewProps) {
   const line = active && over && active !== over ? { at: over, after: ids.indexOf(over) > ids.indexOf(active) } : null
   return (
     <div className="av">
-      <div className="av-strip" role="img" aria-label={`${secs(composed.total_s)} of ${target} s`}>
-        <div className="av-strip-bar">
-          {shots.map((s) => <span key={s.id} className={`seg ${s.id === p.current ? 'cur' : ''} ${s.id === active ? 'moving' : ''}`} style={{ flexGrow: s.duration_s }} />)}
+      {/* The header (mock ScriptAV): the script's title and facts, and the length strip, one labelled segment per shot. */}
+      <div className="av-header">
+        <div className="av-title">
+          <h2>{composed.script.title || 'Untitled script'}</h2>
+          <span>{target} s · {composed.storyboard?.ratio ?? '16:9'} · {shots.length} {shots.length === 1 ? 'shot' : 'shots'}</span>
         </div>
-        <span className="av-strip-words">{composed.total_s.toFixed(1)} of {target} s</span>
+        <div className="av-strip" role="img" aria-label={`${secs(composed.total_s)} of ${target} s`}>
+          <div className="av-strip-head"><span className="pt-label">Length</span><span className="av-strip-words">{target} s target · {composed.total_s.toFixed(1)} s estimated</span></div>
+          <div className="av-strip-bar">
+            {shots.map((s, i) => <span key={s.id} className={`seg ${s.id === p.current ? 'cur' : ''} ${s.id === active ? 'moving' : ''}`} style={{ flexGrow: s.duration_s }}>{i + 1} · {s.duration_s.toFixed(1)}</span>)}
+          </div>
+        </div>
       </div>
       <div className="av-table" role="table" aria-label="Shots, video and audio">
         <div className="av-row av-headrow" role="row">
