@@ -47,6 +47,7 @@ from runway_common import (  # noqa: E402
     KEY_ENV, Assets, Budget, Runner, Tap, default_factory, ephemeral_upload, fetch_bytes, is_https, key_status,
     make_client,
 )
+from contracts_dir import pricing
 from providers import ProviderJob, load_sheet  # noqa: E402
 
 PROMPT_TAIL = "Everything else stays exactly as it is: the people, the place, the light and the camera."
@@ -85,9 +86,9 @@ def plan_for(take_s: float, window: dict, at: float) -> tuple[dict, float]:
     if not window["from_s"] <= at <= window["to_s"] or window["to_s"] > take_s + 1e-6:
         raise SystemExit(f"--at {at:g} must be inside the window, and the window inside the {take_s:g} s take")
     plan = time_rules.patch_plan(window, at, take_s)
-    spec = load_sheet("runway")["ops"]["clip_patch"]
-    billed = max(spec.get("minS", 0), math.ceil(plan["seconds"] - 1e-9))
-    return plan, round(billed * float(spec["usdPerS"]), 4)
+    sheet = load_sheet("runway")
+    billed = max(sheet["ops"]["clip_patch"].get("minS", 0), math.ceil(plan["seconds"] - 1e-9))
+    return plan, pricing().op_usd(sheet, "clip_patch", None, {"inputS": billed})
 
 
 def local_io(root: Path):
@@ -162,7 +163,7 @@ def main(argv=None) -> int:
         })
         runner = Runner(default_factory(key, assets, tap, sheet), Budget(args.max_usd), tap=tap)
         rec = runner.run("clip_patch range send", job, est=est)
-        report = {"take": take.name, "takeS": take_s, "window": window, "atS": args.at, "plan": plan, "estimateUsd": est,
+        report = {"take": take.name, "takeS": take_s, "window": window, "atS": args.at, "plan": plan, "reservedUsd": est,
                   "stillFrame": cut["stills"][0], "runway": rec}
         if rec.get("state") != "completed" or not rec.get("outputs"):
             (out / "report.json").write_text(json.dumps(report, indent=1) + "\n")

@@ -55,8 +55,7 @@
     "clip_patch": {
       "model": "mock",
       "endpoint": "mock://video",
-      "estimateUsd": 0,
-      "usdPerS": 0,
+      "defaults": {"outputs": 1},
       "minS": 2,
       "maxS": 15,
       "label": "Mock"

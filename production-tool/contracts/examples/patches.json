@@ -583,7 +583,7 @@
   }
  ],
  "estimates": {
-  "about": "The relay's clip_patch reservation: max(minS, ceil(seconds)) x usdPerS, read from capabilities/runway.json ops.clip_patch (minS 2, usdPerS 0.28). Never shown to a person (owner decision 2026-10-13): recorded on the job for History.",
+  "about": "The relay's clip_patch reservation: max(minS, ceil(seconds)) seconds of aleph2 priced by contracts/pricing.py from capabilities/runway.json (ops.clip_patch minS 2; models.aleph2 28 credits a second). Never shown to a person (owner decision 2026-10-13): recorded on the job for History.",
   "cases": [
    {
     "seconds": 2,

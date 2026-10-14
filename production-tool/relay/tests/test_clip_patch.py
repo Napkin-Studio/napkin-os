@@ -18,7 +18,7 @@ import pytest
 import time_rules
 from conftest import CDN, Harness, asset, base_config, envelope
 from contracts import Contracts
-from contracts_dir import contracts_dir
+from contracts_dir import contracts_dir, pricing
 from director import new_id
 from director.director import Director, DirectorError
 from providers import load_sheet
@@ -159,9 +159,9 @@ def test_off_unless_the_flag_says_on():
 
 @pytest.mark.parametrize("case", PATCHES["estimates"]["cases"], ids=lambda c: f"{c['seconds']}s")
 def test_the_price_is_the_sheets_per_second_rate_on_the_cut(case):
+    # Priced through contracts/pricing.py from the models catalogue (runway-sheet-sync).
     h = harness()
-    spec = h.providers["runway"].sheet["ops"]["clip_patch"]
-    assert h.relay._patch_estimate(spec, case["seconds"]) == case["usd"]
+    assert h.relay._estimate("clip_patch", "runway", seconds=case["seconds"]) == (case["usd"], False)
 
 
 def test_a_3_s_window_reserves_084_and_context_only_widens_a_cut_send():
@@ -343,7 +343,7 @@ def test_cancel_in_the_cut_is_free_and_in_the_splice_is_charged():
 
 def veo_sheet() -> dict:
     sheet = copy.deepcopy(load_sheet("runway"))
-    sheet["ops"]["clip_patch"]["alternates"] = [{"model": "veo3.1", "endpoint": "POST /v1/image_to_video", "estimateUsd": 1.6,
+    sheet["ops"]["clip_patch"]["alternates"] = [{"model": "veo3.1", "endpoint": "POST /v1/image_to_video", "defaults": {"durationS": 4},
                                                  "label": "Veo 3.1", "mode": "first_last", "durationsS": [4]}]
     return sheet
 
@@ -404,7 +404,7 @@ def test_clippatch_model_veo_picks_the_alternate_before_submit_and_sends_first_a
     shot = {"id": "shot_01K7B00000000000000000SH04", "kind": "shot", "duration_s": 6,
             "camera": {"size": "close"}, "action": "She wakes.", "refs": []}
     job = post(h, shot=shot)
-    assert job["model"] == "veo3.1" and job["cost"]["reserved"] == 1.6
+    assert job["model"] == "veo3.1" and job["cost"]["reserved"] == pricing().op_usd(sheet, "clip_patch", "veo3.1", {"durationS": 4})
     assert job["patch"]["window"] == {"from_s": 1, "to_s": 5}  # widened to the 4 s Veo makes, inside the shot
     assert h.stitched[-1]["stills"] == [{"atS": 1, "key": f"ads/scratch/{job['jobId']}/still.png"},
                                         {"atS": 5, "key": f"ads/scratch/{job['jobId']}/last.png"}]
