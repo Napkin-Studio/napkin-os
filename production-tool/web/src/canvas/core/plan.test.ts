@@ -34,7 +34,7 @@ function ORACLE(all: readonly PlainEl[], selectedIds: readonly string[]): Select
     const e = live.get(id)
     if (!e) continue
     const c = oracleCdOf(e)
-    if (c?.kind === 'provenance' || c?.kind === 'pin') continue
+    if (c?.kind === 'provenance' || (c?.kind as string) === 'pin') continue
     if (c?.kind === 'pic' || c?.kind === 'drawn' || c?.kind === 'gen') {
       addImage(e)
       continue
