@@ -38,6 +38,29 @@ describe('the engine stays behind src/canvas/adapter', () => {
   })
 })
 
+describe('one engine’s adapter is reached only through the loader (features/engine-adapter.clan)', () => {
+  it.each([
+    ['a stage importing an adapter’s view', `import { X } from '../canvas/adapter/excalidraw/CanvasView'`, 'src/stages/X.tsx'],
+    ['a canvas file importing the Excalidraw adapter', `import { X } from './adapter/excalidraw'`, 'src/canvas/scene.ts'],
+    ['a canvas file importing the own adapter', `import { X } from './adapter/own/adapter'`, 'src/canvas/controller.ts'],
+    ['a type import from an adapter', `import type { X } from './adapter/excalidraw/types'`, 'src/canvas/text.ts'],
+    ['a re-export of an adapter', `export { X } from '../canvas/adapter/own'`, 'src/export.ts'],
+  ])('%s is refused', async (_what, line, file) => {
+    const msgs = await restricted(`${line}\nexport const y = 1\n`, file)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toContain('features/engine-adapter.clan')
+  })
+
+  it('the loader itself is allowed', async () => {
+    expect(await restricted(`import { loadEngine } from './adapter'\nexport const x = loadEngine\n`, 'src/canvas/CanvasMount.tsx')).toEqual([])
+    expect(await restricted(`import { canvasExportFile } from './canvas/adapter'\nexport const x = canvasExportFile\n`, 'src/export.ts')).toEqual([])
+  })
+
+  it('inside src/canvas/adapter the loader reaches each engine', async () => {
+    expect(await restricted(`import { X } from './own/engine'\nexport const x = X\n`, 'src/canvas/adapter/index.ts')).toEqual([])
+  })
+})
+
 describe('src/canvas/core imports no engine, no sync library and no adapter', () => {
   const core = 'src/canvas/core/x.ts'
   it.each([

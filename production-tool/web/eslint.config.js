@@ -11,6 +11,12 @@ const ENGINE = {
   allowTypeImports: false,
 }
 
+const ONE_ADAPTER = {
+  group: ['**/adapter/*', '**/adapter/*/**'],
+  message: 'Reach the canvas engines through src/canvas/adapter (the loader), never one engine\'s adapter (features/engine-adapter.clan)',
+  allowTypeImports: false,
+}
+
 export default defineConfig([
   globalIgnores(['dist']),
   {
@@ -34,12 +40,14 @@ export default defineConfig([
   // The canvas engine lives behind src/canvas/adapter (features/canvas-core.clan).
   // allowTypeImports is false, so `import type` and `export … from` are caught too;
   // src/canvas/boundary.test.ts catches the strings lint cannot see.
+  // Nor does anything outside it import one engine's adapter: callers reach the engines only
+  // through src/canvas/adapter/index.ts, the loader (features/engine-adapter.clan).
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/canvas/adapter/**'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
-        patterns: [ENGINE],
+        patterns: [ENGINE, ONE_ADAPTER],
       }],
     },
   },
