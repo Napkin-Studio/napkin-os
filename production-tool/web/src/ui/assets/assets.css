@@ -1,0 +1,31 @@
+/* The Assets drawer (mock Assets.dc.html): in the board rail's place, full height. */
+.assets-drawer {
+  position: absolute; left: 16px; top: 16px; bottom: 16px; width: 306px; z-index: 6;
+  display: flex; flex-direction: column; padding: 14px 14px 12px; gap: 10px;
+}
+.ad-head { display: flex; align-items: center; gap: 8px; }
+.ad-head b { font-size: 15px; font-weight: 600; }
+.ad-head .pt-grow { flex: 1; }
+.ad-x { width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; font-size: 18px; cursor: pointer; color: var(--ink2); }
+.ad-x:hover { background: var(--soft); }
+.ad-tabs { display: flex; gap: 2px; padding: 3px; border-radius: var(--r-pill); background: var(--soft); }
+.ad-tabs { justify-content: space-between; }
+.ad-tabs button { flex: none; height: 28px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 11.5px; color: var(--ink2); cursor: pointer; white-space: nowrap; padding: 0 7px; }
+.ad-tabs button.on { background: var(--card); color: var(--tool-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(20, 30, 60, 0.10); }
+.ad-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.ad-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-pill); color: var(--ink3); }
+.ad-search input { flex: 1; border: 0; outline: none; background: transparent; font-size: 13px; color: var(--ink); }
+.ad-section { display: flex; justify-content: space-between; margin-top: 8px; }
+.ad-key { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 12px; border: 1px solid transparent; }
+.ad-key:hover { border-color: var(--line-soft); background: var(--card); }
+.ad-thumbs { display: flex; gap: 2px; flex-shrink: 0; }
+.ad-thumb { width: 36px; height: 48px; border-radius: 6px; overflow: hidden; border: 0; padding: 0; background: var(--soft); cursor: pointer; display: block; }
+.ad-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ad-keytext { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; }
+.ad-meta { font-size: 11.5px; color: var(--ink2); }
+.ad-role { border: 0; background: transparent; font: inherit; color: var(--ink2); padding: 0; cursor: pointer; }
+.ad-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.ad-error { color: var(--danger); font-size: 12px; font-weight: 600; }
+.ad-empty { margin: 4px 2px; font-size: 13px; line-height: 1.45; color: var(--ink2); }
+.ad-clean { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 8px; }
+.ad-foot { padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--ink2); }

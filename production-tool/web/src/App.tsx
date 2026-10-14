@@ -9,6 +9,7 @@ import { HistoryPanel } from './ui/History'
 import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
 import { BusyPointer } from './ui/loader/BusyPointer'
+import { UndoKeys } from './ui/UndoButtons'
 import { PanelsContext } from './ui/chrome/panels'
 import { CLAN_DB } from './model/store'
 import { clanDbFor, INDEX_KEY } from './projects/storage'
@@ -63,6 +64,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       <UpdateBox />
       <FallbackNotices />
       <BusyPointer />
+      <UndoKeys />
       {!import.meta.env.PROD && <DevSwitch />}
     </PanelsContext.Provider>
   )

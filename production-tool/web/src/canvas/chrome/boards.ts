@@ -1,0 +1,74 @@
+// The board rail's rows (ui-behaviour 3.2). One selector feeds the rail, so when art-boards puts
+// board frames on the canvas only this source changes: rows come from doc.boards by rank when the
+// project has any. Until then the rail lists the Ad template's seven boards with today's counts:
+// the reference boards fit the canvas to their pictures; Script, Storyboard and Video open their
+// editors, since their nodes are not on the canvas yet (features/production-ui.clan).
+
+import type { BoardPurpose, ProductionDocument, RefRole } from '../../contracts/types'
+import { keysList, refsList, shotsOf } from '../../model/selectors'
+
+export type BoardTarget =
+  | { kind: 'board'; id: string }
+  | { kind: 'refs'; nodes: string[] }
+  | { kind: 'open'; editor: 'script' | 'storyboard' | 'video' }
+
+export interface BoardRow {
+  id: string
+  title: string
+  /** "Characters · 3"; none when nothing is counted. */
+  count?: number
+  purpose: BoardPurpose
+  target: BoardTarget
+  /** Why the row cannot be used now, in words; absent when it can. */
+  off?: string
+}
+
+const TEMPLATE: { id: string; title: string; purpose: BoardPurpose; roles?: RefRole[] | 'other' }[] = [
+  { id: 'script', title: 'Script', purpose: 'script' },
+  { id: 'characters', title: 'Characters', purpose: 'character', roles: ['character'] },
+  { id: 'locations', title: 'Locations', purpose: 'location', roles: ['location'] },
+  { id: 'references', title: 'References', purpose: 'reference', roles: 'other' },
+  { id: 'products', title: 'Products', purpose: 'product', roles: ['product'] },
+  { id: 'storyboard', title: 'Storyboard', purpose: 'storyboard' },
+  { id: 'video', title: 'Video', purpose: 'video' },
+]
+const OWN: RefRole[] = ['character', 'location', 'product']
+
+export function boardRows(doc: ProductionDocument): BoardRow[] {
+  const boards = Object.values(doc.boards ?? {}).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
+  if (boards.length) return boards.map((b) => ({ id: b.id, title: b.title, purpose: b.purpose, target: { kind: 'board', id: b.id } }))
+  const roleOf = new Map(keysList(doc).map((k) => [k.key, k.role]))
+  const refs = refsList(doc)
+  const shots = shotsOf(doc).length
+  return TEMPLATE.map((t): BoardRow => {
+    if (t.roles) {
+      const mine = refs.filter((r) => {
+        const role = roleOf.get(r.key) ?? 'character'
+        return t.roles === 'other' ? !OWN.includes(role) : t.roles!.includes(role)
+      })
+      const nodes = mine.flatMap((r) => (r.node ? [r.node] : []))
+      return { id: t.id, title: t.title, purpose: t.purpose, count: mine.length || undefined, target: { kind: 'refs', nodes },
+        off: nodes.length ? undefined : `No ${t.title.toLowerCase()} named yet` }
+    }
+    if (t.id === 'storyboard') return { id: t.id, title: t.title, purpose: t.purpose, count: shots || undefined, target: { kind: 'open', editor: 'storyboard' } }
+    return { id: t.id, title: t.title, purpose: t.purpose, target: { kind: 'open', editor: t.id as 'script' | 'video' } }
+  })
+}
+
+/** "Characters · 3". */
+export const rowLabel = (r: Pick<BoardRow, 'title' | 'count'>) => (r.count ? `${r.title} · ${r.count}` : r.title)
+
+/**
+ * ⌥1…⌥9 jump to the board at that place, ⌥0 fits everything (ui-behaviour 3.2). Read from
+ * event.code, since ⌥+digit types a symbol on a Mac; never while typing.
+ * Returns the row's index, 'fit', or null when the key is not the rail's.
+ */
+export function boardKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'code' | 'target'>): number | 'fit' | null {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return null
+  const m = /^Digit([0-9])$/.exec(e.code)
+  if (!m) return null
+  const t = e.target as { closest?: (s: string) => unknown } | null
+  if (t?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return null
+  const n = Number(m[1])
+  return n === 0 ? 'fit' : n - 1
+}

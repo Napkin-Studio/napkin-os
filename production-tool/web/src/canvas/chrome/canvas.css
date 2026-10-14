@@ -1,0 +1,106 @@
+/* The canvas chrome of the approved UI (docs/production-tool/ui-mocks/Main.dc.html):
+   the Boards rail, the bottom tool bar and the zoom pill, floating over either canvas engine. */
+
+/* ── Boards rail (left, frosted) ─────────────────────────────────────────── */
+.board-rail {
+  position: absolute; left: 16px; top: 16px; width: 208px; padding: 12px; z-index: 5;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.board-rail .br-head { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); padding: 4px 8px 8px; }
+.br-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; border: 0; background: transparent;
+  font-size: 13px; color: var(--ink); text-align: left; cursor: pointer; width: 100%;
+}
+.br-row:hover:not(:disabled) { background: var(--soft); }
+.br-row:disabled { color: var(--ink3); cursor: default; }
+.br-row.current { color: var(--tool-ink); background: var(--tool-soft); font-weight: 600; }
+.br-row .br-key { color: var(--ink3); font-family: var(--f-mono); font-size: 11px; }
+.br-row.current .br-key { color: var(--tool-ink); }
+.br-new { margin-top: 6px; text-align: left; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; font-size: 13px; color: var(--ink2); }
+.br-new:disabled { cursor: default; }
+.board-rail .br-foot { margin-top: 10px; padding: 10px 8px 2px; border-top: 1px solid var(--line-soft); font-family: var(--f-mono); font-size: 11px; line-height: 1.6; color: var(--ink3); }
+.br-pill { position: absolute; left: 16px; top: 16px; z-index: 5; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px; border-radius: var(--r-pill); font-size: 14px; cursor: pointer; color: var(--ink); }
+.br-pill .br-cur { color: var(--tool-ink); font-weight: 600; }
+.br-sheet { width: 300px; padding: 8px; }
+.br-sheet .br-row { min-height: 48px; font-size: 15px; }
+.br-sheethead { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px; }
+.br-close { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; font-size: 20px; cursor: pointer; color: var(--ink2); }
+
+/* ── The tool bar (bottom, centred) ──────────────────────────────────────── */
+.canvas-toolbar {
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 5;
+  display: flex; align-items: center; gap: 4px; padding: 6px;
+  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-pop);
+}
+@media (prefers-color-scheme: dark) { .canvas-toolbar, .zoom-pill { background: rgba(22, 26, 31, 0.94); } }
+.tb-tool {
+  width: 36px; height: 36px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0; font-size: 12px;
+}
+.tb-tool.wide { width: auto; padding: 0 12px; }
+.tb-tool:hover:not(:disabled) { background: var(--soft); }
+.tb-tool.on { background: var(--ink-fixed); color: #FFFFFF; }
+.tb-tool:disabled { color: var(--ink3); opacity: 0.55; cursor: default; }
+.tb-tool .tb-t { font-weight: 600; font-size: 15px; }
+.tb-sep { width: 1px; height: 22px; background: var(--line-soft); margin: 0 4px; }
+.tb-node { height: 36px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: var(--action); color: var(--action-fg); font-size: 13px; font-weight: 600; cursor: pointer; }
+.tb-node:hover { background: var(--action-hover); }
+
+/* ── Zoom and undo (bottom right) ────────────────────────────────────────── */
+.zoom-pill {
+  position: absolute; right: 16px; bottom: 20px; z-index: 5; display: flex; align-items: center; gap: 4px; padding: 4px;
+  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); font-size: 12px;
+}
+.zoom-pill button { width: 30px; height: 30px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; color: var(--ink); padding: 0; font-size: 13px; }
+.zoom-pill button:hover:not(:disabled) { background: var(--soft); }
+.zoom-pill button:disabled { color: var(--ink3); cursor: default; }
+.zoom-pill .zp-value { width: 44px; font-family: var(--f-mono); font-size: 12px; }
+.zoom-pill .zp-sep { width: 1px; height: 18px; background: var(--line-soft); }
+.zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; }
+
+/* ── The selection bar (ui-behaviour 3.9; mock CanvasLinking) ────────────── */
+.canvas-wrap .toolbar { padding: 6px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.96); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); }
+.canvas-wrap .toolbar .sep { background: var(--line-soft); height: 22px; }
+.canvas-wrap .toolbar .btn:not(.primary):not(.dark) { border-color: transparent; background: transparent; }
+.canvas-wrap .toolbar .btn:not(.primary):not(.dark):hover:not(:disabled) { background: var(--soft); }
+
+/* ── "What Dex will send" (ui-behaviour 3.16; mock Scope) ────────────────── */
+.popover.send-tray { width: 380px; padding: 12px 14px; border-radius: var(--r-panel); background: rgba(255, 255, 255, 0.98); display: flex; flex-direction: column; gap: 8px; }
+.tray-head { display: flex; align-items: center; gap: 8px; }
+.tray-fold { width: 26px; height: 26px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; color: var(--ink); }
+.tray-title { display: flex; flex-direction: column; }
+.tray-title b { font-weight: 600; font-size: 13px; }
+.tray-title span { font-size: 11px; color: var(--ink3); }
+.tray-line { align-self: flex-start; height: 30px; padding: 0 12px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); font-size: 12.5px; cursor: pointer; color: var(--ink); }
+.tray-rows { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 6px 0; }
+.tray-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 2px; font-size: 12px; line-height: 1.4; cursor: pointer; }
+.tray-row input { margin: 2px 0 0; width: 14px; height: 14px; accent-color: var(--tool); flex: none; }
+.tray-row b { font-weight: 600; }
+.tray-words { display: flex; flex-direction: column; gap: 4px; }
+.tray-words .textarea { min-height: 56px; font-size: 13px; }
+.send-tray .taghints { margin: 0; }
+.tray-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tray-model { line-height: 1.4; margin-right: auto; }
+.tray-error { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+
+/* ── Today's engine under the chrome: its own bars give way to ours ──────── */
+.canvas-wrap .excalidraw .App-toolbar-container,
+.canvas-wrap .excalidraw .main-menu-trigger,
+.canvas-wrap .excalidraw .layer-ui__wrapper__top-right,
+.canvas-wrap .excalidraw .layer-ui__wrapper__footer-left,
+.canvas-wrap .excalidraw .layer-ui__wrapper__footer-right,
+.canvas-wrap .excalidraw .disable-zen-mode,
+.canvas-wrap .excalidraw .HintViewer { display: none !important; }
+/* Its properties panel (stroke, fill) opens on the right, clear of the Boards rail. */
+.canvas-wrap .excalidraw .App-menu_top { display: flex; justify-content: flex-end; pointer-events: none; }
+.canvas-wrap .excalidraw .App-menu_top > * { pointer-events: auto; }
+.canvas-wrap .excalidraw .App-menu_top__left { position: absolute; right: 0; top: 0; }
+.canvas-wrap .excalidraw .App-menu__left { transform: translateX(-100%); }
+.tray-foot.nowrap { flex-wrap: nowrap; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+/* The dot grid, moving with the canvas (Character sets --grid-x, --grid-y and --grid-s). */
+.canvas-wrap.pt-grid { background-position: var(--grid-x, 0) var(--grid-y, 0); background-size: var(--grid-s, 24px) var(--grid-s, 24px); }
+
+/* A new project's first card (mock States: the Ad template's Skye card). */
+.start-card { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: 420px; padding: 16px 18px; z-index: 4; display: flex; flex-direction: column; gap: 10px; }
+.start-card b { font-size: 14px; font-weight: 600; }
+.start-card p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink2); }

@@ -7,22 +7,29 @@ import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { useCallback, useMemo } from 'react'
 import { ExcalidrawAdapter } from './adapter'
+import { excalidrawChrome } from './chrome'
+import type { CanvasChrome } from '../../chrome/controls'
 import type { FileMap, SceneElement } from './types'
 
-export function CanvasView({ initial, onReady, onChange, theme }: {
+export function CanvasView({ initial, onReady, onChrome, onChange, theme }: {
   /** The saved scene to open with (read once, on mount). */
   initial: { elements: SceneElement[]; files: FileMap } | null
   onReady: (adapter: ExcalidrawAdapter) => void
+  /** The tool bar's and zoom pill's controls (canvas/chrome/controls.ts). */
+  onChrome?: (chrome: CanvasChrome) => void
   onChange: () => void
   theme: 'light' | 'dark'
 }) {
   const initialData = useMemo(() => {
-    if (initial?.elements?.length) return { elements: initial.elements, files: initial.files, scrollToContent: true }
-    return { elements: [], appState: { currentItemStrokeWidth: 2 } }
+    if (initial?.elements?.length) return { elements: initial.elements, files: initial.files, scrollToContent: true, appState: { viewBackgroundColor: 'transparent' } }
+    return { elements: [], appState: { currentItemStrokeWidth: 2, viewBackgroundColor: 'transparent' } }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Excalidraw calls this once, from its constructor, as it called setApi before.
-  const onApi = useCallback((api: ExcalidrawImperativeAPI) => onReady(new ExcalidrawAdapter(api)), [onReady])
+  const onApi = useCallback((api: ExcalidrawImperativeAPI) => {
+    onReady(new ExcalidrawAdapter(api))
+    onChrome?.(excalidrawChrome(api))
+  }, [onReady, onChrome])
 
   return (
     <Excalidraw

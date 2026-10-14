@@ -9,33 +9,37 @@
 import { CanvasView } from '../canvas/adapter/excalidraw/CanvasView'
 import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import { CanvasController, OTHER_VIEWS, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
+import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
+import { scriptRoute } from '../app/route'
+import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
+import { boardRows, type BoardRow } from '../canvas/chrome/boards'
+import type { CanvasChrome } from '../canvas/chrome/controls'
+import { usePanels } from '../ui/chrome/panels'
+import { AssetsDrawer } from '../ui/assets/AssetsDrawer'
+import { AgentFigure } from '../ui/agents/AgentFigure'
+import { sayer } from '../ui/agents/cast'
+import { CanvasController, viewLabel, type CanvasSnapshot, type GenerateResult } from '../canvas/controller'
 import { croppedCaption } from '../canvas/core/sketch'
 import { framesFromSketch, sketchDeleteText } from '../doc/remove'
 import { AskCard } from '../ui/AskCard'
 import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, cd, imageOf, isText, isUserDrawing, type Canvas, type El } from '../canvas/scene'
-import { AGENCY_SHELF, REF_ROLES, type Ask, type CustomData, type KeyEntry, type LibraryIndex, type ModelChoice, type NamedRef, type RefRole, type View } from '../contracts/types'
+import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
-import { keyNamed, keysList, refsList } from '../model/selectors'
-import { choiceToSend, modelChoicesFor } from '../capabilities'
+import { keyNamed, keysList, mainScript, mainStoryboard, refsList } from '../model/selectors'
+import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
-import { systemUpdate } from '../doc/store'
-import { sweep, unused } from '../doc/gc'
 import { isActive } from '../jobs/runner'
-import { deleteBlob } from '../lib/blobs'
 import { cleanKey, cleanVariant, nameOf, nameProblem, refByName, wholeKeys } from '../lib/names'
-import { useBlobUrl, useColorScheme, useFloating } from '../ui/hooks'
+import { useColorScheme, useFloating } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
 import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { useUndo } from '../ui/useUndo'
-import { RelayError } from '../relay'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
@@ -55,7 +59,12 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : 'That did not 
 
 export function Character({ initial, active }: { initial: CanvasSnapshot | null; active: boolean }) {
   const services = useServices()
-  const { runner, doc: docStore } = services
+  const { runner, doc: docStore, ui: uiStore, project } = services
+  const router = useRouter()
+  const panels = usePanels()
+  const [chrome, setChrome] = useState<CanvasChrome | null>(null)
+  const [board, setBoard] = useState<string | null>(null)
+  const narrow = useNarrow()
   const doc = useDoc()
   const ui = useUi()
   useJobsTick()
@@ -247,10 +256,41 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const hasMarks = els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e))
   const showHint = !ui.hintDismissed && !hasMarks && Object.keys(doc.refs).length === 0
 
+  // The board rail and + Node (ui-behaviour 3.2, 3.3): a reference board fits the canvas to its
+  // pictures; Script, Storyboard and Video open their editors over the canvas.
+  const rows = useMemo(() => boardRows(doc), [doc])
+  const open = useCallback((editor: 'script' | 'storyboard' | 'video') => {
+    if (editor === 'script') {
+      const sc = mainScript(docStore.get())
+      if (sc) router.push(scriptRoute(project.id, sc.id))
+      return
+    }
+    uiStore.update((u) => { u.stage = editor }, 'stage')
+  }, [docStore, router, project.id, uiStore])
+  const pickBoard = useCallback((row: BoardRow) => {
+    setBoard(row.id)
+    if (row.target.kind === 'open') return open(row.target.editor)
+    if (!canvas) return
+    const want = row.target.kind === 'refs' ? new Set(row.target.nodes) : new Set<string>()
+    const hit = alive(canvas.elements()).filter((e) => {
+      const c = cd(e)
+      return want.has(e.id) || (row.target.kind === 'board' && c?.kind === 'board' && c.id === row.target.id)
+    })
+    if (hit.length) canvas.fit(hit, { zoomFactor: 0.8, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
+  }, [canvas, open])
+  const onNode = useCallback((kind: NewNode) => {
+    if (kind === 'picture') return chrome?.setTool('image')
+    if (kind === 'sketch') return chrome?.setTool('sketch')
+    open(kind)
+  }, [chrome, open])
+  const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
+  // The dot grid moves with the canvas.
+  const grid = vs ? { '--grid-x': `${vs.view.scrollX * vs.view.zoom}px`, '--grid-y': `${vs.view.scrollY * vs.view.zoom}px`, '--grid-s': `${24 * vs.view.zoom}px` } as React.CSSProperties : undefined
+
   return (
     <div className="character">
-      <div className="canvas-wrap" ref={wrap}>
-        <CanvasView initial={initial} onReady={setCanvas} onChange={onChange} theme={theme} />
+      <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
+        <CanvasView initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} />
         <div className="overlay-layer">
           <FlowArrows els={els} toView={toView} />
           {els.map((e) => {
@@ -297,15 +337,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           </div>
         )}
         {placeError && <div className="place-error" role="alert">{placeError} <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
-        {showHint && (
-          <div className="hint3" aria-hidden>
-            <div className="step"><div className="n">1</div><b>Make</b><span>Draw, write or drop pictures anywhere on the canvas.</span></div>
-            <div className="step"><div className="n">2</div><b>Generate</b><span>Select any of them, then <b style={{ display: 'inline' }}>Generate</b>. Results are new nodes you can use again.</span></div>
-            <div className="step"><div className="n">3</div><b>Name</b><span>Name the ones you keep, like <span className="mono">@maya_front</span>. Your script uses those names.</span></div>
-          </div>
-        )}
+        {showHint && <StartCard onScript={() => open('script')} onPictures={() => chrome?.setTool('image')} />}
+        {panels.assets
+          ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}
+              onPicture={() => chrome?.setTool('image')} onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} />
+          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={() => chrome?.fitAll()} narrow={narrow} />}
+        <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} />
+        {!narrow && <ZoomPill chrome={chrome} />}
       </div>
-      <RefsDock ctrl={ctrl} els={els} />
     </div>
   )
 }
@@ -549,6 +588,8 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
   const [asked, setAsked] = useState<Ask | null>(null)
   const [text, setText] = useState('')
   const [more, setMore] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [off, setOff] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -577,7 +618,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
       setBusy(false)
     }
   }
-  const submit = () => go(() => ctrl.generate(ids, text, { more, limits, modelChoice }))
+  const submit = () => go(() => ctrl.generate(sent(ids), text, { more, limits, modelChoice }))
   const answered = async (answer: AnswerChoice) => {
     setAsked(null)
     if ('optionId' in answer && answer.optionId === LAYOUT_ONLY) await go(() => ctrl.generate(ids, text, { more, limits, modelChoice, layoutOnly: true }))
@@ -591,49 +632,83 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
       </Floating>
     )
   }
-  const count = preview.inputs.length + preview.drawings + (preview.sketch ? 1 : 0)
   const oneArea = preview.areas <= 1
+  // What goes: every input of the selection, each with its tick (ui-behaviour 3.16). Unticked
+  // pictures stay out of the send; the sketch, the drawing and the notes are the selection itself.
+  const sent = (all: string[]) => all.filter((id) => {
+    const el = ctrl.liveElements().find((e) => e.id === id)
+    const c = el ? cd(el) : undefined
+    return !(c && 'id' in c && off.has(c.id))
+  })
+  const inputs = preview.inputs.filter((i) => !off.has(i.nodeId)).length
+  const summary = [preview.sketch ? 'Sketch' : preview.drawings ? 'Drawing' : null,
+    inputs ? `${inputs} ${inputs === 1 ? 'input' : 'inputs'}` : null,
+    preview.notes.length ? `${preview.notes.length} ${preview.notes.length === 1 ? 'note' : 'notes'}` : null,
+    text.trim() ? 'your words' : null].filter(Boolean).join(', ') || 'Your words only'
+  // "<model> on Runway" (ui-behaviour 3.7), the pick or the first routed model.
+  const shown = choice ?? modelChoicesFor('generate', config)[0]
+  const model = shown ? `${modelLabel(shown.provider, shown.model)} on ${shown.provider === 'runway' ? 'Runway' : shown.provider === 'mock' ? 'the mock' : shown.provider}` : undefined
+  const tick = (id: string, label: React.ReactNode, on: boolean, change?: () => void) => (
+    <label key={id} className="tray-row">
+      <input type="checkbox" checked={on} disabled={!change} onChange={change} />
+      <span>{label}</span>
+    </label>
+  )
   return (
-    <Floating className="popover" anchor={at}>
-      <h3>Generate from {count ? `${count} ${count === 1 ? 'input' : 'inputs'}` : 'your words'}</h3>
-      <div className="taghints">
-        {preview.sketch && <span className="taghint static" title={preview.sketch.frame ? 'This frame becomes a sketch area: the result comes back at its shape' : 'The result comes back at this shape'}>sketch area {preview.sketch.label}</span>}
-        {preview.inputs.map((i) => <span key={i.nodeId} className="taghint static">{i.name ? `@${i.name}` : KIND_WORD[i.kind]}</span>)}
-        {preview.drawings > 0 && <span className="taghint static">new drawing</span>}
-        {preview.notes.map((n, i) => <span key={`n${i}`} className="taghint static" title={n}>“{n.length > 24 ? `${n.slice(0, 23)}…` : n}”</span>)}
+    <Floating className="popover send-tray" anchor={at}>
+      <div className="tray-head">
+        <button type="button" className="tray-fold" aria-label={open ? 'Collapse' : 'Expand'} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d={open ? 'M3 7.5 L6 4.5 L9 7.5' : 'M3 4.5 L6 7.5 L9 4.5'} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+        </button>
+        <AgentFigure agent="dex" size={22} decorative />
+        <div className="tray-title"><b>What Dex will send</b><span>{sayer('dex')}</span></div>
       </div>
-      {refsList(doc).length > 0 && (
-        <>
-          <div className="faint" style={{ fontSize: 12.5 }}>Tap a name to use it in your words. A bare name is the whole character.</div>
-          <div className="taghints">
-            {wholeKeys(doc).map((k) => <button key={k} className="taghint whole" title={`${k}: its front and other views`} onClick={() => insert(k)}>@{k}</button>)}
-            {refsList(doc).map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
-          </div>
-        </>
+      {!open && <button type="button" className="tray-line" onClick={() => setOpen(true)}>{summary}</button>}
+      {open && (
+        <div className="tray-rows" role="group" aria-label="Inputs to send">
+          {preview.sketch && tick('sketch', <><b>Sketch</b> <span className="faint">· {preview.sketch.label} layout</span></>, true)}
+          {preview.drawings > 0 && tick('drawing', <><b>Drawing</b> <span className="faint">· as drawn</span></>, true)}
+          {preview.inputs.map((i) => tick(i.nodeId, i.name
+            ? <><span className="pt-ref">@{i.name}</span> <span className="faint">· {KIND_WORD[i.kind]}</span></>
+            : <><b>{KIND_WORD[i.kind][0].toUpperCase() + KIND_WORD[i.kind].slice(1)}</b> <span className="faint">· not named</span></>,
+          !off.has(i.nodeId), () => setOff((o) => { const n = new Set(o); if (n.has(i.nodeId)) n.delete(i.nodeId); else n.add(i.nodeId); return n })))}
+          {preview.notes.map((n, k) => tick(`note${k}`, <><b>Note</b> <span className="faint">· instruction:</span> {n.length > 60 ? `${n.slice(0, 59)}…` : n}</>, true))}
+        </div>
       )}
-      <textarea
-        ref={ref}
-        className="textarea"
-        maxLength={1000}
-        placeholder={preview.notes.length ? 'Anything to add to the notes you selected?' : 'What should it make? e.g. the character from the drawing, in the colours of the photo'}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          e.stopPropagation()
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit()
-          if (e.key === 'Escape') onClose()
-        }}
-      />
-      {preview.cropLine && <div className="faint" role="note" style={{ fontSize: 12.5, marginTop: 6 }}>{preview.cropLine}</div>}
-      {!oneArea && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>Pick one sketch area for one Generate.</div>}
-      {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{error}</div>}
-      <div className="row" style={{ marginTop: 10, gap: 6 }}>
-        <span className="faint" style={{ fontSize: 11.5 }}>{text.length}/1000</span>
-        {controls.moreOptions && <button className={`btn xs ${more ? 'on' : ''}`} title="Ask for 4 options instead of 1" onClick={() => setMore(!more)}>4 options</button>}
+      <label className="tray-words">
+        <span className="pt-label">{preview.notes.length ? 'Anything to add' : 'Your words'}</span>
+        <textarea
+          ref={ref}
+          className="textarea"
+          maxLength={1000}
+          placeholder={preview.notes.length ? 'Anything to add to the notes you selected?' : 'What should it make? e.g. the character from the drawing, in the colours of the photo'}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submit()
+            if (e.key === 'Escape') onClose()
+          }}
+        />
+      </label>
+      {refsList(doc).length > 0 && (
+        <div className="taghints" aria-label="Names you can use">
+          {wholeKeys(doc).map((k) => <button key={k} className="taghint whole" title={`${k}: its front and other views`} onClick={() => insert(k)}>@{k}</button>)}
+          {refsList(doc).map((r) => <button key={r.id} className="taghint" onClick={() => insert(nameOf(r))}>@{nameOf(r)}</button>)}
+        </div>
+      )}
+      {preview.cropLine && <div className="faint" role="note" style={{ fontSize: 12.5 }}>{preview.cropLine}</div>}
+      {!oneArea && <div role="alert" className="tray-error">Pick one sketch area for one Generate.</div>}
+      {error && <div role="alert" className="tray-error">{error}</div>}
+      <div className="tray-foot">
         <ModelPick op="generate" value={choice} onChange={setPick} />
+        {controls.moreOptions && <button className={`btn xs ${more ? 'on' : ''}`} title="Ask for 4 options instead of 1" onClick={() => setMore(!more)}>4 options</button>}
         <span className="spacer" />
-        <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm" disabled={busy || !oneArea} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(ids, text, more, modelChoice) }}>Place…</button>
+        <button className="btn xs ghost" disabled={busy || !oneArea} title="Click on the canvas where it should land" onClick={() => { onClose(); onPlace(sent(ids), text, more, modelChoice) }}>Place…</button>
+      </div>
+      <div className="tray-foot nowrap" title="Nothing is sent until you press Generate.">
+        <span className="pt-mono tray-model">{model ?? 'The default model'}{preview.sketch ? <><br />{preview.sketch.label}</> : null}</span>
+        <button className="btn sm" onClick={onClose}>Cancel</button>
         <button className="btn sm primary" disabled={busy || !oneArea} onClick={() => void submit()}>{busy ? 'Sending…' : 'Generate'}</button>
       </div>
     </Floating>
@@ -707,157 +782,33 @@ function NamePopover({ ctrl, nodeId, current, presetVariant, at, onClose }: {
   )
 }
 
-// ── References: the solid keys, the library and Clean up ───────────────────
-
-function RefsDock({ ctrl, els }: { ctrl: CanvasController | null; els: El[] }) {
-  const doc = useDoc()
-  const { doc: docStore, project, ui: uiStore } = useServices()
-  const named = refsList(doc).length > 0
-  const { controls } = useConfig()
-  const [library, setLibrary] = useState(false)
-  const [cleaning, setCleaning] = useState<string[] | null>(null)
-  const [note, setNote] = useState<string | null>(null)
-  const onCanvas = els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)
-
-  const startCleanUp = () => {
-    setNote(null)
-    const gone = unused(docStore.get(), onCanvas)
-    if (!gone.length) return setNote('Nothing to clean up: every picture is still in use.')
-    setCleaning(gone)
-  }
-  const cleanUp = async (gone: string[]) => {
-    setCleaning(null)
-    await systemUpdate(docStore, (d) => sweep(d, gone), 'clean up')
-    // Blobs are shared by every project: a picture another project still uses keeps its bytes.
-    await Promise.all(gone.filter((sha) => !project.usedElsewhere(sha)).map((sha) => deleteBlob(sha)))
-    setNote(`Removed ${gone.length} unused ${gone.length === 1 ? 'picture' : 'pictures'}.`)
-  }
-
+/** A new project's first card (mock States, "New project · Ad template"): Skye offers the script. */
+function StartCard({ onScript, onPictures }: { onScript: () => void; onPictures: () => void }) {
   return (
-    <div className="dock refsdock">
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div className="eyebrow" style={{ marginBottom: 6 }}>References</div>
-        {keysList(doc).length === 0 && <span className="faint" style={{ fontSize: 12.5 }}>Name an image (select it, then Name…) to keep it as a reference for your script.</span>}
-        <div className="keys">
-          {keysList(doc).map((k) => <KeyRow key={k.key} k={k} ctrl={ctrl} views={controls.views} />)}
-        </div>
+    <div className="start-card pt-card" role="note">
+      <div className="row" style={{ gap: 10 }}>
+        <AgentFigure agent="skye" size={22} decorative />
+        <b>Start with the script</b>
+        <span className="pt-mono">{sayer('skye')}</span>
       </div>
-      <div className="stack" style={{ alignItems: 'flex-end', gap: 6 }}>
-        <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" onClick={() => setLibrary(true)} disabled={!ctrl} title="Characters and objects you published, for any of your projects">Your library</button>
-          <button className="btn sm ghost" onClick={startCleanUp} title="Remove pictures nothing uses any more">Clean up</button>
-        </div>
-        {cleaning && <InlineConfirm text={`Remove ${cleaning.length} unused ${cleaning.length === 1 ? 'picture' : 'pictures'} from this browser? Named images and anything on the canvas or in the storyboard stay.`} yes="Remove" onYes={() => void cleanUp(cleaning)} onNo={() => setCleaning(null)} />}
-        {note && <span className="faint" style={{ fontSize: 12 }}>{note}</span>}
-        <button className="btn primary" disabled={!named} title={named ? undefined : 'Name at least one image first'}
-          onClick={() => uiStore.update((u) => { u.stage = 'storyboard' }, 'stage')}>
-          Go to Storyboard →
-        </button>
+      <p>Paste a script, or tell Skye the idea. Then draw or drop your characters, places and products.</p>
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <button type="button" className="btn" onClick={onPictures}>Add pictures</button>
+        <button type="button" className="btn primary" onClick={onScript}>Write the script</button>
       </div>
-      {library && ctrl && <LibraryPanel ctrl={ctrl} onClose={() => setLibrary(false)} />}
     </div>
   )
 }
 
-function KeyRow({ k, ctrl, views }: { k: KeyEntry; ctrl: CanvasController | null; views: boolean }) {
-  const doc = useDoc()
-  const [busy, setBusy] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const refs = refsList(doc).filter((r) => r.key === k.key)
-  const front = refs.find((r) => r.variant === 'front')
-  const missingViews = OTHER_VIEWS.filter((v: View) => !refs.some((r) => r.variant === v))
-  const run = async (label: string, fn: () => Promise<void>) => {
-    setBusy(label)
-    setError(null)
-    try {
-      await fn()
-    } catch (e) {
-      setError(e instanceof RelayError && e.error.code === 'conflict' ? e.message : errText(e))
-    } finally {
-      setBusy(null)
-    }
-  }
-  return (
-    <div className="keyrow">
-      <b className="mono">{k.key}</b>
-      <select className="select xs" aria-label={`What ${k.key} is`} value={k.role} onChange={(e) => ctrl?.setRole(k.key, e.target.value as RefRole)}>
-        {REF_ROLES.map((r) => <option key={r} value={r}>{roleWord(r)}</option>)}
-      </select>
-      <div className="variants">
-        {refs.map((r) => <Variant key={r.id} r={r} onShow={() => r.node && ctrl?.scrollTo(r.node)} />)}
-      </div>
-      {views && front && missingViews.length > 0 && <button className="btn xs" disabled={!!busy || !ctrl} onClick={() => run('views', () => ctrl!.makeViews(k.key, missingViews))}>{busy === 'views' ? 'Starting…' : 'Make views'}</button>}
-      <button className="btn xs" disabled={!!busy || !ctrl || !refs.length} title="Keep this key in your library, for your other projects" onClick={() => run('publish', () => ctrl!.publish(k.key))}>
-        {busy === 'publish' ? 'Publishing…' : k.library ? `Publish v${k.library.ver + 1}` : 'Publish'}
-      </button>
-      {k.library && <span className="faint" style={{ fontSize: 11.5 }}>v{k.library.ver} in your library</span>}
-      {error && <span role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}>{error}</span>}
-    </div>
-  )
-}
-
-function Variant({ r, onShow }: { r: NamedRef; onShow: () => void }) {
-  const url = useBlobUrl(r.asset)
-  return (
-    <button className="variant" onClick={onShow} title={`@${nameOf(r)}`}>
-      {url && <img src={url} alt="" />}
-      <span className="name">{r.variant}</span>
-    </button>
-  )
-}
-
-function LibraryPanel({ ctrl, onClose }: { ctrl: CanvasController; onClose: () => void }) {
-  const { relay } = useServices()
-  const doc = useDoc()
-  const [index, setIndex] = useState<LibraryIndex | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState<string | null>(null)
+/** Below 1180px (iPad), the rail folds into a pill (ui-behaviour 2.5, 3.2). */
+function useNarrow(): boolean {
+  const q = '(max-width: 1179px)'
+  const [narrow, setNarrow] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(q).matches)
   useEffect(() => {
-    relay.library(AGENCY_SHELF).then(setIndex, (e) => setError(errText(e)))
-  }, [relay])
-  const importKey = async (key: string) => {
-    setBusy(key)
-    setError(null)
-    try {
-      await ctrl.importEntry(await relay.libraryEntry(key, undefined, AGENCY_SHELF))
-    } catch (e) {
-      setError(errText(e))
-    } finally {
-      setBusy(null)
-    }
-  }
-  return (
-    <div className="candidates library" onPointerDown={(e) => e.stopPropagation()}>
-      <div className="row">
-        <b>Your library</b>
-        <span className="faint" style={{ fontSize: 12 }}>Characters and objects you published from any of your projects. Importing copies them in.</span>
-        <span className="spacer" />
-        <button className="btn xs ghost" onClick={onClose}>Close</button>
-      </div>
-      {error && <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, fontWeight: 600 }}>{error}</div>}
-      {!index && !error && <span className="faint" style={{ fontSize: 12.5 }}>Loading…</span>}
-      {index && !index.keys.length && <span className="faint" style={{ fontSize: 12.5 }}>Nothing yet. Publish a key from References to use it in your other projects.</span>}
-      <div className="grid">
-        {index?.keys.map((k) => {
-          const mine = keyNamed(doc, k.key)
-          const newer = mine?.library && mine.library.ver < k.ver
-          return (
-            <div key={k.key} className="stack libkey" style={{ gap: 4 }}>
-              <LibraryCover url={k.cover?.url} sha={k.cover?.sha256} />
-              <b className="mono">{k.key}</b>
-              <span className="faint" style={{ fontSize: 11.5 }}>v{k.ver} · @{k.by}{k.variants?.length ? ` · ${k.variants.join(', ')}` : ''}</span>
-              <button className="btn xs" disabled={!!busy || (!!mine?.library && !newer)} onClick={() => void importKey(k.key)}>
-                {busy === k.key ? 'Importing…' : mine?.library ? (newer ? `Update to v${k.ver}` : 'Up to date') : mine ? 'Import (replaces yours)' : 'Import'}
-              </button>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function LibraryCover({ url, sha }: { url?: string; sha?: string }) {
-  const local = useBlobUrl(sha)
-  return <div className="cand">{(local ?? url) && <img src={local ?? url} alt="" />}</div>
+    const m = matchMedia(q)
+    const on = () => setNarrow(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [])
+  return narrow
 }
