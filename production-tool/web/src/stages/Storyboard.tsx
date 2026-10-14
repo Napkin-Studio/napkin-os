@@ -46,6 +46,7 @@ import { Float } from '../ui/Float'
 import { trayGroups, type TrayRow } from '../ui/tray'
 import { applyClipLine, applyFrameEditStep, cameraDiff, cameraLabel, changeFrame, discardStep, frameEditCopy, frameEditLines, frameEditOf, keepBothStep, proposalOf } from '../jobs/frameEdit'
 import { ImageEditor } from './ImageEditor'
+import { ScopeLine } from './InputsStrip'
 import './storyboard.css'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
@@ -165,6 +166,7 @@ export function Storyboard() {
         {staleClips > 0 && <span className="pt-pill warn">{staleClips} {staleClips === 1 ? 'clip' : 'clips'} out of date</span>}
         {shots.length > 0 && <button className="btn" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add shot</button>}
       </div>
+      <ScopeLine nodeId={sb?.id} shotNumber={(id) => shotNumber(doc, id)} />
       <div className="panel sb-body pt-grid">
         {error && <div role="alert" className="sb-error">{error}</div>}
         {deleted && (

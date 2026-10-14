@@ -50,6 +50,8 @@ import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem, viewsOnCanvas, type MediaItem } from '../media/names'
+import { linkedRows, sketchOf, unknownTyped } from './trayScope'
+import './inputs.css'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -706,14 +708,18 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
     )
   }
   const oneArea = preview.areas <= 1
+  // What is linked into the sketch area (model/scope.ts): its references go with it, ticked; the rest is listed.
+  const linked = linkedRows(doc, sketchOf(ctrl.liveElements(), ids), ctrl.liveElements(), ids)
+  const unknown = unknownTyped(doc, text)
   // What goes: every input of the selection, each with its tick (ui-behaviour 3.16). Unticked
   // pictures stay out of the send; the sketch, the drawing and the notes are the selection itself.
-  const sent = (all: string[]) => all.filter((id) => {
+  // Ticked linked references join it; unticking one leaves it out of this send only (the link stays).
+  const sent = (all: string[]) => [...all.filter((id) => {
     const el = ctrl.liveElements().find((e) => e.id === id)
     const c = el ? cd(el) : undefined
     return !(c && 'id' in c && off.has(c.id))
-  })
-  const inputs = preview.inputs.filter((i) => !off.has(i.nodeId)).length
+  }), ...linked.filter((r) => !off.has(r.key)).flatMap((r) => r.elIds)]
+  const inputs = preview.inputs.filter((i) => !off.has(i.nodeId)).length + linked.filter((r) => r.elIds.length && !off.has(r.key)).length
   const summary = [preview.sketch ? 'Sketch' : preview.drawings ? 'Drawing' : null,
     inputs ? `${inputs} ${inputs === 1 ? 'input' : 'inputs'}` : null,
     preview.notes.length ? `${preview.notes.length} ${preview.notes.length === 1 ? 'note' : 'notes'}` : null,
@@ -746,7 +752,12 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
             : <><b>{KIND_WORD[i.kind][0].toUpperCase() + KIND_WORD[i.kind].slice(1)}</b> <span className="faint">· not named</span></>,
           !off.has(i.nodeId), () => setOff((o) => { const n = new Set(o); if (n.has(i.nodeId)) n.delete(i.nodeId); else n.add(i.nodeId); return n })))}
           {preview.notes.map((n, k) => tick(`note${k}`, <><b>Note</b> <span className="faint">· instruction:</span> {n.length > 60 ? `${n.slice(0, 59)}…` : n}</>, true))}
+          {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : ''}</span></>,
+            r.elIds.length > 0 && !off.has(r.key), r.elIds.length ? () => setOff((o) => { const n = new Set(o); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n }) : undefined))}
         </div>
+      )}
+      {unknown.length > 0 && (
+        <div className="tray-unknown" role="note">{unknown.length === 1 ? '1 name isn\'t a reference' : `${unknown.length} names aren't references`}: {unknown.map((n) => `@${n}`).join(', ')} <span className="faint">· it goes as plain words</span></div>
       )}
       <label className="tray-words">
         <span className="pt-label">{preview.notes.length ? 'Anything to add' : 'Your words'}</span>
