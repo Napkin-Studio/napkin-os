@@ -7,7 +7,7 @@ import * as Y from 'yjs'
 import { SceneStore } from '../../../../../canvas-engine/src'
 import type { Link, ProductionDocument } from '../../../contracts/types'
 import { modelStore, MAYA } from '../../../test/model'
-import { cardOf, linkCheck, linkIdOf, linkNodes, reconcileLinks, seedNodes } from '../../nodes/nodes'
+import { cardOf, linkCheck, linkIdOf, linkMemory, linkNodes, reconcileLinks, seedNodes } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
 
 async function project(): Promise<ProductionDocument> {
@@ -60,7 +60,7 @@ describe('canvas-nodes on the own engine', () => {
     expect(linkCheck(a.elements(), doc, by('script'), by('storyboard'))).toMatchObject({ ok: false })
     // Without the document's drives link, script to storyboard is allowed, as drives.
     const loose = { ...doc, links: {} } as ProductionDocument
-    expect(linkCheck(a.elements(), loose, by('script'), by('storyboard'))).toEqual({ ok: true, role: 'drives' })
+    expect(linkCheck(a.elements(), loose, by('script'), by('storyboard'))).toEqual({ ok: true, role: 'drives', docRole: 'drives' })
   })
 
   it('linkNodes writes the link element as one step and the document entry, and reconcile follows a delete and its undo', async () => {
@@ -73,8 +73,8 @@ describe('canvas-nodes on the own engine', () => {
     expect(r.ok).toBe(true)
     expect(written[0]).toMatchObject({ from: { kind: 'script' }, to: { kind: 'video' }, role: 'drives' })
     const withLink = { ...doc, links: { [written[0].id]: written[0] } } as ProductionDocument
-    const seen = new Set<string>()
-    expect(reconcileLinks(a.elements(), withLink, seen)).toEqual({ unlink: [], relink: [] })
+    const seen = linkMemory()
+    expect(reconcileLinks(a.elements(), withLink, seen)).toEqual({ unlink: [], relink: [], draw: [], erase: [] })
     // The person deletes the link element: its document entry goes.
     const linkEl = a.elements().find((e) => linkIdOf(e) === written[0].id)!
     a.selector.set([linkEl.id])

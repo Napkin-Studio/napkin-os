@@ -73,3 +73,8 @@
 .node-layer .nl-hint b { color: var(--ink); font-weight: 600; }
 .node-layer .nl-key { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
 .node-layer .nl-picker { position: absolute; z-index: 4; pointer-events: auto; display: flex; flex-direction: column; min-width: 220px; padding: 4px; transform: translate(8px, 8px); }
+/* Pictures and sketch areas are drawn by the engine: while linking, a box over each says glow or dim. */
+.node-layer .nl-endbox { position: absolute; pointer-events: none; border-radius: 6px; box-sizing: border-box; }
+.node-layer .nl-endbox.target { outline: 2px solid var(--tool); outline-offset: 3px; }
+.node-layer .nl-endbox.source { outline: 2px dashed var(--tool); outline-offset: 3px; }
+.node-layer .nl-endbox.dim { background: color-mix(in srgb, var(--canvas-bg, #FAFAFB) 60%, transparent); }

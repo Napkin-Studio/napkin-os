@@ -15,7 +15,7 @@ import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
-import { cardOf, CARD_KINDS, createNode, linkCheck, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { cardOf, CARD_KINDS, createNode, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import './nodes.css'
 
@@ -39,7 +39,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   // Dropped on empty canvas: the kinds that can take this link (ui-behaviour 3.4 Dropping a link).
   const [picker, setPicker] = useState<{ from: CanvasElement; at: Local; scene: Pt; kinds: CardKind[] } | null>(null)
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set())
-  const seen = useRef(new Set<string>())
+  const seen = useRef(linkMemory())
   void tick
 
   const open = useCallback((kind: CardKind, id: string) => {
@@ -111,14 +111,26 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (els.length) canvas.transact((all) => [...all, ...els], { undoable: false })
   }, [canvas, services])
 
-  // The document's links follow the link elements (a delete, or its undo). A link the document
-  // refuses (its integrity check) is offered once a session, never again on every change.
+  // The document's links and the link elements follow each other, whoever wrote either: a delete or
+  // its undo on the canvas, a link written elsewhere (an ask, another person), an inputs chip's ×.
+  // A link the document refuses (its integrity check) is offered once a session, never again.
   const offered = useRef(new Set<string>())
   useEffect(() => {
     const found = reconcileLinks(canvas.elements(), doc, seen.current)
-    const unlink = found.unlink
+    const { unlink, draw, erase } = found
     const relink = found.relink.filter((l) => !offered.current.has(l.id))
     for (const l of relink) offered.current.add(l.id)
+    if (draw.length || erase.length) {
+      const gone = new Set(erase)
+      canvas.transact((els) => {
+        let all = els.map((e) => (gone.has(e.id) ? canvas.patch(e, { isDeleted: true }) : e))
+        for (const d of draw) {
+          const el = canvas.link({ fromElId: d.from.id, toElId: d.to.id, role: d.link.role, linkId: d.link.id })
+          all = canvas.bindArrow([...all, el], el)
+        }
+        return all
+      }, { undoable: false })
+    }
     if (!unlink.length && !relink.length) return
     void updateDoc(services.doc, (d) => {
       for (const id of unlink) delete d.links[id]
@@ -129,7 +141,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const view = canvas.view()
   const toLocal = (x: number, y: number): Local => ({ x: (x + view.scrollX) * view.zoom, y: (y + view.scrollY) * view.zoom })
   const fromClient = (cx: number, cy: number) => canvas.viewportToScene({ x: cx, y: cy }, canvas.view())
-  const cardAt = (p: { x: number; y: number }) => canvas.elements().filter((e) => cardOf(e) && p.x >= e.x && p.y >= e.y && p.x <= e.x + e.width && p.y <= e.y + e.height).at(-1)
+  const inside = (e: CanvasElement, p: Pt) => p.x >= e.x && p.y >= e.y && p.x <= e.x + e.width && p.y <= e.y + e.height
+  const cardAt = (p: Pt) => canvas.elements().filter((e) => cardOf(e) && inside(e, p)).at(-1)
+  /** The link end at a point: a node card (they sit on top), else a picture or a sketch area. */
+  const endAt = (p: Pt) => cardAt(p) ?? canvas.elements().filter((e) => !cardOf(e) && endOf(e, services.doc.get()) && inside(e, p)).at(-1)
+  /** What an end is called in the hint and the picker. */
+  const word = (e: CanvasElement) => {
+    const c = cardOf(e)
+    return c ? WORD[c.kind] : e.type === 'image' ? 'picture' : 'sketch area'
+  }
 
   // Double-click a node to open it (ui-behaviour 3.3, plan 2.5).
   useEffect(() => {
@@ -177,7 +197,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         setDrag((d) => (d?.by === 'tool' ? null : d))
         return
       }
-      const sel = canvas.view().selectedIds.map((id) => canvas.elements().find((e) => e.id === id)).filter((e): e is CanvasElement => !!e && !!cardOf(e))
+      const sel = canvas.view().selectedIds.map((id) => canvas.elements().find((e) => e.id === id)).filter((e): e is CanvasElement => !!e && !!endOf(e, services.doc.get()))
       if (sel.length === 1 && takers(sel[0]).length) setDrag({ from: sel[0], a: portOf(sel[0]), b: portOf(sel[0]), at: null, by: 'tool' })
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,15 +240,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
 
   /** The kinds a new node could be to take a link from `from` (the picker on empty canvas). */
   function takers(from: CanvasElement): CardKind[] {
-    const a = cardOf(from)
-    return a ? CARD_KINDS.filter((k) => canLink(a.kind as LinkKind, k as LinkKind).ok) : []
+    const a = endOf(from, services.doc.get())
+    return a && !('refuse' in a) ? CARD_KINDS.filter((k) => canLink(a.core, k as LinkKind).ok) : []
   }
 
   /** A link released or clicked at a point: on a node, made or refused; on empty canvas, the picker. */
   const finish = (from: CanvasElement, cx: number, cy: number) => {
     const at = hostLocal(cx, cy)
     const scene = fromClient(cx, cy)
-    const to = cardAt(scene)
+    const to = endAt(scene)
     if (to) {
       if (to.id === from.id) return
       void writeLink(from, to, at).then((ok) => { if (ok) cancel() })
@@ -261,12 +281,16 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     e.preventDefault()
     e.stopPropagation()
     if (picker) return setPicker(null)
-    const el = cardAt(fromClient(e.clientX, e.clientY))
+    const el = endAt(fromClient(e.clientX, e.clientY))
     if (!drag) {
       if (!el) return
-      const c = cardOf(el)!
+      const end = endOf(el, services.doc.get())
+      if (end && 'refuse' in end) {
+        setRefusal({ at: hostLocal(e.clientX, e.clientY), text: end.refuse })
+        return
+      }
       if (!takers(el).length) {
-        setRefusal({ at: hostLocal(e.clientX, e.clientY), text: `A ${WORD[c.kind]} feeds nothing on the canvas.` })
+        setRefusal({ at: hostLocal(e.clientX, e.clientY), text: `A ${word(el)} feeds nothing on the canvas.` })
         return
       }
       canvas.select([el.id])
@@ -293,10 +317,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const selected = new Set(view.selectedIds)
   const els = canvas.elements()
   const nodes = els.filter((e) => cardOf(e))
-  // While a link is being made, compatible targets glow and the others dim, the one under the pointer with its reason.
+  // While a link is being made, compatible targets glow and the others dim (pictures and sketch areas
+  // under a box drawn over them), the one under the pointer with its reason.
   const source = drag?.from ?? null
-  const checks = new Map(source ? nodes.filter((n) => n.id !== source.id).map((n) => [n.id, linkCheck(els, doc, source, n)] as const) : [])
-  const hover = drag?.at ? cardAt(drag.at) : undefined
+  const ends = source ? els.filter((e) => e.id !== source.id && endOf(e, doc)) : []
+  const checks = new Map(ends.map((n) => [n.id, linkCheck(els, doc, source!, n)] as const))
+  const hover = drag?.at ? endAt(drag.at) : undefined
+  // A selected picture or sketch area gets a port too (single selection).
+  const lone = view.selectedIds.length === 1 ? els.find((e) => e.id === view.selectedIds[0] && !cardOf(e)) : undefined
+  const lonePort = lone && mode !== 'link' && endOf(lone, doc) ? lone : undefined
   const hoverCheck = hover ? checks.get(hover.id) : undefined
   const linking = mode === 'link'
   return (
@@ -319,20 +348,38 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
           </div>
         )
       })}
+      {source && ends.filter((e) => !cardOf(e)).map((e) => {
+        const p = toLocal(e.x, e.y)
+        const state = checks.get(e.id)?.ok ? 'target' : 'dim'
+        return <span key={e.id} className={`nl-endbox ${state}`} style={{ left: p.x, top: p.y, width: e.width * view.zoom, height: e.height * view.zoom }} />
+      })}
+      {source && !cardOf(source) && (() => {
+        const p = toLocal(source.x, source.y)
+        return <span className="nl-endbox source" style={{ left: p.x, top: p.y, width: source.width * view.zoom, height: source.height * view.zoom }} />
+      })()}
+      {lonePort && (() => {
+        const p = toLocal(lonePort.x + lonePort.width, lonePort.y + lonePort.height / 2)
+        return <span className="nl-port" role="button" aria-label={`Link from this ${word(lonePort)}`} title="Drag to link (L)"
+          style={{ left: p.x, top: p.y }} onPointerDown={(ev) => startLink(lonePort, ev)} onPointerMove={follow} onPointerUp={endLink} />
+      })()}
       {linking && (
         <div className="nl-linkmode" role="application" aria-label="Link tool: click the node to link from, then the node it feeds"
           onPointerDown={toolDown} onPointerMove={follow} />
       )}
-      {drag && drag.at && <svg className="nl-drag" aria-hidden="true"><line x1={drag.a.x} y1={drag.a.y} x2={drag.b.x} y2={drag.b.y} /></svg>}
+      {drag && drag.at && (() => {
+        // From the source's port as the view is now (the source may have been picked under another view).
+        const a = portOf(drag.from)
+        return <svg className="nl-drag" aria-hidden="true"><line x1={a.x} y1={a.y} x2={drag.b.x} y2={drag.b.y} /></svg>
+      })()}
       {drag && hover && hoverCheck && (
         <span className={`nl-tip ${hoverCheck.ok ? 'ok' : ''}`} role="status" style={{ left: drag.b.x, top: drag.b.y }}>
-          {hoverCheck.ok ? `${drag.by === 'port' ? 'Drop' : 'Click'} to link · ${hoverCheck.role}` : hoverCheck.reason}
+          {hoverCheck.ok ? `${drag.by === 'port' ? 'Drop' : 'Click'} to link · ${hoverCheck.docRole}` : hoverCheck.reason}
         </span>
       )}
       {linking && (
         <div className="nl-hint" role="status">
           <b>Link</b>
-          <span>{source ? `Click the node this ${WORD[cardOf(source)!.kind]} feeds, or empty canvas for a new one` : 'Click the node to link from'}</span>
+          <span>{source ? `Click what this ${word(source)} feeds, or empty canvas for a new node` : 'Click the node or named picture to link from'}</span>
           <span className="nl-key">Esc cancels</span>
         </div>
       )}
@@ -340,7 +387,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         <div className="nl-picker pt-panel" role="menu" aria-label="New node for this link" style={{ left: picker.at.x, top: picker.at.y }}>
           {picker.kinds.map((k) => (
             <button key={k} type="button" role="menuitem" className="pt-menurow" onClick={() => pick(k)}>
-              New {WORD[k]} from this {WORD[cardOf(picker.from)!.kind]}
+              New {WORD[k]} from this {word(picker.from)}
             </button>
           ))}
           <button type="button" role="menuitem" className="pt-menurow" onClick={cancel}>Cancel</button>
