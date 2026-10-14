@@ -32,7 +32,7 @@ import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
-import { currentFrame, currentTake, framesOf, jobsList, mainScript, mainStoryboard, openAsks, refsList, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
+import { currentFrame, currentTake, framesOf, jobsList, mainStoryboard, openAsks, openStoryboard, refsList, scriptOfStoryboard, scriptText, shotNumber, shotsOf, storyboardSeconds, takesOf } from '../model/selectors'
 import { jobCtx, LOCAL_PERSON } from '../jobs/runner'
 import { addShot, answerShotAsk, setRatio, setTarget } from './storyboardEdits'
 import { scriptRoute } from '../app/route'
@@ -66,14 +66,17 @@ export function Storyboard() {
   /** The shot whose frame is open in the Image editor (ui-behaviour 3.12). */
   const [editing, setEditing] = useState<string | null>(null)
   const projectName = useProjectName()
-  const shots = shotsOf(doc)
-  const sb = mainStoryboard(doc)
+  // The storyboard opened on the canvas (ui.openNode), else the main one (features/canvas-nodes.clan).
+  const sb = openStoryboard(doc, ui.openNode)
+  const shots = shotsOf(doc, sb?.id)
   const targetS = sb?.target_s ?? 15
   const ratio = sb?.ratio ?? '16:9'
-  const script = mainScript(doc)
+  const script = scriptOfStoryboard(doc, sb?.id)
+  const words = script ? scriptText(doc, script.id) : ''
   const hasRefs = refsList(doc).length > 0
   const check = checkDurations(shots, targetS)
-  const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list')
+  const mainSb = mainStoryboard(doc)?.id
+  const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list' && (c.storyboardId ?? mainSb) === sb?.id)
   const planning = isRunning(doc, planJob)
   const lastPlan = jobsList(doc).filter((j) => j.op === 'shot_list' && j.state === 'completed').at(-1)
   useEffect(() => { if (error) errorShown('storyboard', error) }, [error])
@@ -94,8 +97,8 @@ export function Storyboard() {
   // The Script editor's Plan shots is the same job on the same node: one running is joined.
   const plan = async () => {
     setError(null)
-    if (!scriptText(doc).trim()) return setError('Write a line or two first.')
-    await planOrJoin(deps)
+    if (!words.trim()) return setError('Write a line or two first.')
+    await planOrJoin(deps, { storyboardId: sb?.id })
   }
   const mentionHooks = useMemo(() => (clan ? scriptMentionHooks(clan, undefined) : undefined), [clan])
   const openScript = (shot?: string) => script && router.push(scriptRoute(project.id, script.id, shot))
@@ -119,14 +122,14 @@ export function Storyboard() {
     if (shotNeedsConfirm(docStore.get(), shotId)) setConfirmShot(shotId)
     else void removeNow(shotId)
   }
-  const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first'))
-  const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next'))
+  const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first', { storyboardId: sb?.id }))
+  const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next', { storyboardId: sb?.id }))
   const drawRest = () => attempt(() => drawTheRest(deps))
 
 
   const lock = async () => {
     await updateDoc(docStore, (d) => {
-      for (const s of shotsOf(d)) d.shots[s.id].status = 'locked'
+      for (const s of shotsOf(d, sb?.id)) d.shots[s.id].status = 'locked'
     }, 'lock storyboard')
     uiStore.update((u) => { u.stage = 'video' })
   }
@@ -138,16 +141,16 @@ export function Storyboard() {
     return <ImageEditor shotId={editing} onBack={() => setEditing(null)} onShot={setEditing} />
   }
 
-  const total = storyboardSeconds(doc)
+  const total = storyboardSeconds(doc, sb?.id)
   const over = Math.round((total - targetS) * 10) / 10
   const staleClips = shots.filter((s) => !!takeStale(doc, s.id)).length
   const working = trayGroups(jobsList(doc), (id) => jobCtx(doc, ui, id), (id) => runner.liveInfo(id)).working
   const primary = !shots.length
-    ? <button className="btn primary" disabled={planning || !scriptText(doc).trim()} onClick={() => void attempt(plan)} title={scriptText(doc).trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
+    ? <button className="btn primary" disabled={planning || !words.trim()} onClick={() => void attempt(plan)} title={words.trim() ? undefined : 'Write the script first'}>{planning ? 'Planning…' : 'Plan shots'}</button>
     : noFrames
       ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || !hasRefs} onClick={drawFirst} title={hasRefs ? 'Frame 1 sets the place, the light and the style for every frame after it' : 'Name a picture on the canvas first, like @maya_front'}>{anyFrameRunning ? 'Drawing…' : 'Draw frame 1'}</button>
       : !allFramed
-        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc) < 0 || !hasRefs} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
+        ? <button className="btn primary" disabled={!check.ok || anyFrameRunning || firstUndrawn(doc, sb?.id) < 0 || !hasRefs} onClick={drawRest} title="Draw each remaining shot in turn, each one following the one before">{ui.drawingRest && anyFrameRunning ? 'Drawing the rest…' : anyFrameRunning ? 'Drawing…' : 'Draw the rest'}</button>
         : <button className="btn primary" disabled={anyFrameRunning} onClick={() => void attempt(lock)} title="Lock the frames and make a clip of each in the Video editor">Make clips</button>
 
   return (
@@ -273,7 +276,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const idx = current ? frames.indexOf(current) : -1
   const url = useBlobUrl(current?.asset)
   const asset = current ? doc.assets[current.asset] : undefined
-  const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
+  const ratio = doc.storyboards[shot.storyboard_id]?.ratio ?? mainStoryboard(doc)?.ratio ?? '16:9'
   const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ratio)
   const frameJob = jobAt(doc, ui, (c) => c.for === 'frame' && c.shotId === shot.id)
   const drawing = isRunning(doc, frameJob)

@@ -37,7 +37,7 @@ import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
-import { currentRender, currentTake, mainStoryboard, mainVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
+import { currentRender, currentTake, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
@@ -61,25 +61,30 @@ export function Video() {
   const { controls, config } = useConfig()
   useJobsTick()
   const deps = { relay, doc: docStore, ui: uiStore, runner }
-  const shots = shotsOf(doc)
+  // The video opened on the canvas (ui.openNode), else the main one, with the storyboard that renders it
+  // (features/canvas-nodes.clan). Its clips and its ad land in it.
+  const video = openVideo(doc, ui.openNode)
+  const sb = storyboardOfVideo(doc, video?.id)
+  const isMain = !video || video.id === mainVideo(doc)?.id
+  const shots = sb ? shotsOf(doc, sb.id) : []
   const [shotId, setShotId] = useState<string | null>(shots[0]?.id ?? null)
   const [mode, setMode] = useState<'shot' | 'all'>('shot')
   const [error, setError] = useState<string | null>(null)
   const shot = shots.find((s) => s.id === shotId) ?? shots[0]
-  const take = shot ? currentTake(doc, shot.id) : undefined
+  const take = shot ? currentTake(doc, shot.id, video?.id) : undefined
   const clipJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id)
   // An "uncertain" job is waiting on the participant (Stop waiting / Try again on its card), not on
   // the relay: it locks nothing (features/video-stage-findings.clan).
   const anyRunning = shots.some((s) => isMoving(doc, clipJob(s.id)))
-  const taken = shots.filter((s) => !!currentTake(doc, s.id)).length
+  const taken = shots.filter((s) => !!currentTake(doc, s.id, video?.id)).length
   const allTaken = shots.length > 0 && taken === shots.length
-  const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch')
-  const latestAd = currentRender(doc)
+  const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch' && (c.videoId ?? mainVideo(doc)?.id) === video?.id)
+  const latestAd = currentRender(doc, video?.id)
   // One send per click burst: a double click paid twice (2026-10-09).
   const [makingAll, sendAll] = useSending()
   const [rendering, sendRender] = useSending()
 
-  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, opts)
+  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id })
 
   /** A clip for every shot without one. A shot that cannot be made (no frame yet) does not stop the
    *  others; each one that failed is named. */
@@ -101,15 +106,15 @@ export function Video() {
     setError(null)
     try {
       // Each clip is cut to its shot's length (trimS): the ad is the shots plus the 2.5 s end card.
-      await renderAd(deps)
+      await renderAd(deps, { videoId: video?.id })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   })
 
   // Why Render ad is off, said on the button (a disabled button never said why).
-  const renderBlocked = !allTaken ? `Make a clip for every shot first (${taken} of ${shots.length} done)`
-    : anyRunning ? 'Wait for the clips being made' : isMoving(doc, stitchJob) ? 'The ad is rendering' : undefined
+  const renderBlocked = (!allTaken ? `Make a clip for every shot first (${taken} of ${shots.length} done)`
+    : anyRunning ? 'Wait for the clips being made' : isMoving(doc, stitchJob) ? 'The ad is rendering' : undefined)
 
   if (!controls.video) {
     return <div className="panel"><div className="empty-state"><b>Video is off right now.</b></div></div>
@@ -118,8 +123,8 @@ export function Video() {
   const empty = !shots.length
   const bar = (
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-      title={`Video · ${nodeTitle(mainStoryboard(doc)?.title, 'Storyboard', projectName)}`}
-      meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>}
+      title={`Video · ${isMain ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
+      meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
       middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
       right={<button className="btn" disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
       primary={controls.stitch ? (
@@ -135,9 +140,9 @@ export function Video() {
         <div className="panel"><div className="empty-state">
           <AgentFigure agent="dex" size={64} decorative />
           <span className="sayer">{sayer('dex')}</span>
-          <b>No shots yet.</b>Plan your shots and draw the frames first; I make one clip per frame.
-          {mainVideo(doc) && <PromptStart kind="video" nodeId={mainVideo(doc)!.id} place="editor" />}
-          <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.stage = 'storyboard' })}>Open the storyboard</button></div>
+          <b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}
+          {video && <PromptStart kind="video" nodeId={video.id} place="editor" />}
+          {sb && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}
         </div></div>
       </div>
     )

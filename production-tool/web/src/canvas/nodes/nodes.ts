@@ -10,13 +10,15 @@
 // - reconcileLinks: a link element a person deleted takes its document entry
 //   with it; one brought back by undo puts it back.
 
-import { mainScript, mainStoryboard, mainVideo } from '../../model/selectors'
-import type { Link, LinkRole, ProductionDocument } from '../../contracts/types'
+import { currentRender, keyNamed, mainScript, mainStoryboard, mainVideo, refsList, scenesOf, shotsOf, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
+import type { Link, LinkEndpoint, LinkRole, ProductionDocument, RefRole, Script, Storyboard, Video } from '../../contracts/types'
 import { newId } from '../../lib/ulid'
-import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
-import { canLink, checkLink, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
+import { systemUpdate, updateDoc } from '../../doc/store'
+import type { DocumentStore } from '../../doc/types'
+import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
+import { canLink, checkLink, endName, type LinkEnd as CoreEnd, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
 import type { CardKind } from './cardChrome'
-import { adLayout } from '../boards/layout'
+import { adLayout, CARD_SIZE } from '../boards/layout'
 
 export const CARD_KINDS: readonly CardKind[] = ['script', 'storyboard', 'video']
 
@@ -70,67 +72,260 @@ export function seedNodes(canvas: CanvasAdapter, doc: ProductionDocument): Canva
   return all
 }
 
-/** The link rules' view of what is on the canvas: its nodes and the document's links between them. */
+// ── Link ends: nodes, named pictures and sketch areas (ui-behaviour 3.4) ──
+
+/** One end of a link on the canvas: its element, its document endpoint and the rules' view of it. */
+export interface LinkEndOnCanvas {
+  el: CanvasElement
+  doc: LinkEndpoint
+  core: CoreEnd
+  /** A reference's own role (character, lighting…): the link's role into a generating node. */
+  refRole?: RefRole
+}
+
+/**
+ * What a canvas element is as a link end: a Script, Storyboard or Video node, a named picture (its
+ * reference), or a sketch area. An unnamed picture is not one yet: `refuse` says so. Null: not an end.
+ */
+export function endOf(e: CanvasElement | undefined, doc: ProductionDocument): LinkEndOnCanvas | { refuse: string } | null {
+  if (!e || e.isDeleted) return null
+  const card = cardOf(e)
+  if (card) return { el: e, doc: { kind: card.kind, id: card.id }, core: { kind: card.kind as LinkKind } }
+  const t = tag(e)
+  if (t.kind === 'sketch' && t.id) return { el: e, doc: { kind: 'sketch', id: t.id }, core: { kind: 'sketch' } }
+  if (e.type === 'image') {
+    const ref = refsList(doc).find((r) => r.node && (r.node === e.id || r.node === t.id))
+    if (!ref) return t.kind === 'pic' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
+    const role = (keyNamed(doc, ref.key)?.role ?? ref.role) as RefRole
+    return { el: e, doc: { kind: 'ref', id: ref.id }, core: { kind: 'picture', role }, refRole: role }
+  }
+  return null
+}
+
+const isEnd = (x: ReturnType<typeof endOf>): x is LinkEndOnCanvas => !!x && !('refuse' in x)
+const endInDoc = (doc: ProductionDocument, x: LinkEndOnCanvas) =>
+  x.doc.kind === 'script' || x.doc.kind === 'storyboard' || x.doc.kind === 'video' ? entityIn(doc, { kind: x.doc.kind, id: x.doc.id }) : true
+
+/** The element on the canvas that stands for a document endpoint, if it is there. */
+export function elementOfEnd(els: readonly CanvasElement[], doc: ProductionDocument, end: LinkEndpoint): CanvasElement | undefined {
+  const live = els.filter((e) => !e.isDeleted)
+  if (end.kind === 'ref') {
+    const node = doc.refs?.[end.id]?.node
+    return node ? live.find((e) => e.id === node || tag(e).id === node) : undefined
+  }
+  return live.find((e) => {
+    const t = tag(e)
+    return t.id === end.id && (t.kind === end.kind || (end.kind === 'sketch' && t.kind === 'sketch'))
+  })
+}
+
+/** The rules' role of a document link: a reference's own role is `reference` to them. */
+const coreRole = (l: Pick<Link, 'from' | 'role'>): CoreRole => (l.from.kind === 'ref' ? 'reference' : (l.role as unknown as CoreRole))
+
+/** The link rules' view of what is on the canvas: its link ends and the document's links between them. */
 export function linkGraph(els: readonly CanvasElement[], doc: ProductionDocument): LinkGraph {
-  const nodes = els.map(cardOf).filter((c): c is NonNullable<ReturnType<typeof cardOf>> => !!c).map((c) => ({ id: c.id, kind: c.kind as LinkKind }))
-  const links = Object.values(doc.links ?? {}).map((l) => ({ from: l.from.id, to: l.to.id, role: l.role as unknown as CoreRole }))
+  const nodes = els.map((e) => endOf(e, doc)).filter(isEnd).map((x) => ({ id: x.doc.id, kind: x.core.kind, ...(x.core.role ? { role: x.core.role } : {}) }))
+  const links = Object.values(doc.links ?? {}).map((l) => ({ from: l.from.id, to: l.to.id, role: coreRole(l) }))
   return { nodes, links }
 }
 
 export type LinkOutcome = { ok: true; link: Link; element: CanvasElement } | { ok: false; reason: string }
 
-/** Can `from` feed `to`, and with which role (the first the rules give)? */
-export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument, from: CanvasElement, to: CanvasElement): { ok: true; role: CoreRole } | { ok: false; reason: string } {
-  const a = cardOf(from)
-  const b = cardOf(to)
-  if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard or a video.' }
-  if (a.id === b.id) return { ok: false, reason: 'That would make a loop.' }
-  const can = canLink(a.kind as LinkKind, b.kind as LinkKind)
+/** Can `from` feed `to`, and with which role (the rules' first; a reference's own role in the document)? */
+export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument, from: CanvasElement, to: CanvasElement): { ok: true; role: CoreRole; docRole: LinkRole } | { ok: false; reason: string } {
+  const a = endOf(from, doc)
+  const b = endOf(to, doc)
+  if (a && 'refuse' in a) return { ok: false, reason: a.refuse }
+  if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard, a video, a named picture or a sketch area.' }
+  if ('refuse' in b) return { ok: false, reason: `Nothing links into ${endName({ kind: 'picture' })}: it is an input only.` }
+  if (a.doc.id === b.doc.id) return { ok: false, reason: 'That would make a loop.' }
+  const can = canLink(a.core, b.core)
   if (!can.ok) return can
   const role = can.roles[0]
-  const checked = checkLink(linkGraph(els, doc), a.id, b.id, role)
-  return checked.ok ? { ok: true, role } : checked
+  const checked = checkLink(linkGraph(els, doc), a.doc.id, b.doc.id, role)
+  if (!checked.ok) return checked
+  return { ok: true, role, docRole: (role === 'reference' && a.refRole ? a.refRole : role) as LinkRole }
 }
 
 /**
- * Link two nodes: the link element (one undoable step) and the document's links entry. Returns
- * what was made, or why not. `write` writes the document (updateDoc with a 'link' action).
+ * Link two ends: the document's links entry (written first by `write`, updateDoc with a 'link'
+ * action), then the link element as one undoable step. Returns what was made, or why not.
  */
 export async function linkNodes(canvas: CanvasAdapter, doc: ProductionDocument, from: CanvasElement, to: CanvasElement, write: (link: Link) => Promise<void>): Promise<LinkOutcome> {
   const check = linkCheck(canvas.elements(), doc, from, to)
   if (!check.ok) return check
-  const a = cardOf(from)!
-  const b = cardOf(to)!
-  const link: Link = { id: newId('link'), v: 1, field_v: {}, from: { kind: a.kind, id: a.id }, to: { kind: b.kind, id: b.id }, role: check.role as unknown as LinkRole }
+  const a = endOf(from, doc) as LinkEndOnCanvas
+  const b = endOf(to, doc) as LinkEndOnCanvas
+  const link: Link = { id: newId('link'), v: 1, field_v: {}, from: a.doc, to: b.doc, role: check.docRole }
   await write(link)
-  const element = canvas.link({ fromElId: from.id, toElId: to.id, role: check.role, linkId: link.id })
+  const element = canvas.link({ fromElId: from.id, toElId: to.id, role: check.docRole, linkId: link.id })
   canvas.transact((els) => canvas.bindArrow([...els, element], element), { undoable: true })
   return { ok: true, link, element }
 }
 
+/** What reconcileLinks remembers across calls in one session. */
+export interface LinkMemory {
+  /** Link ids that have had an element on this canvas. */
+  seen: Set<string>
+  /** Link ids that have been in the document. */
+  inDoc: Set<string>
+  /** Link ids this canvas took out of the document because their element was deleted (undo may bring them back). */
+  unlinked: Set<string>
+}
+
+export const linkMemory = (): LinkMemory => ({ seen: new Set(), inDoc: new Set(), unlinked: new Set() })
+
 /**
- * Keep the document's links in step with the link elements: `seen` is every link id this session
- * has had on the canvas. Returns the ids to unlink (seen before, gone now, still in the document)
- * and the links to put back (on the canvas, missing from the document, both ends there).
+ * Keep the document's links and the link elements in step, whoever wrote either (ui-behaviour 3.4):
+ * - unlink: a link element the person deleted takes its document entry with it;
+ * - relink: an element brought back by undo puts its entry back;
+ * - draw: a document link with no element yet (written by an ask, a job, another person, or an
+ *   older canvas), with both ends on the canvas, gets its arrow;
+ * - erase: an element whose document entry someone else removed (an inputs chip's ×) goes too.
+ * Draw and erase are system writes, never the person's step.
  */
-export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDocument, seen: Set<string>): { unlink: string[]; relink: Link[] } {
+export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDocument, mem: LinkMemory): { unlink: string[]; relink: Link[]; draw: { link: Link; from: CanvasElement; to: CanvasElement }[]; erase: string[] } {
   const live = new Map<string, CanvasElement>()
   for (const e of els) {
     const id = linkIdOf(e)
     if (id && !e.isDeleted) live.set(id, e)
   }
+  for (const id of Object.keys(doc.links ?? {})) mem.inDoc.add(id)
   const byEl = new Map(els.filter((e) => !e.isDeleted).map((e) => [e.id, e]))
-  const unlink = [...seen].filter((id) => !live.has(id) && doc.links?.[id])
+  const unlink = [...mem.seen].filter((id) => !live.has(id) && doc.links?.[id])
+  for (const id of unlink) mem.unlinked.add(id)
   const relink: Link[] = []
+  const erase: string[] = []
   for (const [id, e] of live) {
-    seen.add(id)
+    mem.seen.add(id)
     if (doc.links?.[id]) continue
+    // In the document before and not taken out by this canvas: someone removed it, so the arrow goes.
+    if (mem.inDoc.has(id) && !mem.unlinked.has(id)) {
+      erase.push(e.id)
+      continue
+    }
+    mem.unlinked.delete(id)
     const ends = e as CanvasElement & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null; role?: string }
-    const a = cardOf(byEl.get(ends.startBinding?.elementId ?? '') ?? ({} as CanvasElement))
-    const b = cardOf(byEl.get(ends.endBinding?.elementId ?? '') ?? ({} as CanvasElement))
-    // Both ends must be in the document: a node coming back with the canvas's undo is put back
+    const a = endOf(byEl.get(ends.startBinding?.elementId ?? ''), doc)
+    const b = endOf(byEl.get(ends.endBinding?.elementId ?? ''), doc)
+    // A node's end must be in the document: a node coming back with the canvas's undo is put back
     // there first (CanvasDocSync.nodes), and the link waits for it.
-    if (a && b && ends.role && entityIn(doc, a) && entityIn(doc, b)) relink.push({ id, v: 1, field_v: {}, from: { kind: a.kind, id: a.id }, to: { kind: b.kind, id: b.id }, role: ends.role as LinkRole })
+    if (isEnd(a) && isEnd(b) && ends.role && endInDoc(doc, a) && endInDoc(doc, b)) relink.push({ id, v: 1, field_v: {}, from: a.doc, to: b.doc, role: ends.role as LinkRole })
   }
-  return { unlink, relink }
+  const draw: { link: Link; from: CanvasElement; to: CanvasElement }[] = []
+  for (const l of Object.values(doc.links ?? {})) {
+    if (live.has(l.id) || mem.seen.has(l.id)) continue
+    const from = elementOfEnd(els, doc, l.from)
+    const to = elementOfEnd(els, doc, l.to)
+    if (from && to) draw.push({ link: l, from, to })
+  }
+  return { unlink, relink, draw, erase }
+}
+
+// ── New nodes (+ Node; ui-behaviour 3.3 Creating nodes) ─────────────────────
+
+const WORD: Record<CardKind, string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+
+/** A new, empty document entity for a node of this kind: "Script 2", at the project's ratio and length. */
+export function newEntity(doc: ProductionDocument, kind: CardKind): { kind: CardKind; entity: Script | Storyboard | Video } {
+  const n = Object.keys(kind === 'script' ? doc.scripts ?? {} : kind === 'storyboard' ? doc.storyboards ?? {} : doc.videos ?? {}).length
+  const title = n ? `${WORD[kind]} ${n + 1}` : WORD[kind]
+  const sb = mainStoryboard(doc)
+  const target_s = sb?.target_s ?? mainScript(doc)?.target_s ?? 15
+  const ratio = sb?.ratio ?? '16:9'
+  const base = { id: newId(kind), v: 1, field_v: {}, title }
+  if (kind === 'script') return { kind, entity: { ...base, target_s } }
+  if (kind === 'storyboard') return { kind, entity: { ...base, ratio, target_s } }
+  return { kind, entity: { ...base, ratio, target_s, edl: {} } }
+}
+
+type Box = { x: number; y: number; w: number; h: number }
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+const PAD = { x: 16, top: 22, bottom: 16 }
+
+/**
+ * Where a new node of this kind goes (ui-behaviour 3.3): centred on `at`, else on the middle of the
+ * view, nudged clear of the nodes already there. When that spot is on a board whose purpose fits the
+ * kind (the board in view, the one the rail jumped to), the node joins it and the board grows to hold
+ * it. Pure: returns the box, the board it joins and the board's grown box.
+ */
+export function placeNode(canvas: CanvasAdapter, doc: ProductionDocument, kind: CardKind, at?: Pt): { box: Box; board: CanvasElement | null; grow: Box | null } {
+  const els = canvas.elements()
+  const size = CARD_SIZE[kind]
+  const v = canvas.visibleBounds()
+  const c = at ?? { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
+  const purposeOf = (e: CanvasElement) => {
+    const id = (e.customData as { id?: string } | undefined)?.id
+    return (id && doc.boards?.[id]?.purpose) || (e as CanvasElement & { purpose?: string }).purpose
+  }
+  const boards = els.filter((e) => !e.isDeleted && (e.customData as { kind?: string } | undefined)?.kind === 'board')
+  const board = boards.filter((b) => c.x >= b.x && c.y >= b.y && c.x <= b.x + b.width && c.y <= b.y + b.height && purposeOf(b) === kind).at(-1) ?? null
+  const nodes = els.filter((e) => cardOf(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
+  let box: Box = { x: Math.round(c.x - size.w / 2), y: Math.round(c.y - size.h / 2), ...size }
+  if (board) box = { ...box, x: Math.max(box.x, board.x + PAD.x), y: Math.max(box.y, board.y + PAD.top) }
+  for (let i = 0; i < 24 && nodes.some((n) => overlaps(n, box)); i++) box = { ...box, x: box.x + 40, y: box.y + 40 }
+  let grow: Box | null = null
+  if (board) {
+    const right = Math.max(board.x + board.width, box.x + box.w + PAD.x)
+    const bottom = Math.max(board.y + board.height, box.y + box.h + PAD.bottom)
+    if (right > board.x + board.width || bottom > board.y + board.height) grow = { x: board.x, y: board.y, w: right - board.x, h: bottom - board.y }
+  }
+  return { box, board, grow }
+}
+
+/** What createNode needs: the canvas and the document. */
+export interface NodeEnv {
+  canvas: CanvasAdapter
+  doc: DocumentStore
+}
+
+/**
+ * Make a new, empty node of this kind (+ Node; ui-behaviour 3.3): its document entity (a system
+ * write, so the person's one undo step is the node on the canvas), then the node, on the board in view
+ * when its purpose fits, else in the middle of the view (or centred on `at`), selected. Undo takes the
+ * node away; the empty entity stays unlinked until it is used again or collected.
+ */
+export async function createNode(env: NodeEnv, kind: CardKind, at?: Pt): Promise<CanvasElement> {
+  const { canvas } = env
+  const made = newEntity(env.doc.get(), kind)
+  await systemUpdate(env.doc, (d) => {
+    if (made.kind === 'script') d.scripts[made.entity.id] = made.entity as Script
+    else if (made.kind === 'storyboard') d.storyboards[made.entity.id] = made.entity as Storyboard
+    else d.videos[made.entity.id] = made.entity as Video
+  }, `add a ${kind}`)
+  const { box, board, grow } = placeNode(canvas, env.doc.get(), kind, at)
+  const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: box.h, customData: { kind, id: made.entity.id } })
+  const placed = board ? canvas.patch(el, { frameId: board.id }) : el
+  canvas.transact((all) => [
+    ...all.map((e) => (grow && board && e.id === board.id ? canvas.patch(e, { width: grow.w, height: grow.h }) : e)),
+    placed,
+  ], { undoable: true })
+  canvas.select([placed.id])
+  return placed
+}
+
+/**
+ * Is this node still empty, so its card offers a start (ui-behaviour 3.3 Empty; the chrome's PromptStart
+ * slot): a script with no words and no shots, a storyboard with no shots, a video with no shots to cut
+ * and no render.
+ */
+export function isEmptyNode(doc: ProductionDocument, kind: CardKind, id: string): boolean {
+  if (kind === 'script') {
+    const words = scenesOf(doc, id).map((s) => s.text ?? '').join('').trim()
+    const sb = storyboardOfScript(doc, id)
+    return !words && !(sb && shotsOf(doc, sb.id).length)
+  }
+  if (kind === 'storyboard') return shotsOf(doc, id).length === 0
+  const sb = storyboardOfVideo(doc, id)
+  return !(sb && shotsOf(doc, sb.id).length) && !currentRender(doc, id)
+}
+
+/**
+ * An inputs chip's × (ui-behaviour 3.3, 3.16): the link out of the document, as the person's step. The
+ * canvas's arrow follows on its next reconcile (reconcileLinks erase), so chip and arrow go together.
+ */
+export function unlinkInput(store: DocumentStore, linkId: string): Promise<unknown> {
+  const l = store.get().links?.[linkId]
+  if (!l) return Promise.resolve()
+  return updateDoc(store, (d) => { delete d.links[linkId] }, `unlink ${l.from.kind} from ${l.to.kind}`)
 }

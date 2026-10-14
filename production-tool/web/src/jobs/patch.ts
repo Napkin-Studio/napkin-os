@@ -16,7 +16,7 @@ import type { Controls } from '../capabilities'
 import type { Job, NoteWindow, ProductionDocument, Review, Take } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
-import { currentTake, edlItemFor, mainVideo, shotName, takesOf } from '../model/selectors'
+import { currentTake, edlItemFor, mainVideo, shotName, takesOf, videoOfShot } from '../model/selectors'
 import { landingWhy } from './landing'
 
 export type FixRoute =
@@ -61,6 +61,6 @@ export function landPatch(store: DocumentStore, job: Job, ctx: { shotId: string;
   const version = Math.max(0, ...takesOf(d, ctx.shotId).map((t) => t.version)) + 1
   const what = `take v${version} for ${shotName(d, ctx.shotId)}`
   return landUpdate(store, (x) => {
-    applyPatchTake(x as unknown as PatchDoc, job as unknown as PatchJob, { ...ctx, videoId: ctx.videoId ?? mainVideo(x)?.id })
+    applyPatchTake(x as unknown as PatchDoc, job as unknown as PatchJob, { ...ctx, videoId: ctx.videoId ?? videoOfShot(x, ctx.shotId)?.id ?? mainVideo(x)?.id })
   }, landingWhy(store, job.jobId, what))
 }

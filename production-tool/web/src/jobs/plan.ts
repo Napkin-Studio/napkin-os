@@ -24,7 +24,7 @@ import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { proseFromText } from '../model/diff'
 import { ModelStore } from '../model/store'
-import { beatsOf, currentFrame, currentTake, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
+import { beatsOf, currentFrame, currentTake, framesOf, keyNamed, mainStoryboard, openAsks, refNamed, scenesOf, scriptOfStoryboard, scriptText, shotNumber, shotsOf, staleList, takesOf } from '../model/selectors'
 import type { Relay } from '../relay'
 import type { FrameDeps } from './frames'
 import { SCRIPT_MAX } from './frames'
@@ -34,14 +34,19 @@ import { isActive } from './runner'
 
 // ── the request ─────────────────────────────────────────────────────────────
 
-/** The shot_list request: the script's words, the target, the named pictures, the shots already there. */
-export async function planInput(relay: Relay, d: ProductionDocument, text?: string): Promise<JobInput> {
-  const sb = mainStoryboard(d)
+/** The storyboard a plan is for: this one when it is in the document, else the main one. */
+const boardToPlan = (d: ProductionDocument, storyboardId?: string) => (storyboardId && d.storyboards[storyboardId]) || mainStoryboard(d)
+
+/** The shot_list request: the script's words, the target, the named pictures, the shots already there.
+ *  `storyboardId`: the storyboard to plan (absent: the main one), from the script that drives it. */
+export async function planInput(relay: Relay, d: ProductionDocument, text?: string, storyboardId?: string): Promise<JobInput> {
+  const sb = boardToPlan(d, storyboardId)
   if (!sb) throw new Error('This project has no storyboard.')
   const refs = await allNamed(relay, d)
   const shots = shotsOf(d, sb.id)
+  const script = scriptOfStoryboard(d, sb.id)
   return {
-    script: scriptText(d).slice(0, SCRIPT_MAX),
+    script: (script ? scriptText(d, script.id) : '').slice(0, SCRIPT_MAX),
     targetS: Math.min(600, Math.max(1, Math.round(sb.target_s))),
     ...(refs.length ? { refs } : {}),
     ...(shots.length ? { shots: shots.map((s) => jobShot(d, s, false)) } : {}),
@@ -49,15 +54,17 @@ export async function planInput(relay: Relay, d: ProductionDocument, text?: stri
   }
 }
 
-/** Ask Dex for a plan (or a re-plan) of the main storyboard. */
-export async function planShots(deps: FrameDeps, opts: { text?: string } = {}): Promise<string> {
-  const input = await planInput(deps.relay, deps.doc.get(), opts.text)
-  return deps.runner.submit('shot_list', input, [], { for: 'shot_list' })
+/** Ask Dex for a plan (or a re-plan) of a storyboard (absent: the main one). */
+export async function planShots(deps: FrameDeps, opts: { text?: string; storyboardId?: string } = {}): Promise<string> {
+  const d = deps.doc.get()
+  const input = await planInput(deps.relay, d, opts.text, opts.storyboardId)
+  const sb = boardToPlan(d, opts.storyboardId)
+  return deps.runner.submit('shot_list', input, [], sb && sb.id !== mainStoryboard(d)?.id ? { for: 'shot_list', storyboardId: sb.id } : { for: 'shot_list' })
 }
 
-/** The plan job running on the main storyboard now, if any. */
-export function runningPlan(d: ProductionDocument): string | undefined {
-  const sb = mainStoryboard(d)
+/** The plan job running on a storyboard (absent: the main one) now, if any. */
+export function runningPlan(d: ProductionDocument, storyboardId?: string): string | undefined {
+  const sb = boardToPlan(d, storyboardId)
   if (!sb) return undefined
   return Object.values(d.jobs).find((j) => j.op === 'shot_list' && j.node?.kind === 'storyboard' && j.node.id === sb.id && isActive(j.state))?.id
 }
@@ -66,8 +73,8 @@ export function runningPlan(d: ProductionDocument): string | undefined {
  * Plan shots from either entry point (the Storyboard stage, the Script editor): the same job, on the
  * same node {kind: 'storyboard', id}. One already running is joined, never started twice.
  */
-export async function planOrJoin(deps: FrameDeps, opts: { text?: string } = {}): Promise<{ jobId: string; joined: boolean }> {
-  const running = runningPlan(deps.doc.get())
+export async function planOrJoin(deps: FrameDeps, opts: { text?: string; storyboardId?: string } = {}): Promise<{ jobId: string; joined: boolean }> {
+  const running = runningPlan(deps.doc.get(), opts.storyboardId)
   if (running) return { jobId: running, joined: true }
   return { jobId: await planShots(deps, opts), joined: false }
 }
@@ -181,15 +188,15 @@ function beatRows(shotId: string, p: PlannedShot): BeatRow[] {
 }
 
 /** The plan a shot_list job's result makes of the document as it is now (see the top of this file). */
-export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>): ShotListPlan {
-  const sb = mainStoryboard(d)
+export function planOf(d: ProductionDocument, job: Pick<Job, 'shots'>, storyboardId?: string): ShotListPlan {
+  const sb = boardToPlan(d, storyboardId)
   const out: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [], stale: [], asks: [] }
   if (!sb) return out
   const now = new Date().toISOString()
   const planned = job.shots ?? []
   const existing = shotsOf(d, sb.id)
   const byId = new Map(existing.map((s) => [s.id, s]))
-  const scenes = scenesOf(d)
+  const scenes = scenesOf(d, scriptOfStoryboard(d, sb.id)?.id)
   const fresh = planned.filter((p) => !(p.id && byId.has(p.id)))
   const ranks = fresh.length ? ranksBetween(existing.at(-1)?.rank ?? null, null, fresh.length) : []
   let k = 0
@@ -254,8 +261,9 @@ function mentionedIds(d: ProductionDocument, words: string): string[] {
 }
 
 /** The plan written into a draft with its words as flat text (the snapshot store, and tests). */
-export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, _ctx?: unknown): ShotListPlan {
-  const plan = planOf(d, job)
+export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, ctx?: { storyboardId?: string }): ShotListPlan {
+  const sbId = boardToPlan(d, ctx?.storyboardId)?.id
+  const plan = planOf(d, job, sbId)
   for (const id of plan.dropBeats) delete d.beats[id]
   for (const id of plan.dropShots) delete d.shots[id]
   for (const row of plan.shots) {
@@ -274,7 +282,7 @@ export function applyShotList(d: ProductionDocument, job: Pick<Job, 'shots'>, _c
   for (const m of plan.stale) d.stale[m.id] = m
   for (const a of plan.asks) d.asks[a.id] = a
   // The words moved into the shots: nothing stays in the scenes (one owner per span).
-  for (const sc of scenesOf(d)) if (sc.text) sc.text = ''
+  for (const sc of scenesOf(d, scriptOfStoryboard(d, sbId)?.id)) if (sc.text) sc.text = ''
   return plan
 }
 
@@ -299,12 +307,13 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   if (!(store instanceof ModelStore)) {
     const n = job.shots?.length ?? 0
     let plan: ShotListPlan = { shots: [], beats: [], dropShots: [], dropBeats: [], stale: [], asks: [] }
-    await landUpdate(store, (x) => { plan = applyShotList(x, job) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
+    await landUpdate(store, (x) => { plan = applyShotList(x, job, ctx) }, landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards))
     return plan
   }
   await store.flush()
   const d = store.get()
-  const plan = planOf(d, job)
+  const sbId = boardToPlan(d, ctx?.storyboardId)?.id
+  const plan = planOf(d, job, sbId)
   const n = plan.shots.length
   const why = landingWhy(store, job.jobId, `${n} ${n === 1 ? 'shot' : 'shots'} for the storyboard`, cards)
   const patches: Patch[] = []
@@ -319,7 +328,7 @@ export async function landShotList(store: DocumentStore, job: Job, ctx?: Extract
   for (const m of plan.stale) patches.push({ op: 'create', entity: 'stale', id: m.id, value: m, base_version: 0 })
   for (const a of plan.asks) patches.push({ op: 'create', entity: 'asks', id: a.id, value: a, base_version: 0 })
   const landing: PlanLanding = {
-    scenes: scenesOf(d).map((s) => ({ id: s.id, remainder: EMPTY_PROSE })),
+    scenes: scenesOf(d, scriptOfStoryboard(d, sbId)?.id).map((s) => ({ id: s.id, remainder: EMPTY_PROSE })),
     shots: plan.shots.filter((r) => !r.existing).map((r) => ({ id: r.id, value: r.fields, prose: shotProse(d, r) })),
     beats: plan.beats.map((b) => ({ id: b.id, value: b.fields, prose: proseFromText(d, [{ type: b.fields.kind === 'line' ? 'dialogue' : 'action', text: b.text.replace(/\n/g, ' ') }]) })),
     patches,

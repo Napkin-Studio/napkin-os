@@ -8,7 +8,7 @@
 //   the pictures sit in their boards (parentId).
 // - boardKey and jumpTo: ⌥1…⌥9 fit the board at that rank, ⌥0 fits everything.
 
-import { ranksBetween } from '../../../../clan-store/src'
+import { rankBetween, ranksBetween } from '../../../../clan-store/src'
 import type { Board, BoardPurpose, ProductionDocument } from '../../contracts/types'
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
@@ -143,10 +143,122 @@ export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: nu
     fit(placed)
     return true
   }
-  const board = boardsByRank(doc)[which]
+  const board = liveBoards(els, doc)[which]
   const frame = board && els.find((e) => boardIdOf(e) === board.id)
   if (!frame) return false
   fit([frame])
   canvas.select([])
   return true
 }
+
+/** The document's boards that are on the canvas now, by rank: the rail's rows and the ⌥ numbers. */
+export function liveBoards(els: readonly CanvasElement[], doc: ProductionDocument): Board[] {
+  const live = new Set(els.flatMap((e) => (isBoard(e) ? [boardIdOf(e)!] : [])))
+  return boardsByRank(doc).filter((b) => live.has(b.id))
+}
+
+type FrameEl = CanvasElement & { name?: string; purpose?: string }
+
+/**
+ * Keep the document's boards in step with the board frames (ui-behaviour 3.2): a frame deleted takes
+ * its board out of the document (and so out of the rail and the ⌥ numbers); one brought back by undo
+ * puts the board back as it was; a frame renamed or given a purpose renames the board. `memory` is
+ * every board this session has seen on the canvas, kept as last seen. Only boards seen this session
+ * are removed or restored, so a board written before its frame lands is never touched.
+ */
+export function reconcileBoards(els: readonly CanvasElement[], doc: ProductionDocument, memory: Map<string, Board>): { remove: string[]; restore: Board[]; retitle: { id: string; title: string; purpose?: BoardPurpose }[] } {
+  const live = new Map<string, FrameEl>()
+  for (const e of els) {
+    const id = boardIdOf(e)
+    if (id) live.set(id, e as FrameEl)
+  }
+  const remove: string[] = []
+  const restore: Board[] = []
+  const retitle: { id: string; title: string; purpose?: BoardPurpose }[] = []
+  for (const b of Object.values(doc.boards ?? {})) {
+    const f = live.get(b.id)
+    if (!f) {
+      if (memory.has(b.id)) remove.push(b.id)
+      continue
+    }
+    const title = typeof f.name === 'string' && f.name.trim() ? f.name.trim() : b.title
+    const purpose = (f.purpose as BoardPurpose | undefined) ?? b.purpose
+    memory.set(b.id, { ...b, title, purpose })
+    if (title !== b.title || purpose !== b.purpose) retitle.push({ id: b.id, title, ...(purpose !== b.purpose ? { purpose } : {}) })
+  }
+  for (const [id] of live) {
+    if (doc.boards?.[id]) continue
+    const kept = memory.get(id)
+    if (kept) restore.push(kept)
+  }
+  return { remove, restore, retitle }
+}
+
+/** What sits on a board: the live elements whose container is its frame. */
+export function contentsOf(els: readonly CanvasElement[], frameId: string): CanvasElement[] {
+  return els.filter((e) => !e.isDeleted && e.frameId === frameId)
+}
+
+/** A new board's size when it is made without a drag. */
+export const NEW_BOARD = { w: 420, h: 300 }
+
+/**
+ * A new board ("+ New board", or the Board tool's drag; ui-behaviour 3.2): the document's board, last
+ * in rank, and its frame at `rect`, else to the right of the boards on the top row. Not yet written.
+ */
+export function newBoard(canvas: CanvasAdapter, doc: ProductionDocument, opts: { rect?: { x: number; y: number; w: number; h: number }; title?: string; purpose?: BoardPurpose } = {}): { board: Board; frame: CanvasElement } {
+  const els = canvas.elements()
+  const last = boardsByRank(doc).at(-1)
+  const board: Board = { id: newId('board'), v: 1, field_v: {}, title: opts.title ?? 'New board', purpose: opts.purpose ?? 'none', rank: rankBetween(last?.rank ?? null, null) }
+  let r = opts.rect
+  if (!r) {
+    const frames = els.filter(isBoard)
+    if (frames.length) {
+      const top = Math.min(...frames.map((f) => f.y))
+      const right = Math.max(...frames.map((f) => f.x + f.width))
+      r = { x: right + GAP, y: top, ...NEW_BOARD }
+    } else {
+      const v = canvas.visibleBounds()
+      r = { x: (v.minX + v.maxX) / 2 - NEW_BOARD.w / 2, y: (v.minY + v.maxY) / 2 - NEW_BOARD.h / 2, ...NEW_BOARD }
+    }
+  }
+  const frame = canvas.board({ x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h), title: board.title, boardId: board.id, purpose: board.purpose })
+  return { board, frame }
+}
+
+/**
+ * Delete boards as one undoable step (ui-behaviour 3.2): with `all`, what sits on them goes too (and
+ * the links to it); without, it stays where it is, on no board. `also`: other elements deleted with them.
+ */
+export function deleteBoards(canvas: CanvasAdapter, frameIds: readonly string[], all: boolean, also: readonly string[] = []) {
+  const frames = new Set(frameIds)
+  canvas.transact((els) => {
+    const gone = new Set([...frames, ...also])
+    if (all) for (const e of els) if (!e.isDeleted && e.frameId && frames.has(e.frameId)) gone.add(e.id)
+    // Links whose ends are going go with them.
+    for (const e of els) {
+      const ends = e as CanvasElement & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null }
+      if ((ends.startBinding?.elementId && gone.has(ends.startBinding.elementId)) || (ends.endBinding?.elementId && gone.has(ends.endBinding.elementId))) gone.add(e.id)
+    }
+    return els.map((e) => {
+      if (e.isDeleted) return e
+      if (gone.has(e.id)) return canvas.patch(e, { isDeleted: true })
+      return e.frameId && frames.has(e.frameId) ? canvas.patch(e, { frameId: null }) : e
+    })
+  }, { undoable: true })
+  canvas.select([])
+}
+
+/** The purposes a board can have, with the words the picker shows (ui-behaviour 3.2). */
+export const PURPOSES: readonly { purpose: BoardPurpose; label: string }[] = [
+  { purpose: 'none', label: 'None' },
+  { purpose: 'character', label: 'Characters' },
+  { purpose: 'location', label: 'Locations' },
+  { purpose: 'reference', label: 'References' },
+  { purpose: 'product', label: 'Products' },
+  { purpose: 'storyboard', label: 'Storyboard' },
+  { purpose: 'video', label: 'Video' },
+  { purpose: 'sketches', label: 'Sketches' },
+  { purpose: 'brand', label: 'Brand' },
+  { purpose: 'formats', label: 'Formats' },
+]

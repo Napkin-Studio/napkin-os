@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Services } from '../../../app/context'
 import { CanvasController } from '../../controller'
 import { mainScript, mainStoryboard } from '../../../model/selectors'
-import { reconcileLinks } from '../../nodes/nodes'
+import { linkMemory, reconcileLinks } from '../../nodes/nodes'
 import { snapshotDoc } from '../../../test/jobFixtures'
 import { OwnAdapter } from './adapter'
 
@@ -60,7 +60,8 @@ describe('delete on the own engine', () => {
   it('a link coming back with its node waits until the node is back in the document', async () => {
     const { a, doc, ctrl, sb, link } = setup()
     const id = mainStoryboard(doc.get())!.id
-    const seen = new Set(['link_x'])
+    const seen = linkMemory()
+    seen.seen.add('link_x')
     ctrl.deleteElements([sb.id])
     await ctrl.sync.nodes(a.elements({ includeDeleted: true }))
     a.undoScene('undo')

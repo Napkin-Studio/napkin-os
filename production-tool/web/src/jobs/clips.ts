@@ -1,11 +1,11 @@
 // Clips and the ad, as requests. Shared by the Video stage, "Fix it in the shot"
 // (jobs/fix.ts) and "Update what follows" (jobs/follow.ts). The clip in a shot
-// is the main video's cut item for it (its edl pick); the ad is a render of the
-// video (contract 3).
+// is its video's cut item for it (its edl pick: the video its storyboard renders,
+// selectors videoOfShot); the ad is a render of a video (contract 3).
 
 import type { JobInput, ModelChoice, ProductionDocument, Shot, Take } from '../contracts/types'
 import type { JobPurpose } from '../model/purpose'
-import { currentTake, mainStoryboard, mainVideo, shotsOf } from '../model/selectors'
+import { currentTake, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
 import { clipText } from '../lib/guard'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
@@ -14,21 +14,22 @@ import { jobShot, refsFor } from './select'
 
 export { jobShot }
 
-/** The take in the cut for a shot now (its edl item's pick). */
-export function selectedTake(d: ProductionDocument, shotId: string): Take | undefined {
-  return currentTake(d, shotId)
+/** The take in the cut for a shot now (its edl item's pick, in `videoId`, else its own video). */
+export function selectedTake(d: ProductionDocument, shotId: string, videoId?: string): Take | undefined {
+  return currentTake(d, shotId, videoId ?? videoOfShot(d, shotId)?.id ?? mainVideo(d)?.id)
 }
 
-/** The ratio a clip or the ad is made at: the main video's, else the storyboard's. */
-function ratioOf(d: ProductionDocument) {
-  return mainVideo(d)?.ratio ?? mainStoryboard(d)?.ratio
+/** The ratio a clip or the ad is made at: the video's, else its storyboard's. */
+function ratioOf(d: ProductionDocument, videoId: string | undefined, storyboardId?: string) {
+  const v = videoId ? d.videos[videoId] : undefined
+  return v?.ratio ?? (storyboardId ? d.storyboards[storyboardId]?.ratio : undefined) ?? storyboardOfVideo(d, v?.id)?.ratio
 }
 
 /** A clip for a shot from its picked storyboard frame, on `modelChoice` when the participant picked one. */
 export async function makeClip(
   deps: FrameDeps,
   shotId: string,
-  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice } = {},
+  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice; videoId?: string } = {},
 ): Promise<string> {
   const d = deps.doc.get()
   const shot = d.shots[shotId]
@@ -38,7 +39,7 @@ export async function makeClip(
   const image = await assetRef(deps.relay, frame.asset)
   const text = extra.text?.trim()
   const refs = await refsFor(deps.relay, d, shot, text)
-  const ratio = ratioOf(d)
+  const ratio = ratioOf(d, videoOfShot(d, shot.id, extra.videoId)?.id, shot.storyboard_id)
   const input: JobInput = { shot: jobShot(d, shot), image, ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}) }
   const purpose: JobPurpose = {
     for: 'clip',
@@ -52,12 +53,14 @@ export async function makeClip(
 
 /** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length. An end
  *  card shot's clip is marked endCard (the stitch adds its own card instead); one with no clip is left out. */
-export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>): Promise<{ input: JobInput; parents: string[] }> {
+export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoId?: string): Promise<{ input: JobInput; parents: string[] }> {
   const d = deps.doc.get()
+  const video = (videoId && d.videos[videoId]) || mainVideo(d)
   const clips: NonNullable<JobInput['clips']> = []
   const parents: string[] = []
-  for (const [i, s] of shotsOf(d).entries()) {
-    const t = selectedTake(d, s.id)
+  const sb = storyboardOfVideo(d, video?.id)
+  for (const [i, s] of (sb ? shotsOf(d, sb.id) : []).entries()) {
+    const t = selectedTake(d, s.id, video?.id)
     if (!t && s.kind === 'end_card') continue
     if (!t) throw new Error(`Shot ${i + 1} has no clip yet.`)
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
@@ -65,14 +68,16 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>): Promi
     clips.push({ asset: await assetRef(deps.relay, t.asset, d), trimS: s.duration_s, ...(s.kind === 'end_card' ? { endCard: true } : {}) })
     parents.push(t.job_id)
   }
-  const ratio = ratioOf(d)
+  const ratio = ratioOf(d, video?.id)
   return { input: { clips, ...(ratio ? { ratio } : {}) }, parents }
 }
 
-/** Render the ad from the clips in the cut. */
-export async function renderAd(deps: FrameDeps, opts: { followRun?: string } = {}): Promise<string> {
-  const { input, parents } = await stitchInput(deps)
-  return deps.runner.submit('stitch', input, parents, { for: 'stitch' }, undefined, undefined, opts.followRun ? { local: { followRun: opts.followRun } } : {})
+/** Render the ad of a video (absent: the main one) from the clips in its cut. */
+export async function renderAd(deps: FrameDeps, opts: { followRun?: string; videoId?: string } = {}): Promise<string> {
+  const { input, parents } = await stitchInput(deps, opts.videoId)
+  const d = deps.doc.get()
+  const other = opts.videoId && d.videos[opts.videoId] && opts.videoId !== mainVideo(d)?.id
+  return deps.runner.submit('stitch', input, parents, other ? { for: 'stitch', videoId: opts.videoId } : { for: 'stitch' }, undefined, undefined, opts.followRun ? { local: { followRun: opts.followRun } } : {})
 }
 
 /** The end card the stitch adds after the clips: the 2.5 s roll-up card (stitch.py CARD_S). */

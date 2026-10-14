@@ -44,3 +44,43 @@
 :where(.node-layer) :where(.bl-poster img, .bl-poster video) { width: 100%; height: 100%; object-fit: cover; display: block; }
 :where(.node-layer) :where(.bl-len) { position: absolute; right: 6px; bottom: 6px; font-family: var(--f-mono); font-size: 10px; color: #FFFFFF; }
 :where(.node-layer) :where(.bl-facts) { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }
+
+/* A new node: "New" and a soft halo for 4 s (ui-behaviour 3.3 Creating nodes). */
+.node-layer .bl-cardbox.new .bl-card { box-shadow: 0 0 0 6px color-mix(in srgb, var(--tool) 18%, transparent), var(--shadow-soft); }
+.node-layer .nl-new {
+  position: absolute; left: 12px; top: -11px; padding: 1px 8px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600;
+  background: var(--tool); color: #FFFFFF; pointer-events: none;
+}
+/* An empty node's start (the chrome's PromptStart slot) takes the card's body. */
+.node-layer .bl-start { pointer-events: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+
+/* Making a link (ui-behaviour 3.4): compatible targets glow, the rest dim to 40%. */
+.node-layer.linking .bl-cardbox { transition: opacity 120ms ease; }
+.node-layer .bl-cardbox.target .bl-card { outline: 2px solid var(--tool); outline-offset: 3px; }
+.node-layer .bl-cardbox.source .bl-card { outline: 2px dashed var(--tool); outline-offset: 3px; }
+.node-layer .bl-cardbox.dim { opacity: 0.4; }
+.node-layer .nl-linkmode { position: absolute; inset: 0; pointer-events: auto; cursor: crosshair; z-index: 2; }
+.node-layer .nl-tip {
+  position: absolute; transform: translate(14px, 14px); padding: 4px 10px; border-radius: var(--r-pill); z-index: 3;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-pill); font-size: 12px; color: var(--ink2); white-space: nowrap; pointer-events: none;
+}
+.node-layer .nl-tip.ok { color: var(--tool-ink, var(--tool)); border-color: var(--tool); }
+.node-layer .nl-hint {
+  position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-pill);
+  font-size: 13px; color: var(--ink2); white-space: nowrap; pointer-events: none;
+}
+.node-layer .nl-hint b { color: var(--ink); font-weight: 600; }
+.node-layer .nl-key { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
+.node-layer .nl-picker { position: absolute; z-index: 4; pointer-events: auto; display: flex; flex-direction: column; min-width: 220px; padding: 4px; transform: translate(8px, 8px); }
+/* Pictures and sketch areas are drawn by the engine: while linking, a box over each says glow or dim. */
+.node-layer .nl-endbox { position: absolute; pointer-events: none; border-radius: 6px; box-sizing: border-box; }
+.node-layer .nl-endbox.target { outline: 2px solid var(--tool); outline-offset: 3px; }
+.node-layer .nl-endbox.source { outline: 2px dashed var(--tool); outline-offset: 3px; }
+.node-layer .nl-endbox.dim { background: color-mix(in srgb, var(--canvas-bg, #FAFAFB) 60%, transparent); }
+/* "+ Link input" under a selected node (3.16): the Link tool into it. */
+.node-layer .nl-linkin {
+  position: absolute; left: 0; pointer-events: auto; padding: 4px 12px; border-radius: var(--r-pill); font-size: 12px;
+  background: var(--card); border: 1px dashed var(--tool); color: var(--tool-ink, var(--tool)); cursor: pointer; white-space: nowrap;
+}
+.node-layer .nl-linkin:hover { background: var(--tool-soft); }

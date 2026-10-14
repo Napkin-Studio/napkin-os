@@ -44,7 +44,9 @@ export function ImageEditor({ shotId, onBack, onShot }: { shotId: string; onBack
   const doc = useDoc()
   const ui = useUi()
   const { config, controls } = useConfig()
-  const shots = shotsOf(doc)
+  // The shot's own storyboard (more than one per project; features/canvas-nodes.clan).
+  const sbId = doc.shots[shotId]?.storyboard_id
+  const shots = shotsOf(doc, sbId)
   const index = shots.findIndex((s) => s.id === shotId)
   const shot: Shot | undefined = shots[index]
   const frames = shot ? framesOf(doc, shot.id) : []
@@ -66,7 +68,7 @@ export function ImageEditor({ shotId, onBack, onShot }: { shotId: string; onBack
   const choice = pick ?? startingChoice(modelChoicesFor('frame', config), made.made)
   const project = useProjectName()
   const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
-  const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
+  const ratio = (sbId && doc.storyboards[sbId]?.ratio) || mainStoryboard(doc)?.ratio || '16:9'
   const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ratio)
   if (!shot) return null
 
@@ -87,7 +89,7 @@ export function ImageEditor({ shotId, onBack, onShot }: { shotId: string; onBack
     const image = await assetRef(relay, current.asset)
     let mask
     if (strokes.length && controls.maskBrush && asset?.w && asset?.h) mask = await assetRef(relay, await putBlob(await maskPng(strokes, asset.w, asset.h)))
-    const anchors = await continuity(relay, doc, index)
+    const anchors = await continuity(relay, doc, index, false, sbId)
     const own = ownAspect(doc, current.asset)
     await runner.submit('region_edit', { image, region, text: fill.trim(), ...(mask ? { mask } : {}), ...anchors, ...(own ? { aspect: own } : {}) }, current.job_id ? [current.job_id] : [], { for: 'frame', shotId: shot.id, parentFrameId: current.id, how: 'again' })
     setFill('')
@@ -98,7 +100,7 @@ export function ImageEditor({ shotId, onBack, onShot }: { shotId: string; onBack
   // Change whole frame: drawn again with the words (or the first draw when there is none yet).
   const changeWhole = () => attempt(async () => {
     const modelChoice = current ? choiceToSend('frame', config, choice) : undefined
-    await drawFrame({ relay, doc: docStore, ui: uiStore, runner }, index, current ? 'again' : index === 0 ? 'first' : 'next', { text: whole, ...(current ? { parent: current } : {}), ...(modelChoice ? { modelChoice } : {}) })
+    await drawFrame({ relay, doc: docStore, ui: uiStore, runner }, index, current ? 'again' : index === 0 ? 'first' : 'next', { text: whole, storyboardId: sbId, ...(current ? { parent: current } : {}), ...(modelChoice ? { modelChoice } : {}) })
     setWhole('')
   })
   const deleteVersion = () => attempt(async () => { if (current) await deleteFrom(docStore, (d) => removeFrame(d, current.id)) })

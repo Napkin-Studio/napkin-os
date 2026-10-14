@@ -253,7 +253,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 
   const sb = composed?.storyboard
   const deps = { relay, doc: docStore, ui: uiStore, runner }
-  const planning = runningPlan(doc)
+  const planning = sb ? runningPlan(doc, sb.id) : undefined
   const skye = skyeState(doc, scriptId)
   const skyeDeps = { relay, doc: docStore, ui: uiStore, runner }
   const ask = (target: WriteTarget, intent: WriteIntent, opts: Parameters<typeof startWrite>[5] = {}) =>
@@ -281,7 +281,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     || (composed!.shots.length > 0 && Object.values(doc.scenes).some((s) => s.script_id === scriptId && !!s.text?.trim())))
   const plan = () => attempt(async () => {
     if (!scriptText(doc, scriptId).trim()) throw new Error('Write a line or two first.')
-    const r = await planOrJoin(deps)
+    // The storyboard this script drives (more than one per project; features/canvas-nodes.clan).
+    if (!sb) throw new Error('Link this script to a storyboard on the canvas first.')
+    const r = await planOrJoin(deps, { storyboardId: sb.id })
     if (r.joined) say('Dex is already planning these shots.')
   })
 

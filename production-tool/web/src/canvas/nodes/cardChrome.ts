@@ -17,6 +17,11 @@ export interface CardChrome {
   title(own: string | undefined, templateWord: string, project: string | undefined): string
   loader(work: 'plan' | 'produce' | 'create'): ReactNode
   agent(agent: Agent, working: boolean): ReactNode
+  /**
+   * An empty node's start (ui-behaviour 3.3 Empty; ui/prompt): drawn in the card in place of the
+   * "No script yet" line while the node is empty. Optional: without it the card keeps that line.
+   */
+  PromptStart?: (p: { kind: CardKind; nodeId: string }) => ReactNode
 }
 
 /** production-ui's nodeTitle rule (ui/chrome/panels.ts), as the default. */

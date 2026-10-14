@@ -12,6 +12,10 @@ export interface CanvasChrome {
   /** The tool in use, or null for one the bar does not show (a shape picked by its key). */
   tool(): ChromeTool | null
   setTool(t: ChromeTool): void
+  /** The next sketch area's shape (ui-behaviour 3.7's picker); absent where the engine takes it elsewhere. */
+  setSketchRatio?(ratio: string): void
+  /** Does this engine have the tool yet? Absent: every tool. The bar disables the others, with why. */
+  supports?(t: ChromeTool): boolean
   /** Zoom, 1 = 100%. */
   zoom(): number
   /** One step in or out, round the middle of the view. */

@@ -15,7 +15,7 @@ import { aspectOfRatio, exactRatio, reducedAspect } from '../canvas/core/sketch'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
-import { edlItemFor, edlOf, framesOf, mainVideo, rendersOf, shotName, takesOf } from '../model/selectors'
+import { edlItemFor, edlOf, framesOf, mainVideo, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
 import { landingWhy } from './landing'
 import { refreshClipStale } from './stale'
 
@@ -101,7 +101,7 @@ export function applyFrame(d: ProductionDocument, job: Job, ctx: FrameCtx): Fram
   return frame
 }
 
-/** A clip job's result as the shot's new take, picked in the main video's cut (its edl item is made, after
+/** A clip job's result as the shot's new take, picked in its video's cut (selectors videoOfShot) (its edl item is made, after
  *  the others, when the shot has none yet); the notes it fixed are resolved. Landing twice does nothing. */
 export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take | undefined {
   const out = job.outputs?.[0]
@@ -125,7 +125,7 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
     segments: [],
   }
   d.takes[take.id] = take
-  const video = mainVideo(d)
+  const video = videoOfShot(d, shot.id)
   if (video) {
     const item = edlItemFor(d, shot.id, video.id)
     if (item) video.edl[item.id].pick = { current: take.id }
@@ -145,10 +145,11 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
   return take
 }
 
-/** A stitch job's result as the main video's new render, picked now. Landing twice does nothing. */
-export function applyStitch(d: ProductionDocument, job: Job): Render | undefined {
+/** A stitch job's result as its video's new render (ctx.videoId, else the main video), picked now.
+ *  Landing twice does nothing. */
+export function applyStitch(d: ProductionDocument, job: Job, ctx?: { videoId?: string }): Render | undefined {
   const out = job.outputs?.[0]
-  const video = mainVideo(d)
+  const video = (ctx?.videoId && d.videos[ctx.videoId]) || mainVideo(d)
   if (!out || !video) return undefined
   if (Object.values(d.renders).some((r) => r.job_id === job.jobId)) return undefined
   const render: Render = {
@@ -185,6 +186,6 @@ export function landTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { 
 /** Edie's ad, picked as the video's render: "edit the ad v2". */
 export function landRender(store: DocumentStore, job: Job, ctx?: Extract<JobCtx, { for: 'stitch' }>) {
   const d = store.get()
-  const what = `the ad v${nextVersion(rendersOf(d))}`
-  return landUpdate(store, (x) => { applyStitch(x, job) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
+  const what = `the ad v${nextVersion(rendersOf(d, ctx?.videoId ?? mainVideo(d)?.id))}`
+  return landUpdate(store, (x) => { applyStitch(x, job, ctx) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
 }

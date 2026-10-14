@@ -1,11 +1,12 @@
 // CanvasChrome on our own engine (features/production-ui.clan): the bar's tools
-// map onto the engine's (select, hand, pen and eraser; text, sketch areas and
-// pictures are not on the own engine yet, so those buttons do nothing here; the
-// sketch area tool is the engine's, canvas-edit-tools), zoom
+// map onto the engine's (select, hand, pen and eraser, and the sketch area tool,
+// canvas-edit-tools; the Picture tool is the node layer's; text is not on the own
+// engine yet), zoom
 // keeps the middle of the view still, and fit uses the adapter's own fit.
 
 import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
 import type { OwnAdapter } from './adapter'
+import { canvasActions } from '../../chrome/actions'
 
 const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser', sketch: 'sketch' }
 // The highlighter is the pen's other mode (the pen's options), so the pen stays lit.
@@ -22,7 +23,15 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       const t = a.activeTool()
       return t.type === 'native' ? FROM_ENGINE[t.id] ?? null : null
     },
+    // The Picture tool is the node layer's (canvas/nodes/pictures.ts): a file picker, then the pictures in view.
+    // The engine's own sketch tool takes the next area's ratio when it has one (features/canvas-edit-tools.clan).
+    setSketchRatio: (r) => a.setSketchRatio(r),
+    supports: (t) => !!TO_ENGINE[t] || (t === 'image' && canvasActions.canPicture()),
     setTool: (t) => {
+      if (t === 'image') {
+        canvasActions.picture()
+        return
+      }
       const id = TO_ENGINE[t]
       if (id) a.setActiveTool({ type: 'native', id })
     },
