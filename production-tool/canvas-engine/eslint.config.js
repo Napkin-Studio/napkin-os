@@ -25,6 +25,7 @@ export default defineConfig([
         ],
         patterns: [
           { group: ['react/*', 'react-dom/*', 'tldraw/*', '@tldraw/editor/*', '@tldraw/tldraw', '@tldraw/tldraw/*'], message: 'Not in the engine (features/canvas-engine.clan).' },
+          { group: ['@excalidraw/*'], message: 'The engine imports nothing from Excalidraw; the converter reads its JSON (features/engine-import.clan).' },
           { group: ['**/clan-store', '**/clan-store/**', '**/web/src', '**/web/src/**', '@napkin/production-tool-clan-store'], message: 'The engine does not reach the document store or the web app; they call it (features/canvas-engine.clan).' },
         ],
       }],

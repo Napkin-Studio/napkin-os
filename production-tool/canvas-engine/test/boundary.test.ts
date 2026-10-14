@@ -25,6 +25,7 @@ describe('the engine imports', () => {
     ['the tldraw editor', '@tl' + 'draw/editor'],
     ['the document store', '../../../clan' + '-store/src'],
     ['the web app', '../../../web/src/canvas/scene'],
+    ['Excalidraw', '@excali' + 'draw/excalidraw'],
   ])('refuse %s', async (_what, from) => {
     expect(await refused(from)).toBe(1)
   })
