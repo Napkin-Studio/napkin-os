@@ -196,6 +196,8 @@ export interface BoardIntent {
   height: number
   title: string
   boardId: string
+  /** The board's purpose (character, location…): an empty board's drop hint. */
+  purpose?: string
 }
 
 /** A sketch area (frame-aspect; ui-behaviour 3.7): a white rectangle tagged {kind:'sketch', id}. */

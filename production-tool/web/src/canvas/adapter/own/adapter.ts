@@ -12,7 +12,7 @@
 
 import * as Y from 'yjs'
 import {
-  elementFromRecord, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type InkTool, type Intent, type Renderer,
+  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type InkTool, type Intent, type Renderer,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -259,7 +259,7 @@ export class OwnAdapter implements CanvasAdapter {
   board(i: BoardIntent): CanvasElement {
     return this.make({
       ...(i.id ? { id: i.id } : {}), type: 'frame', x: i.x, y: i.y, width: i.width, height: i.height, name: i.title,
-      customData: { kind: 'board', id: i.boardId },
+      customData: { kind: 'board', id: i.boardId }, ...(i.purpose ? { purpose: i.purpose } : {}),
     } as Partial<OwnEl> & { type: string })
   }
 
@@ -408,7 +408,7 @@ export class OwnAdapter implements CanvasAdapter {
   /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
     // Node cards sit above the canvas, and a link is hit along its line (canvas-nodes).
-    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom)
+    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitBoardTitle(this.scene, { x, y }, this.vp.zoom)
     if (top) return top
     if (this.renderer) return this.renderer.hit(x, y)
     return this.scene.all()

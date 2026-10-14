@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useServices } from '../app/context'
 import { engineChoice, engineToMount, loadEngine } from './adapter'
 import type { CanvasAdapter, CanvasSnapshot } from './core/canvasAdapter'
+import { BoardLayer } from './boards/BoardLayer'
 import { NodeLayer } from './nodes/NodeLayer'
 
 export function CanvasMount({ initial, onReady, onChange, theme }: {
@@ -85,6 +86,7 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
   return (
     <div ref={host} style={{ position: 'absolute', inset: 0 }}>
       {own && <NodeLayer canvas={own} tick={tick} />}
+      {own && <BoardLayer canvas={own} />}
     </div>
   )
 }
