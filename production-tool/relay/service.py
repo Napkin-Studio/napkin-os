@@ -104,6 +104,7 @@ SPEND_POLICY = json.loads((contracts_dir() / "spend-policy.json").read_text())
 LIMIT_REACHED = "Your agency's monthly limit is reached, so nothing new can be made this month."
 BUDGET_USED = "The generation budget is used up."
 CLAUDE_OFF_PLAN = "Dex plans shots with Claude, which your agency has turned off."
+CLAUDE_OFF_WRITE = "Skye writes with Claude, which your agency has turned off."
 # Each maker's name for the not_allowed line ("made by Google"), from the notice.
 MAKER_NAMES = {e["id"]: e["name"] for e in json.loads((contracts_dir() / "subprocessors.json").read_text())["entries"]}
 CONTRACT = _COMMON["contractVersion"]["const"]  # "3"
@@ -732,6 +733,9 @@ class Relay:
         op, pick = req["op"], req.get("modelChoice")
         if op == "shot_list" and not allow["claude"]:
             raise ApiError("not_allowed", CLAUDE_OFF_PLAN)
+        if op == "write" and not allow["claude"]:
+            # Script text is the agency's: it goes to the text model only where the agency allows Claude.
+            raise ApiError("not_allowed", CLAUDE_OFF_WRITE)
         if op in INTERNAL_OPS:
             return
         if pick and not self._model_on(pick["provider"], pick["model"], allow):
@@ -823,9 +827,6 @@ class Relay:
             raise ApiError("capability_missing", "This step is not built yet.")
         if op == "write" and not isinstance(req["input"].get("write"), dict):
             raise ApiError("invalid_input", "A write job says what to write (input.write).")
-        if op == "write" and not self.may_send_text(who["tenant"]["id"]):
-            # Script text is the agency's: it goes to the text model only where the agency allows it.
-            raise ApiError("capability_missing", "Skye isn't available here yet.")
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
@@ -1342,16 +1343,6 @@ class Relay:
             return self._ask(saved, out["question"], block)
         return self._finish(saved, "completed", shots=out["shots"], director=block, outputs=[],
                             kind="generated", paid=False)
-
-    def may_send_text(self, tenant_id: str) -> bool:
-        """Whether this agency's script text may go to the text model (features/script-editor.clan).
-        tenant-limits fills this with the per-tenant Bedrock allowlist; until then it allows what
-        shot_list already sends, for the same tenants: an agency that is on, unless its item says
-        textModel: false."""
-        item = self._tenant(tenant_id)
-        if item is None:
-            return True  # the local relay and the tests have no tenants table; _tenant_on guards real ones
-        return item.get("textModel", True) is not False
 
     def _run_write(self, job: dict) -> dict:
         """Skye drafts: no provider, no spend; the text quota was counted at admission."""

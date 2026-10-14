@@ -65,14 +65,16 @@ def test_an_unknown_name_reaches_skye_as_written(h):
     assert job["writes"][0]["lines"][0]["text"] == "A runs past far behind @maya_front."
 
 
-def test_an_agency_whose_text_may_not_go_to_the_model_is_refused_before_quota(h):
+def test_an_agency_that_turned_claude_off_is_refused_before_quota(h):
+    # tenant-limits' allow.claude is the agency's say on script text reaching the text model.
     token = h.as_person(team="red")
     tid = h.people[token]["tenant"]["id"]
-    h.store.put_tenant({"tenantId": tid, "agency": "red", "enabled": True, "textModel": False})
+    h.store.put_tenant({"tenantId": tid, "agency": "red", "enabled": True,
+                        "allow": {"claude": False, "makers": ["runway", "google"]}})
     h.relay._tenants.pop(tid, None)
-    _, out = post_write(h, token, expect=422)
-    assert out["error"]["code"] == "capability_missing"
-    assert out["error"]["message"] == "Skye isn't available here yet."
+    _, out = post_write(h, token, expect=403)
+    assert out["error"]["code"] == "not_allowed"
+    assert out["error"]["message"] == "Skye writes with Claude, which your agency has turned off."
 
 
 def test_a_write_without_its_input_is_invalid(h):
