@@ -76,6 +76,21 @@ export function storyboardOfScript(d: Doc, scriptId: Id | undefined): Storyboard
   return scriptId === mainScript(d)?.id ? mainStoryboard(d) : undefined
 }
 
+/**
+ * The video a shot's clips land in: `prefer` when that video is rendered from the shot's storyboard,
+ * else the first video its storyboard renders, else (the main storyboard's shots) the main video.
+ */
+export function videoOfShot(d: Doc, shotId: Id, prefer?: Id): Video | undefined {
+  const sb = d.shots[shotId]?.storyboard_id
+  if (!sb) return undefined
+  const rendered = values(d.links).filter((l) => l.role === 'renders' && l.from.kind === 'storyboard' && l.from.id === sb && l.to.kind === 'video')
+    .map((l) => d.videos[l.to.id]).filter((v): v is Video => !!v).sort(byId)
+  const mainV = mainVideo(d)
+  const ok = (v: Video | undefined) => !!v && (rendered.some((r) => r.id === v.id) || (v.id === mainV?.id && sb === mainStoryboard(d)?.id))
+  if (prefer && ok(d.videos[prefer])) return d.videos[prefer]
+  return rendered[0] ?? (sb === mainStoryboard(d)?.id ? mainV : undefined)
+}
+
 /** A storyboard's shots in rank order (the main storyboard's by default). */
 export function shotsOf(d: Doc, storyboardId = mainStoryboard(d)?.id): Shot[] {
   return values(d.shots).filter((s) => s.storyboard_id === storyboardId).sort(byRank)

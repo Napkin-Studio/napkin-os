@@ -1,7 +1,8 @@
 // More than one storyboard per project (features/canvas-nodes.clan): Plan shots on a second storyboard
 // (made with + Node, driven by a second script) sends that script's words and lands the shots on that
 // storyboard, never the main one; the plan job's node is that storyboard, read back after a reload;
-// its frames are drawn from its own shots at its own ratio. On the CLAN store, with the mock relay.
+// its frames are drawn from its own shots at its own ratio; its clips land in the video it renders and
+// that video's ad renders it. On the CLAN store, with the mock relay.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -9,15 +10,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { ClanDocumentStore, rankBetween } from '../../../clan-store/src'
 import { newEntity } from '../canvas/nodes/nodes'
-import type { Link, Script, Storyboard } from '../contracts/types'
+import type { Link, Script, Storyboard, Video } from '../contracts/types'
 import { SnapshotStore, systemUpdate, updateDoc } from '../doc/store'
 import { initialUi, type UiState } from '../doc/ui'
 import { newId } from '../lib/ulid'
 import { purposeOf } from '../model/purpose'
-import { mainStoryboard, openStoryboard, scenesOf, scriptOfStoryboard, shotsOf } from '../model/selectors'
+import { currentRender, currentTake, edlOf, mainStoryboard, mainVideo, openStoryboard, scenesOf, scriptOfStoryboard, shotsOf } from '../model/selectors'
 import { ModelStore } from '../model/store'
 import { MockRelay, type MockRenderer } from '../relay/mock'
 import { MAYA } from '../test/jobFixtures'
+import { makeClip, renderAd } from './clips'
 import { drawFrame, type FrameDeps } from './frames'
 import { planInput, planOrJoin, runningPlan } from './plan'
 import { JobRunner } from './runner'
@@ -39,7 +41,8 @@ async function setup() {
   let t = 1_000_000
   const renderer: MockRenderer = {
     async render(req) {
-      return [{ blob: new Blob([`${req.op}-${Math.random()}`], { type: 'image/png' }), mime: 'image/png', w: 9, h: 16 }]
+      const mime = req.op === 'clip' || req.op === 'stitch' ? 'video/mp4' : 'image/png'
+      return [{ blob: new Blob([`${req.op}-${Math.random()}`], { type: mime }), mime, w: 9, h: 16, ...(mime === 'video/mp4' ? { durationS: 5 } : {}) }]
     },
   }
   const relay = new MockRelay({ renderer, now: () => t, delayMs: 2000, persistKey: null })
@@ -53,12 +56,18 @@ async function setup() {
   const d0 = store.get()
   const script = newEntity(d0, 'script').entity as Script
   const sb = { ...(newEntity(d0, 'storyboard').entity as Storyboard), ratio: '9:16' as const }
+  const video = { ...(newEntity(d0, 'video').entity as Video), ratio: '9:16' as const }
   const drives: Link = { id: newId('link'), v: 1, field_v: {}, from: { kind: 'script', id: script.id }, to: { kind: 'storyboard', id: sb.id }, role: 'drives' }
+  const renders: Link = { id: newId('link'), v: 1, field_v: {}, from: { kind: 'storyboard', id: sb.id }, to: { kind: 'video', id: video.id }, role: 'renders' }
   await systemUpdate(store, (d) => {
     d.scripts[script.id] = script
     d.storyboards[sb.id] = sb
-  }, 'add a script and a storyboard')
-  await updateDoc(store, (d) => { d.links[drives.id] = drives }, 'link script to storyboard')
+    d.videos[video.id] = video
+  }, 'add a script, a storyboard and a video')
+  await updateDoc(store, (d) => {
+    d.links[drives.id] = drives
+    d.links[renders.id] = renders
+  }, 'link script to storyboard')
   const scene = (scriptId: string, text: string, heading: string) => {
     const id = newId('scene')
     return { id, v: 1, field_v: {}, script_id: scriptId, rank: rankBetween(null, null), heading, text }
@@ -78,7 +87,7 @@ async function setup() {
     await flush()
     await store.flush()
   }
-  return { store, ui, runner, relay, deps, land, script, sb }
+  return { store, ui, runner, relay, deps, land, script, sb, video }
 }
 
 describe('Plan shots on a second storyboard', () => {
@@ -114,6 +123,33 @@ describe('Plan shots on a second storyboard', () => {
     // The Storyboard panel shows the storyboard opened on the canvas.
     expect(openStoryboard(store.get(), { storyboard: sb.id })!.id).toBe(sb.id)
     expect(openStoryboard(store.get(), {})!.id).toBe(mainStoryboard(store.get())!.id)
+    await store.close()
+  })
+
+  it('a clip of its shot lands in the video that storyboard renders, and its ad renders that video', async () => {
+    const { store, deps, land, sb, video } = await setup()
+    await planOrJoin(deps, { storyboardId: sb.id })
+    await land()
+    await vi.waitFor(() => expect(shotsOf(store.get(), sb.id).length).toBeGreaterThan(0), { timeout: 4000, interval: 10 })
+    const shots = shotsOf(store.get(), sb.id)
+    for (const [i] of shots.entries()) {
+      await drawFrame(deps, i, i ? 'next' : 'first', { storyboardId: sb.id })
+      await land()
+    }
+    for (const s of shots) {
+      const clip = await makeClip(deps, s.id, { videoId: video.id })
+      expect(deps.ui.get().jobs[clip].request!.input.ratio).toBe('9:16')
+    }
+    await land()
+    await vi.waitFor(() => expect(shots.every((s) => !!currentTake(store.get(), s.id, video.id))).toBe(true), { timeout: 4000, interval: 10 })
+    expect(edlOf(store.get(), video.id)).toHaveLength(shots.length)
+    expect(edlOf(store.get(), mainVideo(store.get())!.id)).toHaveLength(0)
+    const ad = await renderAd(deps, { videoId: video.id })
+    expect(store.get().jobs[ad].node).toEqual({ kind: 'video', id: video.id })
+    expect(purposeOf(store.get().jobs[ad])).toEqual({ for: 'stitch', videoId: video.id })
+    await land()
+    await vi.waitFor(() => expect(currentRender(store.get(), video.id)).toBeTruthy(), { timeout: 4000, interval: 10 })
+    expect(currentRender(store.get(), mainVideo(store.get())!.id)).toBeUndefined()
     await store.close()
   })
 })

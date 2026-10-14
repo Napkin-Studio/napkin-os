@@ -61,7 +61,7 @@ export function Video() {
   useJobsTick()
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   // The video opened on the canvas (ui.openNode), else the main one, with the storyboard that renders it
-  // (features/canvas-nodes.clan). Clips and the ad still land in the main video: on another, they wait.
+  // (features/canvas-nodes.clan). Its clips and its ad land in it.
   const video = openVideo(doc, ui.openNode)
   const sb = storyboardOfVideo(doc, video?.id)
   const isMain = !video || video.id === mainVideo(doc)?.id
@@ -77,13 +77,13 @@ export function Video() {
   const anyRunning = shots.some((s) => isMoving(doc, clipJob(s.id)))
   const taken = shots.filter((s) => !!currentTake(doc, s.id, video?.id)).length
   const allTaken = shots.length > 0 && taken === shots.length
-  const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch')
+  const stitchJob = jobAt(doc, ui, (c) => c.for === 'stitch' && (c.videoId ?? mainVideo(doc)?.id) === video?.id)
   const latestAd = currentRender(doc, video?.id)
   // One send per click burst: a double click paid twice (2026-10-09).
   const [makingAll, sendAll] = useSending()
   const [rendering, sendRender] = useSending()
 
-  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, opts)
+  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id })
 
   /** A clip for every shot without one. A shot that cannot be made (no frame yet) does not stop the
    *  others; each one that failed is named. */
@@ -105,15 +105,14 @@ export function Video() {
     setError(null)
     try {
       // Each clip is cut to its shot's length (trimS): the ad is the shots plus the 2.5 s end card.
-      await renderAd(deps)
+      await renderAd(deps, { videoId: video?.id })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   })
 
   // Why Render ad is off, said on the button (a disabled button never said why).
-  const notHere = isMain ? undefined : 'Clips and the ad are made on the first video for now'
-  const renderBlocked = notHere ?? (!allTaken ? `Make a clip for every shot first (${taken} of ${shots.length} done)`
+  const renderBlocked = (!allTaken ? `Make a clip for every shot first (${taken} of ${shots.length} done)`
     : anyRunning ? 'Wait for the clips being made' : isMoving(doc, stitchJob) ? 'The ad is rendering' : undefined)
 
   if (!controls.video) {
@@ -136,7 +135,7 @@ export function Video() {
         title={`Video · ${isMain ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
         meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
         middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
-        right={<button className="btn" disabled={!!notHere || makingAll || anyRunning || allTaken} title={notHere} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
+        right={<button className="btn" disabled={makingAll || anyRunning || allTaken} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
         primary={controls.stitch ? (
           <button className="btn primary" disabled={rendering || !!renderBlocked} onClick={() => void render()} title={renderBlocked ?? 'Join the clips into one ad with the end card'}>
             {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}

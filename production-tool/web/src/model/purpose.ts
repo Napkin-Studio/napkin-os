@@ -23,7 +23,8 @@ export type JobPurpose =
    *  shot" edit; when it lands, a clip is made from it for these notes (jobs/fix.ts). */
   | { for: 'frame'; shotId: Id; parentFrameId?: Id; how?: FrameHow; fixReviewIds?: Id[] }
   | { for: 'clip'; shotId: Id; parentTakeId?: Id; reviewIds?: Id[] }
-  | { for: 'stitch' }
+  /** videoId: the video it renders (absent: the main one). */
+  | { for: 'stitch'; videoId?: Id }
   /** A Generate on a sketch area (features/frame-aspect.clan): it lands as a frame made from the sketch. */
   | { for: 'sketch'; sketchId: Id }
   /** Change this frame (features/frame-change-edit.clan): a proposal on the shot's frame `parentFrameId`,
@@ -51,7 +52,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
     case 'shot_list':
       return { kind: 'storyboard', id: (p.storyboardId && d.storyboards[p.storyboardId] ? p.storyboardId : mainStoryboard(d)!.id) }
     case 'stitch':
-      return { kind: 'video', id: mainVideo(d)!.id }
+      return { kind: 'video', id: (p.videoId && d.videos[p.videoId] ? p.videoId : mainVideo(d)!.id) }
     case 'sketch':
       return { kind: 'sketch', id: p.sketchId }
     case 'write':
@@ -81,8 +82,9 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
   switch (kind) {
     case 'shot_list':
       return j.node?.kind === 'storyboard' && j.node.id ? { for: 'shot_list', storyboardId: j.node.id } : { for: 'shot_list' }
-    case 'canvas':
     case 'stitch':
+      return j.node?.kind === 'video' && j.node.id ? { for: 'stitch', videoId: j.node.id } : { for: 'stitch' }
+    case 'canvas':
       return { for: kind }
     case 'write':
       return j.node.kind === 'script' ? { for: 'write', scriptId: j.node.id } : { for: 'write' }
