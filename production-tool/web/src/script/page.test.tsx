@@ -31,7 +31,7 @@ import { ScriptEditor } from './ScriptEditor'
 
 const makeClan: MakeClan = (persistence, opts = {}) =>
   new ModelStore(new ClanDocumentStore({ wasm: wasm(), persistence, saveDebounceMs: 0, person: opts.person }), { debounceMs: 1, undo: opts.undo })
-const ME = { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, quotas: { image: 40, video: 6, render: 3 }, projects: 0 }
+const ME = { participantId: MAYA.id, handle: 'maya', team: 'napkin', workspace: MAYA.tenant_id, tenant: { id: MAYA.tenant_id, agency: 'napkin' }, allow: { claude: true, makers: ['runway', 'google'] }, quotas: null, projects: 0 }
 
 let root: Root | null = null
 afterEach(() => {
