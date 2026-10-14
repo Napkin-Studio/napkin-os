@@ -78,3 +78,9 @@
 .node-layer .nl-endbox.target { outline: 2px solid var(--tool); outline-offset: 3px; }
 .node-layer .nl-endbox.source { outline: 2px dashed var(--tool); outline-offset: 3px; }
 .node-layer .nl-endbox.dim { background: color-mix(in srgb, var(--canvas-bg, #FAFAFB) 60%, transparent); }
+/* "+ Link input" under a selected node (3.16): the Link tool into it. */
+.node-layer .nl-linkin {
+  position: absolute; left: 0; pointer-events: auto; padding: 4px 12px; border-radius: var(--r-pill); font-size: 12px;
+  background: var(--card); border: 1px dashed var(--tool); color: var(--tool-ink, var(--tool)); cursor: pointer; white-space: nowrap;
+}
+.node-layer .nl-linkin:hover { background: var(--tool-soft); }

@@ -13,7 +13,7 @@
 import { currentRender, keyNamed, mainScript, mainStoryboard, mainVideo, refsList, scenesOf, shotsOf, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
 import type { Link, LinkEndpoint, LinkRole, ProductionDocument, RefRole, Script, Storyboard, Video } from '../../contracts/types'
 import { newId } from '../../lib/ulid'
-import { systemUpdate } from '../../doc/store'
+import { systemUpdate, updateDoc } from '../../doc/store'
 import type { DocumentStore } from '../../doc/types'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { canLink, checkLink, endName, type LinkEnd as CoreEnd, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
@@ -311,4 +311,14 @@ export function isEmptyNode(doc: ProductionDocument, kind: CardKind, id: string)
   if (kind === 'storyboard') return shotsOf(doc, id).length === 0
   const sb = storyboardOfVideo(doc, id)
   return !(sb && shotsOf(doc, sb.id).length) && !currentRender(doc, id)
+}
+
+/**
+ * An inputs chip's × (ui-behaviour 3.3, 3.16): the link out of the document, as the person's step. The
+ * canvas's arrow follows on its next reconcile (reconcileLinks erase), so chip and arrow go together.
+ */
+export function unlinkInput(store: DocumentStore, linkId: string): Promise<unknown> {
+  const l = store.get().links?.[linkId]
+  if (!l) return Promise.resolve()
+  return updateDoc(store, (d) => { delete d.links[linkId] }, `unlink ${l.from.kind} from ${l.to.kind}`)
 }

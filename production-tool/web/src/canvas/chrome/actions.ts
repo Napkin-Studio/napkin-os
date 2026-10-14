@@ -17,6 +17,8 @@ export interface CanvasActions {
   board(): void
   /** The Picture tool: ask for picture files and place them in view (a canvas without its own tool). */
   picture(): void
+  /** "+ Link input" on a node (3.16): the Link tool, with this node as the target; the person clicks what feeds it. */
+  linkInto(node: { kind: string; id: string }): void
 }
 
 type Listener = () => void
@@ -25,6 +27,7 @@ class Bus {
   private nodes: Pick<CanvasActions, 'node'> | null = null
   private boards: Pick<CanvasActions, 'board'> | null = null
   private pictures: Pick<CanvasActions, 'picture'> | null = null
+  private into: Pick<CanvasActions, 'linkInto'> | null = null
   private current: CanvasMode = null
   private pick: string | null = null
   private readonly listeners = new Set<Listener>()
@@ -34,11 +37,13 @@ class Bus {
     if (part.node) this.nodes = { node: part.node }
     if (part.board) this.boards = { board: part.board }
     if (part.picture) this.pictures = { picture: part.picture }
+    if (part.linkInto) this.into = { linkInto: part.linkInto }
     this.emit()
     return () => {
       if (part.node && this.nodes?.node === part.node) this.nodes = null
       if (part.board && this.boards?.board === part.board) this.boards = null
       if (part.picture && this.pictures?.picture === part.picture) this.pictures = null
+      if (part.linkInto && this.into?.linkInto === part.linkInto) this.into = null
       this.current = null
       this.emit()
     }
@@ -60,6 +65,17 @@ class Bus {
     if (!this.pictures) return false
     this.pictures.picture()
     return true
+  }
+
+  /** "+ Link input" (an inputs strip's button): false when no canvas can link (Excalidraw). */
+  linkInto(node: { kind: string; id: string }): boolean {
+    if (!this.into) return false
+    this.into.linkInto(node)
+    return true
+  }
+
+  canLinkInto(): boolean {
+    return !!this.into
   }
 
   node(kind: CardKind): boolean {

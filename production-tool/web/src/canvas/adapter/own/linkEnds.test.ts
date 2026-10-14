@@ -12,7 +12,7 @@ import { newId } from '../../../lib/ulid'
 import { mainScript, mainStoryboard } from '../../../model/selectors'
 import { addKey, addRef } from '../../../test/jobFixtures'
 import { modelStore, MAYA, SHA } from '../../../test/model'
-import { cardOf, endOf, linkCheck, linkIdOf, linkMemory, linkNodes, reconcileLinks, seedNodes } from '../../nodes/nodes'
+import { cardOf, endOf, linkCheck, linkIdOf, linkMemory, linkNodes, reconcileLinks, seedNodes, unlinkInput } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
 
 async function setup() {
@@ -87,7 +87,8 @@ describe('the arrows follow the document\'s links, whoever wrote them', () => {
     expect((arrow as unknown as { startBinding: { elementId: string } }).startBinding.elementId).toBe(maya.id)
     expect((arrow as unknown as { endBinding: { elementId: string } }).endBinding.elementId).toBe(node('storyboard').id)
     // An inputs chip's × removes it from the document: the arrow goes.
-    await updateDoc(s, (d) => { delete d.links[id] }, 'unlink ref from storyboard')
+    await unlinkInput(s, id)
+    expect(doc().links[id]).toBeUndefined()
     expect(apply().erase).toEqual([arrow.id])
     expect(a.elements().some((e) => linkIdOf(e) === id)).toBe(false)
     // The canvas's own delete unlinks; its undo links again (not an erase).

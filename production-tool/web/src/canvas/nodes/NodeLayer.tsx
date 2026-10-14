@@ -11,11 +11,12 @@ import { RouterContext, useDoc, useServices } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
+import type { LinkEndpoint } from '../../contracts/types'
 import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
-import { cardOf, CARD_KINDS, createNode, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import './nodes.css'
 
@@ -35,6 +36,9 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const router = useContext(RouterContext)
   const mode = useSyncExternalStore(canvasActions.subscribe, () => canvasActions.mode())
   const [drag, setDrag] = useState<Drag | null>(null)
+  // "+ Link input" (3.16): the Link tool with a fixed target; the person clicks what feeds it. `at`: the pointer.
+  const [into, setInto] = useState<{ el: CanvasElement; at: Pt | null } | null>(null)
+  const intoNext = useRef<CanvasElement | null>(null)
   const [refusal, setRefusal] = useState<{ at: Local; text: string } | null>(null)
   // Dropped on empty canvas: the kinds that can take this link (ui-behaviour 3.4 Dropping a link).
   const [picker, setPicker] = useState<{ from: CanvasElement; at: Local; scene: Pt; kinds: CardKind[] } | null>(null)
@@ -181,6 +185,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
 
   const cancel = useCallback(() => {
     setDrag(null)
+    setInto(null)
     setPicker(null)
     canvasActions.setMode(null)
   }, [])
@@ -195,6 +200,14 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       was = now
       if (now !== 'link') {
         setDrag((d) => (d?.by === 'tool' ? null : d))
+        setInto(null)
+        return
+      }
+      const fixed = intoNext.current
+      intoNext.current = null
+      if (fixed) {
+        setDrag(null)
+        setInto({ el: fixed, at: null })
         return
       }
       const sel = canvas.view().selectedIds.map((id) => canvas.elements().find((e) => e.id === id)).filter((e): e is CanvasElement => !!e && !!endOf(e, services.doc.get()))
@@ -203,11 +216,25 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvas])
 
+  // "+ Link input" from a node's inputs strip or its button here: the Link tool, into that node.
+  const linkInto = useCallback((el: CanvasElement) => {
+    intoNext.current = el
+    setPicker(null)
+    if (canvasActions.mode() === 'link') canvasActions.setMode(null)
+    canvasActions.setMode('link')
+  }, [])
+  useEffect(() => canvasActions.register({
+    linkInto: (node) => {
+      const el = elementOfEnd(canvas.elements(), services.doc.get(), node as LinkEndpoint)
+      if (el) linkInto(el)
+    },
+  }), [canvas, services, linkInto])
+
   // L turns the Link tool on and off; Esc stops a link drag, the Link tool and the picker.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (drag || picker || canvasActions.mode() === 'link') {
+        if (drag || into || picker || canvasActions.mode() === 'link') {
           e.preventDefault()
           cancel()
         }
@@ -225,7 +252,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [drag, picker, cancel])
+  }, [drag, into, picker, cancel])
 
   const writeLink = (from: CanvasElement, to: CanvasElement, at: Local) =>
     linkNodes(canvas, services.doc.get(), from, to, (link) => updateDoc(services.doc, (d) => { d.links[link.id] = link }, `link ${link.from.kind} to ${link.to.kind}`).then(() => {}))
@@ -267,6 +294,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     setDrag({ from, a: portOf(from), b: hostLocal(e.clientX, e.clientY), at: fromClient(e.clientX, e.clientY), by: 'port' })
   }
   const follow = (e: React.PointerEvent) => {
+    if (into) setInto({ ...into, at: fromClient(e.clientX, e.clientY) })
     if (drag) setDrag({ ...drag, b: hostLocal(e.clientX, e.clientY), at: fromClient(e.clientX, e.clientY) })
   }
   const endLink = (e: React.PointerEvent) => {
@@ -282,6 +310,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     e.stopPropagation()
     if (picker) return setPicker(null)
     const el = endAt(fromClient(e.clientX, e.clientY))
+    if (into) {
+      // Linking into a fixed node: the click picks what feeds it.
+      if (!el || el.id === into.el.id) return
+      void writeLink(el, into.el, hostLocal(e.clientX, e.clientY)).then((ok) => { if (ok) cancel() })
+      return
+    }
     if (!drag) {
       if (!el) return
       const end = endOf(el, services.doc.get())
@@ -319,10 +353,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const nodes = els.filter((e) => cardOf(e))
   // While a link is being made, compatible targets glow and the others dim (pictures and sketch areas
   // under a box drawn over them), the one under the pointer with its reason.
-  const source = drag?.from ?? null
+  // The fixed end: the source being linked from, or the node being linked into ("+ Link input").
+  const source = drag?.from ?? into?.el ?? null
   const ends = source ? els.filter((e) => e.id !== source.id && endOf(e, doc)) : []
-  const checks = new Map(ends.map((n) => [n.id, linkCheck(els, doc, source!, n)] as const))
-  const hover = drag?.at ? endAt(drag.at) : undefined
+  const checks = new Map(ends.map((n) => [n.id, into && !drag ? linkCheck(els, doc, n, into.el) : linkCheck(els, doc, source!, n)] as const))
+  const pointerAt = drag?.at ?? into?.at ?? null
+  const hover = pointerAt ? endAt(pointerAt) : undefined
   // A selected picture or sketch area gets a port too (single selection).
   const lone = view.selectedIds.length === 1 ? els.find((e) => e.id === view.selectedIds[0] && !cardOf(e)) : undefined
   const lonePort = lone && mode !== 'link' && endOf(lone, doc) ? lone : undefined
@@ -342,6 +378,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
             style={{ left: p.x, top: p.y, width: e.width, height: e.height, transform: `scale(${view.zoom})` }}>
             <NodeCard kind={c.kind} id={c.id} onOpen={() => open(c.kind, c.id)} />
             {fresh.has(e.id) && <span className="nl-new">New</span>}
+            {on && !linking && <button type="button" className="nl-linkin" style={{ top: e.height + 10 }} title="Link something into this node (a picture, a script…)"
+              onPointerDown={(ev) => ev.stopPropagation()} onClick={() => linkInto(e)}>+ Link input</button>}
             {on && !linking && <span className="nl-port" role="button" aria-label={`Link from this ${c.kind}`} title="Drag to link (L)"
               style={{ left: e.width - 16, top: e.height / 2 }}
               onPointerDown={(ev) => startLink(e, ev)} onPointerMove={follow} onPointerUp={endLink} />}
@@ -371,15 +409,18 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const a = portOf(drag.from)
         return <svg className="nl-drag" aria-hidden="true"><line x1={a.x} y1={a.y} x2={drag.b.x} y2={drag.b.y} /></svg>
       })()}
-      {drag && hover && hoverCheck && (
-        <span className={`nl-tip ${hoverCheck.ok ? 'ok' : ''}`} role="status" style={{ left: drag.b.x, top: drag.b.y }}>
-          {hoverCheck.ok ? `${drag.by === 'port' ? 'Drop' : 'Click'} to link · ${hoverCheck.docRole}` : hoverCheck.reason}
-        </span>
-      )}
+      {pointerAt && hover && hoverCheck && (() => {
+        const p = toLocal(pointerAt.x, pointerAt.y)
+        return (
+          <span className={`nl-tip ${hoverCheck.ok ? 'ok' : ''}`} role="status" style={{ left: p.x, top: p.y }}>
+            {hoverCheck.ok ? `${drag?.by === 'port' ? 'Drop' : 'Click'} to link · ${hoverCheck.docRole}` : hoverCheck.reason}
+          </span>
+        )
+      })()}
       {linking && (
         <div className="nl-hint" role="status">
           <b>Link</b>
-          <span>{source ? `Click what this ${word(source)} feeds, or empty canvas for a new node` : 'Click the node or named picture to link from'}</span>
+          <span>{into && !drag ? `Click what feeds this ${word(into.el)}: a named picture, a script, a storyboard` : source ? `Click what this ${word(source)} feeds, or empty canvas for a new node` : 'Click the node or named picture to link from'}</span>
           <span className="nl-key">Esc cancels</span>
         </div>
       )}
