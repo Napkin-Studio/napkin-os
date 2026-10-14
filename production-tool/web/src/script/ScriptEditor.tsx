@@ -55,6 +55,7 @@ import type { MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
+import { PromptStart } from '../ui/prompt/PromptStart'
 
 type Doc = ProductionDocument
 type Focus = { key: string; editor: Editor | null } | null
@@ -335,7 +336,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
           mentions={mentions} say={say} onError={setError} disabled={!!planning} onRemove={removeItem} />
       ) : <div className="sp-rows">
-        {empty && !phone && <EmptyScript store={store} scriptId={scriptId} chain={chain} setActive={setActive} />}
+        {empty && !phone && <PromptStart kind="script" nodeId={scriptId} place="editor" />}
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
             current={current} active={active} setCurrent={setCurrent} setActive={setActive} mentions={mentions} drafts={drafts} whyOf={whyOf}
@@ -748,27 +749,6 @@ function ElementBar({ focus, composed, store, chain, onError, say }: { focus: Fo
           onMouseDown={(e) => e.preventDefault()} onClick={x.act}>{x.label}</button>
       ))}
       {next && <span className="faint se-hint">Tab for {next === 'direction' ? 'Direction' : next[0].toUpperCase() + next.slice(1)}</span>}
-    </div>
-  )
-}
-
-/** An empty script: one line to write the idea in, or a script to paste. */
-function EmptyScript({ store, scriptId, chain, setActive }: { store: ModelStore; scriptId: string; chain: CaretChain; setActive: (k: string | null) => void }) {
-  const doc = useDoc()
-  const first = Object.values(doc.scenes).filter((s) => s.script_id === scriptId).sort((a, b) => (a.rank < b.rank ? -1 : 1))[0]
-  return (
-    <div className="se-emptyline">
-      <button className="sp-placeholder" onClick={() => {
-        if (first) {
-          setActive(caretKey('scene', first.id))
-          chain.focus(caretKey('scene', first.id), 'start')
-          return
-        }
-        void addScene(store, scriptId).then((id) => {
-          setActive(caretKey('scene', id))
-          chain.focus(caretKey('scene', id), 'start')
-        })
-      }}>Paste a script, or write the idea in a line.</button>
     </div>
   )
 }

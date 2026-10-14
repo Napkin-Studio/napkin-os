@@ -9,10 +9,12 @@ import { AgentFigure } from '../../ui/agents/AgentFigure'
 import { NodeIcon } from '../../ui/chrome/Bar'
 import { nodeTitle } from '../../ui/chrome/panels'
 import { NapkinLoader } from '../../ui/loader/NapkinLoader'
+import { PromptStart, type PromptStartProps } from '../../ui/prompt/PromptStart'
 
 export const PRODUCTION_CARD_CHROME: CardChrome = {
   icon: (kind) => createElement(NodeIcon, { kind }),
   title: nodeTitle,
   loader: (work) => createElement(NapkinLoader, { work, size: 16 }),
   agent: (agent, working) => createElement(AgentFigure, { agent, size: 24, decorative: true, ...(working ? { state: 'working' as const } : {}) }),
+  ...{ PromptStart: (p: PromptStartProps) => createElement(PromptStart, p) }, // an empty card's start (features/prompt-start.clan; canvas-nodes' slot)
 }

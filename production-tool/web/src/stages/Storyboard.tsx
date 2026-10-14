@@ -48,6 +48,7 @@ import { applyClipLine, applyFrameEditStep, cameraDiff, cameraLabel, changeFrame
 import { ImageEditor } from './ImageEditor'
 import { ScopeLine } from './InputsStrip'
 import './storyboard.css'
+import { PromptStart } from '../ui/prompt/PromptStart'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -180,7 +181,7 @@ export function Storyboard() {
         {!shots.length && !planJob && (
           <div className="sb-empty pt-card">
             <div className="row" style={{ gap: 10 }}><AgentFigure agent="dex" size={28} decorative /><b>No shots yet</b><span className="pt-mono">{sayer('dex')}</span></div>
-            <p>Write the script, then Plan shots. I plan one shot per beat, with its camera, and draw a frame for each.</p>
+            {sb && <PromptStart kind="storyboard" nodeId={sb.id} place="editor" />}
             <div className="row" style={{ justifyContent: 'flex-end' }}>
               <button className="btn" disabled={!clan || !script} onClick={() => openScript()}>Open script</button>
             </div>
