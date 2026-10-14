@@ -49,8 +49,10 @@ export interface Box {
   h: number
 }
 
-/** How near a corner (screen pixels) a press takes its handle. */
-export const HANDLE_PX = 8
+/** The handles sit this far (screen pixels) outside the box's corners, where the renderer draws them. */
+export const HANDLE_PAD = 6
+/** How near a handle's centre (screen pixels) a press takes it. */
+export const HANDLE_PX = 7
 /** Kinds the handles never scale: their size is the card's or the board's, or they follow their ends. */
 const UNSCALED = new Set(['node', 'board', 'link'])
 
@@ -224,8 +226,9 @@ export class SelectTool {
     const f = this.frame()
     if (!f?.scalable) return null
     const reach = HANDLE_PX / zoom
+    const d = HANDLE_PAD / zoom
     const { x, y, w, h } = f.box
-    const corners: [Corner, number, number][] = [['nw', x, y], ['ne', x + w, y], ['sw', x, y + h], ['se', x + w, y + h]]
+    const corners: [Corner, number, number][] = [['nw', x - d, y - d], ['ne', x + w + d, y - d], ['sw', x - d, y + h + d], ['se', x + w + d, y + h + d]]
     return corners.find(([, cx, cy]) => Math.abs(p.x - cx) <= reach && Math.abs(p.y - cy) <= reach)?.[0] ?? null
   }
 

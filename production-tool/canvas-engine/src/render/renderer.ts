@@ -328,6 +328,7 @@ export class Renderer {
   /** The selection's frame: a dashed group box (1.5 px, 6 px out) or a plain one, and white corner handles. */
   private drawFrame(ctx: DrawContext, f: SelectionFrame, cam: Camera) {
     const k = 1 / cam.zoom
+    // Where the select tool takes the handles (HANDLE_PAD).
     const pad = 6 * k
     const { x, y, w, h } = f.box
     ctx.strokeStyle = FRAME_COLOUR

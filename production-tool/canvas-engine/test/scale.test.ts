@@ -35,19 +35,21 @@ describe('corner handles', () => {
     const { tool } = setup([shape('a', 0, 0, 100, 50), shape('b', 200, 100, 100, 100), node])
     tool.set(['a', 'b'])
     expect(tool.frame()).toMatchObject({ box: { x: 0, y: 0, w: 300, h: 200 }, scalable: true })
-    expect(tool.handleAt({ x: 302, y: 199 }, 1)).toBe('se')
-    expect(tool.handleAt({ x: 0, y: 0 }, 1)).toBe('nw')
+    expect(tool.handleAt({ x: 304, y: 209 }, 1)).toBe('se')
+    expect(tool.handleAt({ x: -6, y: -6 }, 1)).toBe('nw')
+    // Inside the box is the box (a move), not a handle.
+    expect(tool.handleAt({ x: 3, y: 3 }, 1)).toBeNull()
     expect(tool.handleAt({ x: 150, y: 100 }, 1)).toBeNull()
     tool.set(['a', 'n'])
     expect(tool.frame()!.scalable).toBe(false)
-    expect(tool.handleAt({ x: 0, y: 0 }, 1)).toBeNull()
+    expect(tool.handleAt({ x: -6, y: -6 }, 1)).toBeNull()
   })
 
   it('dragging a corner previews without writing, then scales round the opposite corner as one step', () => {
     const { scene, tool, steps, updates } = setup([shape('a', 0, 0, 100, 50), shape('b', 200, 100, 100, 100)])
     tool.set(['a', 'b'])
     const before = updates()
-    tool.press({ x: 300, y: 200 })
+    tool.press({ x: 306, y: 206 })
     tool.drag({ x: 450, y: 260 })
     expect(tool.scaling).toMatchObject({ ox: 0, oy: 0, s: 1.5 })
     expect(updates()).toBe(before)
@@ -62,7 +64,7 @@ describe('corner handles', () => {
   it('the north-west corner scales round the south-east one', () => {
     const { scene, tool } = setup([shape('a', 100, 100, 100, 100)])
     tool.set(['a'])
-    tool.press({ x: 100, y: 100 })
+    tool.press({ x: 94, y: 94 })
     tool.release({ x: 150, y: 150 })
     expect(scene.get('a')).toMatchObject({ x: 150, y: 150, w: 50, h: 50 })
   })
@@ -71,13 +73,13 @@ describe('corner handles', () => {
     const { scene, tool } = setup([shape('a', 0, 0, 50, 50, { groupIds: ['g'] }), shape('b', 50, 50, 50, 50, { groupIds: ['g'] })])
     tool.press({ x: 10, y: 10 })
     tool.release({ x: 10, y: 10 })
-    tool.press({ x: 100, y: 100 })
+    tool.press({ x: 106, y: 106 })
     tool.release({ x: 200, y: 200 })
     expect(scene.get('b')).toMatchObject({ x: 100, y: 100, w: 100, h: 100 })
   })
 
   it('a sketch area keeps its ratio from every corner, whichever way the pointer goes', () => {
-    for (const [corner, from] of [['se', { x: 160, y: 90 }], ['nw', { x: 0, y: 0 }], ['ne', { x: 160, y: 0 }], ['sw', { x: 0, y: 90 }]] as const) {
+    for (const [corner, from] of [['se', { x: 166, y: 96 }], ['nw', { x: -6, y: -6 }], ['ne', { x: 166, y: -6 }], ['sw', { x: -6, y: 96 }]] as const) {
       const { scene, tool } = setup([area('s', 0, 0, 160, 90, '16:9')])
       tool.set(['s'])
       expect(tool.handleAt(from, 1)).toBe(corner)
@@ -93,7 +95,7 @@ describe('corner handles', () => {
   it('an area with no ratio keeps the shape it had when the drag began', () => {
     const { scene, tool } = setup([area('s', 0, 0, 120, 100)])
     tool.set(['s'])
-    tool.press({ x: 120, y: 100 })
+    tool.press({ x: 126, y: 106 })
     tool.release({ x: 300, y: 120 })
     const r = scene.get('s')!
     expect(r.w / r.h).toBeCloseTo(1.2, 9)
@@ -102,7 +104,7 @@ describe('corner handles', () => {
   it('locked elements are not scaled; a tiny drag never collapses the box', () => {
     const { scene, tool } = setup([shape('a', 0, 0, 100, 100), shape('l', 100, 100, 100, 100, { locked: true })])
     tool.set(['a', 'l'])
-    tool.press({ x: 200, y: 200 })
+    tool.press({ x: 206, y: 206 })
     tool.release({ x: -500, y: -500 })
     expect(scene.get('l')).toMatchObject({ x: 100, y: 100, w: 100, h: 100 })
     expect(scene.get('a')!.w).toBeGreaterThan(0)
@@ -114,7 +116,7 @@ describe('corner handles', () => {
     const { scene, tool } = setup([])
     scene.seed([s], { s: pts })
     tool.set(['s'])
-    tool.press({ x: 40, y: 20 })
+    tool.press({ x: 46, y: 26 })
     tool.release({ x: 80, y: 40 })
     expect(scene.get('s')).toMatchObject({ w: 80, h: 40 })
     expect(scene.points('s')).toBe(pts)
