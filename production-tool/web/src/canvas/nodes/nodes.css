@@ -6,7 +6,8 @@
 
 .node-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .node-layer .bl-cardbox { position: absolute; transform-origin: 0 0; pointer-events: none; }
-.node-layer .bl-card { pointer-events: none; }
+.node-layer .bl-card { pointer-events: none; left: 0; right: 0; top: 0; }
+/* The node element is the card itself; its board (a real frame) gives the margin round it. */
 .node-layer .bl-card button, .node-layer .nl-port { pointer-events: auto; }
 .node-layer .bl-cardbox.selected .bl-card { outline: 2px solid var(--tool); outline-offset: 2px; }
 .node-layer .nl-port {
@@ -21,7 +22,7 @@
 }
 
 :where(.node-layer) :where(.bl-card) {
-  position: absolute; left: 16px; right: 16px; top: 22px; box-sizing: border-box;
+  position: absolute; left: 0; right: 0; top: 0; box-sizing: border-box;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft);
   padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; color: var(--ink);
 }

@@ -40,6 +40,7 @@ export interface DrawContext {
   restore(): void
   translate(x: number, y: number): void
   fillRect(x: number, y: number, w: number, h: number): void
+  clearRect?(x: number, y: number, w: number, h: number): void
   strokeRect(x: number, y: number, w: number, h: number): void
   fillText(text: string, x: number, y: number): void
   beginPath(): void
@@ -105,6 +106,34 @@ export function liveOutline(points: readonly { x: number; y: number; pressure: n
   return getStroke(points.map((p) => [p.x, p.y, p.pressure]), { size, thinning: 0.6, smoothing: 0.5, streamline: 0.4, simulatePressure: false, last })
 }
 
+/**
+ * How boards look, from the host's theme tokens (the web chrome's --line, --card, --canvas-bg):
+ * a rounded frame with a soft fill and its title in a chip on the top edge. Null keeps the plain
+ * outline with the title above it.
+ */
+export interface BoardLook {
+  fill: string
+  stroke: string
+  /** The stroke of the current board (the one the rail last jumped to). */
+  current: string
+  radius: number
+  title: string
+  /** The chip behind the title: the canvas's background, so the frame line breaks under it. */
+  titleBg: string
+}
+
+/** How bound links look, from the host's tokens: solid ink, lit in the tool colour, the role in a pill. */
+export interface LinkLook {
+  stroke: string
+  lit: string
+  /** The role pill: its text, fill and border. */
+  label: string
+  labelBg: string
+  labelLine: string
+  /** Roles written on the line (mock Main writes "drives" only). */
+  roles: readonly string[]
+}
+
 export class Renderer {
   private readonly scene: SceneStore
   private readonly host: RenderHost
@@ -116,6 +145,9 @@ export class Renderer {
   selected = new Set<string>()
   /** A move being dragged (select tool): drawn offset, never written until release. */
   moving: { ids: ReadonlySet<string>; dx: number; dy: number } | null = null
+  boardLook: BoardLook | null = null
+  linkLook: LinkLook | null = null
+  currentBoard: string | null = null
 
   constructor(scene: SceneStore, host: RenderHost) {
     this.scene = scene
@@ -205,8 +237,12 @@ export class Renderer {
     const t0 = performance.now()
     const stats: DrawStats = { drawn: 0, culled: 0, pathsBuilt: 0, ms: 0 }
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.fillStyle = background
-    ctx.fillRect(0, 0, viewport.width * dpr, viewport.height * dpr)
+    // 'transparent': the host's own background (the chrome's dot grid) shows through.
+    if (background === 'transparent' && ctx.clearRect) ctx.clearRect(0, 0, viewport.width * dpr, viewport.height * dpr)
+    else {
+      ctx.fillStyle = background
+      ctx.fillRect(0, 0, viewport.width * dpr, viewport.height * dpr)
+    }
     const s = dpr * cam.zoom
     ctx.setTransform(s, 0, 0, s, s * cam.scrollX, s * cam.scrollY)
     const visible = new Set(this.tree.search(Renderer.view(cam, viewport)).map((b) => b.id))
@@ -242,6 +278,52 @@ export class Renderer {
     return stats
   }
 
+  /** A board in the host's look: rounded, softly filled, its title in a chip on the top edge. */
+  private drawBoard(ctx: DrawContext, r: ElementRecord, cam: Camera, look: BoardLook) {
+    const x = Math.min(r.x, r.x + r.w)
+    const y = Math.min(r.y, r.y + r.h)
+    const w = Math.abs(r.w)
+    const h = Math.abs(r.h)
+    const k = Math.min(look.radius, w / 2, h / 2)
+    const q = Math.PI / 2
+    ctx.beginPath()
+    ctx.moveTo(x + k, y)
+    ctx.lineTo(x + w - k, y)
+    ctx.ellipse(x + w - k, y + k, k, k, 0, -q, 0)
+    ctx.lineTo(x + w, y + h - k)
+    ctx.ellipse(x + w - k, y + h - k, k, k, 0, 0, q)
+    ctx.lineTo(x + k, y + h)
+    ctx.ellipse(x + k, y + h - k, k, k, 0, q, 2 * q)
+    ctx.lineTo(x, y + k)
+    ctx.ellipse(x + k, y + k, k, k, 0, 2 * q, 3 * q)
+    ctx.closePath()
+    ctx.fillStyle = look.fill
+    ctx.fill()
+    const current = this.currentBoard === r.id
+    ctx.strokeStyle = current ? look.current : look.stroke
+    ctx.lineWidth = current ? 2 : 1
+    ctx.stroke()
+    const empty = !this.occupied.has(r.id)
+    if (empty) {
+      const hint = dropHint(typeof r.props.purpose === 'string' ? r.props.purpose : '')
+      if (hint && cam.zoom > 0.25) {
+        ctx.fillStyle = '#a8a397'
+        ctx.font = '13px Geist, sans-serif'
+        ctx.fillText(hint, x + 16, y + h / 2)
+      }
+    }
+    const name = typeof r.props.name === 'string' ? r.props.name : ''
+    if (name && cam.zoom > 0.08) {
+      // Scene units: the title scales with the board, as the chrome's frames do.
+      const tw = name.length * 7 + 16
+      ctx.fillStyle = look.titleBg
+      ctx.fillRect(x + 14, y - 10, tw, 20)
+      ctx.fillStyle = current ? look.current : look.title
+      ctx.font = '600 12px Geist, sans-serif'
+      ctx.fillText(name, x + 22, y + 4)
+    }
+  }
+
   private drawOne(ctx: DrawContext, r: ElementRecord, cam: Camera, level: Level, stats: DrawStats) {
     const stroke = r.style.stroke ?? DEFAULT_INK
     switch (r.kind) {
@@ -269,6 +351,7 @@ export class Renderer {
       case 'board':
       case 'frame':
       case 'sketch': {
+        if (r.kind === 'board' && this.boardLook) return this.drawBoard(ctx, r, cam, this.boardLook)
         if (r.kind === 'sketch' || r.style.fill) {
           ctx.fillStyle = r.style.fill ?? '#ffffff'
           ctx.fillRect(r.x, r.y, r.w, r.h)
@@ -311,8 +394,9 @@ export class Renderer {
           // A link runs between its ends' edges, wherever they are now; quiet until an end is selected.
           const { a, b } = linkSegment(this.moved(ends.from), this.moved(ends.to))
           const lit = this.selected.has(r.id) || this.selected.has(ends.from.id) || this.selected.has(ends.to.id)
-          ctx.globalAlpha = lit ? 1 : 0.3
-          ctx.strokeStyle = '#4a7fd4'
+          const look = this.linkLook
+          ctx.globalAlpha = lit || look ? 1 : 0.3
+          ctx.strokeStyle = look ? (lit ? look.lit : look.stroke) : '#4a7fd4'
           ctx.lineWidth = (lit ? 2 : 1.5) / cam.zoom
           ctx.beginPath()
           ctx.moveTo(a.x, a.y)
@@ -324,6 +408,30 @@ export class Renderer {
           ctx.lineTo(b.x - head * Math.cos(ang + 0.45), b.y - head * Math.sin(ang + 0.45))
           ctx.stroke()
           const role = typeof r.props.role === 'string' ? r.props.role : ''
+          if (look) {
+            if (role && look.roles.includes(role) && cam.zoom > 0.2) {
+              // A pill beside the line's middle, in scene units (it scales with the canvas, as Main's does).
+              const w = role.length * 6.5 + 16
+              const x = (a.x + b.x) / 2 + 10
+              const y = (a.y + b.y) / 2 - 10
+              ctx.fillStyle = look.labelBg
+              ctx.strokeStyle = look.labelLine
+              ctx.lineWidth = 1
+              ctx.beginPath()
+              ctx.moveTo(x + 10, y)
+              ctx.lineTo(x + w - 10, y)
+              ctx.ellipse(x + w - 10, y + 10, 10, 10, 0, -Math.PI / 2, Math.PI / 2)
+              ctx.lineTo(x + 10, y + 20)
+              ctx.ellipse(x + 10, y + 10, 10, 10, 0, Math.PI / 2, Math.PI * 1.5)
+              ctx.closePath()
+              ctx.fill()
+              ctx.stroke()
+              ctx.fillStyle = look.label
+              ctx.font = '11px Geist, sans-serif'
+              ctx.fillText(role, x + 8, y + 14)
+            }
+            return
+          }
           if (role && cam.zoom > 0.2) {
             ctx.fillStyle = '#4a7fd4'
             ctx.font = `${12 / cam.zoom}px Geist, sans-serif`

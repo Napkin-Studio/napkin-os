@@ -14,6 +14,10 @@ import { scriptRoute } from '../app/route'
 import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
 import { boardFrames, boardRows, type BoardRow } from '../canvas/chrome/boards'
 import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
+import { PRODUCTION_CARD_CHROME } from '../canvas/chrome/cardChrome'
+import { cardOf } from '../canvas/nodes/nodes'
+import { CardChromeContext } from '../canvas/nodes/cardChrome'
+import { boardKey, boardsByRank, isBoard, jumpTo } from '../canvas/boards/boards'
 import type { CanvasChrome } from '../canvas/chrome/controls'
 import { usePanels } from '../ui/chrome/panels'
 import { AssetsDrawer } from '../ui/assets/AssetsDrawer'
@@ -63,7 +67,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const { runner, doc: docStore, ui: uiStore, project } = services
   const router = useRouter()
   const panels = usePanels()
-  const [chrome] = useState<CanvasChrome | null>(null)
+  const [chrome, setChrome] = useState<CanvasChrome | null>(null)
   const [board, setBoard] = useState<string | null>(null)
   const narrow = useMedia(TABLET)
   const doc = useDoc()
@@ -165,7 +169,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   }, [vs, canvas])
 
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
-  const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id)), [els, vs])
+  // Nodes and boards (our own engine) have their own handles: the floating toolbar is for marks and pictures.
+  const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id) && !cardOf(e) && !isBoard(e)), [els, vs])
   const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
@@ -257,9 +262,24 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const hasMarks = els.some((e) => isUserDrawing(e) || isText(e) || !!imageOf(e))
   const showHint = !ui.hintDismissed && !hasMarks && Object.keys(doc.refs).length === 0
 
+  // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
+  // canvas-nodes): the rail jumps to the frames, and nothing is drawn over the canvas for them.
+  const own = canvas?.engine === 'own'
+  // The rail's left edge: what a jump keeps clear (the rail covers the left 240px; none when narrow).
+  const railInset = narrow || panels.assets ? 0 : 240
   // The board rail and + Node (ui-behaviour 3.2, 3.3): a reference board fits the canvas to its
   // pictures; Script, Storyboard and Video open their editors over the canvas.
-  const rows = useMemo(() => boardRows(doc), [doc])
+  const counts = useMemo(() => {
+    const n: Record<string, number> = {}
+    if (!own) return n
+    const boardOf = new Map(els.filter(isBoard).map((e) => [e.id, (e.customData as { id: string }).id]))
+    for (const e of els) {
+      const b = e.frameId ? boardOf.get(e.frameId) : undefined
+      if (b && imageOf(e)) n[b] = (n[b] ?? 0) + 1
+    }
+    return n
+  }, [els, own])
+  const rows = useMemo(() => boardRows(doc, own, counts), [doc, own, counts])
   const open = useCallback((editor: 'script' | 'storyboard' | 'video') => {
     if (editor === 'script') {
       const sc = mainScript(docStore.get())
@@ -272,13 +292,32 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     setBoard(row.id)
     if (row.target.kind === 'open') return open(row.target.editor)
     if (!canvas) return
+    if (own && row.target.kind === 'board') {
+      const id = row.target.id
+      jumpTo(canvas, docStore.get(), boardsByRank(docStore.get()).findIndex((b) => b.id === id), !matchMedia('(prefers-reduced-motion: reduce)').matches, railInset)
+      canvas.setCurrentBoard?.(id)
+      return
+    }
     const want = row.target.kind === 'refs' ? new Set(row.target.nodes) : new Set<string>()
     const hit = alive(canvas.elements()).filter((e) => {
       const c = cd(e)
       return want.has(e.id) || (!!c && 'id' in c && want.has(c.id)) || (row.target.kind === 'board' && c?.kind === 'board' && c.id === row.target.id)
     })
     if (hit.length) canvas.fit(hit, { zoomFactor: 0.8, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
-  }, [canvas, open])
+  }, [canvas, open, own, docStore, railInset])
+  // On our own engine the canvas takes ⌥1…⌥9 (canvas/boards/BoardLayer); the rail only shows which is current.
+  useEffect(() => {
+    if (!own || !canvas) return
+    const onKey = (e: KeyboardEvent) => {
+      const k = boardKey(e)
+      if (k === null) return
+      const b = k === 'fit' ? null : boardsByRank(docStore.get())[k]
+      setBoard(b?.id ?? null)
+      canvas.setCurrentBoard?.(b?.id ?? null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [own, canvas, docStore])
   const onNode = useCallback((kind: NewNode) => {
     if (kind === 'picture') return chrome?.setTool('image')
     if (kind === 'sketch') return chrome?.setTool('sketch')
@@ -287,6 +326,12 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const ratio = mainStoryboard(doc)?.ratio ?? '16:9'
   // ⌥0: everything, the boards drawn over the canvas included.
   const fitEverything = () => {
+    if (own && canvas) {
+      setBoard(null)
+      canvas.setCurrentBoard?.(null)
+      jumpTo(canvas, docStore.get(), 'fit', !matchMedia('(prefers-reduced-motion: reduce)').matches, railInset)
+      return
+    }
     if (!chrome) return
     if (!frames.length) return chrome.fitAll()
     const els = canvas ? alive(canvas.elements()) : []
@@ -300,7 +345,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   // The boards drawn over the canvas until art-boards makes them frames (mock Main): picture boards
   // wrap their pictures; Script, Storyboard and Video hold their node cards.
   const frames = ((): ReturnType<typeof boardFrames> => {
-    if (Object.keys(doc.boards ?? {}).length) return []
+    if (!canvas || own) return []
     const groups = rows.flatMap((r) => {
       if (r.target.kind !== 'refs') return []
       const hit = r.target.nodes.map((n) => byOwnId(els, n)).filter((e): e is El => !!e)
@@ -313,9 +358,10 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
 
   return (
     <div className="character">
+      <CardChromeContext.Provider value={PRODUCTION_CARD_CHROME}>
       <div className="canvas-wrap pt-grid" ref={wrap} style={grid}>
         {frames.length > 0 && <BoardsLayer part="frames" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
-        <CanvasMount initial={initial} onReady={setCanvas} onChange={onChange} theme={theme} />
+        <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <div className="overlay-layer">
           <FlowArrows els={els} toView={toView} />
@@ -367,10 +413,11 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
         {panels.assets
           ? <AssetsDrawer ctrl={ctrl} onClose={() => panels.toggle('assets')} onBoards={() => { panels.toggle('assets'); chrome?.fitAll() }}
               onPicture={() => chrome?.setTool('image')} onCanvas={els.map((e) => imageOf(e)?.asset).filter((x): x is string => !!x)} />
-          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow={narrow} />}
+          : <BoardRail rows={rows} current={board} onPick={pickBoard} onFit={fitEverything} narrow={narrow} keys={!own} />}
         <CanvasToolbar chrome={chrome} ratio={ratio} onNode={onNode} vertical={narrow} />
         <ZoomPill chrome={chrome} touch={narrow} />
       </div>
+      </CardChromeContext.Provider>
     </div>
   )
 }

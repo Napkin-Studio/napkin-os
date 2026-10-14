@@ -3,13 +3,17 @@
 // and takes the rail's ⌥1…⌥9 and ⌥0 jumps onto the real frames. It draws
 // nothing itself: the engine draws the frames; the rail is the chrome's.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useServices } from '../../app/context'
 import { systemUpdate } from '../../doc/store'
 import type { CanvasAdapter } from '../core/canvasAdapter'
 import { boardKey, jumpTo, seedBoards } from './boards'
 
-export function BoardLayer({ canvas }: { canvas: CanvasAdapter }) {
+export function BoardLayer({ canvas, inset = 0 }: { canvas: CanvasAdapter; inset?: number }) {
+  const keep = useRef(inset)
+  useEffect(() => {
+    keep.current = inset
+  }, [inset])
   const services = useServices()
 
   useEffect(() => {
@@ -21,14 +25,14 @@ export function BoardLayer({ canvas }: { canvas: CanvasAdapter }) {
         for (const b of seeded.boards) d.boards[b.id] = b
       }, 'create the Ad template boards').catch((e) => console.warn('could not write the boards', e))
     }
-    canvas.fit(canvas.elements(), { zoomFactor: 0.9, animate: false })
+    jumpTo(canvas, services.doc.get(), 'fit', false, keep.current)
   }, [canvas, services])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const which = boardKey(e)
       if (which === null) return
-      if (jumpTo(canvas, services.doc.get(), which, !matchMedia?.('(prefers-reduced-motion: reduce)').matches)) e.preventDefault()
+      if (jumpTo(canvas, services.doc.get(), which, !matchMedia?.('(prefers-reduced-motion: reduce)').matches, keep.current)) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

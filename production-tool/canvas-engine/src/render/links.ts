@@ -27,12 +27,22 @@ export function boundEnds(get: (id: string) => ElementRecord | undefined, r: Ele
 
 /** The segment a bound link draws: the source's output edge to the target's input edge. */
 export function linkSegment(from: ElementRecord, to: ElementRecord): { a: Pt; b: Pt } {
+  // Where the ends overlap across the line, it runs straight, through the middle of the overlap (mock Main).
+  const mid = (a0: number, a1: number, b0: number, b1: number, own: number, their: number) => {
+    const lo = Math.max(a0, b0)
+    const hi = Math.min(a1, b1)
+    return hi > lo ? [(lo + hi) / 2, (lo + hi) / 2] : [own, their]
+  }
   const below = to.y >= from.y + from.h && to.x < from.x + from.w && to.x + to.w > from.x
-  if (below) return { a: { x: from.x + from.w / 2, y: from.y + from.h }, b: { x: to.x + to.w / 2, y: to.y } }
+  if (below) {
+    const [ax, bx] = mid(from.x, from.x + from.w, to.x, to.x + to.w, from.x + from.w / 2, to.x + to.w / 2)
+    return { a: { x: ax, y: from.y + from.h }, b: { x: bx, y: to.y } }
+  }
   const right = to.x >= from.x + from.w / 2
+  const [ay, by] = mid(from.y, from.y + from.h, to.y, to.y + to.h, from.y + from.h / 2, to.y + to.h / 2)
   return right
-    ? { a: { x: from.x + from.w, y: from.y + from.h / 2 }, b: { x: to.x, y: to.y + to.h / 2 } }
-    : { a: { x: from.x, y: from.y + from.h / 2 }, b: { x: to.x + to.w, y: to.y + to.h / 2 } }
+    ? { a: { x: from.x + from.w, y: ay }, b: { x: to.x, y: by } }
+    : { a: { x: from.x, y: ay }, b: { x: to.x + to.w, y: by } }
 }
 
 /** Distance from p to the segment a-b. */

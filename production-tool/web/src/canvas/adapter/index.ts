@@ -45,6 +45,11 @@ export function engineChoice(search: string, flags?: { ownCanvas?: boolean } | n
 // Read the query when the app loads, before its router replaces the URL.
 engineChoice(globalThis.location?.search ?? '', null)
 
+/** ?engine=own in the address this page was loaded with: this person asked for the own engine now. */
+export const askedOwn = (search: string) => new URLSearchParams(search).get('engine') === 'own'
+const ASKED_OWN = askedOwn(globalThis.location?.search ?? '')
+export const askedOwnAtLoad = () => ASKED_OWN
+
 export async function loadEngine(id: EngineId): Promise<CanvasEngine> {
   if (id === 'own') return (await import('./own/engine')).ownEngine
   return (await import('./excalidraw/engine')).excalidrawEngine
@@ -60,9 +65,17 @@ export function engineOf(snapshot: CanvasSnapshot | null | undefined): EngineId 
  * writes over the other's scene (an Excalidraw project reaches the own engine only as a converted
  * copy, engine-import). The choice applies to a project with nothing drawn yet.
  */
-export function engineToMount(choice: EngineId, initial: CanvasSnapshot | null | undefined): EngineId {
+export function engineToMount(choice: EngineId, initial: CanvasSnapshot | null | undefined, asked = false): EngineId {
+  // Asked for in the address (?engine=own), an Excalidraw scene opens converted on the own engine
+  // (the OwnAdapter imports it); CanvasMount keeps the Excalidraw original beside it first.
+  if (asked && choice === 'own') return 'own'
   return initial?.elements?.length ? engineOf(initial) : choice
 }
+
+/** Is this mount turning an Excalidraw scene into an own-engine one? */
+export const converting = (mounted: EngineId, initial: CanvasSnapshot | null | undefined) =>
+  mounted === 'own' && !!initial?.elements?.length && engineOf(initial) === 'excalidraw'
+
 
 /** The scene as a file for the export zip, from the saved snapshot, without mounting an engine. */
 export async function canvasExportFile(snapshot: CanvasSnapshot | undefined): Promise<CanvasExportFile> {

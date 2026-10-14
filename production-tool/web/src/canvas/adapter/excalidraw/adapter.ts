@@ -21,6 +21,8 @@ import { edgeAnchors } from '../../core/anchors'
 import { sceneDiff } from '../../core/sceneDiff'
 import { hexOf } from '../../../lib/hash'
 import type { FileData, FileId, FileMap, SceneElement } from './types'
+import { excalidrawChrome } from './chrome'
+import type { CanvasChrome } from '../../chrome/controls'
 
 type El = SceneElement
 
@@ -71,6 +73,11 @@ export class ExcalidrawAdapter implements CanvasAdapter {
   constructor(api: ExcalidrawImperativeAPI, lifetime: ExcalidrawLifetime | null = null) {
     this.api = api
     this.lifetime = lifetime
+  }
+
+  /** The tool bar's and zoom pill's controls on Excalidraw. */
+  chrome(): CanvasChrome {
+    return excalidrawChrome(this.api)
   }
 
   // ── reads and writes ──

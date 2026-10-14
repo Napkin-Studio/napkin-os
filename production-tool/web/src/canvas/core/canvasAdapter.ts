@@ -14,6 +14,7 @@
 
 import type { LinkRole } from './links'
 import type { NodeKind } from './nodes'
+import type { CanvasChrome } from '../chrome/controls'
 
 /**
  * An element as the tool reads it, whatever engine holds it. Both engines' elements satisfy it
@@ -398,6 +399,10 @@ export interface CanvasAdapter {
   /** Is the person in the middle of something: drawing, dragging, typing, another tool? */
   isBusy(): boolean
   setActiveTool(tool: ActiveToolSpec): void
+  /** The tool bar's and zoom pill's controls on this engine (canvas/chrome/controls.ts). */
+  chrome?(): CanvasChrome
+  /** The board the rail last jumped to (a document board id), drawn as current; null for none. */
+  setCurrentBoard?(boardId: string | null): void
   exportPng(els: readonly CanvasElement[], opts: ExportPngOptions): Promise<Blob>
   /** An SVG document of these elements, pictures embedded. */
   exportSvg(els: readonly CanvasElement[], opts: ExportPngOptions): Promise<string>

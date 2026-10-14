@@ -12,7 +12,7 @@
 
 import * as Y from 'yjs'
 import {
-  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type InkTool, type Intent, type Renderer,
+  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, recordsFromElements, SceneStore, SceneUndo, SelectTool, type BoardLook, type InkTool, type LinkLook, type Intent, type Renderer,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -24,6 +24,15 @@ import { edgeAnchors } from '../../core/anchors'
 import { elementBounds } from '../../core/geometry'
 import { sceneDiff } from '../../core/sceneDiff'
 import { drawElements, svgOf, type Ctx2D } from './draw'
+import { ownChrome } from './chrome'
+import type { CanvasChrome } from '../../chrome/controls'
+
+/** What the canvas sits on and how boards look, in a theme (engine.ts reads them from the chrome's tokens). */
+export interface Surface {
+  background: string
+  board: BoardLook | null
+  link: LinkLook | null
+}
 
 /** A surface to export onto: a 2D context and how to read it back as a PNG. */
 export interface Raster {
@@ -391,6 +400,28 @@ export class OwnAdapter implements CanvasAdapter {
   }
 
   /** The tool's names (Excalidraw's, as the stage passes them) onto the router and the ink tools. */
+  /** The tool in use (the chrome's tool bar reads it). */
+  activeTool(): ActiveToolSpec {
+    return this.tool
+  }
+
+  /** The tool bar's and zoom pill's controls on this engine. */
+  chrome(): CanvasChrome {
+    return ownChrome(this)
+  }
+
+  /** The board the rail last jumped to (a document board id), drawn in the tool colour. */
+  setCurrentBoard(boardId: string | null) {
+    const el = boardId ? this.elements().find((e) => (e.customData as { kind?: string; id?: string } | undefined)?.kind === 'board' && (e.customData as { id?: string }).id === boardId) : undefined
+    this.currentBoard = el?.id ?? null
+    this.changed()
+  }
+
+  private currentBoard: string | null = null
+  /** The surface for a theme; null draws the plain white or near-black canvas. */
+  surfaceFor: ((theme: 'light' | 'dark') => Surface) | null = null
+  private surface: { theme: string; s: Surface } | null = null
+
   setActiveTool(tool: ActiveToolSpec) {
     this.tool = tool
     const id = tool.type === 'native' ? tool.id : ''
@@ -401,6 +432,7 @@ export class OwnAdapter implements CanvasAdapter {
       this.router.tool = 'ink'
       this.inkTool = id
     } else this.router.tool = id === 'hand' ? 'hand' : 'select'
+    this.changed()
   }
 
   private image = (sha: string) => this.decoded.get(sha)
@@ -517,7 +549,11 @@ export class OwnAdapter implements CanvasAdapter {
     if (this.renderer) {
       this.renderer.selected = this.selector.selected
       this.renderer.moving = this.selector.preview
-      this.renderer.draw(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr, this.theme === 'dark' ? '#121212' : '#ffffff')
+      if (this.surfaceFor && this.surface?.theme !== this.theme) this.surface = { theme: this.theme, s: this.surfaceFor(this.theme) }
+      this.renderer.boardLook = this.surface?.s.board ?? null
+      this.renderer.linkLook = this.surface?.s.link ?? null
+      this.renderer.currentBoard = this.currentBoard
+      this.renderer.draw(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr, this.surface?.s.background ?? (this.theme === 'dark' ? '#121212' : '#ffffff'))
       return
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0)

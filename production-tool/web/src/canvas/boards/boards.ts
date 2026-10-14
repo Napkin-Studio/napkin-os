@@ -2,9 +2,10 @@
 // Engine-neutral, through CanvasAdapter v2:
 // - seedBoards: a canvas with no board gets the Ad template's seven boards, as the
 //   document's boards[id]{title, purpose, rank} and as board frames, laid out as
-//   production-ui's overlay drew them (mock Main): the Script board wrapping the
-//   Script node, the four picture boards beside it, the Storyboard and Video
-//   boards wrapping theirs. The nodes sit in their boards (parentId).
+//   production-ui's overlay drew them (mock Main, layout.ts): the Script board
+//   wrapping the Script node, the picture boards wrapping the named pictures of
+//   their role, the Storyboard and Video boards wrapping theirs. The nodes and
+//   the pictures sit in their boards (parentId).
 // - boardKey and jumpTo: ⌥1…⌥9 fit the board at that rank, ⌥0 fits everything.
 
 import { ranksBetween } from '../../../../clan-store/src'
@@ -12,6 +13,8 @@ import type { Board, BoardPurpose, ProductionDocument } from '../../contracts/ty
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
 import { cardOf } from '../nodes/nodes'
+import type { CardKind } from '../nodes/cardChrome'
+import { adLayout, CARD_INSET, CARD_SIZE } from './layout'
 
 /** The Ad template (ui-behaviour 3.2; production-ui's boards.ts TEMPLATE). */
 export const AD_TEMPLATE: readonly { key: string; title: string; purpose: BoardPurpose }[] = [
@@ -24,10 +27,9 @@ export const AD_TEMPLATE: readonly { key: string; title: string; purpose: BoardP
   { key: 'video', title: 'Video', purpose: 'video' },
 ]
 
-const PAD = 24
-const TOP = 32
-const PICTURE = { w: 420, h: 300 }
 const GAP = 48
+/** Empty picture boards (no pictures of their role yet). */
+const PICTURE = { w: 420, h: 300 }
 
 const tagOf = (e: CanvasElement) => e.customData as { kind?: string; id?: string } | undefined
 export const isBoard = (e: CanvasElement) => !e.isDeleted && tagOf(e)?.kind === 'board'
@@ -54,25 +56,27 @@ export function seedBoards(canvas: CanvasAdapter, doc: ProductionDocument): Seed
     ? []
     : AD_TEMPLATE.map((t, i) => ({ id: newId('board'), v: 1, field_v: {}, title: t.title, purpose: t.purpose, rank: ranks[i] }))
   const list = existing.length ? existing : boards
-  const node = (kind: string) => els.find((e) => cardOf(e)?.kind === kind)
-  const around = (e: CanvasElement | undefined, fallback: { x: number; y: number; w: number; h: number }) =>
-    e ? { x: e.x - PAD, y: e.y - TOP, w: e.width + PAD * 2, h: e.height + TOP + PAD } : fallback
-  const script = around(node('script'), { x: -PAD, y: -TOP, w: 388, h: 496 })
-  const pictureAt = (i: number) => ({
-    x: script.x + script.w + GAP + (i % 2) * (PICTURE.w + GAP),
-    y: script.y + Math.floor(i / 2) * (PICTURE.h + GAP),
-    ...PICTURE,
-  })
-  const below = Math.max(script.y + script.h, pictureAt(3).y + PICTURE.h) + GAP
-  const rects: Record<BoardPurpose, { x: number; y: number; w: number; h: number } | undefined> = {
-    script,
-    character: pictureAt(0),
-    location: pictureAt(1),
-    reference: pictureAt(2),
-    product: pictureAt(3),
-    storyboard: around(node('storyboard'), { x: script.x, y: below, w: 800, h: 292 }),
-    video: around(node('video'), { x: script.x + 848, y: below, w: 428, h: 292 }),
-    sketches: undefined, brand: undefined, formats: undefined, none: undefined,
+  const layout = adLayout(els, doc)
+  const node = (kind: CardKind) => els.find((e) => cardOf(e)?.kind === kind)
+  // A node's board: the card's inset round it (canvas.css .bl-card), as Main's frames.
+  const around = (kind: CardKind) => {
+    const e = node(kind)
+    if (!e) return layout.boards[kind]
+    const below = (layout.boards[kind]?.h ?? 0) - CARD_INSET.top - CARD_SIZE[kind].h
+    return { x: e.x - CARD_INSET.x, y: e.y - CARD_INSET.top, w: e.width + CARD_INSET.x * 2, h: e.height + CARD_INSET.top + Math.max(CARD_INSET.x, below) }
+  }
+  // Picture boards wrap their pictures; one with none yet goes after the last on the top row.
+  const rects: Partial<Record<BoardPurpose, { x: number; y: number; w: number; h: number }>> = {
+    script: around('script'), storyboard: around('storyboard'), video: around('video'),
+  }
+  const top = rects.script!
+  let right = Math.max(top.x + top.w, ...(['character', 'location', 'reference', 'product'] as const).flatMap((p) => (layout.boards[p] ? [layout.boards[p]!.x + layout.boards[p]!.w] : [])))
+  for (const p of ['character', 'location', 'reference', 'product'] as const) {
+    if (layout.boards[p]) rects[p] = layout.boards[p]
+    else {
+      rects[p] = { x: right + GAP, y: top.y, ...PICTURE }
+      right += GAP + PICTURE.w
+    }
   }
   const made = list.flatMap((b): [Board, CanvasElement][] => {
     const r = rects[b.purpose]
@@ -80,13 +84,18 @@ export function seedBoards(canvas: CanvasAdapter, doc: ProductionDocument): Seed
   })
   const frames = made.map(([, f]) => f)
   const byPurpose = new Map(made.map(([b, f]) => [b.purpose, f]))
+  const homeOf = new Map<string, CanvasElement>()
+  for (const [p, pics] of layout.pictures) {
+    const f = byPurpose.get(p)
+    if (f) for (const e of pics) homeOf.set(e.id, f)
+  }
   return {
     boards,
     apply: (all) => [
       ...frames,
       ...all.map((e) => {
         const c = cardOf(e)
-        const home = c && (c.kind === 'script' || c.kind === 'storyboard' || c.kind === 'video') ? byPurpose.get(c.kind) : undefined
+        const home = c ? byPurpose.get(c.kind) : homeOf.get(e.id)
         return home ? canvas.patch(e, { frameId: home.id }) : e
       }),
     ],
@@ -104,18 +113,40 @@ export function boardKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey'
   return n === 0 ? 'fit' : n - 1
 }
 
-/** Fit the board at this rank (with what is on it), or everything. Returns false when there is no such board. */
-export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: number | 'fit', animate = true): boolean {
+/**
+ * Fit the board at this rank (with what is on it), or everything. `inset`: screen pixels on the left
+ * the chrome covers (the board rail), kept clear. Returns false when there is no such board.
+ */
+export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: number | 'fit', animate = true, inset = 0): boolean {
   const els = canvas.elements()
+  // Fit at most at 100%, centred in the part of the view right of the inset (production-ui's fitView):
+  // measure the view, then fit a box made to come out at that zoom and place.
+  const fit = (what: CanvasElement[]) => {
+    canvas.fit(what, { zoomFactor: 0.9, animate: false })
+    const z0 = canvas.view().zoom
+    const vb = canvas.visibleBounds()
+    const vw = (vb.maxX - vb.minX) * z0
+    const vh = (vb.maxY - vb.minY) * z0
+    const b = canvas.bounds(what)
+    const z = Math.min(1, 0.9 * Math.min(Math.max(1, vw - inset) / Math.max(1, b.w), vh / Math.max(1, b.h)))
+    const cx = b.minX + b.w / 2 - inset / 2 / z
+    const cy = b.minY + b.h / 2
+    const w = (0.9 * vw) / z
+    const h = (0.9 * vh) / z
+    const corner = (id: string, x: number, y: number): CanvasElement => ({ id, type: 'rectangle', x, y, width: 0, height: 0 })
+    canvas.fit([corner('__fit_a', cx - w / 2, cy - h / 2), corner('__fit_b', cx + w / 2, cy + h / 2)], { zoomFactor: 0.9, animate })
+  }
   if (which === 'fit') {
-    if (!els.length) return false
-    canvas.fit(els, { zoomFactor: 0.9, animate })
+    // Bound links run between their ends; their own boxes say nothing about where they are.
+    const placed = els.filter((e) => (e.customData as { kind?: string } | undefined)?.kind !== 'link')
+    if (!placed.length) return false
+    fit(placed)
     return true
   }
   const board = boardsByRank(doc)[which]
   const frame = board && els.find((e) => boardIdOf(e) === board.id)
   if (!frame) return false
-  canvas.fit([frame], { zoomFactor: 0.9, animate })
+  fit([frame])
   canvas.select([])
   return true
 }

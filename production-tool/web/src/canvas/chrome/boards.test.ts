@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { emptyDocument } from '../../doc/store'
 import type { Board, KeyEntry, NamedRef, ProductionDocument } from '../../contracts/types'
-import { boardFrames, boardKey, boardRows, rowLabel } from './boards'
+import { boardFrames, boardRows, rowLabel } from './boards'
+import { boardKey } from '../boards/boards'
 import { nextZoom, scrollForZoom } from './controls'
 
 const person = { id: 'p1', handle: 'shrey', tenant_id: 't1' }
@@ -26,13 +27,20 @@ describe('the board rail (ui-behaviour 3.2)', () => {
     expect(rows[0].target).toEqual({ kind: 'open', editor: 'script' })
     expect(rows[5].target).toEqual({ kind: 'open', editor: 'storyboard' })
   })
-  it('prefers the project\'s own boards, by rank', () => {
+  it('lists the project\'s own boards by rank when they are frames on the canvas', () => {
     const d = doc()
     d.boards = {
       b2: { id: 'b2', v: 1, field_v: {}, title: 'Locations', purpose: 'location', rank: 'b' } as Board,
       b1: { id: 'b1', v: 1, field_v: {}, title: 'Script', purpose: 'script', rank: 'a' } as Board,
     }
-    expect(boardRows(d).map((r) => [r.title, r.target])).toEqual([['Script', { kind: 'board', id: 'b1' }], ['Locations', { kind: 'board', id: 'b2' }]])
+    const rows = boardRows(d, true, { b2: 2 })
+    expect(rows.map((r) => [r.title, r.target])).toEqual([['Script', { kind: 'board', id: 'b1' }], ['Locations', { kind: 'board', id: 'b2' }]])
+    expect(rows.map((r) => r.count)).toEqual([undefined, 2])
+  })
+  it('keeps the template rows on a canvas without board frames (Excalidraw), whatever doc.boards holds', () => {
+    const d = doc()
+    d.boards = { b1: { id: 'b1', v: 1, field_v: {}, title: 'Script', purpose: 'script', rank: 'a' } as Board }
+    expect(boardRows(d).map((r) => r.title)).toEqual(['Script', 'Characters', 'Locations', 'References', 'Products', 'Storyboard', 'Video'])
   })
   it('jumps with ⌥1…⌥9 read from event.code, fits with ⌥0, and never while typing', () => {
     const k = (code: string, extra: Partial<KeyboardEvent> = {}, target: unknown = null) =>

@@ -5,21 +5,27 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useServices } from '../app/context'
-import { engineChoice, engineToMount, loadEngine } from './adapter'
+import { askedOwnAtLoad, converting, engineChoice, engineToMount, loadEngine } from './adapter'
+import { idbPut } from '../lib/idb'
+import type { CanvasChrome } from './chrome/controls'
 import type { CanvasAdapter, CanvasSnapshot } from './core/canvasAdapter'
 import { BoardLayer } from './boards/BoardLayer'
 import { NodeLayer } from './nodes/NodeLayer'
 
-export function CanvasMount({ initial, onReady, onChange, theme }: {
+export function CanvasMount({ initial, onReady, onChrome, onChange, theme, railInset = 0 }: {
   /** The saved scene to open with (read once, on mount). */
   initial: CanvasSnapshot | null
   onReady: (adapter: CanvasAdapter) => void
+  /** The tool bar's and zoom pill's controls on the mounted engine (canvas/chrome/controls.ts). */
+  onChrome?: (chrome: CanvasChrome) => void
   onChange: () => void
   theme: 'light' | 'dark'
+  /** Screen pixels on the left the chrome covers (the board rail): board jumps keep them clear. */
+  railInset?: number
 }) {
   const host = useRef<HTMLDivElement>(null)
   const adapter = useRef<CanvasAdapter | null>(null)
-  const { remoteConfig, clan } = useServices()
+  const { remoteConfig, clan, project } = useServices()
   // The store Worker's scene channel (features/engine-store.clan), when the project's store is one.
   const store = clan?.clan as { openScene?: (doc: never) => Promise<{ readOnly: string | null }> } | undefined
   const openScene = store?.openScene ? (doc: unknown) => store.openScene!(doc as never) : undefined
@@ -35,10 +41,10 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
     })
   }
   // The latest callbacks, without remounting the engine when they change.
-  const cbs = useRef({ onReady, onChange })
+  const cbs = useRef({ onReady, onChrome, onChange })
   useEffect(() => {
-    cbs.current = { onReady, onChange }
-  }, [onReady, onChange])
+    cbs.current = { onReady, onChrome, onChange }
+  }, [onReady, onChrome, onChange])
 
   useEffect(() => {
     const el = host.current
@@ -51,7 +57,12 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
     el.appendChild(slot)
     let mine: CanvasAdapter | null = null
     const choice = engineChoice(globalThis.location?.search ?? '', remoteConfig?.flags)
-    void loadEngine(engineToMount(choice, initial))
+    const id = engineToMount(choice, initial, askedOwnAtLoad())
+    // An Excalidraw scene opened on the own engine: its original is kept beside it, untouched.
+    const kept = converting(id, initial) && project?.canvasKey
+      ? idbPut('kv', `${project.canvasKey}.excalidraw`, initial).catch((e) => console.warn('the Excalidraw original was not kept', e))
+      : Promise.resolve()
+    void kept.then(() => loadEngine(id))
       .then((engine) => engine.mount(slot, { initial, onChange: () => { cbs.current.onChange(); bump() }, theme, openScene }))
       .then((a) => {
         mine = a
@@ -62,6 +73,8 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
         }
         adapter.current = a
         cbs.current.onReady(a)
+        const chrome = a.chrome?.()
+        if (chrome) cbs.current.onChrome?.(chrome)
         // The document's nodes are real elements on our own engine (features/canvas-nodes.clan).
         if (a.engine === 'own') setOwn(a)
       })
@@ -86,7 +99,7 @@ export function CanvasMount({ initial, onReady, onChange, theme }: {
   return (
     <div ref={host} style={{ position: 'absolute', inset: 0 }}>
       {own && <NodeLayer canvas={own} tick={tick} />}
-      {own && <BoardLayer canvas={own} />}
+      {own && <BoardLayer canvas={own} inset={railInset} />}
     </div>
   )
 }

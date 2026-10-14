@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { PointerSample, SceneStep } from '../../core/canvasAdapter'
-import { engineChoice, engineOf, engineToMount, loadEngine } from '../index'
+import { askedOwn, converting, engineChoice, engineOf, engineToMount, loadEngine } from '../index'
 import * as Y from 'yjs'
 import { SceneStore } from '../../../../../canvas-engine/src'
 import { OwnAdapter } from './adapter'
@@ -201,6 +201,13 @@ describe('choosing the engine', () => {
     expect(engineToMount('excalidraw', own)).toBe('own')
     expect(engineToMount('own', { elements: [], files: {} })).toBe('own')
     expect(engineToMount('own', null)).toBe('own')
+    // Asked for in the address (?engine=own): an Excalidraw scene opens converted, its original kept.
+    expect(engineToMount('own', ex, true)).toBe('own')
+    expect(engineToMount('excalidraw', ex, true)).toBe('excalidraw')
+    expect(converting('own', ex)).toBe(true)
+    expect(converting('own', own)).toBe(false)
+    expect(askedOwn('?engine=own')).toBe(true)
+    expect(askedOwn('?engine=excalidraw')).toBe(false)
   })
 
   it('loads the own engine by dynamic import', async () => {

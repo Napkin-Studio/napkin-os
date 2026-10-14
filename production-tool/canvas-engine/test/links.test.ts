@@ -42,6 +42,9 @@ describe('links', () => {
     expect(linkSegment(e1.from, e1.to)).toEqual({ a: { x: 150, y: 200 }, b: { x: 150, y: 400 } })
     const e2 = boundEnds(get, s.get('l2')!)!
     expect(linkSegment(e2.from, e2.to)).toEqual({ a: { x: 300, y: 500 }, b: { x: 500, y: 500 } })
+    // Partly over each other: straight down through the overlap, not corner to corner.
+    const wide = element({ id: 'w', kind: 'node', z: 'c0', x: 100, y: 400, w: 600, h: 200 })
+    expect(linkSegment(e1.from, wide)).toEqual({ a: { x: 200, y: 200 }, b: { x: 200, y: 400 } })
   })
 
   it('follow a moved node, and are quiet until an end is selected', () => {

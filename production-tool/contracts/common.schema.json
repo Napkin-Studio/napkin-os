@@ -302,6 +302,7 @@
         "rules": [
           { "from": ["script"], "to": ["storyboard"], "roles": ["drives"], "per_target": "one" },
           { "from": ["storyboard"], "to": ["video"], "roles": ["renders"], "per_target": "one" },
+          { "from": ["script"], "to": ["video"], "roles": ["drives"], "per_target": "one" },
           { "from": ["ref", "frame"], "to": ["shot"], "roles": ["frame", "layout"], "per_target": "one" },
           { "from": ["ref"], "to": ["script", "storyboard", "video", "sketch", "format_set", "shot"], "roles": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"], "per_target": "many" },
           { "from": ["board", "group"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["input"], "per_target": "many", "per_source": "one" },

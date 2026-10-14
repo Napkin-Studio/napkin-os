@@ -99,4 +99,30 @@ describe('Renderer', () => {
     expect(r.hit(5005, 5005)?.id).toBe('far')
     expect(r.hit(-50, -50)).toBeUndefined()
   })
+
+  it('draws boards in the look the host gives (rounded, filled, the current one in its colour) over a transparent background', () => {
+    const store = new SceneStore(new Y.Doc())
+    store.seed([
+      element({ id: 'b1', kind: 'board', z: 'a1', x: 0, y: 0, w: 300, h: 200, props: { name: 'Script', purpose: 'script' } }),
+      element({ id: 'b2', kind: 'board', z: 'a2', x: 400, y: 0, w: 300, h: 200, props: { name: 'Video', purpose: 'video' } }),
+    ], {})
+    const r = new Renderer(store, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
+    const calls: string[] = []
+    const strokes: unknown[] = []
+    const ctx = new Proxy({} as DrawContext, {
+      get: (t, k) => (k in t ? (t as never)[k] : k === 'lineWidth' || k === 'globalAlpha' ? 1 : (...a: unknown[]) => { calls.push(`${String(k)}${k === 'fillText' ? `:${a[0]}` : ''}`) }),
+      set: (_t, k, v) => {
+        if (k === 'strokeStyle') strokes.push(v)
+        return true
+      },
+    })
+    r.boardLook = { fill: 'rgba(255,255,255,0.55)', stroke: '#D6DAE2', current: '#2F64F5', radius: 16, title: '#4A4F5C', titleBg: '#FAFAFB' }
+    r.currentBoard = 'b2'
+    r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1, 'transparent')
+    expect(calls[1]).toBe('clearRect')
+    expect(calls).not.toContain('strokeRect')
+    expect(calls.filter((c) => c === 'ellipse')).toHaveLength(8)
+    expect(calls).toContain('fillText:Script')
+    expect(strokes).toEqual(['#D6DAE2', '#2F64F5'])
+  })
 })

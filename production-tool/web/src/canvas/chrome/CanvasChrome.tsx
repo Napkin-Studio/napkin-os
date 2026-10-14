@@ -7,7 +7,9 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { Float } from '../../ui/Float'
 import { UndoButtons } from '../../ui/UndoButtons'
 import { NodeIcon } from '../../ui/chrome/Bar'
-import { boardKey, rowLabel, type BoardRow } from './boards'
+import { rowLabel, type BoardRow } from './boards'
+// ⌥1…⌥9 and ⌥0 (ui-behaviour 3.2): one reading of the keys for the rail and the own engine's boards.
+import { boardKey } from '../boards/boards'
 import type { CanvasChrome, ChromeTool } from './controls'
 import './canvas.css'
 
@@ -22,19 +24,22 @@ function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom
 
 const OPTION = typeof navigator !== 'undefined' && /Mac|iP(hone|ad)/.test(navigator.platform) ? '⌥' : 'Alt+'
 
-export function BoardRail({ rows, current, onPick, onFit, narrow = false }: {
+export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys = true }: {
   rows: BoardRow[]
   current: string | null
   onPick: (row: BoardRow) => void
   onFit: () => void
   /** iPad and narrow windows: the rail is a "Boards" pill that opens a sheet (ui-behaviour 3.2). */
   narrow?: boolean
+  /** The rail takes ⌥1…⌥9 and ⌥0 itself; false where the canvas does (our own engine's boards). */
+  keys?: boolean
 }) {
   const pick = useRef(onPick)
   const fit = useRef(onFit)
   const list = useRef(rows)
   useEffect(() => { pick.current = onPick; fit.current = onFit; list.current = rows }, [onPick, onFit, rows])
   useEffect(() => {
+    if (!keys) return
     const onKey = (e: KeyboardEvent) => {
       const k = boardKey(e)
       if (k === null) return
@@ -45,7 +50,7 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false }: {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [keys])
   const [open, setOpen] = useState(false)
   const pillRef = useRef<HTMLButtonElement>(null)
   const items = rows.map((r, i) => (

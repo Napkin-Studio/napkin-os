@@ -10,7 +10,7 @@
 import * as Y from 'yjs'
 import { drawDpr, liveOutline, Renderer, type Bitmap, type Intent, type RawPointer } from '../../../../../canvas-engine/src'
 import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } from '../../core/canvasAdapter'
-import { OwnAdapter } from './adapter'
+import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
 
 /** What this browser's pointer events can carry (ui-behaviour 8; fallbacks are raw events and pressure only). */
@@ -26,6 +26,36 @@ export function probeCapabilities(): InputCapabilities {
 
 /** Single-key tools on the canvas until the toolbar offers them (ui-behaviour 7). */
 const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter' }
+
+/**
+ * The canvas's surface from the chrome's tokens on the host (styles.css: --line, --tool, --ink2,
+ * --canvas-bg, --r-board): transparent over the chrome's grid, boards as production-ui drew them.
+ * Without the tokens (a bare host) it keeps the plain canvas.
+ */
+export function surfaceOf(host: HTMLElement, theme: 'light' | 'dark'): Surface {
+  const css = typeof getComputedStyle === 'function' ? getComputedStyle(host) : null
+  const v = (name: string) => css?.getPropertyValue(name).trim() ?? ''
+  if (!v('--line')) return { background: theme === 'dark' ? '#121212' : '#ffffff', board: null, link: null }
+  return {
+    background: 'transparent',
+    board: {
+      fill: theme === 'dark' ? 'rgba(22, 26, 31, 0.45)' : 'rgba(255, 255, 255, 0.55)',
+      stroke: v('--line'),
+      current: v('--tool') || '#2F64F5',
+      radius: parseFloat(v('--r-board')) || 16,
+      title: v('--ink2') || '#4A4F5C',
+      titleBg: v('--canvas-bg') || (theme === 'dark' ? '#121417' : '#FAFAFB'),
+    },
+    link: {
+      stroke: v('--ink') || '#16181D',
+      lit: v('--tool') || '#2F64F5',
+      label: v('--ink2') || '#4A4F5C',
+      labelBg: v('--card') || '#FFFFFF',
+      labelLine: v('--line'),
+      roles: ['drives'],
+    },
+  }
+}
 
 const layer = (host: HTMLElement, z: number) => {
   const c = document.createElement('canvas')
@@ -44,12 +74,15 @@ export const ownEngine: CanvasEngine = {
     }) : { readOnly: null }
     const adapter = new OwnAdapter(opts.initial, { doc })
     adapter.setTheme(opts.theme)
-    adapter.setActiveTool({ type: 'native', id: 'freedraw' })
+    // Select first, as Excalidraw opens: the tool bar's pen (P) draws.
+    adapter.setActiveTool({ type: 'native', id: 'selection' })
+    adapter.surfaceFor = (theme) => surfaceOf(host, theme)
     const main = layer(host, 0)
     const live = layer(host, 1)
     live.style.pointerEvents = 'auto'
     main.style.pointerEvents = 'none'
-    const ctx = main.getContext('2d', { alpha: false }) as unknown as Ctx2D
+    // Transparent, so the chrome's dot grid under the canvas shows through (mock Main).
+    const ctx = main.getContext('2d') as unknown as Ctx2D
     const lctx = live.getContext('2d', { desynchronized: true } as CanvasRenderingContext2DSettings) as CanvasRenderingContext2D
     const renderer = new Renderer(adapter.scene, {
       newPath: () => new Path2D(),

@@ -107,7 +107,7 @@
       "from": "script",
       "to": "video",
       "role": "drives",
-      "ok": false
+      "ok": true
     },
     {
       "from": "storyboard",

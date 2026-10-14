@@ -39,9 +39,14 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (els.length) canvas.transact((all) => [...all, ...els], { undoable: false })
   }, [canvas, services])
 
-  // The document's links follow the link elements (a delete, or its undo).
+  // The document's links follow the link elements (a delete, or its undo). A link the document
+  // refuses (its integrity check) is offered once a session, never again on every change.
+  const offered = useRef(new Set<string>())
   useEffect(() => {
-    const { unlink, relink } = reconcileLinks(canvas.elements(), doc, seen.current)
+    const found = reconcileLinks(canvas.elements(), doc, seen.current)
+    const unlink = found.unlink
+    const relink = found.relink.filter((l) => !offered.current.has(l.id))
+    for (const l of relink) offered.current.add(l.id)
     if (!unlink.length && !relink.length) return
     void updateDoc(services.doc, (d) => {
       for (const id of unlink) delete d.links[id]

@@ -89,5 +89,50 @@ describe('art-boards on the own engine', () => {
     expect(vb.maxX - vb.minX).toBeLessThan(2000)
     expect(jumpTo(a, doc, 'fit', false)).toBe(true)
     expect(jumpTo(a, doc, 20, false)).toBe(false)
+    // With the rail's 240px kept clear: the board lands right of it, never above 100%.
+    expect(jumpTo(a, doc, 1, false, 240)).toBe(true)
+    const v = a.view()
+    expect(v.zoom).toBeLessThanOrEqual(1)
+    expect(a.sceneToViewport({ x: chars.x, y: chars.y }, v).x).toBeGreaterThanOrEqual(240)
+    expect(a.sceneToViewport({ x: chars.x + chars.width, y: chars.y }, v).x).toBeLessThanOrEqual(1200)
+  })
+
+  it('on a canvas with named pictures, each picture board wraps its pictures, and the nodes stand left of them (mock Main)', async () => {
+    const s = modelStore()
+    await s.create(MAYA, 'Rain')
+    const doc = structuredClone(s.get()) as unknown as ProductionDocument
+    await s.close()
+    const a = new OwnAdapter()
+    a.resize(1440, 900, 0, 0)
+    const pic = (x: number, y: number) => a.imageNode({ x, y, width: 100, height: 150, assetSha: null, customData: { kind: 'pic', id: `pic_${x}_${y}` }, status: 'saved' })
+    const face = pic(600, 100)
+    const beach = pic(800, 100)
+    const bottle = pic(600, 400)
+    a.transact((els) => [...els, face, beach, bottle], { undoable: false })
+    const ref = (id: string, key: string, role: string, node: string) => {
+      doc.keys[`k_${id}`] = { id: `k_${id}`, v: 1, field_v: {}, key, role } as never
+      doc.refs[id] = { id, v: 1, field_v: {}, key, variant: 'front', role, node } as never
+    }
+    ref('r1', 'maya', 'character', face.id)
+    ref('r2', 'ext', 'location', beach.id)
+    ref('r3', 'bottle', 'product', bottle.id)
+    a.transact((els) => [...els, ...seedNodes(a, doc)], { undoable: false })
+    const seed = seedBoards(a, doc)!
+    a.transact((els) => seed.apply(els), { undoable: false })
+    for (const b of seed.boards) doc.boards[b.id] = b
+    const inside = (e: { x: number; y: number; width: number; height: number }, f: { x: number; y: number; width: number; height: number }) =>
+      e.x >= f.x && e.y >= f.y && e.x + e.width <= f.x + f.width && e.y + e.height <= f.y + f.height
+    const at = (id: string) => a.elements().find((e) => e.id === id)!
+    expect(at(face.id).frameId).toBe(board(a, doc, 'character').id)
+    expect(at(beach.id).frameId).toBe(board(a, doc, 'location').id)
+    expect(at(bottle.id).frameId).toBe(board(a, doc, 'product').id)
+    expect(inside(at(face.id), board(a, doc, 'character'))).toBe(true)
+    expect(inside(at(bottle.id), board(a, doc, 'product'))).toBe(true)
+    const script = node(a, 'script')
+    expect(script.x + script.width).toBeLessThan(600)
+    expect(inside(script, board(a, doc, 'script'))).toBe(true)
+    expect(node(a, 'storyboard').y).toBeGreaterThan(550)
+    // Every board is there, the References board (no pictures yet) after the others.
+    expect(a.elements().filter(isBoard)).toHaveLength(7)
   })
 })

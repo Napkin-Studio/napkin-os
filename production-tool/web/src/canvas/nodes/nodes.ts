@@ -3,7 +3,7 @@
 // CanvasAdapter v2, so the own engine runs it and nothing here imports an engine.
 //
 // - seedNodes: a canvas with no node yet gets the project's Script, Storyboard and
-//   Video nodes, where production-ui's overlay drew them (mock Main), and a link
+//   Video nodes, where production-ui's overlay drew them (mock Main, boards/layout.ts), and a link
 //   element for each of the document's links between them.
 // - linkNodes: a person's link from one node to another, checked against the link
 //   rules (core/links.ts), written to the scene and to the document's links.
@@ -16,6 +16,7 @@ import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
 import { canLink, checkLink, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
 import type { CardKind } from './cardChrome'
+import { adLayout } from '../boards/layout'
 
 export const CARD_KINDS: readonly CardKind[] = ['script', 'storyboard', 'video']
 
@@ -36,24 +37,22 @@ export function linkIdOf(e: CanvasElement): string | null {
   return t.kind === 'link' && t.id ? t.id : null
 }
 
-/** The boxes production-ui's overlay gave the three nodes (mock Main): Script left, Storyboard below, Video beside it. */
-export const NODE_BOXES: Record<CardKind, { x: number; y: number; w: number; h: number }> = {
-  script: { x: 0, y: 0, w: 340, h: 440 },
-  storyboard: { x: 0, y: 488, w: 752, h: 236 },
-  video: { x: 776, y: 488, w: 380, h: 236 },
-}
-
-/** The elements to add so the canvas shows the document's nodes and their links; [] when it already does. */
-export function seedNodes(canvas: CanvasAdapter, doc: ProductionDocument, at: { x: number; y: number } = { x: 0, y: 0 }): CanvasElement[] {
+/**
+ * The elements to add so the canvas shows the document's nodes and their links; [] when it already
+ * does. The nodes go where production-ui's overlay drew them (mock Main; boards/layout.ts): left of
+ * the named pictures, the Storyboard below, the Video beside it.
+ */
+export function seedNodes(canvas: CanvasAdapter, doc: ProductionDocument): CanvasElement[] {
   const els = canvas.elements()
   if (els.some((e) => cardOf(e))) return []
+  const boxes = adLayout(els, doc).nodes
   const entities: [CardKind, { id: string } | undefined][] = [['script', mainScript(doc)], ['storyboard', mainStoryboard(doc)], ['video', mainVideo(doc)]]
   const made = new Map<string, CanvasElement>()
   const out: CanvasElement[] = []
   for (const [kind, ent] of entities) {
     if (!ent) continue
-    const b = NODE_BOXES[kind]
-    const el = canvas.node({ x: at.x + b.x, y: at.y + b.y, width: b.w, height: b.h, customData: { kind, id: ent.id } })
+    const b = boxes[kind]
+    const el = canvas.node({ x: b.x, y: b.y, width: b.w, height: b.h, customData: { kind, id: ent.id } })
     made.set(ent.id, el)
     out.push(el)
   }
