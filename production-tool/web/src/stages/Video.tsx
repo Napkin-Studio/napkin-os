@@ -37,7 +37,8 @@ import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
-import { currentRender, currentTake, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
+import { currentRender, currentTake, mainStoryboard, reviewsList, shotFrameAsset, shotNumber, shotsOf, takesOf } from '../model/selectors'
+import { EditorBar } from '../ui/chrome/TopBars'
 import { addTakeNote, pickTake } from './videoEdits'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
@@ -118,6 +119,9 @@ export function Video() {
   }
 
   return (
+    <div className="editor">
+    <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
+      title={`Video · ${mainStoryboard(doc)?.title ?? 'Video'}`} meta={<span className="pt-ratio">{mainStoryboard(doc)?.ratio ?? '16:9'} · {Math.round(mainStoryboard(doc)?.target_s ?? 15)} s</span>} />
     <div className="panel">
       <div className="panel-inner">
         <div className="eyebrow">Step 3</div>
@@ -155,6 +159,7 @@ export function Video() {
           </Player>
         </div>
       </div>
+    </div>
     </div>
   )
 }

@@ -50,6 +50,7 @@ import { scriptRoute } from '../app/route'
 import type { ModelStore } from '../model/store'
 import { insertMention, removeMention } from '../script/edits'
 import { ShotEditor } from '../script/ShotEditor'
+import { EditorBar } from '../ui/chrome/TopBars'
 import { scriptMentionHooks } from '../script/mentionHooks'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
@@ -127,6 +128,9 @@ export function Storyboard() {
   }
 
   return (
+    <div className="editor">
+    <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
+      title={`Storyboard · ${sb?.title ?? 'Storyboard'}`} meta={<span className="pt-ratio">{ratio}</span>} />
     <div className="panel">
       <div className="panel-inner">
         <div className="eyebrow">Step 2</div>
@@ -273,6 +277,7 @@ export function Storyboard() {
           </>
         )}
       </div>
+    </div>
     </div>
   )
 }

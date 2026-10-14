@@ -53,7 +53,7 @@ export function SaveButton() {
   const title = state.kind === 'failed' ? `Not saved: ${state.why}. Your work is still in this browser; try again.`
     : 'Save your project to the server now (Ctrl+S). It also saves every 5 minutes.'
   return (
-    <button className={`btn sm ${state.kind === 'failed' ? 'danger' : ''}`} disabled={state.kind === 'saving'} title={title} onClick={() => void save()}>
+    <button className={`pt-savebtn ${state.kind === 'failed' ? 'failed' : ''}`} disabled={state.kind === 'saving'} title={title} onClick={() => void save()}>
       {label}
     </button>
   )

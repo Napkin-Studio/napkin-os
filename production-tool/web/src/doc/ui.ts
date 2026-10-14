@@ -58,10 +58,12 @@ export interface AppUi {
   homeSort: 'recent' | 'name'
   /** When the server last took a project (POST /clan), for Home's footer. */
   savedAt?: string
+  /** Reduce motion, from the account menu (ui-behaviour 6.6): 'still' stops every loader and animation. */
+  motion?: 'still'
 }
 
 /** The UiState fields that are the app's, not the project's. */
-export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt'] as const satisfies readonly (keyof AppUi)[]
+export const APP_UI_KEYS = ['configChoice', 'providerChoice', 'me', 'hintDismissed', 'view', 'project', 'homeSort', 'savedAt', 'motion'] as const satisfies readonly (keyof AppUi)[]
 
 /** Kept per project. */
 export interface ProjectUi {

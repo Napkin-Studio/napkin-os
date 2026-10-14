@@ -19,6 +19,11 @@ export function Root({ shell, access, router }: { shell: Shell; access: AccessSt
   const why = useSyncExternalStore(access.subscribe, access.get)
   const { relay } = shell.deps
   const route = useSyncExternalStore(router.subscribe, router.get)
+  // Reduce motion (ui-behaviour 6.6): the account menu's switch stills every loader and animation.
+  useEffect(() => {
+    if (app.motion === 'still') document.documentElement.dataset.motion = 'still'
+    else delete document.documentElement.dataset.motion
+  }, [app.motion])
   // An editor's route belongs to its open project: on Home, or in another project, it goes.
   const open = state.view === 'project' ? state.session?.id : undefined
   useEffect(() => {

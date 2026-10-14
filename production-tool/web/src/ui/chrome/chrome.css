@@ -1,0 +1,111 @@
+/* The house chrome of the approved UI (docs/production-tool/ui-mocks/Main.dc.html):
+   the 48px top bar, frosted panels, pills and the small marks every screen shares.
+   Values are the mocks' own; colours come from the tokens in styles.css. */
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+.ptbar {
+  height: var(--topbar-h); flex-shrink: 0; position: relative; z-index: 20;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap; min-width: 0;
+}
+@media (prefers-color-scheme: dark) { .ptbar { background: rgba(15, 17, 20, 0.92); } }
+.ptbar > * { flex-shrink: 0; }
+.ptbar .pt-grow { flex: 1; min-width: 0; }
+.ptbar .pt-shrink { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pt-home {
+  width: 28px; height: 28px; border: 0; border-radius: 8px; background: var(--ink-fixed);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.pt-studio, .pt-tool { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+.pt-tool { color: var(--tool-ink); }
+.pt-project { font-size: 13px; color: var(--ink3); }
+.pt-sep { width: 1px; height: 22px; background: var(--line-soft); flex-shrink: 0; }
+.pt-title { margin: 0; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+.pt-mono { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
+.pt-ratio { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); padding: 2px 8px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); }
+.pt-back { height: 32px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--card); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink); }
+.pt-back:hover { background: var(--soft); }
+
+/* People here: overlapping 26px avatars and who is where. */
+.pt-presence { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.pt-avatar {
+  width: 26px; height: 26px; border-radius: var(--r-pill); color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 11px; border: 2px solid var(--paper); background: var(--ink-fixed); flex-shrink: 0;
+}
+.pt-avatar + .pt-avatar { margin-left: -10px; }
+.pt-account { width: 32px; height: 32px; border-radius: var(--r-pill); border: 0; background: var(--soft-2); font-weight: 600; font-size: 12px; cursor: pointer; color: var(--ink); padding: 0; }
+.pt-account[aria-expanded='true'] { box-shadow: 0 0 0 2px var(--tool); }
+
+/* A segmented switch (Screenplay | Video · Audio, Picture | Sound, List | Tree). */
+.pt-seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--soft); }
+.pt-seg button { height: 28px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink2); font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.pt-seg button[aria-pressed='true'] { background: var(--card); color: var(--tool-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(20, 30, 60, 0.10); }
+
+/* Undo and redo as one bordered pair. */
+.pt-pair { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); }
+.pt-pair button { width: 30px; height: 28px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 14px; cursor: pointer; color: var(--ink); padding: 0; }
+.pt-pair button:hover:not(:disabled) { background: var(--soft); }
+.pt-pair button:disabled { color: var(--ink3); cursor: default; }
+
+/* A status pill in the bar: the loader and one line ("Wren is making frame 3"). */
+.pt-status {
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 6px; border-radius: var(--r-pill);
+  border: 1px solid var(--line-soft); background: var(--card); font-size: 12.5px; color: var(--ink2); cursor: pointer; max-width: 420px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.pt-status.warm { background: #FFF7E0; border-color: transparent; }
+.pt-status.bad { background: var(--danger-bg); color: var(--danger); border-color: transparent; padding-left: 12px; }
+.pt-status .pt-status-line { overflow: hidden; text-overflow: ellipsis; }
+
+/* The questions pill: only while asks are open (ui-behaviour 3.17). */
+.pt-asks { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 12px; border-radius: var(--r-pill); border: 1px solid #F6C9BD; background: #FFF4F1; font-size: 13px; }
+.pt-asks .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--create); }
+.pt-asks b { color: var(--action); font-weight: 600; }
+.pt-asks .pos { font-family: var(--f-mono); font-size: 11px; color: var(--action); }
+.pt-asks button { width: 24px; height: 24px; border-radius: 50%; border: 0; background: var(--card); cursor: pointer; color: var(--ink); }
+
+/* ── Frosted panels and cards ────────────────────────────────────────────── */
+.pt-panel { background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: var(--r-panel); box-shadow: var(--shadow-soft); backdrop-filter: var(--blur); }
+.pt-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft); }
+.pt-label { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3); }
+.pt-ref { font-family: var(--f-mono); font-size: 11px; color: var(--tool-ink); }
+
+/* Pills: a role, a state, a count. */
+.pt-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink2); white-space: nowrap; }
+.pt-pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pt-pill.ok { background: var(--ok-bg); color: var(--success); }
+.pt-pill.bad { background: var(--danger-bg); color: var(--danger); }
+.pt-pill.blue { background: var(--tool-soft); color: var(--tool-ink); }
+.pt-pill.dark { background: var(--ink-fixed); color: #FFFFFF; }
+.pt-pill.mono { font-family: var(--f-mono); }
+
+/* A signed line: a figure, "Name · job" in mono, and what they say. */
+.pt-say { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); }
+.pt-say .who { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.pt-bubble { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); font-size: 12px; color: var(--ink); }
+.pt-bubble .who { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+
+/* Menus in the bar (Export, the account). */
+.pt-menu { min-width: 300px; padding: 6px; }
+.pt-menu .pt-menurow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; font-size: 13px; text-align: left; cursor: pointer; color: var(--ink); }
+.pt-menu .pt-menurow:hover:not(:disabled) { background: var(--soft); }
+.pt-menu .pt-menurow:disabled { color: var(--ink3); cursor: default; }
+.pt-menu .pt-menurow .hint { margin-left: auto; font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
+.pt-menu .pt-menusep { height: 1px; background: var(--line-soft); margin: 4px 6px; }
+.pt-menu .pt-menuhead { padding: 8px 12px 4px; font-size: 12px; color: var(--ink3); }
+.pt-switch { width: 40px; height: 24px; border-radius: var(--r-pill); border: 0; background: var(--line); position: relative; cursor: pointer; flex-shrink: 0; padding: 0; }
+.pt-switch::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF; transition: left 0.15s var(--ease); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+.pt-switch[aria-checked='true'] { background: var(--tool); }
+.pt-switch[aria-checked='true']::after { left: 19px; }
+
+/* An editor over the canvas: its own bar, then its surface (ui-behaviour 2.2). */
+.editor { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--canvas-bg); z-index: 8; }
+.editor > .panel { flex: 1; min-height: 0; }
+.stage-pane.editor-pane { z-index: 8; }
+.pt-savebtn { height: 28px; padding: 0 8px; border: 0; background: transparent; font-family: var(--f-mono); font-size: 11px; color: var(--ink3); cursor: pointer; border-radius: 8px; }
+.pt-savebtn:hover:not(:disabled) { background: var(--soft); color: var(--ink2); }
+.pt-savebtn.failed { color: var(--danger); }
+
+/* The dot grid every canvas-like surface sits on. */
+.pt-grid { background-color: var(--canvas-bg); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }

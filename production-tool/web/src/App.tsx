@@ -1,50 +1,39 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { useConfig, useDoc, useJobsTick, useRoute, useServices, useShell, useUi } from './app/context'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useConfig, useRoute, useServices, useShell, useUi } from './app/context'
 import { CONFIG_CHOICES, PROVIDER_CHOICES, routedProvider, type ConfigChoice, type ProviderChoice } from './capabilities'
 import type { CanvasSnapshot } from './canvas/controller'
-import type { StageName } from './doc/ui'
-import { refsList, storyboardReady } from './model/selectors'
-import { personOf } from './projects/session'
-import { download, exportBundle } from './export'
 import { Character } from './stages/Character'
 import { Storyboard } from './stages/Storyboard'
 import { Video } from './stages/Video'
-import { StudioMark } from './ui/Mark'
 import { HistoryPanel } from './ui/History'
+import { RemakeBar } from './ui/Follow'
+import { CanvasBar } from './ui/chrome/TopBars'
+import { PanelsContext } from './ui/chrome/panels'
 import { CLAN_DB } from './model/store'
 import { clanDbFor, INDEX_KEY } from './projects/storage'
-import { RemakeBar, UpdateFollows } from './ui/Follow'
 import { UpdateBox } from './ui/UpdateBox'
 import { FallbackNotices } from './ui/FallbackNotices'
-import { UndoButtons } from './ui/UndoButtons'
-import { SaveButton } from './ui/SaveButton'
 import { SaveConflictBox } from './ui/SaveConflict'
-import { Float, MenuItem } from './ui/Float'
-import { JobTray } from './ui/JobTray'
-import { BetaTag } from './dogfood/Dogfood'
 import { errorShown, setScreen } from './dogfood/recorder'
-import { downloadAllMedia } from './media/download'
-import { viewsOnCanvas } from './media/names'
-import { idbGet } from './lib/idb'
 
 // The Script editor is its own chunk: projects that never open it never load Tiptap.
 const ScriptEditor = lazy(() => import('./script/ScriptEditor').then((m) => ({ default: m.ScriptEditor })))
 
-const STAGES: { id: StageName; n: number; label: string }[] = [
-  { id: 'character', n: 1, label: 'Canvas' },
-  { id: 'storyboard', n: 2, label: 'Storyboard' },
-  { id: 'video', n: 3, label: 'Video' },
-]
-
 export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null }) {
   const { clan, storeNote, project } = useServices()
   const { config } = useConfig()
-  const stage = useUi().stage
+  const ui = useUi()
+  const stage = ui.stage
   const route = useRoute()
   // The Script editor opens full screen over the stages (features/script-editor.clan); the canvas
-  // stays mounted underneath, so its jobs keep landing.
+  // stays mounted underneath, so its jobs keep landing. Storyboard and Video open the same way.
   const script = route.kind === 'script' && route.projectId === project.id ? route.scriptId : null
-  const [history, setHistory] = useState(false)
+  const [panel, setPanel] = useState<'history' | 'assets' | null>(null)
+  const panels = useMemo(() => ({
+    history: panel === 'history',
+    assets: panel === 'assets',
+    toggle: (p: 'history' | 'assets') => setPanel((now) => (now === p ? null : p)),
+  }), [panel])
   const [trouble, setTrouble] = useState<string | null>(null)
   useEffect(() => clan?.onTrouble((m) => setTrouble(m)), [clan])
   // The beta's record: where the person is, and what went wrong in front of them.
@@ -53,123 +42,27 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   useEffect(() => { if (storeNote) errorShown('store', storeNote) }, [storeNote])
 
   return (
-    <>
-      <TopBar history={history} onHistory={() => setHistory((h) => !h)} />
+    <PanelsContext.Provider value={panels}>
+      {stage === 'character' && <CanvasBar />}
       {config.banner && <div className="banner">{config.banner}</div>}
       {storeNote && <div className="storenote" role="status">{storeNote}</div>}
       {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
       <SaveConflictBox />
       <div className="stage">
-        {history && <HistoryPanel store={clan} onClose={() => setHistory(false)} />}
-        {/* The canvas stays mounted so its jobs keep landing while you're on another stage. */}
+        {/* The canvas stays mounted so its jobs keep landing while an editor is open over it. */}
         <div className={`stage-pane ${stage === 'character' ? '' : 'hidden'}`} data-dogfood-area="canvas">
           <Character initial={initialCanvas} active={stage === 'character'} />
         </div>
-        {stage === 'storyboard' && <div className="stage-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
-        {stage === 'video' && <div className="stage-pane" data-dogfood-area="video"><Video /></div>}
+        {stage === 'storyboard' && <div className="stage-pane editor-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
+        {stage === 'video' && <div className="stage-pane editor-pane" data-dogfood-area="video"><Video /></div>}
         {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
+        {panel === 'history' && <HistoryPanel store={clan} onClose={() => setPanel(null)} />}
       </div>
       {script && <Suspense fallback={<div className="se" role="status" aria-busy="true" />}><ScriptEditor key={script} scriptId={script} /></Suspense>}
       <UpdateBox />
       <FallbackNotices />
       {!import.meta.env.PROD && <DevSwitch />}
-    </>
-  )
-}
-
-function TopBar({ history, onHistory }: { history: boolean; onHistory: () => void }) {
-  const { doc: docStore, ui: uiStore, relay, project } = useServices()
-  const shell = useShell()
-  const doc = useDoc()
-  const ui = useUi()
-  useJobsTick()
-  const [exporting, setExporting] = useState(false)
-  const [packing, setPacking] = useState<{ done: number; total: number } | null>(null)
-  const [packNote, setPackNote] = useState<string | null>(null)
-  const menuRef = useRef<HTMLButtonElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const closeMenu = useCallback(() => { setMenuOpen(false); setPackNote(null) }, [])
-  const stage = ui.stage
-  const hasRefs = refsList(doc).length > 0
-  // The Video stage opens once every shot is locked or waits for review (storyboardReady), as before.
-  const reachable = (s: StageName) =>
-    s === 'character' || (s === 'storyboard' && hasRefs) || (s === 'video' && hasRefs && storyboardReady(doc))
-  const order = STAGES.findIndex((s) => s.id === stage)
-
-  return (
-    <header className="topbar">
-      {/* The Napkin mark goes back to Home (features/project-home.clan); this project is saved on the way. */}
-      <div className="brand">
-        <button className="brand-home" title="Home: your projects" aria-label="Home" onClick={() => void shell.goHome()}><StudioMark size={22} /></button>
-        <span className="brand-studio">Napkin Studio</span>
-        <span className="brand-tool">Production</span>
-        <BetaTag screen={{ stage, project: project.id }} />
-        <small className="brand-project" title={shell.index.get(project.id)?.name}>{shell.index.get(project.id)?.name ?? ''}</small>
-        {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
-      </div>
-      <nav className="rail" aria-label="Stages">
-        {STAGES.map((s, i) => (
-          <span key={s.id} className="row" style={{ gap: 4 }}>
-            {i > 0 && <span className="rail-sep">·</span>}
-            <button
-              className={`rail-step ${s.id === stage ? 'current' : ''} ${i < order ? 'done' : ''}`}
-              disabled={!reachable(s.id)}
-              aria-current={s.id === stage ? 'step' : undefined}
-              onClick={() => uiStore.update((u) => { u.stage = s.id })}
-            >
-              <span className="n">{i < order ? '✓' : s.n}</span>
-              {s.label}
-            </button>
-          </span>
-        ))}
-      </nav>
-      <div className="topbar-right">
-        {stage !== 'character' && <UpdateFollows />}
-        <JobTray />
-        <UndoButtons />
-        <SaveButton />
-        <button className={`btn sm ${history ? 'on' : ''}`} aria-pressed={history} title="Every step, who made it and why" onClick={onHistory}>History</button>
-        {/* Export, the handle, New project and All projects live in the menu: the bar keeps the run's state
-            and History. Undo, Redo and Save sit just left of History. Signing in and out is Napkin Studio's
-            (features/drop-hackathon-extras.clan). */}
-        <button ref={menuRef} className={`btn sm icon ${menuOpen ? 'on' : ''}`} aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>⋯</button>
-        <Float anchor={menuRef} open={menuOpen} onClose={closeMenu} align="end" label="Menu">
-          <div className="fhead handle">@{ui.me?.handle ?? personOf(ui.me).handle}{ui.me?.team ? ` · ${ui.me.team}` : ''}</div>
-          <MenuItem icon="↓" disabled={exporting} hint="zip" onSelect={async () => {
-            setExporting(true)
-            try {
-              const { blob, name } = await exportBundle(docStore, project.canvasKey, shell.index.get(project.id)?.name)
-              download(blob, name)
-            } finally {
-              setExporting(false)
-              closeMenu()
-            }
-          }}>{exporting ? 'Packing…' : 'Export'}</MenuItem>
-          {/* The media alone, named (features/media-download.clan): pictures/, storyboard/, clips/, ad/. */}
-          <MenuItem icon="⇩" disabled={!!packing} hint={packing ? undefined : 'zip'} onSelect={async () => {
-            setPacking({ done: 0, total: 0 })
-            setPackNote(null)
-            try {
-              const canvas = await idbGet<CanvasSnapshot>('kv', project.canvasKey).catch(() => undefined)
-              const name = shell.index.get(project.id)?.name
-              const { packed, missing } = await downloadAllMedia(docStore.get(), name, viewsOnCanvas(docStore.get(), canvas?.elements ?? []),
-                (done, total) => setPacking({ done, total }))
-              if (!packed) setPackNote('Nothing to save in this browser')
-              else if (missing) setPackNote(`Saved ${packed} · ${missing} not in this browser`)
-              else closeMenu()
-            } catch {
-              setPackNote('That did not work. Try again.')
-            } finally {
-              setPacking(null)
-            }
-          }}>{packing ? (packing.total ? `Packing ${packing.done} of ${packing.total}…` : 'Packing…') : packNote ?? 'Download all media'}</MenuItem>
-          <div className="fsep" />
-          {/* New project replaces Start over: this one is saved and stays on Home; nothing is overwritten. */}
-          <MenuItem icon="＋" onSelect={() => { closeMenu(); void shell.newProject() }}>New project</MenuItem>
-          <MenuItem icon="⌂" onSelect={() => { closeMenu(); void shell.goHome() }}>All projects</MenuItem>
-        </Float>
-      </div>
-    </header>
+    </PanelsContext.Provider>
   )
 }
 

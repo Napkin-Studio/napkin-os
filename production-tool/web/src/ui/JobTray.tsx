@@ -30,18 +30,24 @@ export function JobTray() {
   const faces = [...new Set([...g.working.map((r) => who(r).agent), ...waitingFaces, ...(g.needsYou.length ? ['jude' as const] : [])])]
   const needsYou = (a: string) => (a === 'jude' && g.needsYou.length > 0) || (waitingFaces.has(a as never) && !g.working.some((r) => who(r).agent === a))
   const empty = !busy && !g.needsYou.length && !g.waiting.length
+  // The bar's status pill (mock Loader): the first running job in words, only while something
+  // runs, waits or failed; nothing at all when nothing is being made.
+  const lead = g.working[0] ?? g.waiting[0]
+  const leadLine = lead ? who(lead).line : undefined
   return (
     <>
-      <button ref={ref} className={`jobchip tray ${busy ? 'busy' : ''} ${open ? 'open' : ''}`} aria-live="polite" aria-haspopup="dialog" aria-expanded={open}
-        title={empty ? 'Nothing is being made' : 'What is being made, and what needs you'} onClick={() => setOpen(!open)}>
-        {faces.length ? (
-          <span className="faces" aria-hidden="true">
-            {faces.map((a) => <AgentFigure key={a} agent={a} size={22} state={needsYou(a) ? 'needs-you' : 'working'} decorative />)}
-          </span>
-        ) : <span className="dot" />}
-        {trayLabel(g)}
-        {g.needsYou.length > 0 && <><span className="sep">·</span><span className="bad">{g.needsYou.length} failed</span></>}
-      </button>
+      {!empty && (
+        <button ref={ref} className={`pt-status tray ${busy ? 'busy' : ''} ${!busy && !g.waiting.length ? 'bad' : ''} ${open ? 'open' : ''}`} aria-live="polite" aria-haspopup="dialog" aria-expanded={open}
+          title="What is being made, and what needs you" onClick={() => setOpen(!open)}>
+          {faces.length > 0 && (
+            <span className="faces" aria-hidden="true">
+              {faces.slice(0, 3).map((a) => <AgentFigure key={a} agent={a} size={20} state={needsYou(a) ? 'needs-you' : 'working'} decorative />)}
+            </span>
+          )}
+          <span className="pt-status-line">{leadLine ?? trayLabel(g)}{g.working.length + g.waiting.length > 1 ? ` · ${trayLabel(g)}` : ''}</span>
+          {g.needsYou.length > 0 && <><span className="sep">·</span><span className="bad">{g.needsYou.length} failed</span></>}
+        </button>
+      )}
       <Float anchor={ref} open={open} onClose={close} align="end" role="dialog" label="Jobs" className="traypop">
         {empty && <div className="tray-empty faint">Nothing is being made right now. Jobs show here while they run, and stay here if one fails.</div>}
         {busy && <div className="fhead">Working now</div>}

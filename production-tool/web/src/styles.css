@@ -10,18 +10,23 @@
   --line-soft: #E7E9EE;
   --ink: #14161B;
   --ink2: #4A4F5C;
-  --ink3: #737987;
+  /* Grey text: #6B7180 meets 4.5:1 on white and on --soft (ui-behaviour 9; #737987 did not). */
+  --ink3: #6B7180;
   --ink-fixed: #14161B;
   --plan: #14161B;
   --create: #FF4F2E;
   --create-fg: #FFFFFF;
   --create-soft: rgba(255, 79, 46, 0.1);
+  /* The primary button (ui-behaviour 9): white on #D63B1F is 4.66:1; brand orange (--create) carries no text. */
+  --action: #D63B1F;
+  --action-hover: #B8321A;
+  --action-fg: #FFFFFF;
   --produce: #8B919E;
   --learn: #DADDE3;
   --status-green: #22C55E;
   --status-amber: #F5A524;
   --status-red: #FF4F2E;
-  --success: #15803d;
+  --success: #166534;
   --danger: #b91c1c;
   --ok-bg: #e7f6ed;
   --warn-bg: #fdf3e3;
@@ -30,6 +35,9 @@
   --shadow-pop: 0 12px 32px rgba(20, 30, 60, 0.16), 0 2px 6px rgba(20, 30, 60, 0.08);
   --shadow-pill: 0 1px 3px rgba(20, 22, 27, 0.1);
   --canvas-bg: #FAFAFB;
+  --canvas-dot: #D6DAE2;
+  --r-board: 16px;
+  --frost-panel: rgba(255, 255, 255, 0.9);
 
   --f-display: 'Geist', 'Helvetica Neue', Arial, sans-serif;
   --f-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
@@ -44,8 +52,9 @@
      (app/src/components/chrome.css .ch-brand-tool). Blue is identity only:
      the name, the current stage, the selected item, Dex. Actions stay --create. */
   --tool: #2F64F5;
-  --tool-ink: color-mix(in oklab, var(--tool) 78%, var(--ink));
-  --tool-soft: color-mix(in oklab, var(--tool) 10%, transparent);
+  /* Tool-blue text, also on a 10-12% blue tint (ui-behaviour 9). Fills stay --tool. */
+  --tool-ink: #1E4ED8;
+  --tool-soft: rgba(47, 100, 245, 0.10);
   --plan-eye: #FFFFFF;
   --warn: #b45309;
   color-scheme: light;
@@ -75,7 +84,11 @@
     --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
     --shadow-pill: 0 1px 3px rgba(0, 0, 0, 0.5);
     --canvas-bg: #121417;
-    --tool-ink: color-mix(in oklab, var(--tool) 70%, white);
+    --tool-ink: #8FB0FF;
+    --frost-panel: rgba(22, 26, 31, 0.9);
+    --canvas-dot: #2A2F38;
+    --action: #E2502F;
+    --action-hover: #C8411F;
     --tool-soft: color-mix(in oklab, var(--tool) 22%, transparent);
     --plan-eye: #14161B;
     --warn: #fbbf24;
@@ -97,7 +110,7 @@ body {
 #root { height: 100vh; display: flex; flex-direction: column; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 2px solid var(--create);
+  outline: 2px solid var(--tool);
   outline-offset: 2px;
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -107,7 +120,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .eyebrow {
   font-family: var(--f-mono);
   font-size: 11px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink3);
 }
@@ -118,24 +131,29 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: 34px; padding: 0 14px; border-radius: var(--r-pill);
+  height: 32px; padding: 0 14px; border-radius: var(--r-pill);
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
-  font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap;
+  font-weight: 500; font-size: 13px; cursor: pointer; white-space: nowrap; text-decoration: none;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform 0.1s;
 }
 .btn:hover:not(:disabled) { background: var(--soft); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--create); border-color: var(--create); color: var(--create-fg); }
-.btn.primary:hover:not(:disabled) { background: #f0401f; }
-.btn.dark { background: var(--plan); border-color: var(--plan); color: var(--paper); }
+/* The one main action of a surface: #D63B1F with white text (ui-behaviour 9). */
+.btn.primary { background: var(--action); border-color: var(--action); color: var(--action-fg); font-weight: 600; padding: 0 16px; }
+.btn.primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+.btn.dark { background: var(--plan); border-color: var(--plan); color: var(--paper); font-weight: 600; }
 .btn.dark:hover:not(:disabled) { opacity: 0.9; background: var(--plan); }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover:not(:disabled) { background: var(--soft); }
-.btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
-.btn.xs { height: 24px; padding: 0 8px; font-size: 11.5px; }
-.btn.icon { width: 30px; padding: 0; }
-.btn.on { background: var(--create-soft); border-color: var(--create); color: var(--create); }
+.btn.link { background: transparent; border-color: transparent; color: var(--tool-ink); padding: 0 6px; }
+.btn.sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.btn.sm.primary { padding: 0 14px; }
+.btn.xs { height: 24px; padding: 0 9px; font-size: 11.5px; }
+.btn.icon { width: 32px; padding: 0; }
+.btn.sm.icon { width: 28px; }
+/* Pressed: a tool-blue tint, the way the Assets and History buttons show they are open. */
+.btn.on { background: var(--tool-soft); border-color: var(--tool); color: var(--tool-ink); font-weight: 600; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
@@ -143,7 +161,7 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
   font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--ink2);
 }
 .chip:hover { background: var(--soft); }
-.chip.on { background: var(--plan); color: var(--paper); border-color: var(--plan); }
+.chip.on { background: var(--tool-soft); color: var(--tool-ink); border-color: var(--tool); }
 
 .input, .textarea, .select {
   width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 10px;
