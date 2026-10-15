@@ -5,28 +5,8 @@
 // swatch, or +, opens the system colour picker from that colour (owner, 2026-10-15).
 
 import { useRef } from 'react'
-import { COLOUR_NAMES, isHex, PEN_COLOURS, PEN_WIDTHS, setPen, WIDTH_NAMES, type PenChoice, type PenColour } from './penStyle'
+import { COLOUR_NAMES, hexOf, isHex, PEN_COLOURS, PEN_WIDTHS, setPen, WIDTH_NAMES, type PenChoice, type PenColour } from './penStyle'
 import './pen.css'
-
-/** A swatch's colour as #rrggbb, to start the picker from: a named ink through this theme's token. */
-export function hexOf(c: PenColour, read: (name: string) => string = cssVar): string {
-  if (isHex(c)) return c.toLowerCase()
-  const v = read(`--pen-${c}`).trim()
-  if (isHex(v)) return v.toLowerCase()
-  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v)
-  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`.toLowerCase()
-  const rgb = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(v)
-  if (rgb) return `#${[rgb[1], rgb[2], rgb[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`
-  return '#000000'
-}
-
-function cssVar(name: string): string {
-  try {
-    return getComputedStyle(document.documentElement).getPropertyValue(name)
-  } catch {
-    return ''
-  }
-}
 
 export function PenOptions({ pen, vertical = false }: { pen: PenChoice; vertical?: boolean }) {
   const look = pen[pen.mode]
