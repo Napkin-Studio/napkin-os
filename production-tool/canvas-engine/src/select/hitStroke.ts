@@ -4,9 +4,8 @@
 // screen pixels, so it is as easy to pick at any zoom. The eraser uses the same
 // distance with its own radius.
 
-import { localPoints } from '../model/points'
+import { localPoints, strokeScale } from '../model/points'
 import type { ElementRecord } from '../model/records'
-import { strokeScale } from '../render/renderer'
 
 /** How far beyond its half-width a line is still hit, in screen pixels. */
 export const HIT_SLOP_PX = 6

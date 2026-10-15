@@ -365,9 +365,12 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 - **Strokes and unfilled shapes** are hit only near their line: within half their width plus 6 screen px, at any zoom. A click in the gaps of a drawing falls through to what lies below it.
 - **Double-click** (mouse) or **double-tap** (pen or touch: two presses within 350 ms and 16 screen px) on a member enters the container and selects that member alone. While entered, single clicks inside pick members alone, a drag on the empty inside draws a marquee over members only, and the container shows a dashed outline just inside its edge.
 - **Esc** leaves the entered container and selects it whole. A click outside it leaves it and acts as a normal click there. It is also left when someone else deletes the container.
+- **Hover** (mouse or pen, Select tool): a faint outline shows round the container a click there would select whole. There is none over a lone element, inside the entered container, or over what is already selected.
+- **Right after Generate** wraps loose strokes, the new Drawing is selected, so the next drag moves it and its strokes together.
+- **A Drawing keeps itself up to date.** A pen stroke that starts and ends inside it joins it. Moving, scaling, erasing or deleting one of its strokes refits the frame round its strokes (16 px pad), in the same undo step. A stroke dropped with its centre outside the frame leaves it. A Drawing whose last stroke leaves stays where it was. Its picture is redrawn shortly after its strokes change. Scaling a Drawing scales its strokes with it.
 - **Boards are unchanged:** the title selects and moves the board, and a click on a member selects that member (or the Drawing it is in).
 
-**Selection bar for an ink group:** **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
+**Selection bar for an ink group:** **Generate** (primary: the strokes become a Drawing, no Ungroup first), **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
 
 **Idle suggestion** (decision D13): 2 s after you stop writing, Ellis may show a quiet chip, "Ellis can read this", that opens the same preview. Nothing converts on its own.
 
@@ -398,7 +401,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 | Reference picture | Role chip · Rename · Use in shot… · More (adds Publish to team library) |
 | Frame or key visual | Open · Use in shot N · Make all sizes… · Make another · More |
 | Sketch area | Generate · More |
-| Ink group | Convert to text · Ungroup · Move to board · Delete |
+| Ink group | Generate · Convert to text · Ungroup · Move to board · Delete |
 | Document | Link to… · More |
 | Format set | Open · Export zip · More |
 | Several mixed things | Group · Move to board · Delete |

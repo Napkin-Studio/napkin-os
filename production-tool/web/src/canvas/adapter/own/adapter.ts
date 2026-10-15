@@ -623,6 +623,17 @@ export class OwnAdapter implements CanvasAdapter {
     return done
   }
 
+  /** The container a click would take whole, outlined faintly under the pointer (container-select). */
+  private hover: { x: number; y: number; w: number; h: number } | null = null
+
+  /** Point the hover outline at a scene point (null: the pointer left). True when it changed, so the caller redraws. */
+  hoverAt(p: Pt | null): boolean {
+    const next = p && !this.sketching() && !this.pointersDown ? this.selector.hoverBox(p) : null
+    const same = next === this.hover || (!!next && !!this.hover && next.x === this.hover.x && next.y === this.hover.y && next.w === this.hover.w && next.h === this.hover.h)
+    this.hover = next
+    return !same
+  }
+
   /** The selected board's handle under a scene point (the cursor shows it), or null. */
   boardHandleAt(p: Pt): Edge | null {
     return this.sketching() ? null : this.selector.boardHandleAt(p, this.vp.zoom)
@@ -753,6 +764,7 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.frame = this.selectionFrame()
       // The entered Drawing, sketch area or group: a dashed inside outline, readable on either theme.
       this.renderer.scope = this.selector.scopeBox()
+      this.renderer.hover = this.hover
       this.renderer.scopeColour = this.theme === 'dark' ? SCOPE_DARK : SCOPE_LIGHT
       this.surfaceNow()
       this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK

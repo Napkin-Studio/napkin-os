@@ -30,7 +30,8 @@ import { boundEnds } from '../render/links'
 import { containsRect, fitRect, growToHold, innerRect, overlaps, placeInBoard, resizeRect, type Edge } from '../boards/sizing'
 import type { PointerKind } from '../input/router'
 import type { ElementRecord } from '../model/records'
-import type { SceneStore } from '../model/store'
+import type { SceneStore, SceneTx } from '../model/store'
+import { isDrawn, refitDrawn } from './drawn'
 
 export interface Pt {
   x: number
@@ -116,6 +117,7 @@ export function scaled(r: ElementRecord, ox: number, oy: number, s: number, rati
 const boxOfAll = (rs: readonly ElementRecord[]): Box => unionRects(rs.map(recordBounds))
 
 const centre = (r: ElementRecord): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
+const inBox = (p: Pt, r: ElementRecord) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h
 
 /** Is p inside the polygon (even-odd)? */
 export function inPolygon(p: Pt, poly: readonly Pt[]): boolean {
@@ -257,6 +259,23 @@ export class SelectTool {
     const key = this.scope
     if (!key || !this.scopeAlive(key)) return null
     const rs = this.scopeIds(key).map((id) => this.scene.get(id)).filter((r): r is ElementRecord => !!r)
+    return rs.length ? boxOfAll(rs) : null
+  }
+
+  /**
+   * The container a click at `p` would select whole (a Drawing, sketch area or group), for a faint
+   * outline under the pointer; null over a lone element, inside the entered container, over what is
+   * already selected, or while a gesture runs.
+   */
+  hoverBox(p: Pt): Box | null {
+    if (this.busy()) return null
+    const hit = this.hit(p.x, p.y)
+    if (!hit) return null
+    const levels = this.levels(hit)
+    if (levels.length < 2 || (this.scope && levels.some((l) => l.key === this.scope))) return null
+    const top = levels[levels.length - 1]
+    if (top.ids.every((id) => this.selected.has(id))) return null
+    const rs = top.ids.map((id) => this.scene.get(id)).filter((r): r is ElementRecord => !!r)
     return rs.length ? boxOfAll(rs) : null
   }
 
@@ -559,7 +578,10 @@ export class SelectTool {
       const ox = corner === 'nw' || corner === 'sw' ? box.x + box.w : box.x
       const oy = corner === 'nw' || corner === 'ne' ? box.y + box.h : box.y
       this.scaleFrom = { box, ox, oy }
-      this.scaling = { ids: new Set(this.selected), ox, oy, s: 1 }
+      // A Drawing scales with its strokes, as it moves with them.
+      const ids = new Set(this.selected)
+      for (const id of this.selected) if (isDrawn(this.scene.get(id))) for (const r of this.scene.all()) if (r.parentId === id) ids.add(r.id)
+      this.scaling = { ids, ox, oy, s: 1 }
       this.changed()
       return
     }
@@ -661,6 +683,8 @@ export class SelectTool {
             out.push(scaled(r, ox, oy, s, ratio))
           }
           if (out.length) tx.put(out)
+          // A member scaled without its Drawing: the Drawing refits round it.
+          this.refitParents(tx, out.filter((r) => r.parentId && !ids.has(r.parentId)))
         })
       }
     } else if (this.preview) {
@@ -679,14 +703,17 @@ export class SelectTool {
           const placed = new Map(moved.map((r) => [r.id, r]))
           for (const r of moved) {
             if (carried.has(r.id) || r.kind === 'board') continue
-            // Strokes in a drawn frame or a sketch area keep that container; only board membership follows the drop.
+            // A member dropped with its centre outside its Drawing leaves it. Other frames and sketch areas
+            // keep their strokes; board membership follows the drop.
             const cur = r.parentId ? tx.get(r.parentId) : undefined
-            if (cur && cur.kind !== 'board') continue
+            if (cur && cur.kind !== 'board' && !(isDrawn(cur) && !inBox(centre(r), cur))) continue
             const parent = this.containerAt(centre(r), r.id, placed)
             if (parent !== r.parentId) placed.set(r.id, { ...r, parentId: parent })
           }
           told = this.fitToBoards(placed, carried, (id) => tx.get(id))
           if (placed.size) tx.put([...placed.values()])
+          // The Drawings members were moved in or out of refit, in this same step.
+          this.refitParents(tx, moved.filter((r) => !carried.has(r.id)))
         })
       }
     } else if (this.marquee) {
@@ -721,6 +748,11 @@ export class SelectTool {
     this.marqueeIn = null
   }
 
+  /** Refit the Drawings these records were in (their parentId before the change), inside the caller's change. */
+  private refitParents(tx: SceneTx, rs: ElementRecord[]) {
+    for (const id of new Set(rs.map((r) => r.parentId).filter((id): id is string => !!id))) refitDrawn(this.scene, tx, id)
+  }
+
   /** Delete the selection (not what is locked) as one step. Returns how many went. */
   deleteSelected(): number {
     const ids = [...this.selected].filter((id) => {
@@ -728,7 +760,11 @@ export class SelectTool {
       return r && !r.locked
     })
     if (!ids.length) return 0
-    this.scene.change((tx) => tx.remove(ids))
+    const was = ids.map((id) => this.scene.get(id)!)
+    this.scene.change((tx) => {
+      tx.remove(ids)
+      this.refitParents(tx, was.filter((r) => !ids.includes(r.parentId ?? '')))
+    })
     for (const id of ids) this.selected.delete(id)
     this.changed()
     return ids.length

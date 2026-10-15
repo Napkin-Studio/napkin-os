@@ -71,6 +71,8 @@ export class CanvasController {
   private syncTimer: ReturnType<typeof setTimeout> | null = null
   /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
   readonly sync: CanvasDocSync
+  /** Each Drawing's members as last seen (ids, and boxes from the frame's corner), so a change re-exports its picture. */
+  private readonly drawnSeen = new Map<string, string>()
 
   constructor(canvas: CanvasAdapter, services: Services) {
     this.canvas = canvas
@@ -79,6 +81,7 @@ export class CanvasController {
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
+    void this.refreshDrawings()
   }
 
   private els(): El[] {
@@ -156,6 +159,7 @@ export class CanvasController {
     void this.sync.gens(this.els())
     void this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
+    void this.refreshDrawings().catch((e) => console.warn('Could not update a drawing’s picture', e))
   }
 
   // ── delete and undo ──
@@ -281,6 +285,24 @@ export class CanvasController {
     }
   }
 
+  /**
+   * Re-export the Drawings whose strokes changed since they were last seen: a stroke joined,
+   * left, moved, was scaled or erased (features/container-select.clan). Moving a whole Drawing
+   * changes nothing here. The first sight of a Drawing only records it.
+   */
+  async refreshDrawings() {
+    const els = alive(this.els())
+    const changed: string[] = []
+    for (const f of els.filter((e) => cd(e)?.kind === 'drawn')) {
+      const kids = childrenOf(els, f.id).filter((k) => k.type !== 'text')
+      const seen = kids.map((k) => `${k.id}:${k.x - f.x},${k.y - f.y},${k.width},${k.height}`).sort().join(' ')
+      const was = this.drawnSeen.get(f.id)
+      this.drawnSeen.set(f.id, seen)
+      if (was !== undefined && was !== seen) changed.push(f.id)
+    }
+    if (changed.length) await this.refreshDrawn(changed)
+  }
+
   /** Give a text element a node id, so arrows can name it. */
   private noteId(elId: string): string {
     const el = this.els().find((e) => e.id === elId)
@@ -347,7 +369,12 @@ export class CanvasController {
     // Loose strokes become one drawing node first.
     if (plan.strokes.length) {
       const frame = await this.wrapDrawing(plan.strokes)
-      if (frame) plan = planSelection(this.els(), [...elIds.filter((id) => !plan.strokes.includes(id)), frame.id])
+      if (frame) {
+        const kept = elIds.filter((id) => !plan.strokes.includes(id))
+        // The Drawing is selected, not its strokes, so the next drag moves it whole.
+        this.canvas.select([...kept, frame.id])
+        plan = planSelection(this.els(), [...kept, frame.id])
+      }
     }
     await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
     plan = planSelection(this.els(), plan.images.map((i) => i.elId).concat(plan.notes.map((n) => n.elId)))

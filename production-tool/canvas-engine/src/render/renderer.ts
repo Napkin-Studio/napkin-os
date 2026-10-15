@@ -13,7 +13,7 @@
 
 import { getStroke } from 'perfect-freehand'
 import RBush from 'rbush'
-import { localPoints } from '../model/points'
+import { localPoints, strokeScale } from '../model/points'
 import { BLOCKS, linkRoute, midway, routeKey, type LinkEnv, type LinkRoute } from './links'
 import { photoEdge, recordBounds } from '../model/bounds'
 import { LIGHT_INK, resolveInk, type InkPalette } from '../ink/palette'
@@ -110,29 +110,8 @@ export interface SelectionFrame {
 export const FRAME_COLOUR = '#2F64F5'
 const LABEL_COLOUR = '#1E4ED8'
 
-const naturalSizes = new WeakMap<Uint8Array, { w: number; h: number }>()
-
-/** The extent of a stroke's own points: its record's w/h over this is the scale it is drawn at. */
-export function naturalSize(pts: Uint8Array): { w: number; h: number } {
-  let n = naturalSizes.get(pts)
-  if (!n) {
-    let w = 0
-    let h = 0
-    for (const p of localPoints(pts)) {
-      w = Math.max(w, p.x)
-      h = Math.max(h, p.y)
-    }
-    n = { w, h }
-    naturalSizes.set(pts, n)
-  }
-  return n
-}
-
-/** The scale a stroke record is drawn at (1 on an axis its points do not span). */
-export function strokeScale(r: { w: number; h: number }, pts: Uint8Array): { sx: number; sy: number } {
-  const n = naturalSize(pts)
-  return { sx: n.w > 1e-6 ? r.w / n.w : 1, sy: n.h > 1e-6 ? r.h / n.h : 1 }
-}
+// A stroke's drawn scale lives with its points (model/points.ts), so the hit test can use it without importing the renderer.
+export { naturalSize, strokeScale } from '../model/points'
 
 /** A stroke's filled outline, from its points relative to its origin. */
 export function strokeOutline(pts: Uint8Array, size: number): number[][] {
@@ -209,6 +188,8 @@ export class Renderer {
   /** The entered container (container-select): a dashed outline just inside its box, in `scopeColour`. */
   scope: { x: number; y: number; w: number; h: number } | null = null
   scopeColour = FRAME_COLOUR
+  /** The container a click would take whole (container-select): a faint outline round it, in `scopeColour`. */
+  hover: { x: number; y: number; w: number; h: number } | null = null
   boardLook: BoardLook | null = null
   linkLook: LinkLook | null = null
   currentBoard: string | null = null
@@ -467,10 +448,21 @@ export class Renderer {
     // A link or bound arrow whose end is gone is not drawn at all (never a line to nowhere).
     for (const rec of this.passes.rest) paint(rec)
     ctx.globalAlpha = 1
+    if (this.hover) this.drawHover(ctx, this.hover, cam)
     if (this.scope) this.drawScope(ctx, this.scope, cam)
     if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
+  }
+
+  /** The container under the pointer: a faint 1 px outline on its box, quieter than the selection frame. */
+  private drawHover(ctx: DrawContext, b: { x: number; y: number; w: number; h: number }, cam: Camera) {
+    ctx.save()
+    ctx.globalAlpha = 0.45
+    ctx.strokeStyle = this.scopeColour
+    ctx.lineWidth = 1 / cam.zoom
+    ctx.strokeRect(b.x, b.y, b.w, b.h)
+    ctx.restore()
   }
 
   /** The entered container: a dashed outline 4 screen px inside its box (container-select), so it reads as "inside". */

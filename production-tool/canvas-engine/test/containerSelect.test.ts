@@ -223,3 +223,18 @@ describe('labels', () => {
     expect(hitTitle(scene, { x: 10, y: -50 }, 0.5)?.id).toBe('D')
   })
 })
+
+describe('hover', () => {
+  it('outlines the container a click would take; nothing over a lone element, inside the entered one, or what is selected', () => {
+    const pic = element({ id: 'p', kind: 'image', z: 'z9', x: 500, y: 0, w: 60, h: 60, props: { assetSha: null, status: 'saved' } })
+    const { tool, click } = drawing([pic])
+    expect(tool.hoverBox({ x: 100, y: 150 })).toEqual({ x: 0, y: 0, w: 300, h: 300 })
+    expect(tool.hoverBox({ x: 520, y: 20 })).toBeNull()
+    expect(tool.hoverBox({ x: 900, y: 900 })).toBeNull()
+    click(100, 150, 0)
+    expect(tool.hoverBox({ x: 100, y: 150 })).toBeNull()
+    click(100, 150, 100)
+    expect(tool.scope).toBe('D')
+    expect(tool.hoverBox({ x: 200, y: 150 })).toBeNull()
+  })
+})

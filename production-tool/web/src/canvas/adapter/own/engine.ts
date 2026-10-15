@@ -314,6 +314,10 @@ export const ownEngine: CanvasEngine = {
         const edge = adapter.boardHandleAt(toScene(e.clientX, e.clientY))
         const want = edge ? RESIZE_CURSOR[edge] : ''
         if (live.style.cursor !== want) live.style.cursor = want
+        // The container a click would take: a faint outline (container-select). Select tool only.
+        if (adapter.hoverAt(adapter.router.tool === 'select' && e.pointerType !== 'touch' ? toScene(e.clientX, e.clientY) : null)) draw()
+      } else if (phase === 'leave' || phase === 'down') {
+        if (adapter.hoverAt(null)) draw()
       }
     }
     const handlers: [string, (e: PointerEvent) => void][] = [

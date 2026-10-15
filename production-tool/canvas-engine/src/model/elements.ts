@@ -7,8 +7,7 @@
 // points' own), so the way back keeps its box; a sketch area carries its ratio.
 
 import { convertExcalidraw, type ExcalidrawLike } from '../import/excalidraw'
-import { localPoints } from './points'
-import { strokeScale } from '../render/renderer'
+import { localPoints, strokeScale } from './points'
 import type { ElementRecord, Plain } from './records'
 import { zBetween } from './z'
 
