@@ -22,6 +22,7 @@ import { MockRelay } from '../relay/mock'
 import { addFrame, addShots, job, MAYA, SHA, wasm } from '../test/model'
 import type { EditSession } from './imageEditor/edits'
 import { ImageEditor } from './ImageEditor'
+import type { EditTarget } from '../model/purpose'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -61,7 +62,7 @@ async function open(session?: (frameId: string) => EditSession, makers = ['runwa
   act(() => {
     root = createRoot(el)
     root.render(createElement(ShellContext.Provider, { value: shell },
-      createElement(ServicesContext.Provider, { value: services }, createElement(ImageEditor, { shotId: ids.shots[1], onBack, onShot }))))
+      createElement(ServicesContext.Provider, { value: services }, createElement(ImageEditor, { target: { kind: 'shot', shotId: ids.shots[1] }, onBack, onTarget: (t: EditTarget) => onShot(t.kind === 'shot' ? t.shotId : t.nodeId) }))))
   })
   await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
   return { el, services, ids, onShot, onBack }
