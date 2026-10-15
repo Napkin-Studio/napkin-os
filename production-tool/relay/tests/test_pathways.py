@@ -288,8 +288,9 @@ def test_runway_region_edits_send_the_image_and_a_mask_made_from_the_box():
 
 
 def test_with_ideogram_off_a_region_edit_runs_on_gemini_with_the_box_drawn():
-    """The default agency has Ideogram off: region_edit runs on its Gemini 3 Pro alternate."""
+    """An agency with Ideogram off: region_edit runs on its Gemini 3 Pro alternate."""
     h, stand = pathway("runway")
+    h.limits("blue", allow={"claude": True, "makers": ["runway", "google"]})
     run(h, "region_edit", {k: v for k, v in INPUTS["region_edit"].items() if k != "mask"})
     body = stand.to("runway")[0]["body"]
     assert body["model"] == "gemini_image3_pro"
@@ -299,6 +300,7 @@ def test_with_ideogram_off_a_region_edit_runs_on_gemini_with_the_box_drawn():
 def test_with_magnific_off_upscale_is_refused_up_front():
     h, stand = pathway("runway")
     token = h.as_person()
+    h.limits("blue", allow={"claude": True, "makers": ["runway", "google"]})
     _, out = h.call("POST", "/jobs", {**envelope("upscale", new_id("job")), "input": INPUTS["upscale"]}, token)
     assert out["error"]["code"] in ("not_allowed", "capability_missing", "flag_off"), out
     assert not stand.to("runway")
