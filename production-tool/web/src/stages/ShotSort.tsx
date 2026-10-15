@@ -3,8 +3,8 @@
 
 import { useState, type ReactNode } from 'react'
 import {
-  DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors,
-  type Announcements, type DragEndEvent, type DragMoveEvent, type DragStartEvent,
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, pointerWithin, useSensor, useSensors,
+  type Announcements, type CollisionDetection, type DragEndEvent, type DragMoveEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, type SortingStrategy } from '@dnd-kit/sortable'
 import type { ProductionDocument } from '../contracts/types'
@@ -16,6 +16,19 @@ type Doc = ProductionDocument
 const still: SortingStrategy = () => null
 
 const centreX = (r: { left: number; width: number } | null | undefined) => (r ? r.left + r.width / 2 : null)
+
+/** With a pointer, the card under the pointer; with the keyboard (or between cards), the nearest. */
+const underPointer: CollisionDetection = (args) => {
+  const hits = args.pointerCoordinates ? pointerWithin(args) : []
+  return hits.length ? hits : closestCenter(args)
+}
+
+/** Where the pointer or finger is now, or null for the keyboard. */
+function pointerX(e: DragMoveEvent): number | null {
+  const start = e.activatorEvent as (Event & { clientX?: number; touches?: TouchList }) | null
+  const x = typeof start?.clientX === 'number' ? start.clientX : start?.touches?.[0]?.clientX
+  return typeof x === 'number' ? x + e.delta.x : null
+}
 
 export interface ShotSortProps {
   /** The shots in rank order. */
@@ -44,7 +57,8 @@ export function ShotSort({ ids, doc, onMove, overlay, note, children }: ShotSort
     const from = String(e.active.id)
     const over = e.over ? String(e.over.id) : null
     if (!over) return setDrop(null)
-    const a = centreX(e.active.rect.current.translated)
+    // The pointer's side of the card under it decides; the keyboard puts the card on the card.
+    const a = pointerX(e) ?? centreX(e.active.rect.current.translated)
     const o = centreX(e.over?.rect)
     const side = dropSide(ids, from, over, a !== null && o !== null ? { active: a, over: o } : undefined)
     setDrop((was) => (was?.over === over && was.side === side ? was : { over, side }))
@@ -72,7 +86,7 @@ export function ShotSort({ ids, doc, onMove, overlay, note, children }: ShotSort
     onDragCancel: ({ active: a }) => `Shot ${num(String(a.id))} stays where it was.`,
   }
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter}
+    <DndContext sensors={sensors} collisionDetection={underPointer}
       onDragStart={(e: DragStartEvent) => { setActive(String(e.active.id)); setDrop(null) }}
       onDragMove={track}
       onDragOver={track}
