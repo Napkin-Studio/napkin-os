@@ -491,59 +491,68 @@ Record: [`features/prompt-to-frame.clan`](../../features/prompt-to-frame.clan) �
 
 ---
 
-## Who does what (proposal, owner decides)
+## Who does what (decided by Shrey, 2026-10-15)
 
-**Proposal only. Shrey decides.** The split follows the rule: Sai takes the
-model, generation and relay side. Shrey takes the canvas, engine and UI side.
+Shrey: "Assign me the open decision discussion we have. The rest you can divide as
+per your wish, just any open decisions those designs have, give those to me, rest
+to Sai."
 
-| Record | Sai | Shrey |
-|---|---|---|
-| image-perf-fill (1) | PR 1 workers and model spike; PR 2 relay fill | Reviews the progress line |
-| image-editor-masks-layers (2, 3) | — | All |
-| topbar-declutter (4) | Uses the More menu for new Video actions | All |
-| board-move (5) | — | All |
-| connected-video (6) | Phases 0, 1, 3, 4, 5 | Phase 2 (gap chips, drift note) |
-| board-autolayout (7) | Phase 1 | Phases 2-5 |
-| container-select (8) | — | All |
-| clan-nodes (9) | Phase 1a relay half, feed picker, evals | The decision and the architecture |
-| prompt-to-frame (10) | Phases 1, 2, 6 | Phases 3-5 |
+- **Shrey decides.** He approves each design (`design.approved_by`), answers every
+  open question in the records (65 in all), and leads the clan-nodes discussion.
+  Handoff H-2 in `napkin-studio.clan`.
+- **Sai builds.** He owns the eight designed records (`owner: Sai`) and builds each
+  one once Shrey has approved it. Handoff H-3 in `napkin-studio.clan`.
 
-Shrey's list is longer. If it is too long, Sai can take topbar-declutter
-phases 1-3 or container-select phase 1. Both are self-contained.
+| Record | Open questions (Shrey) | Builds (Sai) | Size |
+|---|---|---|---|
+| image-editor-masks-layers (2, 3) | 4 | yes, **first** | L |
+| board-move (5) | 7 | yes, **first** | M |
+| container-select (8) | 5 | yes | M |
+| topbar-declutter (4) | 4 | yes | M |
+| image-perf-fill (1) | 7 | yes | L |
+| prompt-to-frame (10) | 6 | yes | L |
+| board-autolayout (7) | 7 | yes | L |
+| connected-video (6) | 8, plus approving about $19 of paid tests | yes | XL |
+| clan-nodes (9) | 17, plus choosing option A-D | after Shrey decides and a design is written | XL |
 
-### Order, so two people are never in the same files
+### Build order for Sai
 
-| Shared files | First | Then |
-|---|---|---|
-| `ImageEditor.tsx`, `Stage.tsx` | Shrey: masks-layers P1 (small PR) | Sai: image-perf-fill PR 1. Sai builds `src/ml/` workers in parallel and wires them in after P1. |
-| `canvas-engine/src/select/select.ts` press | Shrey: board-move phase 1 (`grabOrder`) | container-select, then board-autolayout phase 4 |
-| `canvas/controller.ts`, `Character.tsx` | Shrey: board-autolayout phase 3, container-select phase 4 | Shrey (or Sai, rebased): prompt-to-frame phases 3-5 |
-| `boards/sizing.ts` | Shrey: board-move phase 2 (`nearestFree`) | Sai: board-autolayout phase 1 reuses it as `freeSpotNear`. Agree the name first. |
-| `ScriptEditor.tsx` | Shrey: topbar-declutter phase 4, early | prompt-to-frame and connected-video edits after it |
-| `relay/prompts/director.v9.md` | Sai: prompt-to-frame phase 2 creates it | connected-video and audio-native extend it |
-| `stitch/`, `jobs/clips.ts` | Sai: connected-video phase 1 | — |
-| `production-tool/web/e2e/` | Whoever lands the first UI item (likely masks-layers P0) | Everyone else adds specs, not harnesses |
+Sai works on at most two items at a time (the project's WIP limit). The order puts
+the bugs Shrey hit first, then follows the shared files, so later items build on
+earlier ones instead of colliding:
 
-### What can start once the design is approved, and what waits for an answer
+1. **image-editor-masks-layers** and **board-move.** Both are bugs Shrey hit.
+   board-move lays down the press-priority table (`grabOrder`) that items 7 and 8
+   extend. masks-layers P0 also lands the Playwright harness every later UI item uses.
+2. **container-select**, after board-move (it adds rows to `grabOrder`).
+3. **topbar-declutter.** Its phase 4 moves the Script editor onto the shared bar,
+   so it lands before prompt-to-frame and connected-video touch `ScriptEditor.tsx`.
+4. **image-perf-fill**, after masks-layers (both touch `ImageEditor.tsx` and `Stage.tsx`).
+5. **prompt-to-frame.** It creates `director.v9`, which connected-video extends.
+6. **board-autolayout**, after board-move and container-select (it extends
+   `grabOrder` and reuses board-move's `nearestFree`).
+7. **connected-video**, after Shrey approves its paid tests (phase 0).
+8. **clan-nodes**, once Shrey has decided and its design is approved.
 
-Can start as soon as Shrey approves the design (no open question blocks it):
+### What Shrey's answers unblock
 
-- **Sai:** image-perf-fill phases 1-4 (web workers, model spike). prompt-to-frame
-  phase 1. board-autolayout phase 1. connected-video phase 1 (stitch).
-- **Shrey:** image-editor-masks-layers P0-P3. topbar-declutter phases 1-4 and 6-7.
-  board-move phases 2-3. container-select phase 1.
+Each item starts when Shrey approves its design. Some phases also wait for a
+specific answer:
 
-Waits for an answer from Shrey first:
-
-- image-perf-fill phases 5-7: the Ideogram default decides whether phase 6 is needed.
+- image-perf-fill phases 5-7: whether Ideogram (Fill) and Magnific (Upscale) are on by
+  default decides whether phase 6 (Gemini crop-and-stitch) is needed.
 - image-editor-masks-layers P4: the hidden-layer rules.
-- topbar-declutter phase 5: where the image zoom goes.
-- board-move phases 1 and 4: the inside click and touch.
-- connected-video phase 0 (approve about $19 of paid tests), then phase 3 and later.
-- board-autolayout phase 4: re-order instead of "stays where dropped".
+- topbar-declutter phase 5: where the Image editor's zoom goes.
+- board-move phases 1 and 4: what a click inside a board does, and touch.
+- connected-video phase 0: approve about $19 of paid Runway tests. Phase 3 and later
+  follow their results.
+- board-autolayout phase 4: whether a drop re-orders an auto board (this changes the
+  2026-10-15 "stays where dropped" rule).
 - container-select phase 2: how sketch areas behave.
-- prompt-to-frame phase 2 eval recording (paid), and whether Draw goes through the tray.
-- clan-nodes: everything except phase 1a, which needs only its own approval.
+- prompt-to-frame: whether Draw goes through the send tray, and recording director.v9
+  evals (paid).
+- clan-nodes: everything, except phase 1a (fill and read `JobInput.context`), which
+  needs only its own approval.
 
 ---
 
