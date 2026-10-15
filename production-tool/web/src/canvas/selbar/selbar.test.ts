@@ -22,6 +22,13 @@ describe('barFor (3.9)', () => {
     expect(ids({ units: 0 })).toEqual([])
   })
 
+  it('a key group (owner 2026-10-15): Stack or Spread, never Ungroup (its names make it)', () => {
+    expect(ids({ group: { ink: false, key: { label: 'Samurai · 3 views', stacked: false } } })).toEqual(['stack', 'move-to-board', 'delete'])
+    expect(ids({ group: { ink: false, key: { label: 'Samurai · 3 views', stacked: true } } })).toEqual(['spread', 'move-to-board', 'delete'])
+    expect(barFor(sel({ group: { ink: false, key: { label: 'Samurai · 3 views', stacked: false } } }))[0]).toMatchObject({ label: 'Stack' })
+    expect(barFor(sel({ group: { ink: false, key: { label: 'Samurai · 3 views', stacked: true } } }))[0]).toMatchObject({ label: 'Spread' })
+  })
+
   it('at most one primary, and only where it makes something; what is not built is greyed with why', () => {
     const rows: Partial<SelInfo>[] = [{ cards: ['script', 'storyboard'], units: 2 }, { cards: ['video'] }, { group: { ink: true } }, { units: 3 }]
     for (const r of rows) expect(barFor(sel(r)).filter((a) => a.primary).length).toBeLessThanOrEqual(1)

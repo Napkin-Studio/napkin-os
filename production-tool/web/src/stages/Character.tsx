@@ -17,6 +17,8 @@ import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
 import { PRODUCTION_CARD_CHROME } from '../canvas/chrome/cardChrome'
 import { cardOf, linkIdOf } from '../canvas/nodes/nodes'
 import { SelectionBar } from '../canvas/selbar/SelectionBar'
+import { groupLabel, keyGroupsOn, keyOfGroupId } from '../canvas/nodes/keyGroups'
+import { setStacked } from '../canvas/nodes/stack'
 import { busyQuestion, type CardKind, type SelInfo } from '../canvas/selbar/selbar'
 import { runningOn } from '../canvas/sync'
 import { CardChromeContext } from '../canvas/nodes/cardChrome'
@@ -70,7 +72,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : 'That did not 
 
 /** What our own engine adds for its selection (features/canvas-edit-tools.clan): grouping and the next sketch area's ratio. */
 type OwnEdit = Partial<{
-  selectionKind(): { kind: 'none' } | { kind: 'one' } | { kind: 'group'; ink: boolean } | { kind: 'several'; count: number }
+  selectionKind(): { kind: 'none' } | { kind: 'one' } | { kind: 'group'; group?: string; ink: boolean } | { kind: 'several'; count: number }
   group(): string | null
   ungroup(): boolean
   setSketchRatio(ratio: string): void
@@ -194,11 +196,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     const kind = ownEdit.selectionKind?.() ?? { kind: 'none' as const }
     const cards = all.map(cardOf).filter((c): c is NonNullable<ReturnType<typeof cardOf>> => !!c).map((c) => c.kind as CardKind)
     const links = all.filter((e) => linkIdOf(e)).length
-    const group = kind.kind === 'group' ? { ink: kind.ink } : null
+    // A key's views (owner 2026-10-15): "Samurai · 3 views", stacked or spread.
+    const key = kind.kind === 'group' ? keyOfGroupId(kind.group) : null
+    const kg = key ? keyGroupsOn(els, doc).find((g) => g.key === key) : undefined
+    const group = kind.kind === 'group' ? { ink: kind.ink, ...(kg ? { key: { label: groupLabel(kg), stacked: kg.stacked } } : {}) } : null
     if (!cards.length && !links && !group) return null
     const units = kind.kind === 'several' ? kind.count : kind.kind === 'none' ? 0 : 1
     return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked) }, els: all }
-  }, [ownEdit, vs, els])
+  }, [ownEdit, vs, els, doc])
   const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
@@ -410,9 +415,11 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             const img = imageOf(e)
             const c = cd(e)
             const named = img ? refsList(doc).find((r) => r.node === img.id) : undefined
+            // A stacked view shows no name of its own: its stack has one label ("Samurai · 3 views").
+            const stacked = !!(e as El & { stack?: unknown }).stack
             return (
               <span key={e.id}>
-                {named && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} />}
+                {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
               </span>
             )
@@ -430,6 +437,10 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
                   canvas.transact((all) => all.map((e) => (ids.has(e.id) ? canvas.patch(e, { locked } as Partial<El>) : e)), { undoable: true })
                 },
                 remove: () => requestDelete(ownSel.els),
+                stack: (on) => {
+                  const kg = keyGroupsOn(canvas.elements(), docStore.get()).find((g) => g.members.some((m) => ownSel.els.some((e) => e.id === m.id)))
+                  if (kg) setStacked(canvas, kg.members, on, { animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
+                },
               }} />
             )
           })()}
@@ -811,7 +822,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
             : <><b>{KIND_WORD[i.kind][0].toUpperCase() + KIND_WORD[i.kind].slice(1)}</b> <span className="faint">· not named</span></>,
           !off.has(i.nodeId), () => setOff((o) => { const n = new Set(o); if (n.has(i.nodeId)) n.delete(i.nodeId); else n.add(i.nodeId); return n })))}
           {preview.notes.map((n, k) => tick(`note${k}`, <><b>Note</b> <span className="faint">· instruction:</span> {n.length > 60 ? `${n.slice(0, 59)}…` : n}</>, true))}
-          {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : ''}</span></>,
+          {linked.map((r) => tick(r.key, <>{r.item.kind === 'ref' || r.item.kind === 'key' ? <span className="pt-ref">{r.label.split(' · ')[0]}</span> : <b>{r.label.split(' · ')[0]}</b>} <span className="faint">· {r.label.split(' · ').slice(1).join(' · ')}{r.off ? ` · ${r.off}` : ''}</span></>,
             r.elIds.length > 0 && !off.has(r.key), r.elIds.length ? () => setOff((o) => { const n = new Set(o); if (n.has(r.key)) n.delete(r.key); else n.add(r.key); return n }) : undefined))}
         </div>
       )}

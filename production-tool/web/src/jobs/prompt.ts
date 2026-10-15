@@ -54,8 +54,9 @@ export async function promptRefs(relay: FrameDeps['relay'], d: Doc, nodeId: Id, 
   const picked: NamedRef[] = []
   const add = (r: NamedRef | undefined) => { if (r?.asset && !picked.includes(r)) picked.push(r) }
   for (const it of scopeRefs(scopeOf(d, nodeId))) {
-    if (it.kind === 'ref') add(d.refs[it.id])
-    else if (it.kind === 'key' && it.name) { try { subjectPictures(d, it.name).forEach(add) } catch { /* a key with no front sends none */ } }
+    // A linked key's views come as their own items, past its 4 held back (lib/names keyViews).
+    if (it.kind === 'ref') { if (!it.held) add(d.refs[it.id]) }
+    else if (it.kind === 'key' && it.name && !it.sends) { try { subjectPictures(d, it.name).forEach(add) } catch { /* a key with no front sends none */ } }
   }
   mentions(d, words).found.forEach(add)
   const out: JobInputRef[] = []

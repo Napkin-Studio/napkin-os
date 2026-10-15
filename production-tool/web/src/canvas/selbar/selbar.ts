@@ -17,8 +17,8 @@ export interface SelInfo {
   cards: CardKind[]
   /** Links among it. */
   links: number
-  /** One whole group (ink when every member is a pen stroke), or null. */
-  group: { ink: boolean } | null
+  /** One whole group (ink when every member is a pen stroke; a key's views, owner 2026-10-15), or null. */
+  group: { ink: boolean; key?: { label: string; stacked: boolean } } | null
   /** How many things: groups count once. */
   units: number
   /** Every selected thing is locked. */
@@ -27,7 +27,7 @@ export interface SelInfo {
 
 export type ActionId =
   | 'open' | 'make-video' | 'plan-shots' | 'make-clips' | 'render-ad' | 'make-sizes'
-  | 'convert' | 'group' | 'ungroup' | 'move-to-board' | 'delete'
+  | 'convert' | 'group' | 'ungroup' | 'move-to-board' | 'delete' | 'stack' | 'spread'
 
 export interface BarAction {
   id: ActionId
@@ -64,6 +64,8 @@ const DELETE = act('delete', 'Delete', { icon: true })
 export function barFor(s: SelInfo): BarAction[] {
   if (!s.units) return []
   if (s.group && s.units === 1) {
+    // A key's views (owner 2026-10-15): derived from their names, so no Ungroup; Stack or Spread instead.
+    if (s.group.key) return [s.group.key.stacked ? act('spread', 'Spread') : act('stack', 'Stack'), act('move-to-board', 'Move to board'), DELETE]
     return s.group.ink
       ? [act('convert', 'Convert to text'), act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
       : [act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]

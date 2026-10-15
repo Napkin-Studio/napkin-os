@@ -45,7 +45,7 @@ import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
 import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeState, startWrite } from './skye'
 import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
-import { linkForMention } from '../text/mention/source'
+import { linkForMention, linkWords } from '../text/mention/source'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
 import { AVView } from './AVView'
 import { TimePill } from './TimePill'
@@ -147,7 +147,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     setNotice(n)
     setTimeout(() => setNotice((x) => (x === n ? null : x)), 8000)
   }, [])
-  const mentions = useMemo(() => scriptMentionHooks(store, scriptId, (item) => say(`Linked @${item.name} to this script.`, true)), [store, scriptId, say])
+  const mentions = useMemo(() => scriptMentionHooks(store, scriptId, (item, words) => say(words === `@${item.name}` ? `Linked @${item.name} to this script.` : `Linked ${words} to this script so @${item.name} can be used.`, true)), [store, scriptId, say])
   const attempt = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null)
     try {
@@ -433,7 +433,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
               skyeWorking={skye.working} skyeOff={skye.off}
               onLink={(refId) => {
                 const link = linkForMention(doc, { id: refId, kind: 'ref' }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
-                if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link refs[${refId}] to scripts[${scriptId}]` }).then(() => say(`Linked @${doc.refs[refId].key}_${doc.refs[refId].variant} to this script.`, true)))
+                if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link ${link.from.kind}s[${link.from.id}] to scripts[${scriptId}]` }).then(() => say(`Linked ${linkWords(doc, link)} to this script.`, true)))
               }}
               onNameAnswer={(askId, option) => void attempt(() => answerLocalAsk(store, askId, option, person, (shotId, name) => startWrite(skyeDeps, store, scriptId, { kind: 'shot', id: shotId }, 'cut_name', { name })))} />
           </>
@@ -887,9 +887,12 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
             <div key={`${it.kind}:${it.id}`} className={`se-ref ${it.via === 'mention' ? 'unlinked' : ''}`} data-via={it.via}>
               <RefThumb sha={it.asset} />
               <span className="pt-ref">@{it.name}</span>
+              {it.kind === 'key' && it.count ? <span className="faint se-refvia">{it.count} {it.count === 1 ? 'view' : 'views'}</span> : null}
               {role && <span className="pt-pill">{it.role !== role && it.via === 'link' ? it.role : role}</span>}
               {it.via === 'mention' && ref && <button type="button" className="linkbtn se-reflink" title="Named in the script but not linked to it" onClick={() => onLink(ref.id)}>Link</button>}
-              {it.via === 'board' && <span className="faint se-refvia" title="On a board linked to this script">board</span>}
+              {it.via === 'board' && (it.through && doc.keys[it.through]
+                ? <span className="faint se-refvia" title={`A view of @${doc.keys[it.through].key}, linked to this script${it.held ? '; Dex sends 4 views at most' : ''}`}>{it.held ? 'view · stays out' : 'view'}</span>
+                : <span className="faint se-refvia" title="On a board linked to this script">board</span>)}
               <span className="se-refshots">{nums.join(' ')}</span>
             </div>
           )

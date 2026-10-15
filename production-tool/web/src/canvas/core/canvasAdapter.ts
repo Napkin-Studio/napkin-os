@@ -355,6 +355,11 @@ export interface CanvasAdapter {
   anchors(id: string): Anchor[]
   /** A move being dragged and not yet written (the own engine's preview), so overlays follow it. */
   dragOffset?(): { ids: ReadonlySet<string>; dx: number; dy: number } | null
+  /**
+   * Glide these elements from where they were (`from`, by id) to where they are now, over `ms`: drawn
+   * only, never written (a stack of pictures opening or folding). Optional: an engine without it jumps.
+   */
+  animate?(from: ReadonlyMap<string, { x: number; y: number; angle: number }>, ms: number): void
   setEmphasis(e: Emphasis): void
   emphasis(): Emphasis
 

@@ -70,8 +70,9 @@ describe('@ in a shot', () => {
     expect((json.content ?? []).map((b) => b.type)).toEqual(['action'])
   })
 
-  it('opens the popover by label too, keeps the focus, and Enter inserts the mention and links the ref; Undo leaves it unknown', async () => {
+  it('opens the popover by label too, keeps the focus, and Enter inserts the mention and links its whole key once; Undo leaves it unknown', async () => {
     const { store, shot, laughing, scriptId } = await project()
+    const keyId = Object.values(store.get().keys).find((k) => k.key === 'maya')!.id
     const linked: string[] = []
     const editor = mount(store, shot, scriptId, linked)
     editor.commands.focus('end')
@@ -90,13 +91,15 @@ describe('@ in a shot', () => {
     expect(JSON.stringify(json)).toContain(`"id":"${laughing}"`)
     expect(document.querySelector('.caretfloat')).toBeNull()
     expect(linked).toEqual(['maya_laughing'])
-    expect(Object.values(store.get().links).some((l) => l.from.id === laughing && l.to.kind === 'script' && l.to.id === scriptId && l.role === 'character')).toBe(true)
+    // maya_laughing is one of maya's two views (owner 2026-10-15): the key is linked, once.
+    const toScript = Object.values(store.get().links).filter((l) => l.to.kind === 'script' && l.to.id === scriptId)
+    expect(toScript.map((l) => [l.from.kind, l.from.id, l.role])).toEqual([['key', keyId, 'character']])
     redrawMentions(editor)
     expect(editor.view.dom.querySelector('[data-type="mention"]')?.className).not.toContain('unknown')
     // Undo takes the link back; the mention stays, as a name not in this script.
     await store.undo()
     redrawMentions(editor)
-    expect(Object.values(store.get().links).some((l) => l.from.id === laughing && l.to.kind === 'script')).toBe(false)
+    expect(Object.values(store.get().links).some((l) => l.from.id === keyId && l.to.kind === 'script')).toBe(false)
     expect(editor.view.dom.querySelector('[data-type="mention"]')?.className).toContain('unknown')
     expect(editor.view.dom.querySelector('[data-type="mention"]')?.textContent).toBe('@maya_laughing')
   })

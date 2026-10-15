@@ -17,6 +17,8 @@ export interface SelectionBarActions {
   ungroup(): void
   lock(locked: boolean): void
   remove(): void
+  /** A key group: pile its views up (true) or lay them out (false), one undo step. */
+  stack?(on: boolean): void
 }
 
 const TRASH = (
@@ -37,15 +39,16 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
     else if (id === 'group') actions.group()
     else if (id === 'ungroup') actions.ungroup()
     else if (id === 'delete') actions.remove()
+    else if (id === 'stack' || id === 'spread') actions.stack?.(id === 'stack')
   }
-  const label = info.group?.ink ? 'Ink group actions' : info.cards.length ? 'Node actions' : 'Selection actions'
+  const label = info.group?.key ? `${info.group.key.label} actions` : info.group?.ink ? 'Ink group actions' : info.cards.length ? 'Node actions' : 'Selection actions'
   return (
     <div ref={ref} className="toolbar selbar" style={style} role="toolbar" aria-label={label} onPointerDown={(e) => e.stopPropagation()}>
       {bar.map((a) => a.icon
         ? <span key={a.id} className="row"><span aria-hidden="true" className="sep" /><button type="button" className="sb-icon" aria-label={a.label} title={`${a.label} (Delete)`} onClick={() => run(a.id)}>{TRASH}</button></span>
         : (
           <button key={a.id} type="button" className={`sb-btn ${a.primary ? 'primary' : ''} ${a.id === 'convert' ? 'ink' : ''}`} disabled={!!a.off} aria-disabled={!!a.off}
-            title={a.off ?? (a.id === 'group' ? 'Group (Ctrl+G)' : a.id === 'ungroup' ? 'Ungroup (Ctrl+Shift+G)' : undefined)} onClick={() => run(a.id)}>
+            title={a.off ?? (a.id === 'group' ? 'Group (Ctrl+G)' : a.id === 'ungroup' ? 'Ungroup (Ctrl+Shift+G)' : a.id === 'stack' ? 'Pile the views up; click the stack to open it' : a.id === 'spread' ? 'Lay the views out' : undefined)} onClick={() => run(a.id)}>
             {a.id === 'convert' && INK}{a.label}
           </button>
         ))}

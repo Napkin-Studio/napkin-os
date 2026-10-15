@@ -296,6 +296,17 @@ export class OwnAdapter implements CanvasAdapter {
     return el ? edgeAnchors(this.bounds([el])) : []
   }
 
+  animate(from: ReadonlyMap<string, { x: number; y: number; angle: number }>, ms: number) {
+    if (!this.renderer || !from.size) return
+    this.renderer.tween = { from: new Map([...from].map(([id, p]) => [id, { x: p.x, y: p.y, rotation: p.angle }])), t0: performance.now(), ms }
+    if (typeof requestAnimationFrame === 'undefined') return
+    const step = () => {
+      this.changed()
+      if (this.renderer?.animating()) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
   setEmphasis(e: Emphasis) {
     this.emph = { ...e }
     this.changed()
@@ -535,6 +546,13 @@ export class OwnAdapter implements CanvasAdapter {
   /** Group the selection (Ctrl/Cmd+G), one step of the person's. Returns the group id, or null. */
   group(): string | null {
     return this.selector.group()
+  }
+
+  /** The element at a scene point alone, even inside a group (a double-click): its id, or null. */
+  pickOne(p: Pt): string | null {
+    const id = this.selector.pickOne(p)
+    this.changed()
+    return id
   }
 
   /** Ungroup the outermost group of the selection (Ctrl/Cmd+Shift+G), one step. */

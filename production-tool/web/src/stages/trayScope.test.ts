@@ -36,6 +36,22 @@ describe('the send tray reads the sketch area\'s links', () => {
     expect(linkedRows(d, SKETCH, [els[0]], ['e2'])[0]).toMatchObject({ elIds: [], off: 'its picture is not on the canvas' })
   })
 
+  it('a linked key is one row naming the views that go, each picture on the canvas sent (owner 2026-10-15)', () => {
+    const d = structuredClone(ex)
+    const MAYA = 'key_01K7A00000000000000000000K'
+    for (const l of Object.values(d.links)) if (l.to.id === SKETCH) delete d.links[l.id]
+    d.links.link_k = { id: 'link_k', v: 1, field_v: {}, from: { kind: 'key', id: MAYA }, to: { kind: 'sketch', id: SKETCH }, role: 'character' }
+    const views = Object.values(d.refs).filter((r) => r.key === 'maya')
+    views.forEach((r, i) => { r.node = `node_v${i}` })
+    for (const v of ['back', 'three-quarter', 'laughing']) d.refs[`ref_${v}`] = { ...structuredClone(views[1]), id: `ref_${v}`, variant: v, node: `node_${v}` }
+    const els = [el('e2', { kind: 'sketch', id: SKETCH }), el('p0', { kind: 'pic', id: 'node_v0' }), el('p1', { kind: 'pic', id: 'node_v1' }), el('p3', { kind: 'pic', id: 'node_three-quarter' })]
+    const rows = linkedRows(d, SKETCH, els, ['e2'])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].label).toBe('@maya · 5 views · character (linked) · sends front, three-quarter, side, back (1 more stays out: 4 views at most)')
+    // The back is not on the canvas: the three that are go with the sketch.
+    expect(rows[0].elIds).toEqual(['p0', 'p3', 'p1'])
+  })
+
   it('names typed in the words that match nothing', () => {
     expect(unknownTyped(ex, 'A @jogger runs past @maya_front and @maya, then @jogger again')).toEqual(['jogger'])
   })

@@ -3,6 +3,8 @@
 // whose picture is on the canvas is sent with the sketch (its element joins the Generate); notes, ink
 // and documents linked to it are listed, but a sketch Generate does not read them yet, so they say so.
 // Names typed in the words that match no reference are a row too ("1 name isn't a reference").
+// A linked key is one row naming the views that go ("@samurai · 3 views · character (linked) · sends
+// front, side, back").
 
 import type { ProductionDocument } from '../contracts/types'
 import { byOwnId, cd } from '../canvas/sceneRead'
@@ -42,6 +44,16 @@ export function linkedRows(doc: ProductionDocument, sketchId: string | undefined
   for (const it of scopeOf(doc, sketchId)) {
     if (it.via === 'mention' || it.kind === 'unknown' || it.kind === 'board' || it.kind === 'group') continue
     const key = `${it.kind}:${it.id}`
+    // A linked key (owner 2026-10-15) is one row that says which of its views go: at most 4, the front first.
+    if (it.kind === 'key' && it.sends) {
+      const sends = it.sends.map((id) => doc.refs[id]).filter((r) => !!r)
+      const on = sends.flatMap((r) => (r.node && !chosen.has(r.node) ? [byOwnId(els, r.node)?.id] : [])).filter((x): x is string => !!x)
+      const held = (it.count ?? 0) - sends.length
+      const which = `sends ${sends.map((r) => r.variant).join(', ') || 'no picture'}${held > 0 ? ` (${held} more ${held === 1 ? 'stays' : 'stay'} out: 4 views at most)` : ''}`
+      rows.push({ key, item: it, label: `${it.label} · ${it.role} (linked) · ${which}`, elIds: on, ...(on.length ? {} : { off: 'its pictures are not on the canvas' }) })
+      continue
+    }
+    if (it.kind === 'ref' && it.through && doc.keys?.[it.through]) continue // in its key's row
     if (it.kind === 'ref') {
       const r = doc.refs[it.id]
       const el = r?.node ? byOwnId(els, r.node) : undefined
