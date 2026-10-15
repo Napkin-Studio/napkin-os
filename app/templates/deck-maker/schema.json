@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deck Maker run",
+  "description": "One deck run. `deck` is engine/deck/deck.schema.json's deck.json as the engine writes it; the rest is what the screens need around it.",
+  "type": "object",
+  "properties": {
+    "inputs": {
+      "type": "object",
+      "description": "The only three inputs a deck takes (ADR 0023): the prompt, the research, the brief.",
+      "properties": {
+        "prompt": { "type": "object", "properties": { "client": { "type": "string" }, "project": { "type": "string" }, "agency": { "type": "string" } } },
+        "research": { "type": "object", "properties": { "name": { "type": "string" }, "findings": { "type": "integer" }, "rejected": { "type": "integer" } } },
+        "brief": { "type": "object", "properties": { "name": { "type": "string" }, "fields_filled": { "type": "integer" }, "fields_total": { "type": "integer" }, "mandatories": { "type": "integer" } } },
+        "kind": { "enum": ["agency", "investor"] },
+        "format": { "enum": ["pitch", "full"] },
+        "library": { "type": "object", "description": "Optional team-library brand kit and pictures. Off until the ADR 0023 amendment is approved.", "properties": { "enabled": { "type": "boolean" } } }
+      }
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "state": { "enum": ["draft", "building", "gate", "done", "failed"] },
+        "stage": { "type": "string" },
+        "cost_usd": { "type": "number" },
+        "stages": {
+          "type": "array",
+          "items": { "type": "object", "required": ["id", "name", "status"], "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "sub": { "type": "string" }, "status": { "enum": ["done", "now", "next", "failed"] } } }
+        },
+        "gate": {
+          "type": ["object", "null"],
+          "description": "The open gate. Nothing past it runs until a person approves.",
+          "properties": {
+            "id": { "type": "string" }, "n": { "type": "integer" }, "of": { "type": "integer" }, "dex": { "type": "string" },
+            "beats": { "type": "array", "items": { "type": "object", "properties": { "n": { "type": "string" }, "title": { "type": "string" }, "src": { "type": "string" }, "basis": { "enum": ["brief", "research", "proposal", "placeholder"] } } } },
+            "more_beats": { "type": "integer" },
+            "checks": { "type": "array", "items": { "type": "object", "properties": { "ok": { "type": "boolean" }, "text": { "type": "string" } } } }
+          }
+        },
+        "approvals": { "type": "object", "additionalProperties": { "type": "object", "properties": { "by": { "type": "string" }, "at": { "type": "string" } } } }
+      }
+    },
+    "deck": { "type": "object", "description": "deck.json: meta, order, slides keyed by id, requirements. Plus appendix_count." },
+    "evidence": { "type": "object", "description": "ref -> { kind, text }: what each cited ref says, for the Evidence tab.", "additionalProperties": { "type": "object", "properties": { "kind": { "type": "string" }, "text": { "type": "string" } } } },
+    "validation": { "type": "object", "properties": { "errors": { "type": "integer" }, "to_supply": { "type": "integer" }, "findings": { "type": "object", "additionalProperties": { "type": "array" } } } },
+    "report": { "type": "object", "properties": { "seconds": { "type": "number" }, "tokens": { "type": "integer" }, "cost_usd": { "type": "number" } } }
+  }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44">
+  <!-- The Deck Maker's mark: a slide with a title bar and two lines. One colour on transparent. -->
+  <rect fill="none" stroke="black" stroke-width="3" x="6" y="9" width="32" height="22" rx="3"/>
+  <rect fill="black" x="11" y="14" width="14" height="3" rx="1.5"/>
+  <rect fill="black" x="11" y="21" width="20" height="2" rx="1"/>
+  <rect fill="black" x="16" y="35" width="12" height="3" rx="1.5"/>
+</svg>

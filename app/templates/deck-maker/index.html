@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deck Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" />
+<style>
+/* The studio palette, copied from app/src/index.css (a template is its own page, so it
+   cannot import the shell's sheet). Light is the default; the shell pushes
+   data-color-scheme, and with none set we follow the OS. --tool is the Deck tool's identity,
+   as in production-tool/web/src/styles.css. --create is the one action colour. */
+:root{
+  --paper:#FFFFFF; --card:#FFFFFF; --soft:#F5F6F8; --soft-2:#F2F3F6; --frost:rgba(255,255,255,.82);
+  --line:#D6DAE2; --line-soft:#E7E9EE; --dots:#D6DAE2; --canvas:#FAFAFB;
+  --ink:#14161B; --ink2:#4A4F5C; --ink3:#737987;
+  --create:#FF4F2E; --create-fg:#FFFFFF; --on-fill:#FFFFFF;
+  --tool:#2F64F5; --tool-ink:color-mix(in oklab,var(--tool) 78%,var(--ink)); --tool-soft:color-mix(in oklab,var(--tool) 10%,transparent);
+  --ok-bg:#e7f6ed; --ok-fg:#15803d; --warn-bg:#fdf3e3; --warn-fg:#b45309;
+  --shadow-soft:0 10px 30px rgba(20,30,60,.08); --shadow-lift:0 12px 32px rgba(20,30,60,.16),0 2px 6px rgba(20,30,60,.08);
+  --f-display:'Geist','Helvetica Neue',Arial,sans-serif; --f-mono:'Geist Mono',ui-monospace,Menlo,monospace;
+}
+:root[data-color-scheme="dark"]{
+  --paper:#0F1114; --card:#161A1F; --soft:#1B1F25; --soft-2:#22262D; --frost:rgba(15,17,20,.8);
+  --line:#2A2F38; --line-soft:#22262D; --dots:#22262D; --canvas:#0F1114;
+  --ink:#F2F3F5; --ink2:#A6ACB8; --ink3:#7A808C;
+  --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
+  --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
+  --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-color-scheme="light"]):not([data-color-scheme="dark"]){
+    --paper:#0F1114; --card:#161A1F; --soft:#1B1F25; --soft-2:#22262D; --frost:rgba(15,17,20,.8);
+    --line:#2A2F38; --line-soft:#22262D; --dots:#22262D; --canvas:#0F1114;
+    --ink:#F2F3F5; --ink2:#A6ACB8; --ink3:#7A808C;
+    --tool-ink:color-mix(in oklab,var(--tool) 70%,white); --tool-soft:color-mix(in oklab,var(--tool) 22%,transparent);
+    --ok-bg:#1e3a2f; --ok-fg:#4ade80; --warn-bg:#3a2a1e; --warn-fg:#f59e0b;
+    --shadow-soft:0 10px 30px rgba(0,0,0,.4); --shadow-lift:0 12px 32px rgba(0,0,0,.5);
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:var(--f-display);font-size:14px;line-height:1.5;color:var(--ink);background-color:var(--canvas);
+  background-image:radial-gradient(var(--dots) 1px,transparent 1px);background-size:24px 24px;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.55}
+button:focus-visible,input:focus-visible{outline:3px solid var(--create);outline-offset:2px}
+.mono{font-family:var(--f-mono)}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.eyebrow.dark{color:var(--ink2)}
+
+/* bar */
+.bar{position:sticky;top:0;z-index:10;height:48px;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--frost);
+  -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line-soft)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.brand .tool{color:var(--tool-ink)}
+.sep{color:var(--line)}
+.crumb{font-size:14px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.spacer{flex:1}
+.chip{font-family:var(--f-mono);font-size:11px;color:var(--ink2);background:var(--soft-2);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.chip.ok{color:var(--ok-fg);background:var(--ok-bg)}
+.chip.warn{color:var(--warn-fg);background:var(--warn-bg)}
+.chip.cost{border:1px solid var(--line-soft);background:var(--soft);padding:5px 12px;font-size:12px}
+.steps{display:flex;gap:4px;background:var(--soft-2);border-radius:999px;padding:3px}
+.steps button{height:28px;padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--ink2);font-size:12px;font-weight:600}
+.steps button[aria-current="step"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(20,22,27,.1)}
+.btn{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-size:13px;font-weight:500;color:var(--ink)}
+.btn.sm{height:30px;padding:0 12px;font-size:12px}
+.btn.go{border:0;background:var(--create);color:var(--create-fg);font-weight:600;box-shadow:0 1px 3px rgba(20,22,27,.1)}
+.btn.big{height:46px;padding:0 24px;font-size:15px}
+.btn.dark{border:0;background:var(--ink);color:var(--paper)}
+
+/* surfaces */
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-soft)}
+.frost{background:var(--frost);border:1px solid var(--line-soft);border-radius:18px;box-shadow:var(--shadow-soft)}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.pill.ok{color:var(--ok-fg);background:var(--ok-bg)} .pill.warn{color:var(--warn-fg);background:var(--warn-bg)} .pill.plain{color:var(--ink2);background:var(--soft-2)}
+h1{font-size:44px;line-height:1.05;letter-spacing:-.03em;font-weight:800}
+h1.sm{font-size:34px}
+.lede{font-size:16px;line-height:1.55;color:var(--ink2);max-width:600px}
+.note{font-size:13px;line-height:1.5;color:var(--ink2)}
+.rule{height:1px;background:var(--line-soft);margin:16px 0}
+.dot{margin-top:7px;width:6px;height:6px;border-radius:999px;background:var(--tool);flex-shrink:0}
+
+/* screen 1 */
+.start{max-width:1280px;margin:0 auto;padding:40px 40px 64px;display:grid;grid-template-columns:minmax(0,780px) 380px;gap:40px;justify-content:space-between;align-items:start}
+.stack{display:flex;flex-direction:column;gap:14px}
+.sec{padding:20px 22px}
+.sec-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-h b{font-size:16px;font-weight:700}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin-bottom:6px}
+.inp{width:100%;height:42px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font-size:15px;background:var(--card)}
+.doc{display:flex;align-items:center;gap:12px;background:var(--soft);border-radius:12px;padding:12px}
+.doc .ico{width:36px;height:44px;border-radius:6px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10px;color:var(--tool-ink);flex-shrink:0}
+.pick{text-align:left;border-radius:14px;padding:12px 14px;border:1.5px solid var(--line);background:var(--card);flex:1}
+.pick[aria-pressed="true"]{border-color:var(--tool);background:var(--tool-soft)}
+.pick b{display:block;font-size:14px;font-weight:600} .pick span{display:block;font-size:12px;line-height:1.4;color:var(--ink2);margin-top:3px}
+.row{display:flex;gap:10px}
+.summary{padding:22px}
+.summary .t{margin:12px 0 4px;font-size:22px;font-weight:700;letter-spacing:-.02em}
+.li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;margin-top:10px}
+.lib{padding:18px 22px;background:var(--card);border:1px solid var(--line);border-radius:18px}
+.lib.off{border-style:dashed;background:transparent}
+
+/* screen 2 */
+.build{max-width:1400px;margin:0 auto;padding:24px 32px 64px;display:grid;grid-template-columns:300px minmax(0,1fr) 320px;gap:32px;align-items:start}
+.stage{display:flex;gap:12px;align-items:flex-start;padding:9px 0}
+.ring{width:20px;height:20px;border-radius:999px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:1.5px solid var(--line);background:var(--card);color:var(--ink3)}
+.ring.done{border-color:var(--ok-fg);background:var(--ok-fg);color:var(--on-fill)}
+.ring.now{border-color:var(--tool);background:var(--tool);color:var(--on-fill)}
+.ring.failed{border-color:var(--create);background:var(--create);color:var(--on-fill)}
+.stage b{display:block;font-size:14px;font-weight:500} .stage.now b{font-weight:700}
+.stage span.s{display:block;font-family:var(--f-mono);font-size:11px;color:var(--ink3)}
+.dex{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line-soft);background:var(--soft)}
+.dex .av{width:28px;height:28px;border-radius:999px;background:var(--tool);color:var(--on-fill);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.beat{display:flex;gap:16px;padding:13px 20px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+.beat .n{font-family:var(--f-mono);font-size:12px;color:var(--ink3);width:22px;padding-top:2px}
+.check{display:flex;gap:10px;align-items:center;font-size:13px}
+.tick{width:16px;height:16px;border-radius:999px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tick.ok{background:var(--ok-bg);color:var(--ok-fg)} .tick.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.spin{animation:qspin 2.4s ease-in-out infinite;transform-origin:50% 50%}
+@keyframes qspin{0%{transform:rotate(-45deg)}100%{transform:rotate(315deg)}}
+
+/* screen 3 */
+.review{display:grid;grid-template-columns:230px minmax(0,1fr) 320px;gap:24px;padding:20px 24px 40px;max-width:1500px;margin:0 auto;align-items:start}
+.rail{padding:14px;position:sticky;top:68px;max-height:calc(100vh - 92px);overflow:auto}
+.thumb{width:100%;text-align:left;display:flex;gap:10px;align-items:center;padding:8px;border-radius:12px;border:1.5px solid transparent;background:transparent;margin-bottom:8px}
+.thumb[aria-current="true"]{border-color:var(--tool);background:var(--tool-soft)}
+.thumb .n{font-family:var(--f-mono);font-size:11px;color:var(--ink3);width:16px}
+.thumb .t{font-size:12px;font-weight:600;line-height:1.25} .thumb .st{display:block;font-size:10px;font-weight:600}
+.st.ok{color:var(--ok-fg)} .st.plain{color:var(--ink2)} .st.warn{color:var(--warn-fg)}
+.slide{aspect-ratio:16/9;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lift);padding:5.5% 6.5%;position:relative;overflow:hidden}
+.slide .kick{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--create)}
+.slide h2{margin:12px 0 0;font-size:clamp(22px,3vw,34px);line-height:1.12;letter-spacing:-.03em;font-weight:800;max-width:70%}
+.slide ul{list-style:none;margin-top:22px;display:flex;flex-direction:column;gap:12px;max-width:62%}
+.slide li{display:flex;gap:12px;align-items:flex-start;font-size:clamp(14px,1.5vw,17px);line-height:1.45}
+.slide li .dot{margin-top:9px;background:var(--ink)}
+.slide sup{font-family:var(--f-mono);font-size:10px;color:var(--tool-ink);margin-left:3px}
+.slide .foot{position:absolute;left:6.5%;right:6.5%;bottom:4%;display:flex;font-family:var(--f-mono);font-size:10px;color:var(--ink3)}
+.ph{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:.9em;color:var(--warn-fg);background:var(--warn-bg);border-radius:8px;padding:2px 8px}
+.ph i{font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.tabs{display:flex;gap:4px;background:var(--soft-2);border-radius:999px;padding:3px;margin-bottom:14px}
+.tabs button{flex:1;height:30px;border:0;border-radius:999px;font-size:12px;font-weight:600;background:transparent;color:var(--ink2)}
+.tabs button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(20,22,27,.1)}
+.ev{background:var(--card);border:1px solid var(--line-soft);border-radius:12px;padding:12px;margin-bottom:10px}
+.ev .id{font-family:var(--f-mono);font-size:11px;color:var(--tool-ink);margin-bottom:4px}
+.side{display:flex;flex-direction:column;gap:12px;position:sticky;top:68px}
+
+/* screen 4 */
+.present{display:grid;grid-template-columns:minmax(0,760px) 210px 360px;gap:32px;padding:24px 32px 40px;max-width:1500px;margin:0 auto;align-items:start;justify-content:space-between}
+.pslide{aspect-ratio:16/9;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow-lift);padding:5.5% 6.5%;position:relative;overflow:hidden}
+.pslide h2{margin:12px 0 0;font-size:clamp(28px,4.2vw,56px);line-height:1.04;letter-spacing:-.035em;font-weight:800;max-width:75%}
+.pslide .kick{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--create)}
+.pslide .foot{position:absolute;left:6.5%;right:6.5%;bottom:4%;display:flex;font-family:var(--f-mono);font-size:10px;color:var(--ink3)}
+.controls{margin-top:14px;display:flex;align-items:center;gap:10px;background:var(--frost);border:1px solid var(--line-soft);border-radius:999px;padding:8px 10px;box-shadow:var(--shadow-soft)}
+.circ{width:38px;height:38px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-size:16px}
+.prog{flex:1;height:4px;border-radius:2px;background:var(--line-soft);position:relative}
+.prog span{position:absolute;left:0;top:0;height:4px;border-radius:2px;background:var(--tool)}
+.mini{width:210px;aspect-ratio:16/9;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;overflow:hidden}
+.mini .k{font-family:var(--f-mono);font-size:7px;letter-spacing:.12em;text-transform:uppercase;color:var(--create)}
+.mini .t{margin-top:6px;font-size:13px;line-height:1.15;font-weight:800;letter-spacing:-.02em}
+.fmt{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.fmt .x{width:36px;height:36px;border-radius:10px;background:var(--soft-2);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10px;font-weight:500}
+.callout{margin-top:16px;background:var(--warn-bg);border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5;color:var(--warn-fg)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);border-radius:999px;padding:10px 18px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s}
+.toast.on{opacity:1}
+@media (max-width:1100px){
+  .start,.build,.review,.present{grid-template-columns:minmax(0,1fr);padding:20px 16px 48px}
+  .rail,.side{position:static;max-height:none}
+  .bar{flex-wrap:wrap;height:auto;padding:8px 16px}
+  h1{font-size:34px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- The pure part: what a screen decides, with no DOM. app/tests/deckMaker.test.ts runs this block alone. -->
+<script id="deck-logic">
+var DeckLogic = (function () {
+  'use strict';
+
+  /** The agent's marks from a block: a placeholder is text only the user can supply. */
+  function isPlaceholder(block) {
+    return !!(block && (block.human === true || /^\[[^\]]+\]$/.test(String(block.text || '').trim())));
+  }
+
+  /** Slide ids in story order. Backup slides (after the divider) are counted, not listed. */
+  function presented(deck) {
+    return ((deck && deck.order) || []).filter(function (id) { return deck.slides && deck.slides[id]; });
+  }
+
+  /** Every ref a slide cites, once, in the order it first appears. */
+  function refsOf(slide) {
+    var seen = {}, out = [];
+    function add(list) {
+      (list || []).forEach(function (r) { if (!seen[r]) { seen[r] = 1; out.push(r); } });
+    }
+    ((slide && slide.blocks) || []).forEach(function (b) { add(b.refs); });
+    ((slide && slide.claims) || []).forEach(function (c) { add(c.refs); });
+    return out;
+  }
+
+  /** What each cited ref says. A ref the run does not hold is shown as missing, never skipped. */
+  function evidenceFor(slide, evidence) {
+    return refsOf(slide).map(function (ref) {
+      var e = evidence && evidence[ref];
+      return e ? { ref: ref, kind: e.kind, text: e.text }
+               : { ref: ref, kind: 'not found', text: 'This run holds nothing under that name.' };
+    });
+  }
+
+  /** needs-you when a placeholder is on the slide or the engine says so; drafted; else from source. */
+  function statusOf(slide) {
+    if (!slide) return 'drafted';
+    if (slide.status === 'needs_human') return 'need';
+    if (slide.status === 'drafted') return 'draft';
+    return 'src';
+  }
+
+  var STATUS = {
+    src: { label: 'From source', tone: 'ok' },
+    draft: { label: 'Drafted', tone: 'plain' },
+    need: { label: 'Needs you', tone: 'warn' }
+  };
+
+  /** The Checks tab: what the validators found, then what the view can see for itself. */
+  function checksFor(id, slide, validation) {
+    var out = [];
+    var found = (validation && validation.findings && validation.findings[id]) || [];
+    found.forEach(function (f) { out.push({ ok: false, text: f.message }); });
+    var blocks = (slide && slide.blocks) || [];
+    var ph = blocks.filter(isPlaceholder).length;
+    if (ph && !found.length) out.push({ ok: false, text: ph + ' placeholder' + (ph > 1 ? 's' : '') + ' to supply' });
+    if (!found.length && !ph) {
+      out.push({ ok: true, text: 'No problems found on this slide' });
+    }
+    var bare = ((slide && slide.claims) || []).filter(function (c) { return !(c.refs || []).length; });
+    bare.forEach(function (c) { out.push({ ok: true, text: 'Labelled ' + (c.basis || 'opinion') + ', so it carries no source' }); });
+    return out;
+  }
+
+  /** One gate approved: that stage is done and the next one starts. Anything but the open gate is refused. */
+  function approveGate(run, gateId, by, at) {
+    if (!run || !run.gate || run.gate.id !== gateId) return null;
+    var stages = run.stages.map(function (s) { return { id: s.id, name: s.name, sub: s.sub, status: s.status }; });
+    var i = stages.findIndex(function (s) { return s.id === gateId; });
+    if (i < 0) return null;
+    stages[i].status = 'done';
+    var next = stages.find(function (s, k) { return k > i && s.status === 'next'; });
+    if (next) next.status = 'now';
+    var approvals = {};
+    Object.keys(run.approvals || {}).forEach(function (k) { approvals[k] = run.approvals[k]; });
+    approvals[gateId] = { by: by, at: at };
+    return {
+      state: 'building', stage: next ? next.id : run.stage, cost_usd: run.cost_usd,
+      stages: stages, gate: null, approvals: approvals
+    };
+  }
+
+  /** The rule the gate exists for: with a gate open, no stage after it may be running. */
+  function gateHolds(run) {
+    if (!run || !run.gate) return true;
+    var i = run.stages.findIndex(function (s) { return s.id === run.gate.id; });
+    return run.stages.every(function (s, k) { return k <= i || s.status === 'next'; });
+  }
+
+  /** The line under "You will get". Numbers come from the run, never from the screen. */
+  function summaryOf(inputs, deck) {
+    var kind = inputs.kind === 'investor' ? 'An investor deck' : 'An agency pitch';
+    var size = inputs.format === 'full'
+      ? 'Every slide in story order'
+      : 'At most 18 slides, then a hidden appendix';
+    var n = presented(deck).length;
+    return {
+      title: kind + ' for ' + (inputs.prompt.client || '[Client]'),
+      note: size + '. Every number points to the research or the brief.',
+      built: n
+    };
+  }
+
+  /** The agency name, or the placeholder the deck itself shows. */
+  function agencyShown(inputs) {
+    return (inputs.prompt.agency || '').trim() || '[Agency]';
+  }
+
+  return {
+    isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
+    statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate,
+    gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown
+  };
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var L = DeckLogic;
+
+  // ── host contract (same as the other apps) ────────────────────────────
+  function data() { return (window.__CLAN__ && window.__CLAN__.data) || {}; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toast(m) { var t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('on'); }, 3200); }
+  function put(obj, action, rationale) {
+    if (!window.clan || !window.clan.patchData) { toast('No host bridge: changes are not being saved.'); return Promise.resolve(); }
+    return window.clan.patchData(obj, { actor: 'human', action: action, rationale: rationale || '', pinned: false });
+  }
+
+  // View state only. Anything the document should keep is written with put().
+  var view = { screen: null, slide: null, tab: 'evidence', present: 0 };
+  var pending = {}; // inputs picked on the Start screen, written when Build is pressed
+
+  function d() {
+    var x = data();
+    return {
+      inputs: x.inputs || { prompt: {}, research: {}, brief: {}, kind: 'agency', format: 'pitch', library: { enabled: false } },
+      run: x.run || { state: 'draft', stages: [], gate: null, approvals: {} },
+      deck: x.deck || { order: [], slides: {} },
+      evidence: x.evidence || {}, validation: x.validation || {}, report: x.report || {}, exports: x.exports || {},
+      changes: x.change_requests || []
+    };
+  }
+
+  function screenOf(s) {
+    if (view.screen) return view.screen;
+    if (s.run.state === 'done') return 'review';
+    if (s.run.state === 'gate' || s.run.state === 'building') return 'build';
+    return 'start';
+  }
+
+  // ── pieces ────────────────────────────────────────────────────────────
+  var MARK = '<svg aria-hidden="true" width="24" height="24" viewBox="0 0 32 32"><g transform="rotate(-45 16 16)">' +
+    '<path d="M16 16 L16 2 A14 14 0 0 1 30 16 Z" fill="#FF4F2E"/><path d="M16 16 L30 16 A14 14 0 0 1 16 30 Z" fill="#8B919E"/>' +
+    '<path d="M16 16 L16 30 A14 14 0 0 1 2 16 Z" fill="#14161B"/><path d="M16 16 L2 16 A14 14 0 0 1 16 2 Z" fill="#DADDE3"/></g></svg>';
+  var MARK_SPIN = MARK.replace('width="24" height="24"', 'class="spin" width="40" height="40"').replace('<g transform="rotate(-45 16 16)">', '<g>');
+
+  function bar(s, scr) {
+    var p = s.inputs.prompt;
+    var title = (p.client && p.project) ? esc(p.client) + ' · ' + esc(p.project) : 'New deck';
+    var steps = [['start', 'Start'], ['build', 'Build'], ['review', 'Review'], ['present', 'Present']];
+    var v = s.validation;
+    var chip = s.run.state === 'done' || scr === 'review'
+      ? '<span class="chip ' + ((v.errors || 0) ? 'warn' : 'ok') + '">' + (v.errors || 0) + ' errors · ' + (v.to_supply || 0) + ' to supply</span>' : '';
+    var cost = (s.run.cost_usd != null && scr !== 'start') ? '<span class="chip cost">$' + Number(s.run.cost_usd).toFixed(2) + ' so far</span>' : '';
+    return '<header class="bar">' + MARK +
+      '<span class="brand">Napkin Studio <span class="tool">Deck</span></span><span class="sep">/</span><span class="crumb">' + title + '</span>' + chip +
+      '<div class="spacer"></div>' + cost +
+      '<nav class="steps" aria-label="Deck steps">' + steps.map(function (st) {
+        return '<button data-go="' + st[0] + '"' + (scr === st[0] ? ' aria-current="step"' : '') + '>' + st[1] + '</button>';
+      }).join('') + '</nav></header>';
+  }
+
+  function pick(name, id, cur, title, note) {
+    return '<button class="pick" data-' + name + '="' + id + '" aria-pressed="' + (cur === id) + '"><b>' + esc(title) + '</b><span>' + esc(note) + '</span></button>';
+  }
+
+  // ── 1 · Start ─────────────────────────────────────────────────────────
+  function start(s) {
+    var inp = s.inputs;
+    var kind = pending.kind || inp.kind, format = pending.format || inp.format;
+    var sum = L.summaryOf({ prompt: inp.prompt, kind: kind, format: format }, s.deck);
+    var r = inp.research, b = inp.brief;
+    function field(id, lab, val, ph) {
+      return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(val || '') + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
+    }
+    var attached = '<span class="pill ok">Attached</span>';
+    return '<main class="start"><div>' +
+      '<div class="eyebrow">New deck</div>' +
+      '<h1 style="margin:10px 0 6px">What are we pitching?</h1>' +
+      '<p class="lede" style="margin-bottom:28px">Three things go in: your prompt, the research and the brief. Nothing else is used, so every line on a slide can be traced back to one of them.</p>' +
+      '<div class="stack">' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">01</span><b>Your prompt</b><div class="spacer"></div>' +
+        '<span class="pill ' + (inp.prompt.client && inp.prompt.project ? 'ok' : 'warn') + '">' + (inp.prompt.client && inp.prompt.project ? 'Ready' : 'Needs a client and a project') + '</span></div>' +
+        '<div class="three">' + field('client', 'Client', inp.prompt.client) + field('project', 'Project', inp.prompt.project) + field('agency', 'Agency (optional)', inp.prompt.agency, 'Shows as [Agency]') + '</div></section>' +
+      '<div class="two">' +
+        '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Research</b><div class="spacer"></div>' + (r.name ? attached : '<span class="pill plain">Optional</span>') + '</div>' +
+          (r.name ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected</div></div></div>' +
+            '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.</p>' : '<p class="note">No research attached. The deck then rests on the brief alone.</p>') + '</section>' +
+        '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Brief</b><div class="spacer"></div>' + (b.name ? attached : '<span class="pill warn">Needed</span>') + '</div>' +
+          (b.name ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(b.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(b.fields_filled) + ' of ' + esc(b.fields_total) + ' fields · ' + esc(b.mandatories) + ' mandatories</div></div></div>' +
+            '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">A deck cannot start without a brief.</p>') + '</section>' +
+      '</div>' +
+      '<div class="two"><div><div class="eyebrow dark" style="margin-bottom:8px">Kind of deck</div><div class="row">' +
+        pick('kind', 'agency', kind, 'Agency pitch', 'Territories, one idea, executions') + pick('kind', 'investor', kind, 'Investor deck', 'Problem, market, traction, ask') +
+      '</div></div><div><div class="eyebrow dark" style="margin-bottom:8px">Length</div><div class="row">' +
+        pick('format', 'pitch', format, 'Pitch · 18 slides', 'Then an appendix of backup') + pick('format', 'full', format, 'Full story', 'Every slide in story order') +
+      '</div></div></div></div></div>' +
+      '<aside class="stack">' +
+      '<div class="frost summary"><div class="eyebrow">You will get</div><div class="t">' + esc(sum.title) + '</div><div class="note">' + esc(sum.note) + '</div><div class="rule"></div>' +
+        '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Web deck</b> to present in a browser, with a presenter view</span></div>' +
+        '<div class="li"><span class="dot"></span><span><b style="font-weight:600">PowerPoint</b> with notes and the appendix hidden</span></div>' +
+        '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Animated deck</b> you can present from HyperFrames</span></div>' +
+        '<div class="rule"></div><p class="note">You approve the storyline and pick a territory on the way. Then you review the finished deck.</p>' +
+        '<button class="btn go big" id="build" style="width:100%;margin-top:18px;height:48px">Build deck</button>' +
+        '<p class="mono" style="margin-top:10px;text-align:center;font-size:11px;color:var(--ink3)">' + (s.run.stages.length ? 'Opens the recorded run. Live building needs the engine server.' : 'Live building needs the engine server.') + '</p></div>' +
+      library(s) + '</aside></main>';
+  }
+
+  // The team-library shelf is off until ADR 0027 (the amendment to the deck input rule, ADR 0023) is approved.
+  function library(s) {
+    if (!s.inputs.library || !s.inputs.library.enabled) {
+      return '<div class="lib off"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:14px;font-weight:600">From the team library</b><span class="pill plain">Off</span></div>' +
+        '<p class="note" style="margin-top:8px">A brand kit and pictures from your team library would be optional inputs. That changes the rule that a deck takes only the prompt, the research and the brief, so it stays off until that rule change is approved.</p></div>';
+    }
+    return '<div class="lib"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:14px;font-weight:600">From the team library</b><span class="note">optional</span></div>' +
+      '<p class="note" style="margin-top:10px">Pictures replace the "illustrative" placeholders. Font files are never taken from a PDF.</p></div>';
+  }
+
+  // ── 2 · Build, with gates ─────────────────────────────────────────────
+  function build(s) {
+    var run = s.run, gate = run.gate;
+    var stages = run.stages.map(function (st) {
+      var glyph = st.status === 'done' ? '✓' : st.status === 'now' ? '•' : st.status === 'failed' ? '!' : '';
+      return '<div class="stage ' + st.status + '"><span class="ring ' + st.status + '" aria-hidden="true">' + glyph + '</span><div><b>' + esc(st.name) + '</b><span class="s">' + esc(st.sub) + '</span></div></div>';
+    }).join('');
+    var main;
+    if (gate) {
+      var bases = {
+        brief: ['From brief', 'ok'], research: ['From research', 'ok'], proposal: ['Our proposal', 'warn'], placeholder: ['Placeholder', 'warn']
+      };
+      main = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="pill warn">Needs you</span><span class="eyebrow">Gate ' + esc(gate.n) + ' of ' + esc(gate.of) + '</span></div>' +
+        '<h1 class="sm" style="margin-bottom:6px">Approve the storyline</h1>' +
+        '<p class="note" style="font-size:15px;max-width:600px;margin-bottom:20px">This is the order the pitch will tell its story in. Change a beat now and every later step follows it. Changing it later costs more.</p>' +
+        '<div class="card" style="overflow:hidden"><div class="dex"><span class="av" aria-hidden="true">D</span><span class="mono" style="font-size:12px">Dex · directs</span><span class="note">' + esc(gate.dex) + '</span></div>' +
+        gate.beats.map(function (b) {
+          var c = bases[b.basis] || bases.brief;
+          return '<div class="beat"><span class="n">' + esc(b.n) + '</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;line-height:1.35">' + esc(b.title) + '</div><div class="mono eyebrow" style="margin-top:3px;text-transform:none;letter-spacing:0">' + esc(b.src) + '</div></div><span class="pill ' + c[1] + '">' + c[0] + '</span></div>';
+        }).join('') +
+        (gate.more_beats ? '<div style="padding:11px 20px;font-size:13px;color:var(--ink3)">+ ' + esc(gate.more_beats) + ' more beats, then the appendix</div>' : '') + '</div>' +
+        '<div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn go big" id="approve">Approve and continue</button>' +
+        '<button class="btn big" style="padding:0 20px;font-size:14px" data-edit="beats">Edit beats</button><button class="btn big" style="padding:0 20px;font-size:14px" data-retry="storyline">Ask Dex to try again</button></div>';
+    } else {
+      var now = run.stages.filter(function (x) { return x.status === 'now'; })[0];
+      main = '<h1 class="sm" style="margin-bottom:6px">' + (now ? esc(now.name) : 'Waiting') + '</h1>' +
+        '<p class="note" style="font-size:15px;max-width:600px">' + (now ? 'Next in line. This step is waiting for the engine, which is not connected to this document yet.' : 'Nothing is running.') + '</p>';
+    }
+    var checks = gate ? '<div class="card" style="padding:20px"><div class="eyebrow" style="margin-bottom:12px">Checked so far</div><div class="stack" style="gap:10px">' +
+      gate.checks.map(function (c) { return '<div class="check"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' + esc(c.text) + '</span></div>'; }).join('') + '</div></div>' : '';
+    return '<main class="build"><aside class="frost" style="padding:20px"><div class="eyebrow" style="margin-bottom:14px">How the deck gets built</div>' + stages + '</aside>' +
+      '<section>' + main + '</section><aside class="stack">' +
+      '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + (gate ? MARK_SPIN.replace('class="spin"', '') : MARK_SPIN) +
+        '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? 'Nothing runs until you approve' : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
+        '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>' +
+      checks + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+  }
+
+  // ── 3 · Review ────────────────────────────────────────────────────────
+  function slideHtml(id, s, n, total, big) {
+    var sl = s.deck.slides[id];
+    var items = (sl.blocks || []).map(function (b) {
+      if (L.isPlaceholder(b)) return '<li><span class="dot"></span><span class="ph"><i>To supply</i>' + esc(b.text) + '</span></li>';
+      var refs = (b.refs || []).map(esc).join(', ');
+      return '<li><span class="dot"></span><span>' + esc(b.text) + (refs ? '<sup>' + refs + '</sup>' : '') + '</span></li>';
+    }).join('');
+    return { items: items, sl: sl };
+  }
+
+  function review(s) {
+    var ids = L.presented(s.deck);
+    if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">No deck yet</h1><p class="lede" style="margin-top:8px">Build a deck first. Nothing to review until the engine has written one.</p></main>';
+    if (!view.slide || ids.indexOf(view.slide) < 0) view.slide = ids[Math.min(3, ids.length - 1)];
+    var id = view.slide, sl = s.deck.slides[id], n = ids.indexOf(id) + 1;
+    var st = L.STATUS[L.statusOf(sl)];
+    var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
+    var rail = ids.map(function (sid, i) {
+      var x = s.deck.slides[sid], t = L.STATUS[L.statusOf(x)];
+      return '<button class="thumb" data-slide="' + sid + '"' + (sid === id ? ' aria-current="true"' : '') + '><span class="n">' + String(i + 1).padStart(2, '0') + '</span>' +
+        '<span><span class="t">' + esc(x.section) + '</span><span class="st ' + t.tone + '">' + t.label + '</span></span></button>';
+    }).join('');
+    var tabs = [['evidence', 'Evidence'], ['checks', 'Checks'], ['who', 'History']].map(function (t) {
+      return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (view.tab === t[0]) + '">' + t[1] + '</button>';
+    }).join('');
+    var panel = '';
+    if (view.tab === 'evidence') {
+      var ev = L.evidenceFor(sl, s.evidence);
+      panel = ev.length ? ev.map(function (e) { return '<div class="ev"><div class="id">' + esc(e.ref) + ' · ' + esc(e.kind) + '</div><div style="font-size:13px;line-height:1.45">' + esc(e.text) + '</div></div>'; }).join('')
+        : '<p class="note">This slide cites nothing: its lines are labelled creative, opinion or proposal.</p>';
+    } else if (view.tab === 'checks') {
+      panel = '<div class="stack" style="gap:10px">' + L.checksFor(id, sl, s.validation).map(function (c) {
+        return '<div class="check" style="align-items:flex-start"><span class="tick ' + (c.ok ? 'ok' : 'warn') + '" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span style="font-size:13px;line-height:1.45">' + esc(c.text) + '</span></div>';
+      }).join('') + '</div>';
+    } else {
+      var ap = s.run.approvals || {}, keys = Object.keys(ap);
+      panel = '<p class="note" style="margin-bottom:10px">What a person did to this deck, from its record.</p>' +
+        (keys.length ? keys.map(function (k) { return '<div class="check" style="margin-bottom:8px"><span class="tick ok" aria-hidden="true">✓</span><span style="font-size:13px">' + esc(ap[k].by) + ' approved the ' + esc(k) + '</span></div>'; }).join('') : '<p class="note">No gate has been approved in this document yet.</p>') +
+        '<div class="mono eyebrow" style="margin-top:10px;text-transform:none;letter-spacing:0">Answers ' + (sl.requirements && sl.requirements.length ? esc(sl.requirements.join(', ')) : 'no requirement') + '</div>';
+    }
+    var s1 = slideHtml(id, s, n, ids.length);
+    return '<main class="review"><nav class="frost rail" aria-label="Slides"><div style="display:flex;margin-bottom:10px;padding:0 4px"><span class="eyebrow">' + esc(s.inputs.format === 'full' ? 'Full' : 'Pitch') + ' · ' + ids.length + '</span><div class="spacer"></div><span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + esc((s.deck.appendix_count || 0)) + ' appendix</span></div>' + rail + '</nav>' +
+      '<section><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">Slide ' + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
+        '<button class="btn sm" data-act="appendix">Move to appendix</button><button class="btn sm" data-tab="evidence">Why this slide</button></div>' +
+      '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
+        '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + String(n).padStart(2, '0') + '</span></div></div>' +
+      '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
+      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' +
+      '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
+      '</div><p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">Only the words on this slide change. Its sources stay.</p></div></aside></main>';
+  }
+
+  // ── 4 · Present and export ────────────────────────────────────────────
+  function presentScreen(s) {
+    var ids = L.presented(s.deck);
+    if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">Nothing to present yet</h1></main>';
+    var i = Math.max(0, Math.min(view.present, ids.length - 1)), sl = s.deck.slides[ids[i]], nx = s.deck.slides[ids[i + 1]];
+    var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
+    var supply = ids.filter(function (x) { return s.deck.slides[x].status === 'needs_human'; }).length;
+    var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
+    var fmts = [['web', 'WEB', 'Web deck', 'One file, animated, works offline', 'Open'], ['pptx', 'PPTX', 'PowerPoint', 'Notes kept, appendix hidden', 'Download'],
+      ['anim', 'ANIM', 'Animated deck', 'Present it from HyperFrames', 'Get project'], ['pdf', 'PDF', 'PDF', 'Presented slides only', 'Download']];
+    return '<main class="present"><section><div class="pslide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2>' +
+      '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + (i + 1) + ' / ' + ids.length + '</span></div></div>' +
+      '<div class="controls"><button class="circ" aria-label="Previous slide" data-pres="-1"' + (i === 0 ? ' disabled' : '') + '>←</button><button class="circ" style="background:var(--ink);color:var(--paper);border:0" aria-label="Next slide" data-pres="1"' + (i === ids.length - 1 ? ' disabled' : '') + '>→</button>' +
+      '<span class="mono" style="font-size:13px;padding:0 10px">' + (i + 1) + ' / ' + ids.length + '</span><div class="prog"><span style="width:' + Math.round(((i + 1) / ids.length) * 100) + '%"></span></div></div>' +
+      '<div class="card" style="margin-top:14px;padding:18px 22px"><div class="eyebrow" style="margin-bottom:8px">Notes for this slide</div><div style="font-size:18px;line-height:1.5">' + esc(sl.notes || 'No notes for this slide.') + '</div>' +
+      (refs ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + refs + '</div>' : '') + '</div></section>' +
+      '<aside class="stack"><div class="eyebrow">Next</div>' + (nx ? '<div class="mini"><div class="k">' + esc(nx.section) + '</div><div class="t">' + esc(nx.title) + '</div></div>' : '<div class="note">That is the last presented slide.</div>') +
+      '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(s.deck.appendix_count || 0) + ' backup slides are hidden. They keep their sources.</div></aside>' +
+      '<aside class="frost" style="padding:22px"><div style="display:flex;align-items:center"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div><span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span></div>' +
+      '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' +
+      fmts.map(function (f) {
+        var ready = !!s.exports[f[0]];
+        return '<div class="fmt"><span class="x" aria-hidden="true">' + f[1] + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + f[2] + '</div><div class="note" style="font-size:12px">' + (ready ? f[3] : 'Not built yet') + '</div></div>' +
+          '<button class="btn sm" data-export="' + f[0] + '"' + (ready ? '' : ' disabled') + ' style="font-weight:600">' + f[4] + '</button></div>';
+      }).join('') +
+      (supply ? '<div class="callout">' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
+      '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></aside></main>';
+  }
+
+  // ── render and events ─────────────────────────────────────────────────
+  function render() {
+    var s = d(), scr = screenOf(s);
+    var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
+    document.getElementById('app').innerHTML = bar(s, scr) + body;
+    document.title = 'Deck Maker';
+  }
+
+  function now() { return new Date().toISOString(); }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('button'); if (!t) return;
+    var s = d(), a = t.dataset;
+    if (a.go) { view.screen = a.go; return render(); }
+    if (a.kind) { pending.kind = a.kind; return render(); }
+    if (a.format) { pending.format = a.format; return render(); }
+    if (a.slide) { view.slide = a.slide; return render(); }
+    if (a.tab) { view.tab = a.tab; return render(); }
+    if (a.pres) { view.present += Number(a.pres); return render(); }
+    if (t.id === 'build') {
+      var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+      var prompt = { client: val('client'), project: val('project'), agency: val('agency') };
+      if (!prompt.client || !prompt.project || !s.inputs.brief.name) { toast('A deck needs a client, a project and a brief.'); return; }
+      var inputs = Object.assign({}, s.inputs, { prompt: prompt, kind: pending.kind || s.inputs.kind, format: pending.format || s.inputs.format });
+      put({ inputs: inputs }, 'start deck', 'inputs: prompt, research, brief');
+      view.screen = 'build'; render();
+      toast(s.run.stages.length ? 'Showing the recorded run. Live building needs the engine server.' : 'Saved. Live building needs the engine server.');
+      return;
+    }
+    if (t.id === 'approve') {
+      var next = L.approveGate(s.run, s.run.gate && s.run.gate.id, 'You', now());
+      if (!next) return;
+      put({ run: next }, 'approve ' + s.run.gate.id, 'gate ' + s.run.gate.n + ' of ' + s.run.gate.of + ' approved');
+      return;
+    }
+    if (a.edit || a.retry) { toast('Editing and retrying a gate need the engine server.'); return; }
+    if (a.act === 'appendix') { toast('Moving slides to the appendix needs the engine server.'); return; }
+    if (a.change) {
+      var reqs = (s.changes || []).concat([{ slide: view.slide, change: a.change, at: now(), status: 'waiting' }]);
+      put({ change_requests: reqs }, 'ask for a change: ' + a.change, 'slide ' + view.slide);
+      toast('Recorded. The words change when the engine is connected; sources stay.');
+      return;
+    }
+    if (a.export) { toast('Open the file from the document export.'); return; }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (screenOf(d()) !== 'present' || /INPUT|TEXTAREA/.test((e.target || {}).tagName || '')) return;
+    if (e.key === 'ArrowRight') { view.present += 1; render(); }
+    if (e.key === 'ArrowLeft') { view.present -= 1; render(); }
+  });
+
+  if (window.addEventListener) {
+    // The bridge fires these when the document's data changes or loads, and sets data-color-scheme itself.
+    window.addEventListener('clan:dataupdated', render);
+    window.addEventListener('napkin:ready', render);
+  }
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# Deck Maker pipeline contract. Travels into every instance. See docs/contracts/deck-maker.md.
+pipeline: napkin-deck
+version: 1
+request_kind: agent
+job_kind: deck
+endpoint_default: http://localhost:8787
+
+tasks:
+  build_deck:
+    sends: { inputs: object, from_stage: string }
+    returns: 'bare JSON { "run": {...}, "deck"?: deck.json } — runs to the next gate and stops'
+  approve_gate:
+    sends: { gate: string, decision: "approve | edit | retry", edits: object }
+    returns: 'bare JSON { "run": {...} } — the next stage state'
+  ask_change:
+    sends: { slide: string, change: "shorter | add_figure | rephrase | free text" }
+    returns: 'bare JSON { "slide": {...} } — words only; refs stay'
+
+errors: non-2xx status; a 200 body must never contain an `error` key.
