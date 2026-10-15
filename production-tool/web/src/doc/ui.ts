@@ -132,6 +132,8 @@ export interface FollowRun {
   awaiting?: FollowItem
   /** The model to send per step (absent: the routed default): the last that worked, then the box's pick. */
   models?: { frame?: ModelChoice; clip?: ModelChoice }
+  /** The quality the box picked for the clips (absent: each video's default; features/clip-quality.clan). */
+  clipQuality?: ClipQuality
   /** Old versions already taken out because their replacement landed. */
   replaced?: string[]
   /** How many items the run started with, for "2 of 5". */
