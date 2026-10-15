@@ -30,7 +30,13 @@ export interface CanvasChrome {
   fitRect(r: { x: number; y: number; w: number; h: number }): void
   /** The pen's options (pen or highlighter, ink name, width): what the pen draws with from now on. */
   setPen(p: PenChoice): void
-  /** Called when the tool, the zoom or the selected sketch area changes. */
+  /** The next text's look (the Text tool's options: font size in scene pixels, an ink name or #rrggbb); absent where the engine has its own text. */
+  setText?(look: { size: number; color: string }): void
+  /** The look of the text being typed or the selected text, else null (the Text options then show it). */
+  selectedText?(): { size: number; color: string } | null
+  /** Restyle the text being typed, or the selected texts (one undo step). */
+  styleText?(change: { size?: number; color?: string }): void
+  /** Called when the tool, the zoom, the selected sketch area or the selected text changes. */
   onChange(cb: () => void): () => void
 }
 

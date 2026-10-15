@@ -108,6 +108,17 @@ export function setPen(change: { mode?: PenMode; color?: PenColour; width?: numb
   for (const fn of listeners) fn(next)
 }
 
+/** A colour the picker closed on, picked for something else (a text): it joins the recent swatches, the pen's ink unchanged. */
+export function rememberColour(hex: string) {
+  if (!isHex(hex)) return
+  const p = getPen()
+  const c = hex.toLowerCase()
+  const next: PenChoice = { ...p, recent: [c, ...p.recent.filter((x) => x !== c)].slice(0, RECENT_MAX) }
+  current = next
+  savePen(next)
+  for (const fn of listeners) fn(next)
+}
+
 export function onPenChange(fn: (p: PenChoice) => void): () => void {
   listeners.add(fn)
   return () => void listeners.delete(fn)

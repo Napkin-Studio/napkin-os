@@ -12,7 +12,9 @@ import { rowLabel, type BoardRow } from './boards'
 import { boardKey } from '../boards/boards'
 import type { CanvasChrome, ChromeTool } from './controls'
 import { PenOptions } from './PenOptions'
-import { usePenChoice } from './penStyle'
+import { rememberColour, usePenChoice } from './penStyle'
+import { TextOptions } from './TextOptions'
+import { setText, TEXT_SIZE_PX, useTextChoice } from './textStyle'
 import { canvasActions } from './actions'
 import { copyLabel } from '../core/sketchCopy'
 import { RATIOS, type Ratio } from '../../contracts/types'
@@ -24,13 +26,20 @@ function useActions() {
   return { canNode: canvasActions.canNode(), canBoard: canvasActions.canBoard(), mode: canvasActions.mode(), pending: canvasActions.pending() }
 }
 
-function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom: number; area: string } {
+function useChrome(chrome: CanvasChrome | null): { tool: ChromeTool | null; zoom: number; area: string; text: string } {
   const sub = useCallback((cb: () => void) => (chrome ? chrome.onChange(cb) : () => {}), [chrome])
   const tool = useSyncExternalStore(sub, () => chrome?.tool() ?? 'select', () => chrome?.tool() ?? 'select')
   const zoom = useSyncExternalStore(sub, () => chrome?.zoom() ?? 1, () => chrome?.zoom() ?? 1)
   // The one sketch area selected, as "id|ratio" (a stable snapshot), or '' (the picker's copy mode).
   const area = useSyncExternalStore(sub, () => sketchSig(chrome), () => sketchSig(chrome))
-  return { tool, zoom, area }
+  // The text being typed or selected, as "size|colour" (a stable snapshot), or '' (canvas-text).
+  const text = useSyncExternalStore(sub, () => textSig(chrome), () => textSig(chrome))
+  return { tool, zoom, area, text }
+}
+
+const textSig = (chrome: CanvasChrome | null) => {
+  const t = chrome?.selectedText?.()
+  return t ? `${t.size}|${t.color}` : ''
 }
 
 const sketchSig = (chrome: CanvasChrome | null) => {
@@ -141,7 +150,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   /** iPad (mock TabletCanvas): a column on the left, each tool with its name, 44px targets, undo and redo in it. */
   vertical?: boolean
 }) {
-  const { tool, area } = useChrome(chrome)
+  const { tool, area, text } = useChrome(chrome)
   // A sketch area selected: the picker copies it into another shape (owner decision 2026-10-14); it never reshapes it.
   const areaRatio = area ? area.split('|')[1] || null : null
   // The pen's options: applied to the engine always, shown while the pen is in use.
@@ -160,7 +169,21 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   }, [chrome, picked])
   // A chrome tool (Board, Link) is on: the engine's tool shows as not pressed. Picking an engine tool ends it.
   const shown = actions.mode ? null : tool
-  const penOptions = shown === 'pen' && <PenOptions pen={pen} vertical={vertical} />
+  // The Text tool's options (canvas-text): while it is in hand, or a text is being typed or is selected.
+  const textChoice = useTextChoice(chrome)
+  const [selSize, selColor] = text ? text.split('|') : []
+  const textLook = text ? { size: Number(selSize), color: selColor } : { size: TEXT_SIZE_PX[textChoice.size], color: textChoice.color }
+  const textOptions = !!chrome?.setText && shown !== 'pen' && (shown === 'text' || !!text) && (
+    <TextOptions look={textLook} recent={pen.recent} vertical={vertical}
+      onSize={(s) => { setText({ size: s }); chrome?.styleText?.({ size: TEXT_SIZE_PX[s] }) }}
+      onColor={(c, remember, live) => {
+        if (remember) rememberColour(c)
+        setText({ color: c })
+        // The picker's live moves restyle nothing (each would be an undo step); the colour it closes on does.
+        if (!live) chrome?.styleText?.({ color: c.toLowerCase() })
+      }} />
+  )
+  const penOptions = shown === 'pen' ? <PenOptions pen={pen} vertical={vertical} /> : textOptions
   useEffect(() => {
     if (!actions.mode || !chrome) return
     const was = chrome.tool()
