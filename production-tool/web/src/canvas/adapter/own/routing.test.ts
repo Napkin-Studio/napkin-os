@@ -9,6 +9,7 @@ import type { ProductionDocument } from '../../../contracts/types'
 import { CanvasController, type Routed } from '../../controller'
 import { newId } from '../../../lib/ulid'
 import { snapshotDoc } from '../../../test/jobFixtures'
+import { keyGroupFields } from '../../nodes/keyGroups'
 import { OwnAdapter } from './adapter'
 
 vi.mock('../../../lib/idb', () => ({ idbPut: async () => {}, idbGet: async () => undefined }))
@@ -50,6 +51,9 @@ describe('naming routes a loose picture to its board', () => {
     expect([at(loose).x, at(loose).y]).toEqual([16 + 200 + 40, 22])
     expect(a.undo.depth().undo).toBe(depth + 1)
     expect(heard.map((r) => r.title)).toEqual(['Characters'])
+    // The key-group reaction (every client's) then finds the view in its row and moves nothing.
+    const f = keyGroupFields(a.elements(), doc.get() as unknown as ProductionDocument)
+    expect([f.get(loose.id)?.x, f.get(loose.id)?.y]).toEqual([undefined, undefined])
     // Undo of the move keeps the name.
     a.undoScene('undo')
     expect([at(loose).x, at(loose).frameId ?? null]).toEqual([2000, null])

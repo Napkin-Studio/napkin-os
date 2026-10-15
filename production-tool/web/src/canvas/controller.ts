@@ -616,7 +616,7 @@ export class CanvasController {
     if (!img?.asset) throw new Error('Name a picture once it is finished.')
     const asset = img.asset
     const name = `${key}_${variant}`
-    systemUpdate(this.s.doc, (d) => {
+    const write = (d: ProductionDocument) => {
       const now = new Date().toISOString()
       const refs = Object.values(d.refs)
       const mine = refs.find((r) => r.node === nodeId)
@@ -639,7 +639,13 @@ export class CanvasController {
         d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
       }
       dropUnusedKeys(d)
-    }, 'name').then(() => this.routeNamed([nodeId])).catch((e) => console.warn('the named picture was not moved to its board', e))
+    }
+    // To its role's board first, with the document as the name will leave it, so the key-group reaction
+    // finds the view already in its row (and the move is this person's own undo step).
+    const after = structuredClone(this.doc())
+    write(after)
+    this.routeNamed([nodeId], after)
+    void systemUpdate(this.s.doc, (d) => write(d as unknown as ProductionDocument), 'name')
   }
 
   private readonly routedCbs = new Set<(r: Routed) => void>()
@@ -656,9 +662,8 @@ export class CanvasController {
    * (the name stays). With no such board it stays loose; one already on a board stays (BA3). Only the
    * client that named it moves it (this runs from the local action, never from a remote change).
    */
-  routeNamed(nodeIds: readonly string[]): Routed | null {
+  routeNamed(nodeIds: readonly string[], doc: ProductionDocument = this.doc()): Routed | null {
     if (this.canvas.engine !== 'own') return null
-    const doc = this.doc()
     const els = this.els()
     const loose = nodeIds.map((n) => this.nodeEl(n)).filter((e): e is El => !!e && !e.isDeleted && !(e.frameId && boardFrame(els, e.frameId)))
     if (!loose.length) return null
@@ -698,12 +703,15 @@ export class CanvasController {
 
   /** A key's role, and its refs' with it. */
   setRole(key: Key, role: RefRole) {
-    systemUpdate(this.s.doc, (d) => {
+    const write = (d: ProductionDocument) => {
       const k = keyNamed(d, key)
       if (k) k.role = role
       for (const r of Object.values(d.refs)) if (r.key === key) r.role = role
-    }, 'name').then((d) => this.routeNamed(Object.values(d.refs).filter((r) => r.key === key && r.node).map((r) => r.node!)))
-      .catch((e) => console.warn('the named pictures were not moved to their board', e))
+    }
+    const after = structuredClone(this.doc())
+    write(after)
+    this.routeNamed(Object.values(after.refs).filter((r) => r.key === key && r.node).map((r) => r.node!), after)
+    void systemUpdate(this.s.doc, (d) => write(d as unknown as ProductionDocument), 'name')
   }
 
   // ── views: any named image is a key's front; the others are generated from it ──
