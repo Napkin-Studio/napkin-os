@@ -23,16 +23,16 @@ import { framesOf, openAsks, scriptText, shotsOf, staleList, takesOf } from '../
 import { answerShotAsk } from '../stages/storyboardEdits'
 import { AgentAvatar } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { Float, MenuItem } from '../ui/Float'
+import { MenuItem } from '../ui/Float'
 import { HistoryPanel, type HistoryFocus } from '../ui/History'
 import { AskCard, AskOptions } from '../ui/AskCard'
 import { showAsk } from '../ui/askPlaces'
-import { UndoButtons } from '../ui/UndoButtons'
-import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
+import { BackButton } from '../ui/chrome/Bar'
+import { EditorBar } from '../ui/chrome/TopBars'
+import { LinkIcon } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
 import { AgentFigure } from '../ui/agents/AgentFigure'
-import { JobTray } from '../ui/JobTray'
 import { useBlobUrl } from '../ui/hooks'
 import { CAST, type CastKey } from '../ui/agents/cast'
 import { CaretChain, caretKey } from './caret'
@@ -140,8 +140,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
-  const [menu, setMenu] = useState(false)
-  const menuRef = useRef<HTMLButtonElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [chain] = useState(() => new CaretChain())
   const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
@@ -351,13 +349,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 
   const hooksFor = (key: string, extra: Partial<KeyHooks> = {}): KeyHooks => ({
     out: (dir) => chain.move(key, dir),
-    escape: () => {
-      if (menu) {
-        setMenu(false)
-        return true
-      }
-      return false
-    },
+    escape: () => false,
     ...extra,
   })
   const focusOn = (key: string) => (e: Editor | null) => {
@@ -411,59 +403,58 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 
   return (
     <div className={`se ${sheet ? `sheet-${sheet}` : ''}`} data-script-page="" data-view={view}>
-      <header className="ptbar se-top">
-        <BackButton label={backTo} onClick={onBack} />
-        <BarSep />
-        <NodeIcon kind="script" />
-        <h1 className="pt-title">Script · {title}</h1>
-        <span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>
-        {!phone && (
-          <span className="pt-seg se-switch" role="group" aria-label="Script view">
-            <button aria-pressed={view === 'screenplay'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'screenplay' } } })}>Screenplay</button>
-            <button aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
-          </span>
-        )}
-        <span className="pt-grow" />
-        {/* What is running, as on every editor bar: the one place besides the pointer the logo turns (ui-behaviour 6.5). */}
-        <JobTray />
-        {storyboardsOf(doc, scriptId).length > 1 && (
+      {/* The shared editor bar (features/topbar-declutter.clan): the view switch, Undo, History, More
+          (Import Fountain, Copy link to this, Shots from) and Plan shots, fitted like every editor's. */}
+      <EditorBar className="se-top" back={backTo} onBack={onBack} icon="script" title={`Script · ${title}`}
+        meta={<span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>}
+        view={phone ? undefined : {
+          label: 'Script view', value: view,
+          onPick: (v) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: v as typeof view } } }),
+          options: [{ id: 'screenplay', label: 'Screenplay' }, { id: 'av', label: 'Video · Audio' }],
+        }}
+        undo={!phone}
+        history={{ on: history, toggle: () => { setHistoryFocus(undefined); setHistory((h) => !h) } }}
+        moreTip={phone ? 'More: copy link' : 'More: import Fountain, copy link'}
+        moreHead={storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
             <select className="select xs" value={sb?.id ?? ''} onChange={(e) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { view, ...u.script?.[scriptId], storyboard: e.target.value } } })}>
               {storyboardsOf(doc, scriptId).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
             </select>
           </label>
         )}
-        {!phone && <UndoButtons />}
-        <button className={`btn ${history ? 'on' : ''}`} aria-pressed={history} onClick={() => { setHistoryFocus(undefined); setHistory((h) => !h) }} title="Every decision, who made it and why">History</button>
-        <button ref={menuRef} className={`btn icon ${menu ? 'on' : ''}`} aria-label="More" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-        <Float anchor={menuRef} open={menu} onClose={() => setMenu(false)} align="end" label="More">
-          {!phone && <MenuItem icon="⇪" onSelect={() => { setMenu(false); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
-          <MenuItem icon="🔗" onSelect={() => {
-            setMenu(false)
-            const url = new URL(formatRoute(route), location.origin).href
-            void navigator.clipboard?.writeText(url).then(() => say('Link copied.'), () => say(url))
-          }}>Copy link to this</MenuItem>
-        </Float>
-        {!phone && blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
-        {!phone && (
-          <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked ? 'se-plan-why' : undefined} onClick={() => void plan()}>
-            {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
-          </button>
+        more={(close) => (
+          <>
+            {!phone && <MenuItem icon="⇪" onSelect={() => { close(); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
+            <MenuItem icon={<LinkIcon />} onSelect={() => {
+              close()
+              const url = new URL(formatRoute(route), location.origin).href
+              void navigator.clipboard?.writeText(url).then(() => say('Link copied.'), () => say(url))
+            }}>Copy link to this</MenuItem>
+          </>
         )}
-        <Account />
-        <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
-          const f = e.target.files?.[0]
-          e.target.value = ''
-          if (f) void doImport(f)
-        }} />
-      </header>
+        primary={!phone && (
+          <>
+            {/* Why Plan shots is off: its tooltip, and read with it (a disabled button never says why). */}
+            {blocked && !planning && <span className="pt-sr se-why" id="se-plan-why">{blocked}</span>}
+            <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
+              data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
+              {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
+            </button>
+          </>
+        )} />
+      <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
+        const f = e.target.files?.[0]
+        e.target.value = ''
+        if (f) void doImport(f)
+      }} />
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
       {!phone && next && (
         <div className="se-next" role="status" aria-label="What comes next" data-next={next.step}>
           <AgentFigure agent="dex" size={22} decorative />
           <span><span className="who">{sayer('dex')}:</span> {next.line}</span>
           <span className="pt-grow" />
-          {next.actions.map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
+          {/* Plan shots and Update storyboard are the bar's primary: the line does not repeat them. */}
+          {next.actions.filter((a) => a !== 'plan' && a !== 'update').map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
         </div>
       )}
       {confirm && (

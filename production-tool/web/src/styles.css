@@ -128,6 +128,8 @@
   --r-board: 16px;
   --topbar-h: 48px;
 }
+/* Touch: a 56px top bar for 44px targets (ui-behaviour 8; features/topbar-declutter.clan). */
+@media (pointer: coarse) { :root { --topbar-h: 56px; } }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }

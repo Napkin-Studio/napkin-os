@@ -25,11 +25,14 @@
 .pt-tool { color: var(--tool-ink); }
 .pt-project { font-size: 13px; color: var(--ink3); }
 .pt-sep { width: 1px; height: 22px; background: var(--line-soft); flex-shrink: 0; }
-.pt-title { margin: 0; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+/* An editor's title shrinks first, with an ellipsis, before any control moves (features/topbar-declutter.clan). */
+.pt-title { margin: 0; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; display: block; overflow: hidden; text-overflow: ellipsis; }
+.ptbar > .pt-title { flex-shrink: 1; min-width: 120px; }
 .pt-mono { font-family: var(--f-mono); font-size: 11px; color: var(--ink3); }
 .pt-ratio { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); padding: 2px 8px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); }
 .pt-back { height: 32px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--card); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink); }
 .pt-back:hover { background: var(--soft); }
+.pt-back.short { width: 32px; padding: 0; justify-content: center; }
 
 /* People here: overlapping 26px avatars and who is where. */
 .pt-presence { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
@@ -129,6 +132,11 @@
 .pt-savebtn { height: 28px; padding: 0 8px; border: 0; background: transparent; font-family: var(--f-mono); font-size: 11px; color: var(--ink3); cursor: pointer; border-radius: 8px; }
 .pt-savebtn:hover:not(:disabled) { background: var(--soft); color: var(--ink2); }
 .pt-savebtn.failed { color: var(--danger); }
+/* Tight: the save state is a dot (green saved, grey not yet, pulsing while saving); failed keeps its words. */
+.pt-savebtn.dot { width: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.pt-savedot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink3); }
+.pt-savebtn[data-state='saved'] .pt-savedot { background: var(--status-green, #1F9D55); }
+.pt-savebtn[data-state='saving'] .pt-savedot { background: var(--ink2); }
 
 /* Reduce motion (ui-behaviour 6.6): the system setting or the account menu's switch. */
 [data-motion='still'] .pending { animation: none; }
@@ -145,3 +153,25 @@
 /* Dark (features/theme-and-pencil.clan): the warm and coral fills above carried light text on pale paper. */
 :root[data-theme='dark'] .pt-asks { background: var(--create-soft); border-color: rgba(255, 79, 46, 0.35); color: var(--ink); }
 :root[data-theme='dark'] .pt-asks b, :root[data-theme='dark'] .pt-asks .pos { color: #FF8A70; }
+
+/* ── Fit levels (ui/chrome/fit.ts: compact under 1280px, tight under 1024px) ───── */
+.ptbar[data-fit='compact'], .ptbar[data-fit='tight'] { gap: 8px; }
+.ptbar[data-fit='tight'] .df-thumbs { display: none; }
+.pt-asks[data-tip] { position: relative; }
+/* More's head: what left the bar at compact (the meta pills, the save state) and Script's Shots from. */
+.pt-moremenu { min-width: 280px; }
+.pt-morehead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 10px 4px; font-size: 12px; color: var(--ink2); }
+
+/* ── Touch (ui-behaviour 8): a 56px bar and 44px targets ──────────────────────── */
+@media (pointer: coarse) {
+  .ptbar .btn, .ptbar .pt-back, .ph-bar .btn { height: 44px; }
+  .ptbar .btn.icon, .ptbar .pt-back.short { width: 44px; }
+  .ptbar .pt-account, .ph-bar .pt-account { width: 44px; height: 44px; }
+  .ptbar .pt-pair button { width: 44px; height: 44px; }
+  .ptbar .pt-seg button { height: 44px; }
+  .ptbar .pt-savebtn { height: 44px; }
+  .ptbar .pt-savebtn.dot { width: 44px; }
+  .ptbar .pt-asks { height: 44px; }
+  .ptbar .pt-asks button { width: 36px; height: 36px; }
+  .pt-moremenu .fmi { min-height: 44px; }
+}

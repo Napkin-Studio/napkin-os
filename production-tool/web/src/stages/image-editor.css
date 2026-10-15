@@ -3,13 +3,25 @@
    column on the right. Colours are the theme's tokens, so dark follows. */
 .image-editor { z-index: 9; }
 .ie-meta { font-size: 11px; color: var(--ink3); }
-.ie-zoom { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); font-size: 12px; }
+.ie-stagewrap { position: relative; }
+/* Zoom: a pill on the stage, bottom right, as the canvas's zoom pill (features/topbar-declutter.clan). */
+.ie-zoom {
+  position: absolute; right: 12px; bottom: 12px; z-index: 4; display: flex; align-items: center; gap: 2px; padding: 3px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-pill); font-size: 12px;
+  background: rgba(255, 255, 255, 0.94); box-shadow: var(--shadow-pill);
+}
+:root[data-theme='dark'] .ie-zoom { background: rgba(22, 26, 31, 0.94); }
+@media (pointer: coarse) { .ie-zoom button { width: 44px; height: 44px; } }
 .ie-zoom button { width: 28px; height: 28px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink); cursor: pointer; }
 .ie-zoom button:hover { background: var(--soft); }
 .ie-zoom .pt-mono { width: 40px; text-align: center; }
 .ie-zoom .ie-fit { width: auto; padding: 0 10px; background: var(--soft-2); }
 .ie-pill { font-size: 12px; color: var(--ink2); padding: 4px 10px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); }
 .ie-vbtn { height: 32px; gap: 6px; }
+.ie-vhead { padding: 6px 10px 4px; font-size: 11px; color: var(--ink3); }
+.ie-pill .ie-n-short { display: none; }
+.ptbar[data-fit='tight'] .ie-pill .ie-n-long, .ptbar[data-fit='tight'] .ie-vof { display: none; }
+.ptbar[data-fit='tight'] .ie-pill .ie-n-short { display: inline; }
 .ie-caret { font-size: 10px; color: var(--ink3); }
 
 .ie-body {
