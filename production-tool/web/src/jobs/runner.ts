@@ -194,6 +194,7 @@ export class JobRunner {
     op: Op, input: JobInput, parentIds: string[], purpose: JobPurpose, jobId = newId('job'), modelChoice?: ModelChoice, extras: SubmitExtras = {},
   ): Promise<string> {
     if (this.stopped) throw new Error('the project was closed')
+    if (this.unstarted.delete(jobId)) this.emit()
     const d = this.doc.get()
     const node = extras.node ?? purposeNode(d, purpose, jobId)
     // The texts linked into the node are its input words (features/canvas-text.clan).
@@ -390,6 +391,45 @@ export class JobRunner {
     } catch {
       return false
     }
+  }
+
+  /** Placeholders whose job the relay never got and this document never recorded (adopt). */
+  private readonly unstarted = new Set<string>()
+
+  /** A placeholder that never started: nothing is making it, so its card offers to make it or remove it. */
+  isUnstarted(jobId: string): boolean {
+    return this.unstarted.has(jobId)
+  }
+
+  /**
+   * A job the canvas placed but this document never recorded: the page closed between placing it and
+   * writing it down (2026-10-15, Make the other views: the side and back stayed blank for good). The
+   * relay is asked. A job it has is written into the document and followed like any other, so it lands
+   * (it may already be paid for); one it never got is unstarted. `parentIds`: what the placeholder was made from.
+   */
+  async adopt(jobId: string, parentIds: string[]): Promise<'known' | 'adopted' | 'unstarted' | 'unknown'> {
+    if (this.doc.get().jobs[jobId] || this.live.has(jobId)) return 'known'
+    let job: Job
+    try {
+      job = await this.relay.getJob(jobId)
+    } catch (e) {
+      if (!(e instanceof RelayError && e.status === 404)) return 'unknown' // offline or signed out: asked again next time
+      this.unstarted.add(jobId)
+      this.emit()
+      return 'unstarted'
+    }
+    if (this.stopped || this.doc.get().jobs[jobId] || job.projectId !== this.doc.get().project.id) return 'unknown'
+    normalisePromptVersion(job)
+    await systemUpdate(this.doc, (d) => {
+      if (d.jobs[jobId]) return
+      d.jobs[jobId] = {
+        id: jobId, v: 1, field_v: {}, op: job.op, state: 'queued', node: job.node, ...(job.purpose ? { purpose: job.purpose } : {}),
+        started_by: job.startedBy, tenant_id: job.tenantId, nonce: job.nonce, crew: job.crew,
+        parent_ids: parentIds, input_hashes: job.inputHashes, created_at: job.createdAt || new Date().toISOString(),
+      }
+    }, `adopt ${job.op}`)
+    this.apply(job)
+    return 'adopted'
   }
 
   /** Pick up every job that was still moving when the page was last open. */
