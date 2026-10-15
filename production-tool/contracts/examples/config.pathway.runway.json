@@ -23,6 +23,9 @@
     ],
     "clip_edit": [
       "runway"
+    ],
+    "upscale": [
+      "runway"
     ]
   },
   "director": {

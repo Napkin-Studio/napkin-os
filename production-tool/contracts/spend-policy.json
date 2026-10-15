@@ -3,6 +3,6 @@
   "decided": "2026-10-13",
   "capUsdMonthly": null,
   "dailyQuotas": false,
-  "allow": { "claude": true, "makers": ["runway", "google"] },
+  "allow": { "claude": true, "makers": ["runway", "google", "ideogram", "magnific"] },
   "alwaysAllowed": ["napkin"]
 }
