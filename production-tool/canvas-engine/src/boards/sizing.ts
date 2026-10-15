@@ -13,6 +13,7 @@
 
 import RBush from 'rbush'
 import { unionRects, type Rect } from '../model/bounds'
+import { nextSlot, overflowSpot, type SlotAsk } from './arrange'
 
 /** A board's inner margin: 16 at the sides, 22 under the title, 34 at the foot (room for a name chip). */
 export const BOARD_PAD = { x: 16, top: 22, bottom: 34 } as const
@@ -303,14 +304,17 @@ export function placeInBoard(board: Rect, occupied: readonly Rect[], size: { w: 
  * Several things onto one board, in order: each placed as placeInBoard says, the board growing as it
  * goes; once it is full, the rest land outside too, clear of each other.
  */
-export function placeAllInBoard(board: Rect, occupied: readonly Rect[], sizes: readonly { w: number; h: number }[], blockers: readonly Rect[], prefer?: (i: number) => { x: number; y: number } | undefined): { boxes: Rect[]; board: Rect; full: boolean[] } {
+export function placeAllInBoard(board: Rect, occupied: readonly Rect[], sizes: readonly { w: number; h: number }[], blockers: readonly Rect[], prefer?: (i: number) => { x: number; y: number } | undefined, ask?: (i: number, placed: readonly Rect[]) => SlotAsk | undefined): { boxes: Rect[]; board: Rect; full: boolean[] } {
   let b = board
   const occ = [...occupied]
   const outside: Rect[] = []
   const boxes: Rect[] = []
   const full: boolean[] = []
   for (let i = 0; i < sizes.length; i++) {
-    const p = placeInBoard(b, occ, sizes[i], [...blockers, ...outside], prefer?.(i))
+    const a = ask?.(i, boxes)
+    const p = a ? nextSlot(b, occ, sizes[i], [...blockers, ...outside], a) : placeInBoard(b, occ, sizes[i], [...blockers, ...outside], prefer?.(i))
+    // Overflow is one ordered row at one side (after the first that went out).
+    if (p.full && outside.length) p.box = { ...overflowSpot(b, sizes[i], outside, [...blockers, ...occ]), ...sizes[i] }
     boxes.push(p.box)
     full.push(p.full)
     if (p.full) outside.push(p.box)

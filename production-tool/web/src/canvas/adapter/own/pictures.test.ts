@@ -96,6 +96,28 @@ describe('pictures on the own engine', () => {
     expect(heard).toEqual([f.id])
   })
 
+  it('three pastes with no board under the middle of the view give three disjoint pictures, none over a board edge', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const v = a.visibleBounds()
+    const mid = { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
+    // A board just right of the middle: a centred paste would straddle its left edge.
+    const side = a.board({ x: mid.x + 60, y: mid.y - 200, width: 420, height: 400, title: 'Characters', boardId: newId('board'), purpose: 'character' })
+    a.transact((all) => [side, ...all], { undoable: false })
+    const doc = snapshotDoc()
+    const got = [
+      ...(await placePictures(a, doc, [png('p1')])),
+      ...(await placePictures(a, doc, [png('p2')])),
+      ...(await placePictures(a, doc, [png('p3')])),
+    ]
+    const ov = (p: { x: number; y: number; width: number; height: number }, q: typeof p) => p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height
+    for (let i = 0; i < 3; i++) {
+      expect(got[i].frameId ?? null).toBeNull()
+      expect(ov(got[i], side)).toBe(false)
+      for (let j = i + 1; j < 3; j++) expect(ov(got[i], got[j])).toBe(false)
+    }
+  })
+
   it('keeps only image files, and lays a row out centred', () => {
     expect(imageFiles([png('x'), new Blob(['t'], { type: 'text/plain' })])).toHaveLength(1)
     const row = pictureRow({ x: 0, y: 0 }, [{ w: 100, h: 100 }, { w: 200, h: 100 }])

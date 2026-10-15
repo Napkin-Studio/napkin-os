@@ -143,7 +143,11 @@ export function keyGroupFields(els: readonly CanvasElement[], doc: ProductionDoc
       // next free slot (owner decision 2026-10-15; boards/fitting).
       const view = els.map((e) => (out.has(e.id) ? { ...e, ...out.get(e.id) } as CanvasElement : e))
       const ids = [...placed.keys()]
-      const fit = fitInto(view, frameId, ids.map((id) => [id]), (i) => placed.get(ids[i]))
+      // Each new view right after the last of its key's row, wrapping below the row from its start (BA4).
+      const boxes = base.map((m) => boxOf(m))
+      const last = [...boxes].sort((a, b) => a.y - b.y || a.x - b.x).at(-1)!
+      const rowStart = Math.min(...boxes.map((b) => b.x))
+      const fit = fitInto(view, frameId, ids.map((id) => [id]), undefined, (i, done) => ({ after: i ? done[i - 1] : last, rowStart }))
       for (const [id, f] of fit.fields) put(id, f)
       tellFull(frameId, fit)
     } else for (const [id, at] of placed) put(id, { ...at, frameId })

@@ -22,7 +22,7 @@ import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { canLink, checkLink, endName, type LinkEnd as CoreEnd, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
 import type { CardKind } from './cardChrome'
 import { adLayout, CARD_SIZE } from '../boards/layout'
-import { boardAt, fitInto, tellFull, withFields } from '../boards/fitting'
+import { boardAt, clearOffset, fitInto, tellFull, withFields } from '../boards/fitting'
 import { isKeyGroup, keyViews } from '../../lib/names'
 import { keyGroupId } from './keyGroups'
 
@@ -292,7 +292,6 @@ export function newEntity(doc: ProductionDocument, kind: CardKind): { kind: Card
 }
 
 type Box = { x: number; y: number; w: number; h: number }
-const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
 /**
  * Where a new node of this kind goes (ui-behaviour 3.3): centred on `at`, else on the middle of the
@@ -310,9 +309,12 @@ export function placeNode(canvas: CanvasAdapter, doc: ProductionDocument, kind: 
     return (id && doc.boards?.[id]?.purpose) || (e as CanvasElement & { purpose?: string }).purpose
   }
   const board = boardAt(els, c, (b) => purposeOf(b) === kind) ?? null
-  const nodes = els.filter((e) => cardOf(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
   let box: Box = { x: Math.round(c.x - size.w / 2), y: Math.round(c.y - size.h / 2), ...size }
-  for (let i = 0; i < 24 && nodes.some((n) => overlaps(n, box)); i++) box = { ...box, x: box.x + 40, y: box.y + 40 }
+  // Off a board: the nearest spot clear of everything there (nodes, pictures, boards), never over a board's edge.
+  if (!board) {
+    const { dx, dy } = clearOffset(els, [box])
+    box = { ...box, x: Math.round(box.x + dx), y: Math.round(box.y + dy) }
+  }
   return { box, board }
 }
 

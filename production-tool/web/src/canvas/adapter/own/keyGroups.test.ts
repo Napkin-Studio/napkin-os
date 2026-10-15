@@ -79,6 +79,31 @@ describe('key groups follow the names', () => {
     await s.close()
   })
 
+  it('on a board hemmed in on the right, a key\'s new views wrap below its row from its start; nothing already there moves', async () => {
+    const { s, a, name, follow, el } = await setup([['samurai', 'front'], ['samurai', 'side'], ['samurai', 'back'], ['samurai', 'three-quarter']])
+    const board = a.board({ x: 850, y: -50, width: 800, height: 500, title: 'Characters', boardId: newId('board'), purpose: 'character' })
+    const right = a.board({ x: 1800, y: -400, width: 400, height: 2000, title: 'Locations', boardId: newId('board'), purpose: 'location' })
+    // Free canvas below (the seeded nodes would block growing down there).
+    a.transact((all) => [board, right, ...all.map((e) => (e.id === el(0).id ? a.patch(e, { frameId: board.id }) : cardOf(e) ? a.patch(e, { isDeleted: true }) : e))], { undoable: false })
+    await name(0, 'samurai', 'front')
+    await name(1, 'samurai', 'side')
+    follow()
+    const side = { x: el(1).x, y: el(1).y }
+    await name(2, 'samurai', 'back')
+    await name(3, 'samurai', 'three-quarter')
+    follow()
+    // The front and the side stay put; three-quarter and back (keyViews order) go on the next row, from
+    // the front's left.
+    expect([el(0).x, el(0).y]).toEqual([900, 0])
+    expect([el(1).x, el(1).y]).toEqual([side.x, side.y])
+    expect([el(3).x, el(3).y]).toEqual([900, 400 + 40])
+    expect([el(2).x, el(2).y]).toEqual([900 + 340, 400 + 40])
+    for (const i of [1, 2, 3]) expect(el(i).frameId).toBe(board.id)
+    const f = a.elements().find((e) => e.id === board.id)!
+    expect(f.x + f.width).toBeLessThanOrEqual(1800 - 24)
+    await s.close()
+  })
+
   it('a renamed view leaves its group at once; a group of one is no group', async () => {
     const { s, doc, name, follow, el, a } = await setup()
     await name(0, 'samurai', 'front')

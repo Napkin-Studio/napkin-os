@@ -6,7 +6,7 @@
 // on no board, and the board says "Board is full · Resize" (boardNotices). The geometry is
 // canvas-engine's boards/sizing. On Excalidraw there are no board frames, so nothing here acts.
 
-import { growToHold, placeAllInBoard, type Rect } from '../../../../canvas-engine/src'
+import { BOARD_CLEAR, growToHold, nearestFree, placeAllInBoard, type Rect, type SlotAsk } from '../../../../canvas-engine/src'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { elementBounds } from '../core/geometry'
 import { boxOf, membersOf } from '../core/sketch'
@@ -87,7 +87,7 @@ export interface Fit {
  * order, as boards/sizing says. `prefer(i)`: the top-left asked for unit i (beside its source, next to
  * its group), taken when it is clear. Pure: returns the fields; nothing is written.
  */
-export function fitInto(els: readonly CanvasElement[], frameId: string, units: readonly (readonly string[])[], prefer?: (i: number) => Pt | undefined): Fit {
+export function fitInto(els: readonly CanvasElement[], frameId: string, units: readonly (readonly string[])[], prefer?: (i: number) => Pt | undefined, ask?: (i: number, placed: readonly Rect[]) => SlotAsk | undefined): Fit {
   const fields = new Map<string, Fields>()
   const frame = boardFrame(els, frameId)
   if (!frame || !units.length) return { fields, outside: [] }
@@ -96,7 +96,7 @@ export function fitInto(els: readonly CanvasElement[], frameId: string, units: r
   const byId = new Map(els.map((e) => [e.id, e]))
   const rects = units.map((ids) => rectOf(ids.map((id) => byId.get(id)).filter((e): e is CanvasElement => !!e)))
   const board = rectOfFrame(frame)
-  const r = placeAllInBoard(board, unitsOn(els, frameId, moving), rects.map((u) => ({ w: u.w, h: u.h })), blockersOf(els, frameId, moving), prefer)
+  const r = placeAllInBoard(board, unitsOn(els, frameId, moving), rects.map((u) => ({ w: u.w, h: u.h })), blockersOf(els, frameId, moving), prefer, ask)
   const outside: string[][] = []
   units.forEach((ids, i) => {
     const dx = r.boxes[i].x - rects[i].x
@@ -113,6 +113,19 @@ export function fitInto(els: readonly CanvasElement[], frameId: string, units: r
     fields.set(frameId, { x: r.board.x, y: r.board.y, width: r.board.w, height: r.board.h })
   }
   return { fields, outside }
+}
+
+/**
+ * Where boxes that move together (a pasted row, a new node) land off any board: the nearest spot to
+ * where they are asked for that is BOARD_CLEAR from everything on the canvas (boards, pictures, nodes;
+ * not links). Returns the offset to add.
+ */
+export function clearOffset(els: readonly CanvasElement[], boxes: readonly Rect[], skip: ReadonlySet<string> = new Set()): { dx: number; dy: number } {
+  if (!boxes.length) return { dx: 0, dy: 0 }
+  const all = boxes.reduce((a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.max(a.x + a.w, b.x + b.w) - Math.min(a.x, b.x), h: Math.max(a.y + a.h, b.y + b.h) - Math.min(a.y, b.y) }))
+  const avoid = els.filter((e) => !e.isDeleted && !skip.has(e.id) && !follows(e)).map((e) => rectOf([e]))
+  const to = nearestFree(all, avoid, { margin: BOARD_CLEAR })
+  return { dx: to.x - all.x, dy: to.y - all.y }
 }
 
 /** The board's new box when what is on it sticks out (a picture landed taller, a stack spread), if it can grow. */

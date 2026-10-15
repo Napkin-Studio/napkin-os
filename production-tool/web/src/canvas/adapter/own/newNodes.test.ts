@@ -95,7 +95,7 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     await s.close()
   })
 
-  it('a Storyboard and a Video made where no board fits go in the middle of the view, unboarded, and never on top of each other', async () => {
+  it('a Storyboard and a Video made where no board fits go near the middle of the view, unboarded, clear of every node and board', async () => {
     const { a, s, doc } = await seeded()
     // The Characters board in view: its purpose fits none of the three.
     const chars = Object.values(doc().boards).sort((x, y) => (x.rank < y.rank ? -1 : 1))
@@ -110,13 +110,10 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     expect(overlap(boxOf(v1), boxOf(v2))).toBe(false)
     const vb = a.visibleBounds()
     const mid = { x: (vb.minX + vb.maxX) / 2, y: (vb.minY + vb.maxY) / 2 }
-    // Centred on the middle of the view, nudged (diagonally) only as far as it takes to clear the nodes there.
-    const dx = sb.x + sb.width / 2 - mid.x
-    const dy = sb.y + sb.height / 2 - mid.y
-    expect(dx).toBeGreaterThanOrEqual(0)
-    expect(dx).toBeCloseTo(dy, 0)
-    expect(dx).toBeLessThan(600)
-    for (const other of a.elements().filter((e) => cardOf(e) && e.id !== sb.id)) expect(overlap(boxOf(sb), boxOf(other))).toBe(false)
+    // The nearest spot to the middle of the view that is clear of everything there: nodes, pictures and
+    // boards, never over a board's edge (board-autolayout).
+    expect(Math.hypot(sb.x + sb.width / 2 - mid.x, sb.y + sb.height / 2 - mid.y)).toBeLessThan(900)
+    for (const n of [sb, v1, v2]) for (const other of a.elements().filter((e) => !e.isDeleted && e.id !== n.id && (cardOf(e) || isBoard(e)))) expect(overlap(boxOf(n), boxOf(other))).toBe(false)
     // A storyboard and a video made new are empty: their cards offer the start.
     expect(isEmptyNode(doc(), 'storyboard', cardOf(sb)!.id)).toBe(true)
     expect(isEmptyNode(doc(), 'video', cardOf(v1)!.id)).toBe(true)

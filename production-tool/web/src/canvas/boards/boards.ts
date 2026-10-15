@@ -169,6 +169,37 @@ export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: nu
   return true
 }
 
+/**
+ * Bring a scene box into view, right of `inset` screen pixels on the left (the rail): nothing when it is
+ * in view already; a pan at this zoom when it fits; else zoomed out just enough. The smallest move, so
+ * new things never send the view somewhere surprising, and never leave them under the rail.
+ */
+export function bringIntoView(canvas: CanvasAdapter, box: { minX: number; minY: number; maxX: number; maxY: number }, inset = 0, animate = true): boolean {
+  const z = canvas.view().zoom
+  const vb = canvas.visibleBounds()
+  const left = vb.minX + inset / z
+  if (box.minX >= left && box.maxX <= vb.maxX && box.minY >= vb.minY && box.maxY <= vb.maxY) return false
+  const sw = (vb.maxX - vb.minX) * z
+  const sh = (vb.maxY - vb.minY) * z
+  const pad = 32
+  const bw = box.maxX - box.minX
+  const bh = box.maxY - box.minY
+  const zoom = Math.min(z, Math.max(0.1, sw - inset - pad * 2) / Math.max(1, bw), Math.max(0.1, sh - pad * 2) / Math.max(1, bh))
+  const W = sw / zoom
+  const H = sh / zoom
+  const p = pad / zoom
+  const s = inset / zoom
+  // The centre nearest the current one that shows the whole box (right of the inset).
+  const near = (cur: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, cur)))
+  const cx = near((vb.minX + vb.maxX) / 2, box.maxX + p - W / 2, box.minX - p - s + W / 2)
+  const cy = near((vb.minY + vb.maxY) / 2, box.maxY + p - H / 2, box.minY - p + H / 2)
+  const w = (0.9 * sw) / zoom
+  const h = (0.9 * sh) / zoom
+  const corner = (id: string, x: number, y: number): CanvasElement => ({ id, type: 'rectangle', x, y, width: 0, height: 0 })
+  canvas.fit([corner('__fit_a', cx - w / 2, cy - h / 2), corner('__fit_b', cx + w / 2, cy + h / 2)], { zoomFactor: 0.9, animate })
+  return true
+}
+
 /** The document's boards that are on the canvas now, by rank: the rail's rows and the ⌥ numbers. */
 export function liveBoards(els: readonly CanvasElement[], doc: ProductionDocument): Board[] {
   const live = new Set(els.flatMap((e) => (isBoard(e) ? [boardIdOf(e)!] : [])))
