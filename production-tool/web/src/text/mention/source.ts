@@ -5,6 +5,7 @@
 // the place mention-input names (web/src/text/mention/), for mention-input to adopt.
 
 import type { Id, Link, LinkEndpointKind, ProductionDocument, RefRole } from '../../contracts/types'
+import { isKeyGroup, keyViews } from '../../lib/names'
 
 type Doc = ProductionDocument
 
@@ -38,20 +39,40 @@ export function groupOf(role: RefRole): MentionGroup {
   return 'Other'
 }
 
-/** Whether a ref is linked to the node (a ref→node link of any role). */
-export function isLinked(d: Doc, refId: Id, node: { kind: LinkEndpointKind; id: Id }): boolean {
-  return Object.values(d.links ?? {}).some((l) => l.from.kind === 'ref' && l.from.id === refId && l.to.kind === node.kind && l.to.id === node.id)
+const linksInto = (d: Doc, kind: 'ref' | 'key', id: Id, node: { kind: LinkEndpointKind; id: Id }) =>
+  Object.values(d.links ?? {}).some((l) => l.from.kind === kind && l.from.id === id && l.to.kind === node.kind && l.to.id === node.id)
+
+/** The key entry of a key name. */
+const keyEntry = (d: Doc, key: string) => Object.values(d.keys ?? {}).find((k) => k.key === key)
+
+/** Whether a whole key is linked to the node (a key→node link; owner 2026-10-15). */
+export function isKeyLinked(d: Doc, keyId: Id, node: { kind: LinkEndpointKind; id: Id }): boolean {
+  return linksInto(d, 'key', keyId, node)
 }
 
-/** Everything that can be named, in the popover's order: Characters, Locations, Products, References, then the rest, each A–Z. */
+/** Whether a ref is linked to the node: its own ref→node link of any role, or its key's. */
+export function isLinked(d: Doc, refId: Id, node: { kind: LinkEndpointKind; id: Id }): boolean {
+  if (linksInto(d, 'ref', refId, node)) return true
+  const k = d.refs?.[refId] ? keyEntry(d, d.refs[refId].key) : undefined
+  return !!k && isKeyLinked(d, k.id, node)
+}
+
+/**
+ * Everything that can be named, in the popover's order: Characters, Locations, Products, References,
+ * then the rest, each A–Z. A key with two or more views (one character, owner 2026-10-15), or with a
+ * front, is offered as the whole group, "@samurai · 3 views", right above its views.
+ */
 export function mentionSource(d: Doc, node: { kind: LinkEndpointKind; id: Id }): MentionItem[] {
   const out: MentionItem[] = []
   const refs = Object.values(d.refs ?? {})
   for (const k of Object.values(d.keys ?? {})) {
-    const mine = refs.filter((r) => r.key === k.key)
-    const front = mine.find((r) => r.variant === 'front')
-    if (!front) continue // a bare @key stands for the whole character, led by its front
-    out.push({ id: k.id, name: k.key, role: k.role, group: groupOf(k.role), asset: front.asset, kind: 'key', linked: mine.some((r) => isLinked(d, r.id, node)) })
+    const { views, sent } = keyViews(d, k.key)
+    if (views.length < 2 && !views.some((r) => r.variant === 'front')) continue
+    const lead = sent[0] ?? views[0]
+    out.push({
+      id: k.id, name: k.key, label: `${views.length} ${views.length === 1 ? 'view' : 'views'}`, role: k.role, group: groupOf(k.role), ...(lead?.asset ? { asset: lead.asset } : {}),
+      kind: 'key', linked: isKeyLinked(d, k.id, node) || views.some((r) => isLinked(d, r.id, node)),
+    })
   }
   for (const r of refs) {
     out.push({ id: r.id, name: `${r.key}_${r.variant}`, ...(r.label ? { label: r.label } : {}), role: r.role, group: groupOf(r.role), asset: r.asset, kind: 'ref', linked: isLinked(d, r.id, node) })
@@ -94,10 +115,29 @@ export function closestName(name: string, names: string[]): string | null {
   return best?.n ?? null
 }
 
-/** The ref→script link a mention of an unlinked ref makes (its role is the ref's), or null when none is needed. */
+/**
+ * The link a mention of something unlinked makes (3.6 "Insert a reference that isn't linked": the
+ * group it sits in is linked), or null when none is needed: a key, or a view of a key with two or
+ * more views, links the whole key once (owner 2026-10-15), in the key's role; a lone ref links itself.
+ */
 export function linkForMention(d: Doc, item: Pick<MentionItem, 'id' | 'kind'>, node: { kind: LinkEndpointKind; id: Id }, newId: () => Id): Link | null {
-  const refId = item.kind === 'ref' ? item.id : Object.values(d.refs).find((r) => r.key === d.keys[item.id]?.key && r.variant === 'front')?.id
-  const ref = refId ? d.refs[refId] : undefined
+  const ref = item.kind === 'ref' ? d.refs?.[item.id] : undefined
+  const key = item.kind === 'key' ? d.keys?.[item.id] : ref && isKeyGroup(d, ref.key) ? keyEntry(d, ref.key) : undefined
+  if (key) {
+    if (isKeyLinked(d, key.id, node) || (ref && isLinked(d, ref.id, node))) return null
+    return { id: newId(), v: 1, field_v: {}, from: { kind: 'key', id: key.id }, to: node, role: key.role }
+  }
   if (!ref || isLinked(d, ref.id, node)) return null
   return { id: newId(), v: 1, field_v: {}, from: { kind: 'ref', id: ref.id }, to: node, role: ref.role }
+}
+
+/** What a link made for a mention brings in, in the toast's words: "@samurai · 3 views", or "@maya_side". */
+export function linkWords(d: Doc, link: Pick<Link, 'from'>): string {
+  if (link.from.kind === 'key') {
+    const k = d.keys?.[link.from.id]
+    const n = k ? keyViews(d, k.key).views.length : 0
+    return k ? `@${k.key} · ${n} ${n === 1 ? 'view' : 'views'}` : 'the character'
+  }
+  const r = d.refs?.[link.from.id]
+  return r ? `@${r.key}_${r.variant}` : 'the reference'
 }

@@ -9,6 +9,9 @@
 //   rules (core/links.ts), written to the scene and to the document's links.
 // - reconcileLinks: a link element a person deleted takes its document entry
 //   with it; one brought back by undo puts it back.
+// - A picture that is one of a key's two or more views is the whole key as a link end
+//   (owner 2026-10-15: one character, auto-grouped): a link from it, or from its group,
+//   is one link from the key. `single` (⌥ while linking) links only that view.
 
 import { currentRender, keyNamed, mainScript, mainStoryboard, mainVideo, refsList, scenesOf, shotsOf, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
 import type { Link, LinkEndpoint, LinkRole, ProductionDocument, RefRole, Script, Storyboard, Video } from '../../contracts/types'
@@ -19,6 +22,7 @@ import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { canLink, checkLink, endName, type LinkEnd as CoreEnd, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
 import type { CardKind } from './cardChrome'
 import { adLayout, CARD_SIZE } from '../boards/layout'
+import { isKeyGroup, keyViews } from '../../lib/names'
 
 export const CARD_KINDS: readonly CardKind[] = ['script', 'storyboard', 'video']
 
@@ -83,11 +87,17 @@ export interface LinkEndOnCanvas {
   refRole?: RefRole
 }
 
+/** How a link end is read: `single` takes a key's view as itself, not as its whole key. */
+export interface EndOptions {
+  single?: boolean
+}
+
 /**
  * What a canvas element is as a link end: a Script, Storyboard or Video node, a named picture (its
- * reference), or a sketch area. An unnamed picture is not one yet: `refuse` says so. Null: not an end.
+ * reference, or its whole key when the key has two or more views), or a sketch area. An unnamed
+ * picture is not one yet: `refuse` says so. Null: not an end.
  */
-export function endOf(e: CanvasElement | undefined, doc: ProductionDocument): LinkEndOnCanvas | { refuse: string } | null {
+export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opts: EndOptions = {}): LinkEndOnCanvas | { refuse: string } | null {
   if (!e || e.isDeleted) return null
   const card = cardOf(e)
   if (card) return { el: e, doc: { kind: card.kind, id: card.id }, core: { kind: card.kind as LinkKind } }
@@ -96,7 +106,9 @@ export function endOf(e: CanvasElement | undefined, doc: ProductionDocument): Li
   if (e.type === 'image') {
     const ref = refsList(doc).find((r) => r.node && (r.node === e.id || r.node === t.id))
     if (!ref) return t.kind === 'pic' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
-    const role = (keyNamed(doc, ref.key)?.role ?? ref.role) as RefRole
+    const key = keyNamed(doc, ref.key)
+    const role = (key?.role ?? ref.role) as RefRole
+    if (key && !opts.single && isKeyGroup(doc, ref.key)) return { el: e, doc: { kind: 'key', id: key.id }, core: { kind: 'picture', role }, refRole: role }
     return { el: e, doc: { kind: 'ref', id: ref.id }, core: { kind: 'picture', role }, refRole: role }
   }
   return null
@@ -109,9 +121,12 @@ const endInDoc = (doc: ProductionDocument, x: LinkEndOnCanvas) =>
 /** The element on the canvas that stands for a document endpoint, if it is there. */
 export function elementOfEnd(els: readonly CanvasElement[], doc: ProductionDocument, end: LinkEndpoint): CanvasElement | undefined {
   const live = els.filter((e) => !e.isDeleted)
-  if (end.kind === 'ref') {
-    const node = doc.refs?.[end.id]?.node
-    return node ? live.find((e) => e.id === node || tag(e).id === node) : undefined
+  const onCanvas = (node: string | undefined) => (node ? live.find((e) => e.id === node || tag(e).id === node) : undefined)
+  if (end.kind === 'ref') return onCanvas(doc.refs?.[end.id]?.node)
+  // A key: its lead view on the canvas (the front, which tops its stack), else the next.
+  if (end.kind === 'key') {
+    const k = doc.keys?.[end.id]
+    return k ? keyViews(doc, k.key).views.map((r) => onCanvas(r.node)).find(Boolean) : undefined
   }
   return live.find((e) => {
     const t = tag(e)
@@ -119,12 +134,14 @@ export function elementOfEnd(els: readonly CanvasElement[], doc: ProductionDocum
   })
 }
 
-/** The rules' role of a document link: a reference's own role is `reference` to them. */
-const coreRole = (l: Pick<Link, 'from' | 'role'>): CoreRole => (l.from.kind === 'ref' ? 'reference' : (l.role as unknown as CoreRole))
+/** The rules' role of a document link: a reference's (or a key's) own role is `reference` to them. */
+const coreRole = (l: Pick<Link, 'from' | 'role'>): CoreRole => (l.from.kind === 'ref' || l.from.kind === 'key' ? 'reference' : (l.role as unknown as CoreRole))
 
 /** The link rules' view of what is on the canvas: its link ends and the document's links between them. */
 export function linkGraph(els: readonly CanvasElement[], doc: ProductionDocument): LinkGraph {
-  const nodes = els.map((e) => endOf(e, doc)).filter(isEnd).map((x) => ({ id: x.doc.id, kind: x.core.kind, ...(x.core.role ? { role: x.core.role } : {}) }))
+  // A key's view is an end both as its key and as itself.
+  const ends = els.flatMap((e) => [endOf(e, doc), endOf(e, doc, { single: true })]).filter(isEnd)
+  const nodes = [...new Map(ends.map((x) => [x.doc.id, { id: x.doc.id, kind: x.core.kind, ...(x.core.role ? { role: x.core.role } : {}) }])).values()]
   const links = Object.values(doc.links ?? {}).map((l) => ({ from: l.from.id, to: l.to.id, role: coreRole(l) }))
   return { nodes, links }
 }
@@ -132,8 +149,8 @@ export function linkGraph(els: readonly CanvasElement[], doc: ProductionDocument
 export type LinkOutcome = { ok: true; link: Link; element: CanvasElement } | { ok: false; reason: string }
 
 /** Can `from` feed `to`, and with which role (the rules' first; a reference's own role in the document)? */
-export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument, from: CanvasElement, to: CanvasElement): { ok: true; role: CoreRole; docRole: LinkRole } | { ok: false; reason: string } {
-  const a = endOf(from, doc)
+export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument, from: CanvasElement, to: CanvasElement, opts: EndOptions = {}): { ok: true; role: CoreRole; docRole: LinkRole } | { ok: false; reason: string } {
+  const a = endOf(from, doc, opts)
   const b = endOf(to, doc)
   if (a && 'refuse' in a) return { ok: false, reason: a.refuse }
   if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard, a video, a named picture or a sketch area.' }
@@ -151,10 +168,10 @@ export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument
  * Link two ends: the document's links entry (written first by `write`, updateDoc with a 'link'
  * action), then the link element as one undoable step. Returns what was made, or why not.
  */
-export async function linkNodes(canvas: CanvasAdapter, doc: ProductionDocument, from: CanvasElement, to: CanvasElement, write: (link: Link) => Promise<void>): Promise<LinkOutcome> {
-  const check = linkCheck(canvas.elements(), doc, from, to)
+export async function linkNodes(canvas: CanvasAdapter, doc: ProductionDocument, from: CanvasElement, to: CanvasElement, write: (link: Link) => Promise<void>, opts: EndOptions = {}): Promise<LinkOutcome> {
+  const check = linkCheck(canvas.elements(), doc, from, to, opts)
   if (!check.ok) return check
-  const a = endOf(from, doc) as LinkEndOnCanvas
+  const a = endOf(from, doc, opts) as LinkEndOnCanvas
   const b = endOf(to, doc) as LinkEndOnCanvas
   const link: Link = { id: newId('link'), v: 1, field_v: {}, from: a.doc, to: b.doc, role: check.docRole }
   await write(link)
@@ -171,9 +188,11 @@ export interface LinkMemory {
   inDoc: Set<string>
   /** Link ids this canvas took out of the document because their element was deleted (undo may bring them back). */
   unlinked: Set<string>
+  /** Each link as the document last had it, so undo brings back the same ends (a key, or one view of it). */
+  known: Map<string, Link>
 }
 
-export const linkMemory = (): LinkMemory => ({ seen: new Set(), inDoc: new Set(), unlinked: new Set() })
+export const linkMemory = (): LinkMemory => ({ seen: new Set(), inDoc: new Set(), unlinked: new Set(), known: new Map() })
 
 /**
  * Keep the document's links and the link elements in step, whoever wrote either (ui-behaviour 3.4):
@@ -190,7 +209,10 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
     const id = linkIdOf(e)
     if (id && !e.isDeleted) live.set(id, e)
   }
-  for (const id of Object.keys(doc.links ?? {})) mem.inDoc.add(id)
+  for (const [id, l] of Object.entries(doc.links ?? {})) {
+    mem.inDoc.add(id)
+    mem.known.set(id, l)
+  }
   const byEl = new Map(els.filter((e) => !e.isDeleted).map((e) => [e.id, e]))
   const unlink = [...mem.seen].filter((id) => !live.has(id) && doc.links?.[id])
   for (const id of unlink) mem.unlinked.add(id)
@@ -210,7 +232,11 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
     const b = endOf(byEl.get(ends.endBinding?.elementId ?? ''), doc)
     // A node's end must be in the document: a node coming back with the canvas's undo is put back
     // there first (CanvasDocSync.nodes), and the link waits for it.
-    if (isEnd(a) && isEnd(b) && ends.role && endInDoc(doc, a) && endInDoc(doc, b)) relink.push({ id, v: 1, field_v: {}, from: a.doc, to: b.doc, role: ends.role as LinkRole })
+    // A picture's link comes back as it was: from its whole key, or from that one view.
+    const was = mem.known.get(id)?.from
+    const pic = (k: string) => k === 'key' || k === 'ref'
+    const from = isEnd(a) && was && pic(was.kind) && pic(a.doc.kind) ? was : isEnd(a) ? a.doc : null
+    if (from && isEnd(b) && ends.role && endInDoc(doc, a as LinkEndOnCanvas) && endInDoc(doc, b)) relink.push({ id, v: 1, field_v: {}, from, to: b.doc, role: ends.role as LinkRole })
   }
   const draw: { link: Link; from: CanvasElement; to: CanvasElement }[] = []
   for (const l of Object.values(doc.links ?? {})) {

@@ -134,6 +134,36 @@
       "role": "brand",
       "board_purpose": "location",
       "ok": false
+    },
+    {
+      "from": "key",
+      "to": "script",
+      "role": "character",
+      "ok": true
+    },
+    {
+      "from": "key",
+      "to": "sketch",
+      "role": "character",
+      "ok": true
+    },
+    {
+      "from": "key",
+      "to": "shot",
+      "role": "location",
+      "ok": true
+    },
+    {
+      "from": "key",
+      "to": "storyboard",
+      "role": "input",
+      "ok": false
+    },
+    {
+      "from": "script",
+      "to": "key",
+      "role": "character",
+      "ok": false
     }
   ]
 }

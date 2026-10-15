@@ -3,7 +3,9 @@
 //
 // - A click selects the topmost element there, with its whole outermost group
 //   (groupIds run innermost to outermost, as Excalidraw's and core/nodes.ts read
-//   them); shift-click adds or removes it.
+//   them); shift-click adds or removes it. A double-click on a member of a group picks
+//   that member alone (pickOne, as Excalidraw enters a group), so one view of a
+//   character can be named or linked on its own.
 // - Group adds a new outermost group to the selection and Ungroup takes the
 //   outermost one off, each one undoable step (canvas-edit-tools; ui-behaviour 3.8).
 // - A press on empty space starts a marquee (mouse, touch) or a lasso (pen); at
@@ -193,6 +195,15 @@ export class SelectTool {
     const boards = this.scene.all().filter((r) => r.kind === 'board' && r.id !== self).map((r) => placed.get(r.id) ?? r)
     const hit = boards.filter((b) => p.x >= b.x && p.y >= b.y && p.x <= b.x + b.w && p.y <= b.y + b.h).sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
     return hit?.id ?? null
+  }
+
+  /** The topmost element at a point, alone, even when it is in a group (a double-click). Its id, or null. */
+  pickOne(p: Pt): string | null {
+    const hit = this.hit(p.x, p.y)
+    if (!hit) return null
+    this.selected = new Set([hit.id])
+    this.changed()
+    return hit.id
   }
 
   set(ids: Iterable<string>) {

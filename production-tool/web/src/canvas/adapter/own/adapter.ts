@@ -138,7 +138,8 @@ export class OwnAdapter implements CanvasAdapter {
     this.undo = new SceneUndo(this.scene)
     this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y))
     this.selector.onChange(() => this.changed())
-    this.sketch = new SketchTool(this.scene)
+    // A drawn area's sketch id is a document id (sketch_ + a ULID): links into it are checked against the contract.
+    this.sketch = new SketchTool(this.scene, { newId: (p) => (p === 'sketch' ? newId('sketch') : this.opts.newId()) })
     this.scene.onChange((ids) => {
       this.cache = null
       for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
@@ -294,6 +295,17 @@ export class OwnAdapter implements CanvasAdapter {
   anchors(id: string): Anchor[] {
     const el = this.elements().find((e) => e.id === id)
     return el ? edgeAnchors(this.bounds([el])) : []
+  }
+
+  animate(from: ReadonlyMap<string, { x: number; y: number; angle: number }>, ms: number) {
+    if (!this.renderer || !from.size) return
+    this.renderer.tween = { from: new Map([...from].map(([id, p]) => [id, { x: p.x, y: p.y, rotation: p.angle }])), t0: performance.now(), ms }
+    if (typeof requestAnimationFrame === 'undefined') return
+    const step = () => {
+      this.changed()
+      if (this.renderer?.animating()) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
   }
 
   setEmphasis(e: Emphasis) {
@@ -535,6 +547,13 @@ export class OwnAdapter implements CanvasAdapter {
   /** Group the selection (Ctrl/Cmd+G), one step of the person's. Returns the group id, or null. */
   group(): string | null {
     return this.selector.group()
+  }
+
+  /** The element at a scene point alone, even inside a group (a double-click): its id, or null. */
+  pickOne(p: Pt): string | null {
+    const id = this.selector.pickOne(p)
+    this.changed()
+    return id
   }
 
   /** Ungroup the outermost group of the selection (Ctrl/Cmd+Shift+G), one step. */

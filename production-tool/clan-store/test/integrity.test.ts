@@ -41,6 +41,14 @@ describe('integrity', () => {
     }, /text has one owner/],
     ['a bad rank', (d) => { first(d, 'shots').rank = 'a0' + '0' }, /not an order key/],
     ['a key that is not its id', (d) => { first(d, 'boards').id = id('board', 99) }, /not its key/],
+    // A key link (owner 2026-10-15): the whole character, one link per key and target.
+    ['a key link whose key is gone', (d) => {
+      add(d, 'links', { id: id('link', 92), from: { kind: 'key', id: id('key', 99) }, to: { kind: 'script', id: first(d, 'scripts').id }, role: 'character' })
+    }, /its key .* is not in the document/],
+    ['two links from one key into one node', (d) => {
+      const k = find(d, 'keys', (x) => x.key === 'maya').id
+      for (const n of [93, 94]) add(d, 'links', { id: id('link', n), from: { kind: 'key', id: k }, to: { kind: 'script', id: first(d, 'scripts').id }, role: 'character' })
+    }, /2 links of one role on one port/],
   ]
   for (const [name, mutate, want] of broken) {
     it(`refuses ${name}`, () => {
@@ -49,6 +57,13 @@ describe('integrity', () => {
       expect(integrity(d).join('\n')).toMatch(want)
     })
   }
+
+  it('passes a key link: the whole character into a script', () => {
+    const d = ad()
+    const k = find(d, 'keys', (x) => x.key === 'maya').id
+    add(d, 'links', { id: id('link', 95), from: { kind: 'key', id: k }, to: { kind: 'script', id: first(d, 'scripts').id }, role: 'character' })
+    expect(integrity(d)).toEqual([])
+  })
 
   // linkRule's kinds make no cycle today (nothing leaves a shot, a video feeds only a format
   // set); the loop check stands behind it for the rules to come.

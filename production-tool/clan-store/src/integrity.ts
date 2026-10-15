@@ -27,7 +27,7 @@ export const MAX_PROSE_BYTES = 64 * 1024
 
 /** The map each document-entity endpoint kind lives in. group, note and ink are canvas things. */
 export const ENDPOINT_MAP: Record<string, string | null> = {
-  board: 'boards', script: 'scripts', storyboard: 'storyboards', video: 'videos', ref: 'refs', frame: 'frames', render: 'renders',
+  board: 'boards', script: 'scripts', storyboard: 'storyboards', video: 'videos', ref: 'refs', key: 'keys', frame: 'frames', render: 'renders',
   sketch: 'sketches', document: 'documents', format_set: 'format_sets', shot: 'shots', group: null, note: null, ink: null,
 }
 

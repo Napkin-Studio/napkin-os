@@ -32,6 +32,28 @@ export function keyRefs(doc: ProductionDocument, key: Key): NamedRef[] {
   return [front, ...mine.filter((r) => r !== front).sort((a, b) => rank(a) - rank(b)).slice(0, KEY_EXTRAS)]
 }
 
+/**
+ * A key's views, as one character or thing (owner 2026-10-15: pictures that share a key are one,
+ * auto-grouped under it): every named ref with the key, the front first, then three-quarter, side,
+ * back, then the rest by name. `sent` is what one job takes of them when the whole key is linked:
+ * those with a picture, at most the front and KEY_EXTRAS more (as a bare @key sends), so a key never
+ * takes more than 4 of Runway's references (refs.maxCharacter 5 on the capability sheet). Never throws:
+ * a key with no front leads with its first view.
+ */
+export function keyViews(doc: ProductionDocument, key: Key): { views: NamedRef[]; sent: NamedRef[] } {
+  const mine = refsList(doc).filter((r) => r.key === key)
+  const rank = (r: NamedRef) => (r.variant === 'front' ? -1 : VIEW_ORDER.includes(r.variant) ? VIEW_ORDER.indexOf(r.variant) : VIEW_ORDER.length)
+  const views = [...mine].sort((a, b) => rank(a) - rank(b) || (a.variant < b.variant ? -1 : a.variant > b.variant ? 1 : 0))
+  return { views, sent: views.filter((r) => r.asset).slice(0, 1 + KEY_EXTRAS) }
+}
+
+/** Is this key a group of views (two or more named refs), so linking any of them links the key? */
+export function isKeyGroup(doc: ProductionDocument, key: Key): boolean {
+  let n = 0
+  for (const r of refsList(doc)) if (r.key === key && ++n > 1) return true
+  return false
+}
+
 /** Keys that can be named bare (they have a front). */
 export function wholeKeys(doc: ProductionDocument): Key[] {
   const refs = refsList(doc)

@@ -100,7 +100,7 @@ export type View = (typeof VIEWS)[number]
 
 export interface Region { x: number; y: number; w: number; h: number }
 
-export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot'] as const
+export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot'] as const
 export type LinkEndpointKind = (typeof LINK_ENDPOINT_KINDS)[number]
 export interface LinkEndpoint { kind: LinkEndpointKind; id: string }
 export type StructuralLinkRole = 'drives' | 'renders' | 'input' | 'note' | 'context' | 'brand' | 'master' | 'frame' | 'made_from' | 'note_on_shot'

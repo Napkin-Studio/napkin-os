@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../../contracts/types'
-import { closestName, editDistance, isLinked, linkForMention, matchMentions, mentionSource } from './source'
+import { closestName, editDistance, isLinked, linkForMention, linkWords, matchMentions, mentionSource } from './source'
 
 const U = (c: string) => c.repeat(26)
 function doc(): ProductionDocument {
@@ -55,11 +55,34 @@ describe('closestName', () => {
 })
 
 describe('linkForMention', () => {
-  it('links an unlinked ref to the script with its role; a linked one needs none', () => {
+  it('links an unlinked lone ref to the script with its role; a linked one needs none', () => {
     const d = doc()
-    const l = linkForMention(d, { id: `ref_${U('D')}`, kind: 'ref' }, SCRIPT, () => `link_${U('K')}`)
-    expect(l).toMatchObject({ from: { kind: 'ref', id: `ref_${U('D')}` }, to: SCRIPT, role: 'character' })
+    const l = linkForMention(d, { id: `ref_${U('G')}`, kind: 'ref' }, SCRIPT, () => `link_${U('K')}`)
+    expect(l).toMatchObject({ from: { kind: 'ref', id: `ref_${U('G')}` }, to: SCRIPT, role: 'product' })
     expect(linkForMention(d, { id: `ref_${U('C')}`, kind: 'ref' }, SCRIPT, () => 'x')).toBeNull()
     expect(isLinked(d, `ref_${U('C')}`, SCRIPT)).toBe(true)
+  })
+
+  it('a view of a key with two or more views links the whole key, once, in its role (owner 2026-10-15)', () => {
+    const d = doc()
+    const l = linkForMention(d, { id: `ref_${U('D')}`, kind: 'ref' }, SCRIPT, () => `link_${U('K')}`)!
+    expect(l).toMatchObject({ from: { kind: 'key', id: `key_${U('A')}` }, to: SCRIPT, role: 'character' })
+    expect(linkWords(d, l)).toBe('@maya · 2 views')
+    d.links[l.id] = l
+    // Every view of it is linked now, and the key needs no second link.
+    expect(isLinked(d, `ref_${U('D')}`, SCRIPT)).toBe(true)
+    expect(linkForMention(d, { id: `ref_${U('D')}`, kind: 'ref' }, SCRIPT, () => 'y')).toBeNull()
+    expect(linkForMention(d, { id: `key_${U('A')}`, kind: 'key' }, SCRIPT, () => 'y')).toBeNull()
+  })
+
+  it('offers a key of two views as the group, "N views", above its views, even without a front', () => {
+    const d = doc()
+    d.refs[`ref_${U('C')}`].variant = 'side'
+    const items = mentionSource(d, SCRIPT)
+    const at = items.findIndex((i) => i.name === 'maya')
+    expect(items[at]).toMatchObject({ kind: 'key', label: '2 views', linked: true })
+    expect(items.slice(at + 1, at + 3).map((i) => i.name)).toEqual(['maya_laughing', 'maya_side'])
+    // A key of one view without a front is not a group.
+    expect(items.some((i) => i.kind === 'key' && i.name === 'soda')).toBe(false)
   })
 })

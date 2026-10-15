@@ -4,7 +4,7 @@
 import { newUlidId } from '../../../clan-store/src'
 import type { ProductionDocument } from '../contracts/types'
 import type { ModelStore } from '../model/store'
-import { isLinked, linkForMention, mentionSource, type MentionItem } from '../text/mention/source'
+import { isLinked, linkForMention, linkWords, mentionSource, type MentionItem } from '../text/mention/source'
 import type { MentionHooks } from './mentions'
 
 type Doc = ProductionDocument
@@ -23,10 +23,11 @@ export function resolveMention(d: Doc, id: string, scope?: { kind: 'script'; id:
 
 /**
  * Hooks for a script's editors. Picking a reference not linked to the script links it (one undo
- * step, a ref→script link with the ref's role) and calls `linked`, which says so with Undo.
+ * step, a ref→script link with the ref's role, or its whole key when it is one of a key's views)
+ * and calls `linked` with what came in, which says so with Undo.
  * Without a script (a Storyboard card), every reference that exists is in scope and nothing links.
  */
-export function scriptMentionHooks(store: ModelStore, scriptId: string | undefined, linked?: (item: MentionItem) => void): MentionHooks {
+export function scriptMentionHooks(store: ModelStore, scriptId: string | undefined, linked?: (item: MentionItem, words: string) => void): MentionHooks {
   const scope = scriptId ? { kind: 'script' as const, id: scriptId } : undefined
   const node = scope ?? { kind: 'script' as const, id: '' }
   return {
@@ -38,7 +39,8 @@ export function scriptMentionHooks(store: ModelStore, scriptId: string | undefin
       const d = store.get()
       const link = linkForMention(d, item, scope, () => newUlidId('link'))
       if (!link) return
-      void store.change((x) => { x.links[link.id] = link }, { action: `link refs[${link.from.id}] to scripts[${scope.id}]` }).then(() => linked?.(item))
+      const words = linkWords(d, link)
+      void store.change((x) => { x.links[link.id] = link }, { action: `link ${link.from.kind}s[${link.from.id}] to scripts[${scope.id}]` }).then(() => linked?.(item, words))
     },
   }
 }

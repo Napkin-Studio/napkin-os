@@ -84,6 +84,20 @@ describe('SelectTool', () => {
     expect([...tool.selected]).toEqual(['a'])
   })
 
+  it('a double-click (pickOne) on a member of a group picks it alone; a drag then moves only it', () => {
+    const { tool, scene } = setup(RECS)
+    tool.press({ x: 110, y: 10 })
+    tool.release({ x: 110, y: 10 })
+    expect([...tool.selected].sort()).toEqual(['b', 'c'])
+    expect(tool.pickOne({ x: 110, y: 10 })).toBe('b')
+    expect([...tool.selected]).toEqual(['b'])
+    tool.press({ x: 110, y: 10 })
+    tool.release({ x: 130, y: 10 })
+    expect(scene.get('b')!.x).toBe(120)
+    expect(scene.get('c')!.x).toBe(200)
+    expect(tool.pickOne({ x: -50, y: -50 })).toBeNull()
+  })
+
   it('a click on empty space clears; a marquee selects what is wholly inside', () => {
     const { tool } = setup(RECS)
     tool.set(['a'])

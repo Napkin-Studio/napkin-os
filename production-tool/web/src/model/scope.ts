@@ -5,8 +5,8 @@
 //
 // What is in a node's scope, in the order the strip shows it:
 // - upstream: the script that drives it, the storyboard that renders it (their links);
-// - each other link into it: a board or group (and the references on it), a single reference
-//   with its role, a sketch area or drawing, a note or ink group, a document, the brand board,
+// - each other link into it: a board or group (and the references on it), a whole key (and each of
+//   its views: owner 2026-10-15), a single reference with its role, a sketch area or drawing, a note or ink group, a document, the brand board,
 //   a frame (a shot's frame or layout, a format set's master);
 // - what upstream nodes have linked in (a storyboard sees its script's references), once;
 // - @-mentions in its own text that nothing above brings in (not yet linked: the auto-link of
@@ -21,6 +21,7 @@ import type {
   Board, BoardPurpose, Id, Link, LinkEndpoint, LinkEndpointKind, LinkRole, NamedRef, ProductionDocument, RefRole, Sha256, Shot,
 } from '../contracts/types'
 import { beatsOf, refName, scenesOf, shotsOf } from './selectors'
+import { keyViews } from '../lib/names'
 
 type Doc = ProductionDocument
 
@@ -49,8 +50,12 @@ export interface ScopeItem {
   drawn?: boolean
   /** Ids of the node's shots whose text names it ("@maya · character · 1 2 4 5"). */
   usedBy: Id[]
-  /** For a board or group: how many references it brings in. */
+  /** For a board or group: how many references it brings in; for a key: how many views. */
   count?: number
+  /** For a linked key: the views one job sends (at most 4; lib/names keyViews), by ref id. */
+  sends?: Id[]
+  /** A view of a linked key that stays out of a send (past the key's 4). */
+  held?: boolean
   /** The board or group item this one came in through (via 'board'), or the upstream node (via 'upstream'). */
   through?: Id
 }
@@ -157,6 +162,18 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
       const r = d.refs?.[e.id]
       return r ? [refItem(d, r, via, l.role, l.id, through, true)] : []
     }
+    case 'key': {
+      // The whole character: one chip, "@samurai · 3 views", then each view with its own role.
+      const k = d.keys?.[e.id]
+      if (!k) return []
+      const { views, sent } = keyViews(d, k.key)
+      const n = views.length
+      const head: ScopeItem = {
+        ...base, kind: 'key', id: e.id, name: k.key, label: `@${k.key} · ${n} ${n === 1 ? 'view' : 'views'}`, count: n,
+        sends: sent.map((r) => r.id), ...(sent[0]?.asset ? { asset: sent[0].asset } : {}),
+      }
+      return [head, ...views.map((r) => ({ ...refItem(d, r, via === 'link' ? 'board' : via, r.role, l.id, e.id), ...(sent.includes(r) ? {} : { held: true }) }))]
+    }
     case 'board':
     case 'group': {
       const b = e.kind === 'board' ? d.boards?.[e.id] : undefined
@@ -220,7 +237,7 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
   }
   const own = into(nodeId)
   // A reference's own link before the board it also sits on, so its chip shows.
-  const grouped = (l: Link) => Number(l.from.kind === 'board' || l.from.kind === 'group')
+  const grouped = (l: Link) => Number(l.from.kind === 'board' || l.from.kind === 'group' || l.from.kind === 'key')
   for (const l of [...own].sort((a, b) => grouped(a) - grouped(b))) for (const it of linkItems(d, l, 'link', opts)) add(it)
   // Upstream: what the driving script or rendering storyboard has linked in, up the chain, once.
   const visited = new Set([nodeId])
@@ -271,6 +288,13 @@ export function scopeOf(d: Doc, nodeId: Id, opts: ScopeOptions = {}): ScopeItem[
     const direct = named.get(`ref:${it.id}`) ?? []
     const viaKey = (keyOf(it.id) && named.get(`key:${keyOf(it.id)}`)) || []
     it.usedBy = shots.map((s) => s.id).filter((id) => direct.includes(id) || viaKey.includes(id))
+  }
+  // A linked key is used wherever the key or any of its views is named.
+  for (const it of items) {
+    if (it.kind !== 'key') continue
+    const views = items.filter((x) => x.kind === 'ref' && x.through === it.id)
+    const used = new Set([...(named.get(`key:${it.id}`) ?? []), ...views.flatMap((v) => v.usedBy)])
+    it.usedBy = shots.map((s) => s.id).filter((id) => used.has(id))
   }
   for (const [k, used] of named) {
     const [kk, id] = k.split(/:(.*)/s) as ['ref' | 'key', Id]

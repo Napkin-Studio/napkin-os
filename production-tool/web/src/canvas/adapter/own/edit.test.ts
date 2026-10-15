@@ -20,6 +20,8 @@ describe('the own engine’s edit tools', () => {
     a.release(at(90, 10))
     const [el] = a.elements()
     expect(el).toMatchObject({ type: 'rectangle', width: 90, height: 160, ratio: '9:16', customData: { kind: 'sketch' } })
+    // Its id is a document id (sketch_ + a ULID), so a link into it passes the contract's pattern.
+    expect((el.customData as { id: string }).id).toMatch(/^sketch_[0-9A-HJKMNP-TV-Z]{26}$/)
     expect(a.view().selectedIds).toEqual([el.id])
     expect(ownChrome(a).tool()).toBe('select')
   })

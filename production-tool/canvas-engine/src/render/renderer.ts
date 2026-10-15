@@ -41,6 +41,7 @@ export interface DrawContext {
   restore(): void
   translate(x: number, y: number): void
   scale?(x: number, y: number): void
+  rotate?(angle: number): void
   fillRect(x: number, y: number, w: number, h: number): void
   clearRect?(x: number, y: number, w: number, h: number): void
   strokeRect(x: number, y: number, w: number, h: number): void
@@ -190,6 +191,29 @@ export class Renderer {
   currentBoard: string | null = null
   /** What the ink names mean in the host's theme (ink/palette.ts); the light values until it says. */
   inkPalette: InkPalette = LIGHT_INK
+  /**
+   * Elements gliding from where they were to where they are now (a stack of pictures opening or
+   * folding): drawn in between for `ms`, eased, never written. The host keeps drawing while
+   * animating() says so.
+   */
+  tween: { from: ReadonlyMap<string, { x: number; y: number; rotation: number }>; t0: number; ms: number } | null = null
+
+  /** Is a tween still running at `now`? */
+  animating(now = performance.now()): boolean {
+    return !!this.tween && now - this.tween.t0 < this.tween.ms
+  }
+
+  /** A record where the tween draws it at `now`: on its way from where it was (ease out). */
+  tweened(r: ElementRecord, now = performance.now()): ElementRecord {
+    const t = this.tween
+    const from = t?.from.get(r.id)
+    if (!t || !from) return r
+    const k = Math.min(1, Math.max(0, (now - t.t0) / Math.max(1, t.ms)))
+    if (k >= 1) return r
+    const e = 1 - (1 - k) ** 3
+    const at = (a: number, b: number) => a + (b - a) * e
+    return { ...r, x: at(from.x, r.x), y: at(from.y, r.y), rotation: at(from.rotation, r.rotation) }
+  }
 
   constructor(scene: SceneStore, host: RenderHost) {
     this.scene = scene
@@ -290,7 +314,10 @@ export class Renderer {
     const visible = new Set(this.tree.search(Renderer.view(cam, viewport)).map((b) => b.id))
     const minPx = 1.5 / cam.zoom
     const level: Level = cam.zoom < FULL_RES_MIN_ZOOM ? 'small' : 'full'
-    for (const r of this.order()) {
+    const now = performance.now()
+    if (this.tween && !this.animating(now)) this.tween = null
+    for (const rec of this.order()) {
+      const r = this.tween ? this.tweened(rec, now) : rec
       // A bound link is drawn from its ends (it follows them), so its own box never culls it.
       if (!visible.has(r.id) && r.kind !== 'link') {
         stats.culled++
@@ -420,11 +447,28 @@ export class Renderer {
       case 'image': {
         const sha = typeof r.props.assetSha === 'string' ? r.props.assetSha : null
         const bm = sha ? (this.host.bitmap(sha, level) ?? this.host.bitmap(sha, level === 'full' ? 'small' : 'full')) : undefined
+        // Turned about its centre (a picture in a stack: a pile of photos).
+        const turned = !!r.rotation && !!ctx.rotate
+        if (turned) {
+          ctx.save()
+          ctx.translate(r.x + r.w / 2, r.y + r.h / 2)
+          ctx.rotate!(r.rotation)
+          ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2))
+        }
+        // A picture in a stack is a photo: a soft shadow and a white edge, so the ones below read apart.
+        if (r.props.stack) {
+          const b = Math.max(4, Math.min(Math.abs(r.w), Math.abs(r.h)) * 0.03)
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.14)'
+          ctx.fillRect(r.x - b + 2, r.y - b + 5, r.w + b * 2, r.h + b * 2)
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(r.x - b, r.y - b, r.w + b * 2, r.h + b * 2)
+        }
         if (bm) ctx.drawImage(bm, r.x, r.y, r.w, r.h)
         else {
           ctx.fillStyle = '#eeeeee'
           ctx.fillRect(r.x, r.y, r.w, r.h)
         }
+        if (turned) ctx.restore()
         return
       }
       case 'board':

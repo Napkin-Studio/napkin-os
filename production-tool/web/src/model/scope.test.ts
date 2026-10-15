@@ -147,3 +147,58 @@ describe('scope labels', () => {
     expect(inputChips(scopeOf(d, SB))[0].label).toBe('Script')
   })
 })
+
+// A link from a whole key (owner 2026-10-15: pictures that share a key are one character).
+describe('scopeOf with a key link', () => {
+  const MAYA = 'key_01K7A00000000000000000000K'
+  const withKey = () => {
+    const d = fresh()
+    // The script has nothing of maya linked; then the key is linked once.
+    for (const l of Object.values(d.links)) if (l.to.id === SCRIPT && (l.from.id === MAYA_FRONT || l.from.id === MAYA_SIDE)) delete d.links[l.id]
+    const l = link({ kind: 'key', id: MAYA }, { kind: 'script', id: SCRIPT }, 'character', 'link_key1')
+    d.links[l.id] = l
+    return d
+  }
+
+  it('is one chip, "@maya · 2 views", and brings in each view with its role, name and picture', () => {
+    const items = scopeOf(withKey(), SCRIPT)
+    const chips = inputChips(items).filter((c) => c.kind === 'key')
+    expect(chips.map((c) => c.label)).toEqual(['@maya · 2 views'])
+    expect(chips[0]).toMatchObject({ id: MAYA, name: 'maya', count: 2, linkId: 'link_key1', sends: [MAYA_FRONT, MAYA_SIDE] })
+    const at = items.findIndex((i) => i.kind === 'key')
+    expect(items.slice(at + 1, at + 3)).toMatchObject([
+      { kind: 'ref', id: MAYA_FRONT, name: 'maya_front', role: 'character', via: 'board', through: MAYA, linkId: 'link_key1' },
+      { kind: 'ref', id: MAYA_SIDE, name: 'maya_side', role: 'character', via: 'board', through: MAYA },
+    ])
+    expect(items[at + 1].asset).toBeTruthy()
+    expect(scopeRefs(items).filter((i) => i.through === MAYA)).toHaveLength(2)
+  })
+
+  it('takes in a view named later, live, and sends at most 4 of them, the front first', () => {
+    const d = withKey()
+    for (const v of ['back', 'three-quarter', 'laughing']) {
+      const id = `ref_x${v.replace('-', '')}`
+      d.refs[id] = { ...structuredClone(d.refs[MAYA_SIDE]), id, variant: v }
+    }
+    const head = scopeOf(d, SCRIPT).find((i) => i.kind === 'key')!
+    expect(head.label).toBe('@maya · 5 views')
+    expect(head.sends?.map((id) => d.refs[id].variant)).toEqual(['front', 'three-quarter', 'side', 'back'])
+    expect(scopeOf(d, SCRIPT).find((i) => i.id === 'ref_xlaughing')).toMatchObject({ held: true, through: MAYA })
+  })
+
+  it('a bare @maya in the text is the linked key, used by the shots naming it or a view', () => {
+    const d = withKey()
+    d.shots[S16].action = 'And @maya again.'
+    const items = scopeOf(d, SCRIPT)
+    expect(items.filter((i) => i.kind === 'key')).toHaveLength(1)
+    expect(items.find((i) => i.kind === 'key')!.usedBy).toEqual(expect.arrayContaining([S15, S16]))
+  })
+
+  it('unlinking the key takes the chip and its views away', () => {
+    const d = withKey()
+    delete d.links.link_key1
+    const items = scopeOf(d, SCRIPT)
+    expect(items.some((i) => i.kind === 'key' && i.via === 'link')).toBe(false)
+    expect(items.some((i) => i.through === MAYA)).toBe(false)
+  })
+})

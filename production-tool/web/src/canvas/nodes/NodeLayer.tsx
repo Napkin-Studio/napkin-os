@@ -5,6 +5,10 @@
 // nodes once, makes new ones (+ Node, through the chrome's actions), opens a node
 // on double-click or Open, links nodes (the Link tool L, or a drag from a port;
 // ui-behaviour 3.4), and keeps the document's links in step with the link elements.
+// Pictures that share a key are one group (keyGroups.ts; owner 2026-10-15): kept in step with the
+// document, labelled "Samurai · 3 views", linked as the whole key (⌥ links one view), stacked or
+// spread (stack.ts); a click on a stack opens it, a click on empty canvas folds back what a click
+// opened, and a double-click picks one view out of its group.
 
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { RouterContext, useDoc, useServices } from '../../app/context'
@@ -19,6 +23,8 @@ import { NodeCard } from './cards'
 import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import { makeVideo, storyboardFor } from './make'
+import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
+import { setStacked } from './stack'
 import './nodes.css'
 
 type Local = { x: number; y: number }
@@ -26,8 +32,12 @@ const WORD: Record<CardKind, string> = { script: 'script', storyboard: 'storyboa
 /** How long a new node keeps its "New" pill and halo (ui-behaviour 3.3). */
 const NEW_MS = 4000
 
-/** A link being made: from a port drag or the Link tool's source; `b` follows the pointer (`at`, in the scene). */
-interface Drag { from: CanvasElement; a: Local; b: Local; at: Pt | null; by: 'port' | 'tool' }
+/** A link being made: from a port drag or the Link tool's source; `b` follows the pointer (`at`, in the scene).
+ *  `single`: ⌥ was held, so a key's view links as itself, not as its whole key. */
+interface Drag { from: CanvasElement; a: Local; b: Local; at: Pt | null; by: 'port' | 'tool'; single?: boolean }
+
+/** Motion unless the person asked for less (a stack then opens and folds at once). */
+const motion = () => !(typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)
 
 export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: number }) {
   // The engine's host (this layer's parent): where double-clicks land and what positions are local to.
@@ -171,6 +181,45 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     }, unlink.length ? `unlink ${unlink.length} on the canvas` : `link ${relink.length} on the canvas`).catch((e) => console.warn('could not keep the links in step', e))
   }, [canvas, doc, services, tick])
 
+  // Key groups follow the document (a system write): naming or renaming a picture joins or leaves its
+  // key's group at once, and a newly named view goes beside the others.
+  useEffect(() => {
+    const fields = keyGroupFields(canvas.elements(), doc)
+    if (!fields.size) return
+    canvas.transact((all) => all.map((e) => (fields.has(e.id) ? canvas.patch(e, fields.get(e.id)!) : e)), { undoable: false })
+  }, [canvas, doc, tick])
+
+  // A click (or tap) on a stack opens it; a click on empty canvas folds back what a click opened. What
+  // the click hit is what the canvas selected at the press (a stack's whole group, or nothing).
+  const opened = useRef(new Set<string>())
+  useEffect(() => {
+    let down: Pt | null = null
+    return canvas.onPointer((p) => {
+      if (canvasActions.mode() === 'link') return
+      if (p.phase === 'down') {
+        down = { x: p.x, y: p.y }
+        return
+      }
+      if (p.phase !== 'up' || !down) return
+      const was = down
+      down = null
+      if (Math.hypot(p.x - was.x, p.y - was.y) * canvas.view().zoom > 4) return
+      const sel = new Set(canvas.view().selectedIds)
+      const groups = keyGroupsOn(canvas.elements(), services.doc.get())
+      const hit = groups.find((g) => g.members.length === sel.size && g.members.every((m) => sel.has(m.id)))
+      if (hit) {
+        if (hit.stacked && setStacked(canvas, hit.members, false, { animate: motion() })) opened.current.add(hit.key)
+        return
+      }
+      if (sel.size) return
+      for (const key of opened.current) {
+        const g = groups.find((x) => x.key === key)
+        if (g && !g.stacked) setStacked(canvas, g.members, true, { animate: motion() })
+      }
+      opened.current.clear()
+    })
+  }, [canvas, services])
+
   const view = canvas.view()
   const toLocal = (x: number, y: number): Local => ({ x: (x + view.scrollX) * view.zoom, y: (y + view.scrollY) * view.zoom })
   const fromClient = (cx: number, cy: number) => canvas.viewportToScene({ x: cx, y: cy }, canvas.view())
@@ -189,9 +238,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     const host = root.current?.parentElement
     if (!host) return
     const onDbl = (e: MouseEvent) => {
-      const el = cardAt(fromClient(e.clientX, e.clientY))
+      const p = fromClient(e.clientX, e.clientY)
+      const el = cardAt(p)
       const c = el && cardOf(el)
-      if (!c) return
+      // A double-click on a picture in a group picks that one view (our own engine; Excalidraw does it itself).
+      if (!c) {
+        const own = canvas as CanvasAdapter & { pickOne?: (p: Pt) => string | null }
+        if (own.pickOne && canvas.elements().some((x) => !x.isDeleted && (x.groupIds ?? []).length > 0 && inside(x, p))) own.pickOne(p)
+        return
+      }
       e.preventDefault()
       e.stopPropagation()
       open(c.kind, c.id)
@@ -211,6 +266,18 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     return { x: cx - (r?.left ?? 0), y: cy - (r?.top ?? 0) }
   }
   const portOf = (from: CanvasElement) => toLocal(from.x + from.width, from.y + from.height / 2)
+
+  /** The key group the selection is, whole, if it is one. */
+  function selectedKeyGroup(): KeyGroup | null {
+    const ids = new Set(canvas.view().selectedIds)
+    if (ids.size < 2) return null
+    return keyGroupsOn(canvas.elements(), services.doc.get()).find((g) => g.members.length === ids.size && g.members.every((m) => ids.has(m.id))) ?? null
+  }
+  const boxOfAll = (es: readonly CanvasElement[]) => {
+    const x0 = Math.min(...es.map((e) => e.x))
+    const y0 = Math.min(...es.map((e) => e.y))
+    return { x: x0, y: y0, w: Math.max(...es.map((e) => e.x + e.width)) - x0, h: Math.max(...es.map((e) => e.y + e.height)) - y0 }
+  }
 
   const cancel = useCallback(() => {
     setDrag(null)
@@ -240,7 +307,10 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return
       }
       const sel = canvas.view().selectedIds.map((id) => canvas.elements().find((e) => e.id === id)).filter((e): e is CanvasElement => !!e && !!endOf(e, services.doc.get()))
-      if (sel.length === 1 && takers(sel[0]).length) setDrag({ from: sel[0], a: portOf(sel[0]), b: portOf(sel[0]), at: null, by: 'tool' })
+      // A key group selected links from its lead view: the whole key.
+      const group = selectedKeyGroup()
+      const from = group ? group.members[0] : sel.length === 1 ? sel[0] : undefined
+      if (from && takers(from).length) setDrag({ from, a: portOf(from), b: portOf(from), at: null, by: 'tool' })
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvas])
@@ -283,8 +353,8 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     return () => window.removeEventListener('keydown', onKey)
   }, [drag, into, picker, cancel])
 
-  const writeLink = (from: CanvasElement, to: CanvasElement, at: Local) =>
-    linkNodes(canvas, services.doc.get(), from, to, (link) => updateDoc(services.doc, (d) => { d.links[link.id] = link }, `link ${link.from.kind} to ${link.to.kind}`).then(() => {}))
+  const writeLink = (from: CanvasElement, to: CanvasElement, at: Local, single = false) =>
+    linkNodes(canvas, services.doc.get(), from, to, (link) => updateDoc(services.doc, (d) => { d.links[link.id] = link }, `link ${link.from.kind} to ${link.to.kind}`).then(() => {}), { single })
       .then((r) => {
         if (!r.ok) setRefusal({ at, text: r.reason })
         return r.ok
@@ -301,13 +371,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   }
 
   /** A link released or clicked at a point: on a node, made or refused; on empty canvas, the picker. */
-  const finish = (from: CanvasElement, cx: number, cy: number) => {
+  const finish = (from: CanvasElement, cx: number, cy: number, single = false) => {
     const at = hostLocal(cx, cy)
     const scene = fromClient(cx, cy)
     const to = endAt(scene)
     if (to) {
       if (to.id === from.id) return
-      void writeLink(from, to, at).then((ok) => { if (ok) cancel() })
+      void writeLink(from, to, at, single).then((ok) => { if (ok) cancel() })
       return
     }
     const kinds = takers(from)
@@ -320,7 +390,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     setPicker(null)
-    setDrag({ from, a: portOf(from), b: hostLocal(e.clientX, e.clientY), at: fromClient(e.clientX, e.clientY), by: 'port' })
+    setDrag({ from, a: portOf(from), b: hostLocal(e.clientX, e.clientY), at: fromClient(e.clientX, e.clientY), by: 'port', single: e.altKey })
   }
   const follow = (e: React.PointerEvent) => {
     if (into) setInto({ ...into, at: fromClient(e.clientX, e.clientY) })
@@ -330,7 +400,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (!drag) return
     const from = drag.from
     setDrag(null)
-    finish(from, e.clientX, e.clientY)
+    finish(from, e.clientX, e.clientY, drag.single || e.altKey)
   }
 
   // The Link tool's surface: click the source, then the target (ui-behaviour 3.4).
@@ -342,7 +412,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (into) {
       // Linking into a fixed node: the click picks what feeds it.
       if (!el || el.id === into.el.id) return
-      void writeLink(el, into.el, hostLocal(e.clientX, e.clientY)).then((ok) => { if (ok) cancel() })
+      void writeLink(el, into.el, hostLocal(e.clientX, e.clientY), e.altKey).then((ok) => { if (ok) cancel() })
       return
     }
     if (!drag) {
@@ -357,10 +427,10 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return
       }
       canvas.select([el.id])
-      setDrag({ from: el, a: portOf(el), b: hostLocal(e.clientX, e.clientY), at: fromClient(e.clientX, e.clientY), by: 'tool' })
+      setDrag({ from: el, a: portOf(el), b: hostLocal(e.clientX, e.clientY), at: fromClient(e.clientX, e.clientY), by: 'tool', single: e.altKey })
       return
     }
-    finish(drag.from, e.clientX, e.clientY)
+    finish(drag.from, e.clientX, e.clientY, drag.single || e.altKey)
   }
 
   const pick = (kind: CardKind) => {
@@ -385,12 +455,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   // The fixed end: the source being linked from, or the node being linked into ("+ Link input").
   const source = drag?.from ?? into?.el ?? null
   const ends = source ? els.filter((e) => e.id !== source.id && endOf(e, doc)) : []
-  const checks = new Map(ends.map((n) => [n.id, into && !drag ? linkCheck(els, doc, n, into.el) : linkCheck(els, doc, source!, n)] as const))
+  const checks = new Map(ends.map((n) => [n.id, into && !drag ? linkCheck(els, doc, n, into.el) : linkCheck(els, doc, source!, n, { single: drag?.single })] as const))
   const pointerAt = drag?.at ?? into?.at ?? null
   const hover = pointerAt ? endAt(pointerAt) : undefined
   // A selected picture or sketch area gets a port too (single selection).
   const lone = view.selectedIds.length === 1 ? els.find((e) => e.id === view.selectedIds[0] && !cardOf(e)) : undefined
   const lonePort = lone && mode !== 'link' && endOf(lone, doc) ? lone : undefined
+  // The key groups, labelled; one selected whole gets a port at its right edge (it links the key).
+  const groups = keyGroupsOn(els, doc)
+  const groupSel = mode !== 'link' ? selectedKeyGroup() : null
   const hoverCheck = hover ? checks.get(hover.id) : undefined
   const linking = mode === 'link'
   return (
@@ -429,6 +502,25 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         return <span className="nl-port" role="button" aria-label={`Link from this ${word(lonePort)}`} title="Drag to link (L)"
           style={{ left: p.x, top: p.y }} onPointerDown={(ev) => startLink(lonePort, ev)} onPointerMove={follow} onPointerUp={endLink} />
       })()}
+      {groups.map((g) => {
+        const off = g.members.some((m) => moving?.ids.has(m.id)) ? moving : null
+        const b = boxOfAll(g.members)
+        const p = toLocal(b.x + (off?.dx ?? 0), b.y + (off?.dy ?? 0))
+        return (
+          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''}`} data-key={g.key} style={{ left: p.x, top: p.y }}
+            title={g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
+            onPointerDown={(ev) => ev.stopPropagation()} onClick={() => canvas.select(g.members.map((m) => m.id))}>
+            {groupLabel(g)}
+          </button>
+        )
+      })}
+      {groupSel && (() => {
+        const b = boxOfAll(groupSel.members)
+        const p = toLocal(b.x + b.w, b.y + b.h / 2)
+        const lead = groupSel.members[0]
+        return <span className="nl-port" role="button" aria-label={`Link from ${groupLabel(groupSel)}`} title="Drag to link the whole character (L); ⌥ links one view"
+          style={{ left: p.x, top: p.y }} onPointerDown={(ev) => startLink(lead, ev)} onPointerMove={follow} onPointerUp={endLink} />
+      })()}
       {linking && (
         <div className="nl-linkmode" role="application" aria-label="Link tool: click the node to link from, then the node it feeds"
           onPointerDown={toolDown} onPointerMove={follow} />
@@ -450,7 +542,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         <div className="nl-hint" role="status">
           <b>Link</b>
           <span>{into && !drag ? `Click what feeds this ${word(into.el)}: a named picture, a script, a storyboard` : source ? `Click what this ${word(source)} feeds, or empty canvas for a new node` : 'Click the node or named picture to link from'}</span>
-          <span className="nl-key">Esc cancels</span>
+          <span className="nl-key">⌥ one view · Esc cancels</span>
         </div>
       )}
       {picker && (
