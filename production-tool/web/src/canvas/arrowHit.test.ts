@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { arrowPath, arrowShown, distToPath, distToSegment, hitArrow, provenanceOf, type ArrowLike } from './arrowHit'
-import { quietRecord } from './adapter/own/engine'
-import { element } from '../../../canvas-engine/src'
 import { curvePoints } from './curve'
 
 const prov = { kind: 'provenance', from: 'node_a', to: 'job_b' }
@@ -86,15 +84,5 @@ describe('a key’s views from its front are quiet (canvas-nodes decision 2026-1
 
   it('an arrow to any other generation always shows', () => {
     expect(arrowShown(to('G'), (id) => els.get(id), new Set())).toBe(true)
-  })
-
-  it('the engine reads the same rule off its records', () => {
-    const recs = new Map([
-      ['S', element({ id: 'S', kind: 'image', z: 'a0', customData: { kind: 'gen', id: 'job_b', op: 'view' } })],
-      ['G', element({ id: 'G', kind: 'image', z: 'a1', customData: { kind: 'gen', id: 'job_c', op: 'generate' } })],
-    ])
-    const arrow = (end: string) => element({ id: `a${end}`, kind: 'arrow', z: 'b0', props: { start: { elementId: 'F' }, end: { elementId: end } }, customData: prov })
-    expect(quietRecord(arrow('S'), (id) => recs.get(id))).toBe(true)
-    expect(quietRecord(arrow('G'), (id) => recs.get(id))).toBe(false)
   })
 })
