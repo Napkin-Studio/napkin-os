@@ -678,6 +678,9 @@ function VersionChip({ nodeId, at }: { nodeId: string; at: Pt }) {
 
 // ── The name on a named node ────────────────────────────────────────────────
 
+/** The height of the @name line under a picture (styles.css .refchips): what sits below it starts here. */
+const NAME_LINE = 16
+
 function NameChip({ r, at }: { r: NamedRef; at: Pt }) {
   return (
     <div className="refchips" style={{ left: at.x, top: at.y }}>
@@ -718,7 +721,8 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
           {showMock && c.mock && <span className="mockbadge">MOCK</span>}
         </div>
       )}
-      {state === 'completed' && caption && <div className="gencaption" style={{ left: tl.x, top: tl.y + h }}>{caption}</div>}
+      {/* Under the picture's @name when it has one, not on top of it (owner, 2026-10-16). */}
+      {state === 'completed' && caption && <div className="gencaption" style={{ left: tl.x, top: tl.y + h + (named ? NAME_LINE : 0) }}>{caption}</div>}
     </>
   )
 }
