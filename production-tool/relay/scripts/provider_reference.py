@@ -27,9 +27,9 @@ from contracts_dir import contracts_dir, pricing  # noqa: E402
 OUT = RELAY.parents[1] / "docs" / "production-tool" / "provider-reference.md"
 SCHEMAS = RELAY / "tests" / "fixtures" / "schemas"
 PROVIDERS = ("runway",)
-OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
+OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit", "upscale")
 STEP = {"generate": "Character (canvas generate)", "view": "Views (turnaround)", "frame": "Storyboard frame",
-        "region_edit": "Region edit", "clip": "Clip", "clip_edit": "Clip edit"}
+        "region_edit": "Region edit", "clip": "Clip", "clip_edit": "Clip edit", "upscale": "Upscale (Image editor)"}
 TAGS = {"at_tag": "`@tag` (its own name)", "none": "not named (by order only)"}
 INTERESTING = ("aspect_ratio", "ratio", "resolution", "duration", "image_size", "num_images", "outputCount",
                "result_type", "edit_strength", "horizontal_angle")
@@ -45,7 +45,7 @@ plus up to three other pictures, views first. Each line is proven by a case in
 |---|---|
 | Runway, images (Gemini 3 Pro) | Every picture with its own `@tag` (`@maya_front`, `@maya_jumping`), as `human` (characters, at most 5) or `object`. |
 | Runway, clips (Veo 3.1) | The storyboard frame only; characters are named in words. |
-| Runway, region edits | The image and a copy with the box drawn on it. |
+| Runway, region edits (Ideogram 4.5) | The image, and a black-and-white mask (black = change) from the painted mask or the box; with neither, a preciseEdit of the whole image. |
 
 In a clip, the pose and look come from the storyboard frame, so a frame made strictly from the
 right pictures is what keeps a character consistent.
@@ -124,6 +124,8 @@ def _usd(v) -> str:
 # (production-tool/relay/providers/*.py; proven in tests/test_pathways.py).
 SENDS = {
     ("runway", "gemini_image3_pro@region_edit"): "the image and a copy with the box drawn on it, each with its own @tag",
+    ("runway", "ideogram_4_5@region_edit"): "the image first (refs by order, no @tag) and a black-edit mask, or preciseEdit with no mask",
+    ("runway", "magnific_precision_upscaler_v2"): "the image and the scale (2x or 4x)",
     ("runway", "veo3.1"): "the storyboard frame (and a last frame) only; characters named in words",
     ("runway", "veo3.1_fast"): "the storyboard frame (and a last frame) only; characters named in words",
     ("runway", "aleph2"): "the clip, the change in words and an optional keyframe",

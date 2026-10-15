@@ -201,6 +201,14 @@
                     "first_last"
                   ],
                   "description": "clip_patch only: the alternate makes the window from its first and last frames (Veo 3.1 image_to_video) instead of editing the cut; it is priced by durationS, the window's billed seconds. Added 2026-10-14 (additive, features/clip-moment-edit.clan)."
+                },
+                "mask": {
+                  "$ref": "#/properties/mask",
+                  "description": "Replaces the op's and the sheet's for this model."
+                },
+                "preciseEdit": {
+                  "type": "boolean",
+                  "description": "With no region and no mask, the op edits the whole image keeping its composition and size (ideogram_4_5 preciseEdit; providers.md fact 3). Added 2026-10-15 (additive, features/image-editor.clan)."
                 }
               },
               "required": [
@@ -211,6 +219,14 @@
               ],
               "additionalProperties": false
             }
+          },
+          "mask": {
+            "$ref": "#/properties/mask",
+            "description": "This op's model takes masks this way, over the sheet's mask (an op on a sheet whose other models take none: Runway's region_edit on ideogram_4_5). Added 2026-10-15 (additive, features/image-editor.clan)."
+          },
+          "preciseEdit": {
+            "type": "boolean",
+            "description": "With no region and no mask, the op edits the whole image keeping its composition and size (ideogram_4_5 preciseEdit; providers.md fact 3). Added 2026-10-15 (additive, features/image-editor.clan)."
           }
         },
         "required": [

@@ -270,6 +270,10 @@
           "minimum": 1,
           "maximum": 9
         },
+        "scale": {
+          "enum": [2, 4],
+          "description": "upscale: how many times each side grows (JobInput.scale). Added 2026-10-15 (additive, features/image-editor.clan)."
+        },
         "strength": {
           "enum": [
             "adhere",

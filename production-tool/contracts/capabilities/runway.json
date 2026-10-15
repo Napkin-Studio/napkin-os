@@ -66,12 +66,28 @@
       ]
     },
     "region_edit": {
-      "model": "gemini_image3_pro",
+      "model": "ideogram_4_5",
       "endpoint": "POST /v1/text_to_image",
-      "defaults": {"outputs": 1, "ratio": "1344:768"},
+      "defaults": {"outputs": 1, "refs": 1},
       "seed": false,
       "outputs": [1, 4],
-      "label": "Gemini 3 Pro"
+      "label": "Ideogram 4.5",
+      "note": "Changes the masked area, or the whole frame keeping its composition",
+      "mask": "png_black_edit",
+      "preciseEdit": true,
+      "refs": {"max": 5, "maxCharacter": 5},
+      "alternates": [
+        {
+          "model": "gemini_image3_pro",
+          "endpoint": "POST /v1/text_to_image",
+          "defaults": {"outputs": 1, "ratio": "1344:768"},
+          "label": "Gemini 3 Pro",
+          "note": "Redraws a boxed area; the previous default",
+          "seed": false,
+          "outputs": [1, 4],
+          "mask": "none"
+        }
+      ]
     },
     "frame_edit": {
       "model": "gemini_image3_pro",
@@ -127,6 +143,13 @@
       "maxS": 30,
       "seed": true,
       "label": "Aleph 2"
+    },
+    "upscale": {
+      "model": "magnific_precision_upscaler_v2",
+      "endpoint": "POST /v1/image_upscale",
+      "defaults": {"inputPx": 1344, "scaleFactor": 2},
+      "seed": false,
+      "label": "Magnific Precision Upscaler v2"
     }
   },
   "models": {

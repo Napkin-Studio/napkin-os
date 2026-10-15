@@ -255,7 +255,9 @@ class FakeRunwayHttp:
         return httpx.Response(200, json={"id": "task_1", "status": "RUNNING"})
 
 
-def test_an_unmasked_local_reading_runs_as_region_edit_with_runways_marked_copy():
+def test_an_unmasked_local_reading_runs_as_region_edit_with_a_box_mask_on_ideogram():
+    """Runway's region_edit is ideogram_4_5 (features/image-editor.clan): a box with no painted mask
+    goes as a black-and-white mask made from the box, black where it changes, beside the frame."""
     h = harness(providers=("runway",))
     http = FakeRunwayHttp()
     h.relay.registry.register(Adapted(RunwayProvider("rw-key", Resolver(), client=httpx.Client(transport=httpx.MockTransport(http)))),
@@ -265,9 +267,9 @@ def test_an_unmasked_local_reading_runs_as_region_edit_with_runways_marked_copy(
     job = post(h, h.as_person(), edit_input("make her scarf red", region=BOX))
     assert job["state"] == "submitted", job
     (sent,) = [json.loads(r.content) for r in http.requests if r.method == "POST"]
-    assert sent["promptText"].startswith(REGION_PROMPT.format(current="current", marked="marked")[:40])
-    marked = [r for r in sent["referenceImages"] if r["tag"] == "marked"]
-    assert marked and marked[0]["uri"].startswith("data:image/png;base64,")
+    assert sent["model"] == "ideogram_4_5" and sent["promptText"].startswith("make her scarf red")
+    assert sent["maskUri"].startswith("data:image/png;base64,") and "ratio" not in sent
+    assert len(sent["referenceImages"]) == 1
     assert job["director"]["output"]["frameEdit"] == {"reading": "local", "runAs": "region_edit"}
 
 
@@ -395,7 +397,8 @@ def test_frame_edit_reserves_the_dearer_op_then_the_price_of_the_one_it_runs_as(
     # prices come from models[model].pricing through pricing.py).
     h = harness()
     sheet = h.providers["runway"].sheet
-    sheet["ops"]["region_edit"]["model"] = "gemini_image3.1_flash"
+    sheet["ops"]["region_edit"].update(model="gemini_image3.1_flash", mask="none",
+                                       defaults={"outputs": 1, "ratio": "1344:768"})
     cheap = pricing().op_usd(sheet, "region_edit")
     assert cheap < pricing().op_usd(sheet, "frame_edit") == 0.2
     dex(h, reply("local", "region_edit", prompt=LOCAL_PROMPT, region=BOX,

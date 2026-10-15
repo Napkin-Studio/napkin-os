@@ -415,11 +415,16 @@ def test_provider_limits_the_sheet_cannot_say_raise(name, edit, why):
     # frame-aspect: a pixel size the model does not take snaps by shape (it was refused, and the job failed).
     ("generate_runway", "1080:1350", "896:1152"),
     ("generate_runway", "1920:1080", "1344:768"),
-    ("region_edit_runway", "512:512", "1024:1024"),  # a flash size; pro has none
     ("clip_runway", "1080:1350", "720:1280"),
 ])
 def test_a_size_the_model_does_not_take_snaps_to_its_nearest(name, ratio, size):
     assert attempt(name, job_edit(ratio=ratio)).output["providerJob"]["ratio"] == size
+
+
+def test_a_region_edit_on_ideogram_carries_no_ratio():
+    """ideogram_4_5 keeps the edited picture's size; a ratio is refused with a mask or preciseEdit
+    (features/image-editor.clan), so a ratio the model writes is dropped."""
+    assert "ratio" not in attempt("region_edit_runway", job_edit(ratio="512:512")).output["providerJob"]
 
 
 def test_a_clip_prompt_past_runways_1000_characters_is_refused():

@@ -134,9 +134,13 @@ class MockProvider:
             return Status("done", queue_position=0, kind="mock", cost_usd=0.0,
                           outputs=[ProviderOutput(url=f"mock://{request_id}/0", mime="video/mp4", data=source)])
         n = max(1, job.outputs or 1)
+        size = runway_size(job)
+        if job.op == "upscale" and source:  # each side grows by the scale, as Magnific's does
+            w0, h0 = Image.open(io.BytesIO(source)).size
+            size = (w0 * (job.scale or 2), h0 * (job.scale or 2))
         outputs = []
         for i in range(n):
-            data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", runway_size(job))
+            data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", size)
             outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="image/png", w=w, h=h,
                                           duration_s=job.duration_s if job.op in VIDEO_OPS else None,
                                           data=data))

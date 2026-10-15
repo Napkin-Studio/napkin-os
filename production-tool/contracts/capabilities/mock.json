@@ -61,7 +61,8 @@
       "minS": 2,
       "maxS": 15,
       "label": "Mock"
-    }
+    },
+    "upscale": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}, "label": "Mock"}
   },
   "models": {
     "mock": {"maker": "napkin", "label": "Mock", "pricing": {"unit": "image", "credits": 0, "source": []}},

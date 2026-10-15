@@ -143,6 +143,37 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     stamp(ctx, w, h, `${refs.length} inputs · ${inp.text ?? ''}`)
     return { blob: await toBlob(c), mime: 'image/png', w, h, ...(croppedFrom ? { croppedFrom } : {}) }
   }
+  if (req.op === 'upscale') {
+    // Upscale (features/image-editor.clan): each side grows by the scale, as Magnific's does.
+    const img = await bitmap(input, inp.image?.sha256)
+    const k = inp.scale ?? 2
+    const w = (img?.width ?? 768) * k
+    const h = (img?.height ?? 432) * k
+    const { c, ctx } = canvas(w, h)
+    paper(ctx, w, h, n)
+    if (img) ctx.drawImage(img, 0, 0, w, h)
+    stamp(ctx, w, h, `upscaled ${k}×`)
+    return { blob: await toBlob(c), mime: 'image/png', w, h }
+  }
+  if (req.op === 'cutout') {
+    // Rhea's cut-out on the server, mocked: everything that differs from the border colour, on transparency.
+    const img = await bitmap(input, inp.image?.sha256)
+    const w = img?.width ?? 768
+    const h = img?.height ?? 432
+    const { c, ctx } = canvas(w, h)
+    if (img) ctx.drawImage(img, 0, 0)
+    const px = ctx.getImageData(0, 0, w, h)
+    const d = px.data
+    const border: number[][] = []
+    for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 32))) for (const y of [0, h - 1]) border.push([...d.slice((y * w + x) * 4, (y * w + x) * 4 + 3)])
+    const bg = [0, 1, 2].map((i) => border.map((b) => b[i]).sort((a, b) => a - b)[border.length >> 1])
+    for (let i = 0; i < w * h; i++) {
+      const diff = Math.max(Math.abs(d[i * 4] - bg[0]), Math.abs(d[i * 4 + 1] - bg[1]), Math.abs(d[i * 4 + 2] - bg[2]))
+      if (diff <= 40) d[i * 4 + 3] = 0
+    }
+    ctx.putImageData(px, 0, 0)
+    return { blob: await toBlob(c), mime: 'image/png', w, h }
+  }
   if (req.op === 'region_edit') {
     const img = await bitmap(input, inp.image?.sha256)
     const w = img?.width ?? 768
@@ -150,7 +181,23 @@ async function renderImage(req: JobRequest, input: Input): Promise<RenderedOutpu
     const { c, ctx } = canvas(w, h)
     paper(ctx, w, h, n)
     if (img) ctx.drawImage(img, 0, 0)
-    if (inp.region) {
+    const mask = await bitmap(input, inp.mask?.sha256)
+    if (mask) {
+      // The painted mask, tinted: what the mock "changed".
+      const { c: t, ctx: tc } = canvas(w, h)
+      tc.drawImage(mask, 0, 0, w, h)
+      const md = tc.getImageData(0, 0, w, h)
+      for (let i = 0; i < w * h; i++) {
+        const on = md.data[i * 4] > 127
+        md.data[i * 4] = 255; md.data[i * 4 + 1] = 79; md.data[i * 4 + 2] = 46; md.data[i * 4 + 3] = on ? 90 : 0
+      }
+      tc.putImageData(md, 0, 0)
+      ctx.drawImage(t, 0, 0)
+    } else if (!inp.region) {
+      ctx.fillStyle = 'rgba(255,79,46,0.12)' // Change whole frame: the whole picture, tinted
+      ctx.fillRect(0, 0, w, h)
+    }
+    if (inp.region && !mask) {
       const r = inp.region
       ctx.fillStyle = 'rgba(255,79,46,0.28)'
       ctx.fillRect(r.x * w, r.y * h, r.w * w, r.h * h)

@@ -23,7 +23,7 @@ from contracts_dir import contracts_dir
 # The bundled copy in the Lambda zip, else production-tool/contracts (contracts_dir.py).
 CONTRACTS = contracts_dir()
 
-IMAGE_OPS = ("generate", "view", "frame", "region_edit", "frame_edit")
+IMAGE_OPS = ("generate", "view", "frame", "region_edit", "frame_edit", "upscale")
 VIDEO_OPS = ("clip", "clip_edit")
 
 StatusState = Literal["queued", "running", "done", "failed", "cancelled"]
@@ -109,6 +109,7 @@ class ProviderJob:
     audio: Optional[bool] = None
     outputs: Optional[int] = None
     strength: Optional[str] = None
+    scale: Optional[int] = None  # upscale: how many times each side grows (2 or 4)
 
     @classmethod
     def from_director(cls, op: str, job: dict) -> "ProviderJob":
@@ -124,7 +125,7 @@ class ProviderJob:
             last_frame=job.get("lastFrame"), mask=job.get("mask"), region=job.get("region"),
             keyframe=job.get("keyframe"), angle=job.get("angle"), ratio=job.get("ratio"),
             duration_s=job.get("durationS"), seed=job.get("seed"), audio=job.get("audio"),
-            outputs=job.get("outputs"), strength=job.get("strength"),
+            outputs=job.get("outputs"), strength=job.get("strength"), scale=job.get("scale"),
         )
 
 
@@ -174,7 +175,9 @@ def load_sheet(name: str, root: Path = CONTRACTS) -> dict:
 
 
 # What an alternate may replace at the sheet level (capabilities.schema.json ops[op].alternates).
-SHEET_OVERRIDES = ("tagSyntax", "refs", "series", "outputsPerCall", "video")
+# mask: Runway's region_edit takes a mask on ideogram_4_5 though the sheet's other models take none
+# (features/image-editor.clan).
+SHEET_OVERRIDES = ("tagSyntax", "refs", "series", "outputsPerCall", "video", "mask")
 DURATION_FIELDS = ("durationsS", "minS", "maxS")
 
 

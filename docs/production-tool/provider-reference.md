@@ -20,7 +20,7 @@ plus up to three other pictures, views first. Each line is proven by a case in
 |---|---|
 | Runway, images (Gemini 3 Pro) | Every picture with its own `@tag` (`@maya_front`, `@maya_jumping`), as `human` (characters, at most 5) or `object`. |
 | Runway, clips (Veo 3.1) | The storyboard frame only; characters are named in words. |
-| Runway, region edits | The image and a copy with the box drawn on it. |
+| Runway, region edits (Ideogram 4.5) | The image, and a black-and-white mask (black = change) from the painted mask or the box; with neither, a preciseEdit of the whole image. |
 
 In a clip, the pose and look come from the storyboard frame, so a frame made strictly from the
 right pictures is what keeps a character consistent.
@@ -47,10 +47,12 @@ pinned (always sent, never dropped for a limit), and the director must keep its 
 |  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
 | Storyboard frame | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
 |  | **Gemini 3.1 Flash** (`gemini_image3.1_flash`) | $0.070 | refs: up to 14, 5 characters; named `@tag` (its own name) | `ratio`: 512:512, 416:624, 624:416, 432:592, 592:432, 448:576, 576:448, 384:672, 672:384, 768:336, 256:1024, 1024:256 … (56 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
-| Region edit | **Gemini 3 Pro** (`gemini_image3_pro`) default | $0.20 | the image and a copy with the box drawn on it, each with its own @tag | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
+| Region edit | **Ideogram 4.5** (`ideogram_4_5`) default | $0.080 | the image first (refs by order, no @tag) and a black-edit mask, or preciseEdit with no mask | `ratio`: 1024:1024, 1280:720, 720:1280, 1152:864, 864:1152, 1248:832, 832:1248, 1120:896, 896:1120, 1440:720, 720:1440, 2048:2048 … (27 in all); `outputCount`: 1-8; `referenceImages`: at most 5; prompt: at most 10000 characters (schema 2026-10-13) |
+|  | **Gemini 3 Pro** (`gemini_image3_pro`) | $0.20 | the image and a copy with the box drawn on it, each with its own @tag | `ratio`: 1344:768, 768:1344, 1024:1024, 1184:864, 864:1184, 1536:672, 832:1248, 1248:832, 896:1152, 1152:896, 2048:2048, 1696:2528 … (30 in all); `outputCount`: 1, 4; `referenceImages`: at most 14; prompt: at most 5500 characters (schema 2026-10-13) |
 | Clip | **Veo 3.1** (`veo3.1`) default | $1.20 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-13) |
 |  | **Veo 3.1 Fast** (`veo3.1_fast`) | $0.60 | the storyboard frame (and a last frame) only; characters named in words; lengths: 4, 6, 8 s | `ratio`: 1280:720, 720:1280, 1080:1920, 1920:1080; `duration`: 4, 6, 8; prompt: at most 1000 characters (schema 2026-10-13) |
 | Clip edit | **Aleph 2** (`aleph2`) default | $1.40 | the clip, the change in words and an optional keyframe; lengths: 2-30 s | prompt: at most 1000 characters (schema 2026-10-13) |
+| Upscale (Image editor) | **Magnific Precision Upscaler v2** (`magnific_precision_upscaler_v2`) default | $0.25 | the image and the scale (2x or 4x) | — (schema 2026-10-13) |
 
 ### runway models catalogue
 

@@ -129,6 +129,8 @@ class PassthroughDirector:
             return self._frame_edit(job_request, sheet)
         if op == "clip_patch":
             return self._clip_patch(job_request, sheet)
+        if op == "upscale":
+            return self._upscale(job_request, sheet)
         provider = (sheet or {}).get("provider", "mock")
         model = ((sheet or {}).get("ops", {}).get(op) or {}).get("model", "unknown")
         refs = []
@@ -189,6 +191,18 @@ class PassthroughDirector:
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}
+
+    def _upscale(self, job_request: dict, sheet: dict | None) -> dict:
+        """Rhea upscales (features/image-editor.clan): the image and the scale, no words to write."""
+        inp = job_request.get("input", {})
+        provider = (sheet or {}).get("provider", "mock")
+        model = ((sheet or {}).get("ops", {}).get("upscale") or {}).get("model", "unknown")
+        image = inp.get("image")
+        refs = [{"sha256": image["sha256"], "name": "current", "role": "current"}] if image else []
+        job = {"provider": provider, "model": model, "prompt": "upscale", "refs": refs, "outputs": 1,
+               "scale": inp.get("scale") or 2}
+        return {"op": "upscale", "providerJob": job, "question": None, "confidence": 0.1,
+                "rationale": f"passthrough: upscaled {job['scale']}x, nothing to write"}
 
     def _clip_patch(self, job_request: dict, sheet: dict | None) -> dict:
         """Fix this moment with no model (features/clip-moment-edit.clan): the note's words, as they are,

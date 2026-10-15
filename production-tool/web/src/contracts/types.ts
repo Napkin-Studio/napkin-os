@@ -226,6 +226,10 @@ export interface OpSheet {
   note?: string
   /** Vetted models a person may pick when they regenerate (features/model-choice.clan). */
   alternates?: OpAlternate[]
+  /** This op's model takes masks this way, over the sheet's (Runway region_edit on ideogram_4_5). */
+  mask?: CapabilitySheet['mask']
+  /** With no region and no mask, the op edits the whole image keeping its composition. */
+  preciseEdit?: boolean
 }
 
 /** One alternate model for an op: its fields replace the op's, its overrides the sheet's. */
@@ -246,6 +250,8 @@ export interface OpAlternate {
   series?: number
   outputsPerCall?: number
   video?: CapabilitySheet['video']
+  mask?: CapabilitySheet['mask']
+  preciseEdit?: boolean
 }
 
 /** One model in the sheet's catalogue: its checked limits and its published price (read by the relay). */
@@ -824,6 +830,8 @@ export interface JobInput {
   write?: WriteInput
   /** Change: the new answer to the parent job's question. */
   answer?: JobAnswer
+  /** upscale: how many times each side grows (features/image-editor.clan). */
+  scale?: 2 | 4
 }
 
 export type WriteIntent = 'draft' | 'tighten' | 'fit_seconds' | 'add_beat' | 'write_vo' | 'rephrase' | 'cut_name'

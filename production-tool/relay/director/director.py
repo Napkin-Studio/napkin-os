@@ -51,6 +51,9 @@ PRO_RATIOS = frozenset("""
 RUNWAY_CLIP_RATIOS = frozenset(("1280:720", "720:1280", "1080:1920", "1920:1080"))
 # Endpoints that take no usable ratio: the output keeps the input's shape (or the endpoint has no such field).
 NO_RATIO = {("runway", "clip_edit"), ("runway", "clip_patch")}
+# Models that keep the edited image's own size and take no ratio with a mask or preciseEdit
+# (ideogram_4_5 on region_edit; providers.md fact 3, features/image-editor.clan).
+NO_RATIO_MODELS = {"ideogram_4_5"}
 # Longest prompt per provider and op kind; a longer one is a 400 from the provider.
 KEYFRAME_MAX_S = 30  # Runway aleph2 keyframe seconds run 0 to 30
 # director.v5 on (features/director-v5.clan): what the director may add beyond the participant's words,
@@ -193,7 +196,7 @@ def provider_ratio(provider: str, op: str, ratio: Optional[str], model: Optional
         target = f"{int(aspect['w'])}:{int(aspect['h'])}"
     else:
         target = ratio
-    if not target or (provider, op) in NO_RATIO:
+    if not target or (provider, op) in NO_RATIO or model in NO_RATIO_MODELS:
         return None
     allowed = provider_sizes(provider, op, model)
     if allowed is None:
@@ -730,7 +733,7 @@ class Director:
         if limit and utf16_units(job["prompt"]) > limit:
             raise DirectorError(f"{provider} {op} prompt is {utf16_units(job['prompt'])} characters, over its {limit}")
         ratio = job.get("ratio")
-        if ratio and (provider, op) in NO_RATIO:
+        if ratio and ((provider, op) in NO_RATIO or job.get("model") in NO_RATIO_MODELS):
             # The model often copies the ratio it was given; the frame or clip sets the shape here,
             # so it is dropped rather than failing the job (2026-10-09).
             del job["ratio"]

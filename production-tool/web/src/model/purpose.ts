@@ -30,6 +30,10 @@ export type JobPurpose =
   /** Change this frame (features/frame-change-edit.clan): a proposal on the shot's frame `parentFrameId`,
    *  landed unpicked until Apply or Keep both (jobs/frameEdit.ts). */
   | { for: 'frame_edit'; shotId: Id; parentFrameId?: Id }
+  /** An Image editor action on the shot's frame `parentFrameId` (features/image-editor.clan): Fill area,
+   *  Change whole frame, Upscale or Remove background on our server. Its result lands nowhere: the
+   *  editor shows it as a layer, and only Apply as new version makes a frame. */
+  | { for: 'image_edit'; shotId: Id; parentFrameId?: Id }
   /** Skye drafts or rewrites one item of a script (features/script-editor.clan). */
   | { for: 'write'; scriptId?: Id }
 
@@ -48,6 +52,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
     case 'frame':
     case 'clip':
     case 'frame_edit':
+    case 'image_edit':
       return { kind: 'shot', id: p.shotId }
     case 'shot_list':
       return { kind: 'storyboard', id: (p.storyboardId && d.storyboards[p.storyboardId] ? p.storyboardId : mainStoryboard(d)!.id) }
@@ -66,7 +71,7 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
 /** The input rows a purpose keeps (what the job is a new version of, the notes it fixes). */
 export function purposeInputs(p: JobPurpose): JobInputRow[] {
   const rows: JobInputRow[] = []
-  if ((p.for === 'frame' || p.for === 'frame_edit') && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
+  if ((p.for === 'frame' || p.for === 'frame_edit' || p.for === 'image_edit') && p.parentFrameId) rows.push({ kind: 'frame', ref: p.parentFrameId, used_as: 'new version of', included: true })
   if (p.for === 'clip' && p.parentTakeId) rows.push({ kind: 'take', ref: p.parentTakeId, used_as: 'new version of', included: true })
   for (const r of (p.for === 'frame' ? p.fixReviewIds : p.for === 'clip' ? p.reviewIds : undefined) ?? []) {
     rows.push({ kind: 'note', ref: r, used_as: 'note to fix', included: true })
@@ -99,10 +104,11 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
     }
     case 'sketch':
       return j.node.kind === 'sketch' ? { for: 'sketch', sketchId: j.node.id } : null
-    case 'frame_edit': {
+    case 'frame_edit':
+    case 'image_edit': {
       if (j.node.kind !== 'shot') return null
       const pf = parent('frame')
-      return { for: 'frame_edit', shotId: j.node.id, ...(pf ? { parentFrameId: pf } : {}) }
+      return { for: kind, shotId: j.node.id, ...(pf ? { parentFrameId: pf } : {}) }
     }
     case 'clip': {
       if (j.node.kind !== 'shot') return null

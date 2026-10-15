@@ -1,9 +1,12 @@
 """Runway adapter, over raw httpx (docs/production-tool/providers.md, capabilities/runway.json).
 
-Images go to text_to_image (gemini_image3.1_flash, gemini_image3_pro for region edits),
-clips to image_to_video (veo3.1_fast) and clip edits to video_to_video (aleph2).
-Runway has no mask: a region edit sends the clean image and a copy with the box drawn
-on it, and the region package pastes the original back outside the box.
+Images go to text_to_image (gemini_image3_pro, gemini_image3.1_flash), clips to image_to_video
+(veo3.1) and clip edits to video_to_video (aleph2), upscales to image_upscale (magnific).
+A region edit runs on ideogram_4_5 (features/image-editor.clan): the image as the first reference
+and a black-and-white mask the same size (black = edit, providers.md fact 2), made from our
+white = change mask or from the box; with no region and no mask it is a preciseEdit, which
+changes the whole image keeping its composition (fact 3). On the Gemini 3 Pro alternate, which
+takes no mask, it sends the clean image and a copy with the box drawn on it.
 
 submit() never waits and status() makes one call. The key is a constructor argument;
 this module never reads the environment.
@@ -89,7 +92,8 @@ def _http_error(resp: httpx.Response) -> ProviderError:
 # The previous defaults, kept as alternates (features/default-models.clan). Runway is the floor of
 # every job and its models are always offered (features/runway-fallback.clan).
 ALTERNATES = {"generate": {"gemini_image3.1_flash"}, "view": {"gemini_image3.1_flash"},
-              "frame": {"gemini_image3.1_flash"}, "clip": {"veo3.1_fast"}}
+              "frame": {"gemini_image3.1_flash"}, "clip": {"veo3.1_fast"},
+              "region_edit": {"gemini_image3_pro"}}  # the box-drawn edit, before ideogram_4_5 took masks
 
 
 class RunwayProvider:
@@ -136,13 +140,82 @@ class RunwayProvider:
             raise ProviderError("invalid_input", str(exc), False) from exc
 
     def _check(self, job: ProviderJob, prompt: str) -> None:
-        # The sheet's seed flag is false for the image models; both video models take one.
-        check_capabilities(self._sheet, dataclasses.replace(job, seed=None) if job.op in VIDEO_OPS else job)
+        # The sheet's seed flag is false for the image models; both video models take one. The sheet as
+        # the job's model sees it: ideogram_4_5 takes a mask on region_edit, Gemini does not.
+        sheet = effective_sheet(self._sheet, job.op, job.model)
+        check_capabilities(sheet, dataclasses.replace(job, seed=None) if job.op in VIDEO_OPS else job)
         limit = (self._sheet.get("models", {}).get(self._model(job)) or {}).get("promptMax")
         if limit is not None and utf16_units(prompt) > limit:
             raise CapabilityMissing(f"{job.op} prompt is at most {limit} characters")
         if job.op in VIDEO_OPS and job.seed is not None and not 0 <= job.seed <= MAX_SEED:
             raise CapabilityMissing(f"seed must be 0-{MAX_SEED}")
+
+    def _bytes(self, sha: str) -> bytes:
+        """One of our own assets, read here (a mask to invert, the size of the image to edit)."""
+        import base64
+
+        url = self._assets(sha).url
+        try:
+            if url.startswith("data:"):
+                return base64.b64decode(url.split(",", 1)[1])
+            resp = self._client.get(url)
+            resp.raise_for_status()
+            return resp.content
+        except (httpx.HTTPError, ValueError) as exc:  # our own asset: not a call to Runway
+            raise ProviderError("internal", f"could not read an input: {exc}", True, source="napkin") from exc
+
+    def _ideogram(self, job: ProviderJob) -> tuple[str, dict]:
+        """A region edit on ideogram_4_5: the image first, then up to four references; maskUri black where
+        it changes (from the job's mask, ours white = change, or from the box), else preciseEdit. Neither
+        takes a ratio: the result keeps the image's size."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        from region.image_ops import mask_png, to_endpoint_mask
+
+        current = next((r for r in job.refs if r.role == "current"), None)
+        if current is None:
+            raise CapabilityMissing("region_edit needs a 'current' ref")
+        job = dataclasses.replace(job, ratio=None)
+        prompt = self._tagged([], job.prompt)  # ideogram names no reference by tag
+        self._check(job, prompt)
+        if job.outputs not in (None, 1, 4):
+            raise CapabilityMissing("Runway returns exactly 1 or 4 images")
+        others = [r for r in job.refs if r is not current][:4]
+        body = {"model": self._model(job), "promptText": prompt,
+                "referenceImages": [{"uri": self._assets(r.sha256).url} for r in [current, *others]],
+                "outputCount": job.outputs or 1}
+        if job.mask or job.region:
+            try:
+                if job.mask:
+                    ours = self._bytes(job.mask)
+                else:
+                    size = Image.open(io.BytesIO(self._bytes(current.sha256))).size
+                    ours = mask_png(size, job.region)
+                black = to_endpoint_mask(ours, "black_edit")
+            except ProviderError:
+                raise
+            except Exception as exc:  # PIL: not a picture we can read
+                raise ProviderError("invalid_input", f"the mask is not one we can read: {exc}", False) from exc
+            body["maskUri"] = "data:image/png;base64," + base64.b64encode(black).decode()
+        else:
+            body["preciseEdit"] = True
+        return "/v1/text_to_image", body
+
+    def _upscale(self, job: ProviderJob) -> tuple[str, dict]:
+        """Magnific's precision upscaler (providers.md fact 7): the image, 2x or 4x."""
+        self._check(job, job.prompt)
+        source = next((r for r in job.refs if r.role == "current"), job.refs[0] if job.refs else None)
+        if source is None:
+            raise CapabilityMissing("upscale needs the image")
+        factors = (self._sheet.get("models", {}).get(self._model(job)) or {}).get("scaleFactors") or [2, 4]
+        scale = job.scale or 2
+        if scale not in factors:
+            raise CapabilityMissing(f"upscale scale must be one of {factors}")
+        return "/v1/image_upscale", {"model": self._model(job), "imageUri": self._assets(source.sha256).url,
+                                     "scaleFactor": scale}
 
     def _marked(self, current: Ref, region: dict) -> str:
         """The current image with the box drawn on it, as a PNG data URI (Runway has no masks).
@@ -194,16 +267,24 @@ class RunwayProvider:
             by_role = {r.role: r for r in refs}
             if "current" not in by_role:
                 raise CapabilityMissing("region_edit needs a 'current' ref")
-            if "marked" not in by_role:
-                if not job.region:
-                    raise CapabilityMissing("region_edit needs a 'marked' ref or a region to draw")
+            if "marked" not in by_role and not job.region:
+                # Change whole frame on the Gemini alternate (an agency with Ideogram off): the image and the
+                # words, keeping the composition (features/image-editor.clan).
+                current = by_role["current"]
+                if not job.ratio:
+                    job = dataclasses.replace(job, ratio=self._own_ratio(current))
+                refs = [current] + [r for r in refs if r is not current]
+                prompt = (f"Change @{current.name} as follows, keeping its composition, framing and everything "
+                          f"else as it is: ") + prompt
+            elif "marked" not in by_role:
                 by_role["marked"] = Ref("marked:box", "marked", "marked")
                 uris["marked:box"] = self._marked(by_role["current"], job.region)
-            current, marked = by_role["current"], by_role["marked"]
-            if not job.ratio:  # the web sends none for an edit: keep the picture's own shape
-                job = dataclasses.replace(job, ratio=self._own_ratio(current))
-            refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
-            prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
+            if "marked" in by_role:
+                current, marked = by_role["current"], by_role["marked"]
+                if not job.ratio:  # the web sends none for an edit: keep the picture's own shape
+                    job = dataclasses.replace(job, ratio=self._own_ratio(current))
+                refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
+                prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
         self._check(job, prompt)
         if sum(r.role != "character" for r in refs) > MAX_OBJECT:
             raise CapabilityMissing(f"{self.name} takes at most {MAX_OBJECT} object refs")
@@ -279,7 +360,9 @@ class RunwayProvider:
     # The Provider interface
 
     def submit(self, job: ProviderJob) -> str:
-        build = {"clip": self._clip, "clip_edit": self._clip_edit}.get(job.op, self._image)
+        build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale}.get(job.op, self._image)
+        if job.op == "region_edit" and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
+            build = self._ideogram
         path, body = build(job)
         resp = self._call("POST", path, json=body)
         if resp.status_code >= 300:

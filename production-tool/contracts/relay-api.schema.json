@@ -396,7 +396,7 @@
         },
         "image": {
           "$ref": "common.schema.json#/$defs/assetRef",
-          "description": "region_edit, frame_edit: the image being edited (frame_edit: the shot's current frame). view: the source image. clip: the storyboard frame."
+          "description": "region_edit, frame_edit: the image being edited (frame_edit: the shot's current frame). A region_edit with no region and no mask changes the whole image, keeping its composition (ideogram_4_5 preciseEdit; features/image-editor.clan). view: the source image. clip: the storyboard frame. upscale: the image to upscale. cutout: the image whose background Rhea removes (the relay's own segmenter, no provider)."
         },
         "region": {
           "$ref": "common.schema.json#/$defs/region"
@@ -535,6 +535,10 @@
         "still": {
           "$ref": "common.schema.json#/$defs/assetRef",
           "description": "clip_patch: the edited still at atS (the review's still, from Edit still). Absent: no keyframe is sent at the default context 0, so an unedited frame never anchors the edit."
+        },
+        "scale": {
+          "enum": [2, 4],
+          "description": "upscale: how many times each side grows (the Image editor's 2x or 4x). Absent: 2. Added 2026-10-15 (additive, features/image-editor.clan)."
         }
       },
       "additionalProperties": false

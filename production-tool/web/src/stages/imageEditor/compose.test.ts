@@ -1,0 +1,56 @@
+// What Apply saves, Before / After shows and an action is sent (features/image-editor.clan).
+import { describe, expect, it } from 'vitest'
+import { EMPTY, addEdit, toggleHidden, type Edit } from './edits'
+import { plan, untouched, type Pic } from './compose'
+
+const FRAME: Pic = { sha: 'sha256:frame', w: 1344, h: 768 }
+const results: Record<string, Pic> = {
+  job_fill: { sha: 'sha256:fill', w: 1344, h: 768 },
+  job_whole: { sha: 'sha256:whole', w: 1344, h: 768 },
+  job_up: { sha: 'sha256:up', w: 2688, h: 1536 },
+}
+const resultOf = (e: Edit) => ('jobId' in e && e.jobId ? results[e.jobId] : e.kind === 'cutout' && e.sha ? { sha: e.sha, w: 1344, h: 768 } : undefined)
+const kinds = (p: ReturnType<typeof plan>) => p.steps.map((s) => (s.kind === 'base' ? `base:${s.pic.sha}` : s.kind))
+
+describe('plan', () => {
+  it('is the frame alone with no edits, and says so', () => {
+    const p = plan(EMPTY, FRAME, resultOf)
+    expect(kinds(p)).toEqual(['base:sha256:frame'])
+    expect(untouched(p, FRAME)).toBe(true)
+  })
+  it('puts a fill in its mask over the frame, then cut-outs and text in front, and crops last', () => {
+    let s = addEdit(EMPTY, { id: 'f', kind: 'fill', maskId: 'm', words: 'drops', keepOutside: true, jobId: 'job_fill' })
+    s = addEdit(s, { id: 't', kind: 'text', text: 'Drink the morning.', x: 0.05, y: 0.86, size: 0.06 })
+    s = addEdit(s, { id: 'c', kind: 'cutout', where: 'device', sha: 'sha256:cut' })
+    s = addEdit(s, { id: 'k', kind: 'crop', x: 0.1, y: 0.1, w: 0.8, h: 0.8 })
+    const p = plan(s, FRAME, resultOf)
+    expect(kinds(p)).toEqual(['base:sha256:frame', 'fill', 'cutout', 'text'])
+    expect(p.crop).toEqual({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 })
+    expect(untouched(p, FRAME)).toBe(false)
+    // What an action is sent: no text, no crop.
+    expect(kinds(plan(s, FRAME, resultOf, { text: false, crop: false }))).toEqual(['base:sha256:frame', 'fill', 'cutout'])
+  })
+  it('a whole-frame change replaces what came before; an upscale also sets the size', () => {
+    let s = addEdit(EMPTY, { id: 'f', kind: 'fill', maskId: 'm', words: 'drops', keepOutside: true, jobId: 'job_fill' })
+    s = addEdit(s, { id: 'w', kind: 'whole', words: 'warmer', jobId: 'job_whole' })
+    expect(kinds(plan(s, FRAME, resultOf))).toEqual(['base:sha256:whole'])
+    s = addEdit(s, { id: 'u', kind: 'upscale', scale: 2, jobId: 'job_up' })
+    const p = plan(s, FRAME, resultOf)
+    expect(kinds(p)).toEqual(['base:sha256:up'])
+    expect([p.w, p.h]).toEqual([2688, 1536])
+  })
+  it('a result still running changes nothing yet', () => {
+    const s = addEdit(EMPTY, { id: 'w', kind: 'whole', words: 'warmer', jobId: 'job_pending' })
+    expect(kinds(plan(s, FRAME, resultOf))).toEqual(['base:sha256:frame'])
+  })
+  it('hidden layers are left out; hiding the frame leaves the cut-out on transparency', () => {
+    let s = addEdit(EMPTY, { id: 'c', kind: 'cutout', where: 'device', sha: 'sha256:cut' })
+    s = addEdit(s, { id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, size: 0.1 })
+    s = toggleHidden(toggleHidden(s, 'frame'), 't')
+    expect(kinds(plan(s, FRAME, resultOf))).toEqual(['cutout'])
+  })
+  it('Before shows the frame as saved', () => {
+    const s = addEdit(EMPTY, { id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, size: 0.1 })
+    expect(kinds(plan(s, FRAME, resultOf, { before: true }))).toEqual(['base:sha256:frame'])
+  })
+})
