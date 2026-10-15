@@ -9,6 +9,7 @@ import { useDoc, useServices } from '../app/context'
 import type { Shot } from '../contracts/types'
 import { deleteFrom, removeShot, shotDeleteText, shotNeedsConfirm } from '../doc/remove'
 import { updateDoc } from '../doc/store'
+import { selectedFrame } from '../jobs/frames'
 import { editShot } from '../jobs/stale'
 import { MAX_SHOTS } from '../lib/shots'
 import { framesOf, takesOf } from '../model/selectors'
@@ -46,7 +47,7 @@ export function ShotPanel({ shot, index, count, onGone }: { shot: Shot; index: n
     <section className="card section stack ve-shot" aria-label={`Shot ${index + 1}`} data-video-shot={shot.id}>
       <div className="row">
         <h2>Shot {index + 1}</h2>
-        <span className="faint" style={{ fontSize: 12 }}>its words make its clip</span>
+        <span className="faint" style={{ fontSize: 12 }}>{selectedFrame(doc, shot.id) ? 'its clip is made from its frame' : 'its words make its clip'}</span>
       </div>
       <div className="ve-shotwords">
         {clan
