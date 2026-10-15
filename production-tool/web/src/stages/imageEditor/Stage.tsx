@@ -165,7 +165,8 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
       setCropDrag(null)
     }
   }
-  const crop = cropDrag ? cropRect(cropDrag.a, cropDrag.b) : plan.crop
+  const kept = session.edits.find((e) => e.kind === 'crop' && !session.hidden.includes(e.id))
+  const crop = cropDrag ? cropRect(cropDrag.a, cropDrag.b) : kept && kept.kind === 'crop' ? kept : undefined
   const texts = session.edits.filter((e) => e.kind === 'text' && !session.hidden.includes(e.id))
   const pendingMask = pending ? session.edits.find((e) => e.id === pending) : undefined
   const pendingBox = useMemo(() => {
@@ -194,6 +195,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
           <div key={t.id} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
             contentEditable={tool === 'text'} suppressContentEditableWarning spellCheck={false} role="textbox" aria-label="Text on the frame"
             onPointerDown={(e) => {
+              if (tool === 'text') e.stopPropagation() // typing on it, not a new text
               if (tool !== 'select') return
               e.stopPropagation()
               ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)

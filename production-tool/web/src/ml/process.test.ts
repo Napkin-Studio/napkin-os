@@ -1,7 +1,7 @@
 // The on-device models' pixels in and out (features/image-editor.clan): the preprocessor configs of
 // BiRefNet_lite-ONNX and slimsam-77-uniform (ImageNet mean and std, 1024 px, SAM's longest-side pad).
 import { describe, expect, it } from 'vitest'
-import { SIDE, alphaOf, bestMask, clickBackend, cutoutWhere, nchw, samMask, samPoint, samSize } from './process'
+import { SIDE, alphaOf, bestMask, clickBackend, cutoutWhere, maskAreas, nchw, samMask, samPoint, samSize, within } from './process'
 
 describe('the model inputs', () => {
   it('normalises RGBA into NCHW planes with ImageNet mean and std, padding with 0', () => {
@@ -28,6 +28,15 @@ describe('the model outputs', () => {
   it('picks the mask SlimSAM scores highest', () => {
     expect(bestMask([0.82, 0.95, 0.9])).toBe(1)
   })
+  it('finds the object, not the letter: the largest mask nearly as sure as the best', () => {
+    // a click on the label (measured on the Lumen frame): the label, not the letter M
+    expect(bestMask([0.742, 0.801, 0.821], [0.0129, 0.0003, 0.0002])).toBe(0)
+    // a mask far less sure than the best is not taken for its size
+    expect(bestMask([0.579, 0.946, 0.963], [0.4, 0.0144, 0.0016])).toBe(1)
+    const pred = new Float32Array(2 * 4 * 4).fill(-1)
+    pred[0] = pred[1] = 1
+    expect(maskAreas(pred, 2, 4)).toEqual([2 / 16, 0])
+  })
   it('maps a 256 x 256 logit block back onto the picture, padding ignored', () => {
     const low = 256
     const pred = new Float32Array(3 * low * low).fill(-5)
@@ -51,8 +60,12 @@ describe('where each tool runs (3.12)', () => {
     expect(cutoutWhere({ webgpu: true, memoryGb: 2 })).toBe('server')
     expect(cutoutWhere({ webgpu: false, memoryGb: 16 })).toBe('server')
   })
-  it('click-selects on WebGPU, or on WebAssembly without it', () => {
-    expect(clickBackend({ webgpu: true })).toBe('webgpu')
+  it('click-selects on WebAssembly, with or without WebGPU', () => {
+    expect(clickBackend({ webgpu: true })).toBe('wasm')
     expect(clickBackend({ webgpu: false })).toBe('wasm')
+  })
+  it('gives up on a model that stalls', async () => {
+    await expect(within(new Promise(() => {}), 10, 'too slow')).rejects.toThrow('too slow')
+    await expect(within(Promise.resolve(3), 10, 'too slow')).resolves.toBe(3)
   })
 })

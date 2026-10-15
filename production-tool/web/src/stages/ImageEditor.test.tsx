@@ -165,6 +165,20 @@ describe('the edits and layers', () => {
   })
 })
 
+describe("arriving from Jude's brand flag", () => {
+  it('shows the rule at the top of the Edits panel, and nothing runs', async () => {
+    const { el, services, ids } = await open()
+    await act(async () => {
+      await systemUpdate(services.doc, (d) => {
+        d.checks.check_01K7A00000000000000000003A = { id: 'check_01K7A00000000000000000003A', v: 1, field_v: {}, target: { kind: 'frame', id: ids.frame },
+          crew: 'jude', result: 'flag', reason_code: 'logo_clear_space', note: 'Logo clear space: one bottle-cap height' }
+      })
+    })
+    expect(el.querySelector('.ie-edits [role="note"]')?.textContent).toContain('Logo clear space: one bottle-cap height')
+    expect(el.textContent).not.toContain('edits not applied')
+  })
+})
+
 describe('the actions (3.12), none with a price', () => {
   it('offers Remove background, Fill area, Change whole frame and Upscale with its output size', async () => {
     const { el } = await open()

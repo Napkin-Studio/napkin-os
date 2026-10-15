@@ -3,25 +3,28 @@
 // Click-select runs SlimSAM on WebGPU or WebAssembly. The pixels in and out are ml/process.ts.
 
 import type * as OrtNs from 'onnxruntime-web'
-import { CLICK_DECODER, CLICK_ENCODER, CUTOUT_WEIGHTS, fetchModel, type ModelFile } from './models'
-import { SIDE, alphaOf, bestMask, clickBackend, nchw, samMask, samPoint, samSize } from './process'
+import { CLICK_DECODER, CLICK_ENCODER, CUTOUT_WEIGHTS, CUTOUT_WEIGHTS_FP32, fetchModel, type ModelFile } from './models'
+import { SIDE, alphaOf, bestMask, clickBackend, maskAreas, nchw, samMask, samPoint, samSize } from './process'
 
 type Ort = typeof OrtNs
 let ortP: Promise<Ort> | null = null
 const ort = () => (ortP ??= import('onnxruntime-web/webgpu') as Promise<Ort>)
 
-export interface DeviceEnv { webgpu: boolean; memoryGb?: number }
+export interface DeviceEnv { webgpu: boolean; memoryGb?: number; f16?: boolean }
 
 /** What this device offers: a WebGPU adapter, and its memory where the browser says. */
 export async function deviceEnv(): Promise<DeviceEnv> {
-  const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> }; deviceMemory?: number }
+  const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<{ features: { has(f: string): boolean } } | null> }; deviceMemory?: number }
   let webgpu: boolean
+  let f16 = false
   try {
-    webgpu = !!(await nav.gpu?.requestAdapter())
+    const adapter = await nav.gpu?.requestAdapter()
+    webgpu = !!adapter
+    f16 = !!adapter?.features.has('shader-f16')
   } catch {
     webgpu = false
   }
-  return { webgpu, ...(typeof nav.deviceMemory === 'number' ? { memoryGb: nav.deviceMemory } : {}) }
+  return { webgpu, f16, ...(typeof nav.deviceMemory === 'number' ? { memoryGb: nav.deviceMemory } : {}) }
 }
 
 const sessions = new Map<string, Promise<OrtNs.InferenceSession>>()
@@ -49,9 +52,9 @@ function pixels(src: CanvasImageSource, w: number, h: number, cw = w, ch = h): I
 }
 
 /** The picture with its background removed, as an RGBA PNG its own size (BiRefNet-lite on WebGPU). */
-export async function removeBackground(src: CanvasImageSource, w: number, h: number): Promise<Blob> {
+export async function removeBackground(src: CanvasImageSource, w: number, h: number, env: DeviceEnv): Promise<Blob> {
   const o = await ort()
-  const s = await session(CUTOUT_WEIGHTS, 'webgpu')
+  const s = await session(env.f16 ? CUTOUT_WEIGHTS : CUTOUT_WEIGHTS_FP32, 'webgpu')
   const input = new o.Tensor('float32', nchw(pixels(src, SIDE, SIDE).data, SIDE, SIDE), [1, 3, SIDE, SIDE])
   const out = await s.run({ [s.inputNames[0]]: input })
   const alpha = alphaOf(out[s.outputNames[0]].data as Float32Array)
@@ -100,6 +103,7 @@ export async function clickSelect(src: CanvasImageSource, w: number, h: number, 
     image_embeddings: e.image_embeddings,
     image_positional_embeddings: e.image_positional_embeddings,
   })
-  const best = bestMask(out.iou_scores.data as Float32Array)
-  return samMask(out.pred_masks.data as Float32Array, best, w, h)
+  const pred = out.pred_masks.data as Float32Array
+  const iou = out.iou_scores.data as Float32Array
+  return samMask(pred, bestMask(iou, maskAreas(pred, iou.length)), w, h)
 }

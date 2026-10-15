@@ -41,11 +41,27 @@ export function samPoint(p: { x: number; y: number }, w: number, h: number): [nu
   return [p.x * w * scale, p.y * h * scale]
 }
 
-/** The mask SlimSAM is surest of. */
-export function bestMask(iou: ArrayLike<number>): number {
+/** Which of SlimSAM's masks a click means: "AI finds the object", so the largest of the masks it is
+ *  nearly as sure of as its best (within 0.1), not the letter under the pointer. `areas`: each mask's
+ *  share of the picture; without them, the surest. */
+export function bestMask(iou: ArrayLike<number>, areas?: ArrayLike<number>): number {
   let best = 0
   for (let i = 1; i < iou.length; i++) if (iou[i] > iou[best]) best = i
-  return best
+  if (!areas) return best
+  let pick = best
+  for (let i = 0; i < iou.length; i++) if (iou[i] >= iou[best] - 0.1 && areas[i] > areas[pick]) pick = i
+  return pick
+}
+
+/** Each low-resolution mask's share of the grid it covers (its positive logits). */
+export function maskAreas(pred: ArrayLike<number>, count: number, low = 256): number[] {
+  const out: number[] = []
+  for (let k = 0; k < count; k++) {
+    let n = 0
+    for (let i = k * low * low; i < (k + 1) * low * low; i++) if (pred[i] > 0) n++
+    out.push(n / (low * low))
+  }
+  return out
 }
 
 /**
@@ -79,7 +95,16 @@ export function cutoutWhere(env: { webgpu: boolean; memoryGb?: number }): Cutout
   return env.webgpu && (env.memoryGb === undefined || env.memoryGb >= 4) ? 'device' : 'server'
 }
 
-/** Click-select is small enough for the CPU: WebGPU when there is one, else WebAssembly. */
-export function clickBackend(env: { webgpu: boolean }): 'webgpu' | 'wasm' {
-  return env.webgpu ? 'webgpu' : 'wasm'
+/** Click-select runs on WebAssembly on every device: the quantized (int8) SlimSAM is small enough for
+ *  the CPU, and onnxruntime-web's WebGPU path stalled on it (headless Chromium, 2026-10-15). */
+export function clickBackend(_env: { webgpu: boolean }): 'webgpu' | 'wasm' {
+  return 'wasm'
+}
+
+/** A promise that gives up after `ms` (a model that stalls must not hold the editor). */
+export function within<T>(p: Promise<T>, ms: number, why: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(why)), ms)
+    p.then((v) => { clearTimeout(t); resolve(v) }, (e) => { clearTimeout(t); reject(e) })
+  })
 }

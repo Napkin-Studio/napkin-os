@@ -30,7 +30,7 @@ import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
 import { ratioAspect } from '../jobs/select'
 import { PromptStart } from '../ui/prompt/PromptStart'
-import { cutoutWhere, type CutoutWhere } from '../ml/process'
+import { cutoutWhere, within, type CutoutWhere } from '../ml/process'
 import type { DeviceEnv } from '../ml/runtime'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editId, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
@@ -78,8 +78,11 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const asset = current ? doc.assets[current.asset] : undefined
   const ratio = (sbId && doc.storyboards[sbId]?.ratio) || mainStoryboard(doc)?.ratio || '16:9'
   const aspect = ratioAspect(ratio)
-  const W = asset?.w ?? 1344
-  const H = asset?.h ?? Math.round(W / aspect)
+  // The frame's own size: the asset's, else the picture's once it loads (an older asset without w, h).
+  const [natural, setNatural] = useState<{ sha: string; w: number; h: number } | null>(null)
+  const own = asset?.w && asset?.h ? { w: asset.w, h: asset.h } : natural?.sha === current?.asset ? natural : undefined
+  const W = own?.w ?? 1344
+  const H = own?.h ?? Math.round(W / aspect)
   const framePic: Pic | undefined = current ? { sha: current.asset, w: W, h: H } : undefined
   const session: EditSession = (current && ui.imageEdits?.[current.id]) || EMPTY
   const frameId = current?.id
@@ -116,7 +119,9 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const nameAnchor = useRef<HTMLButtonElement>(null)
   const project = useProjectName()
   const motion = ui.motion !== 'still'
-  const check = checkId ? doc.checks[checkId] : undefined
+  // Jude's brand flag (3.12, 3.18): the one "Fix in image editor" came from, else an open flag on this frame.
+  const check = checkId ? doc.checks[checkId]
+    : Object.values(doc.checks).find((c) => c.target.kind === 'frame' && c.target.id === current?.id && c.result === 'flag' && !c.ignored)
   useEffect(() => { if (error) errorShown('frame', error, { shot: index + 1 }) }, [error, index])
 
   // What this device offers, once (WebGPU, memory): where Remove background runs.
@@ -164,6 +169,13 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     }
     return p
   }, [])
+  useEffect(() => {
+    const sha = current?.asset
+    if (!sha || (asset?.w && asset?.h)) return
+    let alive = true
+    void image(sha).then((b) => { if (alive) setNatural({ sha, w: b.width, h: b.height }) }).catch(() => undefined)
+    return () => { alive = false }
+  }, [current?.asset, asset?.w, asset?.h, image])
   // Cut-outs' alpha, for Snap to cut-out: loaded once, read at any size.
   const [cutPics, setCutPics] = useState<Record<string, ImageBitmap>>({})
   useEffect(() => {
@@ -267,9 +279,10 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     let bits: Uint8Array
     try {
       const m = await ml()
-      bits = await m.clickSelect(await image(pic.sha), pic.w, pic.h, pic.sha, p, env ?? { webgpu: false })
-    } catch {
-      throw new Error('Click-select could not run on this device. Paint the area with the brush instead.')
+      bits = await within(m.clickSelect(await image(pic.sha), pic.w, pic.h, pic.sha, p, env ?? { webgpu: false }), 90_000, 'click-select took too long')
+    } catch (e) {
+      console.warn('Click-select could not run on this device.', e)
+      throw new Error('Click-select could not run on this device. Paint the area with the brush instead.', { cause: e })
     }
     if (!painted(bits)) throw new Error('Rhea found nothing there. Click on the thing itself, or paint it.')
     const small = shrink(bits, pic.w, pic.h)
@@ -297,12 +310,13 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     if (where === 'device') {
       try {
         const m = await ml()
-        const blob = await m.removeBackground(await image(input.sha), input.w, input.h)
+        const blob = await within(m.removeBackground(await image(input.sha), input.w, input.h, env ?? { webgpu: true }), 120_000, 'the device took too long')
         const sha = await putBlob(blob)
         await registerAsset(sha, blob, input.w, input.h)
         made = { id: editId(), kind: 'cutout', where: 'device', sha }
         setSaid('cut-out ready, ran on your device')
-      } catch {
+      } catch (e) {
+        console.warn('Remove background could not run on this device; our server does it.', e)
         made = undefined // the device could not: our server does it (3.12)
       }
     }
@@ -373,7 +387,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   return (
     <div className="editor image-editor">
       <EditorBar back="Storyboard" onBack={() => go('back')} icon="frame" title={shotTitle(shot, index + 1)}
-        meta={<span className="pt-mono ie-meta">{ratio} locked{asset?.w && asset?.h ? ` · ${asset.w} × ${asset.h}` : ''}</span>}
+        meta={<span className="pt-mono ie-meta">{ratio} locked{own ? ` · ${own.w} × ${own.h}` : ''}</span>}
         right={(
           <>
             <div className="ie-zoom" role="group" aria-label="Zoom">

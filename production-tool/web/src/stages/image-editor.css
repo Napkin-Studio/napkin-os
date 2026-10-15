@@ -42,7 +42,10 @@
 .ie-strip .pt-seg { padding: 2px; border: 0; }
 .ie-strip .pt-seg button { height: 28px; padding: 0 12px; }
 
-.ie-viewport { position: relative; width: 100%; overflow: hidden; border-radius: 6px; box-shadow: var(--shadow-pop); background: var(--card); }
+/* Under the picture, a checkerboard: what shows through once the background is removed and Frame hidden. */
+.ie-viewport { position: relative; width: 100%; overflow: hidden; border-radius: 6px; box-shadow: var(--shadow-pop);
+  background-color: #FFFFFF; background-image: linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%), linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%);
+  background-size: 16px 16px; background-position: 0 0, 8px 8px; }
 .ie-frame { position: absolute; inset: 0; transform-origin: 50% 50%; container-type: size; touch-action: none; user-select: none; }
 .ie-frame.tool-brush, .ie-frame.tool-eraser { cursor: none; }
 .ie-frame.tool-click, .ie-frame.tool-lasso, .ie-frame.tool-crop { cursor: crosshair; }
@@ -169,3 +172,5 @@
   .ie-side { display: flex; }
   .ie-strip { height: auto; flex-wrap: wrap; border-radius: 14px; padding: 8px 12px; }
 }
+/* Full screen over the storyboard (3.12): the storyboard's update bar waits underneath. */
+.stage:has(.image-editor) .remakebar { display: none; }
