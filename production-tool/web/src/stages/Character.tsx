@@ -405,6 +405,11 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const railInset = narrow || panels.assets ? 0 : 240
   // New results land in view right of the rail (board-autolayout).
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
+  // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
+  useEffect(() => ctrl?.onRouted((r) => {
+    const e = canvas?.elements().find((x) => x.id === r.ids[0])
+    offerUndo({ label: `Moved to ${r.title}`, at: e ? { x: e.x, y: e.y } : undefined, undo: () => ctrl.unroute(r) })
+  }), [ctrl, canvas, offerUndo])
   // The Gather nudge and Move to <Board> on the pictures' bar (board-autolayout; BA2 = c, BA3).
   const gather = useMemo(() => (own && canvas && selected.length ? gatherOffer(els, doc, selected.map((e) => e.id)) : null), [own, canvas, selected, els, doc])
   const onGather = useCallback(async (o: GatherOffer) => {

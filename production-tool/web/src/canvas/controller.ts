@@ -22,6 +22,7 @@ import { namedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
 import { bringIntoView } from './boards/boards'
+import { boardForRole, placeOnBoard, roleOfElement } from './boards/arrange'
 import { applySketchFrame } from '../jobs/handlers'
 import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
@@ -61,6 +62,14 @@ export interface GeneratePreview {
 export type GenerateResult = { jobId: string } | { ask: Ask }
 
 const ONE_AREA = 'Pick one sketch area for one Generate.'
+
+/** A named picture moved to its role's board: what moved, where, and how to put it back. */
+export interface Routed {
+  ids: string[]
+  frameId: string
+  title: string
+  before: Map<string, Partial<El>>
+}
 
 export class CanvasController {
   private readonly canvas: CanvasAdapter
@@ -590,7 +599,53 @@ export class CanvasController {
         d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
       }
       dropUnusedKeys(d)
-    }, 'name')
+    }, 'name').then(() => this.routeNamed([nodeId])).catch((e) => console.warn('the named picture was not moved to its board', e))
+  }
+
+  private readonly routedCbs = new Set<(r: Routed) => void>()
+
+  /** Hear when a named picture went to its role's board (the stage says "Moved to Characters · Undo"). */
+  onRouted(cb: (r: Routed) => void): () => void {
+    this.routedCbs.add(cb)
+    return () => void this.routedCbs.delete(cb)
+  }
+
+  /**
+   * After naming or a role (board-autolayout): each of these pictures (node ids) that sits on no board
+   * goes to the first board (by rank) for its role, in its key's row, as its own undoable canvas step
+   * (the name stays). With no such board it stays loose; one already on a board stays (BA3). Only the
+   * client that named it moves it (this runs from the local action, never from a remote change).
+   */
+  routeNamed(nodeIds: readonly string[]): Routed | null {
+    if (this.canvas.engine !== 'own') return null
+    const doc = this.doc()
+    const els = this.els()
+    const loose = nodeIds.map((n) => this.nodeEl(n)).filter((e): e is El => !!e && !e.isDeleted && !(e.frameId && boardFrame(els, e.frameId)))
+    if (!loose.length) return null
+    const role = roleOfElement(doc, loose[0])
+    const board = boardForRole(els, doc, role)
+    if (!board) return null
+    const ids = loose.filter((e) => boardForRole(els, doc, roleOfElement(doc, e))?.id === board.id).map((e) => e.id)
+    const before = new Map<string, Partial<El>>()
+    let fit: ReturnType<typeof placeOnBoard> | null = null
+    this.canvas.transact((all) => {
+      fit = placeOnBoard(all, doc, board.id, ids)
+      for (const id of fit.fields.keys()) {
+        const e = all.find((x) => x.id === id)
+        if (e) before.set(id, id === board.id ? { x: e.x, y: e.y, width: e.width, height: e.height } : { x: e.x, y: e.y, frameId: e.frameId ?? null })
+      }
+      return withFields(this.canvas, all, fit.fields)
+    }, { undoable: true })
+    if (fit) tellFull(board.id, fit)
+    const title = (board as El & { name?: string }).name || 'the board'
+    const r: Routed = { ids, frameId: board.id, title, before }
+    for (const cb of this.routedCbs) cb(r)
+    return r
+  }
+
+  /** Take a routing back (its Undo chip): the pictures and the board where they were. */
+  unroute(r: Routed) {
+    this.canvas.transact((all) => withFields(this.canvas, all, r.before), { undoable: true })
   }
 
   /** Take the name off a node. The key goes too when nothing else uses it and it was never published. */
@@ -607,7 +662,8 @@ export class CanvasController {
       const k = keyNamed(d, key)
       if (k) k.role = role
       for (const r of Object.values(d.refs)) if (r.key === key) r.role = role
-    }, 'name')
+    }, 'name').then((d) => this.routeNamed(Object.values(d.refs).filter((r) => r.key === key && r.node).map((r) => r.node!)))
+      .catch((e) => console.warn('the named pictures were not moved to their board', e))
   }
 
   // ── views: any named image is a key's front; the others are generated from it ──
