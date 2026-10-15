@@ -2,7 +2,8 @@
 
 import type { Shot } from '../contracts/types'
 
-export const TARGETS = [10, 15, 20] as const
+/** The common ad lengths, in seconds, offered wherever the target is set (Script editor, Storyboard). */
+export const TARGETS = [6, 10, 15, 20, 30, 45, 60] as const
 export const MIN_SHOTS = 2
 export const MAX_SHOTS = 8
 

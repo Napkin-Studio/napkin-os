@@ -57,6 +57,8 @@ import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
 import { PromptStart } from '../ui/prompt/PromptStart'
+import { LengthPicker } from './LengthPicker'
+import { setScriptTarget } from './length'
 import { canvasActions } from '../canvas/chrome/actions'
 import { planFromScript, planShotsBlocked } from '../jobs/scriptVideo'
 import { nextStep, videoOfScript as nextVideo, type NextAction } from './nextStep'
@@ -861,6 +863,12 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
   // The longest shot is named only when one shot is longer than every other.
   const longest = shots.filter((s) => s.duration_s === maxS).length === 1 ? shots.find((s) => s.duration_s === maxS) ?? null : null
   const diff = Math.round((target - est) * 10) / 10
+  // The target: the script's, its storyboard's and that storyboard's video's, one undo step (script/length.ts).
+  const setLength = (seconds: number) => {
+    onError(null)
+    void updateDoc(docStore, (d) => setScriptTarget(d, composed.script.id, sb?.id, seconds), `set the script length to ${seconds} s`)
+      .catch((e) => onError(e instanceof Error ? e.message : 'That length did not save.'))
+  }
   const asks = openAsks(doc).filter((a) => !!askedShot(a) && shots.some((s) => s.id === askedShot(a)))
   const answer = (a: Ask, shotId: string, option: 'keep' | 'remove') => {
     onError(null)
@@ -884,7 +892,7 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
         <span className="pt-mono">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {sb?.ratio ?? '16:9'}</span>
       </section>
       <section aria-label="Length" className="se-lengthcard">
-        <div className="se-meterline"><span className="pt-label">Length</span><span>{target} s target · {secs(est)} estimated</span></div>
+        <div className="se-meterline"><span className="pt-label">Length</span><span><LengthPicker value={target} onPick={setLength} /> target · {secs(est)} estimated</span></div>
         <div className="se-meter" role="img" aria-label={`${secs(est)} of ${target} s`}>
           {shots.map((s) => (
             <span key={s.id} className={`seg ${s.id === current ? 'cur' : ''} ${longest && s.id === longest.id && shots.length > 2 ? 'long' : ''}`} style={{ flexGrow: s.duration_s }} title={`${secs(s.duration_s)}`} />

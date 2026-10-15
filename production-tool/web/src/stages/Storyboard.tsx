@@ -15,7 +15,8 @@ import { isRunning, jobAt, ratioAspect } from '../jobs/select'
 import { croppedCaption } from '../canvas/core/sketch'
 import { drawFrame, drawTheRest, firstUndrawn } from '../jobs/frames'
 import { planOrJoin, askedShot } from '../jobs/plan'
-import { checkDurations, MAX_SHOTS, TARGETS } from '../lib/shots'
+import { checkDurations, MAX_SHOTS } from '../lib/shots'
+import { lengthChoices } from '../script/length'
 import { useBlobUrl } from '../ui/hooks'
 import { JobSlot } from '../ui/JobSlot'
 import { updateDoc } from '../doc/store'
@@ -163,7 +164,7 @@ export function Storyboard() {
       <div className="sb-sub">
         <span className="pt-mono sb-len">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {total.toFixed(1)} s of{' '}
           <select className="sb-target" aria-label="The ad's length" value={targetS} onChange={(e) => void updateDoc(docStore, (d) => setTarget(d, Number(e.target.value)), `set the storyboard length to ${e.target.value} s`)}>
-            {TARGETS.map((t) => <option key={t} value={t}>{t}</option>)}
+            {lengthChoices(targetS).map((t) => <option key={t} value={t}>{t}</option>)}
           </select> s</span>
         {shots.length > 0 && <span className={`pt-pill ${check.ok ? 'ok' : 'warn'}`} title={check.ok ? undefined : check.reason}>{check.ok ? 'Lengths fit the ad' : over > 0 ? `${over.toFixed(1)} s over` : `${(-over).toFixed(1)} s short`}</span>}
         {working.slice(0, 2).map((r) => <CrewLine key={r.job.id} row={r} />)}
