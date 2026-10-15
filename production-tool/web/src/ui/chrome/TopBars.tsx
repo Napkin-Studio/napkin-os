@@ -147,7 +147,7 @@ export function CanvasBar({ presence }: { presence?: string }) {
   const mock = useShowMock()
   const name = shell.index.get(project.id)?.name
   return (
-    <header className="ptbar">
+    <header className="ptbar" data-float-avoid="">
       <HomeMark onClick={() => void shell.goHome()} />
       <Brand project={name} />
       <BetaTag screen={{ stage: 'canvas', project: project.id }} />
@@ -178,7 +178,7 @@ export function EditorBar({ back, onBack, icon, title, meta, middle, right, prim
   primary?: ReactNode
 }) {
   return (
-    <header className="ptbar">
+    <header className="ptbar" data-float-avoid="">
       <BackButton label={back} onClick={onBack} />
       <BarSep />
       <NodeIcon kind={icon} />
