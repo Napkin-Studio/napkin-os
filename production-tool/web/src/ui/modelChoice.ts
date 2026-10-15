@@ -2,7 +2,7 @@
 // model made a frame or take (its tooltip, and where the menu starts). Read from the job's
 // record; a job picked for one provider that ran on another (the relay's fallback) says so.
 
-import { modelLabel, type ModelOption } from '../capabilities'
+import { modelLabel, sameOption, type ModelOption } from '../capabilities'
 import type { DocJob, ModelChoice, Provider, ProductionDocument } from '../contracts/types'
 import type { UiState } from '../doc/ui'
 
@@ -50,7 +50,7 @@ export function madeWith(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, job
 
 /** Where the menu starts: the model that made the version being replaced, when it is offered. */
 export function startingChoice(options: ModelOption[], made?: Pick<DocJob, 'provider' | 'model'>): ModelChoice | undefined {
-  const hit = made?.provider && made.model ? options.find((o) => o.provider === made.provider && o.model === made.model) : undefined
+  const hit = made?.provider && made.model ? options.find((o) => sameOption(o, { provider: made.provider, model: made.model! })) : undefined
   const o = hit ?? options[0]
   return o && { provider: o.provider, model: o.model }
 }
@@ -59,6 +59,6 @@ export function startingChoice(options: ModelOption[], made?: Pick<DocJob, 'prov
  *  first (what made it fail, an account out of credit or a model that cannot take the step,
  *  may not hold there), the failed one left out. */
 export function otherModels(options: ModelOption[], failed: Pick<DocJob, 'provider' | 'model'>): ModelOption[] {
-  const rest = options.filter((o) => !(o.provider === failed.provider && o.model === failed.model))
+  const rest = options.filter((o) => !(failed.model && sameOption(o, { provider: failed.provider, model: failed.model })))
   return [...rest.filter((o) => o.provider !== failed.provider), ...rest.filter((o) => o.provider === failed.provider)]
 }

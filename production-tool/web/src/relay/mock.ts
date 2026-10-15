@@ -24,6 +24,7 @@ import { mockWrites } from './mockWrite'
 import { AGENCY_SHELF } from '../contracts/types'
 import { quotaClassOf, SPEND_POLICY } from '../contracts/load'
 import { getBlob, putBlob } from '../lib/blobs'
+import { resolveQuality, sizeLabel } from '../capabilities'
 import { hexOf } from '../lib/hash'
 import { mockFrameEdit } from '../jobs/frameWords'
 import type { AnswerResult, Relay, UploadResult } from './types'
@@ -523,6 +524,12 @@ export class MockRelay implements Relay {
       updatedAt: new Date(item.done?.at ?? now).toISOString(),
     }
     if (queuePosition !== undefined) job.queuePosition = queuePosition
+    if (req.op === 'clip' || req.op === 'clip_edit') {
+      // What ran, as the relay says it (features/clip-quality.clan): the level and its size on the model's sheet.
+      const sized = resolveQuality(req.op, req.modelChoice?.provider ?? 'mock', req.modelChoice?.model, req.quality)
+      job.model = sized.model
+      if (sized.level && sized.tier && !sized.keepsSize) job.quality = { level: sized.level, size: sizeLabel(sized.tier)! }
+    }
     if (item.done?.outputs) job.outputs = item.done.outputs
     if (item.done?.shots) job.shots = item.done.shots
     if (item.done?.writes) job.writes = item.done.writes

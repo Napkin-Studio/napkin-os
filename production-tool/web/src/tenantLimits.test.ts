@@ -20,7 +20,7 @@ describe('the allowlist in the menus and controls', () => {
     expect(modelChoicesFor('clip', withAllow(live(), SPEND_POLICY.allow))).toEqual(all)
     expect(modelChoicesFor('clip', withAllow(live(), { claude: true, makers: ['runway', 'google'] })).map((o) => o.model)).toEqual(
       ['veo3.1', 'veo3.1_fast', 'gemini_omni_flash_1.1'])
-    expect(all.map((o) => o.model)).toEqual(['veo3.1', 'veo3.1_fast', 'klingO3_pro', 'klingO3_standard', 'kling3.0_pro',
+    expect(all.map((o) => o.model)).toEqual(['veo3.1', 'veo3.1_fast', 'klingO3_standard',
       'kling3.0_standard', 'hailuo3', 'gemini_omni_flash_1.1', 'wan3', 'seedance2_5', 'seedance2_fast'])
     const every: Allow = { claude: true, makers: ['runway', 'google', 'kuaishou', 'minimax', 'alibaba', 'bytedance'] }
     expect(modelChoicesFor('clip', withAllow(live(), every))).toEqual(all)

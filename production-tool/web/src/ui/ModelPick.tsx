@@ -6,7 +6,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { useConfig } from '../app/context'
-import { modelChoicesFor, type ModelOption } from '../capabilities'
+import { modelChoicesFor, sameOption, type ModelOption } from '../capabilities'
 import type { ModelChoice, Op } from '../contracts/types'
 import { Float } from './Float'
 
@@ -26,7 +26,7 @@ export function ModelItems({ options, current, tagOther, onPick }: {
   onPick: (o: ModelOption) => void
 }) {
   return options.map((o) => {
-    const on = !!current && keyOf(o) === keyOf(current)
+    const on = sameOption(o, current)
     return (
       <button key={keyOf(o)} type="button" role="menuitem" className={`fmi mmi ${on ? 'on' : ''}`} aria-current={on || undefined} onClick={() => onPick(o)}>
         <ProviderMark provider={o.provider} />
@@ -47,7 +47,7 @@ export function ModelPick({ op, value, onChange }: { op: Op; value?: ModelChoice
   const close = useCallback(() => setOpen(false), [])
   const options = modelChoicesFor(op, config)
   if (options.length < 2) return null
-  const chosen = options.find((o) => value && keyOf(o) === keyOf(value)) ?? options[0]
+  const chosen = options.find((o) => sameOption(o, value)) ?? options[0]
   return (
     <span className="modelpick" onClick={(e) => e.stopPropagation()}>
       <button ref={ref} type="button" className={`modelchip ${open ? 'open' : ''}`} aria-haspopup="menu" aria-expanded={open}
