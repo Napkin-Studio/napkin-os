@@ -8,7 +8,7 @@ import type { JobInput, Op, ProductionDocument } from '../contracts/types'
 import type { JobPurpose } from '../model/purpose'
 import { systemUpdate, updateDoc } from '../doc/store'
 import { putBlob } from '../lib/blobs'
-import { mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf } from '../model/selectors'
+import { mainScript, mainStoryboard, mainVideo, scenesOf, scriptOfStoryboard, shotsOf, storyboardOfScript } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { MockRelay } from '../relay/mock'
 import { addScene } from '../script/edits'
@@ -121,27 +121,46 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     expect(clipMode(doc(store), v)).toBe('frames')
   })
 
-  it('Make clips straight from the script: stored on the video, a storyboard linked to it, Dex plans; switching later is a new answer', async () => {
+  it('Make clips straight from the script: stored on the video, its own shot list (no Storyboard node, no link), Dex plans there', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     const v = await videoFrom(store, sc)
+    const sbBefore = Object.keys(doc(store).storyboards).length
     const { storyboardId } = await answerScriptVideo(deps, v, STRAIGHT, 'human:p_maya01')
     const d = doc(store)
-    expect(Object.values(d.links).some((l) => l.role === 'renders' && l.from.id === storyboardId && l.to.id === v)).toBe(true)
-    expect(Object.values(d.links).some((l) => l.role === 'drives' && l.from.id === sc && l.to.id === storyboardId)).toBe(true)
+    // Decided 2026-10-15: no storyboard beside the script, no link; the video holds the shots.
+    expect(d.storyboards[storyboardId]).toMatchObject({ implicit: true, video_id: v })
+    expect(Object.keys(d.storyboards)).toHaveLength(sbBefore + 1)
+    expect(Object.values(d.links).some((l) => l.from.id === storyboardId || l.to.id === storyboardId)).toBe(false)
+    expect(storyboardOfScript(d, sc)).toBeUndefined()
+    expect(scriptOfStoryboard(d, storyboardId)?.id).toBe(sc)
     expect(waitsOnScriptAsk(d, v)).toBeNull()
     expect(clipMode(d, v)).toBe('straight')
     const ask = scriptVideoAsk(d, v)!
     expect(ask).toMatchObject({ node: { kind: 'video', id: v }, crew: 'dex', state: 'answered' })
     expect(ask.answers.map((a) => a.option_id)).toEqual([STRAIGHT])
-    expect(sent.map((s) => s.op)).toEqual(['shot_list'])
+    expect(sent.map((s) => [s.op, (s.purpose as { storyboardId?: string }).storyboardId])).toEqual([['shot_list', storyboardId]])
     // Nothing paid: no clip was sent.
     expect(sent.some((s) => s.op === 'clip')).toBe(false)
-    await answerScriptVideo(deps, v, PLAN_FIRST, 'human:p_maya01')
-    expect(clipMode(doc(store), v)).toBe('frames')
-    expect(scriptVideoAsk(doc(store), v)!.answers.map((a) => a.option_id)).toEqual([STRAIGHT, PLAN_FIRST])
-    // The plan already running is not sent twice.
+    // Plan the storyboard first makes the node on the canvas: with none here it says so, and records nothing.
+    await expect(answerScriptVideo(deps, v, PLAN_FIRST, 'human:p_maya01')).rejects.toThrow(/on the canvas/)
+    expect(scriptVideoAsk(doc(store), v)!.answers.map((a) => a.option_id)).toEqual([STRAIGHT])
+    // Answering straight again plans nothing twice.
+    await answerScriptVideo(deps, v, STRAIGHT, 'human:p_maya01')
     expect(sent.filter((s) => s.op === 'shot_list')).toHaveLength(1)
+  })
+
+  it('Plan the storyboard first on a video a script drives: the storyboard beside the script, linked; Dex plans', async () => {
+    const { store, deps, sent } = await project()
+    const sc = await newScript(store)
+    const v = await videoFrom(store, sc)
+    const { storyboardId } = await answerScriptVideo(deps, v, PLAN_FIRST, 'human:p_maya01')
+    const d = doc(store)
+    expect(d.storyboards[storyboardId].implicit).toBeUndefined()
+    expect(Object.values(d.links).some((l) => l.role === 'renders' && l.from.id === storyboardId && l.to.id === v)).toBe(true)
+    expect(Object.values(d.links).some((l) => l.role === 'drives' && l.from.id === sc && l.to.id === storyboardId)).toBe(true)
+    expect(clipMode(d, v)).toBe('frames')
+    expect(sent.map((s) => s.op)).toEqual(['shot_list'])
   })
 
   it('refuses before anything when the script has no words', async () => {
@@ -150,6 +169,7 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     const v = await videoFrom(store, sc)
     await expect(answerScriptVideo(deps, v, STRAIGHT, 'human:p_maya01')).rejects.toThrow(/Write the script first/)
     expect(sent).toHaveLength(0)
+    expect(scriptVideoAsk(doc(store), v)).toBeUndefined()
   })
 })
 

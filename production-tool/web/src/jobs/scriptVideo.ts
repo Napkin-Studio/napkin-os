@@ -7,9 +7,11 @@
 // History, Change works, and the Video editor reads it: straight from the script, Make clips makes each
 // shot's clip from its words when it has no frame yet (jobs/clips.ts), through the send tray.
 //
-// Either answer gives the video the storyboard its script drives (made beside the script on the canvas
-// when there is none) with a `renders` link, and Dex plans its shots there: nothing is hidden, and the
-// shots are what Make clips makes clips of. Planning is free; no clip starts here.
+// Straight from the script makes no Storyboard node (decided 2026-10-15): the video gets its own shot list
+// (an implicit storyboard owned by the video, contracts storyboard.implicit and video_id), Dex plans into
+// it, and the Video editor shows and edits the shots on its timeline. Plan the storyboard first links the
+// storyboard its script drives (made beside the script on the canvas when there is none), or turns the
+// video's own shot list into a node (Make a storyboard from these shots). Planning is free; no clip starts.
 
 import type { Id, ProductionDocument, Question } from '../contracts/types'
 import { PLAN_FIRST, STRAIGHT, scriptVideoAsk } from './clipMode'
@@ -21,7 +23,7 @@ import { newId } from '../lib/ulid'
 import { scriptText, shotsOf, storyboardOfScript } from '../model/selectors'
 import type { FrameDeps } from './frames'
 import { planOrJoin, runningPlan } from './plan'
-import { linkInto, scriptOf, storyboardOfVideo } from './prompt'
+import { linkInto, ownShotList, scriptOf, storyboardOfVideo } from './prompt'
 
 export { clipMode, isScriptVideoAsk, PLAN_FIRST, scriptVideoAsk, STRAIGHT, type ClipMode } from './clipMode'
 
@@ -143,23 +145,45 @@ export async function planFromScript(deps: FrameDeps, scriptId: Id): Promise<{ s
 }
 
 /**
- * The person's answer to "Plan a storyboard first?" (either option): stored on the video, then the
- * video gets the storyboard its script drives (made when there is none) with a `renders` link, and
- * Dex plans the shots there when it has none. Free: no clip starts.
+ * Make a storyboard from these shots (ui-behaviour 3.13, decided 2026-10-15): a video's own shot list becomes
+ * a Storyboard node on the canvas beside the video, driven by the video's script, with the shots, frames and
+ * clips as they are. One canvas step: Undo takes the node away and the shots are the video's again.
+ */
+export async function storyboardFromShots(videoId: Id): Promise<{ storyboardId: Id }> {
+  const made = canvasActions.storyboardFromShots(videoId)
+  if (!made) throw new Error('Make a storyboard from these shots on the canvas: open this project with the canvas.')
+  return made
+}
+
+/**
+ * The person's answer to "Plan a storyboard first?" (either option), stored on the video, then:
+ *   - Make clips straight from the script: the video gets its own shot list when it has no storyboard (no
+ *     node on the canvas, decided 2026-10-15) and Dex plans the shots into it;
+ *   - Plan the storyboard first: a video's own shot list becomes a Storyboard node (storyboardFromShots);
+ *     with no storyboard, the one its script drives (made beside the script when there is none) is linked.
+ * Dex plans when there are no shots yet. Free: no clip starts. The script is checked before anything is written.
  */
 export async function answerScriptVideo(deps: FrameDeps, videoId: Id, optionId: string, by: string): Promise<{ storyboardId: Id }> {
   const d = deps.doc.get()
   if (!d.videos[videoId]) throw new Error('This video is gone.')
-  await recordScriptVideoAnswer(deps.doc, videoId, optionId, by)
-  let sbId = storyboardOfVideo(deps.doc.get(), videoId)?.id
-  if (!sbId) {
-    const scriptId = scriptOfVideo(deps.doc.get(), videoId)
+  const had = storyboardOfVideo(d, videoId)
+  const scriptId = scriptOfVideo(d, videoId) ?? (had ? scriptOf(d, had.id) : undefined)
+  if (!had || !shotsOf(d, had.id).length) {
     if (!scriptId) throw new Error('Link a script to this video first.')
-    if (!scriptText(deps.doc.get(), scriptId).trim()) throw new Error('Write the script first: Dex plans the shots from its words.')
-    sbId = (await storyboardForScript(deps.doc, scriptId)).storyboardId
+    if (!scriptText(d, scriptId).trim()) throw new Error('Write the script first: Dex plans the shots from its words.')
+  }
+  if (optionId !== STRAIGHT && had?.implicit && !canvasActions.canMake()) throw new Error('Make a storyboard from these shots on the canvas: open this project with the canvas.')
+  await recordScriptVideoAnswer(deps.doc, videoId, optionId, by)
+  let sbId = had?.id
+  if (optionId === STRAIGHT) {
+    sbId ??= await ownShotList(deps.doc, videoId)
+  } else if (had?.implicit) {
+    await storyboardFromShots(videoId)
+  } else if (!sbId) {
+    sbId = (await storyboardForScript(deps.doc, scriptId!)).storyboardId
     await linkInto(deps.doc, { kind: 'storyboard', id: sbId }, { kind: 'video', id: videoId })
   }
   const now = deps.doc.get()
-  if (!shotsOf(now, sbId).length && !runningPlan(now, sbId)) await planOrJoin(deps, { storyboardId: sbId })
-  return { storyboardId: sbId }
+  if (!shotsOf(now, sbId!).length && !runningPlan(now, sbId)) await planOrJoin(deps, { storyboardId: sbId })
+  return { storyboardId: sbId! }
 }

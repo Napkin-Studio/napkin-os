@@ -27,7 +27,7 @@ import { elementBounds } from '../core/geometry'
 import { isInkTool } from '../core/tools'
 import { UndoChip } from '../../ui/Undo'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
-import { makeVideo, storyboardFor } from './make'
+import { makeVideo, storyboardFor, storyboardFromShots } from './make'
 import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
 import './nodes.css'
@@ -111,6 +111,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         markNew(r.el.id)
         show(r.el, from.storyboardId ? { kind: 'storyboard', id: from.storyboardId } : { kind: 'script', id: from.scriptId! })
         return r
+      },
+      storyboardFromShots: async (videoId) => {
+        const r = await storyboardFromShots({ canvas, doc: services.doc }, videoId)
+        markNew(r.el.id)
+        show(r.el, { kind: 'video', id: videoId })
+        canvasActions.made({ label: 'Storyboard made from the video\'s shots', el: r.el })
+        return { storyboardId: r.storyboardId }
       },
     })
   }, [canvas, services, markNew])

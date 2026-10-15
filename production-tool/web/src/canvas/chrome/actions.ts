@@ -8,6 +8,9 @@
 import type { CardKind } from '../nodes/cardChrome'
 import type { MadeVideo, MakeVideoFrom } from '../nodes/make'
 
+/** A node made on the canvas from an editor (Make a storyboard from these shots): what its Undo chip says, and where. */
+export interface MadeOnCanvas { label: string; el: { id: string; x: number; y: number; width: number } }
+
 /** A tool the chrome runs over the canvas, outside the engine's own (select, hand, pen…). */
 export type CanvasMode = 'link' | 'board' | null
 
@@ -24,6 +27,8 @@ export interface CanvasActions {
   storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }>
   /** Make video (3.5): the Video node beside what it is made from, with its links, one undo step. */
   makeVideo(from: MakeVideoFrom): Promise<MadeVideo>
+  /** Make a storyboard from these shots (3.13): a video's own shot list as a node beside it, one undo step. */
+  storyboardFromShots(videoId: string): Promise<{ storyboardId: string }>
 }
 
 type Listener = () => void
@@ -33,7 +38,8 @@ class Bus {
   private boards: Pick<CanvasActions, 'board'> | null = null
   private pictures: Pick<CanvasActions, 'picture'> | null = null
   private into: Pick<CanvasActions, 'linkInto'> | null = null
-  private makes: Pick<CanvasActions, 'storyboardFor' | 'makeVideo'> | null = null
+  private makes: Pick<CanvasActions, 'storyboardFor' | 'makeVideo' | 'storyboardFromShots'> | null = null
+  private madeCb: ((m: MadeOnCanvas) => void) | null = null
   private current: CanvasMode = null
   private pick: string | null = null
   private readonly listeners = new Set<Listener>()
@@ -44,7 +50,7 @@ class Bus {
     if (part.board) this.boards = { board: part.board }
     if (part.picture) this.pictures = { picture: part.picture }
     if (part.linkInto) this.into = { linkInto: part.linkInto }
-    if (part.storyboardFor && part.makeVideo) this.makes = { storyboardFor: part.storyboardFor, makeVideo: part.makeVideo }
+    if (part.storyboardFor && part.makeVideo && part.storyboardFromShots) this.makes = { storyboardFor: part.storyboardFor, makeVideo: part.makeVideo, storyboardFromShots: part.storyboardFromShots }
     this.emit()
     return () => {
       if (part.node && this.nodes?.node === part.node) this.nodes = null
@@ -94,6 +100,21 @@ class Bus {
   /** The Storyboard a Script drives, made on the canvas when it has none; null when no canvas can. */
   storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }> | null {
     return this.makes ? this.makes.storyboardFor(scriptId) : null
+  }
+
+  /** The canvas page listens for a node made from an editor, to offer its Undo there (one canvas step). */
+  onMade(cb: (m: MadeOnCanvas) => void): () => void {
+    this.madeCb = cb
+    return () => { if (this.madeCb === cb) this.madeCb = null }
+  }
+
+  made(m: MadeOnCanvas) {
+    this.madeCb?.(m)
+  }
+
+  /** A video's own shot list as a Storyboard node on the canvas; null when no canvas can. */
+  storyboardFromShots(videoId: string): Promise<{ storyboardId: string }> | null {
+    return this.makes ? this.makes.storyboardFromShots(videoId) : null
   }
 
   /** Make video on the canvas; null when no canvas can. */

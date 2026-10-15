@@ -232,7 +232,7 @@ describe('PromptStart, rendered', () => {
     expect(Object.values(store.get().links).some((l) => l.to.id === v && l.role === 'renders')).toBe(true)
   })
 
-  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans, links and opens the Video', async () => {
+  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans into the video\'s own shot list, no storyboard node, and opens the Video', async () => {
     const store = await project()
     const v = await unlinkVideo(store)
     const sc = mainScript(store.get())!.id
@@ -259,7 +259,11 @@ describe('PromptStart, rendered', () => {
     for (let i = 0; i < 20; i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)) })
     expect(sent.map((x) => x.op)).toEqual(['shot_list'])
     const d = store.get()
-    expect(Object.values(d.links).some((l) => l.to.id === v && l.role === 'renders')).toBe(true)
+    // No Storyboard node and no link (decided 2026-10-15): the video's own shot list, planned into.
+    const own = Object.values(d.storyboards).find((x) => x.video_id === v)
+    expect(own).toMatchObject({ implicit: true })
+    expect(Object.values(d.links).some((l) => l.to.id === v && l.role === 'renders')).toBe(false)
+    expect(Object.keys(d.storyboards)).toHaveLength(2)
     expect(Object.values(d.asks).find((a) => a.node.id === v)?.answers.map((a) => a.option_id)).toEqual(['straight'])
     expect(s.ui.get()).toMatchObject({ stage: 'video', openNode: { video: v } })
   })

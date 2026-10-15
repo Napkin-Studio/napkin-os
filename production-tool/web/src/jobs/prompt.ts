@@ -19,7 +19,7 @@ import type { DocumentStore } from '../doc/types'
 import { mentions, nameOf, nameProblem } from '../lib/names'
 import { newId } from '../lib/ulid'
 import { scopeOf, scopeRefs } from '../model/scope'
-import { keyNamed, mainScript, mainStoryboard, refsList, scenesOf, scriptText, shotsOf } from '../model/selectors'
+import { keyNamed, mainScript, mainStoryboard, ownShotsOf, refsList, scenesOf, scriptOfStoryboard, scriptText, shotsOf } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { addScene, importFountain } from '../script/edits'
 import { parseFountain } from '../script/fountain'
@@ -103,7 +103,7 @@ export async function scriptFromLine(deps: FrameDeps, store: ModelStore, scriptI
 /** The script that drives a storyboard (its `drives` link), else the project's. */
 export function scriptOf(d: Doc, storyboardId: Id): Id | undefined {
   const l = Object.values(d.links ?? {}).find((x) => x.role === 'drives' && x.to.kind === 'storyboard' && x.to.id === storyboardId)
-  return (l && d.scripts[l.from.id]?.id) ?? mainScript(d)?.id
+  return (l && d.scripts[l.from.id]?.id) ?? (d.storyboards[storyboardId]?.implicit ? scriptOfStoryboard(d, storyboardId)?.id : undefined) ?? mainScript(d)?.id
 }
 
 /** Whether the script that would drive this storyboard has words a plan can read. */
@@ -112,11 +112,6 @@ export function scriptHasWords(d: Doc, storyboardId: Id): boolean {
   return !!id && !!scriptText(d, id).trim()
 }
 
-/** The storyboard a video renders from (its `renders` link), if any. */
-export function storyboardOfVideo(d: Doc, videoId: Id): Storyboard | undefined {
-  const l = Object.values(d.links ?? {}).find((x) => x.role === 'renders' && x.to.kind === 'video' && x.to.id === videoId)
-  return l ? d.storyboards[l.from.id] : undefined
-}
 
 /** The plan request from a line: the line is the script when the script has no words; the refs are the node's scope. */
 export async function ideaPlanInput(deps: FrameDeps, storyboardId: Id, idea: string, scopeNode: Id = storyboardId): Promise<JobInput> {
@@ -171,6 +166,32 @@ export async function linkInto(store: DocumentStore, from: LinkEndpoint, to: Lin
   return link
 }
 
+/** The storyboard a video renders from: its own shot list, else its `renders` link's, if any. */
+export function storyboardOfVideo(d: Doc, videoId: Id): Storyboard | undefined {
+  const own = ownShotsOf(d, videoId)
+  if (own) return own
+  const l = Object.values(d.links ?? {}).find((x) => x.role === 'renders' && x.to.kind === 'video' && x.to.id === videoId)
+  return l ? d.storyboards[l.from.id] : undefined
+}
+
+/**
+ * The video's own shot list (ui-behaviour 3.5, decided 2026-10-15): an implicit storyboard with no canvas
+ * node and no link, owned by this video (video_id), made when the video has no storyboard. Its shots are the video's
+ * timeline in the Video editor. One write, in the document only. Returns its id.
+ */
+export async function ownShotList(store: DocumentStore, videoId: Id): Promise<Id> {
+  const d = store.get()
+  const v = d.videos[videoId]
+  if (!v) throw new Error('This video is gone.')
+  const there = storyboardOfVideo(d, videoId)
+  if (there) return there.id
+  const sbId = newId('storyboard')
+  await updateDoc(store, (x) => {
+    x.storyboards[sbId] = { id: sbId, v: 1, field_v: {}, title: v.title || 'Video', ratio: v.ratio, target_s: v.target_s ?? 15, implicit: true, video_id: videoId }
+  }, `add the shot list of videos[${videoId}]`)
+  return sbId
+}
+
 /**
  * "15 s · Make it" on a video (3.5, 3.17): Dex plans the words on the storyboard the video renders
  * from. With none linked, the project's storyboard is linked in first, when it has no shots yet.
@@ -183,6 +204,7 @@ export async function videoFromWords(deps: FrameDeps, videoId: Id, words: string
   const unknown = unknownName(d, words)
   if (unknown) throw new Error(unknown)
   let sb = storyboardOfVideo(d, videoId)
+  if (!sb && (!mainStoryboard(d) || mainStoryboard(d)?.implicit)) sb = deps.doc.get().storyboards[await ownShotList(deps.doc, videoId)]
   if (!sb) {
     const main = mainStoryboard(d)
     if (!main) throw new Error('This project has no storyboard.')

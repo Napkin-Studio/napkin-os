@@ -11,7 +11,7 @@
 import type { Link, LinkEndpoint, ProductionDocument, Storyboard, Video } from '../../contracts/types'
 import { systemUpdate } from '../../doc/store'
 import { newId } from '../../lib/ulid'
-import { storyboardOfScript } from '../../model/selectors'
+import { ownShotsOf, storyboardOfScript } from '../../model/selectors'
 import { CARD_SIZE } from '../boards/layout'
 import type { CanvasElement } from '../core/canvasAdapter'
 import type { CardKind } from './cardChrome'
@@ -46,7 +46,7 @@ export function drivers(d: Doc, to: LinkEndpoint): string[] {
 /** The storyboard this script drives (its newest `drives` link, as the Script editor shows it), if any. */
 export function drivenStoryboard(d: Doc, scriptId: string): Storyboard | undefined {
   const ids = Object.values(d.links ?? {})
-    .filter((l) => l.role === 'drives' && l.from.kind === 'script' && l.from.id === scriptId && l.to.kind === 'storyboard')
+    .filter((l) => l.role === 'drives' && l.from.kind === 'script' && l.from.id === scriptId && l.to.kind === 'storyboard' && !d.storyboards[l.to.id]?.implicit)
     .sort((a, b) => (a.id < b.id ? 1 : -1)).map((l) => l.to.id)
   return ids.map((id) => d.storyboards[id]).find(Boolean) ?? storyboardOfScript(d, scriptId)
 }
@@ -98,6 +98,30 @@ export async function storyboardFor(env: NodeEnv, scriptId: string): Promise<{ s
   const link = newLink({ kind: 'script', id: scriptId }, { kind: 'storyboard', id: sb.id }, 'drives')
   const el = await place(env, 'storyboard', sb, box, [{ link, from: scriptId, to: sb.id }], `add a storyboard for scripts[${scriptId}]`)
   return { storyboardId: sb.id, made: true, el }
+}
+
+/**
+ * Make a storyboard from these shots (3.13, decided 2026-10-15): a video's own shot list (an implicit
+ * storyboard) is shown as a Storyboard node beside the video, with a `renders` link into the video and the
+ * script's `drives` link into it, as one undo step. Its shots, frames and clips stay as they are. It keeps
+ * its video_id, so taking the node away (Undo, or deleting it) puts the shots back in the video
+ * (CanvasDocSync.nodes) instead of deleting them.
+ */
+export async function storyboardFromShots(env: NodeEnv, videoId: string): Promise<{ storyboardId: string; el: CanvasElement }> {
+  const d = env.doc.get()
+  if (!d.videos[videoId]) throw new Error('This video is gone.')
+  const own = ownShotsOf(d, videoId)
+  if (!own) throw new Error('This video has no shots of its own.')
+  const script = Object.values(d.links ?? {}).find((l) => l.role === 'drives' && l.from.kind === 'script' && l.to.kind === 'video' && l.to.id === videoId && d.scripts[l.from.id])?.from.id
+  const src = elementOfEnd(env.canvas.elements(), d, { kind: 'video', id: videoId })
+  const box = src ? besideBox(env.canvas.elements(), src, 'storyboard') : placeNode(env.canvas, d, 'storyboard').box
+  const { implicit: _implicit, ...shown } = own
+  const n = Object.values(d.storyboards).filter((x) => !x.implicit).length
+  const sb: Storyboard = { ...shown, title: n ? `Storyboard ${n + 1}` : 'Storyboard' }
+  const links = [{ link: newLink({ kind: 'storyboard', id: sb.id }, { kind: 'video', id: videoId }, 'renders'), from: sb.id, to: videoId }]
+  if (script) links.push({ link: newLink({ kind: 'script', id: script }, { kind: 'storyboard', id: sb.id }, 'drives'), from: script, to: sb.id })
+  const el = await place(env, 'storyboard', sb, box, links, `make a storyboard from the shots of videos[${videoId}]`)
+  return { storyboardId: sb.id, el }
 }
 
 /** What Make video was given: at most one script and one storyboard (an ambiguous selection is asked about first). */

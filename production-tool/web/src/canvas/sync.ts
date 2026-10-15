@@ -64,6 +64,8 @@ export class CanvasDocSync {
   /** Nodes alive at the last sync, as 'kind:id' (null until the first). */
   private nodesAlive: Set<string> | null = null
   private readonly nodesSeen = new Set<string>()
+  /** Storyboard nodes whose shots went back to their video when the node went (redo shows them again). */
+  private readonly folded = new Set<string>()
 
   constructor(deps: CanvasSyncDeps) {
     this.deps = deps
@@ -158,12 +160,25 @@ export class CanvasDocSync {
         const d = store.get()
         const map = kind === 'script' ? d.scripts : kind === 'storyboard' ? d.storyboards : d.videos
         if (!map[id]) return
+        // A storyboard made from a video's own shots (it keeps video_id): its shots go back to the video,
+        // its own shot list again, instead of being deleted (decided 2026-10-15). Its arrows go with the node.
+        const own = kind === 'storyboard' ? d.storyboards[id]?.video_id : undefined
+        if (own && d.videos[own]) {
+          this.folded.add(k)
+          await systemUpdate(store, (x) => { if (x.storyboards[id]) x.storyboards[id].implicit = true }, `put the shots of storyboards[${id}] back in videos[${own}]`)
+          return
+        }
         for (const j of runningOn(d, kind, id)) this.deps.cancel(j)
         this.removals.set(k, await deleteFrom(store, (doc) => removeNode(doc, kind, id), { system: true }))
       }).catch((e) => console.warn('could not record the delete', e))
     }
     for (const k of back) {
       this.queue = this.queue.then(async () => {
+        if (this.folded.delete(k)) {
+          const id = k.split(/:(.*)/s)[1]
+          await systemUpdate(this.deps.doc, (x) => { if (x.storyboards[id]) delete x.storyboards[id].implicit }, `show storyboards[${id}] on the canvas again`)
+          return
+        }
         const r = this.removals.get(k)
         this.removals.delete(k)
         if (r) await restoreTo(this.deps.doc, r)

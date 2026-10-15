@@ -6,7 +6,7 @@
 // Contract 3: the clips of a shot are its takes; the one in the cut is the main video's edl item pick;
 // notes are reviews with a window; the ad is the video's picked render.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
@@ -37,20 +37,23 @@ import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
-import { currentRender, currentTake, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
+import { currentRender, currentTake, isImplicit, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
 import { SoundView } from './SoundView'
 import { addTakeNote, pickTake } from './videoEdits'
 import { PromptStart } from '../ui/prompt/PromptStart'
-import { clipMode, waitsOnScriptAsk } from '../jobs/scriptVideo'
+import { answerScriptVideo, clipMode, STRAIGHT, storyboardFromShots, waitsOnScriptAsk } from '../jobs/scriptVideo'
+import { LOCAL_PERSON } from '../jobs/runner'
+import { AddShot, InsertShot, ShotPanel } from './VideoShots'
 import { runningPlan } from '../jobs/plan'
 import { ClipTray } from './ClipTray'
 import { ClipChoice } from './ClipChoice'
 import { selectedFrame } from '../jobs/frames'
 import { NapkinLoader } from '../ui/loader/NapkinLoader'
 import { RemakeBar } from '../ui/Follow'
+import { MAX_SHOTS } from '../lib/shots'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -91,8 +94,34 @@ export function Video() {
   const [makingAll, sendAll] = useSending()
   const [rendering, sendRender] = useSending()
 
-  // Straight from the script (ui-behaviour 3.5): a shot with no frame yet makes its clip from its words.
+  // Straight from the script (ui-behaviour 3.5): a shot with no frame yet makes its clip from its words, and
+  // the shots are edited here, on the timeline (decided 2026-10-15). `own`: they are the video's own shot
+  // list, with no Storyboard node; Make a storyboard from these shots shows them as one.
   const fromWords = clipMode(doc, video?.id) === 'straight'
+  const own = isImplicit(sb)
+  const editable = fromWords && !!sb
+  const me = ui.me?.participantId ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const [shaping, sendShape] = useSending()
+  /** Dex plans the shots into the video again (its answer, straight from the script, once more). */
+  const planHere = () => sendShape(async () => {
+    setError(null)
+    try {
+      if (video) await answerScriptVideo(deps, video.id, STRAIGHT, me)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
+  /** Make a storyboard from these shots: a node on the canvas beside the video (one undo step there). */
+  const showAsStoryboard = () => sendShape(async () => {
+    setError(null)
+    try {
+      if (!video) return
+      await storyboardFromShots(video.id)
+      uiStore.update((u) => { u.stage = 'character' }, 'stage')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
   const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
   // Make clips opens the send tray first (3.16): nothing paid starts until its Make clips.
   const [tray, setTray] = useState(false)
@@ -137,7 +166,7 @@ export function Video() {
   const empty = !shots.length
   const bar = (
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-      title={`Video · ${isMain ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
+      title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
       meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
       middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
       right={<>
@@ -159,11 +188,16 @@ export function Video() {
         <div className="panel"><div className="empty-state">
           <AgentFigure agent="dex" size={64} decorative />
           <span className="sayer">{sayer('dex')}</span>
-          {video && waitsOnScriptAsk(doc, video.id) ? null : planning
-            ? <div className="ve-planning" role="status"><NapkinLoader work="plan" size={18} /><span>I'm planning the shots from the script. {fromWords ? 'Then Make clips makes them straight from its words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
-            : <><b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}</>}
-          {video && <PromptStart kind="video" nodeId={video.id} place="editor" />}
-          {sb && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}
+          {planning
+            ? <div className="ve-planning" role="status"><NapkinLoader work="plan" size={18} /><span>I'm planning the shots from the script. {fromWords ? 'They land on this video\'s timeline; then Make clips makes them straight from their words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
+            : fromWords
+              ? <><b>No shots yet.</b>I plan the shots from the script into this video; you edit them here, then Make clips makes each one from its words.
+                <div style={{ marginTop: 14 }}><button className="btn primary" disabled={shaping} onClick={() => void planHere()}>{shaping ? 'Sending…' : 'Plan the shots'}</button></div></>
+              : video && waitsOnScriptAsk(doc, video.id) ? null
+                : <><b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}</>}
+          {error && <div role="alert" className="ve-error">{error}</div>}
+          {video && !fromWords && <PromptStart kind="video" nodeId={video.id} place="editor" />}
+          {sb && !own && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}
         </div></div>
       </div>
     )
@@ -180,21 +214,27 @@ export function Video() {
             <div className="ve-timeline pt-card">
               <div className="ve-tlhead"><b>Timeline</b><span className="pt-pill ok">{taken} of {shots.length} clips</span><span className="pt-grow" />
                 <RemakeBar dock="inline" />
+                {own && <button className="btn sm" disabled={shaping} onClick={() => void showAsStoryboard()} title="Show these shots as a Storyboard node on the canvas, driving this video, to draw and check their frames. Undo on the canvas puts them back here.">Make a storyboard from these shots</button>}
                 <button className={`btn sm ${mode === 'all' ? 'on' : ''}`} disabled={!allTaken} onClick={() => setMode('all')}
                   title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>▶ All shots</button>
               </div>
               <div className="ve-track"><span className="ve-lane"><b>Shots</b><span>main track</span></span>
-                <div className="strip">
+                <div className={`strip ${editable ? 'editable' : ''}`}>
                   {shots.map((s, i) => (
-                    <ShotCard key={s.id} shot={s} index={i} videoId={video?.id} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
-                      onSelect={() => { setShotId(s.id); setMode('shot') }}
-                      onMake={(opts) => makeClip(s, opts)} />
+                    <Fragment key={s.id}>
+                      {editable && i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} />}
+                      <ShotCard shot={s} index={i} videoId={video?.id} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
+                        onSelect={() => { setShotId(s.id); setMode('shot') }}
+                        onMake={(opts) => makeClip(s, opts)} />
+                    </Fragment>
                   ))}
+                  {editable && sb && <AddShot storyboardId={sb.id} count={shots.length} onMade={(id) => { setShotId(id); setMode('shot') }} />}
                 </div>
               </div>
               <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.</div>
             </div>
           )}>
+          {editable && mode === 'shot' && shot && <ShotPanel key={shot.id} shot={shot} index={shots.indexOf(shot)} count={shots.length} onGone={() => setShotId(null)} />}
           {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobSlot jobId={stitchJob} /></div>}
           {latestAd && <AdResult sha={latestAd.asset} />}
           {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
@@ -279,7 +319,7 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
       }
     }}>
       <div className="thumb">
-        {thumb && <img src={thumb} alt="" />}
+        {thumb ? <img src={thumb} alt="" /> : shot.action ? <span className="ve-thumbwords">{shot.action}</span> : null}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobSlot jobId={jobId} compact /></div>}
       </div>
       {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} />}

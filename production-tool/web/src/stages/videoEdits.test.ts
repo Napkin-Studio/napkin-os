@@ -3,7 +3,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { systemUpdate, updateDoc } from '../doc/store'
-import { currentTake, edlOf, mainVideo } from '../model/selectors'
+import { currentTake, edlOf, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
+import { ownShotList } from '../jobs/prompt'
+import { addShot, moveShot } from './storyboardEdits'
 import { addShots, addTake, id, job, MAYA, modelStore, SHA } from '../test/model'
 import { addTakeNote, pickTake } from './videoEdits'
 
@@ -46,5 +48,26 @@ describe('a second video\'s cut and notes', () => {
     let rev = ''
     await updateDoc(store, (d) => { rev = addTakeNote(d, { takeId, shotId, shotS: 5, atS: 1, text: 'brighter', by: `human:${MAYA.id}` }) }, 'comment')
     expect(store.get().reviews[rev].video_id).toBe(v2)
+  })
+})
+
+describe('a video\'s own shots, edited in the Video editor (decided 2026-10-15)', () => {
+  it('+ Shot adds to the video\'s own shot list, and moves stay inside it', async () => {
+    const store = modelStore()
+    await store.create(MAYA, 'First Light')
+    await store.flush()
+    const v = mainVideo(store.get())!.id
+    // A video no storyboard renders (made from a script alone) gets its own list.
+    await updateDoc(store, (d) => { for (const l of Object.values(d.links)) if (l.to.id === v) delete d.links[l.id] }, 'unlink')
+    const own = await ownShotList(store, v)
+    expect(store.get().storyboards[own]).toMatchObject({ implicit: true, video_id: v })
+    expect(storyboardOfVideo(store.get(), v)?.id).toBe(own)
+    let a = ''
+    let b = ''
+    await updateDoc(store, (d) => { a = addShot(d, own); b = addShot(d, own) }, 'add shot')
+    expect(shotsOf(store.get(), own).map((s) => s.id)).toEqual([a, b])
+    await updateDoc(store, (d) => moveShot(d, b, -1), 'move shot')
+    expect(shotsOf(store.get(), own).map((s) => s.id)).toEqual([b, a])
+    expect(videoOfShot(store.get(), a)?.id).toBe(v)
   })
 })
