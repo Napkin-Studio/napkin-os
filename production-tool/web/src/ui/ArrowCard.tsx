@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useDoc, useUi } from '../app/context'
 import { arrowCard, cardLines, type ArrowCard as Card, type NodeKind } from '../canvas/arrowCard'
-import { arrowPath, hitArrow, provenanceOf, type ArrowLike, type Pt } from '../canvas/arrowHit'
+import { arrowPath, arrowShown, hitArrow, provenanceOf, type ArrowLike, type Pt } from '../canvas/arrowHit'
 import { byOwnId, cd, textOf, type Canvas, type El } from '../canvas/scene'
 
 const DELAY_MS = 250
@@ -54,7 +54,11 @@ export function ArrowCards({ canvas, wrap, selected, toView }: {
       if (e.buttons !== 0 || (e.target as Element | null)?.tagName !== 'CANVAS' || canvas.isBusy()) return hide()
       const view = canvas.view()
       const scene = canvas.viewportToScene({ x: e.clientX, y: e.clientY }, view)
-      const hit = hitArrow(canvas.elements() as unknown as ArrowLike[], scene, view.zoom)
+      const all = canvas.elements()
+      const byEl = new Map(all.map((x) => [x.id, x]))
+      const sel = new Set(view.selectedIds)
+      // A quiet arrow that is not drawn now is not hovered either.
+      const hit = hitArrow((all as unknown as ArrowLike[]).filter((a) => arrowShown(a, (id) => byEl.get(id), sel)), scene, view.zoom)
       if (!hit) return hide()
       if (hit.id === hoverId.current || hit.id === pending.current) return
       clearTimer()

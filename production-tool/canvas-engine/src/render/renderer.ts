@@ -68,6 +68,8 @@ export interface RenderHost {
   newPath(): PathLike
   /** The bitmap of an asset at a level of detail, if it is decoded; the host loads it when not. */
   bitmap(sha: string, level: Level): Bitmap | undefined
+  /** A bound arrow drawn only while it or one of its ends is selected (a key's views from its front, canvas-nodes). */
+  quiet?(r: ElementRecord): boolean
 }
 
 interface Box {
@@ -359,6 +361,7 @@ export class Renderer {
     // A link bound by its group comes first, so it is the one drawn.
     const links = [...this.passes.links].sort((a, b) => Number(named(b)) - Number(named(a)))
     for (const l of links) {
+      if (l.kind === 'arrow' && this.host.quiet?.(l) && !this.endSelected(l)) continue
       const route = linkRoute(env, l)
       if (!route) continue
       // Arrows keep their own key: a provenance arrow and a link between the same ends are both drawn.
@@ -368,6 +371,12 @@ export class Renderer {
       else out.set(key, { link: l, route, all: [l] })
     }
     return [...out.values()]
+  }
+
+  /** Is this link or arrow, or either thing it is bound to, selected? */
+  private endSelected(l: ElementRecord): boolean {
+    if (this.selected.has(l.id)) return true
+    return [l.props.start, l.props.end].some((b) => !!b && typeof b === 'object' && !Array.isArray(b) && typeof b.elementId === 'string' && this.selected.has(b.elementId))
   }
 
   private pathOf(pts: Uint8Array, size: number, stats: DrawStats): PathLike {

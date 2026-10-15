@@ -26,6 +26,26 @@ export function provenanceOf(el: { type: string; customData?: unknown }): Proven
 }
 
 /**
+ * A quiet arrow: the provenance arrow from a key's front to one of its views. Every view comes from the
+ * front, so drawing them all was a tangle across the board (2026-10-15); they show only while the
+ * front, the view or the arrow is selected (canvas-nodes decision 2026-10-15). `to`: the view's element.
+ */
+export function quietArrow(el: { type: string; customData?: unknown }, to: { customData?: unknown } | undefined): boolean {
+  if (!provenanceOf(el)) return false
+  const c = to?.customData as { kind?: string; op?: string } | undefined
+  return c?.kind === 'gen' && c.op === 'view'
+}
+
+/** Is a provenance arrow shown now: not quiet, or it or an end is selected. `byEl`: elements by element id. */
+export function arrowShown(el: ArrowLike & { startBinding?: { elementId?: string } | null; endBinding?: { elementId?: string } | null },
+  byEl: (id: string) => { customData?: unknown } | undefined, selected: ReadonlySet<string>): boolean {
+  const from = el.startBinding?.elementId
+  const to = el.endBinding?.elementId
+  if (!quietArrow(el, to ? byEl(to) : undefined)) return true
+  return selected.has(el.id) || (!!from && selected.has(from)) || (!!to && selected.has(to))
+}
+
+/**
  * The arrow's path in scene coordinates, as drawn: three points are the curve that passes
  * through the middle one (the quadratic FlowArrows draws; makeArrow makes three), sampled;
  * any other count is the straight segments between them.
