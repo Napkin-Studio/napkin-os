@@ -101,8 +101,21 @@ def credits(sheet: dict, model: str, settings: dict | None = None) -> float | in
         seconds = settings.get("inputS") if "inputS" in spec else settings.get("durationS", settings.get("inputS"))
         if seconds is None:
             raise PriceError(f"{model}: the price is per second and no length was given")
-        per = price["audioCredits"] if settings.get("audio") and "audioCredits" in price else price["credits"]
+        if "byResolution" in price:  # a clip's tier: settings.resolution, else its ratio's (Hailuo 3, WAN 3, Seedance)
+            tier = tier_of(spec, settings)
+            if tier not in price["byResolution"]:
+                raise PriceError(f"{model}: no price for resolution {tier!r} (ratio {settings.get('ratio')!r})")
+            per = price["byResolution"][tier]
+        else:
+            per = price["audioCredits"] if settings.get("audio") and "audioCredits" in price else price["credits"]
         total = per * seconds
+        # What some models add on top (features/runway-video-models.clan): each reference picture or
+        # keyframe, and each second of the clip an edit reads.
+        total += price.get("perRef", 0) * int(settings.get("refs") or 0)
+        input_s = settings.get("inputS") or 0
+        if "perInputSecondByResolution" in price:
+            total += price["perInputSecondByResolution"].get(tier_of(spec, settings), 0) * input_s
+        total += price.get("perInputSecond", 0) * input_s
     elif unit == "frame":
         res = settings.get("resolution")
         if res not in (price.get("byResolution") or {}):
