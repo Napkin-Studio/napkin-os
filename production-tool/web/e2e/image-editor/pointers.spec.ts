@@ -9,7 +9,7 @@ test.use({ hasTouch: true })
 /** A touch through the browser's input pipeline (CDP): its pointer events are real ones. */
 async function touch(page: Page) {
   const cdp = await page.context().newCDPSession(page)
-  const send = (type: string, pts: [number, number][]) =>
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel', pts: [number, number][]) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y]) => ({ x, y, id: 7 })) })
   return { send }
 }
