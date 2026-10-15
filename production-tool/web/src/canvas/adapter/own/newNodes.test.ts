@@ -8,6 +8,7 @@ import type { ProductionDocument } from '../../../contracts/types'
 import { modelStore, MAYA } from '../../../test/model'
 import { boardIdOf, isBoard, jumpTo, seedBoards } from '../../boards/boards'
 import { boardNotices } from '../../boards/fitting'
+import { withAdBoards } from '../../../test/adBoards'
 import { cardOf, createNode, isEmptyNode, seedNodes } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
 
@@ -17,9 +18,9 @@ async function seeded() {
   const a = new OwnAdapter()
   a.resize(1600, 1000, 0, 0)
   a.transact((els) => [...els, ...seedNodes(a, s.get() as unknown as ProductionDocument)], { undoable: false })
+  await s.change((d) => { withAdBoards(d as unknown as ProductionDocument) }, { action: 'an existing project: the template boards', undo: false })
   const seed = seedBoards(a, s.get() as unknown as ProductionDocument)!
   a.transact((els) => seed.apply(els), { undoable: false })
-  await s.change((d) => { for (const b of seed.boards) (d as unknown as ProductionDocument).boards[b.id] = b }, { action: 'create boards', undo: false })
   return { a, s, doc: () => s.get() as unknown as ProductionDocument }
 }
 

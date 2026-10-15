@@ -1,32 +1,26 @@
 // Boards as real frames (features/art-boards.clan; ui-behaviour 3.2, plan 2.4).
 // Engine-neutral, through CanvasAdapter v2:
-// - seedBoards: a canvas with no board gets the Ad template's seven boards, as the
-//   document's boards[id]{title, purpose, rank} and as board frames, laid out as
-//   production-ui's overlay drew them (mock Main, layout.ts): the Script board
-//   wrapping the Script node, the picture boards wrapping the named pictures of
-//   their role, the Storyboard and Video boards wrapping theirs. The nodes and
-//   the pictures sit in their boards (parentId).
-// - boardKey and jumpTo: ⌥1…⌥9 fit the board at that rank, ⌥0 fits everything.
+// - A new project starts on an empty canvas (board-autolayout, owner 2026-10-15, BA2 = c): no
+//   template, no boards. Boards are for collections of pictures, made by a person or by the
+//   Gather nudge. Nodes never get a board.
+// - seedBoards: an existing project whose document has boards but whose canvas has no frames for
+//   them (made before the frames, or on Excalidraw) gets its frames, laid out as production-ui's
+//   overlay drew them (mock Main, layout.ts): the Script board wrapping the Script node, the
+//   picture boards wrapping the named pictures of their role, the Storyboard and Video boards
+//   wrapping theirs. The nodes and the pictures sit in their boards (parentId).
+// - railTargets, boardKey and jumpTo: the rail lists the nodes (Script, Storyboard, Video) and then
+//   the boards by rank; ⌥1…⌥9 fit the row at that number, ⌥0 fits everything.
 
 import { rankBetween, ranksBetween } from '../../../../clan-store/src'
+import { nearestFree } from '../../../../canvas-engine/src'
 import { editorOver } from '../chrome/actions'
 import type { Board, BoardPurpose, ProductionDocument } from '../../contracts/types'
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
 import { cardOf } from '../nodes/nodes'
+import { mainScript, mainStoryboard, mainVideo } from '../../model/selectors'
 import type { CardKind } from '../nodes/cardChrome'
 import { adLayout, CARD_INSET, CARD_SIZE } from './layout'
-
-/** The Ad template (ui-behaviour 3.2; production-ui's boards.ts TEMPLATE). */
-export const AD_TEMPLATE: readonly { key: string; title: string; purpose: BoardPurpose }[] = [
-  { key: 'script', title: 'Script', purpose: 'script' },
-  { key: 'characters', title: 'Characters', purpose: 'character' },
-  { key: 'locations', title: 'Locations', purpose: 'location' },
-  { key: 'references', title: 'References', purpose: 'reference' },
-  { key: 'products', title: 'Products', purpose: 'product' },
-  { key: 'storyboard', title: 'Storyboard', purpose: 'storyboard' },
-  { key: 'video', title: 'Video', purpose: 'video' },
-]
 
 const GAP = 48
 /** Empty picture boards (no pictures of their role yet). */
@@ -41,22 +35,19 @@ export const boardsByRank = (doc: ProductionDocument): Board[] =>
   Object.values(doc.boards ?? {}).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 
 export interface SeededBoards {
-  /** Document boards to create (none when the document already has them). */
-  boards: Board[]
   /** The scene after seeding: board frames below everything, nodes in their boards. */
   apply(els: readonly CanvasElement[]): CanvasElement[]
 }
 
-/** The template's boards for a canvas with none; null when it already has boards. */
+/**
+ * Frames for the document's boards on a canvas that has none (an existing project); null when the
+ * canvas already has board frames or the document has no boards (a new project: an empty canvas).
+ */
 export function seedBoards(canvas: CanvasAdapter, doc: ProductionDocument): SeededBoards | null {
   const els = canvas.elements()
   if (els.some(isBoard)) return null
-  const existing = boardsByRank(doc)
-  const ranks = ranksBetween(null, null, AD_TEMPLATE.length)
-  const boards: Board[] = existing.length
-    ? []
-    : AD_TEMPLATE.map((t, i) => ({ id: newId('board'), v: 1, field_v: {}, title: t.title, purpose: t.purpose, rank: ranks[i] }))
-  const list = existing.length ? existing : boards
+  const list = boardsByRank(doc)
+  if (!list.length) return null
   const layout = adLayout(els, doc)
   const node = (kind: CardKind) => els.find((e) => cardOf(e)?.kind === kind)
   // A node's board: the card's inset round it (canvas.css .bl-card), as Main's frames.
@@ -91,7 +82,6 @@ export function seedBoards(canvas: CanvasAdapter, doc: ProductionDocument): Seed
     if (f) for (const e of pics) homeOf.set(e.id, f)
   }
   return {
-    boards,
     apply: (all) => [
       ...frames,
       ...all.map((e) => {
@@ -103,7 +93,35 @@ export function seedBoards(canvas: CanvasAdapter, doc: ProductionDocument): Seed
   }
 }
 
-/** ⌥1…⌥9 (the board at that rank) or ⌥0 (everything), read from event.code; never while typing. */
+/** One row of the rail on the own engine: a node not held by a board, or a board on the canvas. */
+export type RailTarget = { kind: 'node'; card: CardKind; el: CanvasElement } | { kind: 'board'; board: Board; el: CanvasElement }
+
+const NODE_ORDER: readonly CardKind[] = ['script', 'storyboard', 'video']
+
+/**
+ * The nodes the rail lists, in Script, Storyboard, Video order: of each kind, the document's main one
+ * if it is on the canvas, else the first made. A node held by a board is listed as its board instead.
+ */
+export function railNodes(els: readonly CanvasElement[], doc: ProductionDocument): { card: CardKind; el: CanvasElement }[] {
+  const frames = new Set(els.filter(isBoard).map((e) => e.id))
+  const main: Record<CardKind, string | undefined> = { script: mainScript(doc)?.id, storyboard: mainStoryboard(doc)?.id, video: mainVideo(doc)?.id }
+  return NODE_ORDER.flatMap((card) => {
+    const mine = els.filter((e) => cardOf(e)?.kind === card).sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0))
+    const el = mine.find((e) => cardOf(e)!.id === main[card]) ?? mine[0]
+    return el && !(el.frameId && frames.has(el.frameId)) ? [{ card, el }] : []
+  })
+}
+
+/** The rail's rows in order, and so the ⌥ numbers: the loose nodes, then the boards on the canvas by rank. */
+export function railTargets(els: readonly CanvasElement[], doc: ProductionDocument): RailTarget[] {
+  const frameOf = new Map(els.flatMap((e) => (isBoard(e) ? [[boardIdOf(e)!, e] as const] : [])))
+  return [
+    ...railNodes(els, doc).map((n): RailTarget => ({ kind: 'node', ...n })),
+    ...liveBoards(els, doc).map((b): RailTarget => ({ kind: 'board', board: b, el: frameOf.get(b.id)! })),
+  ]
+}
+
+/** ⌥1…⌥9 (the rail row at that number) or ⌥0 (everything), read from event.code; never while typing. */
 export function boardKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'code' | 'target'>): number | 'fit' | null {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || editorOver()) return null
   const m = /^Digit([0-9])$/.exec(e.code)
@@ -115,10 +133,11 @@ export function boardKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey'
 }
 
 /**
- * Fit the board at this rank (with what is on it), or everything. `inset`: screen pixels on the left
- * the chrome covers (the board rail), kept clear. Returns false when there is no such board.
+ * Fit the rail row at this number (a node, or a board with what is on it), an element by id, or
+ * everything. `inset`: screen pixels on the left the chrome covers (the board rail), kept clear.
+ * Returns false when there is no such row.
  */
-export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: number | 'fit', animate = true, inset = 0): boolean {
+export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: number | 'fit' | { el: string }, animate = true, inset = 0): boolean {
   const els = canvas.elements()
   // Fit at most at 100%, centred in the part of the view right of the inset (production-ui's fitView):
   // measure the view, then fit a box made to come out at that zoom and place.
@@ -144,10 +163,9 @@ export function jumpTo(canvas: CanvasAdapter, doc: ProductionDocument, which: nu
     fit(placed)
     return true
   }
-  const board = liveBoards(els, doc)[which]
-  const frame = board && els.find((e) => boardIdOf(e) === board.id)
-  if (!frame) return false
-  fit([frame])
+  const target = typeof which === 'number' ? railTargets(els, doc)[which]?.el : els.find((e) => e.id === which.el && !e.isDeleted)
+  if (!target) return false
+  fit([target])
   canvas.select([])
   return true
 }
@@ -219,8 +237,12 @@ export function newBoard(canvas: CanvasAdapter, doc: ProductionDocument, opts: {
       const right = Math.max(...frames.map((f) => f.x + f.width))
       r = { x: right + GAP, y: top, ...NEW_BOARD }
     } else {
+      // In the middle of the view, at the nearest spot clear of what is there (a new project's nodes).
       const v = canvas.visibleBounds()
-      r = { x: (v.minX + v.maxX) / 2 - NEW_BOARD.w / 2, y: (v.minY + v.maxY) / 2 - NEW_BOARD.h / 2, ...NEW_BOARD }
+      const mid = { x: (v.minX + v.maxX) / 2 - NEW_BOARD.w / 2, y: (v.minY + v.maxY) / 2 - NEW_BOARD.h / 2, ...NEW_BOARD }
+      const kind = (e: CanvasElement) => (e.customData as { kind?: string } | undefined)?.kind
+      const avoid = els.filter((e) => !e.isDeleted && !e.frameId && e.type !== 'arrow' && e.type !== 'line' && kind(e) !== 'link' && kind(e) !== 'provenance').map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
+      r = { ...mid, ...nearestFree(mid, avoid) }
     }
   }
   const frame = canvas.board({ x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.w), height: Math.round(r.h), title: board.title, boardId: board.id, purpose: board.purpose })

@@ -37,6 +37,16 @@ describe('the board rail (ui-behaviour 3.2)', () => {
     expect(rows.map((r) => [r.title, r.target])).toEqual([['Script', { kind: 'board', id: 'b1' }], ['Locations', { kind: 'board', id: 'b2' }]])
     expect(rows.map((r) => r.count)).toEqual([undefined, 2])
   })
+  it('on the own engine lists the loose nodes first, then the boards by rank; a new project lists only its nodes', () => {
+    const d = doc()
+    const nodes = [{ card: 'script' as const, elId: 'e1' }, { card: 'storyboard' as const, elId: 'e2' }, { card: 'video' as const, elId: 'e3' }]
+    expect(boardRows(d, true, {}, nodes).map((r) => [r.title, r.target])).toEqual([
+      ['Script', { kind: 'node', id: 'e1' }], ['Storyboard', { kind: 'node', id: 'e2' }], ['Video', { kind: 'node', id: 'e3' }],
+    ])
+    expect(boardRows(d, true)).toEqual([])
+    d.boards = { b1: { id: 'b1', v: 1, field_v: {}, title: 'Characters', purpose: 'character', rank: 'a' } as Board }
+    expect(boardRows(d, true, { b1: 3 }, nodes).map(rowLabel)).toEqual(['Script', 'Storyboard', 'Video', 'Characters · 3'])
+  })
   it('keeps the template rows on a canvas without board frames (Excalidraw), whatever doc.boards holds', () => {
     const d = doc()
     d.boards = { b1: { id: 'b1', v: 1, field_v: {}, title: 'Script', purpose: 'script', rank: 'a' } as Board }
