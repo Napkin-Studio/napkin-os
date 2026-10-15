@@ -40,10 +40,88 @@ def branch(endpoint: str, model: str) -> dict | None:
     return None
 
 
-def tier_by_pixels(ratio: str) -> str:
+def tier_by_pixels(ratio: str, video: bool = False) -> str:
+    """An image's tier (512, 1K, 2K, 4K), or a clip's (360p, 480p, 720p, 1080p, 4K; auto_<n>p is its own)."""
+    if ratio.startswith("auto_"):
+        return ratio[5:]
     w, h = (int(x) for x in ratio.split(":"))
     mp = w * h / 1e6
+    if video:
+        return "360p" if mp < 0.3 else "480p" if mp < 0.6 else "720p" if mp < 1.5 else "1080p" if mp < 4 else "4K"
     return "512" if mp < 0.5 else "1K" if mp < 2 else "2K" if mp < 8 else "4K"
+
+
+def _min_max(p: dict) -> tuple:
+    """A duration's integer range, from the schema's integer branch."""
+    d = p.get("duration") or {}
+    for b in d.get("anyOf") or [d]:
+        if b.get("type") == "integer":
+            return b.get("minimum"), b.get("maximum")
+    return None, None
+
+
+def video_problems(sheet: dict) -> list[str]:
+    """The clip and clip_edit models (features/runway-video-models.clan) held to their schema branches: the
+    request's audio and negativePrompt fields, the pictures a clip takes with and without a frame, the
+    lengths, and how each edit model takes the clip."""
+    out = []
+    for name, m in sheet["models"].items():
+        if m.get("endpoint") != "POST /v1/image_to_video":
+            continue
+        p = branch(m["endpoint"], name) or {}
+        if "audioParam" in m and m["audioParam"] != ("audio" in p):
+            out.append(f"{name}: audioParam {m['audioParam']} but the schema {'has' if 'audio' in p else 'lacks'} audio")
+        if bool(m.get("negativePrompt")) != ("negativePrompt" in p):
+            out.append(f"{name}: negativePrompt {m.get('negativePrompt')} disagrees with the schema")
+        if m.get("imagesMax") and f"(up to {m['imagesMax']})" not in (p.get("references") or {}).get("description", ""):
+            out.append(f"{name}: imagesMax {m['imagesMax']} is not the references description's")
+        if m.get("keyframeRatio") == "auto_tier" and "auto_720p" not in (p.get("ratio") or {}).get("enum", []):
+            out.append(f"{name}: keyframeRatio auto_tier but the schema has no auto_* ratio")
+        if "v2v" in m:
+            v = branch("POST /v1/video_to_video", name) or {}
+            if bool(m["v2v"].get("audioParam")) != ("audio" in v):
+                out.append(f"{name}: v2v.audioParam disagrees with its video_to_video schema's audio")
+            if m["v2v"]["videoField"] not in v:
+                out.append(f"{name}: v2v.videoField {m['v2v']['videoField']} is not in its video_to_video schema")
+            if m["v2v"].get("mode") and m["v2v"]["mode"] not in (v.get("mode") or {}).get("enum", []):
+                out.append(f"{name}: v2v.mode {m['v2v']['mode']} is not one the schema takes")
+            if m["v2v"].get("keepOriginalSound") and "keepOriginalSound" not in (
+                    (v.get("providerSettings") or {}).get("properties") or {}):
+                out.append(f"{name}: v2v.keepOriginalSound but the schema has no such setting")
+            refs = v.get("references") or {}
+            said = refs.get("maxItems") or next((int(w) for w in refs.get("description", "").replace(")", " ").split()
+                                                 if w.isdigit()), 0)
+            if m["v2v"]["refsMax"] != said:
+                out.append(f"{name}: v2v.refsMax {m['v2v']['refsMax']} != the schema's {said}")
+    for op in ("clip", "clip_edit"):
+        for a in sheet["ops"][op].get("alternates", []):
+            name, video = a["model"], a.get("video") or sheet["video"]
+            if "refs" not in a:  # Veo 3.1 Fast: frames only, as the sheet's own model
+                continue
+            if op == "clip":
+                p = branch("POST /v1/image_to_video", name) or {}
+                t = branch(a["textEndpoint"], name) or {}
+                lo, hi = _min_max(p)
+                if "minS" in a and (a["minS"], a["maxS"]) != (lo, hi):
+                    out.append(f"ops.clip: {name} lengths {a['minS']}-{a['maxS']} != the schema's {lo}-{hi}")
+                takes = (t.get("references") or {}).get("maxItems")
+                if bool(video.get("refsWithoutFrame")) != bool(takes):
+                    out.append(f"ops.clip: {name} refsWithoutFrame disagrees with its text_to_video references")
+                if video.get("refsWithoutFrame") and a["refs"]["max"] != takes:
+                    out.append(f"ops.clip: {name} refs.max {a['refs']['max']} != text_to_video references {takes}")
+                if video["firstFrameWithRefs"] != ("references" in p):
+                    out.append(f"ops.clip: {name} firstFrameWithRefs disagrees with its image_to_video references")
+                if video["firstFrameWithRefs"] and a["refs"]["max"] != sheet["models"][name]["imagesMax"] - 1:
+                    out.append(f"ops.clip: {name} refs.max is not imagesMax less the first frame")
+                if not video["firstFrameWithRefs"] and not video.get("refsWithoutFrame") and a["refs"]["max"]:
+                    out.append(f"ops.clip: {name} takes no pictures but refs.max is {a['refs']['max']}")
+            else:
+                v2v = sheet["models"][name]["v2v"]
+                if a["refs"]["max"] != v2v["refsMax"] + 1:  # the clip itself is a ref too (current)
+                    out.append(f"ops.clip_edit: {name} refs.max is not v2v.refsMax plus the clip")
+                if a.get("maxS") != v2v.get("inputMaxS"):
+                    out.append(f"ops.clip_edit: {name} maxS {a.get('maxS')} != v2v.inputMaxS {v2v.get('inputMaxS')}")
+    return out
 
 
 def problems(sheet: dict) -> list[str]:
@@ -66,8 +144,9 @@ def problems(sheet: dict) -> list[str]:
             if ours != p.get("ratio", {}).get("enum"):
                 out.append(f"{name}: ratios {ours} != the snapshot's {p.get('ratio', {}).get('enum')}")
             for r in m["ratios"]:
-                if "tier" in r and r["tier"] != tier_by_pixels(r["ratio"]):
-                    out.append(f"{name}: {r['ratio']} is tier {tier_by_pixels(r['ratio'])}, not {r['tier']}")
+                video = m["endpoint"] in ("POST /v1/image_to_video", "POST /v1/text_to_video")
+                if "tier" in r and r["tier"] != tier_by_pixels(r["ratio"], video):
+                    out.append(f"{name}: {r['ratio']} is tier {tier_by_pixels(r['ratio'], video)}, not {r['tier']}")
         if "durationsS" in m and m["durationsS"] != p.get("duration", {}).get("enum"):
             out.append(f"{name}: durations {m['durationsS']} != {p.get('duration', {}).get('enum')}")
         if "promptMax" in m and m["promptMax"] != p.get("promptText", {}).get("maxLength"):
@@ -137,7 +216,7 @@ def problems(sheet: dict) -> list[str]:
             # A clip from words alone (ui-behaviour 3.5) goes to the textEndpoint, which must take the model.
             if s.get("textEndpoint") and branch(s["textEndpoint"], s["model"]) is None:
                 out.append(f"ops.{op}: {s['model']} is not in the {s['textEndpoint']} snapshot's oneOf (textEndpoint)")
-    return out
+    return out + video_problems(sheet)
 
 
 def test_the_runway_catalogue_matches_the_snapshots():
@@ -179,6 +258,12 @@ def _mutated(change) -> dict:
     (lambda s: s.__setitem__("usdPerCredit", 0.02), "usdPerCredit"),
     (lambda s: s["ops"]["clip"].__setitem__("model", "gen4.5"), "not in the catalogue"),
     (lambda s: s["ops"]["clip"].__setitem__("textEndpoint", "POST /v1/text_to_image"), "textEndpoint"),
+    (lambda s: s["models"]["hailuo3"].__setitem__("audioParam", True), "audioParam"),
+    (lambda s: s["models"]["klingO3_pro"].__setitem__("imagesMax", 9), "imagesMax"),
+    (lambda s: s["models"]["seedance2_5"]["v2v"].__setitem__("refsMax", 9), "refsMax"),
+    (lambda s: s["ops"]["clip"]["alternates"][3]["video"].__setitem__("refsWithoutFrame", True), "refsWithoutFrame"),
+    (lambda s: s["ops"]["clip"]["alternates"][5].__setitem__("maxS", 20), "lengths"),
+    (lambda s: s["models"]["wan3"]["ratios"][6].__setitem__("tier", "1080p"), "tier"),
 ])
 def test_a_sheet_that_disagrees_with_runway_is_refused(change, says):
     found = problems(_mutated(change))

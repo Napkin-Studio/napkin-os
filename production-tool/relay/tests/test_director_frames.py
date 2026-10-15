@@ -49,14 +49,15 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
     return res, asked, wire
 
 
-def test_v6_is_the_default_and_the_configs_name_v8():
+def test_v6_is_the_default_and_the_configs_name_v9():
     # Contract 3 runs director.v6 (features/contract-v3.clan), per click on Sonnet. The configs name
     # director.v8 (features/canvas-nodes.clan: a shot's required refs, Dex's additions with why; after v7
-    # of frame-change-edit and v6.1 of frame-aspect); the bundle's default stays v6.
+    # of frame-change-edit and v6.1 of frame-aspect), and v9 (features/runway-video-models.clan: which pictures
+    # each clip model carries); the bundle's default stays v6.
     assert PROMPT_VERSION == "director.v6"
     for name in ("config.testing.json", "config.live.json", "config.pathway.runway.json"):
         director = json.loads((EXAMPLES / name).read_text())["director"]
-        assert director["promptVersion"] == "director.v8"
+        assert director["promptVersion"] == "director.v9"
         assert director["perClickModel"] == "eu.anthropic.claude-sonnet-5-5"
 
 

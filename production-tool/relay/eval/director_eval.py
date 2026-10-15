@@ -25,6 +25,10 @@ ratio of Dex's own), take (the take as the one `current` ref) and length.
 A shot's references (features/canvas-nodes.clan, owner 2026-10-15): a case with `required` (`since`
 director.v8) scores keeps_refs (every ref the shot's words name is sent, by its own tag) and no_swap
 (any other picture goes only as an addition listed in `added` with why).
+
+Clips that carry characters (features/runway-video-models.clan): a case with `expect_refs` and `frame`
+(`since` director.v9, often on a `model` pick) scores exact_refs (exactly those pictures besides the clip
+go) and frame (a firstFrame exactly when expected). No v9 reply is recorded yet: record with a model login.
 """
 
 from __future__ import annotations
@@ -88,7 +92,7 @@ def job_input(case: dict, data: dict) -> dict:
     for field in ("image", "mask", "anchorFrame", "previousFrame", "video"):
         if isinstance(inp.get(field), str):
             inp[field] = asset(inp[field])
-    if case["op"] == "clip_patch":
+    if case["op"] in ("clip_patch", "clip_edit") and isinstance(inp.get("video"), dict):
         inp["video"]["mime"] = "video/mp4"
     for r in inp.get("refs") or []:
         r["asset"] = asset(r["asset"])
@@ -171,6 +175,11 @@ def score(case: dict, out: dict) -> dict:
         why = {a.get("name") for a in out.get("added") or [] if (a.get("why") or "").strip()}
         res["keeps_refs"] = set(case["required"]) <= set(roles)
         res["no_swap"] = all(n in case["required"] or n in why or n in ("anchor", "previous") for n in roles)
+    if "expect_refs" in case:
+        # Which pictures the model carries (since director.v9, features/runway-video-models.clan).
+        res["exact_refs"] = sorted(n for n, r in roles.items() if r != "current") == sorted(case["expect_refs"])
+    if "frame" in case:
+        res["frame"] = bool(job.get("firstFrame")) == case["frame"]
     return res
 
 
