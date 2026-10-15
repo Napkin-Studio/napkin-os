@@ -27,7 +27,6 @@ import { AgentFigure } from '../agents/AgentFigure'
 import { sayer, type CastKey } from '../agents/cast'
 import { AskOptions } from '../AskCard'
 import { useBlobUrl } from '../hooks'
-import { NapkinLoader } from '../loader/NapkinLoader'
 import {
   DESCRIBE, insertMention, LINK_SCRIPT, LINK_STORYBOARD, makeItLabel, mentionAt, PLAN_NOW, PROMPT_COPY, promptState, SCRIPT_FIRST,
   storyboardNudge, videoBlock, type PromptKind,
@@ -128,7 +127,6 @@ function AtWork({ agent, line }: { agent: CastKey; line: string }) {
   return (
     <div className="pstart-work" role="status">
       <AgentFigure agent={agent} size={24} state="working" decorative />
-      <NapkinLoader work={agent === 'wren' ? 'create' : 'plan'} size={16} />
       <span>{line}</span>
     </div>
   )

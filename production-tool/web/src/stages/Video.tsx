@@ -48,7 +48,6 @@ import { clipMode, waitsOnScriptAsk } from '../jobs/scriptVideo'
 import { runningPlan } from '../jobs/plan'
 import { ClipTray } from './ClipTray'
 import { ClipChoice } from './ClipChoice'
-import { NapkinLoader } from '../ui/loader/NapkinLoader'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -155,10 +154,10 @@ export function Video() {
         {bar}
         {video && <ClipChoice videoId={video.id} />}
         <div className="panel"><div className="empty-state">
-          <AgentFigure agent="dex" size={64} decorative />
+          <AgentFigure agent="dex" size={64} state={planning ? 'working' : 'idle'} decorative />
           <span className="sayer">{sayer('dex')}</span>
           {video && waitsOnScriptAsk(doc, video.id) ? null : planning
-            ? <div className="ve-planning" role="status"><NapkinLoader work="plan" size={18} /><span>I'm planning the shots from the script. {fromWords ? 'Then Make clips makes them straight from its words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
+            ? <div className="ve-planning" role="status"><span>I'm planning the shots from the script. {fromWords ? 'Then Make clips makes them straight from its words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
             : <><b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}</>}
           {video && <PromptStart kind="video" nodeId={video.id} place="editor" />}
           {sb && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}

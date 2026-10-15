@@ -41,13 +41,12 @@ export function Card({ icon, title, meta, extra, onOpen, children, style, classN
   )
 }
 
-/** Who is at work on a node, in one signed line with the loader (ui-behaviour 3.3 Running). */
+/** Who is at work on a node: their figure working and one signed line (ui-behaviour 3.3 Running, 6.5). */
 export function AtWork({ line, warm = false, agent }: { line: string; warm?: boolean; agent: Agent }) {
   const chrome = useContext(CardChromeContext)
   return (
     <div className={`bl-atwork ${warm ? 'warm' : ''}`} role="status">
       {chrome.agent(agent, true)}
-      {chrome.loader(agent === 'dex' || agent === 'skye' ? 'plan' : agent === 'edie' ? 'produce' : 'create')}
       <span>{line}</span>
     </div>
   )
@@ -140,9 +139,11 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
 function FrameTile({ shot, n, drawing }: { shot: Shot; n: number; drawing: boolean }) {
   const doc = useDoc()
   const url = useBlobUrl(currentFrame(doc, shot)?.asset)
+  const chrome = useContext(CardChromeContext)
   return (
     <figure className="bl-frame">
-      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe">{drawing ? 'Wren is drawing' : 'No frame yet'}</span>}
+      {/* A frame being drawn shows Wren at work, never the loader (ui-behaviour 6.5). */}
+      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}Wren is drawing</> : 'No frame yet'}</span>}
       <figcaption>{n} · {cap(cameraLabel('size', shot.camera.size))}</figcaption>
     </figure>
   )

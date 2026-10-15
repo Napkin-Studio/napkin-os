@@ -1,7 +1,9 @@
 // A job in place: where its output will land, it shows the queue position and
 // elapsed time; when it fails, the error and one floating bar: Retry, Try another model (a menu),
 // Report, Clear. Never a toast. A job waiting for an answer (needs_input) shows its ask card
-// instead: no loader, no busy pointer (ui-behaviour 5.2).
+// instead: no figure at work, no busy pointer (ui-behaviour 5.2). While it runs, the crew member
+// doing the work shows working (leans in, motion lines) with their sign-off; the turning Napkin
+// logo belongs only to the top bar and the busy pointer (owner, 2026-10-15; ui-behaviour 6.5).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
@@ -12,8 +14,7 @@ import { shotNumber } from '../model/selectors'
 import { AskCard } from './AskCard'
 import { cancelText, mayStillCharge } from './cancel'
 import { AgentFigure } from './agents/AgentFigure'
-import { sayer, whoIsWorking, workOf } from './agents/cast'
-import { NapkinLoader } from './loader/NapkinLoader'
+import { sayer, whoIsWorking } from './agents/cast'
 import { Float } from './Float'
 import { otherModels } from './modelChoice'
 import { ModelItems } from './ModelPick'
@@ -137,9 +138,9 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   return (
     <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
-      {/* The logo at work, its leading card the department; the figure signs who (ui-behaviour 6, 5.1). */}
-      <NapkinLoader work={workOf(job.op, state)} state={state === 'queued' ? 'queued' : 'run'} size={compact ? 24 : 32} />
-      <div className="pt-say"><AgentFigure agent={who.agent} state={who.state} size={20} decorative /><span className="who">{sayer(who.agent)}</span></div>
+      {/* Who is doing the work, at work, and their sign-off (ui-behaviour 5.1, 6.5). */}
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+      <div className="pt-say"><span className="who">{sayer(who.agent)}</span></div>
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
         {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}

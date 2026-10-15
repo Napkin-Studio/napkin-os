@@ -177,7 +177,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 
 **States on a node:**
 - **Empty:** "No script yet · link one to plan shots".
-- **Running:** the loader and the agent line ("Dex is planning the clips"), with "started by" when it was not you.
+- **Running:** the agent's figure working and the agent line ("Dex is planning the clips"), with "started by" when it was not you.
 - **Partial:** "Clips 3 of 6 ready".
 - **Stale:** a warn pill ("2 behind the script").
 - **Error:** a danger strip with the job's error copy and **Retry** (section 5.3).
@@ -362,7 +362,7 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 2. **Keep** (primary) replaces the ink with a text element in one undo step. The text shows "Text from your ink · the ink is kept", with **Back to ink**. The strokes are kept in `customData`. Accepted links carry into the text as mentions.
 3. **Undo** (secondary, in the card) closes the preview. The ink was never touched.
 4. **States while Ellis reads:**
-   - **Working:** the loader with the learn card leading, and Ellis working, with "Ellis is reading your note".
+   - **Working:** Ellis's figure working, with "Ellis is reading your note".
    - **Error:** "Ellis couldn't read this. Try again, or type it." The ink is unchanged.
    - **Offline:** Convert is disabled with "Needs a connection".
 
@@ -473,7 +473,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
   - The estimate is the sum of shot durations, with segments in proportion.
   - The current shot is blue. The longest or flagged shot is labelled ("shot 5 · 3.9 s").
   - A target mark is drawn, with a pill for time to spare ("0.8 s to spare", ok) or time over (warn).
-- **Skye at work:** the loader with the plan card leading (scripting), Skye's figure working, and her signed line ("Skye · scripts: I'm timing the end card.").
+- **Skye at work:** Skye's figure working and her signed line ("Skye · scripts: I'm timing the end card.").
 - **Open asks** on this script, as anchored cards (the jogger ask above).
 - **References · 6:** each `@name`, its role and the shots that use it ("@maya · character · 1 2 4 5"). A name with no reference shows "no ref yet" ("@jogger · 2"). **+ Link a reference** at the foot.
 
@@ -503,7 +503,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Sub bar:**
 - "6 shots · 15.0 s of 15 s", with a length chip. It is ok when the total matches the ad length, and warn otherwise ("0.6 s over · Rebalance").
-- Crew status lines, each with the loader, a mono tag (PLANNING, RENDERING), the line, and "started by" ("Wren is rendering clip 1 · about 0:40 left · started by Shrey").
+- Crew status lines, each with the agent's figure working, a mono tag (PLANNING, RENDERING), the line, and "started by" ("Wren is rendering clip 1 · about 0:40 left · started by Shrey").
 - A stale count chip ("1 clip out of date"), then **+ Add shot**.
 
 **Shot cards:**
@@ -514,7 +514,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
   - four camera chips (size, angle, movement, lens);
   - two lines of action with blue `@refs`;
   - Direction.
-- **Clip badges:** "Clip ready" (ok), "Clip out of date · frame changed" (warn) with **Remake clip**, "Rendering clip" (loader), "No clip yet" (grey).
+- **Clip badges:** "Clip ready" (ok), "Clip out of date · frame changed" (warn) with **Remake clip**, "Rendering clip" (Wren's figure working), "No clip yet" (grey).
 - **Hovering a frame** dims it and shows "Open in image editor". A click opens the Image editor (review item 4). Badges stay readable above the dimming.
 
 **Insert between shots** (review item 3):
@@ -656,7 +656,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - **Main track:** drag a clip to reorder, and the track closes gaps itself. Same rank write and drift marks as the storyboard.
   - A clip shows its take ("4 · Close · v3").
   - A spliced range is marked with a crossfade edge and a label ("patched 0:02-0:04").
-  - A clip being rendered shows the loader ("take 2 rendering").
+  - A clip being rendered shows Wren's figure working ("take 2 rendering").
 - **Beats:** diamonds at exact times, with labels. Beats move with their shot.
 - **End card:** the last clip, edited like any shot. A shot that is mostly text (an end card, a tagline card) is never sent to a video model, because the words would garble: it is a still with sound layers, "end card + layers" (3.21).
 
@@ -711,7 +711,7 @@ From top to bottom:
 - **A radio cut** of the version, when one exists, sits under the player as "Radio cut · 30 s", audio only, with its own play button and the same composer.
 - **Notes belong to a render version.** A note turns Done when a later version patches it.
 - **Presence** shows who is editing. There are no cursors.
-- **When the ad is rendering,** the player shows the loader with the produce card leading, with "Edie is cutting v3 · about 1 min".
+- **When the ad is rendering,** the player shows Edie's figure working, with "Edie is cutting v3 · about 1 min".
 
 ### 3.15 Signed out and access
 
@@ -926,7 +926,7 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 
 **States:**
 - **Empty** (a new project): "Nothing decided yet. Every choice you and the crew make lands here."
-- **Loading:** the 64px loader with the learn card leading.
+- **Loading:** Ellis's figure working, 64px, with "Ellis is reading the history".
 - **Live:** new decisions arrive at the end while the panel is open. A filtered panel shows only those that match.
 - **Offline:** the panel shows what was loaded, with "Reconnecting…". Restore is disabled with "Needs a connection".
 
@@ -991,7 +991,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 - **Re-voice to Maya's voice** (on-screen lines from a Path 1 shot) turns the clip model's voice into the character's own voice, speech to speech. It keeps the timing to the hundredth of a second: "Both keep the timing, so her lips still match."
 - **Redo this cue** remakes an effect or ambience from its description, which you can edit first. A hit keeps its place on the motion.
 - **Redo this section** remakes one music section and blends it into the sections on either side. The rest of the music stays.
-- Each goes through the send tray (3.16), collapsed to one line by default. **Wren · renders** makes the take (her figure and the create loader on the item); then **Edie · edits** rebuilds the mix (produce loader, top-bar pill "Edie · edits: mixing your changes into mix v4").
+- Each goes through the send tray (3.16), collapsed to one line by default. **Wren · renders** makes the take (her figure working on the item); then **Edie · edits** rebuilds the mix (her figure working on the Mix card; the top-bar pill reads "Edie · edits: mixing your changes into mix v4").
 - **Words changed in the script** mark the line out of date ("Words changed · redo this line"). It keeps playing the old take until you redo it.
 
 **Character voices.** Every character has one voice, used for every line it says, in every shot and in the radio cut (3.22). A voice-over by nobody on screen uses the project's **Narrator** voice. A line's speaker is set in the script (3.10) or in the line's panel. Changing who says a line marks it out of date.
@@ -1031,7 +1031,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 - **Radio cut** opens a sheet: booked length (**20 s** or **30 s**), the station profile (a list; "Confirm with the station" under it, as out of home says for media owners), and **Make radio cut** (primary).
 - It is built from the same voices and stems, edited to the booked length. Layers are cut to the length before mixing, so the file is never longer than booked.
 - **Lines that only work with the picture** ("It's perfect!" with no smile to see) are raised by Skye as an ask on the radio cut (3.17): "Shot 4's line needs the picture. Keep it, cut it, or let me write a line for radio?". When the booked length is longer than the ad, Skye drafts the extra words in place as an inline suggestion (3.10), with Keep, Keep mine and Why.
-- The voice lines go through the send tray; the mix and the loudness pass are Edie's (produce loader). The result lands on the Video node as "Radio cut · 30 s · v1", plays on the phone (3.14), and is listed in Export.
+- The voice lines go through the send tray; the mix and the loudness pass are Edie's (her figure working). The result lands on the Video node as "Radio cut · 30 s · v1", plays on the phone (3.14), and is listed in Export.
 
 **States:**
 - **No sound yet** (clips made, no audio plan): the lanes show "Dex hasn't planned the sound yet", with **Plan the sound** (primary). Planning is free; the takes it needs go through the send tray as one batch, expanded.
@@ -1075,7 +1075,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 
 **Who it belongs to** (a radio group): **This project only**, **Lumen Water shelf** (the default), or **All of Napkin Studio**. Below: "Designed by Shrey · 13 Oct · v2". A voice on a shelf is shared like any library item (3.18, 4.8): a new version replaces the old one for everyone, and projects keep their copy until Update.
 
-**States:** making previews shows Wren working on the previews column (create loader); a voice that can't be made says why in plain words ("ElevenLabs couldn't make a voice from this description. Say more about the voice."); offline, Use, Make 3 previews and Clone voice are disabled with "Needs a connection".
+**States:** making previews shows Wren working on the previews column; a voice that can't be made says why in plain words ("ElevenLabs couldn't make a voice from this description. Say more about the voice."); offline, Use, Make 3 previews and Clone voice are disabled with "Needs a connection".
 
 ---
 
@@ -1128,7 +1128,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 
 ### 4.6 Offline
 
-- **Banner:** a warn pill with a still loader reads "Reconnecting… your changes are kept", with **Try now**.
+- **Banner:** a warn pill reads "Reconnecting… your changes are kept", with **Try now**.
 - **Edits** are queued locally and replayed on reconnect.
 - **Paid buttons** are disabled while offline, with "Needs a connection".
 - **Jobs that were already running** continue on the server and land when you reconnect.
@@ -1184,14 +1184,14 @@ Five make the ad; two house agents, who work in every Napkin tool, read and chec
 - **Sizes:** 20–24px inline next to a signature; 28–36px in job cards and ask cards; 64–96px on the crew sheet.
 - **Signed lines** follow the house pattern: a small speech bubble, the signature in mono ("Skye · scripts"), first person, short ("I tightened scene 3 so the ad fits 15 s.").
 - **The crew's colours belong to the figures only.** The loader never uses them (section 6).
-- **The figure says who. The loader says which department of work is running.** The two are separate signals.
+- **Where work runs, the figure working is the signal** (owner, 2026-10-15): on the node, card, tile, line or panel doing the work. The loader, which says the department of the work, turns only on the busy pointer and in the top bar's job pill (6.5).
 - **This crew replaces today's three-member `ui/agents/cast.ts`.** Today Dex is shown for every make. In the new crew, Wren is shown while Runway renders.
 
 ### 5.2 Asking (needs_input)
 
 - **When an agent needs an answer,** its job enters `needs_input`. Its node and the jobs list show the agent figure in its needs-you state (the "!" bubble), and the ask card opens on the node (3.17).
 - **Answering** resumes the job and is recorded as a human write (`by: human:<id>`), appended to History. Anyone in the project can answer (4.7).
-- **A job waiting for an answer is not working:** no loader shows for it, and the busy pointer does not show for it.
+- **A job waiting for an answer is not working:** no figure shows working for it, it leaves the top bar's pill, and the busy pointer does not show for it.
 - **It never times out into a guess.** It waits until someone answers or stops it.
 - Section 3.17 has the shape, the three kinds of ask, the card and the questions pill.
 
@@ -1260,6 +1260,8 @@ Owner decision 2026-10-13 (fourth round). It supersedes the earlier prices on bu
 
 This replaces today's `.spinner` (a grey ring with an orange top, `styles.css:231`) everywhere. **The loader is the Napkin logo itself, at work** (owner decision 2026-10-13, artboard 14). It replaces every earlier loader in this spec: the sector sweep, the crew-tone colours and the collapse-and-reform loop are all gone.
 
+**It turns in two places only** (owner decision 2026-10-15: "The Napkin logo turning should only be with the mouse and on top bar. The rest everywhere it should be the agent working. Make this change everywhere."): the busy pointer's badge (6.7) and the top bar's job pill, on the canvas and in every editor. Everywhere else a job runs, the crew member doing the work shows in the figure's working state (5.1, 6.5). `ui/loader/places.test.ts` fails if the loader is rendered anywhere else. Artboards older than this decision that draw the loader on cards, tiles or lines are wrong there.
+
 ### 6.1 The logo, and only its colours
 
 - **The logo** (`ui/Mark.tsx` StudioMark): a disc of four quadrant cards, turned −45°. Each card sits at its own place in the logo: **create** #FF4F2E (top), **produce** #8B919E (right), **learn** #DADDE3 (bottom), **plan** #14161B ink (left).
@@ -1291,10 +1293,7 @@ The leading card says what kind of work is running. The trailing cards are alway
 | Grey #8B919E | produce | editing, rendering the ad, mixing, loudness, the radio cut, all sizes, exporting | Edie · edits; Make all sizes and cut-downs; exports |
 
 - **The department follows the work, not the agent.** Skye scripting leads with plan; Skye researching leads with learn. Make all sizes leads with produce even though Wren makes the sizes.
-- **Colour is never the only signal.**
-  - From 32px up, the agent's figure and line or a title always sit next to the loader.
-  - At 14px and 20px, the words come from the hover or focus label, a toast, or the nearby status line.
-  - The light grey learn card is faint on white, and ink is faint on the dark theme. The words beside the loader carry the meaning; the pin keeps the shape readable.
+- **Colour is never the only signal.** The loader shows only at 14px (the pointer) and 20px (the top bar's pill); its words come from the pill's line beside it and the pointer's hover-hold label. The light grey learn card is faint on white, and ink is faint on the dark theme. The words beside the loader carry the meaning; the pin keeps the shape readable.
 - **The loader is the brand mark, not a button.** Its create card stays brand orange #FF4F2E. Primary buttons use #D63B1F (section 9).
 
 ### 6.4 States
@@ -1306,18 +1305,29 @@ The leading card says what kind of work is running. The trailing cards are alway
 | Queued | The full logo, still. No card leads, because no work has started. |
 | Finish | The full logo, still, for **0.6 s**. It snaps to the full logo from wherever the loop was, with no glide. Then the node or card shows its done state. |
 | Needs you (`needs_input`) | No loader. The agent's figure shows its needs-you bubble (5.2). |
-| Offline banner | The full logo, still, inside the warn pill (4.6). |
+| Offline banner | No loader: the warn pill's words say it (4.6). |
 
 ### 6.5 Sizes and places
 
+The loader turns in two places only (owner, 2026-10-15):
+
 | Size | Where | Next to it |
 |---|---|---|
-| 14px | busy pointer badge; presence cursors | hover-hold label |
-| 20px | status pills, toasts, crew status lines, frame and clip badges, inline lines ("Making frame 3") | the line |
-| 32px | job cards, node status, the masked area in the Image editor | the agent's figure and sign-off, time left, Stop |
-| 64px | a page or panel loading for the first time | a title |
+| 14px | the busy pointer's badge (6.7); presence cursors | hover-hold label |
+| 20px | the top bar's job pill, on the canvas bar, every editor bar (and the phone bar, once it has a job pill) | the lead job's line ("Wren is making the clip for shot 1") |
 
-- **Accessibility.** Loader SVGs are `aria-hidden`. The words beside them live in a `role="status"` `aria-live="polite"` region ("Wren is making frame 3"). On iPad, a loader on a node has `role="img"` and a label such as "Wren is making frame 3".
+**Everywhere else a job runs, the crew member doing it shows, working** (5.1): leaning in, stepping, with motion lines, and the signed line beside them ("Wren · renders"). Who appears follows 5.1 (`whoIsWorking` in `ui/agents/cast.ts`): Wren renders frames, clips and images; Dex plans; Skye scripts; Rhea retouches; Edie edits and renders the ad; Ellis reads; Jude checks. Sizes follow 5.1:
+
+| Figure size | Where |
+|---|---|
+| 20–24px | inline lines: crew status lines, frame and clip badges ("Rendering clip"), node cards at work and the frames drawing on them, the prompt start, the script editor's at-work line, toasts |
+| 28–36px | compact job cards on shot, frame and clip tiles (34), send tray items, ask cards, History rows |
+| 52px | the job overlay over a frame or the player: the Image editor's frame, the Video editor's player, a planning storyboard; one figure, with the sign-off, the line, state · model · time, and Cancel (`ui/JobNode.tsx`, shared by every editor through `JobSlot`) |
+| 64px | a page or panel loading or waiting for the first time, an empty state at work (Dex planning in the empty Video editor) |
+
+- **Queued** shows the figure with "is waiting to start"; **checking** (validating, uncertain) shows Jude working; **needs you** shows the figure's "!" bubble (5.2).
+- **Reduced motion:** the figure's static working pose (`AgentFigure.css`), no motion lines moving.
+- **Accessibility.** Loader SVGs and figures at work are `aria-hidden`. The words beside them live in a `role="status"` `aria-live="polite"` region ("Wren is making frame 3"). On iPad, a figure on a node has `role="img"` and a label such as "Wren is making frame 3".
 
 ### 6.6 Reduced motion
 
@@ -1342,9 +1352,9 @@ Either one switches every loader to the full logo, still, with only the leading 
 - **It hides:**
   - during a pen stroke, a drag, a port drag or brush painting, and reappears on release;
   - when the pointer leaves the window;
-  - on touch devices, which have no cursor. On iPad the loader shows on the node or frame being worked on.
+  - on touch devices, which have no cursor. On iPad the top bar's pill carries the loader, and the figure at work shows on the node or frame being worked on.
 - **Presence cursors** carry a 14px badge led by the department of that person's own running job, with "Sai is planning" in its label.
-- **Phone:** no pointer. The loader appears in the player and the notes list only.
+- **Phone:** no pointer, so no badge. The figure at work shows in the player and the notes list.
 
 ### 6.8 Embedding
 
@@ -1456,7 +1466,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
   - **Tool-blue text:** **#1E4ED8**, including on a 10–12% blue tint. Tool-blue fills (selection, focus rings, glows, mask paint) stay **#2F64F5**.
   - **Green (ok) text:** **#166534**, including on #e7f6ed.
   - **Warn:** #b45309, for warn text and the unknown-name underline (3.6).
-- **Colour is never alone.** People have initials and names. Loaders have words. Note markers have timecodes. Unknown names have an underline and a tooltip. Stale items have a pill with words. Brand flags name the rule. Ask cards say "Waiting for you" as well as having the orange border.
+- **Colour is never alone.** People have initials and names. Loaders and figures at work have words. Note markers have timecodes. Unknown names have an underline and a tooltip. Stale items have a pill with words. Brand flags name the rule. Ask cards say "Waiting for you" as well as having the orange border.
 - **Scope dimming is deliberately below contrast** (about 35%, 3.16). Dimmed items are context, not content, and take no hover. Screen readers still reach them: the "Nodes on this board" list marks them "not linked to <node>".
 - **Semantics.**
   - Real `<button>`, `<a>`, `<input>` and `<textarea>` elements, with labels. Icon-only buttons have `aria-label`.
@@ -1601,7 +1611,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Character sheets, documents, spin-in, export | Rhea proposes crops (Confirm/Adjust); DOCX becomes a Document node used once linked; spin-in card waits for Bring in; Export menu | 3.18; artboard 4d | Drop maya_sheet.png: no reference exists until Confirm. Not now on a spin-in leaves it under From Napkin. |
 | Scamp sheets | Sheets opens the pack picker; a pack drops a board of labelled, ratio-locked sketch areas | 3.19; artboard 4e | Pick Social: a sheet lands with one area per format, each labelled with format and size. |
 | Make all sizes, cut-downs | Wren adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size, with no prices; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
-| The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; the same loader on the pointer | 6; artboard 14 | Generate a frame: the loader leads with the orange create card, the pointer badge shows it at (+11, +15), and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
+| The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; turning only on the pointer and in the top bar's pill; the crew member working everywhere else | 6, 6.5; artboard 14 | Generate a frame: the top bar's pill leads with the orange create card, the pointer badge shows it at (+11, +15), Wren's figure works on the frame and nowhere is the logo drawn on the frame, and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
 | The crew as house figures | Dex, Skye, Wren, Rhea, Edie, Ellis and Jude drawn from `AgentFigure`, with idle, working and needs-you states; signed speech bubbles | 5.1; artboard 13 | Raise an ask: the agent's figure shows the "!" bubble, and no loader uses its colour. |
 | No chat | Inline suggestions with Keep / Keep mine / Why, floating options on a selection, who-wrote-it marks, anchored asks | principle 10, 3.10; artboards 6, 7 | Select a line and press Tighten: Skye's rewrite appears struck and underlined in place, with a signed bubble; nothing changes until Keep. No chat box exists on any surface. |
 | Decision tree | History panel with List and Tree, filters by item, who and kind; Why on any item; versions branch; Restore adds a new decision; pinned decisions | 3.20; artboard 15 | On frame 3 press "Why does this look like this?": the tree opens filtered to frame 3 and shows v2 and v3 as branches. Restore v2: a new decision by you appears at the end, and the older nodes are unchanged. |

@@ -31,7 +31,7 @@ import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
 import { AgentFigure } from '../ui/agents/AgentFigure'
-import { NapkinLoader } from '../ui/loader/NapkinLoader'
+import { JobTray } from '../ui/JobTray'
 import { useBlobUrl } from '../ui/hooks'
 import { CAST, type CastKey } from '../ui/agents/cast'
 import { CaretChain, caretKey } from './caret'
@@ -406,6 +406,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             <button aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
           </span>
         )}
+        {/* What is running, as on every editor bar: the one place besides the pointer the logo turns (ui-behaviour 6.5). */}
+        <JobTray />
         <span className="pt-grow" />
         {storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
@@ -888,14 +890,12 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
       </section>
       {planning && (
         <section aria-label="Dex at work" className="se-atwork">
-          <NapkinLoader work="plan" size={20} />
           <AgentFigure agent="dex" state="working" size={20} decorative />
           <span><span className="who">{sayer('dex')}:</span> I'm planning the shots from the script.</span>
         </section>
       )}
       {skyeWorking && (
         <section aria-label="Skye at work" className="se-atwork">
-          <NapkinLoader work="plan" size={20} />
           <AgentFigure agent="skye" state="working" size={20} decorative />
           <span><span className="who">{SKYE}:</span> I'm writing that now.</span>
         </section>

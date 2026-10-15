@@ -32,7 +32,8 @@ export function JobTray() {
   const needsYou = (a: string) => (a === 'jude' && g.needsYou.length > 0) || (waitingFaces.has(a as never) && !g.working.some((r) => who(r).agent === a))
   const empty = !busy && !g.needsYou.length && !g.waiting.length
   // The bar's status pill (mock Loader): the first running job in words, only while something
-  // runs, waits or failed; nothing at all when nothing is being made.
+  // runs, waits or failed; nothing at all when nothing is being made. With the busy pointer, the one
+  // place the Napkin logo turns (owner, 2026-10-15; ui-behaviour 6.5).
   const lead = g.working[0] ?? g.waiting[0]
   const leadLine = lead ? who(lead).line : undefined
   return (
@@ -40,7 +41,7 @@ export function JobTray() {
       {!empty && (
         <button ref={ref} className={`pt-status tray ${busy ? 'busy' : ''} ${!busy && !g.waiting.length ? 'bad' : ''} ${open ? 'open' : ''}`} aria-live="polite" aria-haspopup="dialog" aria-expanded={open}
           title="What is being made, and what needs you" onClick={() => setOpen(!open)}>
-          {g.working[0] && <NapkinLoader work={workOf(g.working[0].job.op, g.working[0].state)} size={20} />}
+          {g.working[0] && <NapkinLoader work={workOf(g.working[0].job.op, g.working[0].state)} state={g.working[0].state === 'queued' ? 'queued' : 'run'} size={20} />}
           {!g.working[0] && faces.length > 0 && (
             <span className="faces" aria-hidden="true">
               {faces.slice(0, 3).map((a) => <AgentFigure key={a} agent={a} size={20} state={needsYou(a) ? 'needs-you' : 'working'} decorative />)}
