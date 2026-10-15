@@ -31,3 +31,11 @@
 .pen-width:hover { background: var(--soft); }
 .pen-width[aria-checked='true'] { background: var(--soft-2); box-shadow: inset 0 0 0 1px var(--line); }
 @media (pointer: coarse) { .pen-swatch, .pen-width { width: 44px; height: 44px; } .pen-options.vertical .pen-swatches { grid-template-columns: repeat(2, 44px); } }
+/* More colours (owner 2026-10-15): + opens the system picker; the input itself stays out of sight. */
+.pen-more {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--line); background: transparent; color: var(--ink2);
+  cursor: pointer; font-size: 15px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.pen-more:hover { background: var(--soft); color: var(--ink); }
+.pen-picker { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; bottom: 0; left: 50%; }
+@media (pointer: coarse) { .pen-more { width: 44px; height: 44px; } }
