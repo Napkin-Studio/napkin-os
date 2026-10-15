@@ -21,6 +21,7 @@ import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
+import { bringIntoView } from './boards/boards'
 import { applySketchFrame } from '../jobs/handlers'
 import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
@@ -671,19 +672,21 @@ export class CanvasController {
     // A row to the right of the front, clear of anything already there.
     const slot = nextSlot(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
     const placed: { jobId: string; view: View }[] = []
+    let prev: El | undefined
     let x = slot.x
     for (const view of views) {
       const jobId = newId('job')
       const parents = front.node ? [front.node] : []
       let gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
       x += size.w + 40
-      let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, { x: gen.x, y: gen.y })
+      let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, prev)
       gen = all.find((e) => e.id === gen.id) ?? gen
       if (frontEl && front.node) {
         const arrow = makeArrow(this.canvas, frontEl, gen, front.node, jobId, 0, true)
         all = this.canvas.bindArrow([...all, arrow], arrow)
       }
       this.setEls(all)
+      prev = all.find((e) => e.id === gen.id)
       placed.push({ jobId, view })
     }
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
@@ -771,7 +774,7 @@ export class CanvasController {
 
   private placeGen(jobId: string, op: 'generate' | 'view', parentIds: string[], sources: { el: El; id: string }[], at: { x: number; y: number; w: number; h: number }, view?: View) {
     let gen = makeGenPlaceholder(this.canvas, jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
-    let els = this.onSourceBoard([...this.els(), gen], gen, sources[0]?.el, at)
+    let els = this.onSourceBoard([...this.els(), gen], gen, sources[0]?.el)
     gen = els.find((e) => e.id === gen.id) ?? gen
     sources.forEach((s, i) => {
       const arrow = makeArrow(this.canvas, s.el, gen, s.id, jobId, i)
@@ -786,20 +789,37 @@ export class CanvasController {
    * beside the source when that is clear (the board growing toward it), else the board's next free slot,
    * or just outside a board that cannot grow. `els` already holds `gen`; returns them with it placed.
    */
-  private onSourceBoard(els: El[], gen: El, source: El | undefined, at: { x: number; y: number }): El[] {
+  private onSourceBoard(els: El[], gen: El, source: El | undefined, after?: El): El[] {
     const frameId = source?.frameId
     if (!frameId || !boardFrame(els, frameId)) return els
-    const fit = fitInto(els, frameId, [[gen.id]], () => at)
+    // The next free slot after what it follows (the source, or the view made before it), in that row;
+    // wrapping below the row from the source's left (owner BA1, BA4). Nothing already there moves.
+    const box = (e: El) => ({ x: e.x, y: e.y, w: e.width, h: e.height })
+    const fit = fitInto(els, frameId, [[gen.id]], undefined, () => ({ after: box(after ?? source), rowStart: source.x }))
     tellFull(frameId, fit)
     return withFields(this.canvas, els, fit.fields)
   }
 
-  /** Make sure new results land in view: zoom out to them and their inputs when any part is off-screen. */
+  /** Screen pixels on the left the chrome covers (the board rail): reveal keeps new results right of it. */
+  private inset = 0
+
+  setInset(px: number) {
+    this.inset = px
+  }
+
+  /**
+   * Make sure new results land in view with their inputs. On our own engine: the smallest pan (a zoom out
+   * only when they don't fit), right of the rail. Elsewhere: zoom out to them when any part is off-screen.
+   */
   reveal(ids: string[]) {
     const els = alive(this.els()).filter((e) => ids.includes(e.id))
     if (!els.length) return
-    const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     const b = bounds(els)
+    if (this.canvas.engine === 'own') {
+      bringIntoView(this.canvas, b, this.inset, !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches))
+      return
+    }
+    const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     if (b.minX >= vx0 && b.minY >= vy0 && b.maxX <= vx1 && b.maxY <= vy1) return
     this.canvas.fit(els, { zoomFactor: 0.85, animate: true })
   }

@@ -9,7 +9,7 @@ import * as Y from 'yjs'
 import { SceneStore } from '../../../../../canvas-engine/src'
 import type { ProductionDocument } from '../../../contracts/types'
 import { modelStore, MAYA } from '../../../test/model'
-import { boardIdOf, boardKey, isBoard, jumpTo, newBoard, railTargets, seedBoards } from '../../boards/boards'
+import { boardIdOf, boardKey, bringIntoView, isBoard, jumpTo, newBoard, railTargets, seedBoards } from '../../boards/boards'
 import { AD_TEMPLATE, withAdBoards } from '../../../test/adBoards'
 import { cardOf, seedNodes } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
@@ -70,6 +70,27 @@ describe('art-boards on the own engine', () => {
     const vb = a.visibleBounds()
     expect(frame.x + frame.width / 2).toBeGreaterThan(vb.minX)
     expect(frame.x + frame.width / 2).toBeLessThan(vb.maxX + 600)
+  })
+
+  it('new results come into view right of the rail with the smallest move: a pan at this zoom when they fit, else zoomed out just enough', () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const z0 = a.view().zoom
+    const vb = a.visibleBounds()
+    // In view: nothing moves.
+    expect(bringIntoView(a, { minX: vb.minX + 400, minY: vb.minY + 100, maxX: vb.minX + 600, maxY: vb.minY + 300 }, 240, false)).toBe(false)
+    // Under the rail (the left 240 px): a pan right of it, same zoom.
+    const under = { minX: vb.minX + 20, minY: vb.minY + 100, maxX: vb.minX + 200, maxY: vb.minY + 300 }
+    expect(bringIntoView(a, under, 240, false)).toBe(true)
+    expect(a.view().zoom).toBeCloseTo(z0, 5)
+    expect(a.sceneToViewport({ x: under.minX, y: under.minY }, a.view()).x).toBeGreaterThanOrEqual(240)
+    // Too wide for the view: zoomed out, all of it right of the rail.
+    const wide = { minX: 0, minY: 0, maxX: 3000, maxY: 400 }
+    bringIntoView(a, wide, 240, false)
+    const v = a.view()
+    expect(v.zoom).toBeLessThan(z0)
+    expect(a.sceneToViewport({ x: wide.minX, y: 0 }, v).x).toBeGreaterThanOrEqual(240)
+    expect(a.sceneToViewport({ x: wide.maxX, y: 0 }, v).x).toBeLessThanOrEqual(1200)
   })
 
   it("an existing project's seven template boards get their frames once, in rank order, with the nodes in their boards", async () => {

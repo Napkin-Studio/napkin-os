@@ -14,7 +14,7 @@ import { downscale } from '../../lib/fitImage'
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { assetData } from '../scene'
-import { boardAt, fitInto, tellFull, withFields } from '../boards/fitting'
+import { boardAt, clearOffset, fitInto, tellFull, withFields } from '../boards/fitting'
 
 /** A picture node's width on the canvas (the controller's NODE). */
 export const PICTURE_W = 300
@@ -57,7 +57,13 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
   }, 'add picture')
   const v = canvas.visibleBounds()
   const centre = at ?? { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
-  const row = pictureRow(centre, got)
+  let row = pictureRow(centre, got)
+  // Pasted or picked (no point given) with no board under the middle of the view: clear of everything,
+  // so pastes never pile on one spot or straddle a board's edge (board-autolayout).
+  if (!at && !boardAt(canvas.elements(), centre)) {
+    const { dx, dy } = clearOffset(canvas.elements(), row)
+    row = row.map((r) => ({ ...r, x: Math.round(r.x + dx), y: Math.round(r.y + dy) }))
+  }
   const els = got.map((g, i) => canvas.imageNode({
     x: row[i].x, y: row[i].y, width: row[i].w, height: row[i].h, assetSha: g.sha, status: 'saved',
     customData: { kind: 'pic', id: newId('node'), asset: g.sha },

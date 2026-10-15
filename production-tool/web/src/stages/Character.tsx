@@ -446,6 +446,8 @@ export function Character({ initial, active, onPictureEditor }: {
   const own = canvas?.engine === 'own'
   // The rail's left edge: what a jump keeps clear (the rail covers the left 240px; none when narrow).
   const railInset = narrow || panels.assets ? 0 : 240
+  // New results land in view right of the rail (board-autolayout).
+  useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
   // The board rail and + Node (ui-behaviour 3.2, 3.3): a reference board fits the canvas to its
   // pictures; Script, Storyboard and Video open their editors over the canvas.
   const counts = useMemo(() => {
