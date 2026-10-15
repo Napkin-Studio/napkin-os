@@ -138,7 +138,8 @@ export class OwnAdapter implements CanvasAdapter {
     this.undo = new SceneUndo(this.scene)
     this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y))
     this.selector.onChange(() => this.changed())
-    this.sketch = new SketchTool(this.scene)
+    // A drawn area's sketch id is a document id (sketch_ + a ULID): links into it are checked against the contract.
+    this.sketch = new SketchTool(this.scene, { newId: (p) => (p === 'sketch' ? newId('sketch') : this.opts.newId()) })
     this.scene.onChange((ids) => {
       this.cache = null
       for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)

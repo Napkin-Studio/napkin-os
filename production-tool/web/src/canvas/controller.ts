@@ -74,7 +74,7 @@ export class CanvasController {
   constructor(canvas: CanvasAdapter, services: Services) {
     this.canvas = canvas
     this.s = services
-    this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId) })
+    this.sync = new CanvasDocSync({ doc: services.doc, cancel: (jobId) => void services.runner.cancel(jobId), drawnBy: () => this.person() })
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
     void this.sync.nodes(this.els())

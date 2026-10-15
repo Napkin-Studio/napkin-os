@@ -11,12 +11,15 @@ import type { CustomData, ProductionDocument } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
 import { bareRemoval, deleteFrom, removeGen, removeNode, removeSketch, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
 import type { DocumentStore } from '../doc/types'
+import { systemUpdate } from '../doc/store'
 
 export interface SceneEl {
   id: string
   type: string
   isDeleted?: boolean
   customData?: unknown
+  /** A sketch area's ratio, as its tool drew it ('16:9'). */
+  ratio?: string
 }
 
 function genId(e: SceneEl): string | undefined {
@@ -42,6 +45,8 @@ export interface CanvasSyncDeps {
   doc: DocumentStore
   /** Stop a job whose image was deleted while it was still being made. */
   cancel(jobId: string): void
+  /** Who draws: a sketch area drawn here gets its sketches[id] row in their name. */
+  drawnBy?: () => string
 }
 
 export class CanvasDocSync {
@@ -90,6 +95,22 @@ export class CanvasDocSync {
    */
   sketches(els: readonly SceneEl[]): Promise<void> {
     const now = new Set(els.filter((e) => !e.isDeleted).map(sketchId).filter((x): x is string => !!x))
+    // An area drawn on our own engine has no row yet: it gets one at its ratio (a system write), so
+    // links into it and its Generate find it in the document.
+    const drawnBy = this.deps.drawnBy
+    if (drawnBy) {
+      const d = this.deps.doc.get()
+      const fresh = els.filter((e) => !e.isDeleted && sketchId(e) && !this.areasSeen.has(sketchId(e)!) && !d.sketches?.[sketchId(e)!] && /^\d+:\d+$/.test(e.ratio ?? ''))
+      if (fresh.length) {
+        this.queue = this.queue.then(() => systemUpdate(this.deps.doc, (x) => {
+          for (const e of fresh) {
+            const id = sketchId(e)!
+            const [w, h] = e.ratio!.split(':').map(Number)
+            if (!x.sketches[id]) x.sketches[id] = { id, v: 1, field_v: {}, aspect: { w, h }, ratio: e.ratio as never, drawn_by: drawnBy() }
+          }
+        }, 'sketch area').then(() => {})).catch((e) => console.warn('could not record the sketch area', e))
+      }
+    }
     if (!this.areas) {
       this.areas = now
       for (const id of now) this.areasSeen.add(id)

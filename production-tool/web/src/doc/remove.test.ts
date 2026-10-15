@@ -252,6 +252,21 @@ function canvas(s: ModelStore) {
 }
 
 describe('canvas delete ↔ document', () => {
+  it('a sketch area drawn on our own engine gets its sketches row at its ratio, once, so a link into it holds', async () => {
+    const { s } = await seeded(() => ({}))
+    const sync = new CanvasDocSync({ doc: s, cancel: () => {}, drawnBy: () => 'human:p_sai0001' })
+    const sk = id('sketch')
+    const area: SceneEl = { id: 'el_area', type: 'rectangle', customData: { kind: 'sketch', id: sk }, ratio: '9:16' }
+    await sync.sketches([])
+    await sync.sketches([area])
+    expect(s.get().sketches[sk]).toMatchObject({ aspect: { w: 9, h: 16 }, ratio: '9:16', drawn_by: 'human:p_sai0001' })
+    // Deleted and brought back: the delete's own row comes back, not a second one.
+    await sync.sketches([{ ...area, isDeleted: true }])
+    expect(s.get().sketches[sk]).toBeUndefined()
+    await sync.sketches([area])
+    expect(Object.keys(s.get().sketches)).toEqual([sk])
+  })
+
   it('a named image: its name stays in References, nothing else changes; Ctrl+Z restores', async () => {
     const { s, gFront, gFront2, ref } = await seeded(fixture)
     const before = content(s.get())
