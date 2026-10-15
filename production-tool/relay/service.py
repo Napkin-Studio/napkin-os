@@ -112,10 +112,15 @@ CONTRACT = _COMMON["contractVersion"]["const"]  # "3"
 STALE_BUILD = "This build reads contract 3; reload the page."
 # Each op's daily quota class (common opQuotaClass).
 QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
-INTERNAL_OPS = {"shot_list", "stitch", "write"}  # no provider: the director, the stitch Lambda, or Skye (writer.py)
+# No provider: the director, the stitch Lambda, Skye (writer.py), or Rhea's cut-out (cutout.py).
+INTERNAL_OPS = {"shot_list", "stitch", "write", "cutout"}
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
 BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch",
-             "stitch", "write"}
+             "stitch", "write", "upscale", "cutout"}
+# Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan).
+NO_DIRECTOR_OPS = {"upscale"}
+# What the editor says when Remove background cannot run here (features/image-editor.clan).
+NO_CUTOUT = "Rhea can't remove backgrounds on our server yet. Open this on a device with WebGPU to do it there."
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
@@ -268,12 +273,13 @@ def public(job: dict) -> dict:
 class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config,
                  contracts: Contracts | None = None, clock=time.time, stitch=None, cards=None,
-                 who=identity.who, writer=None):
+                 who=identity.who, writer=None, segmenter=None):
         """config: () -> config.json dict (cached by the caller).
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
         cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards).
         who: (method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"} or None,
-        the identity seam (identity.py)."""
+        the identity seam (identity.py).
+        segmenter: cutout.Segmenter for Rhea's cut-out on the server, or None (the cutout op answers 422)."""
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
         # Skye (write): on the director's model port, or the passthrough without one (writer.py).
         self.writer = writer if writer is not None else writers.make(director)
@@ -282,6 +288,7 @@ class Relay:
         self.clock = clock
         self.stitch = stitch
         self.cards = cards
+        self.segmenter = segmenter
         self.dogfood = dogfood.Dogfood(blobs, clock)
         self.ledger = Ledger(store, clock)
         self._tenants: dict[str, tuple[float, dict | None]] = {}
@@ -824,6 +831,17 @@ class Relay:
                 billed = max(spec.get("minS", 0), math.ceil(seconds - 1e-9))
                 settings["inputS" if spec.get("mode") != "first_last" else "durationS"] = billed
             return settings
+        if op == "upscale":  # Magnific's price turns on the output's longest side (providers.md fact 7)
+            settings["scaleFactor"] = inp.get("scale") or 2
+            a = inp.get("aspect") or {}
+            if isinstance(a.get("w"), int) and isinstance(a.get("h"), int):
+                settings["inputPx"] = max(a["w"], a["h"])
+            return settings
+        price = ((sheet.get("models") or {}).get(spec.get("model")) or {}).get("pricing") or {}
+        if op == "region_edit" and "byQuality" in price:  # ideogram_4_5: the image is a reference
+            settings["refs"] = 1
+            if not inp.get("region") and not inp.get("mask") and spec.get("preciseEdit"):
+                settings["preciseEdit"] = True
         seconds = (inp.get("shot") or {}).get("duration_s")
         if seconds:
             if op == "clip":
@@ -855,9 +873,14 @@ class Relay:
         """A clip starts from a picture (its shot's frame), or from words alone: a clip straight from
         the script (ui-behaviour 3.5) has the shot's words and no frame. Refused here, before quota or
         spend, not later by the provider (a video as the frame reached Runway)."""
+        inp = req["input"]
+        if req["op"] in ("upscale", "cutout"):
+            image = inp.get("image")
+            if not image or not str(image.get("mime", "")).startswith("image/"):
+                raise ApiError("invalid_input", "Rhea needs the picture itself (input.image) for this.")
+            return
         if req["op"] != "clip":
             return
-        inp = req["input"]
         image = inp.get("image")
         if image and not str(image.get("mime", "")).startswith("image/"):
             raise ApiError("invalid_input", "A clip starts from a picture, and this shot's frame is not one. Draw the frame again.")
@@ -1080,6 +1103,8 @@ class Relay:
             return self._run_shot_list(job, cfg)
         if op == "write":
             return self._run_write(job)
+        if op == "cutout":
+            return self._run_cutout(job)
         if op == "stitch":
             return self._run_stitch(job, cfg)
         if op == "clip_patch" and not job.get("_stage"):
@@ -1342,7 +1367,7 @@ class Relay:
         # An agency that turned Claude off gets the passthrough director and no cards (features/tenant-limits.clan);
         # a frame_edit Dex cannot look at gets the passthrough too (features/frame-change-edit.clan).
         claude = self._policy(job.get("_tenant"))["allow"]["claude"]
-        director = self.director if claude else PassthroughDirector()
+        director = self.director if claude and job["op"] not in NO_DIRECTOR_OPS else PassthroughDirector()
         try:
             use_config = getattr(director, "use_config", None)
             if use_config:  # config.json's director block: the model ids and prompt version
@@ -1453,6 +1478,34 @@ class Relay:
         if not out.get("writes"):
             return self._fail(saved, "internal", "Skye wrote nothing for this. Try again.", paid=False, refund=True)
         return self._finish(saved, "completed", writes=out["writes"], director=block, outputs=[], kind="generated", paid=False)
+
+    def _run_cutout(self, job: dict) -> dict:
+        """Rhea's cut-out on our server (cutout.py): no provider, no spend; the image quota was counted.
+        The browser sends it only when it cannot run the model itself (features/image-editor.clan)."""
+        saved = self._save(job, state="submitting", _queue="r", model=getattr(self.segmenter, "model", None))
+        if saved is None:
+            return self._reload(job)
+        if self.segmenter is None:
+            return self._fail(saved, "capability_missing", NO_CUTOUT, paid=False, refund=True)
+        import cutout
+        start = self.clock()
+        url = ((saved["_req"].get("input") or {}).get("image") or {}).get("url") or ""
+        try:
+            png, w, h = cutout.cut_out(self.blobs.fetch(url), self.segmenter)
+        except Exception as e:
+            log.exception("cutout of %s failed", saved["jobId"])
+            return self._fail(saved, "internal", f"Rhea could not cut this out ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        sha = "sha256:" + hashlib.sha256(png).hexdigest()
+        key = f"out/{sha}"
+        if not self.blobs.exists(key):
+            self.blobs.put(key, png, "image/png")
+        if saved.get("_tenant"):
+            self.store.hold(saved["_tenant"], sha)
+        out = {"sha256": sha, "url": self.blobs.public_url(key), "mime": "image/png", "bytes": len(png), "w": w, "h": h}
+        log.info("job %s: cut out on the server by %s in %d ms", saved["jobId"], self.segmenter.model,
+                 int((self.clock() - start) * 1000))
+        return self._finish(saved, "completed", outputs=[out], kind=self.segmenter.kind, paid=False)
 
     # ── asks (needs_input, ui-behaviour 3.17, 5.2) ──────────────────────────
     def _ask(self, job: dict, question: dict, block: dict) -> dict:

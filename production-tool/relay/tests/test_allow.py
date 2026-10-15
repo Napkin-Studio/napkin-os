@@ -29,10 +29,12 @@ INPUTS = {
 }
 
 
-def test_the_defaults_are_claude_runway_and_google():
+def test_the_defaults_are_claude_runway_google_and_the_editors_makers():
+    """Ideogram (Fill area, Change whole frame) and Magnific (Upscale) since the Image editor
+    (features/image-editor.clan, ui-behaviour 3.12)."""
     h = runway_routed()
     _, me = h.call("GET", "/me", None, h.as_person(), expect=200)
-    assert me["allow"] == {"claude": True, "makers": ["runway", "google"]}
+    assert me["allow"] == {"claude": True, "makers": ["runway", "google", "ideogram", "magnific"]}
 
 
 @pytest.mark.parametrize("op", sorted(INPUTS))
@@ -132,4 +134,4 @@ def test_a_tenant_item_without_allow_takes_the_policy():
     h = runway_routed()
     tid = h.limits("blue", capUsdMonthly=None)
     assert h.relay._policy(tid) == {"cap": None, "dailyQuotas": False,
-                                   "allow": {"claude": True, "makers": ["runway", "google"]}}
+                                   "allow": {"claude": True, "makers": ["runway", "google", "ideogram", "magnific"]}}

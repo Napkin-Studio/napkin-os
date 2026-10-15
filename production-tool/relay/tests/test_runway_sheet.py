@@ -201,8 +201,15 @@ def test_usd_is_credits_times_the_sheet_rate():
     assert pricing().usd(sheet, "aleph2", {"inputS": 30}) == 8.4
     assert pricing().op_usd(sheet, "clip") == 1.2 and pricing().op_usd(sheet, "clip", "veo3.1_fast") == 0.6
     assert pricing().op_usd(sheet, "clip_edit") == 1.4
-    assert {op: pricing().op_usd(sheet, op) for op in ("generate", "view", "frame", "region_edit")} == \
-        {"generate": 0.2, "view": 0.2, "frame": 0.2, "region_edit": 0.2}
+    assert {op: pricing().op_usd(sheet, op) for op in ("generate", "view", "frame")} == \
+        {"generate": 0.2, "view": 0.2, "frame": 0.2}
+    # region_edit on ideogram_4_5 (features/image-editor.clan): a mask edit with the frame as its reference
+    # is medium (8 cr), a preciseEdit high (25 cr); the Gemini 3 Pro alternate 20 cr. Upscale 25 / 150 cr.
+    assert pricing().op_usd(sheet, "region_edit") == 0.08
+    assert pricing().op_usd(sheet, "region_edit", settings={"preciseEdit": True}) == 0.25
+    assert pricing().op_usd(sheet, "region_edit", "gemini_image3_pro") == 0.2
+    assert pricing().op_usd(sheet, "upscale") == 0.25
+    assert pricing().op_usd(sheet, "upscale", settings={"scaleFactor": 4}) == 1.5
     assert pricing().op_usd(sheet, "frame", "gemini_image3.1_flash") == 0.07
     assert pricing().op_usd(sheet, "clip", "not-offered") is None
 

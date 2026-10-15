@@ -41,3 +41,42 @@ model_card_url = "https://huggingface.co/BAAI/bge-reranker-v2-m3"
 tier = "server"
 used_by = ["engine/rag/judge_local.py"]
 approved_by = "Shrey (2026-10-13 decision)"
+
+# The Image editor's Remove background (features/image-editor.clan): BiRefNet-lite, run on the
+# person's device (fp16, WebGPU, production-tool/web/src/ml/models.ts) and, where a device cannot,
+# on our server (fp32, production-tool/relay/cutout.py). The repo's README card says license: mit;
+# the upstream code and weights (ZhengPeng7/BiRefNet, ZhengPeng7/BiRefNet_lite) are MIT (read
+# 2026-10-15). Not RMBG (non-commercial) and not the onnx-community ISNet export (AGPL-3.0).
+[[model]]
+id = "onnx-community/BiRefNet_lite-ONNX"
+source = "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX"
+revision = "de15b22ba131738a16dff04aab8bdf8dc32e3ac1"
+files = [
+  { path = "onnx/model.onnx", sha256 = "5600024376f572a557870a5eb0afb1e5961636bef4e1e22132025467d0f03333" },
+  { path = "onnx/model_fp16.onnx", sha256 = "d39b897ceb16ae654c1731f3dba0cf9b368d9cae74b5a57459b455cc8bfec402" },
+]
+weight_licence = "MIT"
+code_licence = "MIT"
+model_card_url = "https://huggingface.co/ZhengPeng7/BiRefNet_lite"
+tier = "client"
+used_by = ["production-tool/web/src/ml/models.ts", "production-tool/relay/cutout.py"]
+approved_by = "Shrey (2026-10-15: build the Image editor to ui-behaviour 3.12; licence push needs his approval)"
+
+# The Image editor's Click-select (features/image-editor.clan): SlimSAM-77 (a pruned Segment
+# Anything), quantized, run on the person's device (WebGPU or WASM). Card license: apache-2.0;
+# upstream SlimSAM (czg1225/SlimSAM) and Segment Anything (facebookresearch) are Apache-2.0
+# (read 2026-10-15).
+[[model]]
+id = "Xenova/slimsam-77-uniform"
+source = "https://huggingface.co/Xenova/slimsam-77-uniform"
+revision = "5850ab45f587c112167512ffef949107115e26a0"
+files = [
+  { path = "onnx/vision_encoder_quantized.onnx", sha256 = "cce23c7b2e5d4f330932738fb67ba518e04b0d99ccdd1cccd22a7da4e01f2971" },
+  { path = "onnx/prompt_encoder_mask_decoder_quantized.onnx", sha256 = "cb90b279f549d2cab7fd6e20c38522438c65d84bdcca3d2a764cff7d857fdce2" },
+]
+weight_licence = "Apache-2.0"
+code_licence = "Apache-2.0"
+model_card_url = "https://huggingface.co/Xenova/slimsam-77-uniform"
+tier = "client"
+used_by = ["production-tool/web/src/ml/models.ts"]
+approved_by = "Shrey (2026-10-15: build the Image editor to ui-behaviour 3.12; licence push needs his approval)"

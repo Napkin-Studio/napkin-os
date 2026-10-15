@@ -54,8 +54,8 @@ def test_a_contract_3_job_carries_who_started_it_where_and_for_what(h):
     assert plan["crew"] == "dex" and plan["quotaClass"] == "text"
 
 
-@pytest.mark.parametrize("op", ["bridge", "cutout", "transcribe", "read", "check",
-                                "resize", "cutdown", "upscale"])
+# cutout and upscale are built (features/image-editor.clan; tests/test_image_editor.py).
+@pytest.mark.parametrize("op", ["bridge", "transcribe", "read", "check", "resize", "cutdown"])
 def test_an_op_not_built_yet_is_422_capability_missing_before_quota(h, op):
     token = h.as_person()
     _, out = h.call("POST", "/jobs", {**envelope(op, new_id("job")), "input": {"text": "x"}}, token, expect=422)

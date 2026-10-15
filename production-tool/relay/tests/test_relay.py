@@ -17,7 +17,7 @@ def test_me_says_who_the_seam_names_with_quotas(h):
     assert out["tenant"] == {"id": tenant_id("blue"), "agency": "blue"} and out["name"] == "Alice Ng"
     assert (out["handle"], out["team"]) == ("Alice", "blue") and out["projects"] == 0
     # Daily quotas are off until the agency turns them on (features/tenant-limits.clan).
-    assert out["quotas"] is None and out["allow"] == {"claude": True, "makers": ["runway", "google"]}
+    assert out["quotas"] is None and out["allow"] == {"claude": True, "makers": ["runway", "google", "ideogram", "magnific"]}
     h.limits("blue", dailyQuotas=True)
     _, out = h.call("GET", "/me", None, token, expect=200)
     assert out["quotas"] == {"image": 40, "video": 6, "render": 3}

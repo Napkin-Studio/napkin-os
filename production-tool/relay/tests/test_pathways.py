@@ -27,7 +27,7 @@ from providers.runway import RunwayProvider
 from provider_schemas import errors as schema_errors
 
 PATHWAYS = ("runway",)
-PROVIDER_OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
+PROVIDER_OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit", "upscale")
 ASSET_HOSTS = ("cdn.test", "hack.napkin.ie")  # ours in these tests, and in the recorded director fixtures
 
 
@@ -148,6 +148,7 @@ INPUTS = {
     "region_edit": {"image": asset(6), "region": BOX, "mask": asset(7), "text": "make the hat red", "ratio": "16:9"},
     "clip": {"shot": SHOT, "image": asset(6), "refs": MAYA, "ratio": "16:9"},
     "clip_edit": {"video": asset(8, "video/mp4"), "feel": {"strength": "flex"}, "text": "warmer light"},
+    "upscale": {"image": asset(6), "scale": 4, "aspect": {"w": 1344, "h": 768}},
 }
 
 
@@ -157,6 +158,11 @@ def sent_settings(op: str, body: dict) -> dict:
         return {"durationS": body["duration"], "audio": body["audio"]}
     if op == "clip_edit":
         return {}  # priced at the op's default input length: the request does not carry the clip's
+    if op == "upscale":  # Magnific: the input's longest side (the request's aspect) times the scale
+        return {"scaleFactor": body["scaleFactor"], "inputPx": 1344}
+    if body.get("model") == "ideogram_4_5":  # priced by quality: the image is a reference, preciseEdit is high
+        return {"outputs": body.get("outputCount", 1), "refs": len(body.get("referenceImages") or []),
+                **({"preciseEdit": True} if body.get("preciseEdit") else {})}
     return {"outputs": body.get("outputCount", 1), "ratio": body["ratio"]}
 
 
@@ -263,12 +269,13 @@ def test_a_clip_straight_from_the_script_goes_to_text_to_video_and_says_the_name
     assert job["cost"]["estimate"] == pricing().op_usd(sheet, "clip", None, sent_settings("clip", body))
 
 
-def test_runway_region_edits_send_the_image_and_a_copy_with_the_box_drawn():
+def test_runway_region_edits_send_the_image_and_a_mask_made_from_the_box():
+    """ideogram_4_5 (features/image-editor.clan): the image first, and the box as a black-edit mask."""
     h, stand = pathway("runway")
     run(h, "region_edit", INPUTS["region_edit"])
-    refs = stand.to("runway")[0]["body"]["referenceImages"]
-    assert [r["tag"] for r in refs[:2]] == ["current", "marked"]
-    assert refs[1]["uri"].startswith("data:image/png;base64,")
+    body = stand.to("runway")[0]["body"]
+    assert body["model"] == "ideogram_4_5" and len(body["referenceImages"]) == 1
+    assert body["maskUri"].startswith("data:image/png;base64,") and "ratio" not in body
 
 
 # ── when something goes wrong ───────────────────────────────────────────────

@@ -237,7 +237,8 @@ def test_a_region_edit_keeps_the_pictures_own_shape(h):
     token = h.as_person()
     done, _, runway = finish(h, token, "region_edit", (1344, 768), image=asset(3), text="a red hat",
                              region={"x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2}, aspect={"w": 1344, "h": 756})
-    assert runway.submits[0]["ratio"] == "1344:768"
+    # ideogram_4_5 keeps the picture's own size and takes no ratio (features/image-editor.clan)
+    assert "ratio" not in runway.submits[0]
     (o,) = done["outputs"]
     assert (o["w"], o["h"]) == (1344, 756)
 
