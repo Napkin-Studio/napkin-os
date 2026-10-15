@@ -577,9 +577,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       {groups.map((g) => {
         const off = g.members.some((m) => moving?.ids.has(m.id)) ? moving : null
         const b = boxOfAll(g.members)
-        const p = toLocal(b.x + (off?.dx ?? 0), b.y + (off?.dy ?? 0))
+        // A key in its board's top row: its chip at the row's right end, so it never covers the board's
+        // title chip (the board's handle) at the top left (board-autolayout).
+        const home = g.members[0].frameId ? canvas.elements().find((e) => e.id === g.members[0].frameId) : undefined
+        const end = !!home && (home.customData as { kind?: string } | undefined)?.kind === 'board' && b.y - home.y < 60
+        const p = toLocal((end ? b.x + b.w : b.x) + (off?.dx ?? 0), b.y + (off?.dy ?? 0))
         return (
-          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''}`} data-key={g.key} style={{ left: p.x, top: p.y }}
+          <button key={g.groupId} type="button" className={`nl-keychip ${g.stacked ? 'stacked' : ''} ${end ? 'end' : ''}`} data-key={g.key} style={{ left: p.x, top: p.y }}
             title={g.stacked ? 'Click the stack to open it' : 'One character: its views move and link together'}
             onPointerDown={(ev) => ev.stopPropagation()} onClick={() => canvas.select(g.members.map((m) => m.id))}>
             {groupLabel(g)}
