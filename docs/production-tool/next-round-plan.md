@@ -556,3 +556,6 @@ Waits for an answer from Shrey first:
 | The `production-csp` and `clan-sdk-repack` records, on `feat/production-tool-overhaul` (PR #75). | M each |
 | Terraform applies for os-sign-in and the image editor's server cut-out. A person runs them. | S each |
 | Set `TOKEN_SECRET` before deploy. | S |
+| Skye's draft answered after its scene was undone lands nowhere, silently. Land it as a new first scene, or say so? (Recommended: a new first scene.) | S |
+| In another browser, Skye's waiting question shows only at the top of the page, not on its line (the target lives in the asking browser). Needs a contract field. | S |
+| Flaky under the full parallel test run, pass alone: `src/canvas/nodes/cards.test.tsx` (empty-node PromptStart) and `src/script/perf.test.ts` (compose under 100 ms). | S |
