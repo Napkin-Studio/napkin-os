@@ -211,7 +211,18 @@ export class CanvasController {
 
   /** The selected elements that the Delete key and 🗑 act on: everything but the tool's arrows. */
   deletable(selected: El[]): El[] {
-    return selected.filter((e) => cd(e)?.kind !== 'provenance')
+    const out = selected.filter((e) => cd(e)?.kind !== 'provenance')
+    // A sketch area takes the ink drawn in it (the rule its move uses, boards/fitting): left behind,
+    // the drawing lay loose where the white area had been (owner, 2026-10-15).
+    const areas = out.filter((e) => cd(e)?.kind === 'sketch')
+    if (!areas.length) return out
+    const live = alive(this.els())
+    const loose = live.filter((e) => !e.frameId || boardFrame(live, e.frameId))
+    const ids = new Set(out.map((e) => e.id))
+    for (const a of areas) for (const m of membersOf(loose as unknown as Boxed[], boxOf(a as unknown as Boxed)) as unknown as El[]) {
+      if (!ids.has(m.id)) { ids.add(m.id); out.push(m) }
+    }
+    return out
   }
 
   // ── pictures: downscale ≤1536 px, hash, keep as a node ──

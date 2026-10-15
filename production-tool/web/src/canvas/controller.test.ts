@@ -298,6 +298,14 @@ describe('the shape of a Generate without an area, and of the views', () => {
   })
 })
 
+describe('deleting a sketch area takes the ink drawn in it (owner, 2026-10-15)', () => {
+  it('its strokes go with it; ink elsewhere and on another frame stays', () => {
+    const area = { id: 'A', type: 'rectangle', x: 0, y: 0, width: 320, height: 180, isDeleted: false, frameId: null, customData: { kind: 'sketch', id: 'sketch_1' } } as unknown as El
+    t.canvas.els = [area, stroke('in', 40, 40), stroke('far', 900, 900), frame('F', 600, 0, 200, 200), stroke('framed', 650, 50, 20, 20, 'F')]
+    expect(t.ctrl.deletable([area]).map((e) => e.id).sort()).toEqual(['A', 'in'])
+  })
+})
+
 describe('an area’s lifecycle', () => {
   it('deleting it removes sketches[id]; the frames made from it stay without their sketch_id', async () => {
     withFrame(t)
