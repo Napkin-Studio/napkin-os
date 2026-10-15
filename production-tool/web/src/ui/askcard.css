@@ -39,3 +39,12 @@
 }
 .askcard-later b { font-weight: 600; }
 .askcard-later span { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; }
+
+/* The ask dock (ui/AskDock.tsx): a waiting question no card shows in its place, under the top bar. */
+.askdock {
+  position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 40; display: grid; gap: 10px;
+  width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 88px); overflow: auto; pointer-events: auto;
+}
+.askdock .askcard { max-width: none; }
+.askcard.flash, .askcard-later.flash { animation: askflash 1.2s var(--ease); }
+@keyframes askflash { 0%, 60% { box-shadow: 0 0 0 4px var(--tool), var(--shadow-pop); } 100% { box-shadow: 0 0 0 4px rgba(255, 79, 46, 0.08), var(--shadow-pop); } }

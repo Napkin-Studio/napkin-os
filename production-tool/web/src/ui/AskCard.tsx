@@ -5,10 +5,11 @@
 // answered, who chose what with Change. Anyone in the agency may answer; the
 // first answer wins (the relay says who won).
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
 import type { Ask, Question } from '../contracts/types'
 import { LOCAL_PERSON, type AnswerChoice } from '../jobs/runner'
+import { placeAsk } from './askPlaces'
 import { answerLocally, sendAnswer } from './asks'
 import { AgentFigure } from './agents/AgentFigure'
 import { castOf, sayer } from './agents/cast'
@@ -33,8 +34,9 @@ export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boo
 }
 
 /** `onLocalAnswer`: for an ask with no job (Wren's on a sketch area, features/frame-aspect.clan), the answer is
- *  written to the document here and handed back, and the caller goes ahead with it. */
-export function AskCard({ ask, onLocalAnswer }: { ask: Ask; onLocalAnswer?: (answer: AnswerChoice) => Promise<void> | void }) {
+ *  written to the document here and handed back, and the caller goes ahead with it. `docked`: shown by the ask
+ *  dock (ui/AskDock.tsx), which shows what no card in its place does; any other card places the ask (askPlaces). */
+export function AskCard({ ask, onLocalAnswer, docked = false }: { ask: Ask; onLocalAnswer?: (answer: AnswerChoice) => Promise<void> | void; docked?: boolean }) {
   const { runner, doc: docStore } = useServices()
   const ui = useUi()
   const doc = useDoc()
@@ -50,6 +52,7 @@ export function AskCard({ ask, onLocalAnswer }: { ask: Ask; onLocalAnswer?: (ans
   const byWords = (by?: string) => (!by ? 'Someone' : by === me ? 'You' : by.replace(/^human:/, ''))
   const chose = last?.option_id ? q.options.find((o) => o.id === last.option_id)?.label ?? last.option_id : last?.text
   const job = ask.job_id ? doc.jobs[ask.job_id] : undefined
+  useEffect(() => (docked ? undefined : placeAsk(ask.id)), [ask.id, docked])
 
   const local = !ask.job_id && !!onLocalAnswer
   const send = async (answer: AnswerChoice) => {
@@ -74,13 +77,13 @@ export function AskCard({ ask, onLocalAnswer }: { ask: Ask; onLocalAnswer?: (ans
 
   if (later && !answered) {
     return (
-      <button className="askcard-later" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`}>
+      <button className="askcard-later" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`} data-ask={ask.id}>
         <AgentFigure agent={castOf(ask.crew)} size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· {q.text}</span>
       </button>
     )
   }
   return (
-    <section className={`askcard ${answered ? 'answered' : 'open'}`} role="group" aria-label={`${ask.crew} asks: ${q.text}`} data-ask={ask.id}>
+    <section className={`askcard ${answered ? 'answered' : 'open'}${docked ? ' docked' : ''}`} role="group" aria-label={`${ask.crew} asks: ${q.text}`} data-ask={ask.id}>
       <div className="askcard-head">
         <AgentFigure agent={castOf(ask.crew)} size={28} state={answered ? 'idle' : 'needs-you'} decorative />
         <span className="askcard-who">{sayer(castOf(ask.crew))}</span>

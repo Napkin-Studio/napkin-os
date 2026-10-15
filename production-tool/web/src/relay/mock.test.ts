@@ -125,6 +125,18 @@ describe('mock relay', () => {
     if ('conflict' in again) expect(makeAjv().compile({ $ref: SCHEMA('relay-api') + '#/$defs/AnswerConflict' })(again.conflict)).toBe(true)
   })
 
+  it("[ask] in a write's lines stops Skye's draft at needs_input, as the relay's passthrough does", async () => {
+    const { relay, advance } = setup()
+    const target = { kind: 'scene' as const, id: newId('scene') }
+    const write = { intent: 'draft' as const, target, base_hash: `sha256:${'d'.repeat(64)}`, lines: [{ type: 'action' as const, text: 'A jogger [ask]' }], context: { target_s: 15, neighbours: '', refs: [] } }
+    const req = { ...request('write', '', { write }), node: { kind: 'script' as const, id: newId('script') }, input: { write } }
+    await relay.createJob(req)
+    advance(1000)
+    const asking = await relay.getJob(req.jobId)
+    expect(asking.state).toBe('needs_input')
+    expect(validateJob(asking), JSON.stringify(validateJob.errors)).toBe(true)
+  })
+
   it('a re-plan keeps the ids of the shots it was sent', async () => {
     const { relay, advance } = setup()
     const shots = [{ id: 'shot_01K6XA7Q3M9V2D4R8T0B5C1E6F', kind: 'shot' as const, duration_s: 5, camera: { size: 'wide' as const }, action: 'Rain.', refs: [] }]

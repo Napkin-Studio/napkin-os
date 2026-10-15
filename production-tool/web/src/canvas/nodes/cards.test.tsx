@@ -68,3 +68,23 @@ describe('node cards, one per node (+ Node; ui-behaviour 3.3)', () => {
     expect(html).toContain(`${mainStoryboard(d)!.ratio} · 0 shots`)
   })
 })
+
+describe("the script card while Skye's draft waits on a question (owner 2026-10-15)", () => {
+  const withWrite = (state: 'needs_input' | 'submitted') => {
+    const p = project()
+    const scriptId = mainScript(p.d)!.id
+    const jobId = 'job_01M4ZSCA31MR0N1JYG9XK51K03'
+    const q = 'q_01M4ZSCA31MR0N1JYG9XK51K04'
+    p.d.jobs[jobId] = { id: jobId, v: 1, field_v: {}, op: 'write', state, node: { kind: 'script', id: scriptId }, purpose: 'write', started_by: 'human:p_x', tenant_id: 't', nonce: 'n_yyyyyyyy', crew: 'skye', parent_ids: [], input_hashes: [], created_at: '2026-10-13T10:00:00Z', ask_id: q } as never
+    p.d.asks[q] = { id: q, v: 1, field_v: {}, node: { kind: 'script', id: scriptId }, job_id: jobId, crew: 'skye', state: 'open', answers: [],
+      question: { id: q, kind: 'nudge', text: 'Open wide or close?', options: [{ id: 'wide', label: 'Wide', value: 'wide' }, { id: 'close', label: 'Close', value: 'close' }], allow_text: true } }
+    return render(p.services, DEFAULT_CHROME, createElement(NodeCard, { kind: 'script', id: scriptId, onOpen: () => {} }))
+  }
+
+  it('says it waits for you with the question, not that she is writing', () => {
+    const html = withWrite('needs_input')
+    expect(html).toContain('Waiting for you: Open wide or close?')
+    expect(html).not.toContain('Skye is writing a draft')
+    expect(withWrite('submitted')).toContain('Skye is writing a draft')
+  })
+})
