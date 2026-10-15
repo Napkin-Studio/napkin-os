@@ -299,9 +299,10 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       // engine's double press (container-select) picks the picture out first; it opens only when it was
       // already the one selected before this double-click (owner: the first picks out, the next opens).
       const picture = c ? null : pictureToOpen(canvas.elements(), selectedAtPress.current, p)
-      if (picture && canvasActions.editPicture(picture)) {
+      if (picture && canvasActions.editPicture(picture.node)) {
         e.preventDefault()
         e.stopPropagation()
+        canvas.select([picture.el])
         return
       }
       if (!c) return

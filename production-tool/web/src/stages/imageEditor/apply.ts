@@ -10,7 +10,7 @@ import { currentPictureFrame, framesOf, pictureVersions, refsList } from '../../
 import { markStale } from '../../doc/remove'
 import { nameOf } from '../../lib/names'
 import { refreshClipStale } from '../../jobs/stale'
-import { updateDoc } from '../../doc/store'
+import { systemUpdate, updateDoc } from '../../doc/store'
 import type { DocumentStore } from '../../doc/types'
 
 export interface Edited { sha: string; bytes: number; w: number; h: number; edits: Frame['edits'] }
@@ -78,17 +78,21 @@ function followPicture(d: ProductionDocument, nodeId: string, from: string, to: 
   }
 }
 
+/** v1: the picture as it was on the canvas before its first edit, kept so it can be picked again. */
+function keepOriginal(d: ProductionDocument, pic: CanvasPicture, now: string): Frame {
+  const shown = currentPictureFrame(d, pic.nodeId)
+  if (shown) return shown
+  const f: Frame = { id: newUlidId('frame'), v: 1, field_v: {}, node: pic.nodeId, picked_at: now, version: 1, kind: 'original', asset: pic.sha }
+  d.frames[f.id] = f
+  return f
+}
+
 export function applyPictureEdited(d: ProductionDocument, pic: CanvasPicture, out: Edited, now = new Date().toISOString()): Frame | undefined {
   if (!d.assets[out.sha]) {
     d.assets[out.sha] = { sha256: out.sha, kind: 'image', mime: 'image/png' as Mime, bytes: out.bytes, w: out.w, h: out.h,
       origin: 'edited', locations: [idbLocation(out.sha)] }
   }
-  let parent = currentPictureFrame(d, pic.nodeId)
-  if (!parent) {
-    // v1: the picture as it was on the canvas, kept so it can be picked again.
-    parent = { id: newUlidId('frame'), v: 1, field_v: {}, node: pic.nodeId, picked_at: now, version: 1, kind: 'original', asset: pic.sha }
-    d.frames[parent.id] = parent
-  }
+  const parent = keepOriginal(d, pic, now)
   const versions = pictureVersions(d, pic.nodeId)
   const frame: Frame = {
     id: newUlidId('frame'),
@@ -108,8 +112,11 @@ export function applyPictureEdited(d: ProductionDocument, pic: CanvasPicture, ou
   return frame
 }
 
-/** Apply on a canvas picture as one undo step: "apply edits to the picture as v2". */
+/** Apply on a canvas picture as one undo step: "apply edits to the picture as v2". Its v1 is kept first, as
+ *  the app's own write (not a step): the undo takes v2 back to v1, which the canvas then shows again, after
+ *  a reload too (the canvas keeps only the picture it shows). */
 export async function applyPictureEditedStep(store: DocumentStore, pic: CanvasPicture, out: Edited): Promise<Frame | undefined> {
+  if (!currentPictureFrame(store.get(), pic.nodeId)) await systemUpdate(store, (d) => { keepOriginal(d, pic, new Date().toISOString()) }, 'keep the picture as it was')
   let made: Frame | undefined
   const next = Math.max(1, ...pictureVersions(store.get(), pic.nodeId).map((f) => f.version)) + 1
   await updateDoc(store, (d) => { made = applyPictureEdited(d, pic, out) }, `apply edits to the picture as v${next}`)

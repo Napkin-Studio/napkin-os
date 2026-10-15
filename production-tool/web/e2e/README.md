@@ -34,7 +34,10 @@ Two dev-only hooks (never in a build, `import.meta.env.DEV`):
 - `window.__seed` (`src/dev/seed.ts`): `frame({ ratio, shots, frameOn, w, h })` makes a
   project with storyboard shots and a drawn frame through the app's own helpers
   (the frame lands through `jobs/handlers.ts applyFrame`). `storyboard()` opens the
-  Storyboard stage.
+  Storyboard stage. `canvas()` opens a project on the canvas, for specs that drop pictures there
+  (`canvas-picture/edit.spec.ts`, features/edit-canvas-pictures.clan).
+- `window.__canvas` (`stages/Character.tsx`): the canvas adapter, to read elements, the
+  selection and positions (`sceneToViewport`) back.
 - `?mockDelay=<ms>` holds every mock job that long, so a spec can act while one runs.
   `[ask]` in a job's words makes the mock stop at `needs_input` with a question.
 
