@@ -7,14 +7,14 @@ import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore, type Step } from '../src/model/store'
 import { Renderer } from '../src/render/renderer'
 import { inPolygon, SelectTool } from '../src/select/select'
-import { hitBoardTitle } from '../src/render/links'
+import { boardGrabAt } from '../src/boards/grab'
 
 function setup(records: ElementRecord[]) {
   const doc = new Y.Doc()
   const scene = new SceneStore(doc)
   scene.seed(records)
   const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
-  const tool = new SelectTool(scene, (x, y) => hitBoardTitle(scene, { x, y }, 1) ?? r.hit(x, y))
+  const tool = new SelectTool(scene, (x, y) => r.hit(x, y))
   const steps: Step[] = []
   scene.onStep((s) => steps.push(s))
   let updates = 0
@@ -45,9 +45,8 @@ describe('boards as containers (art-boards)', () => {
 
   it('a board is picked up by its title and moves what is on it, as one step', () => {
     const { scene, tool, steps } = setup([board('L', 0), pic('p', 100, 100, 'L'), pic('q', 200, 100, 'L'), pic('x', 900, 900)])
-    const hit = hitBoardTitle(scene, { x: 50, y: -10 }, 1)!
-    expect(hit.id).toBe('L')
-    tool.set([hit.id])
+    const hit = boardGrabAt(scene, { x: 50, y: -10 }, 1)!
+    expect([hit.board.id, hit.part]).toEqual(['L', 'title'])
     tool.press({ x: 50, y: -10 })
     tool.release({ x: 150, y: 20 })
     expect(steps).toHaveLength(1)

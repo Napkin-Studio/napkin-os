@@ -36,6 +36,7 @@
 /* Board sizing (owner decision 2026-10-15): the selected board's bar, "Board is full · Resize", and
    what a resize let go of. */
 .board-layer .bd-bar { position: absolute; pointer-events: auto; transform: translate(-50%, -100%); }
+.board-layer .bd-bar.beside { transform: translate(0, -50%); }
 .board-layer .bd-full {
   position: absolute; pointer-events: auto; transform: translate(-100%, -50%); display: flex; align-items: center; gap: 6px;
   padding: 3px 4px 3px 10px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--warn, var(--line));

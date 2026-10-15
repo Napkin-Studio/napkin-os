@@ -15,9 +15,6 @@ import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } fro
 import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
 
-/** The cursor over each of a selected board's handles. */
-const RESIZE_CURSOR: Record<string, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }
-
 /** What this browser's pointer events can carry (ui-behaviour 8; fallbacks are raw events and pressure only). */
 export function probeCapabilities(): InputCapabilities {
   const pe = typeof PointerEvent !== 'undefined' ? PointerEvent.prototype : undefined
@@ -28,6 +25,9 @@ export function probeCapabilities(): InputCapabilities {
     pressure: !!pe && 'pressure' in pe,
   }
 }
+
+/** The arrow keys' directions (a nudge). */
+const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
 
 /** Single-key tools on the canvas until the toolbar offers them (ui-behaviour 7). */
 const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter', s: 'sketch' }
@@ -273,6 +273,14 @@ export const ownEngine: CanvasEngine = {
             console.warn('the move was not kept', e)
           }
           break
+        case 'press-cancel':
+          adapter.cancelPress()
+          break
+        case 'tap':
+          // A one-finger tap selects what is under it (ui-behaviour 8); the chrome hears it too.
+          if (adapter.router.tool === 'select') adapter.tap(toScene(i.x, i.y))
+          adapter.emitIntent(i)
+          break
         case 'undo':
         case 'redo':
           adapter.undoScene(i.kind)
@@ -309,10 +317,10 @@ export const ownEngine: CanvasEngine = {
       if (phase === 'down' || phase === 'up') sample(phase, e)
       else if (phase === 'move' && e.buttons) sample('move', e)
       for (const i of adapter.router.handle(raw(phase, e))) act(i)
-      // A selected board's handles show their resize cursor.
-      if (phase === 'move' && !e.buttons) {
-        const edge = adapter.boardHandleAt(toScene(e.clientX, e.clientY))
-        const want = edge ? RESIZE_CURSOR[edge] : ''
+      // The cursor says what a press would do: resize on a selected board's handles, grab on a board's
+      // chip and edge (and a selected board's inside), grabbing while something moves.
+      if (phase === 'move' || phase === 'down' || phase === 'up') {
+        const want = e.pointerType === 'touch' ? '' : adapter.cursorAt(toScene(e.clientX, e.clientY))
         if (live.style.cursor !== want) live.style.cursor = want
       }
     }
@@ -359,6 +367,12 @@ export const ownEngine: CanvasEngine = {
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && adapter.selector.selected.size) {
         e.preventDefault()
         adapter.selector.deleteSelected()
+      } else if (!mod && !e.altKey && ARROWS[e.key] && adapter.selector.selected.size) {
+        // Arrows nudge the selection 1 px, Shift+arrow 10 px (screen pixels); a run is one step.
+        e.preventDefault()
+        const [dx, dy] = ARROWS[e.key]
+        const step = e.shiftKey ? 10 : 1
+        adapter.nudge(dx * step, dy * step)
       } else if (e.key === 'Escape') {
         adapter.selector.cancel()
         adapter.sketch.cancel()
@@ -368,7 +382,12 @@ export const ownEngine: CanvasEngine = {
       draw()
     }
     host.addEventListener('keydown', onKey)
+    // The canvas loses the keyboard: a run of nudges is written now.
+    const onBlur = () => adapter.flushNudge()
+    host.addEventListener('blur', onBlur)
     adapter.attach(() => {
+      host.removeEventListener('blur', onBlur)
+      adapter.flushNudge()
       offChange()
       ro?.disconnect()
       if (frame) cancelAnimationFrame(frame)

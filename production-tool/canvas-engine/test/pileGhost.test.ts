@@ -8,7 +8,7 @@ import * as Y from 'yjs'
 import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore } from '../src/model/store'
 import { Renderer } from '../src/render/renderer'
-import { hitBoardTitle, hitNodeOrLink } from '../src/render/links'
+import { hitNodeOrLink } from '../src/render/links'
 import { SelectTool } from '../src/select/select'
 
 const view = (id: string, x: number, y: number, z: string, rotation: number, stack: { dx: number; dy: number; angle: number }) =>
@@ -24,7 +24,7 @@ function setup() {
     customData: { kind: 'provenance', from: 'n_front', to: 'job_back' }, props: { start: { elementId: 'front' }, end: { elementId: 'back' }, route: [] } })
   scene.seed([front, back, arrow] as ElementRecord[])
   const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
-  const hit = (x: number, y: number) => hitNodeOrLink(scene, { x, y }, 1) ?? hitBoardTitle(scene, { x, y }, 1) ?? r.hit(x, y)
+  const hit = (x: number, y: number) => hitNodeOrLink(scene, { x, y }, 1) ?? r.hit(x, y)
   return { scene, r, hit, tool: new SelectTool(scene, hit) }
 }
 

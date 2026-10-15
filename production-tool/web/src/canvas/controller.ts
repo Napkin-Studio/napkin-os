@@ -253,9 +253,13 @@ export class CanvasController {
     const pad = 16
     const blob = (await downscale(await exportElements(this.canvas, strokes))).blob
     const sha = await putBlob(blob)
-    const frame = this.canvas.frameAround(
+    const made = this.canvas.frameAround(
       { x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, name: 'Drawing', customData: { kind: 'drawn', id: newId('node'), asset: sha } },
     )
+    // Ink drawn on a board is on it (board-move): the Drawing made of it stays on that board, so it moves with it.
+    const home = strokes[0].frameId ?? null
+    const onBoard = !!home && strokes.every((e) => (e.frameId ?? null) === home) && !!boardFrame(els, home)
+    const frame = onBoard ? this.canvas.patch(made, { frameId: home }) : made
     const next = els.map((e) => (ids.includes(e.id) ? this.canvas.patch(e, { frameId: frame.id }) : e))
     this.setEls([frame, ...next]) // frames sit below their children
     this.addAsset(sha, blob, 'drawn')

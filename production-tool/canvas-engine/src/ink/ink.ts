@@ -4,7 +4,8 @@
 // and written once at pointer-up as one undoable step: a record and its
 // immutable points. The eraser marks the strokes its path touches and removes
 // them in one step at pointer-up. Strokes drawn close in time and space share an
-// ink group (groupIds), so a word or a doodle moves as one.
+// ink group (groupIds), so a word or a doodle moves as one. A stroke whose centre lies on a board
+// joins it (parentId, as a picture dropped there does), so it moves with the board (board-move).
 
 import { encodePoints, localPoints, type InkPoint } from '../model/points'
 import { element, type ElementRecord } from '../model/records'
@@ -119,8 +120,15 @@ export class Ink {
     const prev = this.last && this.scene.get(this.last.id)
     const joins = !!prev && at - this.last!.at <= GROUP_MS && gap(box, boxOf(prev)) <= GROUP_PX
     const group = joins ? (prev!.groupIds[0] ?? this.newId('ink')) : null
+    const all = this.scene.all()
+    const cx = (box.minX + box.maxX) / 2
+    const cy = (box.minY + box.maxY) / 2
+    // The topmost board under its centre: the centre rule a move uses (select.ts containerAt).
+    const board = all
+      .filter((r) => r.kind === 'board' && cx >= Math.min(r.x, r.x + r.w) && cx <= Math.max(r.x, r.x + r.w) && cy >= Math.min(r.y, r.y + r.h) && cy <= Math.max(r.y, r.y + r.h))
+      .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
     const rec = element({
-      id, kind: 'stroke', z: zTop(this.scene.all().map((r) => r.z)),
+      id, kind: 'stroke', z: zTop(all.map((r) => r.z)), parentId: board?.id ?? null,
       x: box.minX, y: box.minY, w: box.maxX - box.minX, h: box.maxY - box.minY,
       groupIds: group ? [group] : [],
       opacity: c.tool === 'highlighter' ? HIGHLIGHTER.opacity : 1,

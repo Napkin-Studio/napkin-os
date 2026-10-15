@@ -21,6 +21,7 @@ import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
 import { FULL_RES_MIN_ZOOM } from './caps'
+import { boardTitleRect, titleScale } from '../boards/grab'
 
 export interface Camera {
   scrollX: number
@@ -46,7 +47,7 @@ export interface DrawContext {
   fillRect(x: number, y: number, w: number, h: number): void
   clearRect?(x: number, y: number, w: number, h: number): void
   strokeRect(x: number, y: number, w: number, h: number): void
-  fillText(text: string, x: number, y: number): void
+  fillText(text: string, x: number, y: number, maxWidth?: number): void
   beginPath(): void
   moveTo(x: number, y: number): void
   lineTo(x: number, y: number): void
@@ -190,6 +191,8 @@ export class Renderer {
   moving: { ids: ReadonlySet<string>; dx: number; dy: number } | null = null
   /** A scale being dragged (select tool's handles): drawn scaled round (ox, oy), never written until release. */
   scaling: { ids: ReadonlySet<string>; ox: number; oy: number; s: number } | null = null
+  /** Where moving boards will land (the select tool's landing): a dashed outline in the tool colour. */
+  landing: readonly { x: number; y: number; w: number; h: number }[] | null = null
   /** A board being resized by its handles: drawn at this box until release. */
   resizing: { id: string; rect: { x: number; y: number; w: number; h: number } } | null = null
   /** The selection's frame, drawn on top; a dashed group box replaces the members' own outlines. */
@@ -444,6 +447,21 @@ export class Renderer {
     // A link or bound arrow whose end is gone is not drawn at all (never a line to nowhere).
     for (const rec of this.passes.rest) paint(rec)
     ctx.globalAlpha = 1
+    // The boards' title chips, above what is on them: the handle that moves a board is always seen.
+    if (this.boardLook) {
+      for (const rec of this.passes.boards) {
+        const r0 = this.tween ? this.tweened(rec, now) : rec
+        const r = this.resizing?.id === r0.id ? { ...r0, ...this.resizing.rect } : r0
+        const moving = this.moving?.ids.has(r.id) ? this.moving : null
+        if (moving) {
+          ctx.save()
+          ctx.translate(moving.dx, moving.dy)
+        }
+        this.drawBoardTitle(ctx, r, cam, this.boardLook)
+        if (moving) ctx.restore()
+      }
+    }
+    if (this.landing?.length) this.drawLanding(ctx, this.landing, cam)
     if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
@@ -644,16 +662,30 @@ export class Renderer {
         ctx.fillText(hint, x + 16, y + h / 2)
       }
     }
+  }
+
+  /** A board's title chip (boards/grab boardTitleRect): 20 px tall on screen at least, the frame line broken under it. */
+  private drawBoardTitle(ctx: DrawContext, r: ElementRecord, cam: Camera, look: BoardLook) {
     const name = typeof r.props.name === 'string' ? r.props.name : ''
-    if (name && cam.zoom > 0.08) {
-      // Scene units: the title scales with the board, as the chrome's frames do.
-      const tw = name.length * 7 + 16
-      ctx.fillStyle = look.titleBg
-      ctx.fillRect(x + 14, y - 10, tw, 20)
-      ctx.fillStyle = current ? look.current : look.title
-      ctx.font = '600 12px Geist, sans-serif'
-      ctx.fillText(name, x + 22, y + 4)
-    }
+    if (!name) return
+    const t = boardTitleRect(r, cam.zoom)
+    const k = titleScale(cam.zoom)
+    const current = this.currentBoard === r.id
+    ctx.fillStyle = look.titleBg
+    ctx.fillRect(t.x, t.y, t.w, t.h)
+    ctx.fillStyle = current ? look.current : look.title
+    ctx.font = `600 ${12 * k}px Geist, sans-serif`
+    ctx.fillText(name, t.x + 8 * k, t.y + t.h / 2 + 4 * k, Math.max(0, t.w - 16 * k))
+  }
+
+  /** Where moving boards will land: dashed, in the tool colour (BoardLook.current), rounded as a board. */
+  private drawLanding(ctx: DrawContext, rects: readonly { x: number; y: number; w: number; h: number }[], cam: Camera) {
+    const k = 1 / cam.zoom
+    ctx.strokeStyle = this.boardLook?.current ?? FRAME_COLOUR
+    ctx.lineWidth = 1.5 * k
+    ctx.setLineDash?.([6 * k, 4 * k])
+    for (const r of rects) ctx.strokeRect(r.x, r.y, r.w, r.h)
+    ctx.setLineDash?.([])
   }
 
   private drawOne(ctx: DrawContext, r: ElementRecord, cam: Camera, level: Level, stats: DrawStats) {
