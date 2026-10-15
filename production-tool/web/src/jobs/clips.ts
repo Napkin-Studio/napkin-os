@@ -25,29 +25,58 @@ function ratioOf(d: ProductionDocument, videoId: string | undefined, storyboardI
   return v?.ratio ?? (storyboardId ? d.storyboards[storyboardId]?.ratio : undefined) ?? storyboardOfVideo(d, v?.id)?.ratio
 }
 
-/** A clip for a shot from its picked storyboard frame, on `modelChoice` when the participant picked one. */
+/** Where a shot's clip comes from: its picked frame, or (straight from the script, ui-behaviour 3.5) its words. */
+export type ClipSource = 'frame' | 'words' | null
+
+/** What a shot's clip would be made from now: its frame when it has one; its words when the video makes
+ *  clips straight from the script and the shot has words; else nothing yet (null). */
+export function clipSource(d: ProductionDocument, shotId: string, fromWords: boolean): ClipSource {
+  const shot = d.shots[shotId]
+  if (!shot) return null
+  if (selectedFrame(d, shot.id)) return 'frame'
+  return fromWords && (shot.action ?? '').trim() ? 'words' : null
+}
+
+/** The tray's one line, collapsed: "6 clips · 4 from frames, 2 from the script's words". */
+export function traySummary(sources: ClipSource[]): string {
+  const frames = sources.filter((s) => s === 'frame').length
+  const words = sources.filter((s) => s === 'words').length
+  const n = frames + words
+  if (!n) return 'No clip can be made yet'
+  const head = `${n} ${n === 1 ? 'clip' : 'clips'}`
+  if (!words) return `${head} from ${frames === 1 ? 'its frame' : 'frames'}`
+  if (!frames) return `${head} from the script's words, no frames`
+  return `${head} · ${frames} from frames, ${words} from the script's words`
+}
+
+/**
+ * A clip for a shot from its picked storyboard frame, on `modelChoice` when the participant picked one.
+ * `fromWords` (a video made straight from the script, ui-behaviour 3.5): a shot with no frame yet is made
+ * from its words alone (the model's text-to-video; the relay sends it to the sheet's textEndpoint).
+ */
 export async function makeClip(
   deps: FrameDeps,
   shotId: string,
-  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice; videoId?: string } = {},
+  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean } = {},
 ): Promise<string> {
   const d = deps.doc.get()
   const shot = d.shots[shotId]
   if (!shot) throw new Error('That shot is gone.')
   const frame = selectedFrame(d, shot.id)
-  if (!frame) throw new Error('This shot has no frame yet.')
-  const image = await assetRef(deps.relay, frame.asset)
+  const source = clipSource(d, shot.id, !!extra.fromWords)
+  if (!source) throw new Error(extra.fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
+  const image = frame ? await assetRef(deps.relay, frame.asset) : undefined
   const text = extra.text?.trim()
   const refs = await refsFor(deps.relay, d, shot, text)
   const ratio = ratioOf(d, videoOfShot(d, shot.id, extra.videoId)?.id, shot.storyboard_id)
-  const input: JobInput = { shot: jobShot(d, shot), image, ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}) }
+  const input: JobInput = { shot: jobShot(d, shot), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}) }
   const purpose: JobPurpose = {
     for: 'clip',
     shotId: shot.id,
     ...(extra.parentTake ? { parentTakeId: extra.parentTake.id } : {}),
     ...(extra.reviewIds?.length ? { reviewIds: extra.reviewIds } : {}),
   }
-  const parents = [frame.job_id, extra.parentTake?.job_id].filter(Boolean) as string[]
+  const parents = [frame?.job_id, extra.parentTake?.job_id].filter(Boolean) as string[]
   return deps.runner.submit('clip', input, parents, purpose, undefined, extra.modelChoice, extra.followRun ? { local: { followRun: extra.followRun } } : {})
 }
 
