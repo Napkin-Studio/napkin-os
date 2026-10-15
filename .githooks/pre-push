@@ -37,8 +37,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     continue
   fi
   if [[ "$remote_sha" == "$zero" ]] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
+    # A new branch is checked from the closest commit already on any origin branch, not from
+    # develop: a branch cut from an interim branch (e.g. feat/production-tool-v2) would otherwise
+    # re-check, and re-ask approval for, every commit that branch already pushed through this
+    # hook. Owner decision, Shrey 2026-10-15. CI still runs every check on the PR.
     trunk="$(git rev-parse -q --verify origin/develop >/dev/null && echo origin/develop || echo origin/main)"
     base="$(git merge-base "$trunk" "$local_sha" 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)"
+    best_n="$(git rev-list --count "$base")"
+    while read -r ref_sha; do
+      mb="$(git merge-base "$ref_sha" "$local_sha" 2>/dev/null)" || continue
+      n="$(git rev-list --count "$mb")"
+      if (( n > best_n )); then base="$mb"; best_n="$n"; fi
+    done < <(git for-each-ref --format='%(objectname)' refs/remotes/origin)
   else
     base="$remote_sha"
   fi
