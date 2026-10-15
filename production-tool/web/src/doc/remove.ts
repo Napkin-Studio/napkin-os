@@ -20,7 +20,7 @@ import type { DocumentStore } from './types'
 
 type Doc = ProductionDocument
 type Entity = { id: string } & Record<string, unknown>
-export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | NodeRemovalKind
+export type RemovalKind = 'gen' | 'shot' | 'frame' | 'take' | 'note' | 'ref' | 'sketch' | 'scene' | 'beat' | 'text' | NodeRemovalKind
 /** The document's nodes on the canvas (features/canvas-edit-tools.clan). */
 export type NodeRemovalKind = 'script' | 'storyboard' | 'video'
 
@@ -286,6 +286,16 @@ export function removeSketch(d: Doc, sketchId: string): Removal {
   return r
 }
 
+/** A text left the canvas (features/canvas-text.clan): its texts[id] row goes, with its links. */
+export function removeText(d: Doc, textId: string): Removal {
+  const r = blank('text', textId, `text ${textId}`)
+  if (!d.texts?.[textId]) return r
+  takeOut(d, r, 'texts', textId)
+  for (const x of Object.values(d.links)) if ((x.from.kind === 'text' && x.from.id === textId) || (x.to.kind === 'text' && x.to.id === textId)) takeOut(d, r, 'links', x.id)
+  r.ids = [textId]
+  return r
+}
+
 /** Fold a sub-removal (a shot's) into `r`: what it took out, and what it changed the first time only. */
 function absorb(r: Removal, sub: Removal) {
   r.removed.push(...sub.removed)
@@ -402,7 +412,8 @@ export function markStale(d: Doc, asset: string, refId: string, reason: string, 
 /** Put back what a removal took out and changed (the canvas's restore; a person's delete is undone by LocalUndo). */
 export function restore(d: Doc, r: Removal) {
   for (const { map, value } of r.removed) {
-    const m = mapOf(d, map)
+    // An optional map (texts) the document may have lost meanwhile.
+    const m = mapOf(d, map) ?? ((d as unknown as Record<string, Record<string, Entity>>)[map] = {})
     if (!m[value.id]) m[value.id] = structuredClone(value)
   }
   for (const { map, before } of r.modified) {

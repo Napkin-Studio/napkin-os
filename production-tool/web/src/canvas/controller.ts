@@ -79,6 +79,7 @@ export class CanvasController {
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
+    void this.sync.texts(this.els())
   }
 
   private els(): El[] {
@@ -156,6 +157,7 @@ export class CanvasController {
     void this.sync.gens(this.els())
     void this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
+    void this.sync.texts(this.els())
   }
 
   // ── delete and undo ──

@@ -96,10 +96,14 @@ export interface EndOptions {
   single?: boolean
 }
 
+/** A text's texts[id] row (features/canvas-text.clan): the document's side of a text on the canvas. */
+export const textRowOf = (doc: ProductionDocument, elId: string) => Object.values(doc.texts ?? {}).find((t) => t.node === elId)
+
 /**
  * What a canvas element is as a link end: a Script, Storyboard or Video node, a named picture (its
- * reference, or its whole key when the key has two or more views), or a sketch area. An unnamed
- * picture is not one yet: `refuse` says so. Null: not an end.
+ * reference, or its whole key when the key has two or more views), a sketch area, or a text (its
+ * texts[id] row; to the rules, a note: owner 2026-10-16, "text should link to nodes too"). An unnamed
+ * picture is not one yet, nor a text whose row is still being written: `refuse` says so. Null: not an end.
  */
 export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opts: EndOptions = {}): LinkEndOnCanvas | { refuse: string } | null {
   if (!e || e.isDeleted) return null
@@ -107,6 +111,10 @@ export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opt
   if (card) return { el: e, doc: { kind: card.kind, id: card.id }, core: { kind: card.kind as LinkKind } }
   const t = tag(e)
   if (t.kind === 'sketch' && t.id) return { el: e, doc: { kind: 'sketch', id: t.id }, core: { kind: 'sketch' } }
+  if (e.type === 'text' && !(e as CanvasElement & { containerId?: string | null }).containerId) {
+    const row = textRowOf(doc, e.id)
+    return row ? { el: e, doc: { kind: 'text', id: row.id }, core: { kind: 'note' } } : { refuse: 'Type something in this text first, then link it.' }
+  }
   if (e.type === 'image') {
     const ref = refsList(doc).find((r) => r.node && (r.node === e.id || r.node === t.id))
     if (!ref) return t.kind === 'pic' || !t.kind ? { refuse: 'Name this picture first (Name… on its bar), then link it.' } : null
@@ -127,6 +135,7 @@ export function elementOfEnd(els: readonly CanvasElement[], doc: ProductionDocum
   const live = els.filter((e) => !e.isDeleted)
   const onCanvas = (node: string | undefined) => (node ? live.find((e) => e.id === node || tag(e).id === node) : undefined)
   if (end.kind === 'ref') return onCanvas(doc.refs?.[end.id]?.node)
+  if (end.kind === 'text') return onCanvas(doc.texts?.[end.id]?.node)
   // A key: its lead view on the canvas (the front, which tops its stack), else the next.
   if (end.kind === 'key') {
     const k = doc.keys?.[end.id]
@@ -157,8 +166,8 @@ export function linkCheck(els: readonly CanvasElement[], doc: ProductionDocument
   const a = endOf(from, doc, opts)
   const b = endOf(to, doc)
   if (a && 'refuse' in a) return { ok: false, reason: a.refuse }
-  if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard, a video, a named picture or a sketch area.' }
-  if ('refuse' in b) return { ok: false, reason: `Nothing links into ${endName({ kind: 'picture' })}: it is an input only.` }
+  if (!a || !b) return { ok: false, reason: 'Link a script, a storyboard, a video, a named picture, a sketch area or a text.' }
+  if ('refuse' in b) return { ok: false, reason: to.type === 'text' ? b.refuse : `Nothing links into ${endName({ kind: 'picture' })}: it is an input only.` }
   if (a.doc.id === b.doc.id) return { ok: false, reason: 'That would make a loop.' }
   const can = canLink(a.core, b.core)
   if (!can.ok) return can

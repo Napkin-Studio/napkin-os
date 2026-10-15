@@ -273,12 +273,12 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const fromClient = (cx: number, cy: number) => canvas.viewportToScene({ x: cx, y: cy }, canvas.view())
   const inside = (e: CanvasElement, p: Pt) => p.x >= e.x && p.y >= e.y && p.x <= e.x + e.width && p.y <= e.y + e.height
   const cardAt = (p: Pt) => canvas.elements().filter((e) => cardOf(e) && inside(e, p)).at(-1)
-  /** The link end at a point: a node card (they sit on top), else a picture or a sketch area. */
+  /** The link end at a point: a node card (they sit on top), else a picture, a sketch area or a text. */
   const endAt = (p: Pt) => cardAt(p) ?? canvas.elements().filter((e) => !cardOf(e) && endOf(e, services.doc.get()) && inside(e, p)).at(-1)
   /** What an end is called in the hint and the picker. */
   const word = (e: CanvasElement) => {
     const c = cardOf(e)
-    return c ? WORD[c.kind] : e.type === 'image' ? 'picture' : 'sketch area'
+    return c ? WORD[c.kind] : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
   // Double-click a node to open it (ui-behaviour 3.3, plan 2.5).
