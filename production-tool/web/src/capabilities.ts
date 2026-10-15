@@ -29,8 +29,11 @@ export interface Controls {
   regionEditFrames: boolean
   /** Paint a mask instead of only a box (sheet.mask on region_edit). */
   maskBrush: boolean
-  /** Click-to-select (sheet.segment on region_edit + flag clickSelect). */
+  /** Click-to-select (sheet.segment on region_edit + flag clickSelect). The Image editor's Click-select
+   *  runs on the device instead (features/image-editor.clan) and needs only a mask. */
   clickSelect: boolean
+  /** The Image editor's Upscale: a provider routed for upscale (Magnific on Runway). */
+  upscale: boolean
   /** Video */
   video: boolean
   /** Comments that change a region of a clip (sheet.video.regionEdit on clip_edit). */
@@ -87,8 +90,10 @@ export function controlsFor(config: Config, sheets: Sheets = SHEETS): Controls {
     series: storyboard && frame!.series > 0,
     frameRegenerate: storyboard,
     regionEditFrames,
-    maskBrush: regionEditFrames && regionEdit!.mask !== 'none',
+    // The op's own mask over the sheet's: Runway takes none, except region_edit on ideogram_4_5.
+    maskBrush: regionEditFrames && (regionEdit!.ops.region_edit?.mask ?? regionEdit!.mask) !== 'none',
     clickSelect: regionEditFrames && f.clickSelect && regionEdit!.segment,
+    upscale: storyboard && !!s('upscale'),
     video,
     videoRegionEdit: video && f.videoRegionEdit && !!clipEdit && clipEdit.video.regionEdit !== 'none',
     fixInShot: video && regionEditFrames,

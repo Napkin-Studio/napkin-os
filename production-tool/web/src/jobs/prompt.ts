@@ -256,11 +256,17 @@ export function suggestName(d: Doc, words: string, role: RefRole): { key: string
  * @name, on the job's first output. One step, the person's. A name in use elsewhere is refused.
  */
 export async function nameMadePicture(store: DocumentStore, jobId: Id, name: { key: string; variant: string; role: RefRole; label?: string }, nodeId?: Id): Promise<Id> {
+  const asset = store.get().jobs[jobId]?.outputs?.[0]
+  if (!asset) throw new Error('Name the picture once it is finished.')
+  return nameAsset(store, asset, name, nodeId)
+}
+
+/** A picture in the document named as a reference (Name this picture): also the Image editor's
+ *  cut-out, Save as reference (features/image-editor.clan). A name in use elsewhere is refused. */
+export async function nameAsset(store: DocumentStore, asset: string, name: { key: string; variant: string; role: RefRole; label?: string }, nodeId?: Id): Promise<Id> {
   const problem = nameProblem(name.key, name.variant)
   if (problem) throw new Error(problem)
   const d = store.get()
-  const asset = d.jobs[jobId]?.outputs?.[0]
-  if (!asset) throw new Error('Name the picture once it is finished.')
   const full = `${name.key}_${name.variant}`
   const other = refsList(d).find((r) => nameOf(r) === full)
   if (other && other.asset !== asset) throw new Error(`@${full} is taken. Pick another name.`)

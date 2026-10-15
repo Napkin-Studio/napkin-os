@@ -15,7 +15,7 @@ export interface DeviceEnv { webgpu: boolean; memoryGb?: number }
 /** What this device offers: a WebGPU adapter, and its memory where the browser says. */
 export async function deviceEnv(): Promise<DeviceEnv> {
   const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> }; deviceMemory?: number }
-  let webgpu = false
+  let webgpu: boolean
   try {
     webgpu = !!(await nav.gpu?.requestAdapter())
   } catch {

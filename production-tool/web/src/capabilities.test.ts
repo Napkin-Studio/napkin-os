@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { controlsFor, effectiveConfig, routedProvider, type Controls } from './capabilities'
-import { CONFIGS } from './contracts/load'
+import { CONFIGS, SHEETS } from './contracts/load'
 
 const every = (c: Controls) => Object.entries(c).filter(([, v]) => !v).map(([k]) => k)
 
@@ -10,9 +10,11 @@ describe('capability gating', () => {
     expect(every(c)).toEqual([])
   })
 
-  it('Runway hides the mask brush, click-select, angles and the strength control', () => {
+  it('Runway hides click-select, angles and the strength control, and takes a mask on Ideogram', () => {
     const c = controlsFor(effectiveConfig('allon', 'runway'))
-    expect(c.maskBrush).toBe(false)
+    // region_edit runs on ideogram_4_5, which takes a mask (features/image-editor.clan)
+    expect(c.maskBrush).toBe(true)
+    expect(c.upscale).toBe(true)
     expect(c.clickSelect).toBe(false)
     expect(c.angles).toBe(false)
     expect(c.series).toBe(false)
@@ -72,7 +74,12 @@ describe('capability gating', () => {
 
   it('reads only the first routed provider', () => {
     const cfg = { ...CONFIGS.live, routing: { ...CONFIGS.live.routing, region_edit: ['runway' as const, 'mock' as const] } }
-    expect(controlsFor(cfg).maskBrush).toBe(false)
-    expect(controlsFor({ ...cfg, routing: { ...cfg.routing, region_edit: ['mock' as const, 'runway' as const] } }).maskBrush).toBe(true)
+    expect(controlsFor(cfg).clickSelect).toBe(false)
+    expect(controlsFor({ ...cfg, routing: { ...cfg.routing, region_edit: ['mock' as const, 'runway' as const] } }).clickSelect).toBe(true)
+  })
+  it("reads an op's own mask over the sheet's", () => {
+    const sheets = structuredClone(SHEETS)
+    delete sheets.runway.ops.region_edit!.mask
+    expect(controlsFor(effectiveConfig('allon', 'runway'), sheets).maskBrush).toBe(false)
   })
 })
