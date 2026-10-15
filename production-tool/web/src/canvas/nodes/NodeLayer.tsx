@@ -14,13 +14,18 @@ import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalSt
 import { RouterContext, useDoc, useServices } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import { updateDoc } from '../../doc/store'
-import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
+import type { ActiveToolSpec, CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import type { LinkEndpoint } from '../../contracts/types'
 import { canLink, type LinkKind } from '../core/links'
 import { canvasActions, toolLetter } from '../chrome/actions'
 import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
-import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, groupOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
+import { applyKeyMerges, keyLinkMerges, mergeWords } from './mergeLinks'
+import { provenanceFixes } from './provenance'
+import { elementBounds } from '../core/geometry'
+import { isInkTool } from '../core/tools'
+import { UndoChip } from '../../ui/Undo'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import { makeVideo, storyboardFor } from './make'
 import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
@@ -160,15 +165,23 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const offered = useRef(new Set<string>())
   useEffect(() => {
     const found = reconcileLinks(canvas.elements(), doc, seen.current)
-    const { unlink, draw, erase } = found
+    const { unlink, draw, erase, regroup } = found
     const relink = found.relink.filter((l) => !offered.current.has(l.id))
     for (const l of relink) offered.current.add(l.id)
-    if (draw.length || erase.length) {
+    if (draw.length || erase.length || regroup.length) {
       const gone = new Set(erase)
+      const group = new Map(regroup.map((g) => [g.elId, g.group]))
       canvas.transact((els) => {
-        let all = els.map((e) => (gone.has(e.id) ? canvas.patch(e, { isDeleted: true }) : e))
+        let all = els.map((e) => {
+          if (gone.has(e.id)) return canvas.patch(e, { isDeleted: true })
+          if (!group.has(e.id)) return e
+          // A key link learns the group it leaves from (it attaches at the views' bounds).
+          const b = (e as CanvasElement & { startBinding?: { elementId: string; group?: string } | null }).startBinding
+          const g = group.get(e.id)
+          return b ? canvas.patch(e, { startBinding: { elementId: b.elementId, ...(g ? { group: g } : {}) } } as Partial<CanvasElement>) : e
+        })
         for (const d of draw) {
-          const el = canvas.link({ fromElId: d.from.id, toElId: d.to.id, role: d.link.role, linkId: d.link.id })
+          const el = canvas.link({ fromElId: d.from.id, toElId: d.to.id, role: d.link.role, linkId: d.link.id, ...groupOf(doc, d.link.from) })
           all = canvas.bindArrow([...all, el], el)
         }
         return all
@@ -181,6 +194,17 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     }, unlink.length ? `unlink ${unlink.length} on the canvas` : `link ${relink.length} on the canvas`).catch((e) => console.warn('could not keep the links in step', e))
   }, [canvas, doc, services, tick])
 
+  // Generation arrows stay bound to their ends (a system write): one that lost an end's binding is bound
+  // again to the ends its provenance names, and a fragment whose ends are gone goes.
+  useEffect(() => {
+    const fixes = provenanceFixes(canvas.elements())
+    if (!fixes.size) return
+    canvas.transact((all) => all.map((e) => {
+      const f = fixes.get(e.id)
+      return !f ? e : f === 'delete' ? canvas.patch(e, { isDeleted: true }) : canvas.patch(e, f)
+    }), { undoable: false })
+  }, [canvas, tick])
+
   // Key groups follow the document (a system write): naming or renaming a picture joins or leaves its
   // key's group at once, and a newly named view goes beside the others.
   useEffect(() => {
@@ -188,6 +212,23 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (!fields.size) return
     canvas.transact((all) => all.map((e) => (fields.has(e.id) ? canvas.patch(e, fields.get(e.id)!) : e)), { undoable: false })
   }, [canvas, doc, tick])
+
+  // One key, one link (owner, 2026-10-15): when views form a key group, their links into a target made
+  // before that merge into the key link, as one undo step, said "Linked as @samurai · 3 views". Links
+  // an undo brings back stay as they are (declined), for this session.
+  const declined = useRef(new Set<string>())
+  const [said, setSaid] = useState<{ text: string; key: string; links: string[] } | null>(null)
+  useEffect(() => {
+    const merges = keyLinkMerges(doc, declined.current)
+    if (!merges.length) return
+    const made = applyKeyMerges(canvas, services.doc, merges, declined.current, seen.current)
+    setSaid({ text: merges.map(mergeWords).join(' · '), key: merges[0].key.key, links: made })
+  }, [canvas, doc, services, tick])
+  useEffect(() => {
+    if (!said) return
+    const t = setTimeout(() => setSaid(null), 6000)
+    return () => clearTimeout(t)
+  }, [said])
 
   // A click (or tap) on a stack opens it; a click on empty canvas folds back what a click opened. What
   // the click hit is what the canvas selected at the press (a stack's whole group, or nothing).
@@ -273,10 +314,10 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     if (ids.size < 2) return null
     return keyGroupsOn(canvas.elements(), services.doc.get()).find((g) => g.members.length === ids.size && g.members.every((m) => ids.has(m.id))) ?? null
   }
+  /** The box round elements as drawn: a turned photo in a stack by its turned corners (the whole pile). */
   const boxOfAll = (es: readonly CanvasElement[]) => {
-    const x0 = Math.min(...es.map((e) => e.x))
-    const y0 = Math.min(...es.map((e) => e.y))
-    return { x: x0, y: y0, w: Math.max(...es.map((e) => e.x + e.width)) - x0, h: Math.max(...es.map((e) => e.y + e.height)) - y0 }
+    const b = elementBounds(es)
+    return { x: b.minX, y: b.minY, w: b.w, h: b.h }
   }
 
   const cancel = useCallback(() => {
@@ -466,8 +507,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
   const groupSel = mode !== 'link' ? selectedKeyGroup() : null
   const hoverCheck = hover ? checks.get(hover.id) : undefined
   const linking = mode === 'link'
+  // The pen, highlighter or eraser owns the pointer on every surface: the cards take none while it is in hand.
+  const inking = isInkTool((canvas as CanvasAdapter & { activeTool?: () => ActiveToolSpec }).activeTool?.())
+  // ⌘Z took the merge back: its words leave with it.
+  const saying = said && !(said.links.length && said.links.every((id) => !els.some((e) => e.id === id && !e.isDeleted))) ? said : null
+  const saidGroup = saying ? groups.find((g) => g.key === saying.key) : undefined
   return (
-    <div className={`node-layer ${source ? 'linking' : ''}`} ref={root}>
+    <div className={`node-layer ${source ? 'linking' : ''} ${inking ? 'inking' : ''}`} ref={root}>
       {nodes.map((e) => {
         const c = cardOf(e)!
         const off = moving?.ids.has(e.id) ? moving : null
@@ -520,6 +566,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         const lead = groupSel.members[0]
         return <span className="nl-port" role="button" aria-label={`Link from ${groupLabel(groupSel)}`} title="Drag to link the whole character (L); ⌥ links one view"
           style={{ left: p.x, top: p.y }} onPointerDown={(ev) => startLink(lead, ev)} onPointerMove={follow} onPointerUp={endLink} />
+      })()}
+      {saying && (() => {
+        const b = saidGroup ? boxOfAll(saidGroup.members) : null
+        const p = b ? toLocal(b.x, b.y + b.h) : { x: 24, y: 24 }
+        const undoScene = (canvas as CanvasAdapter & { undoScene?: (dir: 'undo' | 'redo') => boolean }).undoScene
+        return <UndoChip className="nl-said" label={saying.text} style={{ left: p.x, top: p.y + 12 }}
+          onUndo={() => { undoScene?.call(canvas, 'undo'); setSaid(null) }} />
       })()}
       {linking && (
         <div className="nl-linkmode" role="application" aria-label="Link tool: click the node to link from, then the node it feeds"

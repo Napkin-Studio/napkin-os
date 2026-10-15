@@ -74,7 +74,7 @@ describe('canvas-nodes on the own engine', () => {
     expect(written[0]).toMatchObject({ from: { kind: 'script' }, to: { kind: 'video' }, role: 'drives' })
     const withLink = { ...doc, links: { [written[0].id]: written[0] } } as ProductionDocument
     const seen = linkMemory()
-    expect(reconcileLinks(a.elements(), withLink, seen)).toEqual({ unlink: [], relink: [], draw: [], erase: [] })
+    expect(reconcileLinks(a.elements(), withLink, seen)).toEqual({ unlink: [], relink: [], draw: [], erase: [], regroup: [] })
     // The person deletes the link element: its document entry goes.
     const linkEl = a.elements().find((e) => linkIdOf(e) === written[0].id)!
     a.selector.set([linkEl.id])

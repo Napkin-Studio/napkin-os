@@ -23,6 +23,7 @@ import { canLink, checkLink, endName, type LinkEnd as CoreEnd, type LinkGraph, t
 import type { CardKind } from './cardChrome'
 import { adLayout, CARD_SIZE } from '../boards/layout'
 import { isKeyGroup, keyViews } from '../../lib/names'
+import { keyGroupId } from './keyGroups'
 
 export const CARD_KINDS: readonly CardKind[] = ['script', 'storyboard', 'video']
 
@@ -175,9 +176,16 @@ export async function linkNodes(canvas: CanvasAdapter, doc: ProductionDocument, 
   const b = endOf(to, doc) as LinkEndOnCanvas
   const link: Link = { id: newId('link'), v: 1, field_v: {}, from: a.doc, to: b.doc, role: check.docRole }
   await write(link)
-  const element = canvas.link({ fromElId: from.id, toElId: to.id, role: check.docRole, linkId: link.id })
+  const element = canvas.link({ fromElId: from.id, toElId: to.id, role: check.docRole, linkId: link.id, ...groupOf(doc, link.from) })
   canvas.transact((els) => canvas.bindArrow([...els, element], element), { undoable: true })
   return { ok: true, link, element }
+}
+
+/** The group a link leaves from on the canvas: a key's views (`key:<key>`), so it attaches at their bounds. */
+export function groupOf(doc: ProductionDocument, from: LinkEndpoint): { fromGroup?: string } {
+  if (from.kind !== 'key') return {}
+  const k = doc.keys?.[from.id]
+  return k ? { fromGroup: keyGroupId(k.key) } : {}
 }
 
 /** What reconcileLinks remembers across calls in one session. */
@@ -203,7 +211,7 @@ export const linkMemory = (): LinkMemory => ({ seen: new Set(), inDoc: new Set()
  * - erase: an element whose document entry someone else removed (an inputs chip's ×) goes too.
  * Draw and erase are system writes, never the person's step.
  */
-export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDocument, mem: LinkMemory): { unlink: string[]; relink: Link[]; draw: { link: Link; from: CanvasElement; to: CanvasElement }[]; erase: string[] } {
+export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDocument, mem: LinkMemory): { unlink: string[]; relink: Link[]; draw: { link: Link; from: CanvasElement; to: CanvasElement }[]; erase: string[]; regroup: { elId: string; group: string | null }[] } {
   const live = new Map<string, CanvasElement>()
   for (const e of els) {
     const id = linkIdOf(e)
@@ -239,13 +247,22 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
     if (from && isEnd(b) && ends.role && endInDoc(doc, a as LinkEndOnCanvas) && endInDoc(doc, b)) relink.push({ id, v: 1, field_v: {}, from, to: b.doc, role: ends.role as LinkRole })
   }
   const draw: { link: Link; from: CanvasElement; to: CanvasElement }[] = []
+  const regroup: { elId: string; group: string | null }[] = []
   for (const l of Object.values(doc.links ?? {})) {
-    if (live.has(l.id) || mem.seen.has(l.id)) continue
+    const there = live.get(l.id)
+    if (there) {
+      // A key link leaves from its group (it attaches at the views' bounds); one drawn before that knew it learns it.
+      const want = groupOf(doc, l.from).fromGroup ?? null
+      const has = (there as CanvasElement & { startBinding?: { group?: string } | null }).startBinding?.group ?? null
+      if (want !== has) regroup.push({ elId: there.id, group: want })
+      continue
+    }
+    if (mem.seen.has(l.id)) continue
     const from = elementOfEnd(els, doc, l.from)
     const to = elementOfEnd(els, doc, l.to)
     if (from && to) draw.push({ link: l, from, to })
   }
-  return { unlink, relink, draw, erase }
+  return { unlink, relink, draw, erase, regroup }
 }
 
 // ── New nodes (+ Node; ui-behaviour 3.3 Creating nodes) ─────────────────────

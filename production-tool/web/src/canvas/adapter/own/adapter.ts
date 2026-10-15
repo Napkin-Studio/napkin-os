@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  elementFromRecord, hitBoardTitle, hitNodeOrLink, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardLook, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
+  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardLook, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -160,10 +160,26 @@ export class OwnAdapter implements CanvasAdapter {
   // ── reads and writes ──
 
   elements(opts: { includeDeleted?: boolean } = {}): CanvasElement[] {
-    this.cache ??= this.scene.all()
-      .sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
-      .map((r) => elementFromRecord(r, this.scene.points(r.id)) as unknown as CanvasElement)
+    this.cache ??= this.served()
     return opts.includeDeleted ? [...this.cache, ...this.tombstones.values()] : [...this.cache]
+  }
+
+  /**
+   * The records as elements. A bound arrow (a generation's provenance arrow) is served where it is
+   * drawn now, from its ends (canvas-engine linkRoute), so hover cards and exports see the live line.
+   */
+  private served(): CanvasElement[] {
+    const all = this.scene.all().sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
+    const env = all.some((r) => r.kind === 'arrow' && boundEnds((id) => this.scene.get(id), r)) ? sceneLinkEnv(this.scene) : null
+    return all.map((r) => {
+      const el = elementFromRecord(r, this.scene.points(r.id)) as unknown as CanvasElement
+      const route = env && r.kind === 'arrow' ? linkRoute(env, r) : null
+      if (!route) return el
+      const o = route.pts[0]
+      const xs = route.pts.map((p) => p.x)
+      const ys = route.pts.map((p) => p.y)
+      return { ...el, x: o.x, y: o.y, width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys), points: route.pts.map((p) => [p.x - o.x, p.y - o.y] as [number, number]) }
+    })
   }
 
   transact(fn: (els: readonly CanvasElement[]) => readonly CanvasElement[], opts: { undoable: boolean }) {
@@ -174,7 +190,14 @@ export class OwnAdapter implements CanvasAdapter {
       if (e.isDeleted) this.tombstones.set(e.id, { ...e, isDeleted: true })
       else this.tombstones.delete(e.id)
     }
-    const { records, points } = recordsFromElements(live as never, (id) => this.scene.get(id))
+    const converted = recordsFromElements(live as never, (id) => this.scene.get(id))
+    const { points } = converted
+    // A bound link's or arrow's geometry is derived from its ends: what it was served as is never written back.
+    const records = converted.records.map((r) => {
+      const cur = this.scene.get(r.id)
+      if (!cur || (r.kind !== 'arrow' && r.kind !== 'link') || !boundEnds((id) => this.scene.get(id), r)) return r
+      return { ...r, x: cur.x, y: cur.y, w: cur.w, h: cur.h, props: { ...r.props, route: cur.props.route ?? [] } }
+    })
     const keep = new Set(records.map((r) => r.id as string))
     this.scene.change((tx) => {
       const put = records.filter((r) => {
@@ -275,7 +298,7 @@ export class OwnAdapter implements CanvasAdapter {
   link(i: LinkIntent): CanvasElement {
     return this.make({
       type: 'arrow', points: [[0, 0], [1, 1]], role: i.role, customData: { kind: 'link', id: i.linkId },
-      startBinding: { elementId: i.fromElId }, endBinding: { elementId: i.toElId },
+      startBinding: { elementId: i.fromElId, ...(i.fromGroup ? { group: i.fromGroup } : {}) }, endBinding: { elementId: i.toElId },
     } as Partial<OwnEl> & { type: string })
   }
 
@@ -684,6 +707,12 @@ export class OwnAdapter implements CanvasAdapter {
   }
 
   /** Draw the scene onto the screen's context, in device pixels at `dpr`. */
+  /** The ink over the node cards, on the canvas above them (after drawTo, which sets the renderer's state). */
+  drawOverTo(ctx: Ctx2D, dpr: number) {
+    const { scrollX, scrollY, zoom, width, height } = this.vp
+    this.renderer?.drawOver(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr)
+  }
+
   drawTo(ctx: Ctx2D, dpr: number) {
     const { scrollX, scrollY, zoom, width, height } = this.vp
     if (this.renderer) {

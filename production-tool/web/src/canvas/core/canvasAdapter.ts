@@ -186,6 +186,8 @@ export interface LinkIntent {
   role: string
   /** The document's links entry. */
   linkId: string
+  /** The group the link leaves from (a key link from a character's views: `key:<key>`); it attaches at the group's bounds. */
+  fromGroup?: string
 }
 
 /** A board frame (art-boards): a container tagged {kind: 'board', id} with the document's board id. */
