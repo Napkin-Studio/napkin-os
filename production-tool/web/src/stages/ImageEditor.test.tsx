@@ -36,10 +36,11 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-async function open(session?: (frameId: string) => EditSession) {
+async function open(session?: (frameId: string) => EditSession, makers = ['runway', 'google', 'ideogram', 'magnific']) {
   const storage = memoryStorage()
   const index = new ProjectIndex(storage, () => new Date('2026-10-15T10:00:00Z'))
-  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: ME }, null)
+  // Routed as live (Runway), so the agency's makers decide what runs.
+  const app = new SnapshotStore<AppUi>({ ...initialAppUi(), providerChoice: 'runway', me: { ...ME, allow: { claude: true, makers } } }, null)
   const relay = new MockRelay({ renderer: { async render() { return [] } }, delayMs: 2000, persistKey: null })
   const shell = new Shell({ relay, app, index, storage, remoteConfig: null, makeClan, summaryDelayMs: 1 })
   await shell.newProject()
@@ -192,6 +193,23 @@ describe('the actions (3.12), none with a price', () => {
     expect(actions.textContent).toContain('Only the blue area changes')
     expect(actions.textContent).not.toMatch(/\$|credit|cost|price/i)
   })
+  it('an agency with Magnific and Ideogram off: Upscale says why and cannot run', async () => {
+    const { el } = await open(undefined, ['runway', 'google'])
+    const actions = el.querySelector('[aria-label="Actions"]')!
+    expect(actions.textContent).toContain('Magnific, the upscaler, is off for your agency')
+    expect(byText(el, 'Upscale')?.disabled).toBe(true)
+    // Fill area still runs, on Gemini 3 Pro (the box drawn), and the tray says so
+    const box = el.querySelector('#ie-fill') as HTMLTextAreaElement
+    expect(box.disabled).toBe(true)
+  })
+  it('with Ideogram off the fill goes to Gemini 3 Pro, and the tray names it', async () => {
+    const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }), ['runway', 'google'])
+    const box = el.querySelector('#ie-fill') as HTMLTextAreaElement
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    act(() => { set.call(box, 'drops'); box.dispatchEvent(new Event('input', { bubbles: true })) })
+    act(() => byText(el, 'Fill area')!.click())
+    expect(document.querySelector('.ie-tray')?.textContent).toContain('Gemini 3 Pro on Runway')
+  })
   it('Fill area waits for a painted mask and words', async () => {
     const { el } = await open()
     expect(byText(el, 'Fill area')?.disabled).toBe(true)
@@ -207,7 +225,7 @@ describe('the actions (3.12), none with a price', () => {
     expect(tray.textContent).toContain('What Rhea will send to fill the area')
     expect(tray.textContent).toContain('Mask 1')
     expect(tray.textContent).toContain('"add condensation drops"')
-    expect(tray.textContent).toMatch(/on (Runway|the mock)/)
+    expect(tray.textContent).toContain('Ideogram 4.5 on Runway')
     expect(tray.textContent).not.toMatch(/\$|credit|cost|price/i)
   })
 })

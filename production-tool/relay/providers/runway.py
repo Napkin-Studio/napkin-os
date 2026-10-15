@@ -267,16 +267,24 @@ class RunwayProvider:
             by_role = {r.role: r for r in refs}
             if "current" not in by_role:
                 raise CapabilityMissing("region_edit needs a 'current' ref")
-            if "marked" not in by_role:
-                if not job.region:
-                    raise CapabilityMissing("region_edit needs a 'marked' ref or a region to draw")
+            if "marked" not in by_role and not job.region:
+                # Change whole frame on the Gemini alternate (an agency with Ideogram off): the image and the
+                # words, keeping the composition (features/image-editor.clan).
+                current = by_role["current"]
+                if not job.ratio:
+                    job = dataclasses.replace(job, ratio=self._own_ratio(current))
+                refs = [current] + [r for r in refs if r is not current]
+                prompt = (f"Change @{current.name} as follows, keeping its composition, framing and everything "
+                          f"else as it is: ") + prompt
+            elif "marked" not in by_role:
                 by_role["marked"] = Ref("marked:box", "marked", "marked")
                 uris["marked:box"] = self._marked(by_role["current"], job.region)
-            current, marked = by_role["current"], by_role["marked"]
-            if not job.ratio:  # the web sends none for an edit: keep the picture's own shape
-                job = dataclasses.replace(job, ratio=self._own_ratio(current))
-            refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
-            prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
+            if "marked" in by_role:
+                current, marked = by_role["current"], by_role["marked"]
+                if not job.ratio:  # the web sends none for an edit: keep the picture's own shape
+                    job = dataclasses.replace(job, ratio=self._own_ratio(current))
+                refs = [current, marked] + [r for r in refs if r is not current and r is not marked]
+                prompt = REGION_PROMPT.format(current=current.name, marked=marked.name) + prompt
         self._check(job, prompt)
         if sum(r.role != "character" for r in refs) > MAX_OBJECT:
             raise CapabilityMissing(f"{self.name} takes at most {MAX_OBJECT} object refs")

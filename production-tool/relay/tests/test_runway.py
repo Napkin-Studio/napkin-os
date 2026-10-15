@@ -569,3 +569,13 @@ def test_the_editor_bodies_match_runways_own_schemas(editor, runway, server):
         schema = json.loads((schemas / f"{name}.json").read_text())["schema"]
         errors = list(Draft202012Validator(schema).iter_errors(json.loads(req.content)))
         assert not errors, (name, errors[0].message)
+
+
+def test_change_whole_frame_on_the_gemini_alternate_sends_the_frame_and_the_words(editor, server):
+    """An agency with Ideogram off: the whole-frame change runs on Gemini 3 Pro, at the frame's own shape."""
+    editor.submit(job("region_edit", model="gemini_image3_pro", prompt="warmer light", ratio=None,
+                      refs=[Ref(FRAME, "current", "current")]))
+    body = server.body
+    assert body["model"] == "gemini_image3_pro" and [r["tag"] for r in body["referenceImages"]] == ["current"]
+    assert body["promptText"].endswith("warmer light") and "box" not in body["promptText"]
+    assert body["ratio"] == "2752:1536"  # the Pro size nearest a 40 x 20 frame

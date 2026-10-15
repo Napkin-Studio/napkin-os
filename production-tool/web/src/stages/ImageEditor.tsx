@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import type { Frame, Mime, RefRole, Shot } from '../contracts/types'
-import { modelWhere, routedSheet } from '../capabilities'
+import { modelChoicesFor, modelWhere } from '../capabilities'
 import { assetRef } from '../jobs/assets'
 import { selectFrame } from '../jobs/frames'
 import { isActive } from '../jobs/runner'
@@ -204,10 +204,12 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const cutouts = session.edits.filter((e) => e.kind === 'cutout' && resultOf(e))
   const lastCutout = [...session.edits].reverse().find((e): e is CutoutEdit => e.kind === 'cutout')
   const shownPlan = framePic ? plan(session, framePic, resultOf, { text: false, crop: false }) : undefined
-  const regionSheet = routedSheet('region_edit', config)
-  const upSheet = routedSheet('upscale', config)
-  const regionModel = regionSheet ? modelWhere(regionSheet.provider, regionSheet.ops.region_edit?.model) : undefined
-  const upModel = upSheet ? modelWhere(upSheet.provider, upSheet.ops.upscale?.model) : undefined
+  // The model each action runs on for this agency: Ideogram 4.5 and Magnific when it has them on, else
+  // region edits run on Gemini 3 Pro and Upscale cannot run (subprocessors.json: off unless it asks).
+  const regionChoice = modelChoicesFor('region_edit', config)[0]
+  const upChoice = modelChoicesFor('upscale', config)[0]
+  const regionModel = regionChoice ? modelWhere(regionChoice.provider, regionChoice.model) : undefined
+  const upModel = upChoice ? modelWhere(upChoice.provider, upChoice.model) : undefined
 
   // Keys: the tools, [ ] for the brush, Space held for the Hand.
   useEffect(() => {
@@ -598,16 +600,17 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               </div>
             )}
 
-            {controls.upscale && (
+            {controls.storyboard && (
               <div className="ie-action">
                 <b>Upscale</b>
+                {!controls.upscale && <span className="faint">Magnific, the upscaler, is off for your agency, so Upscale cannot run here.</span>}
                 <div className="row">
                   <div className="pt-seg" role="group" aria-label="Upscale amount">
                     <button type="button" className="pt-mono" aria-pressed={scale === 2} onClick={() => setScale(2)}>2×</button>
                     <button type="button" className="pt-mono" aria-pressed={scale === 4} onClick={() => setScale(4)}>4×</button>
                   </div>
                   <span className="pt-mono faint ie-out">{upscaleSize(W, H, scale)}</span>
-                  <button ref={upBtn} type="button" className="btn sm" disabled={!current || running} onClick={() => setTray('upscale')}>Upscale</button>
+                  <button ref={upBtn} type="button" className="btn sm" disabled={!current || running || !controls.upscale} onClick={() => setTray('upscale')}>Upscale</button>
                 </div>
               </div>
             )}

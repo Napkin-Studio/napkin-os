@@ -31,6 +31,8 @@ def editor_harness(segmenter=None) -> Harness:
     cfg["routing"].update(upscale=["runway"], cutout=[])
     h = Harness(cfg)
     h.relay.segmenter = segmenter
+    # Ideogram and Magnific are off unless the agency asks (subprocessors.json): this agency asked.
+    h.limits("blue", allow={"claude": True, "makers": ["runway", "google", "ideogram", "magnific"]})
     return h
 
 
