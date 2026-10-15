@@ -9,6 +9,8 @@
 import { growToHold, placeAllInBoard, type Rect } from '../../../../canvas-engine/src'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { elementBounds } from '../core/geometry'
+import { boxOf, membersOf } from '../core/sketch'
+import { isSketchArea } from '../core/sketchCopy'
 
 type Fields = Partial<CanvasElement>
 const kindOf = (e: CanvasElement) => (e.customData as { kind?: string } | undefined)?.kind
@@ -49,6 +51,30 @@ export function blockersOf(els: readonly CanvasElement[], frameId: string, skip:
   return els.filter((e) => !e.isDeleted && e.id !== frameId && !skip.has(e.id) && !follows(e) && (isBoard(e) ? e.frameId !== frameId : !e.frameId)).map((e) => rectOf([e]))
 }
 
+/**
+ * What lies in these elements, at any depth: children by frameId (a drawn frame's strokes), and a sketch
+ * area's strokes by geometry (core/sketch.ts membersOf), the one rule for whatever moves a container.
+ */
+export function contentsOfUnit(els: readonly CanvasElement[], ids: readonly string[]): CanvasElement[] {
+  const live = els.filter((e) => !e.isDeleted)
+  const out = new Map<string, CanvasElement>()
+  const seen = new Set(ids)
+  const todo = live.filter((e) => seen.has(e.id))
+  while (todo.length) {
+    const c = todo.pop()!
+    const inside = [
+      ...live.filter((e) => e.frameId === c.id),
+      ...(isSketchArea(c) ? membersOf(live.filter((e) => !e.frameId || boardFrame(live, e.frameId)), boxOf(c)) : []),
+    ]
+    for (const m of inside) if (!seen.has(m.id)) {
+      seen.add(m.id)
+      out.set(m.id, m)
+      todo.push(m)
+    }
+  }
+  return [...out.values()]
+}
+
 export interface Fit {
   /** Element id → the fields to change: each unit's place and board (none when it landed outside), the board's box. */
   fields: Map<string, Fields>
@@ -65,7 +91,8 @@ export function fitInto(els: readonly CanvasElement[], frameId: string, units: r
   const fields = new Map<string, Fields>()
   const frame = boardFrame(els, frameId)
   if (!frame || !units.length) return { fields, outside: [] }
-  const moving = new Set(units.flat())
+  // The units and what is in them (a sketch area's ink): never in their own way.
+  const moving = new Set([...units.flat(), ...contentsOfUnit(els, units.flat()).map((e) => e.id)])
   const byId = new Map(els.map((e) => [e.id, e]))
   const rects = units.map((ids) => rectOf(ids.map((id) => byId.get(id)).filter((e): e is CanvasElement => !!e)))
   const board = rectOfFrame(frame)
@@ -79,6 +106,8 @@ export function fitInto(els: readonly CanvasElement[], frameId: string, units: r
       const e = byId.get(id)
       if (e) fields.set(id, { x: e.x + dx, y: e.y + dy, frameId: r.full[i] ? null : frameId })
     }
+    // What is in a unit (a drawn frame's strokes, a sketch area's ink) goes with it.
+    for (const m of contentsOfUnit(els, ids)) if (!fields.has(m.id)) fields.set(m.id, { x: m.x + dx, y: m.y + dy })
   })
   if (r.board.x !== board.x || r.board.y !== board.y || r.board.w !== board.w || r.board.h !== board.h) {
     fields.set(frameId, { x: r.board.x, y: r.board.y, width: r.board.w, height: r.board.h })

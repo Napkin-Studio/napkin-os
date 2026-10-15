@@ -239,7 +239,8 @@ export class SelectTool {
       const ids = new Set<string>(rs.map((r) => r.id))
       const rect = unionRects(rs.map(recordBounds))
       const occupied = this.boardUnits(boardId, placed).filter((u) => !u.ids.some((id) => ids.has(id))).map((u) => u.rect)
-      const blockers = this.blockers(boardId, ids, placed)
+      // What is in the unit (a sketch area's ink) comes with it: it never blocks its own board's growth.
+      const blockers = this.blockers(boardId, this.withMembers(ids), placed)
       const joined = rs.some((r) => before(r.id)?.parentId !== boardId)
       const inner = innerRect(board)
       if (containsRect(inner, rect) && (!joined || !occupied.some((o) => overlaps(rect, o)))) continue
@@ -254,6 +255,12 @@ export class SelectTool {
       const dx = p.box.x - rect.x
       const dy = p.box.y - rect.y
       for (const r of rs) placed.set(r.id, { ...r, x: r.x + dx, y: r.y + dy, parentId: p.full ? null : boardId })
+      // What is in the unit (a drawn frame's strokes, a sketch area's ink) goes with it, in the same step.
+      for (const id of this.withMembers(ids)) {
+        if (ids.has(id)) continue
+        const m = placed.get(id) ?? before(id)
+        if (m && !m.locked) placed.set(id, { ...m, x: m.x + dx, y: m.y + dy })
+      }
       if (p.full) events.push({ kind: 'full', board: boardId, ids: [...ids] })
       else if (p.board !== board) placed.set(boardId, { ...board, ...p.board })
     }
@@ -311,11 +318,30 @@ export class SelectTool {
     return true
   }
 
-  /** The ids and everything on the boards (and frames) among them, at any depth. */
+  /**
+   * What sits in each container: its children by parentId (a board's members, a drawn frame's strokes),
+   * and for a sketch area its strokes by geometry (web core/sketch.ts membersOf: untagged strokes and
+   * shapes whose box meets it, not inside another frame). One rule for everything that moves a container.
+   */
+  private membersByContainer(): Map<string, string[]> {
+    const kids = new Map<string, string[]>()
+    const all = this.scene.all()
+    for (const r of all) if (r.parentId) kids.set(r.parentId, [...(kids.get(r.parentId) ?? []), r.id])
+    const areas = all.filter(isArea)
+    if (areas.length) {
+      const loose = all.filter((r) => (r.kind === 'stroke' || r.kind === 'shape') && !r.customData && (!r.parentId || this.scene.get(r.parentId)?.kind === 'board'))
+      for (const a of areas) {
+        const box = recordBounds(a)
+        for (const r of loose) if (overlaps(recordBounds(r), box, 1e-6)) kids.set(a.id, [...(kids.get(a.id) ?? []), r.id])
+      }
+    }
+    return kids
+  }
+
+  /** The ids and everything in the containers among them (boards, drawn frames, sketch areas), at any depth. */
   private withMembers(ids: Iterable<string>): Set<string> {
     const out = new Set(ids)
-    const kids = new Map<string, string[]>()
-    for (const r of this.scene.all()) if (r.parentId) kids.set(r.parentId, [...(kids.get(r.parentId) ?? []), r.id])
+    const kids = this.membersByContainer()
     const todo = [...out]
     while (todo.length) {
       for (const k of kids.get(todo.pop()!) ?? []) if (!out.has(k)) {
@@ -490,7 +516,10 @@ export class SelectTool {
           const moved = [...ids].map((id) => tx.get(id)).filter((r): r is ElementRecord => !!r && !r.locked).map((r) => ({ ...r, x: r.x + dx, y: r.y + dy }))
           // Membership is parentId only (art-boards): what was picked up joins the board its centre
           // lands on, or leaves every board; what came along with a moved board stays on it.
-          const carried = new Set(moved.filter((r) => r.parentId && ids.has(r.parentId)).map((r) => r.id))
+          // Carried: what is in another moving container (by parentId, or a sketch area's strokes by geometry).
+          const kids = this.membersByContainer()
+          const carried = new Set<string>()
+          for (const id of ids) for (const k of kids.get(id) ?? []) if (ids.has(k)) carried.add(k)
           const placed = new Map(moved.map((r) => [r.id, r]))
           for (const r of moved) {
             if (carried.has(r.id) || r.kind === 'board') continue

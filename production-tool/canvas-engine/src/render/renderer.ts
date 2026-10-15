@@ -278,6 +278,21 @@ export class Renderer {
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
   }
 
+  /**
+   * Is a board empty, for its drop hint? Nothing on it (by parentId), and nothing lying over it either:
+   * ink, a sketch area, a group or a node drawn there counts, member or not.
+   */
+  private emptyBoard(b: ElementRecord): boolean {
+    if (this.occupied.has(b.id)) return false
+    const x0 = Math.min(b.x, b.x + b.w), y0 = Math.min(b.y, b.y + b.h)
+    const box = { minX: x0, minY: y0, maxX: x0 + Math.abs(b.w), maxY: y0 + Math.abs(b.h) }
+    const over = this.tree.search(box).some((hit) => {
+      const r = this.scene.get(hit.id)
+      return !!r && r.id !== b.id && r.kind !== 'board' && r.kind !== 'link' && !(r.kind === 'arrow' && isBound(r))
+    })
+    return !over && !this.nodes.some((n) => n.x < box.maxX && n.x + n.w > box.minX && n.y < box.maxY && n.y + n.h > box.minY)
+  }
+
   /** An element where it is drawn: offset while it is being moved. */
   private moved(r: ElementRecord): ElementRecord {
     return this.moving?.ids.has(r.id) ? { ...r, x: r.x + this.moving.dx, y: r.y + this.moving.dy } : r
@@ -620,7 +635,7 @@ export class Renderer {
     ctx.strokeStyle = current ? look.current : look.stroke
     ctx.lineWidth = current ? 2 : 1
     ctx.stroke()
-    const empty = !this.occupied.has(r.id)
+    const empty = this.emptyBoard(r)
     if (empty) {
       const hint = dropHint(typeof r.props.purpose === 'string' ? r.props.purpose : '')
       if (hint && cam.zoom > 0.25) {
@@ -696,7 +711,7 @@ export class Renderer {
         ctx.strokeStyle = r.kind === 'board' ? '#c9c3b5' : r.kind === 'sketch' ? '#5a6b8c' : stroke
         ctx.lineWidth = 2 / cam.zoom
         // An empty board is dashed, with its purpose's drop hint (ui-behaviour 3.2).
-        const empty = r.kind === 'board' && !this.occupied.has(r.id)
+        const empty = r.kind === 'board' && this.emptyBoard(r)
         if (empty) ctx.setLineDash?.([8 / cam.zoom, 6 / cam.zoom])
         ctx.strokeRect(r.x, r.y, r.w, r.h)
         if (empty) {
