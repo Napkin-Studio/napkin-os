@@ -24,9 +24,9 @@ export function setTarget(d: Doc, seconds: number) {
   if (sb) d.storyboards[sb.id].target_s = seconds
 }
 
-/** A new shot after the last one on the main storyboard. Its id. */
-export function addShot(d: Doc): string {
-  const sb = mainStoryboard(d)
+/** A new shot after the last one on `storyboardId` (absent: the main storyboard). Its id. */
+export function addShot(d: Doc, storyboardId?: string): string {
+  const sb = (storyboardId && d.storyboards[storyboardId]) || mainStoryboard(d)
   if (!sb) throw new Error('This project has no storyboard.')
   const last = shotsOf(d, sb.id).at(-1)
   const id = newId('shot')

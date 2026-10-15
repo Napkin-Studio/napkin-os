@@ -331,6 +331,12 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     }
   }, [ctrl, asking, limits])
 
+  // A node made from an editor (the Video editor's Make a storyboard from these shots): its Undo here.
+  useEffect(() => canvasActions.onMade((m) => {
+    const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
+    offerUndo({ label: m.label, at: { x: m.el.x + m.el.width / 2, y: m.el.y }, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([m.el.id]) })
+  }), [canvas, offerUndo])
+
   /** Make video from a script, a storyboard or both (3.5): one undo step, said with Undo. */
   const makeVideoFrom = useCallback(async (from: MakeVideoFrom) => {
     setWhich(null)

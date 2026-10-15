@@ -34,7 +34,8 @@ import { choiceToSend, modelChoicesFor, type Sheets } from '../capabilities'
 import { updateDoc } from '../doc/store'
 import { newId } from '../lib/ulid'
 import { jobsList, shotsOf } from '../model/selectors'
-import { makeClip, renderAd, selectedTake } from './clips'
+import { clipSource, makeClip, renderAd, selectedTake } from './clips'
+import { shotFromWords } from './clipMode'
 import { shotsBeingFixed } from './fix'
 import { drawFrame, selectedFrame, type FrameDeps } from './frames'
 import { isActive, jobCtx } from './runner'
@@ -119,8 +120,9 @@ export function planFor(d: ProductionDocument, scope: FollowScope, fixing: Reado
     case 'after': {
       const rest = shots.slice(from(scope.item.shotId))
       if (scope.item.kind === 'frame') return { frames: ids(rest.filter((s) => !drawing.has(s.id))), clips: [], ad: false }
-      // A clip is made from its shot's frame: a shot with none is left out.
-      const clips = ids(rest.filter((s) => !fixing.has(s.id) && !!selectedFrame(d, s.id)))
+      // A clip is made from its shot's frame, or from its words in a video made straight from the script:
+      // a shot with neither is left out.
+      const clips = ids(rest.filter((s) => !fixing.has(s.id) && !!clipSource(d, s.id, shotFromWords(d, s.id))))
       return { frames: [], clips, ad: !!ad.ad && clips.length > 0 }
     }
   }

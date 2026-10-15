@@ -4,10 +4,14 @@
 
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../../../contracts/types'
-import { modelStore, MAYA } from '../../../test/model'
-import { mainScript, mainStoryboard } from '../../../model/selectors'
+import { addShots, modelStore, MAYA } from '../../../test/model'
+import { mainScript, mainStoryboard, storyboardOfScript, storyboardOfVideo } from '../../../model/selectors'
 import { cardOf, createNode, linkIdOf, seedNodes } from '../../nodes/nodes'
-import { makeVideo, storyboardFor } from '../../nodes/make'
+import { makeVideo, storyboardFor, storyboardFromShots } from '../../nodes/make'
+import { ownShotList } from '../../../jobs/prompt'
+import { updateDoc } from '../../../doc/store'
+import { deleteFrom, removeNode } from '../../../doc/remove'
+import { CanvasDocSync } from '../../sync'
 import { waitsOnScriptAsk } from '../../../jobs/scriptVideo'
 import { OwnAdapter } from './adapter'
 
@@ -100,6 +104,60 @@ describe('the storyboard a script drives (3.10 Plan shots)', () => {
     const { a, s, doc } = await seeded()
     const r = await storyboardFor({ canvas: a, doc: s }, mainScript(doc())!.id)
     expect(r).toMatchObject({ storyboardId: mainStoryboard(doc())!.id, made: false })
+    await s.close()
+  })
+})
+
+describe('Make a storyboard from these shots (3.13, decided 2026-10-15)', () => {
+  /** A video made from the script alone, with its own shot list (no node) holding one shot. */
+  async function direct() {
+    const env = await seeded()
+    const { a, s, doc } = env
+    const r = await makeVideo({ canvas: a, doc: s }, { scriptId: mainScript(doc())!.id })
+    const own = await ownShotList(s, r.videoId)
+    let shotId = ''
+    await updateDoc(s, (d) => { const [x] = addShots(d, 1, { action: 'She drinks.' }); x.storyboard_id = own; shotId = x.id }, 'plan')
+    const sync = new CanvasDocSync({ doc: s, cancel: () => {} })
+    await sync.nodes(a.elements({ includeDeleted: true }))
+    return { ...env, videoId: r.videoId, own, shotId, sync }
+  }
+
+  it('a video\'s own shot list has no node and is not the script\'s storyboard', async () => {
+    const { a, s, doc, videoId, own } = await direct()
+    expect(doc().storyboards[own]).toMatchObject({ implicit: true, video_id: videoId })
+    expect(a.elements().some((e) => cardOf(e)?.id === own)).toBe(false)
+    expect(storyboardOfScript(doc(), mainScript(doc())!.id)?.id).not.toBe(own)
+    expect(storyboardOfVideo(doc(), videoId)?.id).toBe(own)
+    await s.close()
+  })
+
+  it('shows it as a node beside the video, driven by the script, the shots kept; Undo puts them back in the video', async () => {
+    const { a, s, doc, videoId, own, shotId, sync } = await direct()
+    const r = await storyboardFromShots({ canvas: a, doc: s }, videoId)
+    expect(r.storyboardId).toBe(own)
+    expect(doc().storyboards[own].implicit).toBeUndefined()
+    const vEl = nodeOf(a, videoId)
+    expect(nodeOf(a, own).x).toBeGreaterThanOrEqual(vEl.x + vEl.width)
+    expect(linksTo(doc(), own).map((l) => `${l.from.kind}>${l.to.kind}:${l.role}`).sort()).toEqual(['script>storyboard:drives', 'storyboard>video:renders'])
+    expect(storyboardOfScript(doc(), mainScript(doc())!.id)?.id).not.toBe(own) // the main storyboard is still the script's first
+    expect(doc().shots[shotId].storyboard_id).toBe(own)
+    await sync.nodes(a.elements({ includeDeleted: true }))
+    a.undoScene('undo')
+    await sync.nodes(a.elements({ includeDeleted: true }))
+    expect(a.elements().some((e) => cardOf(e)?.id === own)).toBe(false)
+    expect(doc().storyboards[own]).toMatchObject({ implicit: true, video_id: videoId })
+    expect(doc().shots[shotId]).toBeDefined()
+    a.undoScene('redo')
+    await sync.nodes(a.elements({ includeDeleted: true }))
+    expect(doc().storyboards[own].implicit).toBeUndefined()
+    await s.close()
+  })
+
+  it('deleting the Video takes its own shot list and shots with it', async () => {
+    const { s, doc, videoId, own, shotId } = await direct()
+    await deleteFrom(s, (d) => removeNode(d, 'video', videoId))
+    expect(doc().storyboards[own]).toBeUndefined()
+    expect(doc().shots[shotId]).toBeUndefined()
     await s.close()
   })
 })

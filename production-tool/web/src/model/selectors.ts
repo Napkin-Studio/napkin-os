@@ -28,18 +28,49 @@ export function mainVideo(d: Doc): Video | undefined {
   return first(d.videos)
 }
 
-/** The storyboard that renders the main video (its `renders` link), else the first. */
+/** The storyboard that renders the main video (its `renders` link), else the first one on the canvas. */
 export function mainStoryboard(d: Doc): Storyboard | undefined {
   const v = mainVideo(d)
   const link = v && values(d.links).find((l) => l.role === 'renders' && l.to.kind === 'video' && l.to.id === v.id)
-  return (link && d.storyboards[link.from.id]) || first(d.storyboards)
+  return (link && d.storyboards[link.from.id]) || values(d.storyboards).filter((x) => !x.implicit).sort(byId)[0] || first(d.storyboards)
+}
+
+/**
+ * A video's own shot list (ui-behaviour 3.5, decided 2026-10-15): a storyboard with `implicit` set holds the
+ * shots of a video made straight from the script. It has no canvas node and renders exactly that video;
+ * the Video editor shows and edits its shots. Make a storyboard from these shots clears the flag.
+ */
+export function isImplicit(sb: Pick<Storyboard, 'implicit'> | undefined): boolean {
+  return !!sb?.implicit
+}
+
+/** The video a storyboard renders: a video's own shot list's video, else its first `renders` link's. */
+export function videoOfStoryboard(d: Doc, storyboardId: Id | undefined): Video | undefined {
+  if (!storyboardId) return undefined
+  const own = d.storyboards[storyboardId]?.video_id
+  if (own && d.videos[own]) return d.videos[own]
+  return values(d.links).filter((l) => l.role === 'renders' && l.from.kind === 'storyboard' && l.from.id === storyboardId && l.to.kind === 'video')
+    .map((l) => d.videos[l.to.id]).filter((v): v is Video => !!v).sort(byId)[0]
+}
+
+/** A video's own shot list, as a storyboard with no node (isImplicit), if it has one. */
+export function ownShotsOf(d: Doc, videoId: Id | undefined): Storyboard | undefined {
+  if (!videoId) return undefined
+  return values(d.storyboards).filter((x) => x.implicit && x.video_id === videoId).sort(byId)[0]
+}
+
+/** The script behind a video's own shot list: the one that drives its video. */
+function scriptOfImplicit(d: Doc, sb: Storyboard): Script | undefined {
+  const v = videoOfStoryboard(d, sb.id)
+  const link = v && values(d.links).find((l) => l.role === 'drives' && l.from.kind === 'script' && l.to.kind === 'video' && l.to.id === v.id)
+  return link ? d.scripts[link.from.id] : undefined
 }
 
 /** The script that drives the main storyboard (its `drives` link), else the first. */
 export function mainScript(d: Doc): Script | undefined {
   const sb = mainStoryboard(d)
   const link = sb && values(d.links).find((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === sb.id)
-  return (link && d.scripts[link.from.id]) || first(d.scripts)
+  return (link && d.scripts[link.from.id]) || (sb?.implicit ? scriptOfImplicit(d, sb) : undefined) || first(d.scripts)
 }
 
 /** The storyboard the Storyboard panel shows: the node opened on the canvas, else the main one. */
@@ -55,6 +86,8 @@ export function openVideo(d: Doc, open?: { video?: Id }): Video | undefined {
 /** The storyboard that renders a video (its `renders` link); the main video falls back to the main storyboard. */
 export function storyboardOfVideo(d: Doc, videoId: Id | undefined): Storyboard | undefined {
   if (!videoId) return undefined
+  const own = ownShotsOf(d, videoId)
+  if (own) return own
   const link = values(d.links).find((l) => l.role === 'renders' && l.to.kind === 'video' && l.to.id === videoId)
   if (link) return d.storyboards[link.from.id]
   return videoId === mainVideo(d)?.id ? mainStoryboard(d) : undefined
@@ -65,15 +98,19 @@ export function scriptOfStoryboard(d: Doc, storyboardId: Id | undefined): Script
   if (!storyboardId) return undefined
   const link = values(d.links).find((l) => l.role === 'drives' && l.to.kind === 'storyboard' && l.to.id === storyboardId && l.from.kind === 'script')
   if (link) return d.scripts[link.from.id]
+  const sb = d.storyboards[storyboardId]
+  if (sb?.implicit) return scriptOfImplicit(d, sb)
   return storyboardId === mainStoryboard(d)?.id ? mainScript(d) : undefined
 }
 
 /** The storyboard a script drives (its `drives` link); the main script falls back to the main storyboard. */
 export function storyboardOfScript(d: Doc, scriptId: Id | undefined): Storyboard | undefined {
   if (!scriptId) return undefined
-  const link = values(d.links).find((l) => l.role === 'drives' && l.from.kind === 'script' && l.from.id === scriptId && l.to.kind === 'storyboard')
+  // A video's own shot list is never a script's storyboard: Plan shots on the script makes one on the canvas.
+  const link = values(d.links).find((l) => l.role === 'drives' && l.from.kind === 'script' && l.from.id === scriptId && l.to.kind === 'storyboard' && !d.storyboards[l.to.id]?.implicit)
   if (link) return d.storyboards[link.to.id]
-  return scriptId === mainScript(d)?.id ? mainStoryboard(d) : undefined
+  const main = scriptId === mainScript(d)?.id ? mainStoryboard(d) : undefined
+  return main?.implicit ? undefined : main
 }
 
 /**
@@ -83,6 +120,8 @@ export function storyboardOfScript(d: Doc, scriptId: Id | undefined): Storyboard
 export function videoOfShot(d: Doc, shotId: Id, prefer?: Id): Video | undefined {
   const sb = d.shots[shotId]?.storyboard_id
   if (!sb) return undefined
+  const own = d.storyboards[sb]?.implicit ? d.storyboards[sb]?.video_id : undefined
+  if (own && d.videos[own]) return d.videos[own]
   const rendered = values(d.links).filter((l) => l.role === 'renders' && l.from.kind === 'storyboard' && l.from.id === sb && l.to.kind === 'video')
     .map((l) => d.videos[l.to.id]).filter((v): v is Video => !!v).sort(byId)
   const mainV = mainVideo(d)

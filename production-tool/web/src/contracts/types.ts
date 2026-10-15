@@ -450,7 +450,7 @@ export interface Scene extends EntityBase {
   text?: string
   last_writer?: ActorRef
 }
-export interface Storyboard extends EntityBase { title: string; ratio: Ratio; target_s: number; implicit?: boolean }
+export interface Storyboard extends EntityBase { title: string; ratio: Ratio; target_s: number; implicit?: boolean; video_id?: Id }
 export type ShotStatus = 'planned' | 'needs_review' | 'locked'
 export interface Shot extends EntityBase {
   storyboard_id: Id

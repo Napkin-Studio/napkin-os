@@ -57,7 +57,9 @@ export function seedNodes(canvas: CanvasAdapter, doc: ProductionDocument): Canva
   const els = canvas.elements()
   if (els.some((e) => cardOf(e))) return []
   const boxes = adLayout(els, doc).nodes
-  const entities: [CardKind, { id: string } | undefined][] = [['script', mainScript(doc)], ['storyboard', mainStoryboard(doc)], ['video', mainVideo(doc)]]
+  // A video's own shot list has no node (decided 2026-10-15).
+  const sb = mainStoryboard(doc)
+  const entities: [CardKind, { id: string } | undefined][] = [['script', mainScript(doc)], ['storyboard', sb?.implicit ? undefined : sb], ['video', mainVideo(doc)]]
   const made = new Map<string, CanvasElement>()
   const out: CanvasElement[] = []
   for (const [kind, ent] of entities) {
@@ -277,7 +279,8 @@ const WORD: Record<CardKind, string> = { script: 'Script', storyboard: 'Storyboa
 
 /** A new, empty document entity for a node of this kind: "Script 2", at the project's ratio and length. */
 export function newEntity(doc: ProductionDocument, kind: CardKind): { kind: CardKind; entity: Script | Storyboard | Video } {
-  const n = Object.keys(kind === 'script' ? doc.scripts ?? {} : kind === 'storyboard' ? doc.storyboards ?? {} : doc.videos ?? {}).length
+  // A video's own shot list has no node and no name on the canvas: it is not counted.
+  const n = (kind === 'script' ? Object.values(doc.scripts ?? {}) : kind === 'storyboard' ? Object.values(doc.storyboards ?? {}).filter((x) => !x.implicit) : Object.values(doc.videos ?? {})).length
   const title = n ? `${WORD[kind]} ${n + 1}` : WORD[kind]
   const sb = mainStoryboard(doc)
   const target_s = sb?.target_s ?? mainScript(doc)?.target_s ?? 15

@@ -6,13 +6,13 @@
 // Contract 3: the clips of a shot are its takes; the one in the cut is the main video's edl item pick;
 // notes are reviews with a window; the ad is the video's picked render.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
 import { makeClip as submitClip, renderAd } from '../jobs/clips'
-import { fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
+import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, takeStale } from '../jobs/stale'
 import { adBehindLabel, behindLabel } from '../ui/behind'
@@ -37,17 +37,22 @@ import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
-import { currentRender, currentTake, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
+import { currentRender, currentTake, isImplicit, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
 import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
 import { SoundView } from './SoundView'
 import { addTakeNote, pickTake } from './videoEdits'
 import { PromptStart } from '../ui/prompt/PromptStart'
-import { clipMode, waitsOnScriptAsk } from '../jobs/scriptVideo'
+import { answerScriptVideo, clipMode, STRAIGHT, storyboardFromShots, waitsOnScriptAsk } from '../jobs/scriptVideo'
+import { LOCAL_PERSON } from '../jobs/runner'
+import { AddShot, InsertShot, ShotPanel } from './VideoShots'
 import { runningPlan } from '../jobs/plan'
 import { ClipTray } from './ClipTray'
 import { ClipChoice } from './ClipChoice'
+import { selectedFrame } from '../jobs/frames'
+import { RemakeBar } from '../ui/Follow'
+import { MAX_SHOTS } from '../lib/shots'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -88,8 +93,34 @@ export function Video() {
   const [makingAll, sendAll] = useSending()
   const [rendering, sendRender] = useSending()
 
-  // Straight from the script (ui-behaviour 3.5): a shot with no frame yet makes its clip from its words.
+  // Straight from the script (ui-behaviour 3.5): a shot with no frame yet makes its clip from its words, and
+  // the shots are edited here, on the timeline (decided 2026-10-15). `own`: they are the video's own shot
+  // list, with no Storyboard node; Make a storyboard from these shots shows them as one.
   const fromWords = clipMode(doc, video?.id) === 'straight'
+  const own = isImplicit(sb)
+  const editable = fromWords && !!sb
+  const me = ui.me?.participantId ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const [shaping, sendShape] = useSending()
+  /** Dex plans the shots into the video again (its answer, straight from the script, once more). */
+  const planHere = () => sendShape(async () => {
+    setError(null)
+    try {
+      if (video) await answerScriptVideo(deps, video.id, STRAIGHT, me)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
+  /** Make a storyboard from these shots: a node on the canvas beside the video (one undo step there). */
+  const showAsStoryboard = () => sendShape(async () => {
+    setError(null)
+    try {
+      if (!video) return
+      await storyboardFromShots(video.id)
+      uiStore.update((u) => { u.stage = 'character' }, 'stage')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
   const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
   // Make clips opens the send tray first (3.16): nothing paid starts until its Make clips.
   const [tray, setTray] = useState(false)
@@ -134,7 +165,7 @@ export function Video() {
   const empty = !shots.length
   const bar = (
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
-      title={`Video · ${isMain ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
+      title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
       meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
       middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
       right={<>
@@ -156,11 +187,16 @@ export function Video() {
         <div className="panel"><div className="empty-state">
           <AgentFigure agent="dex" size={64} state={planning ? 'working' : 'idle'} decorative />
           <span className="sayer">{sayer('dex')}</span>
-          {video && waitsOnScriptAsk(doc, video.id) ? null : planning
-            ? <div className="ve-planning" role="status"><span>I'm planning the shots from the script. {fromWords ? 'Then Make clips makes them straight from its words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
-            : <><b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}</>}
-          {video && <PromptStart kind="video" nodeId={video.id} place="editor" />}
-          {sb && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}
+          {planning
+            ? <div className="ve-planning" role="status"><span>I'm planning the shots from the script. {fromWords ? 'They land on this video\'s timeline; then Make clips makes them straight from their words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
+            : fromWords
+              ? <><b>No shots yet.</b>I plan the shots from the script into this video; you edit them here, then Make clips makes each one from its words.
+                <div style={{ marginTop: 14 }}><button className="btn primary" disabled={shaping} onClick={() => void planHere()}>{shaping ? 'Sending…' : 'Plan the shots'}</button></div></>
+              : video && waitsOnScriptAsk(doc, video.id) ? null
+                : <><b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}</>}
+          {error && <div role="alert" className="ve-error">{error}</div>}
+          {video && !fromWords && <PromptStart kind="video" nodeId={video.id} place="editor" />}
+          {sb && !own && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}
         </div></div>
       </div>
     )
@@ -172,25 +208,32 @@ export function Video() {
       {video && <ClipChoice videoId={video.id} />}
       <div className="panel ve-body pt-grid">
         {error && <div role="alert" className="ve-error">{error}</div>}
-        {view === 'sound' ? <SoundView /> : <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}
+        {view === 'sound' ? <SoundView shots={shots} /> : <Player mode={mode} shot={shot} take={take} shots={shots} videoId={video?.id} onPickShot={setShotId}
           strip={(
             <div className="ve-timeline pt-card">
               <div className="ve-tlhead"><b>Timeline</b><span className="pt-pill ok">{taken} of {shots.length} clips</span><span className="pt-grow" />
+                <RemakeBar dock="inline" />
+                {own && <button className="btn sm" disabled={shaping} onClick={() => void showAsStoryboard()} title="Show these shots as a Storyboard node on the canvas, driving this video, to draw and check their frames. Undo on the canvas puts them back here.">Make a storyboard from these shots</button>}
                 <button className={`btn sm ${mode === 'all' ? 'on' : ''}`} disabled={!allTaken} onClick={() => setMode('all')}
                   title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>▶ All shots</button>
               </div>
               <div className="ve-track"><span className="ve-lane"><b>Shots</b><span>main track</span></span>
-                <div className="strip">
+                <div className={`strip ${editable ? 'editable' : ''}`}>
                   {shots.map((s, i) => (
-                    <ShotCard key={s.id} shot={s} index={i} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
-                      onSelect={() => { setShotId(s.id); setMode('shot') }}
-                      onMake={(opts) => makeClip(s, opts)} />
+                    <Fragment key={s.id}>
+                      {editable && i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} />}
+                      <ShotCard shot={s} index={i} videoId={video?.id} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
+                        onSelect={() => { setShotId(s.id); setMode('shot') }}
+                        onMake={(opts) => makeClip(s, opts)} />
+                    </Fragment>
                   ))}
+                  {editable && sb && <AddShot storyboardId={sb.id} count={shots.length} onMade={(id) => { setShotId(id); setMode('shot') }} />}
                 </div>
               </div>
               <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.</div>
             </div>
           )}>
+          {editable && mode === 'shot' && shot && <ShotPanel key={shot.id} shot={shot} index={shots.indexOf(shot)} count={shots.length} onGone={() => setShotId(null)} />}
           {stitchJob && <div className="card" style={{ height: 120, overflow: 'hidden' }}><JobSlot jobId={stitchJob} /></div>}
           {latestAd && <AdResult sha={latestAd.asset} />}
           {controls.feelEdit && take && shot && <FeelBox shot={shot} take={take} />}
@@ -232,8 +275,8 @@ function MakeClipBox({ index, onMake }: { index: number; onMake: (opts: { text?:
   )
 }
 
-function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
-  shot: Shot; index: number; selected: boolean; jobId?: string; onSelect: () => void
+function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
+  shot: Shot; index: number; videoId?: string; selected: boolean; jobId?: string; onSelect: () => void
   onMake: (opts: { text?: string; modelChoice?: ModelChoice }) => Promise<unknown>
 }) {
   const makeRef = useRef<HTMLButtonElement>(null)
@@ -241,7 +284,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
   const { doc: docStore } = useServices()
   const doc = useDoc()
   const takes = takesOf(doc, shot.id)
-  const sel = currentTake(doc, shot.id)
+  const sel = currentTake(doc, shot.id, videoId)
   const thumb = useBlobUrl(shotFrameAsset(doc, shot))
   const showMock = useShowMock()
   const open = reviewsList(doc).filter((r) => r.target.kind === 'take' && takes.some((t) => t.id === r.target.id) && r.state !== 'resolved').length
@@ -275,7 +318,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
       }
     }}>
       <div className="thumb">
-        {thumb && <img src={thumb} alt="" />}
+        {thumb ? <img src={thumb} alt="" /> : shot.action ? <span className="ve-thumbwords">{shot.action}</span> : null}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobSlot jobId={jobId} compact /></div>}
       </div>
       {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} />}
@@ -286,7 +329,7 @@ function ShotCard({ shot, index, selected, jobId, onSelect, onMake }: {
             <button key={t.id} className={`vchip ${t.id === sel?.id ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
               onClick={(e) => {
                 e.stopPropagation()
-                void updateDoc(docStore, (d) => pickTake(d, shot.id, t.id), 'pick take')
+                void updateDoc(docStore, (d) => pickTake(d, shot.id, t.id, videoId), 'pick take')
               }}>v{i + 1}</button>
           ))}
           {!takes.length && !jobId && <button ref={makeRef} className="btn xs" aria-haspopup="dialog" aria-expanded={making} onClick={(e) => { e.stopPropagation(); setMaking(!making) }}>Make clip</button>}
@@ -379,15 +422,16 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
   )
 }
 
-function Player({ mode, shot, take, onPickShot, strip, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; onPickShot: (id: string) => void; strip?: React.ReactNode; children?: React.ReactNode }) {
+/** `shots`: the video's shots in order; `videoId`: the video whose cut plays (another video's cut played
+ *  the main video's takes, 2026-10-15). */
+function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children }: { mode: 'shot' | 'all'; shot?: Shot; take?: Take; shots: Shot[]; videoId?: string; onPickShot: (id: string) => void; strip?: React.ReactNode; children?: React.ReactNode }) {
   const { doc: docStore, runner, relay } = useServices()
   const doc = useDoc()
   const ui = useUi()
   const { config, controls } = useConfig()
   const video = useRef<HTMLVideoElement>(null)
   const stageBox = useRef<HTMLDivElement>(null)
-  const shots = useMemo(() => shotsOf(doc), [doc])
-  const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: currentTake(doc, s.id) })).filter((x) => x.take) as { shot: Shot; take: Take }[], [shots, doc])
+  const playlist = useMemo(() => shots.map((s) => ({ shot: s, take: currentTake(doc, s.id, videoId) })).filter((x) => x.take) as { shot: Shot; take: Take }[], [shots, doc, videoId])
   const [idx, setIdx] = useState(0)
   const cur = mode === 'all' ? playlist[idx] : take && shot ? { shot, take } : undefined
   // Not in this browser (another device, cleared storage): the relay's copy (2026-10-09).
@@ -471,7 +515,7 @@ function Player({ mode, shot, take, onPickShot, strip, children }: { mode: 'shot
     const take = cur.take
     const shotS = take.duration_s || cur.shot.duration_s
     void updateDoc(docStore, (d) => {
-      addTakeNote(d, { takeId: take.id, shotId: cur.shot.id, shotS, atS, text: clipText(note.trim(), 1000), region, by })
+      addTakeNote(d, { takeId: take.id, shotId: cur.shot.id, shotS, atS, text: clipText(note.trim(), 1000), region, by, videoId })
     }, 'comment')
     setNote('')
     setRegion(null)
@@ -480,7 +524,7 @@ function Player({ mode, shot, take, onPickShot, strip, children }: { mode: 'shot
 
   const boxedOpen = openNotes.filter((r) => r.region)
   // A note with a box is fixed in the shot (jobs/fix.ts): the storyboard frame first, then a new clip from it.
-  const fixesInShot = boxedOpen.length > 0 && controls.fixInShot
+  const fixesInShot = !!cur && fixesInFrame(doc, cur.shot.id, boxedOpen, controls.fixInShot)
   const progress = cur ? fixProgress(doc, ctxReader(doc, ui), reviews.filter((r) => r.target.id === cur.take.id).map((r) => r.id)) : undefined
   // The fix's frame already landed and only its clip failed: Fix makes only the clip, from the fixed frame.
   const fixedFrame = cur && fixesInShot ? fixFrameLanded(doc, ctxReader(doc, ui), openNotes.map((r) => r.id)) : undefined
@@ -510,7 +554,7 @@ function Player({ mode, shot, take, onPickShot, strip, children }: { mode: 'shot
   const jump = (r: Review) => {
     const target = r.target.kind === 'take' ? doc.takes[r.target.id] : undefined
     if (target && cur && target.id !== cur.take.id) {
-      void updateDoc(docStore, (d) => pickTake(d, target.shot_id, target.id), 'pick take')
+      void updateDoc(docStore, (d) => pickTake(d, target.shot_id, target.id, videoId), 'pick take')
     }
     if (target && mode === 'all') onPickShot(target.shot_id)
     pendingSeek.current = r.at_s ?? 0
@@ -694,7 +738,7 @@ function Player({ mode, shot, take, onPickShot, strip, children }: { mode: 'shot
           <div className="row" title={made.label}>
             <ModelPick op="clip" value={choice} onChange={setPick} />
             <span className="spacer" />
-            <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title="Make this shot again from its frame">{sending ? 'Sending…' : 'New take'}</button>
+            <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title={selectedFrame(doc, cur.shot.id) ? 'Make this shot again from its frame' : 'Make this shot again from its words'}>{sending ? 'Sending…' : 'New take'}</button>
           </div>
           </div>
         </div>

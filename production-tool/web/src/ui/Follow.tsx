@@ -35,9 +35,10 @@ export function UpdateFollows() {
   )
 }
 
-/** The one place to start an update of the whole project: a bar floating on the stage while anything is
- *  out of date or not made yet. `dock`: top on the Video stage, where the bottom is the player's controls. */
-export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {}) {
+/** The one place to start an update of the whole project: a bar while anything is out of date or not made
+ *  yet. `dock`: floating at the bottom of the stage, or `inline` in the Video editor's timeline head (it
+ *  floated over the top bar there and hid Picture | Sound, 2026-10-15). */
+export function RemakeBar({ dock = 'bottom' }: { dock?: 'bottom' | 'inline' } = {}) {
   const update = useUpdate()
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +58,7 @@ export function RemakeBar({ dock = 'bottom' }: { dock?: 'top' | 'bottom' } = {})
     }
   }
   return (
-    <div className={`remakebar ${dock === 'top' ? 'top' : ''}`} role="region" aria-label="Update" onClick={(e) => e.stopPropagation()}>
+    <div className={`remakebar ${dock === 'inline' ? 'inline' : ''}`} role="region" aria-label="Update" onClick={(e) => e.stopPropagation()}>
       {n > 0 && (
         <>
           <span className="dot" aria-hidden="true" />

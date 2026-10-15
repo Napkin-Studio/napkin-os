@@ -341,7 +341,20 @@ export function removeNode(d: Doc, kind: NodeRemovalKind, nodeId: string): Remov
     for (const x of Object.values(d.reviews)) if (x.video_id === nodeId) takeOut(d, r, 'reviews', x.id)
     takeOutAbout(d, r, 'render', new Set(renders))
     ids.push(...renders)
-    if (renders.length) r.note = `with ${plural(renders.length, 'render')}`
+    // Its own shot list (no node of its own, decided 2026-10-15) goes with it: the shots, frames and clips.
+    let shots = 0
+    for (const sb of Object.values(d.storyboards).filter((x) => x.implicit && x.video_id === nodeId)) {
+      for (const sh of Object.values(d.shots).filter((x) => x.storyboard_id === sb.id)) {
+        const sub = removeShot(d, sh.id)
+        absorb(r, sub)
+        ids.push(...sub.ids)
+        shots++
+      }
+      takeOut(d, r, 'storyboards', sb.id)
+      ids.push(sb.id)
+    }
+    const parts = [renders.length && plural(renders.length, 'render'), shots && plural(shots, 'shot')].filter(Boolean)
+    if (parts.length) r.note = `with ${parts.join(' and ')}`
   }
   takeOutAbout(d, r, kind, new Set([nodeId]))
   asksOn(kind, new Set([nodeId]))

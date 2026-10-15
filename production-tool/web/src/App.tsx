@@ -63,7 +63,8 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
         </div>
         {stage === 'storyboard' && <div className="stage-pane editor-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane editor-pane" data-dogfood-area="video"><Video /></div>}
-        {stage !== 'character' && <RemakeBar dock={stage === 'video' ? 'top' : 'bottom'} />}
+        {/* The Video editor shows it in its timeline head (stages/Video.tsx). */}
+        {stage === 'storyboard' && <RemakeBar />}
         {panel === 'history' && <HistoryPanel store={clan} onClose={() => setPanel(null)} />}
       </div>
       {script && <Suspense fallback={<div className="se" role="status" aria-busy="true" />}><ScriptEditor key={script} scriptId={script} /></Suspense>}

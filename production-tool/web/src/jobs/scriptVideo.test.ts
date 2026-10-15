@@ -8,16 +8,18 @@ import type { JobInput, Op, ProductionDocument } from '../contracts/types'
 import type { JobPurpose } from '../model/purpose'
 import { systemUpdate, updateDoc } from '../doc/store'
 import { putBlob } from '../lib/blobs'
-import { mainScript, mainStoryboard, scenesOf, shotsOf } from '../model/selectors'
+import { mainScript, mainStoryboard, mainVideo, scenesOf, scriptOfStoryboard, shotsOf, storyboardOfScript } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { MockRelay } from '../relay/mock'
 import { addScene } from '../script/edits'
 import { nextStep } from '../script/nextStep'
 import { addFrame, addShots, asset, id, job, MAYA, modelStore } from '../test/model'
 import { clipSource, makeClip, traySummary } from './clips'
+import { fixesInFrame } from './fix'
+import { planFor } from './follow'
 import type { FrameDeps } from './frames'
 import {
-  answerScriptVideo, clipMode, PLAN_FIRST, planFromScript, planShotsBlocked, scriptVideoAsk, scriptVideoQuestion, shotCount, STRAIGHT,
+  answerScriptVideo, clipMode, PLAN_FIRST, planFromScript, planShotsBlocked, recordScriptVideoAnswer, scriptVideoAsk, scriptVideoQuestion, shotCount, STRAIGHT,
   waitsOnScriptAsk,
 } from './scriptVideo'
 
@@ -119,27 +121,46 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     expect(clipMode(doc(store), v)).toBe('frames')
   })
 
-  it('Make clips straight from the script: stored on the video, a storyboard linked to it, Dex plans; switching later is a new answer', async () => {
+  it('Make clips straight from the script: stored on the video, its own shot list (no Storyboard node, no link), Dex plans there', async () => {
     const { store, deps, sent } = await project()
     const sc = await newScript(store)
     const v = await videoFrom(store, sc)
+    const sbBefore = Object.keys(doc(store).storyboards).length
     const { storyboardId } = await answerScriptVideo(deps, v, STRAIGHT, 'human:p_maya01')
     const d = doc(store)
-    expect(Object.values(d.links).some((l) => l.role === 'renders' && l.from.id === storyboardId && l.to.id === v)).toBe(true)
-    expect(Object.values(d.links).some((l) => l.role === 'drives' && l.from.id === sc && l.to.id === storyboardId)).toBe(true)
+    // Decided 2026-10-15: no storyboard beside the script, no link; the video holds the shots.
+    expect(d.storyboards[storyboardId]).toMatchObject({ implicit: true, video_id: v })
+    expect(Object.keys(d.storyboards)).toHaveLength(sbBefore + 1)
+    expect(Object.values(d.links).some((l) => l.from.id === storyboardId || l.to.id === storyboardId)).toBe(false)
+    expect(storyboardOfScript(d, sc)).toBeUndefined()
+    expect(scriptOfStoryboard(d, storyboardId)?.id).toBe(sc)
     expect(waitsOnScriptAsk(d, v)).toBeNull()
     expect(clipMode(d, v)).toBe('straight')
     const ask = scriptVideoAsk(d, v)!
     expect(ask).toMatchObject({ node: { kind: 'video', id: v }, crew: 'dex', state: 'answered' })
     expect(ask.answers.map((a) => a.option_id)).toEqual([STRAIGHT])
-    expect(sent.map((s) => s.op)).toEqual(['shot_list'])
+    expect(sent.map((s) => [s.op, (s.purpose as { storyboardId?: string }).storyboardId])).toEqual([['shot_list', storyboardId]])
     // Nothing paid: no clip was sent.
     expect(sent.some((s) => s.op === 'clip')).toBe(false)
-    await answerScriptVideo(deps, v, PLAN_FIRST, 'human:p_maya01')
-    expect(clipMode(doc(store), v)).toBe('frames')
-    expect(scriptVideoAsk(doc(store), v)!.answers.map((a) => a.option_id)).toEqual([STRAIGHT, PLAN_FIRST])
-    // The plan already running is not sent twice.
+    // Plan the storyboard first makes the node on the canvas: with none here it says so, and records nothing.
+    await expect(answerScriptVideo(deps, v, PLAN_FIRST, 'human:p_maya01')).rejects.toThrow(/on the canvas/)
+    expect(scriptVideoAsk(doc(store), v)!.answers.map((a) => a.option_id)).toEqual([STRAIGHT])
+    // Answering straight again plans nothing twice.
+    await answerScriptVideo(deps, v, STRAIGHT, 'human:p_maya01')
     expect(sent.filter((s) => s.op === 'shot_list')).toHaveLength(1)
+  })
+
+  it('Plan the storyboard first on a video a script drives: the storyboard beside the script, linked; Dex plans', async () => {
+    const { store, deps, sent } = await project()
+    const sc = await newScript(store)
+    const v = await videoFrom(store, sc)
+    const { storyboardId } = await answerScriptVideo(deps, v, PLAN_FIRST, 'human:p_maya01')
+    const d = doc(store)
+    expect(d.storyboards[storyboardId].implicit).toBeUndefined()
+    expect(Object.values(d.links).some((l) => l.role === 'renders' && l.from.id === storyboardId && l.to.id === v)).toBe(true)
+    expect(Object.values(d.links).some((l) => l.role === 'drives' && l.from.id === sc && l.to.id === storyboardId)).toBe(true)
+    expect(clipMode(d, v)).toBe('frames')
+    expect(sent.map((s) => s.op)).toEqual(['shot_list'])
   })
 
   it('refuses before anything when the script has no words', async () => {
@@ -148,6 +169,7 @@ describe('"Plan a storyboard first?" (3.5, 3.17)', () => {
     const v = await videoFrom(store, sc)
     await expect(answerScriptVideo(deps, v, STRAIGHT, 'human:p_maya01')).rejects.toThrow(/Write the script first/)
     expect(sent).toHaveLength(0)
+    expect(scriptVideoAsk(doc(store), v)).toBeUndefined()
   })
 })
 
@@ -181,6 +203,39 @@ describe('clips straight from the script (3.5)', () => {
     expect(clipSource(doc(store), shotId, true)).toBe('frame')
     await makeClip(deps, shotId, { fromWords: true })
     expect(sent[0].input.image?.sha256).toBe(sha)
+  })
+
+  it('in a video made straight from the script, every clip request on a frameless shot uses its words (2026-10-15)', async () => {
+    // New take, a note's new version and Remake call makeClip without fromWords: they failed with
+    // "This shot has no frame yet." on every shot the Video editor had made from its words.
+    const { store, deps, sent } = await project()
+    const v = mainVideo(doc(store))!.id
+    let shotId = ''
+    await updateDoc(store, (d) => { shotId = addShots(d, 2, { action: 'A runner crests the cliff at dawn.' })[0].id }, 'plan')
+    await recordScriptVideoAnswer(store, v, STRAIGHT, 'human:p_maya01')
+    await store.flush()
+    await makeClip(deps, shotId)
+    expect(sent.map((x) => [x.op, !!x.input.image])).toEqual([['clip', false]])
+    // Remake this and the clips after: a shot with words but no frame is in the plan.
+    expect(planFor(doc(store), { kind: 'after', item: { kind: 'clip', shotId } }).clips).toHaveLength(2)
+    // A boxed note on it makes a new version; there is no frame to fix the box in.
+    expect(fixesInFrame(doc(store), shotId, [{ region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }], true)).toBe(false)
+  })
+
+  it('a boxed note is fixed in the frame only when the shot has one', async () => {
+    const { store } = await project()
+    const sha = await putBlob(new Blob(['frame'], { type: 'image/png' }))
+    let shotId = ''
+    await updateDoc(store, (d) => {
+      d.assets[sha] = asset(sha)
+      const s = addShots(d, 1, { action: 'She smiles.' })[0]
+      shotId = s.id
+      addFrame(d, s, sha, { pick: true })
+    }, 'plan')
+    const box = [{ region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }]
+    expect(fixesInFrame(doc(store), shotId, box, true)).toBe(true)
+    expect(fixesInFrame(doc(store), shotId, box, false)).toBe(false)
+    expect(fixesInFrame(doc(store), shotId, [{}], true)).toBe(false)
   })
 
   it('the tray says what each clip is made from', () => {

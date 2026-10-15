@@ -267,7 +267,7 @@ function VideoBlock({ videoId }: { videoId: Id }) {
   const pick = (id: string) => {
     if (id === DESCRIBE) { setOpen(DESCRIBE); return }
     const kind = id === LINK_SCRIPT ? 'script' : 'storyboard'
-    const list = Object.values(kind === 'script' ? doc.scripts : doc.storyboards)
+    const list = kind === 'script' ? Object.values(doc.scripts) : Object.values(doc.storyboards).filter((x) => !x.implicit)
     if (list.length === 1) { void link(kind, list[0].id); return }
     if (!list.length) { setError(kind === 'script' ? 'There is no script yet. Make one with + Node.' : 'There is no storyboard yet. Make one with + Node.'); return }
     setOpen(id as typeof LINK_SCRIPT)
@@ -279,7 +279,7 @@ function VideoBlock({ videoId }: { videoId: Id }) {
       </button>
     )
   }
-  const choices = open === LINK_SCRIPT ? Object.values(doc.scripts) : open === LINK_STORYBOARD ? Object.values(doc.storyboards) : []
+  const choices = open === LINK_SCRIPT ? Object.values(doc.scripts) : open === LINK_STORYBOARD ? Object.values(doc.storyboards).filter((x) => !x.implicit) : []
   return (
     <section className="askcard open pstart-ask" role="group" aria-label={`dex asks: ${q.text}`} data-ask={q.id}>
       <div className="askcard-head">

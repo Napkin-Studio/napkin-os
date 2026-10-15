@@ -558,9 +558,10 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .flash { animation: flash 1.2s var(--ease); }
 @keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--tool), var(--shadow-soft); } 100% { box-shadow: var(--shadow-soft); } }
 
-/* The remake bar (ui/Follow.tsx RemakeBar): floats at the bottom of the stage while anything is behind. */
-.remakebar.top { top: 20px; bottom: auto; }
+/* The remake bar (ui/Follow.tsx RemakeBar): floats at the bottom of the stage while anything is behind;
+   inline in the Video editor's timeline head (.inline). */
 .remakebar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 7px 7px 7px 14px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); white-space: nowrap; }
+.remakebar.inline { position: static; transform: none; box-shadow: none; max-width: 100%; min-width: 0; padding: 3px 3px 3px 12px; gap: 8px; }
 .remakebar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-amber); flex-shrink: 0; }
 .remakebar b { font-size: 13px; }
 .remakebar .remake-what { font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }

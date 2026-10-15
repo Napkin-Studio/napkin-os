@@ -832,7 +832,12 @@
         },
         "implicit": {
           "type": "boolean",
-          "description": "Planned straight from a script for a Video (ui-behaviour 3.5): owned by the Video, with no canvas node until it is shown."
+          "description": "Planned straight from a script for a Video (ui-behaviour 3.5): owned by the Video, with no canvas node until it is shown. Its shots are that Video's timeline, shown and edited in the Video editor. Make a storyboard from these shots clears it and puts the node on the canvas."
+        },
+        "video_id": {
+          "type": "string",
+          "pattern": "^video_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "The Video whose own shot list this is (decided 2026-10-15): set when the shots were planned straight from the script into that Video. With implicit it needs no renders link; shown as a node, deleting the node puts the shots back in the Video (implicit again) instead of deleting them."
         }
       },
       "required": [
