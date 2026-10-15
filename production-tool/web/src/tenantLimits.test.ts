@@ -13,11 +13,12 @@ const RUNWAY_ONLY: Allow = { claude: true, makers: ['runway'] }
 const live = (): Config => effectiveConfig('live', 'config', SHEETS)
 
 describe('the allowlist in the menus and controls', () => {
-  it("lists the default makers' models by default, as the relay allows them", () => {
-    // features/runway-video-models.clan: Kling, Hailuo, WAN and Seedance (and their makers) are off until
-    // an agency allows them; Google's Omni Flash is on with Veo.
+  it("lists every maker's models by default, as the relay allows them", () => {
+    // Owner, 2026-10-15 (features/runway-video-models.clan): every maker is on by default; a client
+    // narrows its own list later. Google only still gives Veo and Omni Flash.
     const all = modelChoicesFor('clip', live())
-    expect(modelChoicesFor('clip', withAllow(live(), SPEND_POLICY.allow)).map((o) => o.model)).toEqual(
+    expect(modelChoicesFor('clip', withAllow(live(), SPEND_POLICY.allow))).toEqual(all)
+    expect(modelChoicesFor('clip', withAllow(live(), { claude: true, makers: ['runway', 'google'] })).map((o) => o.model)).toEqual(
       ['veo3.1', 'veo3.1_fast', 'gemini_omni_flash_1.1'])
     expect(all.map((o) => o.model)).toEqual(['veo3.1', 'veo3.1_fast', 'klingO3_pro', 'klingO3_standard', 'kling3.0_pro',
       'kling3.0_standard', 'hailuo3', 'gemini_omni_flash_1.1', 'wan3', 'seedance2_5', 'seedance2_fast'])
