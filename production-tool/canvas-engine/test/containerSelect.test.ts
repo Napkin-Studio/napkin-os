@@ -206,3 +206,20 @@ describe('groups and sketch areas follow the same rule', () => {
     expect(sel()).toEqual(['i1'])
   })
 })
+
+describe('labels', () => {
+  it('a press on a Drawing’s label takes the Drawing; a board title comes first', async () => {
+    const { hitTitle } = await import('../src/render/links')
+    const scene = new SceneStore(new Y.Doc())
+    scene.seed([
+      element({ id: 'D', kind: 'frame', z: 'a1', x: 0, y: 0, w: 300, h: 300, props: { name: 'Drawing' } }),
+      element({ id: 'B', kind: 'board', z: 'a0', x: 400, y: 0, w: 300, h: 300, props: { name: 'Shots', purpose: 'location' } }),
+    ])
+    expect(hitTitle(scene, { x: 10, y: -8 }, 1)?.id).toBe('D')
+    // Past the label's width, above the frame: nothing.
+    expect(hitTitle(scene, { x: 250, y: -8 }, 1)).toBeUndefined()
+    expect(hitTitle(scene, { x: 450, y: -8 }, 1)?.id).toBe('B')
+    // Zoomed out, the band is wider in scene units.
+    expect(hitTitle(scene, { x: 10, y: -50 }, 0.5)?.id).toBe('D')
+  })
+})

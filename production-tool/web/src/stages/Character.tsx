@@ -281,6 +281,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     if (!el || !ctrl || !canvas) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && placing) {
+        // Handled: the canvas's own Esc (leave a Drawing, clear the selection) then stands aside.
+        e.preventDefault()
         setPlacing(null)
         return
       }

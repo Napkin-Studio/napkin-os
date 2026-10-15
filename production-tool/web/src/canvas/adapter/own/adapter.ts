@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
+  boundEnds, elementFromRecord, hitNodeOrLink, hitTitle, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -631,7 +631,8 @@ export class OwnAdapter implements CanvasAdapter {
   /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
     // Node cards sit above the canvas, and a link is hit along its line (canvas-nodes).
-    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitBoardTitle(this.scene, { x, y }, this.vp.zoom)
+    // A board's title, or a Drawing's label, takes it (container-select).
+    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitTitle(this.scene, { x, y }, this.vp.zoom)
     if (top) return top
     // Lines (strokes, unfilled shapes) count only near their line, with a reach in screen pixels.
     if (this.renderer) return this.renderer.hit(x, y, this.vp.zoom)

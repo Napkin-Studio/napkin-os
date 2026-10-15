@@ -338,6 +338,28 @@ export function hitBoardTitle(scene: Pick<SceneStore, 'all'>, p: Pt, zoom: numbe
     .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
 }
 
+/** A frame label's drawn width in screen px (14 px Geist, as the renderer draws it): an estimate, with room for a short name. */
+export function labelWidthPx(name: string): number {
+  return Math.max(48, name.length * 8.2 + 8)
+}
+
+/**
+ * A board by its title band, else a named frame (a Drawing) by its label (container-select phase 3): the
+ * label is drawn just above the frame's top-left, so a press on it takes the frame. Board titles come first.
+ */
+export function hitTitle(scene: Pick<SceneStore, 'all'>, p: Pt, zoom: number): ElementRecord | undefined {
+  const board = hitBoardTitle(scene, p, zoom)
+  if (board) return board
+  const band = 28 / zoom
+  return scene.all()
+    .filter((r) => {
+      if (r.kind !== 'frame') return false
+      const name = typeof r.props.name === 'string' ? r.props.name : ''
+      return !!name && p.x >= r.x && p.x <= r.x + labelWidthPx(name) / zoom && p.y >= r.y - band && p.y <= r.y
+    })
+    .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+}
+
 /** The topmost node or bound link at a scene point (nodes are DOM cards above the canvas). */
 export function hitNodeOrLink(scene: Pick<SceneStore, 'all' | 'get'>, p: Pt, zoom: number): ElementRecord | undefined {
   const all = scene.all().sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))
