@@ -14,6 +14,7 @@ import math
 import re
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -111,12 +112,28 @@ def _clip_edit_source(job: dict, op: str, payload: dict) -> None:
     job["refs"] = [{"sha256": video["sha256"], "name": "current", "role": "current"}, *refs]
 
 
+def _say_in_words(job: dict, refs: list, character: str) -> None:
+    for ref in refs:
+        words = character or ref["name"].split("_")[0] if ref["role"] == "character" else ref["name"].replace("_", " ")
+        job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
+
+
 def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
-    """Called after the artifact checks, so a ref that is not in the input still fails."""
+    """Called after the artifact checks, so a ref that is not in the input still fails.
+
+    Which pictures a clip carries is the model's (features/runway-video-models.clan): with no frame, its
+    refs where the sheet says video.refsWithoutFrame (Hailuo 3, Omni Flash 1.1, WAN 3, Seedance), with a
+    frame where it says firstFrameWithRefs (Kling O3), each up to refs.max; elsewhere they are said in words."""
     words_only = op == "clip" and not job.get("firstFrame") and bool((sheet["ops"].get(op) or {}).get("textEndpoint"))
+    if op == "clip" and job.get("refs") and _refs_go(op, job, sheet):
+        limit = sheet["refs"]["max"]
+        if len(job["refs"]) > limit:  # the first ones go (the shot's own, front first); the rest in words
+            _say_in_words(job, job["refs"][limit:], "")
+            job["refs"] = job["refs"][:limit]
+        return
     if words_only and job.get("refs"):
-        # A clip straight from the script (no frame, ui-behaviour 3.5) goes to the model's text endpoint,
-        # which takes no pictures: the refs go, and their names are said in words.
+        # A clip straight from the script (no frame, ui-behaviour 3.5) on a model whose text endpoint
+        # takes no pictures (Veo, Kling): the refs go, and their names are said in words.
         for ref in job["refs"]:
             words = ref["name"].split("_")[0] if ref["role"] == "character" else ref["name"].replace("_", " ")
             job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
@@ -138,13 +155,14 @@ SHOT_OPS = ("frame", "clip")
 
 
 def _refs_go(op: str, job: dict, sheet: dict) -> bool:
-    """Whether this job can carry refs at all: a Runway clip takes none with a first frame
-    (video.firstFrameWithRefs false), nor from words alone (the text endpoint)."""
+    """Whether this job can carry refs at all: a clip with a first frame only where the model takes
+    both (video.firstFrameWithRefs: Kling O3), one from words alone only where its text endpoint takes
+    references (video.refsWithoutFrame: Hailuo 3, Omni Flash 1.1, WAN 3, Seedance)."""
     if op != "clip":
         return True
     if job.get("firstFrame"):
         return bool(sheet["video"]["firstFrameWithRefs"])
-    return not (sheet["ops"].get(op) or {}).get("textEndpoint")
+    return bool(sheet["video"].get("refsWithoutFrame")) or not (sheet["ops"].get(op) or {}).get("textEndpoint")
 
 
 def _hold_refs(op: str, job: dict, payload: dict, output: dict, sheet: dict) -> None:
@@ -181,9 +199,20 @@ def provider_sizes(provider: str, op: str, model: Optional[str] = None) -> Optio
     if provider != "runway" or (provider, op) in NO_RATIO:
         return None
     if op == "clip":
-        return RUNWAY_CLIP_RATIOS
+        return clip_sizes(model)
     pro = model == "gemini_image3_pro" or (model is None and op == "region_edit")
     return PRO_RATIOS if pro else FLASH_RATIOS
+
+
+@lru_cache(maxsize=None)
+def clip_sizes(model: Optional[str]) -> frozenset:
+    """A Runway clip model's sizes, from the catalogue (features/runway-video-models.clan): pixel pairs
+    (Veo, Kling, Omni Flash, WAN, Seedance) or aspect ratios (Hailuo 3, whose size is a resolution).
+    Veo's four for the op's own model or one the catalogue does not list."""
+    from providers.types import load_sheet
+    m = (load_sheet("runway").get("models") or {}).get(model or "") or {}
+    sizes = frozenset(r["ratio"] for r in m.get("ratios") or [] if re.fullmatch(r"[0-9]+:[0-9]+", r["ratio"]))
+    return sizes or RUNWAY_CLIP_RATIOS
 
 
 def provider_ratio(provider: str, op: str, ratio: Optional[str], model: Optional[str] = None,

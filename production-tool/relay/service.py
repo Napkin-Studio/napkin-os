@@ -842,6 +842,16 @@ class Relay:
             settings["refs"] = 1
             if not inp.get("region") and not inp.get("mask") and spec.get("preciseEdit"):
                 settings["preciseEdit"] = True
+        if op in ("clip", "clip_edit") and price.get("perRef"):
+            # Hailuo 3 and Omni Flash 1.1 bill each picture the call carries (features/runway-video-models.clan):
+            # reserved for every ref the request offers, up to what the model takes, and the frame.
+            refs = len(inp.get("refs") or [])
+            if op == "clip":
+                video = sheet.get("video") or {}
+                goes = video.get("firstFrameWithRefs") if inp.get("image") else video.get("refsWithoutFrame")
+                settings["refs"] = bool(inp.get("image")) + (min(refs, sheet["refs"]["max"]) if goes else 0)
+            else:
+                settings["refs"] = min(refs, max(0, sheet["refs"]["max"] - 1))  # the clip itself is a ref too
         seconds = (inp.get("shot") or {}).get("duration_s")
         if seconds:
             if op == "clip":
