@@ -213,9 +213,14 @@ export const linkMemory = (): LinkMemory => ({ seen: new Set(), inDoc: new Set()
  */
 export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDocument, mem: LinkMemory): { unlink: string[]; relink: Link[]; draw: { link: Link; from: CanvasElement; to: CanvasElement }[]; erase: string[]; regroup: { elId: string; group: string | null }[] } {
   const live = new Map<string, CanvasElement>()
+  // Two arrows for one link (the document's entry drawn by a reconcile while the person's own link
+  // was still being written): the later goes, so deleting the one on screen unlinks.
+  const twins: string[] = []
   for (const e of els) {
     const id = linkIdOf(e)
-    if (id && !e.isDeleted) live.set(id, e)
+    if (!id || e.isDeleted) continue
+    if (live.has(id)) twins.push(e.id)
+    else live.set(id, e)
   }
   for (const [id, l] of Object.entries(doc.links ?? {})) {
     mem.inDoc.add(id)
@@ -225,7 +230,7 @@ export function reconcileLinks(els: readonly CanvasElement[], doc: ProductionDoc
   const unlink = [...mem.seen].filter((id) => !live.has(id) && doc.links?.[id])
   for (const id of unlink) mem.unlinked.add(id)
   const relink: Link[] = []
-  const erase: string[] = []
+  const erase: string[] = [...twins]
   for (const [id, e] of live) {
     mem.seen.add(id)
     if (doc.links?.[id]) continue

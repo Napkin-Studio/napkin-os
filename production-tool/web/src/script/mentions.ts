@@ -34,6 +34,19 @@ export interface MentionHooks {
 const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
 export const refreshMentions = new PluginKey('napkinMentionRefresh')
 
+/** Plain text cut at its typed @names, each marked known (in `names`: linked here) or not. */
+export function typedSpans(text: string, names: readonly string[]): { text: string; name?: string; known?: boolean }[] {
+  const out: { text: string; name?: string; known?: boolean }[] = []
+  let at = 0
+  for (const m of text.matchAll(MENTION)) {
+    if (m.index! > at) out.push({ text: text.slice(at, m.index) })
+    out.push({ text: m[0], name: m[1], known: names.includes(m[1]) })
+    at = m.index! + m[0].length
+  }
+  if (at < text.length) out.push({ text: text.slice(at) })
+  return out
+}
+
 /** Ask an editor to redraw its mentions (the document's refs or links changed). */
 export function redrawMentions(editor: Editor) {
   if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(refreshMentions, true))
@@ -61,7 +74,11 @@ function decorations(doc: PMNode, hooks: MentionHooks | undefined): DecorationSe
     }
     if (node.isText && node.text) {
       for (const m of node.text.matchAll(MENTION)) {
-        if (names.includes(m[1])) continue
+        // A typed name of something linked here reads as a mention (owner, 2026-10-15: tags count once linked).
+        if (names.includes(m[1])) {
+          out.push(Decoration.inline(pos + m.index!, pos + m.index! + m[0].length, { class: 'mention-typed' }))
+          continue
+        }
         out.push(Decoration.inline(pos + m.index!, pos + m.index! + m[0].length, { class: 'mention-typed unknown', title: hint(m[1], names) }))
       }
     }

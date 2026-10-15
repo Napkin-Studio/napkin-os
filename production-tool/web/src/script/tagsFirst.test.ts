@@ -13,7 +13,7 @@ import { addShots, asset, id, MAYA, modelStore, SHA } from '../test/model'
 import { keyLinkMerges } from '../canvas/nodes/mergeLinks'
 import { editorExtensions } from './extensions'
 import { scriptMentionHooks } from './mentionHooks'
-import { redrawMentions } from './mentions'
+import { redrawMentions, typedSpans } from './mentions'
 import { unknownInShot } from './nameAsks'
 
 const editors: Editor[] = []
@@ -58,6 +58,7 @@ describe('tags first, the character later, and only a link makes it count', () =
     expect(Object.values(store.get().links).filter((l) => l.to.id === scriptId && (l.from.kind === 'key' || l.from.kind === 'ref'))).toHaveLength(0)
     expect(keyLinkMerges(store.get())).toHaveLength(0)
     expect(underlined()).toEqual(['@samurai', '@samurai'])
+    expect(typedSpans('@samurai waits.', hooks.names())[0]).toEqual({ text: '@samurai', name: 'samurai', known: false })
     expect(inputChips(scopeOf(store.get(), scriptId)).map((c) => c.label)).not.toContain('@samurai · 3 views')
     // 3. The person links the group into the Script, once: every @samurai resolves.
     const link = id('link')
@@ -67,6 +68,9 @@ describe('tags first, the character later, and only a link makes it count', () =
     await store.flush()
     redrawMentions(editor)
     expect(underlined()).toEqual([])
+    // Each reads as a mention now, in the editor and in the page's static text.
+    expect([...editor.view.dom.querySelectorAll('.mention-typed:not(.unknown)')].map((e) => e.textContent)).toEqual(['@samurai', '@samurai'])
+    expect(typedSpans('@samurai bows to @ronin.', hooks.names()).filter((p) => p.name).map((p) => [p.name, p.known])).toEqual([['samurai', true], ['ronin', false]])
     expect(hooks.names()).toContain('samurai')
     expect(inputChips(scopeOf(store.get(), scriptId)).map((c) => c.label)).toEqual(['@samurai · 3 views'])
     const sent = JSON.stringify(scopeOf(store.get(), scriptId))

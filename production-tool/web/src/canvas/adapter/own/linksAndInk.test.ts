@@ -133,6 +133,21 @@ describe('one key, one link (owner, 2026-10-15)', () => {
   })
 })
 
+describe('one arrow per link', () => {
+  it('a second arrow for the same link (drawn while the link was being written) is erased, so deleting the one on screen unlinks', async () => {
+    const { s, a, doc, name, el, script, write } = await setup()
+    await name(0, 'samurai', 'front')
+    const r = await linkNodes(a, doc(), el(0), script(), write)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const twin = a.link({ fromElId: el(0).id, toElId: script().id, role: r.link.role, linkId: r.link.id })
+    a.transact((all) => [...all, twin], { undoable: false })
+    const mem = linkMemory()
+    expect(reconcileLinks(a.elements(), doc(), mem).erase).toEqual([twin.id])
+    await s.close()
+  })
+})
+
 describe('generation arrows stay bound to their ends', () => {
   it('one that lost a binding is bound again by its provenance; a fragment whose ends are gone goes', () => {
     const a = new OwnAdapter()
