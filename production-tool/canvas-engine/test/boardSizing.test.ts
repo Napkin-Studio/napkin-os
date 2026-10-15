@@ -275,6 +275,23 @@ describe('the select tool and boards as spaces', () => {
     expect(box(scene.get('C')!)).toEqual({ x: 0, y: 0, w: 400, h: 300 })
   })
 
+  it('a handle dragged toward a neighbour is held short of it, and the host hears what held it (it never looks dead)', () => {
+    const { scene, tool, events } = setup([board('C', 0), board('L', 448, 0, 400, 300), pic('a', 16, 22, 'C')])
+    tool.set(['C'])
+    tool.press({ x: 400, y: 150 })
+    tool.release({ x: 700, y: 150 })
+    // Grown only to BOARD_CLEAR short of Locations (owner BM7), and said.
+    expect(box(scene.get('C')!).w).toBe(448 - BOARD_CLEAR)
+    expect(events).toEqual([{ kind: 'held', board: 'C', ids: ['L'] }])
+    // Grown as far as asked: nothing to say.
+    events.length = 0
+    tool.set(['C'])
+    tool.press({ x: 212, y: 300 })
+    tool.release({ x: 212, y: 360 })
+    expect(box(scene.get('C')!).h).toBe(360)
+    expect(events).toEqual([])
+  })
+
   it('things the edge passed leave the board on release, with the resize, and the host hears it; undo brings them back', () => {
     const { scene, tool, events, undo, steps } = setup([board('C', 0), pic('a', 16, 22, 'C'), pic('b', 250, 22, 'C')])
     tool.set(['C'])

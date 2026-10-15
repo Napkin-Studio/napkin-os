@@ -26,7 +26,7 @@ type Local = { x: number; y: number }
 /** What our engine adds for sized boards (adapter/own): Fit to contents and what boards did. */
 type Sized = CanvasAdapter & {
   fitBoard?: (frameId: string) => boolean
-  onBoardEvent?: (cb: (e: { kind: 'full' | 'left'; board: string; ids: string[] }) => void) => () => void
+  onBoardEvent?: (cb: (e: { kind: 'full' | 'left' | 'held'; board: string; ids: string[] }) => void) => () => void
   undoScene?: (dir: 'undo' | 'redo') => boolean
 }
 /** The board bar never goes higher than this (screen pixels in the canvas): the top bar is above it. */
@@ -58,13 +58,15 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
   // A board that was full (frame id), and what a resize let go of.
   const [full, setFull] = useState<string | null>(null)
   const [left, setLeft] = useState<{ frameId: string; ids: string[] } | null>(null)
+  // A handle's drag held short by neighbours (owner BM7): said, so the handle never looks dead.
+  const [held, setHeld] = useState<{ frameId: string; ids: string[] } | null>(null)
   void tick
 
   useEffect(() => {
     const sized = canvas as Sized
     const offs = [
       boardNotices.subscribe((n) => setFull(n.frameId)),
-      sized.onBoardEvent?.((e) => (e.kind === 'full' ? setFull(e.board) : setLeft({ frameId: e.board, ids: e.ids }))) ?? (() => {}),
+      sized.onBoardEvent?.((e) => (e.kind === 'full' ? setFull(e.board) : e.kind === 'held' ? setHeld({ frameId: e.board, ids: e.ids }) : setLeft({ frameId: e.board, ids: e.ids }))) ?? (() => {}),
     ]
     return () => offs.forEach((off) => off())
   }, [canvas])
@@ -78,6 +80,11 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
     const t = setTimeout(() => setLeft(null), SAY_MS)
     return () => clearTimeout(t)
   }, [left])
+  useEffect(() => {
+    if (!held) return
+    const t = setTimeout(() => setHeld(null), SAY_MS)
+    return () => clearTimeout(t)
+  }, [held])
 
   useEffect(() => {
     const seeded = seedBoards(canvas, services.doc.get())
@@ -318,6 +325,22 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
             <span>Board is full</span>
             <span className="dot">·</span>
             <button type="button" className="btn xs ghost" onClick={resizeFull}>Resize</button>
+          </div>
+        )
+      })()}
+      {held && !resizing && (() => {
+        const f = frameById(held.frameId)
+        if (!f) return null
+        const by = held.ids.map((id) => canvas.elements().find((e) => e.id === id)).filter((e): e is CanvasElement => !!e)
+        const names = by.map((e) => (isBoard(e) ? (e as FrameEl).name || 'A board' : null))
+        if (!by.length) return null
+        const who = by.length === 1 ? names[0] ?? 'Something' : names.every((n) => n) ? names.join(' and ') : 'Things'
+        const p = toLocal({ x: f.x + f.width, y: f.y + f.height })
+        return (
+          <div className="bd-full bd-held" role="status" style={{ left: Math.max(p.x - 260, 220), top: Math.min(Math.max(p.y + 12, BAR_TOP), viewH - 110) }} onPointerDown={(e) => e.stopPropagation()}>
+            <span>{who} {by.length === 1 ? 'is' : 'are'} in the way</span>
+            <span className="dot">·</span>
+            <span>move {by.length > 1 ? 'them' : 'it'} to make room</span>
           </div>
         )
       })()}

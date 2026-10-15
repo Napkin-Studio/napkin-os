@@ -81,10 +81,16 @@ export interface BoardResize {
   rect: Box
   /** The members whose centre the dragged edge has passed: they leave at release. */
   leaving: string[]
+  /** Where the handle asked for, before neighbours held it (owner BM7): `rect` when nothing did. */
+  wanted?: Box
 }
 
 /** What a board did that the person should hear about: it was full (a thing landed outside), or things left it on a resize. */
-export type BoardEvent = { kind: 'full'; board: string; ids: string[] } | { kind: 'left'; board: string; ids: string[] }
+export type BoardEvent =
+  | { kind: 'full'; board: string; ids: string[] }
+  | { kind: 'left'; board: string; ids: string[] }
+  /** A handle's drag was held short by these neighbours (boards or loose things): the board could not grow there. */
+  | { kind: 'held'; board: string; ids: string[] }
 
 /** A press that moves less than this (screen pixels) before release is a click (a board's inside selects it). */
 export const CLICK_SLOP_PX = 4
@@ -332,6 +338,25 @@ export class SelectTool {
       ['n', x + w / 2, y], ['s', x + w / 2, y + h], ['w', x, y + h / 2], ['e', x + w, y + h / 2],
     ]
     return squares.find(([, cx, cy]) => Math.abs(p.x - cx) <= reach && Math.abs(p.y - cy) <= reach)?.[0] ?? null
+  }
+
+  /**
+   * What held a resize short of where its handle went (owner BM7): the neighbours (other boards, loose
+   * things) the wanted box comes within BOARD_CLEAR of, that the board was clear of. [] when a side grew
+   * as far as asked (a pixel's rounding aside).
+   */
+  private heldBy(id: string, held: Box, wanted: Box): string[] {
+    const short = held.x - wanted.x > 1 || held.y - wanted.y > 1 || wanted.x + wanted.w - (held.x + held.w) > 1 || wanted.y + wanted.h - (held.y + held.h) > 1
+    const b = this.scene.get(id)
+    if (!short || !b) return []
+    const out: string[] = []
+    for (const r of this.scene.all()) {
+      if (r.id === id || NO_BLOCK.has(r.kind)) continue
+      if (!(r.kind === 'board' ? r.parentId !== id : r.parentId === null)) continue
+      const rb = recordBounds(r)
+      if (overlaps(wanted, rb, BOARD_CLEAR) && !overlaps(b, rb, BOARD_CLEAR)) out.push(r.id)
+    }
+    return out
   }
 
   /** Fit to contents: the board round what is on it with its padding, one step. False when nothing changes. */
@@ -700,7 +725,7 @@ export class SelectTool {
       const { rect, leaving } = resizeRect(rb, rz.edge, p, this.resizeUnits.map((u) => u.rect))
       // Never grown under a neighbour (owner BM7): a growing side stops BOARD_CLEAR short of it.
       const held = clampGrowth(rb, rect, this.resizeBlockers)
-      this.resizing = { ...rz, rect: held, leaving: leaving.flatMap((i) => this.resizeUnits[i].ids) }
+      this.resizing = { ...rz, rect: held, wanted: rect, leaving: leaving.flatMap((i) => this.resizeUnits[i].ids) }
     } else if (this.scaling && this.scaleFrom) {
       const { box, ox, oy } = this.scaleFrom
       const want = Math.max(Math.abs(p.x - ox) / Math.max(1e-9, box.w), Math.abs(p.y - oy) / Math.max(1e-9, box.h))
@@ -722,7 +747,9 @@ export class SelectTool {
     this.drag(p)
     let told: BoardEvent[] = []
     if (this.resizing) {
-      const { id, leaving } = this.resizing
+      const { id, leaving, wanted } = this.resizing
+      const heldBy = wanted ? this.heldBy(id, this.resizing.rect, wanted) : []
+      if (heldBy.length) told.push({ kind: 'held', board: id, ids: heldBy })
       // Whole scene units: a drag at any zoom leaves a board of round size.
       const r0 = this.resizing.rect
       const rect = { x: Math.round(r0.x), y: Math.round(r0.y), w: Math.round(r0.x + r0.w) - Math.round(r0.x), h: Math.round(r0.y + r0.h) - Math.round(r0.y) }
@@ -736,7 +763,7 @@ export class SelectTool {
           { ...tx.get(id)!, ...rect },
           ...leaving.map((m) => tx.get(m)).filter((r): r is ElementRecord => !!r).map((r) => ({ ...r, parentId: null })),
         ]))
-        if (leaving.length) told = [{ kind: 'left', board: id, ids: leaving }]
+        if (leaving.length) told.push({ kind: 'left', board: id, ids: leaving })
       }
     } else if (this.scaling) {
       const { ids, ox, oy, s } = this.scaling
