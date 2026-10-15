@@ -34,7 +34,7 @@
 .ie-center { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .ie-strip { align-self: flex-start; height: 44px; box-sizing: border-box; padding: 0 6px 0 14px; display: flex; align-items: center; gap: 12px; max-width: 100%;
   background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-soft); font-size: 12px; color: var(--ink2); }
-.ie-strip > b { color: var(--ink); font-weight: 600; }
+.ie-strip > b { color: var(--ink); font-weight: 600; white-space: nowrap; }
 .ie-strip label { display: flex; align-items: center; gap: 8px; }
 .ie-strip input[type='range'] { width: 96px; accent-color: var(--ink); }
 .ie-strip input.ie-soft { width: 72px; }
@@ -46,6 +46,15 @@
 .ie-viewport { position: relative; width: 100%; overflow: hidden; border-radius: 6px; box-shadow: var(--shadow-pop);
   background-color: #FFFFFF; background-image: linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%), linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%);
   background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+/* At Fit the whole frame shows: as wide as the column, but never taller than the room under the strip
+   (a 9:16 frame would otherwise be 880 x 1564 and scroll). --ie-ratio is the frame's w / h (Stage). */
+.ie-viewport { touch-action: none; user-select: none; align-self: center; flex-shrink: 0;
+  --ie-room: calc(100dvh - var(--topbar-h, 48px) - 32px - 44px - 16px);
+  width: min(100%, calc(var(--ie-room) * var(--ie-ratio, 1.7778))); }
+.ie-viewport[data-tool='brush'], .ie-viewport[data-tool='eraser'] { cursor: none; }
+.ie-viewport[data-tool='lasso'], .ie-viewport[data-tool='crop'] { cursor: crosshair; }
+.ie-viewport[data-tool='hand'] { cursor: grab; }
+.ie-viewport[data-tool='hand']:active { cursor: grabbing; }
 .ie-frame { position: absolute; inset: 0; transform-origin: 50% 50%; container-type: size; touch-action: none; user-select: none; }
 .ie-frame.tool-brush, .ie-frame.tool-eraser { cursor: none; }
 .ie-frame.tool-click, .ie-frame.tool-lasso, .ie-frame.tool-crop { cursor: crosshair; }
@@ -64,7 +73,15 @@
 .tool-text .ie-text { outline: 1px dashed rgba(255, 255, 255, 0.8); }
 .ie-crop { position: absolute; border: 2px solid #FFFFFF; box-shadow: 0 0 0 9999px rgba(20, 22, 27, 0.45); pointer-events: none; }
 .ie-pending { position: absolute; opacity: 0.75; pointer-events: none; border-radius: 8px; }
-.ie-job { position: absolute; inset: 0; }
+/* The live stroke (Stage paintLive): a brush is drawn opaque and shown at the mask's 38%, so its
+   segments never darken where they meet; a lasso draws its own fill and dashed edge. */
+.ie-live { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ie-live[data-mode='brush'] { opacity: 0.38; }
+/* A whole-frame job at work (3.12: the busy pointer, and no card over the picture): a token edge. */
+.ie-progress { position: absolute; left: 0; right: 0; top: 0; height: 3px; overflow: hidden; pointer-events: none; background: var(--tool-soft); }
+.ie-progress::after { content: ''; position: absolute; top: 0; bottom: 0; width: 30%; background: var(--tool); animation: ie-progress 1.4s ease-in-out infinite; }
+@keyframes ie-progress { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .ie-progress::after { animation: none; left: 0; width: 100%; opacity: 0.6; } }
 .ie-before { position: absolute; left: 12px; top: 12px; padding: 3px 10px; border-radius: var(--r-pill); background: rgba(20, 22, 27, 0.72); color: #FFFFFF; font-size: 11px; }
 
 .ie-under { display: flex; align-items: center; gap: 12px; font-size: 12px; }
@@ -89,6 +106,13 @@
 .ie-undo { width: 28px; height: 28px; border: 0; border-radius: var(--r-pill); background: var(--soft-2); color: var(--ink); cursor: pointer; }
 .ie-elist li.on .ie-undo { background: var(--card); }
 .ie-elist li.ie-next { border-style: dashed; border-color: var(--line); color: var(--ink2); padding: 6px 12px; background: transparent; }
+.ie-elist li.ie-hasjob { flex-wrap: wrap; }
+.ie-jobrow { display: inline-flex; align-items: center; gap: 6px; }
+.ie-jobrow .jobrow { display: inline-flex; align-items: center; gap: 6px; }
+.ie-jobrow .jobrow .meta { font-family: var(--f-mono); font-size: 11px; color: var(--tool-ink); background: var(--tool-soft); padding: 1px 8px; border-radius: var(--r-pill); }
+.ie-jobrow .confirm { position: static; box-shadow: none; padding: 4px 6px; }
+.ie-jobrow .askcard, .ie-jobrow .jobslot-ask, .ie-jobrow .errnode { flex-basis: 100%; }
+.ie-elist li.ie-hasjob .ie-jobrow:has(.askcard, .jobslot-ask, .errnode) { flex-basis: 100%; }
 .ie-ok, .ie-run, .ie-bad { font-size: 11px; padding: 1px 8px; border-radius: var(--r-pill); font-weight: 400; }
 .ie-ok { background: var(--ok-bg); color: var(--ok-fg); }
 .ie-run { background: var(--tool-soft); color: var(--tool-ink); }
@@ -101,8 +125,13 @@
 .ie-panel { padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: 18px; box-shadow: var(--shadow-soft); }
 .ie-panelhead { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 8px; font-size: 11px; }
 .ie-panelhead h2 { margin: 0; font-weight: 500; }
-.ie-layer { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px; font-size: 13px; }
+.ie-layer { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px; font-size: 13px; }
 .ie-layer.on { background: var(--tool-soft); }
+/* The whole row picks a mask; the eye stays its own button above it. */
+.ie-lpick { position: absolute; inset: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.ie-lpick:hover { background: var(--soft); }
+.ie-layer .ie-eye { position: relative; z-index: 1; }
+.ie-hint { font-size: 12px; color: var(--ink); background: var(--warn-bg); padding: 3px 10px; border-radius: var(--r-pill); white-space: nowrap; }
 .ie-layer.on .ie-lname > span:first-child { color: var(--tool-ink); font-weight: 600; }
 .ie-layer.off .ie-lthumb, .ie-layer.off .ie-lname { opacity: 0.45; }
 .ie-lthumb { width: 40px; height: 24px; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: var(--soft); border: 1px solid var(--line-soft); display: grid; place-items: center; }

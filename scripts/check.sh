@@ -222,7 +222,15 @@ suite_production-tool() {
   if [[ -f production-tool/web/package.json ]]; then
     ( cd production-tool/web &&
       { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-      npm run -s lint && npm test && npm run -s build:web )
+      npm run -s lint && npm test && npm run -s build:web &&
+      # The e2e specs (production-tool/web/e2e/README.md): real pointer events on the dev server and
+      # its in-browser mock. A system Chromium stands in for Playwright's download when there is one.
+      if [[ -z "${E2E_CHROMIUM:-}" ]]; then
+        for b in chromium chromium-browser google-chrome-stable; do
+          command -v "$b" >/dev/null && { export E2E_CHROMIUM="$(command -v "$b")"; break; }
+        done
+      fi &&
+      npm run -s e2e )
   fi
 }
 
