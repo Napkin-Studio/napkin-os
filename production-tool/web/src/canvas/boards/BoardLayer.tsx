@@ -6,7 +6,7 @@
 // undo brings it back), makes boards ("+ New board", the Board tool B and a drag)
 // with their title open in place and a purpose picker, renames a board on a
 // double-click of its title, and asks before deleting a board with things on it.
-// Board sizing (owner decision, Shrey 2026-10-15): a selected board's bar has Fit to contents; a
+// Board sizing (owner decision, Shrey 2026-10-15): a selected board's bar has Tidy (board-autolayout) and Fit to contents; a
 // board that could not grow to take what came to it says "Board is full · Resize" for a while; things
 // a resize let go of are said, with Undo. The engine draws the handles and does the sizing.
 // The engine draws the frames; the rail is the chrome's.
@@ -20,6 +20,7 @@ import { canvasActions, toolLetter } from '../chrome/actions'
 import { boardIdOf, boardKey, contentsOf, deleteBoards, isBoard, jumpTo, newBoard, NEW_BOARD, PURPOSES, reconcileBoards, seedBoards } from './boards'
 import { UndoChip } from '../../ui/Undo'
 import { boardNotices } from './fitting'
+import { tidyBoard } from './gather'
 import { boardTitleRect, TITLE_REACH_PX } from '../../../../canvas-engine/src'
 import './boards.css'
 
@@ -267,6 +268,10 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
     ;(canvas as Sized).fitBoard?.(frameId)
     refocus()
   }
+  const tidyNow = (frameId: string) => {
+    tidyBoard(canvas, doc, frameId)
+    refocus()
+  }
   const resizeFull = () => {
     if (full) canvas.select([full])
     setFull(null)
@@ -314,6 +319,7 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
         const at = beside ? { left: right.x + 8, top: Math.max(right.y, BAR_TOP - 16) } : { left: Math.min(Math.max(p.x, 120), viewW - 120), top: p.y - 6 }
         return (
           <div className={`toolbar selbar bd-bar ${beside ? 'beside' : ''}`} role="toolbar" aria-label="Board actions" style={at} onPointerDown={(e) => e.stopPropagation()}>
+            <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Line what is on it up by what the board is for (one undo step)'} data-frame={sel.id} onClick={(e) => tidyNow(e.currentTarget.dataset.frame!)}>Tidy</button>
             <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Shrink or grow the board to what is on it'} data-frame={sel.id} onClick={(e) => fit(e.currentTarget.dataset.frame!)}>Fit to contents</button>
           </div>
         )
