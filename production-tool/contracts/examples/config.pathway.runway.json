@@ -26,7 +26,7 @@
     ]
   },
   "director": {
-    "promptVersion": "director.v7",
+    "promptVersion": "director.v8",
     "perClickModel": "eu.anthropic.claude-sonnet-5-5",
     "shotListModel": "eu.anthropic.claude-sonnet-5-5"
   },

@@ -129,9 +129,18 @@ def fit_refs(op: str, payload: dict, sheet: dict | None) -> tuple[dict, list[str
     def over() -> bool:
         return sum(r.get("role") == "character" for r in kept) > max_char or len(kept) > max_all
 
+    # An optional ref (offered, not asked for: owner 2026-10-15) goes before any the job asks for.
     for r in reversed(refs):
         if not over():
             break
+        if r.get("optional"):
+            kept.remove(r)
+            dropped.append(r.get("name") or r["id"])
+    for r in reversed(refs):
+        if not over():
+            break
+        if r not in kept:
+            continue
         name = r.get("name") or ""
         if "_" not in name or name.endswith("_front") or name in named:
             continue

@@ -520,6 +520,46 @@
    "seconds": 2.5,
    "target_s": 15,
    "title": "Brand spot"
+  },
+  {
+   "id": "household-samurai",
+   "sector": "Services",
+   "why": "The owner's case (2026-10-15): the person wrote @samurai, a key with four views; Skye's draft turned it into @samurai_front, @samurai_side, @samurai_three-quarter and @samurai_back. Every line keeps @samurai.",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@samurai is the samurai who does all the cleaning work for you. He sweeps the hall in one clean arc and folds the laundry into sharp squares."
+    },
+    {
+     "type": "direction",
+     "text": "Quick cuts, each task one strike."
+    }
+   ],
+   "refs": [
+    {
+     "name": "samurai",
+     "role": "character"
+    },
+    {
+     "name": "samurai_front",
+     "role": "character"
+    },
+    {
+     "name": "samurai_three-quarter",
+     "role": "character"
+    },
+    {
+     "name": "samurai_side",
+     "role": "character"
+    },
+    {
+     "name": "samurai_back",
+     "role": "character"
+    }
+   ],
+   "seconds": 3,
+   "target_s": 15,
+   "title": "Household Samurai"
   }
  ]
 }

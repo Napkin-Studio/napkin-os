@@ -46,7 +46,7 @@ def test_write_is_skyes_internal_job_on_the_text_quota_with_no_spend(h):
     assert draft["base_hash"] == BASE  # echoed: a draft lands after a reload, and goes stale on Keep if the text moved
     assert draft["lines"][0]["text"] == "@maya_front walks the waterline."
     assert draft["note"] == "I tightened it."
-    assert job["director"]["promptVersion"] == "skye.v1"
+    assert job["director"]["promptVersion"] == "skye.v2"
 
 
 def test_fit_seconds_sets_the_length_and_add_beat_keeps_beats_inside_it(h):
@@ -109,7 +109,7 @@ class FakePort:
         return json.loads(json.dumps(self.answer))
 
 
-def test_the_model_writer_asks_sonnet_with_skye_v1_and_the_relay_owns_target_and_hash():
+def test_the_model_writer_asks_sonnet_with_skye_v2_and_the_relay_owns_target_and_hash():
     target = {"kind": "shot", "id": new_id("shot")}
     other = {"kind": "shot", "id": new_id("shot")}
     port = FakePort({"writes": [
@@ -122,7 +122,7 @@ def test_the_model_writer_asks_sonnet_with_skye_v1_and_the_relay_owns_target_and
     out = w.write({"op": "write", "jobId": new_id("job"), "input": inp})
     [asked] = port.asked
     assert asked["purpose"] == "writer" and asked["model"] == "claude-sonnet-5-5"
-    assert asked["system"].startswith("# Skye · scripts (skye.v1)")
+    assert asked["system"].startswith("# Skye · scripts (skye.v2)")
     assert asked["payload"]["input"]["write"]["context"]["refs"] == [{"name": "maya_front", "role": "character"}]
     assert [d["target"] for d in out["writes"]] == [target]
     assert out["writes"][0]["base_hash"] == BASE
@@ -158,8 +158,30 @@ def test_settle_keeps_new_beats_inside_the_length():
 
 
 def test_the_prompt_file_is_versioned_and_says_no_chat():
-    text = (Path(__file__).parent.parent / "prompts" / "skye.v1.md").read_text()
-    assert "You never chat" in text and "No prices, no costs" in text
+    for v in ("skye.v1", "skye.v2"):
+        text = (Path(__file__).parent.parent / "prompts" / f"{v}.md").read_text()
+        assert "You never chat" in text and "No prices, no costs" in text
+
+
+def test_v2_keeps_a_bare_key_and_v1_still_loads():
+    """Owner 2026-10-15: @samurai stays @samurai. skye.v1 stays loadable for a rollback."""
+    v2 = (Path(__file__).parent.parent / "prompts" / "skye.v2.md").read_text()
+    assert "stays `@samurai`" in v2 and "never turn it into one of its views" in v2
+    old = ModelWriter(FakePort({"writes": []}), contracts_dir(), prompt_version="skye.v1")
+    assert old.prompt_version == "skye.v1" and old.system.startswith("# Skye · scripts (skye.v1)")
+
+
+def test_settle_puts_a_swapped_view_back_to_the_bare_key_the_words_name():
+    inp = write_input()
+    inp["write"]["lines"] = [{"type": "action", "text": "@samurai cleans the house. @maya_front watches."}]
+    out = settle(inp, {"writes": [{"note": "n", "lines": [
+        {"type": "action", "text": "@samurai_front sweeps; @samurai_back folds. @maya_side nods."}],
+        "new_beats": [{"kind": "moment", "at_s": 0.5, "text": "@samurai_side bows."}]}]})
+    w = out["writes"][0]
+    # A view of the bare key goes back to @samurai; @maya_side is another picture of a key the words name
+    # by one view, which only the prompt asks Skye to keep (no single bare name to go back to).
+    assert w["lines"][0]["text"] == "@samurai sweeps; @samurai folds. @maya_side nods."
+    assert w["new_beats"][0]["text"] == "@samurai bows."
 
 
 def test_make_finds_the_model_port_inside_the_claude_director():
