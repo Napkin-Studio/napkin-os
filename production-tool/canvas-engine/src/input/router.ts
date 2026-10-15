@@ -14,6 +14,11 @@
 //   a Pencil); a second finger turns that into a pinch and cancels the stroke.
 // - Mouse and pen in the ink tools draw; in other tools they press, drag and
 //   release (engine-select); the hand tool and the middle button pan.
+// - A finger grabs by a long press (board-move; ui-behaviour 8): held still for
+//   LONG_PRESS_MS on something canGrab says a press would pick up, it becomes a
+//   press, then drags and a release, by 'touch'. A palm (the pen coming down) or
+//   a second finger cancels the grab (press-cancel), and two fingers pinch.
+//   Elsewhere one finger still pans.
 
 export type PointerKind = 'mouse' | 'pen' | 'touch'
 export type ToolKind = 'ink' | 'select' | 'hand'
@@ -48,6 +53,8 @@ export type Intent =
   | { kind: 'press'; id: number; x: number; y: number; by: PointerKind }
   | { kind: 'drag'; id: number; x: number; y: number }
   | { kind: 'release'; id: number; x: number; y: number }
+  /** A press is called off (a palm, or a second finger, during a finger's grab): drop its preview. */
+  | { kind: 'press-cancel'; id: number }
   | { kind: 'pan'; dx: number; dy: number }
   | { kind: 'pinch'; scale: number; cx: number; cy: number; dx: number; dy: number }
   | { kind: 'hover'; x: number; y: number; radius: number }
@@ -84,6 +91,8 @@ interface Gesture {
   moved: boolean
   longPressed: boolean
   ignored: boolean
+  /** The finger that grabbed by a long press: its moves drag. */
+  grab: number | null
 }
 
 export class InputRouter {
@@ -100,6 +109,15 @@ export class InputRouter {
   private palmShown = false
   private hovering = false
   private pinch: { d: number; cx: number; cy: number } | null = null
+  /**
+   * Would a press at this viewport point pick something up? Asked once, when a finger's long press
+   * fires (DOM-free: the adapter answers from the select tool's grabOrder). Null: a finger never grabs.
+   */
+  canGrab: ((x: number, y: number) => boolean) | null = null
+
+  constructor(opts: { canGrab?: (x: number, y: number) => boolean } = {}) {
+    this.canGrab = opts.canGrab ?? null
+  }
 
   handle(p: RawPointer): Intent[] {
     if (p.type === 'pen') return this.pen(p)
@@ -113,8 +131,13 @@ export class InputRouter {
     if (!g || g.ignored || g.moved || g.longPressed || this.touches.size !== 1 || this.fingerInk !== null) return []
     if (t - g.t0 < LONG_PRESS_MS) return []
     g.longPressed = true
-    const [f] = this.touches.values()
-    return [{ kind: 'long-press', x: f.x, y: f.y }]
+    const [[id, f]] = this.touches.entries()
+    const out: Intent[] = [{ kind: 'long-press', x: f.x, y: f.y }]
+    if (this.tool !== 'hand' && this.canGrab?.(f.x, f.y)) {
+      g.grab = id
+      out.push({ kind: 'press', id, x: f.x, y: f.y, by: 'touch' })
+    }
+    return out
   }
 
   private points(p: RawPointer): InPoint[] {
@@ -143,6 +166,10 @@ export class InputRouter {
       if (this.fingerInk !== null) {
         out.push({ kind: 'ink-cancel', id: this.fingerInk })
         this.fingerInk = null
+      }
+      if (this.gesture?.grab != null) {
+        out.push({ kind: 'press-cancel', id: this.gesture.grab })
+        this.gesture.grab = null
       }
       if (this.touches.size) {
         if (palm) {
@@ -224,18 +251,23 @@ export class InputRouter {
     if (p.phase === 'down') {
       // The palm while the pen is down: never a gesture.
       if (this.penDown !== null) {
-        if (!this.gesture) this.gesture = { t0: p.t, maxFingers: 0, moved: false, longPressed: false, ignored: true }
+        if (!this.gesture) this.gesture = { t0: p.t, maxFingers: 0, moved: false, longPressed: false, ignored: true, grab: null }
         this.touches.set(p.id, { x: p.x, y: p.y, startX: p.x, startY: p.y, t0: p.t, panX: 0, panY: 0, panT: null })
         return []
       }
       const out: Intent[] = []
-      this.gesture ??= { t0: p.t, maxFingers: 0, moved: false, longPressed: false, ignored: false }
+      this.gesture ??= { t0: p.t, maxFingers: 0, moved: false, longPressed: false, ignored: false, grab: null }
       this.touches.set(p.id, { x: p.x, y: p.y, startX: p.x, startY: p.y, t0: p.t, panX: 0, panY: 0, panT: null })
       this.gesture.maxFingers = Math.max(this.gesture.maxFingers, this.touches.size)
       if (this.touches.size === 1 && !this.penMode && this.tool === 'ink' && !this.gesture.ignored) {
         this.fingerInk = p.id
         out.push({ kind: 'ink-start', id: p.id, at: { x: p.x, y: p.y, pressure: p.pressure || 0.5 }, by: 'touch' })
       } else if (this.touches.size === 2) {
+        // A second finger during a grab: the move is called off, and the two fingers pinch.
+        if (this.gesture.grab !== null) {
+          out.push({ kind: 'press-cancel', id: this.gesture.grab })
+          this.gesture.grab = null
+        }
         if (this.fingerInk !== null) {
           out.push({ kind: 'ink-cancel', id: this.fingerInk })
           this.fingerInk = null
@@ -254,6 +286,7 @@ export class InputRouter {
       const g = this.gesture
       if (g && Math.hypot(p.x - t.startX, p.y - t.startY) > TAP_SLOP) g.moved = true
       if (!g || g.ignored) return []
+      if (g.grab === p.id) return [{ kind: 'drag', id: p.id, x: p.x, y: p.y }]
       if (this.fingerInk === p.id) return [{ kind: 'ink-move', id: p.id, points: this.points(p) }]
       if (this.touches.size === 1) {
         if (!g.moved) return []
@@ -274,6 +307,10 @@ export class InputRouter {
     // up or cancel
     this.touches.delete(p.id)
     const out: Intent[] = []
+    if (this.gesture?.grab === p.id) {
+      this.gesture.grab = null
+      out.push(p.phase === 'cancel' ? { kind: 'press-cancel', id: p.id } : { kind: 'release', id: p.id, x: p.x, y: p.y })
+    }
     if (this.fingerInk === p.id) {
       this.fingerInk = null
       out.push({ kind: p.phase === 'cancel' ? 'ink-cancel' : 'ink-end', id: p.id })
