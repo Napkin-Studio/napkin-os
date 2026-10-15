@@ -146,7 +146,8 @@ Every editor's top bar also carries **History**, before its primary button.
 | Boards beyond the ninth | Listed in the rail without a shortcut. Drag the rows to change rank. | Reordering is one undo step (a rank write). |
 | "+ New board", or the Board tool (B) and a drag | Creates a board. Its title field opens in place, and you pick a purpose (character, location, reference, product, storyboard, video, sketches, brand, formats, or none). | One step. |
 | Drag a rail row | Changes rank. The ⌥ numbers follow the new order. | One step. |
-| Rename (double-click the board title) | Excalidraw's own frame rename, written to `boards[id].title`. | One step. |
+| Rename (double-click the board title) | Excalidraw's own frame rename, written to `boards[id].title`. On our own engine, a double-click on the title chip opens the title in place. | One step. |
+| Move a board (drag its title chip or edge; its inside once selected; arrow keys) | Moves it and everything on it, landing clear of its neighbours (Moving a board, below). | One step. |
 | Delete a board | Asks "Delete the board and the 3 things on it?" with **Delete board only** (contents stay, unboarded) and **Delete all**. | One step. |
 
 - **iPad.** The rail is a "Boards · <current>" pill. Tapping it opens a sheet of 48px rows (thumbnail, name, count), then "+ New board". The ⌥ labels are hidden. The sheet closes from its own close button, on the pill, on a board pick, or on a tap on the canvas outside it (decided 2026-10-13).
@@ -157,7 +158,18 @@ Every editor's top bar also carries **History**, before its primary button.
 - **A board grows to fit what is placed in it**, toward free canvas: down first, then right. It never moves, pushes or covers another board, or loose things on the canvas; it keeps 24 clear of them. A thing moved within its board so that it sticks out makes the board grow to hold it, in whichever direction, under the same rule.
 - **Blocked both ways:** the board does not grow. The thing lands at the nearest free spot just outside it (below, else right, left, above, further out until clear) and is not on the board. The board shows "Board is full · Resize" at its top-right corner for 7 seconds; **Resize** selects the board, so its handles show. (Chosen as the least surprising variant: nothing already placed moves, nothing is hidden under a neighbour, and the new thing is still in view next to the board it was meant for.)
 - **It never shrinks by itself.** **Fit to contents**, on a selected board's bar, shrinks or grows it to its members and the padding, as one undo step (off, with "Nothing on this board yet", on an empty board).
-- **Manual resize:** a selected board has square handles on its corners and the middles of its edges; its sides and foot can be taken anywhere along them (the top is its title, which moves it). A resize is one undo step. An edge never cuts through a member: it stops at the members whose centre is still inside, with the padding (a key's views or an ink group count as one). The members whose centre the edge passed leave the board (on no board) when the drag ends, said as "2 things left Characters · Undo". Never smaller than 160 × 120. A size set by hand holds until something does not fit.
+- **Manual resize:** a selected board has square handles on its corners and the middles of its edges, and only those resize it (owner, 2026-10-15, board-move BM6: the rest of the edge moves the board). On touch each handle takes a 44 px finger. A side never grows under a neighbour: it stops 24 short of the next board or loose thing (BM7). A resize is one undo step. An edge never cuts through a member: it stops at the members whose centre is still inside, with the padding (a key's views or an ink group count as one). The members whose centre the edge passed leave the board (on no board) when the drag ends, said as "2 things left Characters · Undo". Never smaller than 160 × 120. A size set by hand holds until something does not fit.
+**Moving a board** (owner answers, Shrey 2026-10-15; features/board-move.clan). On our own engine:
+- **The title chip** sits on the board's top edge, at least 20 px tall on screen at any zoom, drawn above what is on the board. Pressing it (and 4 px round it) picks the board up with everything on it: its members, a drawn frame's strokes, the ink on it. The cursor is a grab hand over it and a closed hand while moving. Double-clicking it renames the board; the board bar sits just above it, or beside it when the top bar leaves no room, and never covers it.
+- **The edge** (6 px either side of the frame line) moves the board too, selected or not. Only the square handles resize.
+- **The inside.** A click on an unselected board's empty inside (moving less than 4 px) selects the board, so its handles and **Fit to contents** show. A drag there draws a selection box (the Pencil, a lasso), to pick the pictures on it. Once the board is selected, a drag on its inside moves it.
+- **What comes first** when things overlap is one table (grabOrder in the canvas engine): a selected board's handles, the selection's corner handles, a node card or a link, a board's title chip, the thing under the pointer (a picture, ink, a drawn frame), a board's edge, a selected board's inside, an unselected board's inside, empty canvas. So a picture or ink on a board moves alone, as before.
+- **Where it lands.** A moved board never ends up over, or within 24 of, another board or a loose picture, ink or node (links and arrows don't count). While you drag, a dashed outline in the tool colour shows where it will land; let go and it goes to the nearest free spot to where you dropped it. That is one undo step with the move. Several selected boards move by one offset and land together, never blocking each other. Boards never go inside other boards.
+- **Locked:** a locked board is selected but never moved, and neither is anything on it.
+- **Arrow keys** nudge the selection 1 px (⇧ 10 px) on screen. A run of nudges is one undo step, written 400 ms after the last key, or at once on undo, a click, a tool change, leaving the canvas, or someone else changing what you nudge. A nudged board stops 24 short of what is in its way and never jumps it.
+- **Fingers:** one finger still pans. Hold a finger still on a board's chip or edge (or a selected board, or a picture) for half a second, then drag: it moves (8). A palm, or a second finger, calls the move off.
+- **Ink drawn on a board** joins it (its centre decides, as a dropped picture's does) and moves with it; a Drawing made of that ink stays on the board. Ink drawn on a board before this joins it the first time the board moves.
+
 - **New things land in the right board**, through the same placement and growth: a generated picture beside its source on the source's board (the board growing toward it when that is free, else its next free slot), a key's new view next to its group, and + Node into the board in view whose purpose matches. A picture that lands taller than its placeholder, or a stack laid out again, grows its board to hold it when it can.
 
 ### 3.3 Nodes
@@ -1405,7 +1417,8 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Canvas | V H P T S B L | Select, Hand, Pen, Text, Sketch area, Board, Link |
 | Canvas | Enter | Open the selected node's editor |
 | Canvas | ⌘G / ⇧⌘G | Group / ungroup (Excalidraw groups) |
-| Canvas | Delete / Backspace | Delete the selection (asks if a job is running) |
+| Canvas | Delete / Backspace | Delete the selection (asks if a job is running), a selected link too |
+| Canvas | ← → ↑ ↓ / ⇧ + arrow | Nudge the selection 1 px / 10 px on screen; a run of nudges is one undo step (3.2 Moving a board) |
 | Canvas | Tab / ⇧Tab | Move focus between nodes; with L pressed, between compatible link targets |
 | Canvas | ⌘+ / ⌘− / ⇧1 | Zoom in / out / fit |
 | Canvas | Esc with a generating node selected | Ends the scope focus (3.16) |
@@ -1449,7 +1462,9 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Pencil | Draws, or selects with Lasso. Only the Pencil draws while a Pencil is in use, and palm contact is ignored. |
 | Pencil hover (on models that support it) | Shows where the tip will land: an 18px faint ring with a dot in the current ink colour and size. Draws nothing. |
 | Pencil hold at the end of a stroke | Snaps the stroke to a shape. |
-| One finger | Pans the canvas. A tap selects. |
+| One finger | Pans the canvas. A tap selects what is under it, as a click does (a board from its empty inside). |
+| One finger, held still for half a second, then dragged | On something a press would pick up (a board's title chip or edge, a selected board, a picture, ink, a node): moves it, landing as a mouse move does. Elsewhere it is only a long press. A palm (the Pencil landing) or a second finger calls the move off; two fingers then pinch. |
+| Square handles of a selected board | Resize it. Each takes a 44 px finger. |
 | Two-finger pinch | Zooms. |
 | Two-finger tap | Undo. |
 | Three-finger tap | Redo. |
