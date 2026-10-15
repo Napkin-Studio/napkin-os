@@ -706,6 +706,8 @@ export class OwnAdapter implements CanvasAdapter {
 
   /** The selection's frame: dashed round a group, with handles when it can be scaled, the ink group's label. */
   selectionFrame(): SelectionFrame | null {
+    // A text being edited shows its editor, not its frame and handles.
+    if (this.text.session) return null
     // A selected board: its edge and corner handles (it resizes; owner decision 2026-10-15).
     const board = this.selector.soleBoard()
     if (board) return { box: this.selector.resizing?.rect ?? { x: board.x, y: board.y, w: board.w, h: board.h }, dashed: false, handles: false, edges: true }
