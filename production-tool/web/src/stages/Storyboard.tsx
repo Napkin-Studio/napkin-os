@@ -26,7 +26,6 @@ import { editShot, frameStale, takeStale } from '../jobs/stale'
 import { useUpdate } from '../ui/useUpdate'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer, whoIsWorking, workOf } from '../ui/agents/cast'
-import { NapkinLoader } from '../ui/loader/NapkinLoader'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
@@ -225,7 +224,7 @@ function RatioPill({ ratio, onPick }: { ratio: Ratio; onPick: (r: Ratio) => void
   )
 }
 
-/** A crew status line in the sub bar: the loader, the figure, the line and a mono tag (PLANNING, RENDERING). */
+/** A crew status line in the sub bar: the figure at work, the line and a mono tag (PLANNING, RENDERING). */
 function CrewLine({ row }: { row: TrayRow }) {
   const doc = useDoc()
   const shotId = row.ctx && 'shotId' in row.ctx ? row.ctx.shotId : undefined
@@ -235,7 +234,6 @@ function CrewLine({ row }: { row: TrayRow }) {
   return (
     <span className="sb-crewline" role="status">
       <AgentFigure agent={who.agent} state="working" size={20} decorative />
-      <NapkinLoader work={work} size={20} />
       <span>{who.line}</span>
       <span className="sb-tag">{tag}</span>
     </span>
@@ -283,6 +281,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const take = currentTake(doc, shot.id)
   const clipJob = jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id)
   const clipping = isRunning(doc, clipJob)
+  const clipper = clipping && clipJob && doc.jobs[clipJob] ? whoIsWorking(doc.jobs[clipJob], doc.jobs[clipJob].state).agent : 'wren'
   const clipStale = take ? !!takeStale(doc, shot.id) : false
   const prevDrawn = !prev || !!currentFrame(doc, prev)
   const change = frameChangeOf(doc, ui, shot.id)
@@ -312,7 +311,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
     .filter(([, v]) => v !== undefined && v !== null).map(([field, v]) => ({ field, label: cap(cameraLabel(field, v)) }))
   const changed = change && !changeRunning ? cameraDiff(shot.camera, frameEditOf(change.job)?.camera) : undefined
   const changedFields = new Set(changed?.rows.map((r) => r.field) ?? [])
-  const badge = clipping ? <span className="sb-badge warm"><NapkinLoader size={14} />Rendering clip</span>
+  const badge = clipping ? <span className="sb-badge warm"><AgentFigure agent={clipper} state="working" size={20} decorative />Rendering clip</span>
     : take ? (clipStale ? <span className="sb-badge warn">Clip out of date · frame changed</span> : <span className="sb-badge ok">Clip ready</span>)
     : null
   if (confirming) {
