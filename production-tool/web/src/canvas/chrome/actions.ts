@@ -40,6 +40,7 @@ class Bus {
   private into: Pick<CanvasActions, 'linkInto'> | null = null
   private makes: Pick<CanvasActions, 'storyboardFor' | 'makeVideo' | 'storyboardFromShots'> | null = null
   private madeCb: ((m: MadeOnCanvas) => void) | null = null
+  private editCb: ((nodeId: string) => void) | null = null
   private current: CanvasMode = null
   private pick: string | null = null
   private readonly listeners = new Set<Listener>()
@@ -100,6 +101,20 @@ class Bus {
   /** The Storyboard a Script drives, made on the canvas when it has none; null when no canvas can. */
   storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }> | null {
     return this.makes ? this.makes.storyboardFor(scriptId) : null
+  }
+
+  /** The canvas page opens a picture in the Image editor (features/edit-canvas-pictures.clan): the node
+   *  layer's double-click asks for it here. */
+  onEditPicture(cb: (nodeId: string) => void): () => void {
+    this.editCb = cb
+    return () => { if (this.editCb === cb) this.editCb = null }
+  }
+
+  /** Open a canvas picture (its pic or gen node id) in the Image editor; false when no canvas page listens. */
+  editPicture(nodeId: string): boolean {
+    if (!this.editCb) return false
+    this.editCb(nodeId)
+    return true
   }
 
   /** The canvas page listens for a node made from an editor, to offer its Undo there (one canvas step). */
@@ -177,9 +192,14 @@ class Bus {
 
 export const canvasActions = new Bus()
 
-/** Is a key press a canvas tool letter (no modifier, not while typing)? */
+/** An editor is open over the canvas (the Image editor, edit-canvas-pictures): its keys are its own. */
+export function editorOver(): boolean {
+  return typeof document !== 'undefined' && !!document.querySelector('[data-image-editor]')
+}
+
+/** Is a key press a canvas tool letter (no modifier, not while typing, no editor over the canvas)? */
 export function toolLetter(e: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'target' | 'isComposing'>): string | null {
-  if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return null
+  if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing || editorOver()) return null
   const t = e.target as { closest?: (s: string) => unknown } | null
   if (t?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return null
   return /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : null

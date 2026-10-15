@@ -24,7 +24,7 @@ import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/
 import { applySketchFrame } from '../jobs/handlers'
 import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
-import { keyNamed, mainStoryboard, refsList } from '../model/selectors'
+import { currentPictureFrame, keyNamed, mainStoryboard, refsList } from '../model/selectors'
 import { cropLoss } from '../lib/runwaySizes'
 import { BIG_CROP, BIG_CROP_LINE, aspectLabel, boxOf, exactRatio, exportPlan, intersects, lockAspect, membersOf, ratioFor, type Boxed, type Rect } from './core/sketch'
 import { SKETCH_ASK, sketchAsk } from '../ui/asks'
@@ -837,6 +837,45 @@ export class CanvasController {
       return e
     })
     if (changed) this.setEls(next, false)
+  }
+
+  /**
+   * A canvas picture shows its current version (features/edit-canvas-pictures.clan): the document says
+   * which (its frames with node, the latest picked); the element follows, in the same spot and width,
+   * never as a canvas undo step, so the document's undo and redo of an Apply move the canvas too.
+   * Returns how many pictures changed.
+   */
+  async syncPictureVersions(doc: ProductionDocument = this.doc()): Promise<number> {
+    const want = new Map<string, string>()
+    for (const f of Object.values(doc.frames)) if (f.node) want.set(f.node, currentPictureFrame(doc, f.node)!.asset)
+    if (!want.size) return 0
+    const change = alive(this.els()).filter((e) => {
+      const img = imageOf(e)
+      const sha = img && img.kind !== 'drawn' ? want.get(img.id) : undefined
+      return !!sha && sha !== img!.asset
+    })
+    if (!change.length) return 0
+    const add: CanvasAsset[] = []
+    for (const e of change) {
+      const sha = want.get(imageOf(e)!.id)!
+      const blob = await getBlob(sha)
+      if (blob) add.push(await assetData(sha, blob))
+    }
+    if (add.length) this.canvas.addAssets(add)
+    const ids = new Set(change.map((e) => e.id))
+    let n = 0
+    const next = this.els().map((e) => {
+      if (!ids.has(e.id)) return e
+      const c = cd(e) as Extract<CustomData, { kind: 'pic' | 'gen' }>
+      const sha = want.get(c.id)
+      if (!sha || c.asset === sha) return e
+      n++
+      const a = doc.assets[sha]
+      const height = a?.w && a?.h ? Math.round((e.width * a.h) / a.w) : e.height
+      return this.canvas.patch(this.canvas.withAsset(e, sha), { height, customData: { ...c, asset: sha } })
+    })
+    if (n) this.setEls(next, false)
+    return n
   }
 
   /** A canvas job finished: put the image in its node and size it. A view of a key is named key_view when that name is free. */

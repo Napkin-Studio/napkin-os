@@ -310,6 +310,9 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .genlabel .pill.pick { font: inherit; color: inherit; cursor: pointer; }
 .genlabel .pill.pick:hover { border-color: var(--create); color: var(--create); }
 .genlabel .pill.view { background: var(--plan); color: var(--paper); border-color: var(--plan); }
+/* A canvas picture's version, top right of it, opening its versions (features/edit-canvas-pictures.clan). */
+.vchip { position: absolute; transform: translate(calc(-100% - 6px), 6px); height: 20px; padding: 0 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 11px; box-shadow: var(--shadow-pill); cursor: pointer; }
+.vchip:hover, .vchip[aria-expanded="true"] { border-color: var(--tool); color: var(--tool-ink); }
 .gennode { position: absolute; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-soft); border: 1px solid var(--line); }
 
 .toolbar {

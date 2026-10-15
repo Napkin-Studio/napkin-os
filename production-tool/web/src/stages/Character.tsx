@@ -1,8 +1,9 @@
 // Stage 1: a free canvas (Excalidraw, or our own engine behind the flag). Draw, write or drop pictures anywhere;
 // every picture, drawing, note and result is a node. Select any of them and the
 // floating toolbar offers Generate (the result lands beside them, or where you
-// click), Name (key_variant, like @maya_laughing), Set as front, and Make the
-// other views. Curved arrows show what each result was made from. The dock
+// click), Name (key_variant, like @maya_laughing), Set as front, Make the
+// other views, and Edit (the picture in the Image editor, as a new version in
+// place; a double-click on the one picture selected does the same). Curved arrows show what each result was made from. The dock
 // below lists the named references (solid keys), publishes them to the
 // person's library (their own, from any project), imports from it, and cleans up unused pictures.
 
@@ -42,9 +43,13 @@ import { LAYOUT_ONLY } from '../ui/asks'
 import type { AnswerChoice } from '../jobs/runner'
 import { alive, bounds, byOwnId, cd, imageOf, type Canvas, type El } from '../canvas/scene'
 import { showStartCard } from './startCard'
+import { ImageEditor, VersionRow } from './ImageEditor'
+import { editablePicture } from '../canvas/nodes/dblclick'
+import { pickPictureVersionStep } from './imageEditor/apply'
+import { Float } from '../ui/Float'
 import { REF_ROLES, type Ask, type CustomData, type ModelChoice, type NamedRef, type RefRole } from '../contracts/types'
 import { REF_ROLE_TABLE } from '../contracts/load'
-import { keyNamed, keysList, mainScript, mainStoryboard, refsList } from '../model/selectors'
+import { currentPictureFrame, keyNamed, keysList, mainScript, mainStoryboard, pictureVersions, refsList } from '../model/selectors'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import { lastWorkedModel } from '../jobs/follow'
 import { ModelPick } from '../ui/ModelPick'
@@ -161,6 +166,17 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     ctrl.syncGenStates(docStore.get())
     return docStore.onChange((d) => ctrl.syncGenStates(d))
   }, [ctrl, docStore])
+  // A picture shows its current version: Apply, a version picked, and their undo move it (edit-canvas-pictures).
+  useEffect(() => {
+    if (!ctrl) return
+    const sync = (d: ReturnType<typeof docStore.get>) => void ctrl.syncPictureVersions(d).catch((e) => console.warn('could not show the picture version', e))
+    sync(docStore.get())
+    return docStore.onChange(sync)
+  }, [ctrl, docStore])
+
+  // The picture open in the Image editor (its node id): from Edit in its bar, or a double-click.
+  const [editing, setEditing] = useState<string | null>(null)
+  useEffect(() => canvasActions.onEditPicture(setEditing), [])
 
   // Excalidraw measures its container; tell it when the stage comes back into view.
   useEffect(() => {
@@ -521,6 +537,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
               <span key={e.id}>
                 {named && !stacked && <NameChip r={named} at={toView({ x: e.x, y: e.y + e.height })} />}
                 {c?.kind === 'gen' && <GenOverlay el={e} c={c} toView={toView} zoom={zoom} ctrl={ctrl} named={!!named} />}
+                {img && img.kind !== 'drawn' && !stacked && <VersionChip nodeId={img.id} at={toView({ x: e.x + e.width, y: e.y })} />}
               </span>
             )
           })}
@@ -553,7 +570,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             )
           })()}
           {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
-            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits}
+            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
@@ -624,7 +641,36 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
         <ZoomPill chrome={chrome} touch={narrow} />
       </div>
       </CardChromeContext.Provider>
+      {editing && (() => {
+        // The picture as the canvas shows it now; gone from the canvas, the editor closes.
+        const el = byOwnId(els, editing)
+        const sha = editablePicture(el) ? imageOf(el)!.asset : undefined
+        if (!el || !sha) return null
+        const a = doc.assets[sha]
+        return <ImageEditor target={{ kind: 'picture', nodeId: editing }} picture={{ sha, ...(a?.w && a?.h ? { w: a.w, h: a.h } : {}) }} onBack={() => setEditing(null)} />
+      })()}
     </div>
+  )
+}
+
+// ── A picture's versions: "v2" on it, and its versions to pick (edit-canvas-pictures) ──
+
+function VersionChip({ nodeId, at }: { nodeId: string; at: Pt }) {
+  const { doc: store } = useServices()
+  const doc = useDoc()
+  const [open, setOpen] = useState(false)
+  const btn = useRef<HTMLButtonElement>(null)
+  const versions = pictureVersions(doc, nodeId)
+  const current = currentPictureFrame(doc, nodeId)
+  if (versions.length < 2 || !current) return null
+  return (
+    <>
+      <button ref={btn} type="button" className="vchip pt-mono" style={{ left: at.x, top: at.y }} aria-haspopup="menu" aria-expanded={open}
+        title={`v${current.version} of ${versions.length}: pick another version`} onClick={() => setOpen((o) => !o)}>v{current.version}</button>
+      <Float anchor={btn} open={open} onClose={() => setOpen(false)} align="end" label="Versions of this picture" className="ie-versions">
+        {versions.map((f) => <VersionRow key={f.id} f={f} open={f.id === current.id} onPick={() => { setOpen(false); void pickPictureVersionStep(store, f.id) }} />)}
+      </Float>
+    </>
   )
 }
 
@@ -714,8 +760,10 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
 
 type Popover = null | 'generate' | 'name'
 
-function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup }: {
+export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit }: {
   ctrl: CanvasController
+  /** Open the one selected picture in the Image editor (edit-canvas-pictures). */
+  onEdit: (nodeId: string) => void
   selected: El[]
   toView: (p: Pt) => Pt
   onDelete: (sel: El[]) => void
@@ -803,6 +851,10 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, on
         {named && <button className="btn xs ghost" onClick={() => ctrl.unname(singleImage.id)}>Remove name</button>}
       </span>,
     )
+    // Edit: the picture in the Image editor; Apply puts the new version in its place (not a drawing's).
+    if (editablePicture(meaningful[0])) {
+      groups.push(<button key="edit" className="btn sm" title="Open in the Image editor (or double-click the picture)" onClick={() => onEdit(singleImage.id)}>Edit</button>)
+    }
   }
   // The beta's thumbs on a picture the tool made (features/production-tool-dogfood.clan).
   const made = singleImage?.kind === 'gen' ? cd(meaningful[0]) : undefined

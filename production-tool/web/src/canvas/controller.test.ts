@@ -493,3 +493,27 @@ describe('loose strokes become a Drawing', () => {
     expect(t.canvas.commits.at(-1)).toMatchObject({ undoable: false })
   })
 })
+
+describe('a canvas picture shows its current version (edit-canvas-pictures)', () => {
+  it('puts the version picked on the element, in place and at its width, never as a canvas undo step', async () => {
+    const node = 'node_pic01'
+    t.canvas.els = [{ id: 'P', type: 'image', x: 40, y: 60, width: 300, height: 400, isDeleted: false, frameId: null, assetSha: SHA('a'),
+      customData: { kind: 'pic', id: node, asset: SHA('a') } } as unknown as El]
+    await putBlobAs(SHA('b'), new Blob(['b'], { type: 'image/png' }))
+    await systemUpdate(t.doc, (d) => {
+      d.assets[SHA('b')] = asset(SHA('b'), 'image', { w: 600, h: 600 })
+      d.frames.frame_v1 = { id: 'frame_v1', v: 1, field_v: {}, node, picked_at: '2026-10-15T10:00:00Z', version: 1, kind: 'original', asset: SHA('a') }
+      d.frames.frame_v2 = { id: 'frame_v2', v: 1, field_v: {}, node, picked_at: '2026-10-15T10:01:00Z', version: 2, parent_id: 'frame_v1', kind: 'edited', asset: SHA('b'), crew: 'rhea' }
+    })
+    expect(await t.ctrl.syncPictureVersions()).toBe(1)
+    const p = t.canvas.els[0] as El & { assetSha?: string }
+    expect({ x: p.x, y: p.y, w: p.width, h: p.height, sha: p.assetSha, c: (p.customData as Rec).asset }).toEqual({ x: 40, y: 60, w: 300, h: 300, sha: SHA('b'), c: SHA('b') })
+    expect(t.canvas.commits.at(-1)?.undoable).toBe(false)
+    expect(t.canvas.assets.has(SHA('b'))).toBe(true)
+    // The document's undo of the Apply: v2 goes, and the picture shows v1 again.
+    await systemUpdate(t.doc, (d) => { delete d.frames.frame_v2 })
+    await t.ctrl.syncPictureVersions()
+    expect((t.canvas.els[0].customData as Rec).asset).toBe(SHA('a'))
+    expect(await t.ctrl.syncPictureVersions()).toBe(0)
+  })
+})
