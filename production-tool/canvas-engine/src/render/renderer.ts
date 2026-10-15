@@ -17,6 +17,7 @@ import { localPoints } from '../model/points'
 import { BLOCKS, linkRoute, midway, routeKey, type LinkEnv, type LinkRoute } from './links'
 import { photoEdge, recordBounds } from '../model/bounds'
 import { LIGHT_INK, resolveInk, type InkPalette } from '../ink/palette'
+import { LINE_HEIGHT, TEXT_FONT } from '../text/text'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
@@ -199,6 +200,8 @@ export class Renderer {
   currentBoard: string | null = null
   /** What the ink names mean in the host's theme (ink/palette.ts); the light values until it says. */
   inkPalette: InkPalette = LIGHT_INK
+  /** A text being edited in place: its editor shows it, so the canvas does not (features/canvas-text). */
+  editing: string | null = null
   /**
    * Elements gliding from where they were to where they are now (a stack of pictures opening or
    * folding): drawn in between for `ms`, eased, never written. The host keeps drawing while
@@ -404,6 +407,7 @@ export class Renderer {
     const paint = (rec: ElementRecord) => {
       const r0 = this.tween ? this.tweened(rec, now) : rec
       const r = this.resizing?.id === r0.id ? { ...r0, ...this.resizing.rect } : r0
+      if (r.id === this.editing) return
       if (!visible.has(r.id) && r === r0) {
         stats.culled++
         return
@@ -738,11 +742,12 @@ export class Renderer {
         return
       }
       case 'text': {
+        // Lines LINE_HEIGHT apart, each baseline a size below its line's top (as the editor lays them).
         ctx.fillStyle = stroke
         const size = r.style.fontSize ?? 20
-        ctx.font = `${size}px ${r.style.fontFamily ?? 'Geist'}, sans-serif`
+        ctx.font = `${size}px ${r.style.fontFamily ?? TEXT_FONT}, sans-serif`
         const plain = typeof r.props.plain === 'string' ? r.props.plain : ''
-        plain.split('\n').forEach((line, i) => ctx.fillText(line, r.x, r.y + size * (i + 1)))
+        plain.split('\n').forEach((line, i) => ctx.fillText(line, r.x, r.y + size * (LINE_HEIGHT * i + 1)))
         return
       }
       case 'arrow':

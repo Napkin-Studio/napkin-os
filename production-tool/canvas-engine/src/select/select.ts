@@ -95,7 +95,10 @@ const isArea = (r: ElementRecord) => r.kind === 'sketch' || r.customData?.kind =
 export function scaled(r: ElementRecord, ox: number, oy: number, s: number, ratio: number | null = null): ElementRecord {
   const w = r.w * s
   const h = ratio ? w / ratio : r.h * s
-  return { ...r, x: ox + (r.x - ox) * s, y: oy + (r.y - oy) * s, w, h }
+  const out = { ...r, x: ox + (r.x - ox) * s, y: oy + (r.y - oy) * s, w, h }
+  // A text scales its font with its box (features/canvas-text: the handles scale, they never wrap).
+  if (r.kind === 'text') out.style = { ...r.style, fontSize: Math.round((r.style.fontSize ?? 20) * s * 100) / 100 }
+  return out
 }
 
 /** The box round records as drawn: a turned one by its turned corners, a stacked photo with its edge (a whole pile). */
@@ -321,7 +324,7 @@ export class SelectTool {
   /**
    * What sits in each container: its children by parentId (a board's members, a drawn frame's strokes),
    * and for a sketch area its strokes by geometry (web core/sketch.ts membersOf: untagged strokes and
-   * shapes whose box meets it, not inside another frame). One rule for everything that moves a container.
+   * shapes, and texts (canvas-text), whose box meets it, not inside another frame). One rule for everything that moves a container.
    */
   private membersByContainer(): Map<string, string[]> {
     const kids = new Map<string, string[]>()
@@ -329,7 +332,7 @@ export class SelectTool {
     for (const r of all) if (r.parentId) kids.set(r.parentId, [...(kids.get(r.parentId) ?? []), r.id])
     const areas = all.filter(isArea)
     if (areas.length) {
-      const loose = all.filter((r) => (r.kind === 'stroke' || r.kind === 'shape') && !r.customData && (!r.parentId || this.scene.get(r.parentId)?.kind === 'board'))
+      const loose = all.filter((r) => (r.kind === 'stroke' || r.kind === 'shape' || r.kind === 'text') && !r.customData && (!r.parentId || this.scene.get(r.parentId)?.kind === 'board'))
       for (const a of areas) {
         const box = recordBounds(a)
         for (const r of loose) if (overlaps(recordBounds(r), box, 1e-6)) kids.set(a.id, [...(kids.get(a.id) ?? []), r.id])
