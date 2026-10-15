@@ -185,6 +185,20 @@ export function currentFrame(d: Doc, shot: Shot | Id | undefined): Frame | undef
   return s?.pick ? d.frames[s.pick.current] : undefined
 }
 
+/** A canvas picture's versions (features/edit-canvas-pictures.clan), v1 first; none until its first edit. */
+export function pictureVersions(d: Doc, nodeId: string): Frame[] {
+  return values(d.frames).filter((f) => f.node === nodeId).sort((a, b) => a.version - b.version || byId(a, b))
+}
+
+/** The version a canvas picture shows: the latest picked (ties: the higher version); undefined before its first edit. */
+export function currentPictureFrame(d: Doc, nodeId: string): Frame | undefined {
+  let best: Frame | undefined
+  for (const f of pictureVersions(d, nodeId)) {
+    if (!best || (f.picked_at ?? '') >= (best.picked_at ?? '')) best = f
+  }
+  return best
+}
+
 /** The asset of the frame in the shot now. */
 export function shotFrameAsset(d: Doc, shot: Shot | Id | undefined): string | undefined {
   return currentFrame(d, shot)?.asset

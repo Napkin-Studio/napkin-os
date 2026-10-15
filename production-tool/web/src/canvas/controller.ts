@@ -575,7 +575,7 @@ export class CanvasController {
       }
       if (other) {
         // The name moves here: one image per name.
-        if (other.asset && other.asset !== asset) markStale(d, other.asset, other.id, `@${name} now shows another image.`, now)
+        if (other.asset && other.asset !== asset) markStale(d, other.asset, { kind: 'ref', id: other.id }, `@${name} now shows another image.`, now)
         if (mine) delete d.refs[mine.id]
         Object.assign(other, { asset, node: nodeId, named_at: now })
       } else if (mine) {
@@ -712,7 +712,7 @@ export class CanvasController {
       for (const n of nodes) {
         const existing = Object.values(d.refs).find((r) => r.key === entry.key && r.variant === n.variant)
         if (existing) {
-          if (existing.asset && existing.asset !== n.sha) markStale(d, existing.asset, existing.id, `@${entry.key}_${n.variant} was replaced from the library.`, now)
+          if (existing.asset && existing.asset !== n.sha) markStale(d, existing.asset, { kind: 'ref', id: existing.id }, `@${entry.key}_${n.variant} was replaced from the library.`, now)
           Object.assign(existing, { asset: n.sha, node: n.nodeId, role: k.role, named_at: now })
         } else {
           const id = newId('ref')

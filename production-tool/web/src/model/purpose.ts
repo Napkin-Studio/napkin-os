@@ -14,6 +14,10 @@ import { mainScript, mainStoryboard, mainVideo } from './selectors'
 
 export type FrameHow = 'first' | 'next' | 'rest' | 'chain' | 'again' | 'update'
 
+/** What the Image editor works on (features/edit-canvas-pictures.clan): a shot's frame, or a picture on the
+ *  canvas (its pic or gen node id). */
+export type EditTarget = { kind: 'shot'; shotId: Id } | { kind: 'picture'; nodeId: string }
+
 export type JobPurpose =
   | { for: 'canvas' }
   /** storyboardId: the storyboard it plans (absent: the main one; features/canvas-nodes.clan, more than one storyboard). */
@@ -30,10 +34,12 @@ export type JobPurpose =
   /** Change this frame (features/frame-change-edit.clan): a proposal on the shot's frame `parentFrameId`,
    *  landed unpicked until Apply or Keep both (jobs/frameEdit.ts). */
   | { for: 'frame_edit'; shotId: Id; parentFrameId?: Id }
-  /** An Image editor action on the shot's frame `parentFrameId` (features/image-editor.clan): Fill area,
+  /** An Image editor action (features/image-editor.clan) on a shot's frame or a canvas picture
+   *  (features/edit-canvas-pictures.clan), from its version `parentFrameId` when it has one: Fill area,
    *  Change whole frame, Upscale or Remove background on our server. Its result lands nowhere: the
-   *  editor shows it as a layer, and only Apply as new version makes a frame. */
-  | { for: 'image_edit'; shotId: Id; parentFrameId?: Id }
+   *  editor shows it as a layer, and only Apply as new version makes a frame. The job's node is the shot,
+   *  or the canvas node (a group endpoint, as a canvas Generate's). */
+  | { for: 'image_edit'; target: EditTarget; parentFrameId?: Id }
   /** Skye drafts or rewrites one item of a script (features/script-editor.clan). */
   | { for: 'write'; scriptId?: Id }
 
@@ -52,8 +58,9 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
     case 'frame':
     case 'clip':
     case 'frame_edit':
-    case 'image_edit':
       return { kind: 'shot', id: p.shotId }
+    case 'image_edit':
+      return p.target.kind === 'shot' ? { kind: 'shot', id: p.target.shotId } : { kind: 'group', id: p.target.nodeId }
     case 'shot_list':
       return { kind: 'storyboard', id: (p.storyboardId && d.storyboards[p.storyboardId] ? p.storyboardId : mainStoryboard(d)!.id) }
     case 'stitch':
@@ -104,11 +111,15 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
     }
     case 'sketch':
       return j.node.kind === 'sketch' ? { for: 'sketch', sketchId: j.node.id } : null
-    case 'frame_edit':
-    case 'image_edit': {
+    case 'frame_edit': {
       if (j.node.kind !== 'shot') return null
       const pf = parent('frame')
       return { for: kind, shotId: j.node.id, ...(pf ? { parentFrameId: pf } : {}) }
+    }
+    case 'image_edit': {
+      const pf = parent('frame')
+      const target: EditTarget | null = j.node.kind === 'shot' ? { kind: 'shot', shotId: j.node.id } : j.node.kind === 'group' ? { kind: 'picture', nodeId: j.node.id } : null
+      return target ? { for: kind, target, ...(pf ? { parentFrameId: pf } : {}) } : null
     }
     case 'clip': {
       if (j.node.kind !== 'shot') return null
