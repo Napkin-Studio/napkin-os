@@ -160,6 +160,9 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
     if hasattr(mock, "keep_in"):  # the mock's tasks outlive a restart, as a real provider's do
         mock.keep_in(data_dir / "mock-provider")
     director = load_director()
+    # Jobs, counters, claims and holds kept under data_dir/state (features/relay-durable-jobs.clan);
+    # the holds sit beside the bytes they are about, so a restart keeps every saved picture openable
+    # (features/picture-storage.clan). A held.txt left by an earlier build is folded in.
     store = FileStore(data_dir)
     local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
     relay = Relay(store=store, blobs=blobs, registry=registry, director=director,

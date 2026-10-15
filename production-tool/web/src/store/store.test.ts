@@ -138,6 +138,28 @@ async function sceneOn(client: StoreClient) {
 }
 
 describe('the scene: live store and checkpoint', () => {
+  it("a close's save reaches the server when the scene changed since the last checkpoint", async () => {
+    // As session.close and ModelStore.close do it: the save is asked for, not awaited, and the store
+    // is disposed. The Worker disposed under the checkpoint and the save was dropped, so pictures
+    // placed in the last five minutes stayed only in this browser (features/picture-storage.clan).
+    const { client } = open()
+    await client.create({ person: MAYA })
+    const posts: string[] = []
+    client.startMirror(async (_bytes, meta) => {
+      await new Promise((r) => setTimeout(r, 20))
+      posts.push(meta.reason)
+    }, { everyMs: 60_000 })
+    const { store } = await sceneOn(client)
+    store.change((tx) => tx.put([element({ id: 'p', kind: 'shape', z: 'a0', w: 10, h: 10, props: { geo: 'rect' } })]))
+    await settle(client)
+    await client.patch({ project: { title: 'Rain' } }, { action: 'set project title' })
+    void client.mirrorNow('manual').catch(() => {})
+    await client.flush()
+    client.dispose()
+    for (let i = 0; i < 100 && !posts.length; i++) await new Promise((r) => setTimeout(r, 10))
+    expect(posts).toEqual(['manual'])
+  })
+
   it('writes the checkpoint only at mirror, accept, handoff and export, and only when the scene changed', async () => {
     const { client, server } = open()
     await client.create({ person: MAYA })
