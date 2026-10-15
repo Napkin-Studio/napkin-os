@@ -140,9 +140,35 @@ export function toggleHidden(s: EditSession, id: string): EditSession {
   return { ...s, hidden: s.hidden.includes(id) ? s.hidden.filter((h) => h !== id) : [...s.hidden, id] }
 }
 
-/** The edits that count: masks with paint, results that arrived or are on the way. */
+/** An edit that counts: a mask with paint, a result that arrived or is on the way. */
+const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length) && !(e.kind === 'cutout' && e.failed)
+
+/** The edits that count and show: what Apply saves (hidden ones are counted apart, by hiddenCount). */
 export function editCount(s: EditSession): number {
-  return s.edits.filter((e) => !(e.kind === 'mask' && !e.ops.length) && !(e.kind === 'cutout' && e.failed)).length
+  return s.edits.filter((e) => counts(e) && !s.hidden.includes(e.id)).length
+}
+
+/** The hidden layers that would otherwise count: hidden edits, and Frame when it is hidden. `ignore`: kinds
+ *  that make no difference to the purpose (a send has no text or crop; masks are never applied). */
+export function hiddenCount(s: EditSession, ignore: readonly EditKind[] = []): number {
+  return s.edits.filter((e) => counts(e) && s.hidden.includes(e.id) && !ignore.includes(e.kind)).length + (s.hidden.includes('frame') ? 1 : 0)
+}
+
+/** "1 hidden layer is left out" (the pill, the Apply line, the send tray). */
+export function leftOutLine(n: number): string {
+  return `${plural(n, 'hidden layer')} ${n === 1 ? 'is' : 'are'} left out`
+}
+
+/** After Apply: what stays in the editor (owner answer IM3, nothing vanishes). The hidden edits, still hidden,
+ *  and the masks their fills are cut by (hidden too: they were applied). Undefined when nothing stays. */
+export function keptAfterApply(s: EditSession): EditSession | undefined {
+  const kept = s.edits.filter((e) => s.hidden.includes(e.id) && counts(e))
+  if (!kept.length) return undefined
+  const ids = new Set(kept.map((e) => e.id))
+  const masksNeeded = kept.flatMap((e) => (e.kind === 'fill' ? [e.maskId] : []))
+  const edits = s.edits.filter((e) => ids.has(e.id) || masksNeeded.includes(e.id))
+  // Frame is not carried over: on the new version it is the applied picture itself.
+  return { edits, hidden: edits.map((e) => e.id) }
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -211,7 +237,8 @@ export function upscaleSize(w: number, h: number, scale: 2 | 4): string {
 
 /** The edits as a frame keeps them (document frame.edits, at most 64): the op and its small params. */
 export function editsForFrame(s: EditSession): { op: string; params?: Record<string, unknown> }[] {
-  return s.edits.filter((e) => !(e.kind === 'mask' && !e.ops.length) && !(e.kind === 'cutout' && e.failed)).slice(0, 64).map((e) => {
+  // Only what was applied: a hidden layer is left out of the picture, so out of its record too.
+  return s.edits.filter((e) => counts(e) && !s.hidden.includes(e.id)).slice(0, 64).map((e) => {
     switch (e.kind) {
       case 'mask': return { op: 'mask', params: { name: e.name, steps: e.ops.length } }
       case 'cutout': return { op: 'cutout', params: { where: e.where, ...(e.jobId ? { job: e.jobId } : {}) } }

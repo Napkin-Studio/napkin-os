@@ -37,7 +37,7 @@ function antsOn(ctx: CanvasRenderingContext2D, s: { img: ImageData; rim: Int32Ar
 
 type Live = { id: number; op: Extract<MaskOp, { t: 'brush' | 'lasso' }>; drawn: number }
 
-export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, motion, alphaOf, alphaKey,
+export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, motion, alphaOf, alphaKey, onDrawn,
   onMaskOp, onClick, onAddText, onText, onCrop, pending, progress, children }: {
   /** The frame as saved, for Before and while the preview draws. */
   src?: string
@@ -56,6 +56,8 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   alphaOf: AlphaOf
   /** What a cut-out's alpha is drawn from ('' while it loads): part of a snap step's cache key. */
   alphaKey?: (cutoutId: string) => string
+  /** The picture drew (null) or could not (why): a failure keeps the last good picture on the stage. */
+  onDrawn?: (error: string | null) => void
   onMaskOp: (op: MaskOp) => void
   onClick: (p: Pt) => void
   onAddText: (p: Pt) => void
@@ -98,7 +100,11 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
       c.height = out.height
       c.getContext('2d')?.drawImage(out, 0, 0)
       setDrawn(true)
-    }).catch(() => alive && setDrawn(false))
+      onDrawn?.(null)
+    }).catch((e) => {
+      // The last good picture stays (or the frame as saved, before the first): never a blank, never a silent revert.
+      if (alive) onDrawn?.(e instanceof Error ? e.message : 'something went wrong')
+    })
     return () => { alive = false }
     // planKey stands for plan; the masks change the picture only through a fill's plan step
     // eslint-disable-next-line react-hooks/exhaustive-deps

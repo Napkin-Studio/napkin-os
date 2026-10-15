@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
-  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, type EditSession, type MaskOp,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, keptAfterApply, leftOutLine,
+  type EditSession, type MaskOp,
 } from './edits'
 
 const SPEC = readFileSync(new URL('../../../../../docs/production-tool/ui-behaviour.md', import.meta.url), 'utf8')
@@ -136,5 +137,36 @@ describe('each edit has its own undo', () => {
     const ops = editsForFrame(base())
     expect(ops.map((o) => o.op)).toEqual(['mask', 'cutout', 'text', 'fill'])
     expect(ops[3].params).toMatchObject({ words: 'drops', keep_outside: true })
+  })
+})
+
+describe('hidden layers (features/image-editor-masks-layers.clan, IM1 and IM3)', () => {
+  const session = (): EditSession => {
+    let s = withMaskOp(EMPTY, stroke())
+    const m = s.edits[0].id
+    s = addEdit(s, { id: 'f', kind: 'fill', maskId: m, words: 'drops', keepOutside: true, jobId: 'job_1' })
+    s = addEdit(s, { id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, size: 0.1 })
+    return s
+  }
+  it('counts hidden edits apart from the ones Apply saves', () => {
+    const s = toggleHidden(toggleHidden(session(), 't'), 'frame')
+    expect(editCount(s)).toBe(2)
+    expect(hiddenCount(s)).toBe(2) // the text and Frame
+    expect(hiddenCount(s, ['text'])).toBe(1)
+    expect(leftOutLine(1)).toBe('1 hidden layer is left out')
+    expect(leftOutLine(2)).toBe('2 hidden layers are left out')
+  })
+  it('a frame keeps only the applied edits', () => {
+    const s = toggleHidden(session(), 't')
+    expect(editsForFrame(s).map((e) => e.op)).toEqual(['mask', 'fill'])
+  })
+  it('after Apply the hidden edits stay, hidden, with the masks their fills need', () => {
+    expect(keptAfterApply(session())).toBeUndefined()
+    const s = session()
+    const m = s.edits[0].id
+    const kept = keptAfterApply(toggleHidden(toggleHidden(toggleHidden(s, 'f'), 't'), 'frame'))!
+    expect(kept.edits.map((e) => e.id)).toEqual([m, 'f', 't'])
+    expect(kept.hidden).toEqual([m, 'f', 't'])
+    expect(editCount(kept)).toBe(0)
   })
 })
