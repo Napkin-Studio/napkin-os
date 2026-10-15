@@ -45,7 +45,7 @@ export function textBox(plain: string, size: number, measure: Measure = approxMe
 export const plainOf = (r: ElementRecord): string => (typeof r.props.plain === 'string' ? r.props.plain : '')
 
 /** Typed text as it is kept: trailing blank space dropped. Empty means no text. */
-export const tidy = (typed: string) => typed.replace(/\s+$/, '')
+export const trimTyped = (typed: string) => typed.replace(/\s+$/, '')
 
 export interface TextSession {
   /** The record being edited, or the id the new one will take. */
@@ -102,7 +102,7 @@ export class TextTool {
     const s = this.session
     this.session = null
     if (!s) return null
-    const plain = tidy(typed)
+    const plain = trimTyped(typed)
     const cur = s.fresh ? undefined : this.scene.get(s.id)
     if (!plain) {
       if (cur && !cur.locked) this.scene.change((tx) => tx.remove([s.id]))
