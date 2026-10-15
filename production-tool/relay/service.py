@@ -1893,7 +1893,9 @@ class Relay:
             if not key:
                 return self._fail(job, "invalid_input", "A clip is not one of ours; upload it first.",
                                   paid=False, refund=True)
-            clips.append({"key": key, **({"trimS": c["trimS"]} if "trimS" in c else {})})
+            # In and out points and the join into the clip (features/connected-video.clan) go as they came;
+            # a clip without them is sent exactly as before.
+            clips.append({"key": key, **{k: c[k] for k in ("trimS", "inS", "outS", "transition") if k in c}})
         if not clips:
             return self._fail(job, "invalid_input", "Stitch needs at least one clip.", paid=False, refund=True)
         now = self.clock()
@@ -2057,6 +2059,8 @@ class Relay:
         for k in ("w", "h", "durationS"):
             if result.get(k) is not None:
                 out[k] = result[k]
+        if result.get("seams"):  # Jude's seam scores (connected-video phase 1): logged only, until tuned
+            log.info(json.dumps({"kind": "stitch_seams", "jobId": job["jobId"], "seams": result["seams"]}))
         return self._finish(job, "completed", outputs=[out], kind="generated", paid=False)
 
     def _cancel_waiting(self, job: dict, **changes) -> dict:
