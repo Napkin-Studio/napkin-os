@@ -33,8 +33,9 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import { cutoutWhere, within, type CutoutWhere } from '../ml/process'
 import type { DeviceEnv } from '../ml/runtime'
 import {
-  EMPTY, addEdit, applyLine, clearMask, editCount, editId, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
-  toggleHidden, undoEdit, updateEdit, upscaleSize, withMaskOp, type Edit, type EditSession, type MaskOp, type Pt,
+  EMPTY, NOTHING_TO_TAKE, addEdit, applyLine, clearMask, editCount, editId, editLabel, editsForFrame, layersOf, leaveAsk, nextStep,
+  notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
+  type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
 import { bounds, painted, rasterize, rle, shrink } from './imageEditor/mask'
 import { compose, maskToPng, plan, toPng, untouched, type Pic } from './imageEditor/compose'
@@ -48,6 +49,7 @@ import './image-editor.css'
 /** The on-device runtime, loaded only when a tool first needs it (onnxruntime-web is large). */
 const ml = () => import('../ml/runtime')
 
+const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘Z' : 'Ctrl+Z'
 const capital = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 const shotTitle = (s: Shot | undefined, n: number) => `Frame ${n} · ${capital(s?.camera.size ?? 'shot')}`
 
@@ -112,6 +114,10 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const [said, setSaid] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** What the strip says about the last press ("Nothing to take away yet…"), while the frame, tool and mode stay. */
+  const [hintAt, setHintAt] = useState<{ text: string; at: string } | null>(null)
+  /** Steps ⌘Z took back on this frame, for ⇧⌘Z (editor-local: the document's undo is not touched). */
+  const [redoAt, setRedoAt] = useState<{ frame?: string; steps: Undone[] }>({ steps: [] })
   const versionsBtn = useRef<HTMLButtonElement>(null)
   const fillBtn = useRef<HTMLButtonElement>(null)
   const wholeBtn = useRef<HTMLButtonElement>(null)
@@ -212,7 +218,8 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const regionModel = regionChoice ? modelWhere(regionChoice.provider, regionChoice.model) : undefined
   const upModel = upChoice ? modelWhere(upChoice.provider, upChoice.model) : undefined
 
-  // Keys: the tools, [ ] for the brush, Space held for the Hand.
+  // Keys: the tools, [ ] for the brush, Space held for the Hand, ⌘Z and ⇧⌘Z for strokes.
+  const keys = useRef({ undo: () => {}, redo: () => {} })
   useEffect(() => {
     const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
     const down = (e: KeyboardEvent) => {
@@ -231,14 +238,52 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
       if (t) setTool(t)
     }
     const up = (e: KeyboardEvent) => { if (e.key === ' ') setSpace(false) }
+    // ⌘Z / Ctrl+Z takes back the last stroke here, ⇧⌘Z or Ctrl+Y puts it back. Caught before the
+    // document's UndoKeys (capture phase), which would undo a document step instead.
+    const undoKeys = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || typing(e.target)) return
+      const k = e.key.toLowerCase()
+      if (k !== 'z' && k !== 'y') return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (k === 'y' || e.shiftKey) keys.current.redo()
+      else keys.current.undo()
+    }
     window.addEventListener('keydown', down)
+    window.addEventListener('keydown', undoKeys, true)
     window.addEventListener('keyup', up)
     return () => {
       window.removeEventListener('keydown', down)
+      window.removeEventListener('keydown', undoKeys, true)
       window.removeEventListener('keyup', up)
     }
   }, [])
   const activeTool: ToolId = space ? 'hand' : tool
+  const hintKey = `${frameId}|${tool}|${brush.mode}`
+  const hint = hintAt?.at === hintKey ? hintAt.text : null
+  const redoStack = redoAt.frame === frameId ? redoAt.steps : []
+  useEffect(() => {
+    keys.current = {
+      undo: () => {
+        let undone: Undone | undefined
+        setSession((s) => {
+          const r = undoLast(s)
+          undone = r.undone
+          return r.session
+        })
+        if (undone) {
+          const u = undone
+          setRedoAt((st) => ({ frame: frameId, steps: [...(st.frame === frameId ? st.steps : []), u] }))
+        }
+      },
+      redo: () => {
+        const u = redoStack.at(-1)
+        if (!u) return
+        setRedoAt({ frame: frameId, steps: redoStack.slice(0, -1) })
+        setSession((s) => redoUndone(s, u))
+      },
+    }
+  })
 
   if (!shot) return null
 
@@ -276,7 +321,17 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   // ── the tools ──
   // A fill already sent keeps the mask it was sent with: painting while it runs starts a new mask.
   const filling = runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined
-  const onMaskOp = (op: MaskOp) => setSession((s) => withMaskOp(filling && s.active === filling ? { ...s, active: undefined } : s, op))
+  const onMaskOp = (op: MaskOp) => {
+    const target = (s: EditSession) => (filling && s.active === filling ? { ...s, active: undefined } : s)
+    if (nothingToTake(target(session), op)) {
+      setHintAt({ text: NOTHING_TO_TAKE, at: hintKey })
+      return
+    }
+    setHintAt(null)
+    setRedoAt({ steps: [] })
+    setSession((s) => withMaskOp(target(s), op))
+  }
+
   const onClick = (p: Pt) => void attempt('finding the object', async () => {
     if (!framePic || !shownPlan) return
     const base = shownPlan.steps.find((s) => s.kind === 'base')
@@ -390,7 +445,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const step = nextStep(session)
 
   return (
-    <div className="editor image-editor">
+    <div className="editor image-editor" data-image-editor="">
       <EditorBar back="Storyboard" onBack={() => go('back')} icon="frame" title={shotTitle(shot, index + 1)}
         meta={<span className="pt-mono ie-meta">{ratio} locked{own ? ` · ${own.w} × ${own.h}` : ''}</span>}
         right={(
@@ -439,7 +494,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
           <div className="ie-strip" role="group" aria-label={maskTool ? 'Brush mask options' : `${tip.label.split(',')[0]} options`}>
             {maskTool ? (
               <>
-                <b>{activeMask?.name ?? 'Mask 1'}</b>
+                <b>{activeMask?.name ?? 'New mask'}</b>
                 <label>Size
                   <input type="range" min={BRUSH_MIN} max={BRUSH_MAX} value={brush.size} aria-label="Brush size" onChange={(e) => setBrush({ ...brush, size: Number(e.target.value) })} />
                   <span className="pt-mono ie-num">{brush.size}</span>
@@ -486,11 +541,12 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               <button type="button" aria-pressed={view === 'before'} onClick={() => setView('before')}>Before</button>
               <button type="button" aria-pressed={view === 'after'} onClick={() => setView('after')}>After</button>
             </div>
+            {hint && <span className="ie-hint" role="status">{hint}</span>}
             <RheaLine busy={busy} said={said} cutout={lastCutout} state={lastCutout ? stateOf(lastCutout) : undefined}
               error={lastCutout?.jobId ? doc.jobs[lastCutout.jobId]?.error?.message : undefined} />
             {current?.cropped_to && asset?.w && asset?.h && <span className="pt-mono faint">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
             <span className="pt-grow" />
-            <span className="pt-mono ie-legend">Mask: blue paint marks what changes</span>
+            <span className="pt-mono ie-legend">Mask: blue paint marks what changes · {UNDO_KEY} takes back your last stroke here</span>
           </div>
 
           <section className="ie-edits" aria-label="Edits not applied yet">
@@ -550,6 +606,8 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               const pic = e ? resultOf(e) : undefined
               return (
                 <div key={l.id} className={`ie-layer ${l.active ? 'on' : ''} ${l.hidden ? 'off' : ''}`} aria-current={l.active || undefined}>
+                  {/* A mask's row picks it: the brush paints it next (the Edits list does the same). */}
+                  {l.kind === 'mask' && !l.active && <button type="button" className="ie-lpick" aria-label={`Paint ${l.label}`} onClick={() => setSession((s) => ({ ...s, active: l.id }))} />}
                   <LayerThumb kind={l.kind} sha={l.kind === 'frame' ? current?.asset : pic?.sha} />
                   <span className="ie-lname">
                     <span>{l.label}</span>

@@ -100,7 +100,7 @@ describe('the tools (3.12)', () => {
   it('the brush strip has the mask name, Size, Soft, Add/Subtract, Snap to cut-out and Clear mask', async () => {
     const { el } = await open()
     const strip = el.querySelector('[aria-label="Brush mask options"]')!
-    expect(strip.querySelector('b')?.textContent).toBe('Mask 1')
+    expect(strip.querySelector('b')?.textContent).toBe('New mask') // until the first paint (features/image-editor-masks-layers.clan)
     for (const l of ['Brush size', 'Brush softness']) expect(strip.querySelector(`input[aria-label="${l}"]`)).not.toBeNull()
     expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Snap to cut-out', 'Clear mask'])
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' })) })

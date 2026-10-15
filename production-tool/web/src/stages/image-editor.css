@@ -34,7 +34,7 @@
 .ie-center { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .ie-strip { align-self: flex-start; height: 44px; box-sizing: border-box; padding: 0 6px 0 14px; display: flex; align-items: center; gap: 12px; max-width: 100%;
   background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-soft); font-size: 12px; color: var(--ink2); }
-.ie-strip > b { color: var(--ink); font-weight: 600; }
+.ie-strip > b { color: var(--ink); font-weight: 600; white-space: nowrap; }
 .ie-strip label { display: flex; align-items: center; gap: 8px; }
 .ie-strip input[type='range'] { width: 96px; accent-color: var(--ink); }
 .ie-strip input.ie-soft { width: 72px; }
@@ -121,8 +121,13 @@
 .ie-panel { padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--frost-panel); border: 1px solid var(--line-soft); border-radius: 18px; box-shadow: var(--shadow-soft); }
 .ie-panelhead { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 8px; font-size: 11px; }
 .ie-panelhead h2 { margin: 0; font-weight: 500; }
-.ie-layer { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px; font-size: 13px; }
+.ie-layer { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px; font-size: 13px; }
 .ie-layer.on { background: var(--tool-soft); }
+/* The whole row picks a mask; the eye stays its own button above it. */
+.ie-lpick { position: absolute; inset: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer; }
+.ie-lpick:hover { background: var(--soft); }
+.ie-layer .ie-eye { position: relative; z-index: 1; }
+.ie-hint { font-size: 12px; color: var(--ink); background: var(--warn-bg); padding: 3px 10px; border-radius: var(--r-pill); white-space: nowrap; }
 .ie-layer.on .ie-lname > span:first-child { color: var(--tool-ink); font-weight: 600; }
 .ie-layer.off .ie-lthumb, .ie-layer.off .ie-lname { opacity: 0.45; }
 .ie-lthumb { width: 40px; height: 24px; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: var(--soft); border: 1px solid var(--line-soft); display: grid; place-items: center; }

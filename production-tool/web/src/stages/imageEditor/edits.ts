@@ -52,15 +52,58 @@ export function nextMaskName(s: EditSession): string {
   for (let n = 1; ; n++) if (!used.has(`Mask ${n}`)) return `Mask ${n}`
 }
 
-/** The mask the brush, lasso, eraser and click-select add to: the active one, else a new one. */
+/** The mask the brush, lasso, eraser and click-select add to: the active one, else a new one.
+ *  Painting a hidden mask shows it first, so the paint is seen (features/image-editor-masks-layers.clan).
+ *  Taking away (any 'sub', and a snap) with no mask to take from changes nothing: see nothingToTake. */
 export function withMaskOp(s: EditSession, op: MaskOp): EditSession {
   const active = masks(s).find((m) => m.id === s.active)
   if (active) {
-    return { ...s, edits: s.edits.map((e) => (e.id === active.id ? { ...active, ops: [...active.ops, op] } : e)) }
+    return {
+      ...s,
+      edits: s.edits.map((e) => (e.id === active.id ? { ...active, ops: [...active.ops, op] } : e)),
+      hidden: s.hidden.includes(active.id) ? s.hidden.filter((h) => h !== active.id) : s.hidden,
+    }
   }
-  if (op.t === 'brush' && op.mode === 'sub') return s // nothing to erase yet
+  if (nothingToTake(s, op)) return s
   const m: Edit = { id: editId(), kind: 'mask', name: nextMaskName(s), ops: [op] }
   return { ...s, edits: [...s.edits, m], active: m.id }
+}
+
+/** A step that takes paint away (or snaps it) with no mask to take it from: it would make an empty mask. */
+export function nothingToTake(s: EditSession, op: MaskOp): boolean {
+  return !masks(s).some((m) => m.id === s.active) && (op.t === 'snap' || op.mode === 'sub')
+}
+
+/** What the strip says when there is nothing to take away. */
+export const NOTHING_TO_TAKE = 'Nothing to take away yet: paint an area first'
+
+/** One step taken back in the editor (⌘Z), to put back with redo (⇧⌘Z): a mask's stroke, or whole edits. */
+export type Undone =
+  | { t: 'op'; maskId: string; op: MaskOp }
+  | { t: 'edits'; edits: Edit[]; hidden: string[]; active?: string }
+
+/** ⌘Z in the editor: the active mask's last stroke, else (no active mask with strokes) the last edit with what
+ *  depends on it. The document's undo is not touched: the edits are this browser's (ProjectUi.imageEdits). */
+export function undoLast(s: EditSession): { session: EditSession; undone?: Undone } {
+  const active = masks(s).find((m) => m.id === s.active)
+  if (active?.ops.length) return { session: undoMaskOp(s), undone: { t: 'op', maskId: active.id, op: active.ops[active.ops.length - 1] } }
+  const last = [...s.edits].reverse().find((e) => !(e.kind === 'mask' && !e.ops.length && e.id === s.active))
+  if (!last) return { session: s }
+  const next = undoEdit(s, last.id)
+  const kept = new Set(next.edits.map((e) => e.id))
+  const gone = s.edits.filter((e) => !kept.has(e.id))
+  return { session: next, undone: { t: 'edits', edits: gone, hidden: s.hidden.filter((h) => !kept.has(h) && gone.some((e) => e.id === h)), ...(s.active ? { active: s.active } : {}) } }
+}
+
+/** ⇧⌘Z: the step put back. A stroke goes back on its mask (made active, and shown); edits come back at the end. */
+export function redoUndone(s: EditSession, u: Undone): EditSession {
+  if (u.t === 'op') {
+    if (!masks(s).some((m) => m.id === u.maskId)) return s
+    return withMaskOp({ ...s, active: u.maskId }, u.op)
+  }
+  const have = new Set(s.edits.map((e) => e.id))
+  const back = u.edits.filter((e) => !have.has(e.id))
+  return { ...s, edits: [...s.edits, ...back], hidden: [...s.hidden, ...u.hidden.filter((h) => !s.hidden.includes(h))], ...(u.active && back.some((e) => e.id === u.active) ? { active: u.active } : {}) }
 }
 
 /** The last stroke of the active mask taken back (⌘Z inside a mask). */

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
-  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, type EditSession, type MaskOp,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, type EditSession, type MaskOp,
 } from './edits'
 
 const SPEC = readFileSync(new URL('../../../../../docs/production-tool/ui-behaviour.md', import.meta.url), 'utf8')
@@ -55,6 +55,50 @@ describe('masks', () => {
     let s = withMaskOp(EMPTY, stroke())
     s = withMaskOp({ ...s, active: undefined }, stroke())
     expect(s.edits.map((e) => e.kind === 'mask' && e.name)).toEqual(['Mask 1', 'Mask 2'])
+  })
+})
+
+describe('what a step paints into (features/image-editor-masks-layers.clan)', () => {
+  const lassoOp = (mode: 'add' | 'sub'): MaskOp => ({ t: 'lasso', mode, pts: [{ x: 0.1, y: 0.1 }, { x: 0.5, y: 0.1 }, { x: 0.5, y: 0.5 }] })
+  const pick = (mode: 'add' | 'sub'): MaskOp => ({ t: 'pick', mode, w: 2, h: 2, rle: [0, 4] })
+  it('any taking away with no mask (brush, lasso, pick, snap) changes nothing', () => {
+    for (const op of [stroke('sub'), lassoOp('sub'), pick('sub'), { t: 'snap', cutout: 'c' } as MaskOp]) {
+      expect(nothingToTake(EMPTY, op)).toBe(true)
+      expect(withMaskOp(EMPTY, op)).toBe(EMPTY)
+    }
+    expect(nothingToTake(EMPTY, lassoOp('add'))).toBe(false)
+    const s = withMaskOp(EMPTY, stroke())
+    expect(nothingToTake(s, lassoOp('sub'))).toBe(false)
+  })
+  it('painting into a hidden active mask shows it', () => {
+    let s = withMaskOp(EMPTY, stroke())
+    const m = s.edits[0].id
+    s = toggleHidden(s, m)
+    expect(s.hidden).toEqual([m])
+    s = withMaskOp(s, stroke())
+    expect(s.hidden).toEqual([])
+    expect(s.edits[0]).toMatchObject({ ops: [{}, {}] })
+  })
+  it('⌘Z takes back the active mask’s last stroke, and ⇧⌘Z puts it back', () => {
+    let s = withMaskOp(EMPTY, stroke())
+    s = withMaskOp(s, lassoOp('add'))
+    const r = undoLast(s)
+    expect(r.session.edits[0]).toMatchObject({ ops: [{ t: 'brush' }] })
+    expect(r.undone).toMatchObject({ t: 'op', op: { t: 'lasso' } })
+    expect(redoUndone(r.session, r.undone!)).toEqual(s)
+  })
+  it('with no stroke to take back, ⌘Z takes the last edit and what depends on it, and ⇧⌘Z brings them back', () => {
+    let s = withMaskOp(EMPTY, stroke())
+    const m = s.edits[0].id
+    s = addEdit(s, { id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, size: 0.1 })
+    s = { ...clearMask(s), hidden: ['t'] }
+    const r = undoLast(s)
+    expect(r.session.edits.map((e) => e.id)).toEqual([m])
+    expect(r.session.hidden).toEqual([])
+    const back = redoUndone(r.session, r.undone!)
+    expect(back.edits.map((e) => e.id)).toEqual([m, 't'])
+    expect(back.hidden).toEqual(['t'])
+    expect(undoLast(EMPTY)).toEqual({ session: EMPTY })
   })
 })
 
