@@ -19,6 +19,7 @@
 //   renderer draws (nothing is written to Y while dragging), then one undoable
 //   step at release. Locked elements are selected but never moved or deleted.
 
+import { recordBounds, unionRects } from '../model/bounds'
 import type { PointerKind } from '../input/router'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
@@ -74,13 +75,8 @@ export function scaled(r: ElementRecord, ox: number, oy: number, s: number, rati
   return { ...r, x: ox + (r.x - ox) * s, y: oy + (r.y - oy) * s, w, h }
 }
 
-const boxOfAll = (rs: readonly ElementRecord[]): Box => {
-  const x0 = Math.min(...rs.map((r) => Math.min(r.x, r.x + r.w)))
-  const y0 = Math.min(...rs.map((r) => Math.min(r.y, r.y + r.h)))
-  const x1 = Math.max(...rs.map((r) => Math.max(r.x, r.x + r.w)))
-  const y1 = Math.max(...rs.map((r) => Math.max(r.y, r.y + r.h)))
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
-}
+/** The box round records as drawn: a turned one by its turned corners, a stacked photo with its edge (a whole pile). */
+const boxOfAll = (rs: readonly ElementRecord[]): Box => unionRects(rs.map(recordBounds))
 
 const centre = (r: ElementRecord): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
 

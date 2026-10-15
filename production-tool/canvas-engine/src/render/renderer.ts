@@ -14,7 +14,8 @@
 import { getStroke } from 'perfect-freehand'
 import RBush from 'rbush'
 import { localPoints } from '../model/points'
-import { boundEnds, linkSegment } from './links'
+import { BLOCKS, linkRoute, midway, routeKey, type LinkEnv, type LinkRoute } from './links'
+import { photoEdge, recordBounds } from '../model/bounds'
 import { LIGHT_INK, resolveInk, type InkPalette } from '../ink/palette'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
@@ -171,6 +172,9 @@ export interface LinkLook {
   roles: readonly string[]
 }
 
+/** Is this link or arrow bound to something at either end? (Then it is drawn from its ends, or not at all.) */
+const isBound = (r: ElementRecord) => [r.props.start, r.props.end].some((b) => !!b && typeof b === 'object' && !Array.isArray(b) && typeof b.elementId === 'string')
+
 export class Renderer {
   private readonly scene: SceneStore
   private readonly host: RenderHost
@@ -236,7 +240,9 @@ export class Renderer {
 
   private boxOf(r: ElementRecord): Box {
     const pad = typeof r.style.width === 'number' ? r.style.width * 2 : 0
-    return { minX: Math.min(r.x, r.x + r.w) - pad, minY: Math.min(r.y, r.y + r.h) - pad, maxX: Math.max(r.x, r.x + r.w) + pad, maxY: Math.max(r.y, r.y + r.h) + pad, id: r.id }
+    // As drawn: turned about its centre, a stacked photo with its white edge (model/bounds).
+    const b = recordBounds(r)
+    return { minX: b.x - pad, minY: b.y - pad, maxX: b.x + b.w + pad, maxY: b.y + b.h + pad, id: r.id }
   }
 
   private index(r: ElementRecord) {
@@ -276,12 +282,69 @@ export class Renderer {
       const all = this.scene.all()
       this.ordered = all.filter((r) => r.kind !== 'node').sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
       this.occupied = new Set(all.flatMap((r) => (r.parentId ? [r.parentId] : [])))
+      // The passes: boards, then links (under everything on the boards), then the rest in z-order.
+      this.passes = { boards: [], links: [], rest: [] }
+      // A link, or an arrow bound at either end (a generation's provenance arrow), is drawn from its ends.
+      for (const r of this.ordered) (r.kind === 'board' ? this.passes.boards : r.kind === 'link' || (r.kind === 'arrow' && isBound(r)) ? this.passes.links : this.passes.rest).push(r)
+      this.groups = new Map()
+      for (const r of all) for (const g of r.groupIds) {
+        const m = this.groups.get(g)
+        if (m) m.push(r)
+        else this.groups.set(g, [r])
+      }
+      this.nodes = all.filter((r) => r.kind === 'node').sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
     }
     return this.ordered
   }
 
   /** Containers that hold something (refreshed with the order). */
   private occupied = new Set<string>()
+  private passes: { boards: ElementRecord[]; links: ElementRecord[]; rest: ElementRecord[] } = { boards: [], links: [], rest: [] }
+  private groups = new Map<string, ElementRecord[]>()
+  private nodes: ElementRecord[] = []
+
+  /** What link routing reads: groups, what blocks a line (pictures, sketch areas, node cards), records as drawn now. */
+  private linkEnv(now: number): LinkEnv {
+    this.order()
+    return {
+      get: (id) => this.scene.get(id),
+      members: (g) => this.groups.get(g) ?? [],
+      obstacles: (box) => {
+        const out: ElementRecord[] = []
+        for (const b of this.tree.search({ minX: box.x, minY: box.y, maxX: box.x + box.w, maxY: box.y + box.h })) {
+          const r = this.scene.get(b.id)
+          if (r && BLOCKS.has(r.kind)) out.push(r)
+        }
+        for (const n of this.nodes) if (n.x < box.x + box.w && n.x + n.w > box.x && n.y < box.y + box.h && n.y + n.h > box.y) out.push(n)
+        return out
+      },
+      at: (r) => this.moved(this.tween ? this.tweened(r, now) : r),
+    }
+  }
+
+  /** The links as drawn now: each one's route, two between the same group and target drawn as one (the key link first). */
+  linkRoutes(now = performance.now()): { link: ElementRecord; route: LinkRoute; all: ElementRecord[] }[] {
+    this.order()
+    if (!this.passes.links.length) return []
+    const env = this.linkEnv(now)
+    const out = new Map<string, { link: ElementRecord; route: LinkRoute; all: ElementRecord[] }>()
+    const named = (l: ElementRecord) => {
+      const s = l.props.start
+      return !!s && typeof s === 'object' && !Array.isArray(s) && typeof s.group === 'string'
+    }
+    // A link bound by its group comes first, so it is the one drawn.
+    const links = [...this.passes.links].sort((a, b) => Number(named(b)) - Number(named(a)))
+    for (const l of links) {
+      const route = linkRoute(env, l)
+      if (!route) continue
+      // Arrows keep their own key: a provenance arrow and a link between the same ends are both drawn.
+      const key = `${l.kind}:${routeKey(route)}`
+      const had = out.get(key)
+      if (had) had.all.push(l)
+      else out.set(key, { link: l, route, all: [l] })
+    }
+    return [...out.values()]
+  }
 
   private pathOf(pts: Uint8Array, size: number, stats: DrawStats): PathLike {
     let p = this.paths.get(pts)
@@ -316,21 +379,21 @@ export class Renderer {
     const level: Level = cam.zoom < FULL_RES_MIN_ZOOM ? 'small' : 'full'
     const now = performance.now()
     if (this.tween && !this.animating(now)) this.tween = null
-    for (const rec of this.order()) {
+    this.order()
+    const paint = (rec: ElementRecord) => {
       const r = this.tween ? this.tweened(rec, now) : rec
-      // A bound link is drawn from its ends (it follows them), so its own box never culls it.
-      if (!visible.has(r.id) && r.kind !== 'link') {
+      if (!visible.has(r.id)) {
         stats.culled++
-        continue
+        return
       }
       if (r.kind === 'stroke' && Math.abs(r.w) < minPx && Math.abs(r.h) < minPx) {
         stats.culled++
-        continue
+        return
       }
       stats.drawn++
       ctx.globalAlpha = r.opacity
-      const moving = r.kind !== 'link' && this.moving?.ids.has(r.id) ? this.moving : null
-      const scaling = r.kind !== 'link' && ctx.scale && this.scaling?.ids.has(r.id) ? this.scaling : null
+      const moving = this.moving?.ids.has(r.id) ? this.moving : null
+      const scaling = ctx.scale && this.scaling?.ids.has(r.id) ? this.scaling : null
       if (moving || scaling) ctx.save()
       if (moving) ctx.translate(moving.dx, moving.dy)
       if (scaling) {
@@ -347,10 +410,144 @@ export class Renderer {
       }
       if (moving || scaling) ctx.restore()
     }
+    for (const rec of this.passes.boards) paint(rec)
+    // Links under everything on the boards: never over a picture's, a card's or a sketch area's content.
+    // A bound link is drawn from its ends (it follows them), so its own box never culls it.
+    for (const { link, route, all } of this.linkRoutes(now)) {
+      stats.drawn++
+      if (link.kind === 'arrow') this.drawBoundArrow(ctx, link, route, cam)
+      else this.drawLink(ctx, link, route, all, cam)
+    }
+    // A link or bound arrow whose end is gone is not drawn at all (never a line to nowhere).
+    for (const rec of this.passes.rest) paint(rec)
     ctx.globalAlpha = 1
     if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
+  }
+
+  /**
+   * A bound link along its route, under what is on the boards; quiet until it or an end (or a view of
+   * its group) is selected. `all`: the links drawn as this one (the same group to the same target).
+   */
+  private drawLink(ctx: DrawContext, r: ElementRecord, route: LinkRoute, all: readonly ElementRecord[], cam: Camera) {
+    const pts = route.pts
+    if (pts.length < 2) return
+    const sel = (id: string) => this.selected.has(id)
+    const inGroup = (g: string | null) => !!g && (this.groups.get(g) ?? []).some((m) => sel(m.id))
+    const lit = all.some((l) => sel(l.id)) || sel(route.from.id) || sel(route.to.id) || inGroup(route.fromGroup) || inGroup(route.toGroup)
+    const look = this.linkLook
+    ctx.globalAlpha = lit || look ? 1 : 0.3
+    ctx.strokeStyle = look ? (lit ? look.lit : look.stroke) : '#4a7fd4'
+    ctx.lineWidth = (lit ? 2 : 1.5) / cam.zoom
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+    const b = pts[pts.length - 1]
+    // The head points along the line's last stretch into the target.
+    let k = pts.length - 2
+    while (k > 0 && Math.hypot(b.x - pts[k].x, b.y - pts[k].y) < 2) k--
+    const ang = Math.atan2(b.y - pts[k].y, b.x - pts[k].x)
+    const head = 9 / cam.zoom
+    ctx.moveTo(b.x - head * Math.cos(ang - 0.45), b.y - head * Math.sin(ang - 0.45))
+    ctx.lineTo(b.x, b.y)
+    ctx.lineTo(b.x - head * Math.cos(ang + 0.45), b.y - head * Math.sin(ang + 0.45))
+    ctx.stroke()
+    const role = typeof r.props.role === 'string' ? r.props.role : ''
+    const m = midway(pts)
+    if (look) {
+      if (role && look.roles.includes(role) && cam.zoom > 0.2) {
+        // A pill beside the line's middle, in scene units (it scales with the canvas, as Main's does).
+        const w = role.length * 6.5 + 16
+        const x = m.x + 10
+        const y = m.y - 10
+        ctx.fillStyle = look.labelBg
+        ctx.strokeStyle = look.labelLine
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x + 10, y)
+        ctx.lineTo(x + w - 10, y)
+        ctx.ellipse(x + w - 10, y + 10, 10, 10, 0, -Math.PI / 2, Math.PI / 2)
+        ctx.lineTo(x + 10, y + 20)
+        ctx.ellipse(x + 10, y + 10, 10, 10, 0, Math.PI / 2, Math.PI * 1.5)
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
+        ctx.fillStyle = look.label
+        ctx.font = '11px Geist, sans-serif'
+        ctx.fillText(role, x + 8, y + 14)
+      }
+      return
+    }
+    if (role && cam.zoom > 0.2) {
+      ctx.fillStyle = '#4a7fd4'
+      ctx.font = `${12 / cam.zoom}px Geist, sans-serif`
+      ctx.fillText(role, m.x + 6 / cam.zoom, m.y - 6 / cam.zoom)
+    }
+  }
+
+  /** A bound arrow (a generation's provenance arrow) along its route, in its own colour and dash. */
+  private drawBoundArrow(ctx: DrawContext, r: ElementRecord, route: LinkRoute, cam: Camera) {
+    const pts = route.pts
+    if (pts.length < 2) return
+    ctx.globalAlpha = r.opacity
+    ctx.strokeStyle = resolveInk(r.style.stroke, this.inkPalette)
+    ctx.lineWidth = r.style.width ?? 2
+    const k = 1 / cam.zoom
+    if (r.style.dash === 'dashed') ctx.setLineDash?.([8, 6])
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+    ctx.stroke()
+    ctx.setLineDash?.([])
+    const b = pts[pts.length - 1]
+    let n = pts.length - 2
+    while (n > 0 && Math.hypot(b.x - pts[n].x, b.y - pts[n].y) < 2) n--
+    const ang = Math.atan2(b.y - pts[n].y, b.x - pts[n].x)
+    const head = Math.max(10, 12 * k)
+    ctx.beginPath()
+    ctx.moveTo(b.x - head * Math.cos(ang - 0.45), b.y - head * Math.sin(ang - 0.45))
+    ctx.lineTo(b.x, b.y)
+    ctx.lineTo(b.x - head * Math.cos(ang + 0.45), b.y - head * Math.sin(ang + 0.45))
+    ctx.stroke()
+  }
+
+  /**
+   * The ink that lies over node cards, for a canvas above the cards (the cards are DOM over the main
+   * canvas): each stroke drawn later than a card it crosses is drawn again here, so a stroke across a
+   * card shows whole. Nothing else. Clears first.
+   */
+  drawOver(ctx: DrawContext, cam: Camera, viewport: { width: number; height: number }, dpr: number): number {
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect?.(0, 0, viewport.width * dpr, viewport.height * dpr)
+    this.order()
+    if (!this.nodes.length) return 0
+    const s = dpr * cam.zoom
+    ctx.setTransform(s, 0, 0, s, s * cam.scrollX, s * cam.scrollY)
+    const view = Renderer.view(cam, viewport)
+    const stats: DrawStats = { drawn: 0, culled: 0, pathsBuilt: 0, ms: 0 }
+    const level: Level = cam.zoom < FULL_RES_MIN_ZOOM ? 'small' : 'full'
+    const over = new Map<string, ElementRecord>()
+    for (const n of this.nodes) {
+      if (n.x > view.maxX || n.x + n.w < view.minX || n.y > view.maxY || n.y + n.h < view.minY) continue
+      for (const b of this.tree.search({ minX: n.x, minY: n.y, maxX: n.x + n.w, maxY: n.y + n.h })) {
+        const r = this.scene.get(b.id)
+        if (r && r.kind === 'stroke' && r.z > n.z) over.set(r.id, r)
+      }
+    }
+    const strokes = [...over.values()].sort((a, b) => (a.z < b.z ? -1 : a.z > b.z ? 1 : 0))
+    for (const r of strokes) {
+      ctx.globalAlpha = r.opacity
+      const moving = this.moving?.ids.has(r.id) ? this.moving : null
+      if (moving) {
+        ctx.save()
+        ctx.translate(moving.dx, moving.dy)
+      }
+      this.drawOne(ctx, r, cam, level, stats)
+      if (moving) ctx.restore()
+    }
+    ctx.globalAlpha = 1
+    return strokes.length
   }
 
   /** The selection's frame: a dashed group box (1.5 px, 6 px out) or a plain one, and white corner handles. */
@@ -457,7 +654,7 @@ export class Renderer {
         }
         // A picture in a stack is a photo: a soft shadow and a white edge, so the ones below read apart.
         if (r.props.stack) {
-          const b = Math.max(4, Math.min(Math.abs(r.w), Math.abs(r.h)) * 0.03)
+          const b = photoEdge(r)
           ctx.fillStyle = 'rgba(0, 0, 0, 0.14)'
           ctx.fillRect(r.x - b + 2, r.y - b + 5, r.w + b * 2, r.h + b * 2)
           ctx.fillStyle = '#ffffff'
@@ -518,56 +715,7 @@ export class Renderer {
       }
       case 'arrow':
       case 'link': {
-        const ends = r.kind === 'link' ? boundEnds((id) => this.scene.get(id), r) : null
-        if (ends) {
-          // A link runs between its ends' edges, wherever they are now; quiet until an end is selected.
-          const { a, b } = linkSegment(this.moved(ends.from), this.moved(ends.to))
-          const lit = this.selected.has(r.id) || this.selected.has(ends.from.id) || this.selected.has(ends.to.id)
-          const look = this.linkLook
-          ctx.globalAlpha = lit || look ? 1 : 0.3
-          ctx.strokeStyle = look ? (lit ? look.lit : look.stroke) : '#4a7fd4'
-          ctx.lineWidth = (lit ? 2 : 1.5) / cam.zoom
-          ctx.beginPath()
-          ctx.moveTo(a.x, a.y)
-          ctx.lineTo(b.x, b.y)
-          const ang = Math.atan2(b.y - a.y, b.x - a.x)
-          const head = 9 / cam.zoom
-          ctx.moveTo(b.x - head * Math.cos(ang - 0.45), b.y - head * Math.sin(ang - 0.45))
-          ctx.lineTo(b.x, b.y)
-          ctx.lineTo(b.x - head * Math.cos(ang + 0.45), b.y - head * Math.sin(ang + 0.45))
-          ctx.stroke()
-          const role = typeof r.props.role === 'string' ? r.props.role : ''
-          if (look) {
-            if (role && look.roles.includes(role) && cam.zoom > 0.2) {
-              // A pill beside the line's middle, in scene units (it scales with the canvas, as Main's does).
-              const w = role.length * 6.5 + 16
-              const x = (a.x + b.x) / 2 + 10
-              const y = (a.y + b.y) / 2 - 10
-              ctx.fillStyle = look.labelBg
-              ctx.strokeStyle = look.labelLine
-              ctx.lineWidth = 1
-              ctx.beginPath()
-              ctx.moveTo(x + 10, y)
-              ctx.lineTo(x + w - 10, y)
-              ctx.ellipse(x + w - 10, y + 10, 10, 10, 0, -Math.PI / 2, Math.PI / 2)
-              ctx.lineTo(x + 10, y + 20)
-              ctx.ellipse(x + 10, y + 10, 10, 10, 0, Math.PI / 2, Math.PI * 1.5)
-              ctx.closePath()
-              ctx.fill()
-              ctx.stroke()
-              ctx.fillStyle = look.label
-              ctx.font = '11px Geist, sans-serif'
-              ctx.fillText(role, x + 8, y + 14)
-            }
-            return
-          }
-          if (role && cam.zoom > 0.2) {
-            ctx.fillStyle = '#4a7fd4'
-            ctx.font = `${12 / cam.zoom}px Geist, sans-serif`
-            ctx.fillText(role, (a.x + b.x) / 2 + 6 / cam.zoom, (a.y + b.y) / 2 - 6 / cam.zoom)
-          }
-          return
-        }
+        // Bound links are drawn in their own pass (drawLink); this is an arrow, or a link whose ends are gone.
         const route = Array.isArray(r.props.route) ? (r.props.route as number[]) : [0, 0, r.w, r.h]
         ctx.strokeStyle = r.kind === 'link' ? '#4a7fd4' : stroke
         ctx.lineWidth = (r.style.width ?? 2) / (r.kind === 'link' ? cam.zoom : 1)

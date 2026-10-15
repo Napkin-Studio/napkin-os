@@ -51,7 +51,7 @@ import { AVView } from './AVView'
 import { TimePill } from './TimePill'
 import { nextMomentTime, setBeatTime, UNPLANNED_MOMENT } from './moments'
 import { scriptMentionHooks } from './mentionHooks'
-import type { MentionHooks } from './mentions'
+import { typedSpans, type MentionHooks } from './mentions'
 import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
@@ -478,8 +478,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             <button className="se-handle right" aria-expanded={sheet === 'facts'} onClick={() => setSheet(sheet === 'facts' ? null : 'facts')}>Facts</button>
             <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError}
               skyeWorking={skye.working} skyeOff={skye.off}
-              onLink={(refId) => {
-                const link = linkForMention(doc, { id: refId, kind: 'ref' }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
+              onLink={(refId, kind = 'ref') => {
+                const link = linkForMention(doc, { id: refId, kind }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
                 if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link ${link.from.kind}s[${link.from.id}] to scripts[${scriptId}]` }).then(() => say(`Linked ${linkWords(doc, link)} to this script.`, true)))
               }}
               onNameAnswer={(askId, option) => void attempt(() => answerLocalAsk(store, askId, option, person, (shotId, name) => startWrite(skyeDeps, store, scriptId, { kind: 'shot', id: shotId }, 'cut_name', { name })))} />
@@ -624,7 +624,7 @@ function SceneRow({ scene, number, doc, store, chain, readOnly, active, setActiv
           {hasText && (
             <div className="sp-static" role="button" tabIndex={-1} aria-label={`Edit scene ${number}`}
               onClick={() => { if (!readOnly) { setActive(key); chain.focus(key, 'end') } }}>
-              <StaticProse prose={scene.prose as { content?: PMNodeLike[] } | undefined} doc={doc} />
+              <StaticProse prose={scene.prose as { content?: PMNodeLike[] } | undefined} doc={doc} mentions={mentions} />
             </div>
           )}
         </>
@@ -641,19 +641,33 @@ function MountOnFocus({ chain, chainKey }: { chain: CaretChain; chainKey: string
   return null
 }
 
-/** A fragment's prose as static screenplay, mentions under their current names. */
-function StaticProse({ prose, doc }: { prose?: { content?: PMNodeLike[] }; doc: Doc }) {
+/**
+ * A fragment's prose as static screenplay, mentions under their current names, marked as the editor
+ * marks them (mentions.ts): in scope only when linked to this script (owner, 2026-10-15: tags count
+ * once linked), a typed @name underlined until what it names is linked here.
+ */
+function StaticProse({ prose, doc, mentions }: { prose?: { content?: PMNodeLike[] }; doc: Doc; mentions?: MentionHooks }) {
   const names = refNames(doc)
+  const inScope = mentions?.names() ?? null
   const inline = (nodes?: PMNodeLike[]): ReactNode[] => (nodes ?? []).map((n, i) => {
-    if (n.type === 'text') return <span key={i}>{n.text}</span>
+    if (n.type === 'text') return <span key={i}>{typedNames(n.text ?? '', inScope)}</span>
     if (n.type === 'hardBreak') return <br key={i} />
     if (n.type === 'mention') {
-      const r = names[String(n.attrs?.id ?? '')]
-      return r ? <span key={i} className="mention">@{r.variant ? `${r.key}_${r.variant}` : r.key}</span> : <span key={i} className="mention unknown">@{String(n.attrs?.label ?? '')}</span>
+      const id = String(n.attrs?.id ?? '')
+      const r = names[id]
+      const known = mentions ? !!mentions.resolve(id)?.known : !!r
+      const label = r ? `@${r.variant ? `${r.key}_${r.variant}` : r.key}` : `@${String(n.attrs?.label ?? '')}`
+      return <span key={i} className={known ? 'mention' : 'mention unknown'}>{label}</span>
     }
     return null
   })
   return <>{(prose?.content ?? []).map((b, i) => <p key={i} data-type={b.type}>{inline(b.content)}</p>)}</>
+}
+
+/** Plain text with its typed @names marked: in scope (`names`) or underlined; null names marks nothing. */
+function typedNames(text: string, names: string[] | null): ReactNode {
+  if (!names) return text
+  return typedSpans(text, names).map((p, i) => (p.name ? <span key={i} className={p.known ? 'mention-typed' : 'mention-typed unknown'}>{p.text}</span> : p.text))
 }
 
 /** A shot: one line when collapsed; the current shot expands to its action and Direction, then its beats. */
@@ -823,7 +837,8 @@ function WriterMark({ writer, person, onWhy }: { writer?: string; person: string
 function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeOff, onNameAnswer, onLink }: {
   composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void
   skyeWorking?: string; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
-  onLink: (refId: string) => void
+  /** Link a reference (or a whole key) named in the script but not linked to it. */
+  onLink: (id: string, kind?: 'ref' | 'key') => void
 }) {
   const { doc: docStore } = useServices()
   const sb = composed.storyboard
@@ -940,7 +955,7 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
               <span className="pt-ref">@{it.name}</span>
               {it.kind === 'key' && it.count ? <span className="faint se-refvia">{it.count} {it.count === 1 ? 'view' : 'views'}</span> : null}
               {role && <span className="pt-pill">{it.role !== role && it.via === 'link' ? it.role : role}</span>}
-              {it.via === 'mention' && ref && <button type="button" className="linkbtn se-reflink" title="Named in the script but not linked to it" onClick={() => onLink(ref.id)}>Link</button>}
+              {it.via === 'mention' && (ref || it.kind === 'key') && <button type="button" className="linkbtn se-reflink" title="Named in the script but not linked to it" onClick={() => onLink(it.id, it.kind === 'key' ? 'key' : 'ref')}>Link</button>}
               {it.via === 'board' && (it.through && doc.keys[it.through]
                 ? <span className="faint se-refvia" title={`A view of @${doc.keys[it.through].key}, linked to this script${it.held ? '; Dex sends 4 views at most' : ''}`}>{it.held ? 'view · stays out' : 'view'}</span>
                 : <span className="faint se-refvia" title="On a board linked to this script">board</span>)}

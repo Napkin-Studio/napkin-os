@@ -12,6 +12,37 @@ export interface UndoOffer {
   key?: string
   /** On the canvas: the scene point where the thing was. */
   at?: { x: number; y: number }
+  /**
+   * Has the step been taken back some other way (⌘Z, the undo buttons)? Then the offer leaves at
+   * once: "2 deleted · Undo" never stays once the things are back. Read by offerGone.
+   */
+  gone?: (live: ReadonlySet<string>) => boolean
+}
+
+/** Is the offer's step already taken back, given the ids live on the canvas now? */
+export const offerGone = (o: UndoOffer | null, live: ReadonlySet<string>): boolean => !!o?.gone?.(live)
+
+/**
+ * A delete's offer leaves when what it deleted is live again, once the canvas has shown it gone (the
+ * canvas may still be a frame behind when the offer is made).
+ */
+export function backWhenLive(ids: readonly string[]) {
+  let wasGone = false
+  return (live: ReadonlySet<string>) => {
+    const back = ids.some((id) => live.has(id))
+    if (!back) wasGone = true
+    return wasGone && back
+  }
+}
+
+/** A make's offer leaves when what it made is gone again, once the canvas has shown it. */
+export function goneWhenDead(ids: readonly string[]) {
+  let wasThere = false
+  return (live: ReadonlySet<string>) => {
+    const there = ids.some((id) => live.has(id))
+    if (there) wasThere = true
+    return wasThere && !there
+  }
 }
 
 /** One pending Undo, gone after UNDO_MS or when used. */

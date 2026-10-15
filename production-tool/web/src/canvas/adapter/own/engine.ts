@@ -62,6 +62,16 @@ export function surfaceOf(host: HTMLElement, theme: 'light' | 'dark'): Surface {
   }
 }
 
+/** Where the ink drawn over node cards sits: above the node layer's cards (z 3), below the boards' tools (z 5). */
+export const INK_OVER_Z = 4
+
+/**
+ * The live-ink canvas's place: with an ink tool in hand it sits above the cards (INK_OVER_Z), so a
+ * stroke that starts or crosses on a card is the pen's, whole; otherwise just above the main canvas,
+ * so the cards' buttons and ports take their clicks.
+ */
+export const liveZ = (tool: string) => (tool === 'ink' ? INK_OVER_Z : 1)
+
 const layer = (host: HTMLElement, z: number) => {
   const c = document.createElement('canvas')
   c.style.cssText = `position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;z-index:${z}`
@@ -85,8 +95,12 @@ export const ownEngine: CanvasEngine = {
     adapter.focusCanvas = () => host.focus({ preventScroll: true })
     const main = layer(host, 0)
     const live = layer(host, 1)
+    // Ink over the node cards (DOM, z 3 in the node layer): drawn again above them, so a stroke across a card shows whole.
+    const over = layer(host, INK_OVER_Z)
     live.style.pointerEvents = 'auto'
     main.style.pointerEvents = 'none'
+    over.style.pointerEvents = 'none'
+    const octx = over.getContext('2d') as unknown as Ctx2D
     // Transparent, so the chrome's dot grid under the canvas shows through (mock Main).
     const ctx = main.getContext('2d') as unknown as Ctx2D
     const lctx = live.getContext('2d', { desynchronized: true } as CanvasRenderingContext2DSettings) as CanvasRenderingContext2D
@@ -174,13 +188,16 @@ export const ownEngine: CanvasEngine = {
       frame = requestAnimationFrame(() => {
         frame = 0
         adapter.drawTo(ctx, drawDpr(devicePixelRatio))
+        adapter.drawOverTo(octx, drawDpr(devicePixelRatio))
+        // The pen owns the pointer on every surface: its canvas sits above the cards while an ink tool is in hand.
+        live.style.zIndex = String(liveZ(adapter.router.tool))
         drawLive()
       })
     }
     const measure = () => {
       const r = host.getBoundingClientRect()
       const dpr = drawDpr(devicePixelRatio)
-      for (const c of [main, live]) {
+      for (const c of [main, live, over]) {
         c.width = Math.max(1, Math.round(r.width * dpr))
         c.height = Math.max(1, Math.round(r.height * dpr))
       }
@@ -354,6 +371,7 @@ export const ownEngine: CanvasEngine = {
       adapter.useRenderer(null)
       main.remove()
       live.remove()
+      over.remove()
     }, caps)
     if (opened.readOnly) console.warn(opened.readOnly)
     if (adapter.elements().length) adapter.fit(adapter.elements(), { zoomFactor: 0.9, animate: false })

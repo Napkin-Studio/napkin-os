@@ -56,7 +56,7 @@ import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
 import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
-import { useUndo } from '../ui/useUndo'
+import { backWhenLive, goneWhenDead, offerGone, useUndo } from '../ui/useUndo'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown } from '../dogfood/recorder'
 import { DownloadButton } from '../ui/Download'
@@ -194,6 +194,10 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
 
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
   // Nodes and boards (our own engine) have their own handles: the floating toolbar is for marks and pictures.
+  // ⌘Z (or the undo buttons) took the step back: its "· Undo" chip leaves with it.
+  useEffect(() => {
+    if (undo && offerGone(undo, new Set(els.map((e) => e.id)))) offerUndo(null)
+  }, [els, undo, offerUndo])
   const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id) && !cardOf(e) && !isBoard(e)), [els, vs])
   // Our own engine's bar for nodes, links and groups (ui-behaviour 3.9); pictures, marks and sketch areas keep the Generate bar.
   const ownEdit = canvas?.engine === 'own' ? (canvas as unknown as OwnEdit) : null
@@ -232,8 +236,10 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     if (!ctrl) return
     setConfirming(null)
     const r = ctrl.deleteElements(ids)
-    if (r) offerUndo({ label: r.label, at: r.at, undo: () => ctrl.undelete(r.ids) })
-  }, [ctrl, offerUndo])
+    if (r) offerUndo({ label: r.label, at: r.at, undo: () => ctrl.undelete(r.ids), gone: backWhenLive(r.ids) })
+    // The 🗑 had the focus: the next ⌘Z is the canvas's, and takes the delete back (its chip leaves with it).
+    ;(canvas as unknown as { focusCanvas?: (() => void) | null } | null)?.focusCanvas?.()
+  }, [ctrl, offerUndo, canvas])
 
   /** The 🗑 and the Delete key: straight away, or first a confirm when something is still being made. */
   const requestDelete = useCallback((sel: El[]) => {
@@ -334,7 +340,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
       if (!made) throw new Error('Make video needs the canvas.')
       const r = await made
       const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
-      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
+      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, undo: () => { undoScene?.call(canvas, 'undo') }, gone: goneWhenDead([r.el.id]) })
     } catch (err) {
       setPlaceError(errText(err))
     }

@@ -42,6 +42,8 @@ export interface Style {
 export interface Binding {
   elementId: string
   anchor?: { x: number; y: number }
+  /** The group the link leaves from (a key link from a character's views): it attaches at the group's bounds. */
+  group?: string
 }
 
 /** The props each kind may carry (all optional; absent means the default). */

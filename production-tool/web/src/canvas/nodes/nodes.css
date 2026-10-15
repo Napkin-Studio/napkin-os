@@ -97,3 +97,7 @@
 }
 .node-layer .nl-keychip.stacked { transform: translate(0, calc(-100% - 22px)); }
 .node-layer .nl-keychip:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+/* Linked as @samurai · 3 views: under the group, with Undo. */
+.node-layer .nl-said { position: absolute; pointer-events: auto; z-index: 4; }
+/* The pen, highlighter or eraser owns the pointer: nothing in the layer takes it, and no text is selected. */
+.node-layer.inking, .node-layer.inking * { pointer-events: none !important; user-select: none; -webkit-user-select: none; }

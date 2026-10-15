@@ -137,3 +137,9 @@ export function canvasToolRegistry(): ToolRegistry {
   for (const t of canvasTools()) r.register(t)
   return r
 }
+
+/** The ink tools (pen, highlighter, eraser; freedraw is the pen): while one is in hand it owns the pointer on every surface. */
+export function isInkTool(tool: ActiveToolSpec | null | undefined): boolean {
+  const id = tool && tool.type === 'native' ? tool.id : ''
+  return id === 'freedraw' || id === 'pen' || id === 'highlighter' || id === 'eraser'
+}
