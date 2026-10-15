@@ -11,8 +11,8 @@
 //   cuts through a member: an edge stops at the members whose centre is still inside, and the ones whose
 //   centre it passed leave the board.
 
+import RBush from 'rbush'
 import { unionRects, type Rect } from '../model/bounds'
-
 
 /** A board's inner margin: 16 at the sides, 22 under the title, 34 at the foot (room for a name chip). */
 export const BOARD_PAD = { x: 16, top: 22, bottom: 34 } as const
@@ -118,6 +118,129 @@ export function outsideSpot(board: Rect, size: { w: number; h: number }, avoid: 
     if (!overlaps(r, board, BOARD_CLEAR) && !avoid.some((a) => overlaps(r, a, BOARD_GAP / 2))) return t.at
   }
   return { x: board.x, y: bottomOf(board) + BOARD_CLEAR + 61 * step }
+}
+
+/** What a moved board must land clear of, indexed once per gesture (an R-tree of the blockers' boxes). */
+export class BlockerIndex {
+  private readonly tree = new RBush<{ minX: number; minY: number; maxX: number; maxY: number; r: Rect }>()
+  readonly size: number
+
+  constructor(rects: readonly Rect[]) {
+    this.tree.load(rects.map((r) => ({ minX: r.x, minY: r.y, maxX: r.x + r.w, maxY: r.y + r.h, r })))
+    this.size = rects.length
+  }
+
+  /** The blockers whose boxes meet `r` grown by `pad`. */
+  near(r: Rect, pad = 0): Rect[] {
+    return this.tree.search({ minX: r.x - pad, minY: r.y - pad, maxX: r.x + r.w + pad, maxY: r.y + r.h + pad }).map((b) => b.r)
+  }
+
+  /** Does `r` overlap a blocker, or come closer to one than `margin`? */
+  hits(r: Rect, margin: number): boolean {
+    return this.near(r, margin).some((b) => overlaps(r, b, margin))
+  }
+}
+
+const shift = (r: Rect, dx: number, dy: number): Rect => ({ x: r.x + dx, y: r.y + dy, w: r.w, h: r.h })
+
+/**
+ * The smallest move (dx, dy) that leaves every box in `rects` at least `margin` clear of every blocker:
+ * (0, 0) when they already are (the fast path). The rects move together, by one delta, and never block
+ * each other (several boards moved at once land together). Exact: the candidates are the positions
+ * where an edge sits `margin` from a nearby blocker's edge, tried nearest first, searching outward until
+ * one is clear. Ties go down, then right.
+ */
+export function freeOffset(rects: readonly Rect[], avoid: BlockerIndex, margin: number): { dx: number; dy: number } {
+  if (!rects.length || !rects.some((r) => avoid.hits(r, margin))) return { dx: 0, dy: 0 }
+  const all = unionRects(rects)
+  const clear = (dx: number, dy: number) => !rects.some((r) => avoid.hits(shift(r, dx, dy), margin))
+  for (let reach = Math.max(200, all.w, all.h); reach <= 1 << 17; reach *= 2) {
+    const xs = new Set<number>([0])
+    const ys = new Set<number>([0])
+    for (const b of avoid.near(all, reach + margin)) {
+      for (const r of rects) {
+        xs.add(b.x + b.w + margin - r.x)
+        xs.add(b.x - margin - (r.x + r.w))
+        ys.add(b.y + b.h + margin - r.y)
+        ys.add(b.y - margin - (r.y + r.h))
+      }
+    }
+    const tries: [number, number, number][] = []
+    for (const dx of xs) {
+      if (Math.abs(dx) > reach) continue
+      for (const dy of ys) if (Math.abs(dy) <= reach) tries.push([dx, dy, dx * dx + dy * dy])
+    }
+    tries.sort((a, b) => a[2] - b[2] || b[1] - a[1] || b[0] - a[0])
+    for (const [dx, dy] of tries) if (clear(dx, dy)) return { dx, dy }
+  }
+  return { dx: 0, dy: 0 }
+}
+
+/** Where `rect` lands nearest to where it is, `margin` clear of every blocker in `avoid` (it stays when it already is). */
+export function nearestFree(rect: Rect, avoid: readonly Rect[] | BlockerIndex, opts: { margin?: number } = {}): { x: number; y: number } {
+  const idx = avoid instanceof BlockerIndex ? avoid : new BlockerIndex(avoid)
+  const { dx, dy } = freeOffset([rect], idx, opts.margin ?? BOARD_CLEAR)
+  return { x: rect.x + dx, y: rect.y + dy }
+}
+
+/**
+ * How far a move (dx, dy) of `rects` may go along one axis before one of them comes within `margin` of
+ * a blocker it was clear of (a nudge stops there; it never jumps a blocker). `dx` or `dy` is 0.
+ */
+export function clampMove(rects: readonly Rect[], avoid: BlockerIndex, margin: number, dx: number, dy: number): { dx: number; dy: number } {
+  let ok = dx || dy
+  const sign = Math.sign(ok)
+  for (const r of rects) {
+    const sweep = dx ? { x: Math.min(r.x, r.x + dx), y: r.y, w: r.w + Math.abs(dx), h: r.h } : { x: r.x, y: Math.min(r.y, r.y + dy), w: r.w, h: r.h + Math.abs(dy) }
+    for (const b of avoid.near(sweep, margin)) {
+      if (overlaps(r, b, margin)) continue
+      if (dx) {
+        if (!(b.y < r.y + r.h + margin && r.y < b.y + b.h + margin)) continue
+        const room = sign > 0 ? b.x - margin - (r.x + r.w) : -(r.x - (b.x + b.w + margin))
+        if (room >= -EPS) ok = sign > 0 ? Math.min(ok, Math.max(0, room)) : Math.max(ok, -Math.max(0, room))
+      } else {
+        if (!(b.x < r.x + r.w + margin && r.x < b.x + b.w + margin)) continue
+        const room = sign > 0 ? b.y - margin - (r.y + r.h) : -(r.y - (b.y + b.h + margin))
+        if (room >= -EPS) ok = sign > 0 ? Math.min(ok, Math.max(0, room)) : Math.max(ok, -Math.max(0, room))
+      }
+    }
+  }
+  return dx ? { dx: ok, dy: 0 } : { dx: 0, dy: ok }
+}
+
+/**
+ * A resize's box held back so it never grows to within BOARD_CLEAR of a blocker it was clear of: each
+ * edge that moved out stops where the next blocker begins (owner BM7: a side never grows under a
+ * neighbour). Edges moving in are never held.
+ */
+export function clampGrowth(board: Rect, want: Rect, blockers: readonly Rect[]): Rect {
+  let x0 = want.x
+  let y0 = want.y
+  let x1 = rightOf(want)
+  let y1 = bottomOf(want)
+  for (const b of blockers) {
+    if (distance(board, b) < BOARD_CLEAR - EPS) continue
+    const meetsY = (ya: number, yb: number) => b.y < yb + BOARD_CLEAR - EPS && ya < bottomOf(b) + BOARD_CLEAR - EPS
+    // Across first, with the board's own height; then down, with the width the board now has.
+    if (x1 > rightOf(board) && b.x >= rightOf(board) && meetsY(board.y, bottomOf(board))) x1 = Math.max(rightOf(board), Math.min(x1, b.x - BOARD_CLEAR))
+    if (x0 < board.x && rightOf(b) <= board.x && meetsY(board.y, bottomOf(board))) x0 = Math.min(board.x, Math.max(x0, rightOf(b) + BOARD_CLEAR))
+  }
+  for (const b of blockers) {
+    if (distance(board, b) < BOARD_CLEAR - EPS) continue
+    const meetsX = b.x < x1 + BOARD_CLEAR - EPS && x0 < rightOf(b) + BOARD_CLEAR - EPS
+    if (!meetsX) continue
+    if (y1 > bottomOf(board) && b.y >= bottomOf(board)) y1 = Math.max(bottomOf(board), Math.min(y1, b.y - BOARD_CLEAR))
+    if (y0 < board.y && bottomOf(b) <= board.y) y0 = Math.min(board.y, Math.max(y0, bottomOf(b) + BOARD_CLEAR))
+  }
+  // A corner past a blocker diagonally: what is left of it still meets one across, so hold that way too.
+  for (const b of blockers) {
+    if (distance(board, b) < BOARD_CLEAR - EPS) continue
+    const g = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+    if (!overlaps(g, b, BOARD_CLEAR)) continue
+    if (x1 > rightOf(board) && b.x >= rightOf(board)) x1 = Math.max(rightOf(board), b.x - BOARD_CLEAR)
+    else if (x0 < board.x && rightOf(b) <= board.x) x0 = Math.min(board.x, rightOf(b) + BOARD_CLEAR)
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
 
 export interface Placement {
