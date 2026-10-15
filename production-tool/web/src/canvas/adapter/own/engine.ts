@@ -14,6 +14,7 @@ import { RATIOS, type Ratio } from '../../../contracts/types'
 import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } from '../../core/canvasAdapter'
 import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
+import { mountTextEditor } from './textEditor'
 
 /** The cursor over each of a selected board's handles. */
 const RESIZE_CURSOR: Record<string, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }
@@ -30,7 +31,7 @@ export function probeCapabilities(): InputCapabilities {
 }
 
 /** Single-key tools on the canvas until the toolbar offers them (ui-behaviour 7). */
-const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter', s: 'sketch' }
+const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter', s: 'sketch', t: 'text' }
 
 /**
  * The canvas's surface from the chrome's tokens on the host (styles.css: --line, --tool, --ink2,
@@ -206,7 +207,10 @@ export const ownEngine: CanvasEngine = {
       }
       adapter.resize(r.width, r.height, r.left, r.top)
     }
+    // The in-place text editor (canvas-text): opened, moved and closed with the adapter's text session.
+    const editor = mountTextEditor(host, adapter)
     const offChange = adapter.onChange(() => {
+      editor.sync()
       draw()
       opts.onChange()
     })
@@ -309,10 +313,11 @@ export const ownEngine: CanvasEngine = {
       if (phase === 'down' || phase === 'up') sample(phase, e)
       else if (phase === 'move' && e.buttons) sample('move', e)
       for (const i of adapter.router.handle(raw(phase, e))) act(i)
-      // A selected board's handles show their resize cursor.
+      // A selected board's handles show their resize cursor; the Text tool, the text cursor.
       if (phase === 'move' && !e.buttons) {
         const edge = adapter.boardHandleAt(toScene(e.clientX, e.clientY))
-        const want = edge ? RESIZE_CURSOR[edge] : ''
+        const t = adapter.activeTool()
+        const want = edge ? RESIZE_CURSOR[edge] : t.type === 'native' && t.id === 'text' ? 'text' : ''
         if (live.style.cursor !== want) live.style.cursor = want
       }
     }
@@ -368,7 +373,19 @@ export const ownEngine: CanvasEngine = {
       draw()
     }
     host.addEventListener('keydown', onKey)
+    // Double-click a text to edit it in place (canvas-text), with Select in hand.
+    const onDbl = (e: MouseEvent) => {
+      const t = adapter.activeTool()
+      if (t.type !== 'native' || t.id !== 'selection') return
+      const id = adapter.textAt(toScene(e.clientX, e.clientY))
+      if (!id) return
+      e.preventDefault()
+      adapter.editText(id)
+    }
+    host.addEventListener('dblclick', onDbl)
     adapter.attach(() => {
+      host.removeEventListener('dblclick', onDbl)
+      editor.destroy()
       offChange()
       ro?.disconnect()
       if (frame) cancelAnimationFrame(frame)

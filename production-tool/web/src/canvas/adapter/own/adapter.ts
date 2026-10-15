@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
+  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, TextTool, TEXT_FONT, approxMeasure, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Measure, type TextLook, type TextSession, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -54,6 +54,25 @@ export interface OwnOptions {
   newId?: () => string
   /** The scene's Y.Doc (the mount opens it through the store Worker); a fresh one otherwise. */
   doc?: Y.Doc
+  /** How wide a line of text is (default: the browser's canvas measureText, else canvas-engine's guess). */
+  measure?: Measure
+}
+
+/** A line's width from the browser's own text metrics (made on first use), so a text's box fits its glyphs; canvas-engine's guess without a canvas. */
+function browserMeasure(): Measure {
+  let ctx: CanvasRenderingContext2D | null | undefined
+  return (line, size, family) => {
+    if (ctx === undefined) {
+      try {
+        ctx = typeof document !== 'undefined' && typeof OffscreenCanvas !== 'undefined' ? (new OffscreenCanvas(1, 1).getContext('2d') as unknown as CanvasRenderingContext2D) : null
+      } catch {
+        ctx = null
+      }
+    }
+    if (!ctx) return approxMeasure(line, size, family)
+    ctx.font = `${size}px ${family || TEXT_FONT}, sans-serif`
+    return ctx.measureText(line).width
+  }
 }
 
 type OwnEl = CanvasElement & { assetSha?: string | null; startBinding?: { elementId: string }; endBinding?: { elementId: string } }
@@ -96,6 +115,8 @@ export class OwnAdapter implements CanvasAdapter {
   readonly selector: SelectTool
   /** The sketch area tool (S): ratio-locked areas (ui-behaviour 3.7). */
   readonly sketch: SketchTool
+  /** The text tool (T): write and edit text in place (features/canvas-text.clan). */
+  readonly text: TextTool
   /** The ink tool the drawing tools use (freedraw is the pen, or the highlighter when the pen's options say so). */
   inkTool: InkTool = 'pen'
   /** The pen's options (canvas/chrome/penStyle): ink names, painted in the theme's values. */
@@ -127,7 +148,7 @@ export class OwnAdapter implements CanvasAdapter {
   private readonly pointerCbs = new Set<(p: PointerSample) => void>()
   private readonly changeCbs = new Set<() => void>()
   private teardown: (() => void) | null = null
-  private readonly opts: Required<Omit<OwnOptions, 'doc'>>
+  private readonly opts: Required<Omit<OwnOptions, 'doc' | 'measure'>>
 
   constructor(initial: CanvasSnapshot | null = null, opts: OwnOptions = {}) {
     const { doc, ...rest } = opts
@@ -140,6 +161,7 @@ export class OwnAdapter implements CanvasAdapter {
     this.selector.onChange(() => this.changed())
     // A drawn area's sketch id is a document id (sketch_ + a ULID): links into it are checked against the contract.
     this.sketch = new SketchTool(this.scene, { newId: (p) => (p === 'sketch' ? newId('sketch') : this.opts.newId()) })
+    this.text = new TextTool(this.scene, { newId: () => this.opts.newId(), measure: rest.measure ?? browserMeasure() })
     this.scene.onChange((ids) => {
       this.cache = null
       for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
@@ -479,6 +501,7 @@ export class OwnAdapter implements CanvasAdapter {
     this.tool = tool
     const id = tool.type === 'native' ? tool.id : ''
     if (id !== 'sketch') this.sketch.cancel()
+    this.textPress = null
     if (id === 'freedraw' || id === 'pen') {
       this.router.tool = 'ink'
       this.inkTool = this.pen.mode
@@ -512,18 +535,29 @@ export class OwnAdapter implements CanvasAdapter {
 
   /** The router's press, drag and release: the sketch area tool's while it is the tool, else the select tool's. */
   press(p: Pt, opts: { shift?: boolean; by?: 'mouse' | 'pen' | 'touch' } = {}) {
-    if (this.sketching()) this.sketch.press(p)
+    if (this.texting()) this.textPress = p
+    else if (this.sketching()) this.sketch.press(p)
     else this.selector.press(p, { ...opts, zoom: this.vp.zoom })
     this.changed()
   }
 
   drag(p: Pt) {
+    if (this.texting()) return
     if (this.sketching()) this.sketch.drag(p)
     else this.selector.drag(p)
     this.changed()
   }
 
   release(p: Pt) {
+    if (this.texting()) {
+      // T, then a click: the editor opens there, or on the text clicked.
+      const at = this.textPress ?? p
+      this.textPress = null
+      const hit = this.textAt(at)
+      if (hit) this.editText(hit)
+      else this.startText(at)
+      return
+    }
     if (!this.sketching()) {
       this.selector.release(p)
       return
@@ -534,6 +568,81 @@ export class OwnAdapter implements CanvasAdapter {
       this.setActiveTool({ type: 'native', id: 'selection' })
       this.selector.set([area.id])
     }
+    this.changed()
+  }
+
+  // ── text (features/canvas-text.clan) ──
+
+  private textPress: Pt | null = null
+
+  private texting() {
+    return this.tool.type === 'native' && this.tool.id === 'text'
+  }
+
+  /** The text at a scene point (the topmost thing there, when it is a text), or null. */
+  textAt(p: Pt): string | null {
+    const r = this.hitAt(p.x, p.y)
+    return r?.kind === 'text' && !r.locked ? r.id : null
+  }
+
+  /** The edit session open now (the mount shows its editor), or null. */
+  textSession(): TextSession | null {
+    return this.text.session
+  }
+
+  /** A new text at a scene point: the mount opens its editor. */
+  startText(p: Pt): TextSession {
+    if (this.text.session) this.commitText(this.text.session.plain)
+    const s = this.text.begin(p)
+    this.changed()
+    return s
+  }
+
+  /** Edit a text in place (a double-click, or T on a text). False when it cannot be edited. */
+  editText(id: string): boolean {
+    if (this.scene.readOnly) return false
+    const s = this.text.edit(id)
+    if (s) this.selector.set([id])
+    this.changed()
+    return !!s
+  }
+
+  /** End the session with what was typed: one step. Back to Select with the text selected. */
+  commitText(typed: string): string | null {
+    if (!this.text.session) return null
+    let r = null
+    try {
+      r = this.text.commit(typed)
+    } catch (e) {
+      console.warn('the text was not kept', e)
+    }
+    if (this.texting()) this.setActiveTool({ type: 'native', id: 'selection' })
+    this.selector.set(r ? [r.id] : [])
+    this.changed()
+    return r?.id ?? null
+  }
+
+  /** The look the next text takes (the Text tool's options). */
+  setTextLook(look: TextLook) {
+    this.text.look = { ...look }
+    this.changed()
+  }
+
+  /** The selected texts' look (the first one's), or null when no text is selected. */
+  selectedText(): TextLook | null {
+    const s = this.text.session
+    if (s) return s.look
+    for (const id of this.selector.selected) {
+      const r = this.scene.get(id)
+      if (r?.kind === 'text') return { size: r.style.fontSize ?? 20, color: r.style.stroke ?? 'ink' }
+    }
+    return null
+  }
+
+  /** The options changed: the text being typed takes it, else the selected texts (one step). */
+  styleText(change: Partial<TextLook>) {
+    if (this.text.session) this.text.restyleSession(change)
+    else this.text.restyle(this.selector.selected, change)
     this.changed()
   }
 
@@ -751,6 +860,7 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.boardLook = this.surface?.s.board ?? null
       this.renderer.linkLook = this.surface?.s.link ?? null
       this.renderer.currentBoard = this.currentBoard
+      this.renderer.editing = this.text.session?.fresh === false ? this.text.session.id : null
       this.renderer.draw(ctx as never, { scrollX, scrollY, zoom }, { width, height }, dpr, this.surface?.s.background ?? (this.theme === 'dark' ? '#121212' : '#ffffff'))
       return
     }
