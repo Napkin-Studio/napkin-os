@@ -25,6 +25,10 @@ export const CARD_SIZE: Record<CardKind, { w: number; h: number }> = {
 }
 
 const PURPOSE_OF: Partial<Record<RefRole, BoardPurpose>> = { character: 'character', location: 'location', product: 'product' }
+/** The brand roles (board-autolayout): a Brand board takes them when there is one, else References. */
+export const BRAND_ROLES: readonly RefRole[] = ['logo', 'palette', 'typography', 'brand_rule']
+/** The board a picture of this role belongs on: Characters, Locations, Products, else References. */
+export const boardPurposeOfRole = (role: RefRole | undefined): BoardPurpose => (role && PURPOSE_OF[role]) || 'reference'
 const TITLE: Record<string, string> = { character: 'Characters', location: 'Locations', reference: 'References', product: 'Products' }
 
 /** The named pictures on the canvas by the board they belong on. */
