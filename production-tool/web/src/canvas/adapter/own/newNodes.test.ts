@@ -28,7 +28,7 @@ const boxOf = (e: { x: number; y: number; width: number; height: number }) => ({
 const overlap = (p: ReturnType<typeof boxOf>, q: ReturnType<typeof boxOf>) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
 
 describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
-  it('a new Script is its own empty script, a second node, selected; the Script board is hemmed in, so it lands just outside it, and undo takes it away', async () => {
+  it('a new Script is its own empty script, a second node, selected; the Script board is hemmed in below and to the right, so it grows up to hold it (nothing on it moves), and undo takes it away', async () => {
     const { a, s, doc } = await seeded()
     const scriptBoard = Object.values(doc().boards).find((b) => b.purpose === 'script')!
     jumpTo(a, doc(), Object.values(doc().boards).sort((x, y) => (x.rank < y.rank ? -1 : 1)).indexOf(scriptBoard), false)
@@ -48,13 +48,17 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     expect(nodesOf(a, 'script')).toHaveLength(2)
     expect(a.view().selectedIds).toEqual([el.id])
     // The Script board has Characters to its right and Storyboard below (owner decision 2026-10-15): it
-    // does not grow over them; the new script lands just outside, on no board, over nothing, and the
-    // board says it is full.
+    // does not grow over them; it grows up, toward free canvas, and the new script goes above the first
+    // (BA1: make space, never shuffle). Nothing is full.
     const frame = a.elements().find((e) => boardIdOf(e) === scriptBoard.id)!
-    expect(boxOf(frame)).toEqual(frame0)
-    expect(el.frameId ?? null).toBeNull()
-    for (const other of a.elements().filter((e) => e.id !== el.id && !e.isDeleted && (isBoard(e) || cardOf(e)))) expect(overlap(boxOf(el), boxOf(other))).toBe(false)
-    expect(heard).toEqual([frame.id])
+    const fb = boxOf(frame)
+    expect([fb.x, fb.w, fb.y + fb.h]).toEqual([frame0.x, frame0.w, frame0.y + frame0.h])
+    expect(fb.y).toBeLessThan(frame0.y)
+    expect(el.frameId).toBe(frame.id)
+    expect(el.y + el.height).toBeLessThan(first.y)
+    expect(boxOf(nodesOf(a, 'script').find((e) => e.id === first.id)!)).toEqual(boxOf(first))
+    for (const other of a.elements().filter((e) => e.id !== el.id && e.id !== frame.id && !e.isDeleted && (isBoard(e) || cardOf(e)))) expect(overlap(boxOf(el), boxOf(other))).toBe(false)
+    expect(heard).toEqual([])
     // One undo step takes the node away.
     a.undoScene('undo')
     expect(nodesOf(a, 'script')).toHaveLength(1)

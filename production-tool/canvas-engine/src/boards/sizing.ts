@@ -4,8 +4,8 @@
 //
 // - A board is a space. What lands on it goes in the next free slot: contact-sheet rows, BOARD_PAD in
 //   from its edges, BOARD_GAP between things, never over what is already there.
-// - It grows to fit what is placed in it, toward free canvas: down first, then right. It never moves or
-//   covers another board (or loose things on the canvas); when both ways are blocked it does not grow,
+// - It grows to fit what is placed in it, toward free canvas: down first, then right, then up, then left.
+//   It never moves or covers another board (or loose things on the canvas); when every way is blocked it does not grow,
 //   and the thing lands at the nearest free spot just outside instead (`full`).
 // - It never shrinks by itself. fitRect is Fit to contents; resizeRect is a handle's drag, which never
 //   cuts through a member: an edge stops at the members whose centre is still inside, and the ones whose
@@ -249,7 +249,7 @@ export interface Placement {
   /** The board's box after it (grown, or as it was). */
   board: Rect
   /** Which way the board grew to hold it, if it did. */
-  grew: 'down' | 'right' | 'beside' | null
+  grew: 'down' | 'right' | 'up' | 'left' | 'beside' | null
   /** True when the board could not grow: `box` is outside it, and the thing is not on the board. */
   full: boolean
 }
@@ -285,6 +285,16 @@ export function placeInBoard(board: Rect, occupied: readonly Rect[], size: { w: 
   const box = { x: colX, y: inn.y, ...size }
   const g = grown(box)
   if (!growthBlocked(board, g, blockers)) return { box, board: g, grew: 'right', full: false }
+  // Hemmed in below and to the right (a neighbour close by): toward the free canvas that is left, a new
+  // row above everything, then a new column left of everything. Nothing already there moves (BA1).
+  const top = Math.min(inn.y, ...occupied.map((o) => o.y))
+  const up = { x: inn.x, y: top - (occupied.length ? BOARD_GAP : 0) - size.h, ...size }
+  const gu = grown(up)
+  if (!growthBlocked(board, gu, blockers)) return { box: up, board: gu, grew: 'up', full: false }
+  const leftX = Math.min(inn.x, ...occupied.map((o) => o.x))
+  const left = { x: leftX - (occupied.length ? BOARD_GAP : 0) - size.w, y: inn.y, ...size }
+  const gl = grown(left)
+  if (!growthBlocked(board, gl, blockers)) return { box: left, board: gl, grew: 'left', full: false }
   const spot = outsideSpot(board, size, [...blockers, ...occupied])
   return { box: { ...spot, ...size }, board, grew: null, full: true }
 }

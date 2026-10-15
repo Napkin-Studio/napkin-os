@@ -47,6 +47,31 @@ describe('board sizing on the own engine', () => {
     expect([arrow.startBinding?.elementId, arrow.endBinding?.elementId]).toEqual([src.id, gen.id])
   })
 
+  it('a generated picture whose source fills a hemmed-in board (Ad template Characters) lands on that board, growing it up; never above it, outside', () => {
+    const { a, board, pic, frame } = setup()
+    // The source fills the board; Script to the left, Locations to the right, Storyboard below, each 48 away.
+    const src = pic(16, 22, { width: 368, height: 244 })
+    const script = a.board({ x: -388, y: 0, width: 340, height: 440, title: 'Script', boardId: newId('board'), purpose: 'script' })
+    const locs = a.board({ x: 448, y: 0, width: 420, height: 300, title: 'Locations', boardId: newId('board'), purpose: 'location' })
+    const story = a.board({ x: -388, y: 488, width: 1300, height: 236, title: 'Storyboard', boardId: newId('board'), purpose: 'storyboard' })
+    a.transact(() => [board, script, locs, story, src], { undoable: false })
+    const services = { doc: snapshotDoc(), runner: {}, relay: {}, project: { canvasKey: 'k' }, ui: { get: () => ({ me: { participantId: 'p_1' } }) } } as unknown as Services
+    const ctrl = new CanvasController(a, services)
+    const id = (src.customData as { id: string }).id
+    const at = { x: 16 + 368 + 80, y: 22, w: 200, h: 250 }
+    ;(ctrl as unknown as { placeGen: (...args: unknown[]) => void }).placeGen('job_1', 'generate', [id], [{ el: src, id }], at)
+    const gen = a.elements().find((e) => e.id === 'job_1')!
+    const f = frame()
+    expect(gen.frameId).toBe(board.id)
+    expect(gen.x >= f.x && gen.y >= f.y && gen.x + gen.width <= f.x + f.width && gen.y + gen.height <= f.y + f.height).toBe(true)
+    // Up: the bottom, left and width stay; the source does not move; no neighbour is covered.
+    expect([f.x, f.width, f.y + f.height]).toEqual([0, 400, 300])
+    expect(f.y).toBeLessThan(0)
+    expect(gen.y + gen.height).toBeLessThanOrEqual(22)
+    expect([a.elements().find((e) => e.id === src.id)!.x, a.elements().find((e) => e.id === src.id)!.y]).toEqual([16, 22])
+    for (const n of [script, locs, story]) expect(overlap(f, n)).toBe(false)
+  })
+
   it('a selected board resizes from its handle as one step; what the edge passed leaves, is said, and Undo brings it back', () => {
     const { a, board, pic, frame } = setup()
     const p1 = pic(16, 22)
