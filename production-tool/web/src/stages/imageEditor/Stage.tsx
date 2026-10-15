@@ -320,7 +320,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   const brushy = !before && (tool === 'brush' || tool === 'eraser')
 
   return (
-    <div className="ie-viewport" style={{ aspectRatio: `${w} / ${h}` }} data-tool={tool}
+    <div className="ie-viewport" style={{ aspectRatio: `${w} / ${h}`, '--ie-ratio': w / h } as React.CSSProperties} data-tool={tool}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onLostPointerCapture={onLost}
       onPointerLeave={() => { if (cursorEl.current) cursorEl.current.style.display = 'none' }}>
       <div ref={frame} className={`ie-frame tool-${tool}`} style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}>

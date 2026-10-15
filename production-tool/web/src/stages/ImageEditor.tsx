@@ -553,7 +553,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               {view === 'before' && <span className="pt-mono ie-before">Before · v{version} as saved</span>}
             </Stage>
           ) : (
-            <div className="ie-viewport" style={{ aspectRatio: String(aspect) }}>
+            <div className="ie-viewport" style={{ aspectRatio: String(aspect), '--ie-ratio': aspect } as React.CSSProperties}>
               <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shot.id} place="editor" /></div>
             </div>
           )}

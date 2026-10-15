@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
-  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, keptAfterApply, leftOutLine,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, nothingToTake, undoLast, redoUndone, hiddenCount, keptAfterApply, leftOutLine, NOTHING_TO_TAKE,
   type EditSession, type MaskOp,
 } from './edits'
 
@@ -17,6 +17,8 @@ describe('the words match 3.12', () => {
     expect(SPEC).toContain(leaveAsk(3))
     expect(SPEC).toContain(notApplied(3))
     expect(notApplied(1)).toBe('1 edit not applied')
+    expect(SPEC).toContain(leftOutLine(1))
+    expect(SPEC).toContain(NOTHING_TO_TAKE)
   })
   it('names the next Runway step for a painted mask with no fill', () => {
     const s = withMaskOp(EMPTY, stroke())

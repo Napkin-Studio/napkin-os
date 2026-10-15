@@ -581,6 +581,9 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **The stage:**
 - Locked to the frame's ratio. Zoom and pan; the crop keeps the ratio (review item 10).
+- At Fit the whole frame shows: as wide as the column, never taller than the room under the strip (a 9:16 frame fits too).
+- A stroke belongs to the pointer that started it: a second finger or pen is ignored, hover adds nothing, and a cancelled pointer drops the stroke. Brush, Lasso, Hand and Crop can start on the margin when zoomed out; Click-select and Text need a point on the picture.
+- When the picture cannot be drawn, the last good one stays and Rhea's line says why.
 - Prev and next frame links sit below ("← Frame 2 · Medium", "Frame 4 · Close →"). If edits are not applied, moving between frames asks first: "Keep the 3 edits for later, or discard them?"
 
 **Tools (left):**
@@ -598,6 +601,9 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 - Brackets `[ ]` change the brush size.
 - **The brush strip** holds: mask name, Size, Soft, Add/Subtract, **Snap to cut-out** (fits the mask to Rhea's cut-out edge) and **Clear mask**.
+  The name reads "New mask" until the first paint.
+- **What a stroke paints into:** the active mask. Painting a hidden mask shows it first. Subtract, the Eraser or a Subtract lasso with no mask makes no edit and says "Nothing to take away yet: paint an area first". Painting while a Fill runs on the active mask starts a new mask, so the sent mask stays as it was sent.
+- **Ctrl/⌘Z in the editor takes back the last stroke** (or the last edit when no mask has strokes); ⇧⌘Z or Ctrl+Y puts it back. The document's undo is not touched; the legend under the stage says "⌘Z takes back your last stroke here".
 - **Mask paint** is translucent tool blue with marching ants: "Mask: blue paint marks what changes".
 
 **Edits are a non-destructive list:**
@@ -605,7 +611,12 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - Each edit is numbered and has its own undo. "Next: Fill Mask 1" names the next Runway step.
 
 **Layers (front first):** Text, masks, cut-outs and Frame (the locked input version).
-- Each layer can be hidden.
+- Each layer can be hidden. A mask's row picks it (the brush paints it next), as its Edits row does.
+- **What you see is what is sent and applied** (owner, 2026-10-15): hidden layers are left out of Fill, Change, Upscale and Apply, and the pill, the Apply line and the send tray say so: "1 hidden layer is left out". A frame's edits list only what was applied.
+- Hiding **Frame** hides only the original picture: Fill results and Change or Upscale results stay unless their own eye is off.
+- **Remove background** never hides Frame by itself; Rhea's line says "hide Frame to see the cut-out alone".
+- A hidden mask cannot be filled: "Mask 1 is hidden. Show it to fill."
+- Hidden edits are kept: after Apply they stay, still hidden, on the new version.
 - A cut-out offers **Save as reference**, which opens Name this picture with the role preselected.
 - Upstream inputs arrive as locked layers.
 
@@ -629,7 +640,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Before / After** toggles the view. Before hides masks, cut-out outlines and text, and labels the frame "Before · v3 as saved".
 
-**Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes.
+**Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes; a whole-frame job shows a thin progress edge along the top of the stage. Nothing covers the picture: the job's status, elapsed time and Cancel (with its confirm) sit in its Edits row, and a question the job asks shows there too. You can keep painting while it runs. A job with no answer in time reads "did not work" in its row, with Stop waiting and Try again, and holds nothing else.
 
 ### 3.13 Video editor (artboards 10 and 10b; review items 7, 8)
 
