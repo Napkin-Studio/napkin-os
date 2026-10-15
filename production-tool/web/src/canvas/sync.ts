@@ -9,7 +9,8 @@
 
 import type { CustomData, ProductionDocument } from '../contracts/types'
 import { TERMINAL_STATES } from '../contracts/types'
-import { bareRemoval, deleteFrom, removeGen, removeNode, removeSketch, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
+import { bareRemoval, deleteFrom, removeGen, removeNode, removeSketch, removeText, restoreTo, type NodeRemovalKind, type Removal } from '../doc/remove'
+import { newId } from '../lib/ulid'
 import type { DocumentStore } from '../doc/types'
 import { systemUpdate } from '../doc/store'
 
@@ -20,7 +21,17 @@ export interface SceneEl {
   customData?: unknown
   /** A sketch area's ratio, as its tool drew it ('16:9'). */
   ratio?: string
+  /** A text's words, and the shape it is bound in (bound text is the shape's, not a text of its own). */
+  text?: string
+  containerId?: string | null
 }
+
+/** The most words a texts[id] row keeps (document.schema.json). */
+export const TEXT_WORDS_MAX = 4000
+
+/** A text written on the canvas (features/canvas-text.clan): a text element of its own, not a shape's label. */
+const isCanvasText = (e: SceneEl) => !e.isDeleted && e.type === 'text' && !e.containerId
+const wordsOf = (e: SceneEl) => (e.text ?? '').slice(0, TEXT_WORDS_MAX)
 
 function genId(e: SceneEl): string | undefined {
   const c = e.customData as CustomData | undefined
@@ -66,6 +77,11 @@ export class CanvasDocSync {
   private readonly nodesSeen = new Set<string>()
   /** Storyboard nodes whose shots went back to their video when the node went (redo shows them again). */
   private readonly folded = new Set<string>()
+  /** Text elements alive at the last sync (null until the first), and every one seen. */
+  private textsAlive: Set<string> | null = null
+  private readonly textsSeen = new Set<string>()
+  /** Text elements whose row is being written (not written twice). */
+  private readonly textsPending = new Set<string>()
 
   constructor(deps: CanvasSyncDeps) {
     this.deps = deps
@@ -181,6 +197,60 @@ export class CanvasDocSync {
         }
         const r = this.removals.get(k)
         this.removals.delete(k)
+        if (r) await restoreTo(this.deps.doc, r)
+      }).catch((e) => console.warn('could not record the restore', e))
+    }
+    return this.queue
+  }
+
+  /**
+   * Texts on the canvas and their texts[id] rows (features/canvas-text.clan), so a node a text is
+   * linked into reads its words from the document: a text gets its row (a system write), an edit
+   * rewrites its words, a delete takes the row out with its links, and the canvas's undo puts them back.
+   */
+  texts(els: readonly SceneEl[]): Promise<void> {
+    const live = new Map(els.filter(isCanvasText).map((e) => [e.id, e]))
+    const d = this.deps.doc.get()
+    const rows = Object.values(d.texts ?? {})
+    const rowOf = new Map(rows.map((t) => [t.node, t]))
+    const was = this.textsAlive
+    this.textsAlive = new Set(live.keys())
+    const gone = was ? [...was].filter((id) => !live.has(id)) : []
+    const back = was ? [...live.keys()].filter((id) => !was.has(id) && this.textsSeen.has(id) && this.removals.has(`text:${id}`)) : []
+    for (const id of live.keys()) this.textsSeen.add(id)
+    const make: SceneEl[] = []
+    const reword: { id: string; words: string }[] = []
+    for (const e of live.values()) {
+      if (back.includes(e.id) || this.textsPending.has(e.id)) continue
+      const row = rowOf.get(e.id)
+      const words = wordsOf(e)
+      if (!row) { if (words.trim()) make.push(e) }
+      else if (row.words !== words) reword.push({ id: row.id, words })
+    }
+    if (make.length || reword.length) {
+      for (const e of make) this.textsPending.add(e.id)
+      this.queue = this.queue.then(() => systemUpdate(this.deps.doc, (x) => {
+        x.texts ??= {}
+        for (const e of make) {
+          if (Object.values(x.texts).some((t) => t.node === e.id)) continue
+          const id = newId('text')
+          x.texts[id] = { id, v: 1, field_v: {}, node: e.id, words: wordsOf(e) }
+        }
+        for (const r of reword) if (x.texts[r.id]) x.texts[r.id].words = r.words
+      }, make.length ? 'text on the canvas' : 'edit a text').then(() => {})).catch((e) => console.warn('could not record the text', e))
+        .finally(() => { for (const e of make) this.textsPending.delete(e.id) })
+    }
+    for (const node of gone) {
+      const row = rowOf.get(node)
+      if (!row) continue
+      this.queue = this.queue.then(async () => {
+        this.removals.set(`text:${node}`, await deleteFrom(this.deps.doc, (x) => removeText(x, row.id), { system: true }))
+      }).catch((e) => console.warn('could not record the delete', e))
+    }
+    for (const node of back) {
+      this.queue = this.queue.then(async () => {
+        const r = this.removals.get(`text:${node}`)
+        this.removals.delete(`text:${node}`)
         if (r) await restoreTo(this.deps.doc, r)
       }).catch((e) => console.warn('could not record the restore', e))
     }

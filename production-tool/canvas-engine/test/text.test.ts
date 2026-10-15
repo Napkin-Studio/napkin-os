@@ -11,6 +11,7 @@ import { Renderer, type DrawContext } from '../src/render/renderer'
 import { SelectTool } from '../src/select/select'
 import { SceneUndo } from '../src/undo/sceneUndo'
 import { LINE_HEIGHT, TEXT_SIZES, TextTool, textBox } from '../src/text/text'
+import { boundEnds, linkRoute, sceneLinkEnv } from '../src/render/links'
 
 const measure = (line: string, size: number) => line.length * size * 0.5
 
@@ -143,5 +144,21 @@ describe('a text on the canvas', () => {
     r.editing = 't'
     r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1)
     expect(said).toEqual([])
+  })
+})
+
+describe('a text as a link end (owner 2026-10-16)', () => {
+  it('a link bound to a text routes from the text\'s edge, and goes undrawn once the text is gone', () => {
+    const node = element({ id: 'N', kind: 'node', z: 'a1', x: 600, y: 0, w: 300, h: 200 })
+    const link = element({ id: 'L', kind: 'link', z: 'a2', props: { start: { elementId: 't' }, end: { elementId: 'N' }, role: 'note' } })
+    const { scene, select } = setup([written('t', 'Rain', 0, 80), node, link])
+    const env = sceneLinkEnv(scene)
+    const route = linkRoute(env, scene.get('L')!)!
+    const t = scene.get('t')!
+    expect(route.pts[0]).toEqual({ x: t.x + t.w, y: t.y + t.h / 2 })
+    expect(route.pts.at(-1)!.x).toBe(600)
+    select.set(['t'])
+    select.deleteSelected()
+    expect(boundEnds((id) => scene.get(id), scene.get('L')!)).toBeNull()
   })
 })

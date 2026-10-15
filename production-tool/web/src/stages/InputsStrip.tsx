@@ -29,7 +29,7 @@ export function InputsStrip({ nodeId }: { nodeId: string | undefined }) {
 function InputChip({ item }: { item: ScopeItem }) {
   const url = useBlobUrl(item.asset)
   return (
-    <span className={`in-chip kind-${item.kind}`} title={item.drawn ? `${item.label} · drawn` : item.label}>
+    <span className={`in-chip kind-${item.kind}`} title={item.words ?? (item.drawn ? `${item.label} · drawn` : item.label)}>
       {url && <img src={url} alt="" />}
       <span className={item.kind === 'ref' ? 'in-ref' : undefined}>{item.label}</span>
     </span>
