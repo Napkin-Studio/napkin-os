@@ -22,7 +22,9 @@ import { setStacked } from '../canvas/nodes/stack'
 import { busyQuestion, type CardKind, type SelInfo } from '../canvas/selbar/selbar'
 import { runningOn } from '../canvas/sync'
 import { CardChromeContext } from '../canvas/nodes/cardChrome'
-import { boardIdOf, boardKey, isBoard, jumpTo, railNodes, railTargets } from '../canvas/boards/boards'
+import { boardIdOf, boardKey, bringIntoView, isBoard, jumpTo, railNodes, railTargets } from '../canvas/boards/boards'
+import { gatherOffer, type GatherOffer } from '../canvas/boards/arrange'
+import { gatherIntoBoard, moveIntoBoard } from '../canvas/boards/gather'
 import type { CanvasChrome } from '../canvas/chrome/controls'
 import { canvasActions } from '../canvas/chrome/actions'
 import { drivers, type MakeVideoFrom } from '../canvas/nodes/make'
@@ -403,6 +405,20 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const railInset = narrow || panels.assets ? 0 : 240
   // New results land in view right of the rail (board-autolayout).
   useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
+  // The Gather nudge and Move to <Board> on the pictures' bar (board-autolayout; BA2 = c, BA3).
+  const gather = useMemo(() => (own && canvas && selected.length ? gatherOffer(els, doc, selected.map((e) => e.id)) : null), [own, canvas, selected, els, doc])
+  const onGather = useCallback(async (o: GatherOffer) => {
+    if (!canvas) return
+    try {
+      const frameId = o.existing && moveIntoBoard(canvas, docStore.get(), o) ? o.existing : await gatherIntoBoard(canvas, docStore, o)
+      // The board and the pictures in view, right of the rail; the next ⌘Z is the canvas's (it takes this back).
+      const f = canvas.elements().find((e) => e.id === frameId)
+      if (f) bringIntoView(canvas, { minX: f.x, minY: f.y, maxX: f.x + f.width, maxY: f.y + f.height }, railInset, !matchMedia('(prefers-reduced-motion: reduce)').matches)
+      ;(canvas as unknown as { focusCanvas?: (() => void) | null }).focusCanvas?.()
+    } catch (e) {
+      console.warn('the board was not made', e)
+    }
+  }, [canvas, docStore, railInset])
   // The board rail and + Node (ui-behaviour 3.2, 3.3): a reference board fits the canvas to its
   // pictures; Script, Storyboard and Video open their editors over the canvas.
   const counts = useMemo(() => {
@@ -545,7 +561,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             )
           })()}
           {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
-            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits}
+            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} gather={gather} onGather={onGather}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
@@ -706,8 +722,11 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
 
 type Popover = null | 'generate' | 'name'
 
-function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup }: {
+function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, gather, onGather }: {
   ctrl: CanvasController
+  /** Gather into a <Role> board, or Move to <Board> (board-autolayout), when the selection fits one. */
+  gather?: GatherOffer | null
+  onGather?: (o: GatherOffer) => void | Promise<void>
   selected: El[]
   toView: (p: Pt) => Pt
   onDelete: (sel: El[]) => void
@@ -811,6 +830,10 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, on
     const views = viewsOnCanvas(doc, ctrl.liveElements())
     const items = pictures.map((a) => mediaItem(doc, project, a, undefined, views)).filter((m): m is MediaItem => !!m)
     if (items.length) groups.push(<DownloadButton key="dl" items={items} className="btn sm ghost" iconOnly={items.length === 1} />)
+  }
+  if (gather && onGather) {
+    groups.push(<button key="gather" className="btn sm" title={gather.existing ? `Put ${gather.ids.length === 1 ? 'it' : 'them'} on the ${gather.title} board` : `Make a ${gather.title} board round these and put them in it`}
+      onClick={() => void onGather(gather)}>{gather.existing ? `Move to ${gather.title}` : `Gather into a ${gather.title} board`}</button>)
   }
   if (onGroup) groups.push(<button key="group" className="btn sm ghost" title="Group (Ctrl+G)" onClick={onGroup}>Group</button>)
   if (ctrl.deletable(meaningful).length) {

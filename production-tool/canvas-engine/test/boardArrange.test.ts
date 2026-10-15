@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { BOARD_GAP, BOARD_PAD, innerRect, overlaps, placeAllInBoard } from '../src/boards/sizing'
-import { nextSlot, ROW_MAX_W } from '../src/boards/arrange'
+import { nextSlot, ROW_MAX_W, tidy } from '../src/boards/arrange'
 import type { Rect } from '../src/model/bounds'
 
 const V = { w: 200, h: 250 }
@@ -103,5 +103,34 @@ describe('overflow', () => {
     expect(out.length).toBeGreaterThan(2)
     expect(new Set(out.map((o) => o.y)).size).toBe(1)
     for (let i = 1; i < out.length; i++) expect(out[i].x).toBeGreaterThan(out[i - 1].x)
+  })
+})
+
+describe('tidy', () => {
+  const board: Rect = { x: 0, y: 0, w: 720, h: 300 }
+  const lanes = [[{ w: 200, h: 250 }, { w: 200, h: 120 }, { w: 200, h: 250 }, { w: 200, h: 250 }], [{ w: 300, h: 100 }], [{ w: 100, h: 80 }, { w: 100, h: 200 }]]
+
+  it('each lane starts a row from the inner left; units a gap apart; wraps at the inner width; rows as tall as their tallest', () => {
+    const t = tidy(board, lanes, [])
+    const inn = innerRect(board)
+    expect(t.boxes[0].slice(0, 3).map((b) => [b.x, b.y])).toEqual([[inn.x, inn.y], [inn.x + 240, inn.y], [inn.x + 480, inn.y]])
+    // The fourth wraps under the first row's tallest (250).
+    expect([t.boxes[0][3].x, t.boxes[0][3].y]).toEqual([inn.x, inn.y + 250 + BOARD_GAP])
+    expect(t.boxes[1][0].y).toBe(inn.y + 2 * (250 + BOARD_GAP))
+    expect(t.boxes[2][0].y).toBe(t.boxes[1][0].y + 100 + BOARD_GAP)
+    const all = t.boxes.flat()
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i], all[j], BOARD_GAP - 1)).toBe(false)
+    for (const b of all) expect(inside(t.board, b)).toBe(true)
+    expect([t.board.x, t.board.y, t.board.w]).toEqual([0, 0, 720])
+  })
+
+  it('is the same the second time (idempotent), never shrinks the board, and never grows onto a neighbour', () => {
+    const big = { ...board, h: 2000 }
+    expect(tidy(big, lanes, []).board).toEqual(big)
+    const below = { x: 0, y: 500, w: 900, h: 100 }
+    const t = tidy(board, lanes, [below])
+    expect(overlaps(t.board, below)).toBe(false)
+    const again = tidy(t.board, lanes, [below])
+    expect(again.boxes).toEqual(t.boxes)
   })
 })

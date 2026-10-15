@@ -12,7 +12,7 @@
 // - Several things that don't fit land outside as one row, in order, at one side (overflowRow).
 
 import { unionRects, type Rect } from '../model/bounds'
-import { aroundRect, BOARD_GAP, BOARD_CLEAR, bottomOf, clearOf, containsRect, growthBlocked, innerRect, outsideSpot, overlaps, placeInBoard, rightOf, rowSlot, type Placement } from './sizing'
+import { aroundRect, BOARD_GAP, BOARD_CLEAR, bottomOf, clearOf, containsRect, growthBlocked, growToHold, innerRect, outsideSpot, overlaps, placeInBoard, rightOf, rowSlot, type Placement } from './sizing'
 
 /** A row may make its board this wide (scene units) before the next thing wraps below it. */
 export const ROW_MAX_W = 1400
@@ -75,4 +75,62 @@ export function overflowSpot(board: Rect, size: { w: number; h: number }, outsid
     if (!overlaps(r, board, BOARD_CLEAR) && !avoid.some((a) => overlaps(r, a, BOARD_GAP / 2))) return { x: r.x, y: r.y }
   }
   return outsideSpot(board, size, avoid)
+}
+
+/**
+ * Lanes laid out as rows from `origin` (Tidy, and a board made by Gather): each lane starts a new row,
+ * its units left to right a gap apart, wrapping at `width`; each row as tall as its tallest unit, rows
+ * a gap apart, so mixed heights leave no holes. Returns the boxes, lane by lane, and the size used.
+ */
+export function tidyRows(origin: { x: number; y: number }, lanes: readonly (readonly { w: number; h: number }[])[], width: number): { boxes: Rect[][]; w: number; h: number } {
+  const boxes: Rect[][] = []
+  let y = origin.y
+  let used = 0
+  let any = false
+  for (const lane of lanes) {
+    const row: Rect[] = []
+    if (!lane.length) {
+      boxes.push(row)
+      continue
+    }
+    if (any) y += BOARD_GAP
+    let x = origin.x
+    let tall = 0
+    for (const u of lane) {
+      if (x > origin.x && x + u.w > origin.x + width + 1e-6) {
+        y += tall + BOARD_GAP
+        x = origin.x
+        tall = 0
+      }
+      row.push({ x, y, w: u.w, h: u.h })
+      used = Math.max(used, x + u.w - origin.x)
+      x += u.w + BOARD_GAP
+      tall = Math.max(tall, u.h)
+    }
+    y += tall
+    any = true
+    boxes.push(row)
+  }
+  return { boxes, w: used, h: any ? y - origin.y : 0 }
+}
+
+/**
+ * Tidy: a board's lanes lined up as rows from its inner top left (the one time existing members move),
+ * wrapping at its current inner width (never narrower than its widest unit). The board grows to hold
+ * them toward free canvas, never onto `blockers`; it never shrinks here (Fit to contents does that).
+ */
+export function tidy(board: Rect, lanes: readonly (readonly { w: number; h: number }[])[], blockers: readonly Rect[]): { boxes: Rect[][]; board: Rect } {
+  const inn = innerRect(board)
+  const widest = Math.max(0, ...lanes.flat().map((u) => u.w))
+  const laid = tidyRows({ x: inn.x, y: inn.y }, lanes, Math.max(inn.w, widest))
+  const all = laid.boxes.flat()
+  if (!all.length) return { boxes: laid.boxes, board }
+  const want = unionRects([board, aroundRect(unionRects(all))])
+  const grown = growthBlocked(board, want, blockers) ? growToHoldAll(board, all, blockers) : want
+  return { boxes: laid.boxes, board: grown }
+}
+
+/** growToHold, or the board as it is when nothing changes. */
+function growToHoldAll(board: Rect, members: readonly Rect[], blockers: readonly Rect[]): Rect {
+  return growToHold(board, members, blockers) ?? board
 }
