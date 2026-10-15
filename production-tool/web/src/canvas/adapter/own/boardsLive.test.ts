@@ -8,6 +8,7 @@ import type { Board, ProductionDocument } from '../../../contracts/types'
 import { modelStore, MAYA } from '../../../test/model'
 import { boardIdOf, boardsByRank, contentsOf, deleteBoards, isBoard, jumpTo, liveBoards, newBoard, reconcileBoards, seedBoards } from '../../boards/boards'
 import { boardRows } from '../../chrome/boards'
+import { withAdBoards } from '../../../test/adBoards'
 import { cardOf, linkIdOf, seedNodes } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
 
@@ -17,10 +18,10 @@ async function seeded() {
   const a = new OwnAdapter()
   a.resize(1600, 1000, 0, 0)
   a.transact((els) => [...els, ...seedNodes(a, s.get() as unknown as ProductionDocument)], { undoable: false })
-  const seed = seedBoards(a, s.get() as unknown as ProductionDocument)!
-  a.transact((els) => seed.apply(els), { undoable: false })
   const doc = structuredClone(s.get()) as unknown as ProductionDocument
-  for (const b of seed.boards) doc.boards[b.id] = b
+  withAdBoards(doc)
+  const seed = seedBoards(a, doc)!
+  a.transact((els) => seed.apply(els), { undoable: false })
   await s.close()
   return { a, doc }
 }

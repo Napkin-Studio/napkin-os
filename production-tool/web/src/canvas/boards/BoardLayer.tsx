@@ -1,6 +1,7 @@
-// The boards on our own canvas (features/art-boards.clan; ui-behaviour 3.2): seeds
-// the Ad template's seven boards once (document boards and board frames, with the
-// nodes in theirs), takes the rail's ⌥1…⌥9 and ⌥0 jumps onto the real frames, keeps
+// The boards on our own canvas (features/art-boards.clan; ui-behaviour 3.2): a new
+// project starts on an empty canvas with no boards (board-autolayout, BA2 = c); an
+// existing project's boards get their frames once, with the nodes in theirs. It takes
+// the rail's ⌥1…⌥9 (nodes, then boards) and ⌥0 jumps onto the canvas, keeps
 // the document's boards in step with the frames (a deleted board leaves the rail;
 // undo brings it back), makes boards ("+ New board", the Board tool B and a drag)
 // with their title open in place and a purpose picker, renames a board on a
@@ -88,13 +89,12 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
 
   useEffect(() => {
     const seeded = seedBoards(canvas, services.doc.get())
-    if (!seeded) return
-    canvas.transact((els) => seeded.apply(els), { undoable: false })
-    if (seeded.boards.length) {
-      void systemUpdate(services.doc, (d) => {
-        for (const b of seeded.boards) d.boards[b.id] = b
-      }, 'create the Ad template boards').catch((e) => console.warn('could not write the boards', e))
+    if (!seeded) {
+      // A canvas with no boards (a new project): open on its nodes, clear of the rail, never above 100%.
+      if (!canvas.elements().some(isBoard)) jumpTo(canvas, services.doc.get(), 'fit', false, keep.current)
+      return
     }
+    canvas.transact((els) => seeded.apply(els), { undoable: false })
     jumpTo(canvas, services.doc.get(), 'fit', false, keep.current)
   }, [canvas, services])
 
