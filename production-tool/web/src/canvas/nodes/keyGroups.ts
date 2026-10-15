@@ -85,7 +85,7 @@ const same = (a: readonly string[], b: readonly string[]) => a.length === b.leng
  * - each picture of a key with two or more views here carries `key:<key>` as a group id, and no other
  *   key group; one that left its key (renamed, unnamed) loses it, and leaves a stack laid back out;
  * - a view newly in its group that is not already beside the others is placed next to them, to the
- *   right, top-aligned (on the pile, when the group is stacked).
+ *   right, top-aligned, on their board (on the pile, when the group is stacked).
  * Pure: element id → the fields to change.
  */
 export function keyGroupFields(els: readonly CanvasElement[], doc: ProductionDocument): Map<string, Partial<CanvasElement>> {
@@ -127,6 +127,8 @@ export function keyGroupFields(els: readonly CanvasElement[], doc: ProductionDoc
       placed.set(f.id, at)
       box = union(box, { ...own, ...at })
     }
+    // A placed view joins the board its group sits on (membership is the container: art-boards).
+    const frameId = base[0].frameId ?? null
     if (g.stacked) {
       // On the pile: the whole stack laid again, the newcomer's spread place beside the others.
       const members = g.members.map((m) => {
@@ -134,7 +136,8 @@ export function keyGroupFields(els: readonly CanvasElement[], doc: ProductionDoc
         return at ? { ...m, x: at.x, y: at.y, angle: 0, stack: undefined } as CanvasElement : m
       })
       for (const [id, f] of stackFields(members)) put(id, f as Partial<CanvasElement>)
-    } else for (const [id, at] of placed) put(id, at)
+      for (const id of placed.keys()) put(id, { frameId })
+    } else for (const [id, at] of placed) put(id, { ...at, frameId })
   }
   return out
 }

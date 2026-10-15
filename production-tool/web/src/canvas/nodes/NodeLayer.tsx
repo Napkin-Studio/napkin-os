@@ -22,7 +22,7 @@ import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
 import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
-import { groupLabel, keyGroupFields, keyGroupOf, keyGroupsOn, type KeyGroup } from './keyGroups'
+import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
 import './nodes.css'
 
@@ -160,30 +160,29 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     canvas.transact((all) => all.map((e) => (fields.has(e.id) ? canvas.patch(e, fields.get(e.id)!) : e)), { undoable: false })
   }, [canvas, doc, tick])
 
-  // A click (or tap) on a stack opens it; a click on empty canvas folds back what a click opened.
+  // A click (or tap) on a stack opens it; a click on empty canvas folds back what a click opened. What
+  // the click hit is what the canvas selected at the press (a stack's whole group, or nothing).
   const opened = useRef(new Set<string>())
   useEffect(() => {
-    let down: { x: number; y: number; group: string | null; empty: boolean } | null = null
-    const at = (p: Pt) => canvas.elements().filter((e) => !e.isDeleted && (e.customData as { kind?: string } | undefined)?.kind !== 'board' && e.type !== 'frame'
-      && p.x >= e.x && p.y >= e.y && p.x <= e.x + e.width && p.y <= e.y + e.height).at(-1)
+    let down: Pt | null = null
     return canvas.onPointer((p) => {
       if (canvasActions.mode() === 'link') return
       if (p.phase === 'down') {
-        const hit = at(p)
-        down = { x: p.x, y: p.y, group: keyGroupOf(hit), empty: !hit }
+        down = { x: p.x, y: p.y }
         return
       }
       if (p.phase !== 'up' || !down) return
       const was = down
       down = null
       if (Math.hypot(p.x - was.x, p.y - was.y) * canvas.view().zoom > 4) return
+      const sel = new Set(canvas.view().selectedIds)
       const groups = keyGroupsOn(canvas.elements(), services.doc.get())
-      if (was.group) {
-        const g = groups.find((x) => x.key === was.group)
-        if (g?.stacked && setStacked(canvas, g.members, false, { animate: motion() })) opened.current.add(g.key)
+      const hit = groups.find((g) => g.members.length === sel.size && g.members.every((m) => sel.has(m.id)))
+      if (hit) {
+        if (hit.stacked && setStacked(canvas, hit.members, false, { animate: motion() })) opened.current.add(hit.key)
         return
       }
-      if (!was.empty) return
+      if (sel.size) return
       for (const key of opened.current) {
         const g = groups.find((x) => x.key === key)
         if (g && !g.stacked) setStacked(canvas, g.members, true, { animate: motion() })

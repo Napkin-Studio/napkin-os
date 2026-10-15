@@ -16,8 +16,8 @@ export const MAX_TURN = (12 * Math.PI) / 180
 export const MIN_TURN = (5 * Math.PI) / 180
 /** How far the top card may turn: 2.5°. */
 export const TOP_TURN = (2.5 * Math.PI) / 180
-/** How far a card's centre may sit from the top card's, as a share of its width and height. */
-export const MAX_SHIFT = { x: 0.12, y: 0.1 }
+/** How far a card's centre may sit from the top card's, as a share of the larger card's width and height. */
+export const MAX_SHIFT = { x: 0.16, y: 0.12 }
 /** How long a stack takes to open or fold. */
 export const STACK_MS = 320
 
@@ -67,8 +67,11 @@ export function stackLayout(cards: readonly Card[], at: { x: number; y: number }
     const angle = way * (MIN_TURN + unitHash(`${c.id}#turn`) * (MAX_TURN - MIN_TURN))
     // Shifted the way it turns, a little more the deeper it lies, never past MAX_SHIFT.
     const depth = Math.min(1, 0.55 + 0.15 * k)
-    const dx = way * (0.4 + 0.6 * unitHash(`${c.id}#x`)) * depth * MAX_SHIFT.x * c.w
-    const dy = (unitHash(`${c.id}#y`) * 2 - 1) * depth * MAX_SHIFT.y * c.h
+    // Measured on the larger of it and the top card, so a smaller card still shows past the top one.
+    const w = Math.max(c.w, top.w)
+    const h = Math.max(c.h, top.h)
+    const dx = way * (0.5 + 0.5 * unitHash(`${c.id}#x`)) * depth * MAX_SHIFT.x * w
+    const dy = (unitHash(`${c.id}#y`) * 2 - 1) * depth * MAX_SHIFT.y * h
     out.set(c.id, { x: cx + dx - c.w / 2, y: cy + dy - c.h / 2, angle })
   })
   return out

@@ -52,6 +52,9 @@ async function setup(names: [string, string][] = [['samurai', 'front'], ['samura
 describe('key groups follow the names', () => {
   it('views of one key group as "Samurai · 3 views", each newly named one placed beside the others; the next pass changes nothing', async () => {
     const { s, a, doc, name, follow, el } = await setup()
+    // The front sits on the Characters board; its views join it there.
+    const board = a.board({ x: 850, y: -50, width: 600, height: 600, title: 'Characters', boardId: newId('board'), purpose: 'character' })
+    a.transact((all) => [board, ...all.map((e) => (e.id === el(0).id ? a.patch(e, { frameId: board.id }) : e))], { undoable: false })
     await name(0, 'samurai', 'front')
     expect(follow().size).toBe(0) // one view is not a group
     await name(1, 'samurai', 'side')
@@ -61,6 +64,7 @@ describe('key groups follow the names', () => {
     // The front stays where it was named first; the side comes to its right, top-aligned.
     expect([el(0).x, el(0).y]).toEqual([900, 0])
     expect([el(1).x, el(1).y]).toEqual([900 + 300 + 40, 0])
+    expect(el(1).frameId).toBe(board.id)
     await name(2, 'samurai', 'back')
     follow()
     expect([el(2).x, el(2).y, el(2).groupIds]).toEqual([900 + 2 * 340, 0, ['key:samurai']])
