@@ -12,8 +12,8 @@ const ids = (s: Partial<SelInfo>) => barFor(sel(s)).map((a) => a.id)
 describe('barFor (3.9)', () => {
   it('follows the table', () => {
     expect(ids({ cards: ['script', 'storyboard'], units: 2 })).toEqual(['make-video', 'plan-shots', 'group'])
-    expect(ids({ cards: ['script'] })).toEqual(['open', 'plan-shots'])
-    expect(ids({ cards: ['storyboard'] })).toEqual(['open', 'make-clips'])
+    expect(ids({ cards: ['script'] })).toEqual(['open', 'plan-shots', 'make-video'])
+    expect(ids({ cards: ['storyboard'] })).toEqual(['open', 'make-clips', 'make-video'])
     expect(ids({ cards: ['video'] })).toEqual(['open', 'render-ad', 'make-sizes'])
     expect(ids({ group: { ink: true } })).toEqual(['convert', 'ungroup', 'move-to-board', 'delete'])
     expect(ids({ group: { ink: false } })).toEqual(['ungroup', 'move-to-board', 'delete'])
@@ -28,6 +28,21 @@ describe('barFor (3.9)', () => {
     expect(barFor(sel({ cards: ['script', 'storyboard'], units: 2 }))[0]).toMatchObject({ id: 'make-video', primary: true })
     expect(barFor(sel({ group: { ink: true } }))[0].off).toMatch(/Ellis/)
     expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'ungroup')!.off).toBeUndefined()
+  })
+
+  it('Make video and Plan shots are built (3.5, 3.10): no "for now" placeholder; a reason only when this selection cannot', () => {
+    for (const r of [{ cards: ['script', 'storyboard'], units: 2 }, { cards: ['script'] }, { cards: ['storyboard'] }] as Partial<SelInfo>[]) {
+      for (const a of barFor(sel(r)).filter((x) => x.id === 'make-video' || x.id === 'plan-shots')) expect(a.off).toBeUndefined()
+    }
+    const off = barFor(sel({ cards: ['script'], off: { 'plan-shots': 'Write the script first' } }))
+    expect(off.find((a) => a.id === 'plan-shots')!.off).toBe('Write the script first')
+    expect(off.find((a) => a.id === 'make-video')!.off).toBeUndefined()
+  })
+
+  it('two scripts or two storyboards offer Make video (Dex asks which one drives), never with a video in the selection', () => {
+    expect(ids({ cards: ['script', 'script'], units: 2 })).toEqual(['make-video', 'group', 'move-to-board', 'delete'])
+    expect(ids({ cards: ['script', 'storyboard', 'storyboard'], units: 3 })).toEqual(['make-video', 'group', 'move-to-board', 'delete'])
+    expect(ids({ cards: ['script', 'script', 'video'], units: 3 })).toEqual(['group', 'move-to-board', 'delete'])
   })
 
   it('More holds Copy link, Duplicate, Lock and Delete; rows ending in Delete have no More', () => {

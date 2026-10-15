@@ -11,7 +11,7 @@
 // No chat and no cost anywhere: each start is one box or one ask, and the job it starts is today's.
 
 import { useContext, useId, useRef, useState, type ReactNode } from 'react'
-import { RouterContext, useDoc, useJobsTick, useServices } from '../../app/context'
+import { RouterContext, useDoc, useJobsTick, useServices, useUi } from '../../app/context'
 import { scriptRoute } from '../../app/route'
 import type { Id, RefRole } from '../../contracts/types'
 import {
@@ -19,7 +19,8 @@ import {
   suggestName, videoFromWords, videoSeconds, frameFromWords,
 } from '../../jobs/prompt'
 import { planOrJoin } from '../../jobs/plan'
-import { isActive } from '../../jobs/runner'
+import { isActive, LOCAL_PERSON } from '../../jobs/runner'
+import { answerScriptVideo, PLAN_FIRST, scriptVideoAsk, scriptVideoQuestion, shotCount } from '../../jobs/scriptVideo'
 import { nameOf } from '../../lib/names'
 import { mainStoryboard, refsList } from '../../model/selectors'
 import { AgentFigure } from '../agents/AgentFigure'
@@ -57,6 +58,7 @@ export function PromptStart({ kind, nodeId, place = 'card' }: PromptStartProps) 
       {state.show === 'script' && <ScriptStart scriptId={nodeId} place={place} />}
       {state.show === 'storyboard' && <StoryboardStart storyboardId={nodeId} fromScript={state.fromScript} place={place} />}
       {state.show === 'video-block' && <VideoBlock videoId={nodeId} />}
+      {state.show === 'video-script' && <ScriptVideoAsk videoId={nodeId} scriptId={state.scriptId} />}
       {state.show === 'video-plan' && <StoryboardStart storyboardId={state.storyboardId} fromScript={false} place={place} scopeNode={nodeId} />}
       {state.show === 'image-frame' && <FrameStart shotId={nodeId} />}
       {state.show === 'image-picture' && <PictureStart nodeId={nodeId} />}
@@ -309,6 +311,61 @@ function VideoBlock({ videoId }: { videoId: Id }) {
         </div>
       )}
       {busy && <AtWork agent="dex" line={PROMPT_COPY.video.busy} />}
+      {error && <div className="askcard-note" role="alert">{error}</div>}
+    </section>
+  )
+}
+
+/**
+ * Dex's nudge on a video a script drives and no storyboard renders (3.5, 3.17, artboard 4c): "Plan a
+ * storyboard first?". Either answer is stored on the video (Change in the Video editor switches later),
+ * gives it the storyboard its script drives with Dex planning the shots, and opens where the next step is:
+ * the Storyboard to check frames, or the Video, whose Make clips makes them straight from the script.
+ */
+function ScriptVideoAsk({ videoId, scriptId }: { videoId: Id; scriptId: Id }) {
+  const services = useServices()
+  const doc = useDoc()
+  const ui = useUi()
+  const [later, setLater] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const q = scriptVideoAsk(doc, videoId)?.question ?? scriptVideoQuestion(shotCount(doc, scriptId), 'q_00000000000000000000000000')
+  const me = ui.me?.participantId ? `human:${ui.me.participantId}` : LOCAL_PERSON
+  const pick = async (optionId: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const { storyboardId } = await answerScriptVideo(services, videoId, optionId, me)
+      services.ui.update((u) => {
+        u.openNode = optionId === PLAN_FIRST ? { ...u.openNode, storyboard: storyboardId } : { ...u.openNode, video: videoId }
+        u.stage = optionId === PLAN_FIRST ? 'storyboard' : 'video'
+      }, 'stage')
+    } catch (e) {
+      setError(message(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (later) {
+    return (
+      <button className="askcard-later" onClick={() => setLater(false)} aria-label={`Waiting for you: ${q.text}`}>
+        <AgentFigure agent="dex" size={20} state="needs-you" decorative /><b>Waiting for you</b><span>· Make video</span>
+      </button>
+    )
+  }
+  return (
+    <section className="askcard open pstart-ask" role="group" aria-label={`dex asks: ${q.text}`} data-ask="script-video">
+      <div className="askcard-head">
+        <AgentFigure agent="dex" size={28} state="needs-you" decorative />
+        <span className="askcard-who">{sayer('dex')}</span>
+        <span className="askcard-sp" />
+        <button className="askcard-latr" onClick={() => setLater(true)}>Later</button>
+      </div>
+      <div className="askcard-q">{q.text}</div>
+      {q.why && <div className="askcard-why faint">{q.why}</div>}
+      <AskOptions q={q} disabled={busy} onPick={(id) => void pick(id)} />
+      <div className="askcard-why faint">{PROMPT_COPY.later}</div>
+      {busy && <AtWork agent="dex" line="Dex is setting up the storyboard and planning the shots" />}
       {error && <div className="askcard-note" role="alert">{error}</div>}
     </section>
   )

@@ -51,6 +51,10 @@
   position: absolute; left: 12px; top: -11px; padding: 1px 8px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600;
   background: var(--tool); color: #FFFFFF; pointer-events: none;
 }
+/* A node whose start is Dex's ask (ui-behaviour 3.17): the card grows to show it whole, over what is below. */
+.node-layer .bl-card.asking { overflow: visible; }
+.node-layer .bl-cardbox:has(.bl-card.asking) { z-index: 1; }
+.node-layer .bl-cardbox:has(.bl-card.asking) .nl-linkin { display: none; }
 /* An empty node's start (the chrome's PromptStart slot) takes the card's body. */
 .node-layer .bl-start { pointer-events: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 

@@ -19,7 +19,7 @@ import { InlineConfirm } from '../ui/Undo'
 import { askedShot, planOrJoin, runningPlan } from '../jobs/plan'
 import { LOCAL_PERSON } from '../jobs/runner'
 import type { ModelStore } from '../model/store'
-import { framesOf, openAsks, scriptText, staleList, takesOf } from '../model/selectors'
+import { framesOf, openAsks, scriptText, shotsOf, staleList, takesOf } from '../model/selectors'
 import { answerShotAsk } from '../stages/storyboardEdits'
 import { AgentAvatar } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
@@ -56,6 +56,9 @@ import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
 import { PromptStart } from '../ui/prompt/PromptStart'
+import { canvasActions } from '../canvas/chrome/actions'
+import { planFromScript, planShotsBlocked } from '../jobs/scriptVideo'
+import { nextStep, videoOfScript as nextVideo, type NextAction } from './nextStep'
 
 type Doc = ProductionDocument
 type Focus = { key: string; editor: Editor | null } | null
@@ -279,13 +282,48 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
     ))
   const behind = !!sb && (staleList(doc).some((m) => m.target.kind === ('storyboard' as string) && m.target.id === sb.id)
     || (composed!.shots.length > 0 && Object.values(doc.scenes).some((s) => s.script_id === scriptId && !!s.text?.trim())))
+  // Plan shots needs words; with none it is off and says so (ui-behaviour 3.10).
+  const blocked = planShotsBlocked(doc, scriptId)
   const plan = () => attempt(async () => {
-    if (!scriptText(doc, scriptId).trim()) throw new Error('Write a line or two first.')
-    // The storyboard this script drives (more than one per project; features/canvas-nodes.clan).
-    if (!sb) throw new Error('Link this script to a storyboard on the canvas first.')
-    const r = await planOrJoin(deps, { storyboardId: sb.id })
-    if (r.joined) say('Dex is already planning these shots.')
+    if (blocked) throw new Error('Write the script first: Plan shots reads its words.')
+    // The storyboard this script drives (more than one per project; features/canvas-nodes.clan); with
+    // none, Dex plans on a new one, made beside the script on the canvas with its drives link.
+    if (sb) {
+      const r = await planOrJoin(deps, { storyboardId: sb.id })
+      if (r.joined) say('Dex is already planning these shots.')
+      return
+    }
+    const r = await planFromScript(deps, scriptId)
+    if (r.made) say('Dex is planning the shots on a new storyboard, beside this script on the canvas.')
   })
+  // Out of the editor to the canvas, or to an editor over it (ui-behaviour 2.2).
+  const goTo = (stage: 'character' | 'storyboard' | 'video', id?: string) => {
+    uiStore.update((u) => {
+      if (id && stage !== 'character') u.openNode = { ...u.openNode, [stage]: id }
+      u.stage = stage
+    })
+    router.leave()
+  }
+  // Make video from the script (3.5): with the storyboard when Dex has planned it, else from the script
+  // alone, and Dex asks on the new Video node how to make its clips. Then the canvas, where the node is.
+  const makeVideo = () => attempt(async () => {
+    const d = docStore.get()
+    const withBoard = sb && shotsOf(d, sb.id).length ? sb.id : undefined
+    const made = canvasActions.makeVideo({ scriptId, ...(withBoard ? { storyboardId: withBoard } : {}) })
+    if (!made) throw new Error('Make video from the canvas: select this script there.')
+    await made
+    goTo('character')
+  })
+  const next = nextStep(doc, scriptId, sb?.id, behind)
+  const onNext = (a: NextAction) => {
+    if (a === 'plan' || a === 'update') return void plan()
+    if (a === 'make-video') return void makeVideo()
+    if (a === 'open-storyboard' && next && sb) return goTo('storyboard', sb.id)
+    if (a === 'open-video') {
+      const v = Object.values(doc.videos).find((x) => x.id === nextVideo(doc, scriptId, sb?.id))
+      if (v) goTo('video', v.id)
+    }
+  }
 
   const doImport = (file: File) => attempt(async () => {
     const parsed = parseFountain(await file.text())
@@ -387,8 +425,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             void navigator.clipboard?.writeText(url).then(() => say('Link copied.'), () => say(url))
           }}>Copy link to this</MenuItem>
         </Float>
+        {!phone && blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
         {!phone && (
-          <button className="btn primary" disabled={!sb || !!planning} onClick={() => void plan()}>
+          <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked ? 'se-plan-why' : undefined} onClick={() => void plan()}>
             {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
           </button>
         )}
@@ -400,6 +439,14 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         }} />
       </header>
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
+      {!phone && next && (
+        <div className="se-next" role="status" aria-label="What comes next" data-next={next.step}>
+          <AgentFigure agent="dex" size={22} decorative />
+          <span><span className="who">{sayer('dex')}:</span> {next.line}</span>
+          <span className="pt-grow" />
+          {next.actions.map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
+        </div>
+      )}
       {confirm && (
         <div className="se-line se-confirm">
           <InlineConfirm text={confirm.text} yes={confirm.yes} onNo={() => setConfirm(null)} onYes={confirm.go} />
@@ -442,6 +489,10 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       </div>
     </div>
   )
+}
+
+const NEXT_LABEL: Record<NextAction, string> = {
+  plan: 'Plan shots', update: 'Update storyboard', 'make-video': 'Make video', 'open-storyboard': 'Open the storyboard', 'open-video': 'Open the video',
 }
 
 /** The chain's keys in script order: a scene's heading and text, a shot, the current shot's beats. */

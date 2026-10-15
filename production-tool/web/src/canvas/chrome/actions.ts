@@ -6,6 +6,7 @@
 // (Excalidraw: + Node opens the editor) or are disabled with the reason. One bus per page: only one canvas is mounted at a time.
 
 import type { CardKind } from '../nodes/cardChrome'
+import type { MadeVideo, MakeVideoFrom } from '../nodes/make'
 
 /** A tool the chrome runs over the canvas, outside the engine's own (select, hand, pen…). */
 export type CanvasMode = 'link' | 'board' | null
@@ -19,6 +20,10 @@ export interface CanvasActions {
   picture(): void
   /** "+ Link input" on a node (3.16): the Link tool, with this node as the target; the person clicks what feeds it. */
   linkInto(node: { kind: string; id: string }): void
+  /** The Storyboard a Script drives, made beside it on the canvas when it has none (3.10 Plan shots). */
+  storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }>
+  /** Make video (3.5): the Video node beside what it is made from, with its links, one undo step. */
+  makeVideo(from: MakeVideoFrom): Promise<MadeVideo>
 }
 
 type Listener = () => void
@@ -28,6 +33,7 @@ class Bus {
   private boards: Pick<CanvasActions, 'board'> | null = null
   private pictures: Pick<CanvasActions, 'picture'> | null = null
   private into: Pick<CanvasActions, 'linkInto'> | null = null
+  private makes: Pick<CanvasActions, 'storyboardFor' | 'makeVideo'> | null = null
   private current: CanvasMode = null
   private pick: string | null = null
   private readonly listeners = new Set<Listener>()
@@ -38,12 +44,14 @@ class Bus {
     if (part.board) this.boards = { board: part.board }
     if (part.picture) this.pictures = { picture: part.picture }
     if (part.linkInto) this.into = { linkInto: part.linkInto }
+    if (part.storyboardFor && part.makeVideo) this.makes = { storyboardFor: part.storyboardFor, makeVideo: part.makeVideo }
     this.emit()
     return () => {
       if (part.node && this.nodes?.node === part.node) this.nodes = null
       if (part.board && this.boards?.board === part.board) this.boards = null
       if (part.picture && this.pictures?.picture === part.picture) this.pictures = null
       if (part.linkInto && this.into?.linkInto === part.linkInto) this.into = null
+      if (part.makeVideo && this.makes?.makeVideo === part.makeVideo) this.makes = null
       this.current = null
       this.emit()
     }
@@ -76,6 +84,21 @@ class Bus {
 
   canLinkInto(): boolean {
     return !!this.into
+  }
+
+  /** Can the canvas make nodes from nodes (our own engine's node layer is mounted)? */
+  canMake(): boolean {
+    return !!this.makes
+  }
+
+  /** The Storyboard a Script drives, made on the canvas when it has none; null when no canvas can. */
+  storyboardFor(scriptId: string): Promise<{ storyboardId: string; made: boolean }> | null {
+    return this.makes ? this.makes.storyboardFor(scriptId) : null
+  }
+
+  /** Make video on the canvas; null when no canvas can. */
+  makeVideo(from: MakeVideoFrom): Promise<MadeVideo> | null {
+    return this.makes ? this.makes.makeVideo(from) : null
   }
 
   node(kind: CardKind): boolean {

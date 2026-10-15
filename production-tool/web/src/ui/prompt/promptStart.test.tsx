@@ -68,6 +68,28 @@ describe('which start an empty node shows', () => {
     expect(promptState(s.get(), 'video', v)).toEqual({ show: 'video-block' })
   })
 
+  it('a video a script drives and no storyboard renders waits on Dex\'s question (3.5)', async () => {
+    const s = await project()
+    const v = await unlinkVideo(s)
+    const sc = mainScript(s.get())!.id
+    await updateDoc(s, (d) => { const l = id('link'); d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'script', id: sc }, to: { kind: 'video', id: v }, role: 'drives' } }, 'link')
+    await s.flush()
+    expect(promptState(s.get(), 'video', v)).toEqual({ show: 'video-script', scriptId: sc })
+  })
+
+  it('the project\'s video, its storyboard not planned and its script written, asks the same; planned, nothing', async () => {
+    const s = await project()
+    const v = mainVideo(s.get())!.id
+    const sc = mainScript(s.get())!.id
+    const scene = await addScene(s, sc)
+    await updateDoc(s, (d) => { d.scenes[scene].text = 'A runner at dawn.' }, 'edit')
+    await s.flush()
+    expect(promptState(s.get(), 'video', v)).toEqual({ show: 'video-script', scriptId: sc })
+    await updateDoc(s, (d) => { addShots(d, 2) }, 'plan')
+    await s.flush()
+    expect(promptState(s.get(), 'video', v)).toBeNull()
+  })
+
   it('a shot with no frame offers the picture; with a frame, nothing', async () => {
     const s = await project()
     let shot = ''
@@ -208,6 +230,38 @@ describe('PromptStart, rendered', () => {
     for (let i = 0; i < 20; i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)) })
     expect(sent.map((x) => x.op)).toEqual(['shot_list'])
     expect(Object.values(store.get().links).some((l) => l.to.id === v && l.role === 'renders')).toBe(true)
+  })
+
+  it('a video from a script alone: "Plan a storyboard first?"; straight from the script plans, links and opens the Video', async () => {
+    const store = await project()
+    const v = await unlinkVideo(store)
+    const sc = mainScript(store.get())!.id
+    const scene = await addScene(store, sc)
+    await updateDoc(store, (d) => {
+      d.scenes[scene].text = 'A runner crests the cliff at dawn.'
+      const l = id('link')
+      d.links[l] = { id: l, v: 1, field_v: {}, from: { kind: 'script', id: sc }, to: { kind: 'video', id: v }, role: 'drives' }
+    }, 'make video')
+    await store.flush()
+    const { s, sent } = services(store)
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(ServicesContext.Provider, { value: s }, createElement(PromptStart, { kind: 'video', nodeId: v }))))
+    expect(host.textContent).toContain('Plan a storyboard first?')
+    expect(host.textContent).toContain('Clips come out better from frames you\'ve checked.')
+    expect(host.textContent).toContain('You can always switch later.')
+    expect(host.querySelector('.askcard-opt.rec')?.textContent).toMatch(/^Plan the storyboard firstRecommendedAbout \d+ shots, with frames you check first$/)
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent === 'Later')).toBe(true)
+    expect(sent).toHaveLength(0)
+    const straight = [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Make clips straight from the script'))!
+    await act(async () => straight.click())
+    for (let i = 0; i < 20; i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)) })
+    expect(sent.map((x) => x.op)).toEqual(['shot_list'])
+    const d = store.get()
+    expect(Object.values(d.links).some((l) => l.to.id === v && l.role === 'renders')).toBe(true)
+    expect(Object.values(d.asks).find((a) => a.node.id === v)?.answers.map((a) => a.option_id)).toEqual(['straight'])
+    expect(s.ui.get()).toMatchObject({ stage: 'video', openNode: { video: v } })
   })
 
   it('an empty storyboard: the line, then the nudge; planning from the line goes ahead', async () => {

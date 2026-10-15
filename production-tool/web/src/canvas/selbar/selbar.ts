@@ -23,6 +23,8 @@ export interface SelInfo {
   units: number
   /** Every selected thing is locked. */
   locked: boolean
+  /** Actions that cannot run on this selection now, with why ("Write the script first"). */
+  off?: Partial<Record<ActionId, string>>
 }
 
 export type ActionId =
@@ -48,8 +50,6 @@ export interface MoreAction {
 
 const LATER = 'Not built yet.'
 const OFF: Partial<Record<ActionId, string>> = {
-  'make-video': 'Make video comes with starting from a prompt. Open the Video for now.',
-  'plan-shots': 'Plan shots from the Storyboard for now (Open).',
   'make-clips': 'Make clips from the Storyboard for now (Open).',
   'render-ad': 'Render the ad from the Video for now (Open).',
   'make-sizes': 'Make all sizes comes with format sheets.',
@@ -57,12 +57,20 @@ const OFF: Partial<Record<ActionId, string>> = {
   'move-to-board': 'Drag it onto a board for now.',
 }
 
-const act = (id: ActionId, label: string, extra: Partial<BarAction> = {}): BarAction => ({ id, label, ...(OFF[id] ? { off: OFF[id] } : {}), ...extra })
-const DELETE = act('delete', 'Delete', { icon: true })
+const base = (id: ActionId, label: string, extra: Partial<BarAction> = {}): BarAction => ({ id, label, ...(OFF[id] ? { off: OFF[id] } : {}), ...extra })
+const DELETE = base('delete', 'Delete', { icon: true })
 
-/** The bar for a selection (the 3.9 table), or [] when the canvas's picture bar has it instead. */
+/**
+ * The bar for a selection (the 3.9 table), or [] when the canvas's picture bar has it instead. Make video
+ * is also on a Script or a Storyboard alone, and on two scripts or two storyboards (3.5: Dex asks which
+ * one drives); an action this selection cannot run now is greyed with its reason (`s.off`).
+ */
 export function barFor(s: SelInfo): BarAction[] {
   if (!s.units) return []
+  const act = (id: ActionId, label: string, extra: Partial<BarAction> = {}): BarAction => {
+    const a = base(id, label, extra)
+    return s.off?.[id] ? { ...a, off: s.off[id] } : a
+  }
   if (s.group && s.units === 1) {
     return s.group.ink
       ? [act('convert', 'Convert to text'), act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
@@ -74,12 +82,18 @@ export function barFor(s: SelInfo): BarAction[] {
   }
   if (only && s.units === 1) {
     switch (s.cards[0]) {
-      case 'script': return [act('open', 'Open'), act('plan-shots', 'Plan shots')]
-      case 'storyboard': return [act('open', 'Open'), act('make-clips', 'Make clips…')]
+      case 'script': return [act('open', 'Open'), act('plan-shots', 'Plan shots'), act('make-video', 'Make video')]
+      case 'storyboard': return [act('open', 'Open'), act('make-clips', 'Make clips…'), act('make-video', 'Make video')]
       case 'video': return [act('open', 'Open'), act('render-ad', 'Render ad…'), act('make-sizes', 'Make all sizes…')]
     }
   }
   if (s.links === s.units) return [DELETE]
+  // Two scripts or two storyboards (and no video): Make video asks which one drives (3.5).
+  const scripts = s.cards.filter((c) => c === 'script').length
+  const boards = s.cards.filter((c) => c === 'storyboard').length
+  if (only && !s.cards.includes('video') && scripts <= 3 && boards <= 3 && (scripts > 1 || boards > 1)) {
+    return [act('make-video', 'Make video', { primary: true }), act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
+  }
   return [act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
 }
 

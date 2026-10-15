@@ -14,6 +14,7 @@ import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStor
 import type { ProductionDocument, Shot } from '../../contracts/types'
 import { InputsStrip } from '../../stages/InputsStrip'
 import { isEmptyNode } from './nodes'
+import { waitsOnScriptAsk } from '../../jobs/scriptVideo'
 import { CardChromeContext, type Agent, type CardKind } from './cardChrome'
 import { useBlobUrl } from '../../ui/hooks'
 import { useProjectName } from '../../ui/useDownload'
@@ -23,10 +24,10 @@ const withRefs = (t: string): ReactNode[] => t.split(/(@[a-z][a-z0-9_]*)/g).map(
 const cap = (s: string) => s.slice(0, 1).toUpperCase() + s.slice(1)
 const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s)
 
-export function Card({ icon, title, meta, extra, onOpen, children, style }: { icon: CardKind; title: string; meta?: ReactNode; extra?: ReactNode; onOpen: () => void; children: ReactNode; style?: CSSProperties }) {
+export function Card({ icon, title, meta, extra, onOpen, children, style, className = '' }: { icon: CardKind; title: string; meta?: ReactNode; extra?: ReactNode; onOpen: () => void; children: ReactNode; style?: CSSProperties; className?: string }) {
   const chrome = useContext(CardChromeContext)
   return (
-    <article className="bl-card" style={style}>
+    <article className={`bl-card ${className}`} style={style}>
       <div className="bl-cardhead">
         {chrome.icon(icon)}
         <b>{title}</b>
@@ -165,8 +166,13 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
   const total = shots.reduce((a, s) => a + s.duration_s, 0)
   // The main video is named after its storyboard (mock Main); another after its own title.
   const title = sb && video?.id === mainVideo(doc)?.id ? chrome.title(sb.title, 'Storyboard', project) : chrome.title(video?.title, 'Video', project)
+  // A video a script drives with no storyboard yet (mock Asks): "from Script · no storyboard".
+  const fromScript = !sb && !!video && Object.values(doc.links ?? {}).some((l) => l.role === 'drives' && l.from.kind === 'script' && l.to.kind === 'video' && l.to.id === video.id)
+  // Dex's ask on a video with no storyboard (3.17) is read whole: the card grows over what is below it.
+  const asking = !!video && !!chrome.PromptStart && isEmptyNode(doc, 'video', video.id) && (!sb || !!waitsOnScriptAsk(doc, video.id))
   return (
-    <Card icon="video" title={`Video · ${title}`} onOpen={onOpen} style={{ height: 194 }}>
+    <Card icon="video" title={`Video · ${title}`} meta={fromScript ? <span className="pt-mono">from Script · no storyboard</span> : undefined} onOpen={onOpen}
+      className={asking ? 'asking' : ''} style={asking ? { minHeight: 194 } : { height: 194 }}>
       <InputsStrip nodeId={video?.id} />
       <Start kind="video" id={video?.id} fallback={
         <div className="bl-videorow">

@@ -8,6 +8,7 @@ import { pictureJob, scriptHasWords, storyboardOfVideo, type PromptKind } from '
 import { isActive } from '../../jobs/runner'
 import { scopeOf } from '../../model/scope'
 import { currentFrame, framesOf, scenesOf, shotsOf } from '../../model/selectors'
+import { waitsOnScriptAsk } from '../../jobs/scriptVideo'
 
 type Doc = ProductionDocument
 
@@ -54,6 +55,7 @@ export type PromptState =
   | { show: 'script' }
   | { show: 'storyboard'; fromScript: boolean }
   | { show: 'video-block' }
+  | { show: 'video-script'; scriptId: Id }
   | { show: 'video-plan'; storyboardId: Id }
   | { show: 'image-frame' }
   | { show: 'image-picture' }
@@ -70,6 +72,9 @@ export function promptState(d: Doc, kind: PromptKind, nodeId: Id): PromptState {
     case 'video': {
       if (!d.videos[nodeId]) return null
       if (videoBlocked(d, nodeId)) return { show: 'video-block' }
+      // A script drives it and no storyboard renders it yet: Dex asks how to make its clips (3.5).
+      const scriptId = waitsOnScriptAsk(d, nodeId)
+      if (scriptId) return { show: 'video-script', scriptId }
       const sb = storyboardOfVideo(d, nodeId)
       if (!sb || shotsOf(d, sb.id).length || running(d, 'shot_list', { kind: 'storyboard', id: sb.id })) return null
       return { show: 'video-plan', storyboardId: sb.id }
