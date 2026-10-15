@@ -118,6 +118,7 @@ The bar is 48px tall. From left to right:
 - the project name ("Lumen Water · First Light");
 - the questions pill, only while asks are open ("2 questions waiting", with ‹ › and its position "1 of 2"; section 3.17);
 - presence avatars, with "Sai and Maya are here";
+- the job button, only while something runs, waits for you or failed: the Napkin logo alone, turning while a job runs (6.5);
 - **History** (opens the decision tree panel, 3.20), **Assets** (opens the Assets drawer, 3.18), **Export** (a menu, 3.18), **Share** and the account button.
 
 Every editor's top bar also carries **History**, before its primary button.
@@ -1226,14 +1227,14 @@ Five make the ad; two house agents, who work in every Napkin tool, read and chec
 - **Sizes:** 20–24px inline next to a signature; 28–36px in job cards and ask cards; 64–96px on the crew sheet.
 - **Signed lines** follow the house pattern: a small speech bubble, the signature in mono ("Skye · scripts"), first person, short ("I tightened scene 3 so the ad fits 15 s.").
 - **The crew's colours belong to the figures only.** The loader never uses them (section 6).
-- **Where work runs, the figure working is the signal** (owner, 2026-10-15): on the node, card, tile, line or panel doing the work. The loader, which says the department of the work, turns only on the busy pointer and in the top bar's job pill (6.5).
+- **Where work runs, the figure working is the signal** (owner, 2026-10-15): on the node, card, tile, line or panel doing the work. The loader, which says the department of the work, turns only on the busy pointer and in the top bar's job button (6.5).
 - **This crew replaces today's three-member `ui/agents/cast.ts`.** Today Dex is shown for every make. In the new crew, Wren is shown while Runway renders.
 
 ### 5.2 Asking (needs_input)
 
 - **When an agent needs an answer,** its job enters `needs_input`. Its node and the jobs list show the agent figure in its needs-you state (the "!" bubble), and the ask card opens on the node (3.17).
 - **Answering** resumes the job and is recorded as a human write (`by: human:<id>`), appended to History. Anyone in the project can answer (4.7).
-- **A job waiting for an answer is not working:** no figure shows working for it, it leaves the top bar's pill, and the busy pointer does not show for it.
+- **A job waiting for an answer is not working:** no figure shows working for it, the top bar's job button stops turning for it (the still logo with the orange needs-you mark, 6.5), and the busy pointer does not show for it.
 - **It never times out into a guess.** It waits until someone answers or stops it.
 - Section 3.17 has the shape, the three kinds of ask, the card and the questions pill.
 
@@ -1302,7 +1303,7 @@ Owner decision 2026-10-13 (fourth round). It supersedes the earlier prices on bu
 
 This replaces today's `.spinner` (a grey ring with an orange top, `styles.css:231`) everywhere. **The loader is the Napkin logo itself, at work** (owner decision 2026-10-13, artboard 14). It replaces every earlier loader in this spec: the sector sweep, the crew-tone colours and the collapse-and-reform loop are all gone.
 
-**It turns in two places only** (owner decision 2026-10-15: "The Napkin logo turning should only be with the mouse and on top bar. The rest everywhere it should be the agent working. Make this change everywhere."): the busy pointer's badge (6.7) and the top bar's job pill, on the canvas and in every editor. Everywhere else a job runs, the crew member doing the work shows in the figure's working state (5.1, 6.5). `ui/loader/places.test.ts` fails if the loader is rendered anywhere else. Artboards older than this decision that draw the loader on cards, tiles or lines are wrong there.
+**It turns in two places only** (owner decision 2026-10-15: "The Napkin logo turning should only be with the mouse and on top bar. The rest everywhere it should be the agent working. Make this change everywhere."): the busy pointer's badge (6.7) and the top bar's job button, on the canvas, in every editor and on the phone bar. Everywhere else a job runs, the crew member doing the work shows in the figure's working state (5.1, 6.5). `ui/loader/places.test.ts` fails if the loader is rendered anywhere else. Artboards older than this decision that draw the loader on cards, tiles or lines are wrong there.
 
 ### 6.1 The logo, and only its colours
 
@@ -1335,7 +1336,7 @@ The leading card says what kind of work is running. The trailing cards are alway
 | Grey #8B919E | produce | editing, rendering the ad, mixing, loudness, the radio cut, all sizes, exporting | Edie · edits; Make all sizes and cut-downs; exports |
 
 - **The department follows the work, not the agent.** Skye scripting leads with plan; Skye researching leads with learn. Make all sizes leads with produce even though Wren makes the sizes.
-- **Colour is never the only signal.** The loader shows only at 14px (the pointer) and 20px (the top bar's pill); its words come from the pill's line beside it and the pointer's hover-hold label. The light grey learn card is faint on white, and ink is faint on the dark theme. The words beside the loader carry the meaning; the pin keeps the shape readable.
+- **Colour is never the only signal.** The loader shows only at 14px (the pointer) and 20px (the top bar's job button); its words come from the job button's tooltip, label and live region and the first row of its popover, and from the pointer's hover-hold label. The light grey learn card is faint on white, and ink is faint on the dark theme. The words beside the loader carry the meaning; the pin keeps the shape readable.
 - **The loader is the brand mark, not a button.** Its create card stays brand orange #FF4F2E. Primary buttons use #D63B1F (section 9).
 
 ### 6.4 States
@@ -1356,7 +1357,19 @@ The loader turns in two places only (owner, 2026-10-15):
 | Size | Where | Next to it |
 |---|---|---|
 | 14px | the busy pointer's badge (6.7); presence cursors | hover-hold label |
-| 20px | the top bar's job pill, on the canvas bar, every editor bar (and the phone bar, once it has a job pill) | the lead job's line ("Wren is making the clip for shot 1") |
+| 20px | the top bar's job button, on the canvas bar, every editor bar and the phone bar | nothing: the lead job's line ("Wren is making the clip for shot 1 · 3 running") is the button's tooltip and label, a separate polite live region, and the first row of its popover |
+
+**The job button** (owner, 2026-10-15: "just the icon rotating"; features/topbar-declutter.clan). It is the Napkin logo alone: no words and no count in the bar. 32px (44px on touch), in the same slot on every bar: the first item after presence on the right.
+
+| What is going on | The button |
+|---|---|
+| Something running | The turning logo, led by the lead job's department. A queued lead job: the full logo, still. |
+| A question waiting for you (5.2) | A brand-orange needs-you mark (#FF4F2E, the figure's "!" colour) on the logo's top-right corner; the logo is still unless something else runs. |
+| A job failed, nothing running or waiting | The still logo with a red mark. |
+| Nothing running, waiting or failed | No button. |
+
+- **Its words:** the lead line and the counts ("Wren is making frame 3 · 3 running · Waiting for you · 1 failed") are its tooltip (`data-tip`) and `aria-label`, a separate visually hidden `role="status"` `aria-live="polite"` region (the button itself has no `aria-live`), and the first row of the popover it opens.
+- **The phone bar** has the same button, before the account; its popover lists the jobs without Show, and no ask dock (asks are answered on a laptop or iPad, 2.5).
 
 **Everywhere else a job runs, the crew member doing it shows, working** (5.1): leaning in, stepping, with motion lines, and the signed line beside them ("Wren · renders"). Who appears follows 5.1 (`whoIsWorking` in `ui/agents/cast.ts`): Wren renders frames, clips and images; Dex plans; Skye scripts; Rhea retouches; Edie edits and renders the ad; Ellis reads; Jude checks. Sizes follow 5.1:
 
@@ -1394,7 +1407,7 @@ Either one switches every loader to the full logo, still, with only the leading 
 - **It hides:**
   - during a pen stroke, a drag, a port drag or brush painting, and reappears on release;
   - when the pointer leaves the window;
-  - on touch devices, which have no cursor. On iPad the top bar's pill carries the loader, and the figure at work shows on the node or frame being worked on.
+  - on touch devices, which have no cursor. On iPad the top bar's job button carries the loader (a tap opens its popover, whose first row says the lead line), and the figure at work shows on the node or frame being worked on.
 - **Presence cursors** carry a 14px badge led by the department of that person's own running job, with "Sai is planning" in its label.
 - **Phone:** no pointer, so no badge. The figure at work shows in the player and the notes list.
 
@@ -1655,7 +1668,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Character sheets, documents, spin-in, export | Rhea proposes crops (Confirm/Adjust); DOCX becomes a Document node used once linked; spin-in card waits for Bring in; Export menu | 3.18; artboard 4d | Drop maya_sheet.png: no reference exists until Confirm. Not now on a spin-in leaves it under From Napkin. |
 | Scamp sheets | Sheets opens the pack picker; a pack drops a board of labelled, ratio-locked sketch areas | 3.19; artboard 4e | Pick Social: a sheet lands with one area per format, each labelled with format and size. |
 | Make all sizes, cut-downs | Wren adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size, with no prices; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
-| The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; turning only on the pointer and in the top bar's pill; the crew member working everywhere else | 6, 6.5; artboard 14 | Generate a frame: the top bar's pill leads with the orange create card, the pointer badge shows it at (+11, +15), Wren's figure works on the frame and nowhere is the logo drawn on the frame, and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
+| The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; turning only on the pointer and in the top bar's job button; the crew member working everywhere else | 6, 6.5; artboard 14 | Generate a frame: the top bar's job button leads with the orange create card, the pointer badge shows it at (+11, +15), Wren's figure works on the frame and nowhere is the logo drawn on the frame, and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
 | The crew as house figures | Dex, Skye, Wren, Rhea, Edie, Ellis and Jude drawn from `AgentFigure`, with idle, working and needs-you states; signed speech bubbles | 5.1; artboard 13 | Raise an ask: the agent's figure shows the "!" bubble, and no loader uses its colour. |
 | No chat | Inline suggestions with Keep / Keep mine / Why, floating options on a selection, who-wrote-it marks, anchored asks | principle 10, 3.10; artboards 6, 7 | Select a line and press Tighten: Skye's rewrite appears struck and underlined in place, with a signed bubble; nothing changes until Keep. No chat box exists on any surface. |
 | Decision tree | History panel with List and Tree, filters by item, who and kind; Why on any item; versions branch; Restore adds a new decision; pinned decisions | 3.20; artboard 15 | On frame 3 press "Why does this look like this?": the tree opens filtered to frame 3 and shows v2 and v3 as branches. Restore v2: a new decision by you appears at the end, and the older nodes are unchanged. |
