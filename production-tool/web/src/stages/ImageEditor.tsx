@@ -116,8 +116,9 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const [said, setSaid] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  /** What the strip says about the last press ("Nothing to take away yet…"), while the frame, tool and mode stay. */
+  /** Why the picture could not be drawn (the stage keeps the last good one), for Rhea's line. */
   const [drawError, setDrawError] = useState<string | null>(null)
+  /** What the line under the stage says about the last press ("Nothing to take away yet…"), while the frame, tool and mode stay. */
   const [hintAt, setHintAt] = useState<{ text: string; at: string } | null>(null)
   /** Steps ⌘Z took back on this frame, for ⇧⌘Z (editor-local: the document's undo is not touched). */
   const [redoAt, setRedoAt] = useState<{ frame?: string; steps: Undone[] }>({ steps: [] })

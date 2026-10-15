@@ -255,3 +255,15 @@ describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () 
     expect(byText(el, 'Remove')?.disabled).toBe(false)
   })
 })
+
+describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
+  it('a hidden mask cannot be filled and says why', async () => {
+    const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: ['m1'], active: 'm1' }))
+    expect((el.querySelector('#ie-fill') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(el.textContent).toContain('Mask 1 is hidden. Show it to fill.')
+  })
+  it('the pill counts hidden layers apart', async () => {
+    const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }, { id: 't1', kind: 'text', text: 'Hi', x: 0.1, y: 0.1, size: 0.06 }], hidden: ['t1'], active: 'm1' }))
+    expect(el.querySelector('.ie-pill')?.textContent).toBe('1 edit not applied · 1 hidden layer is left out')
+  })
+})
