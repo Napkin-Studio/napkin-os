@@ -40,6 +40,10 @@ die() { echo "run-production-local: $*" >&2; exit 1; }
 say() { echo "run-production-local: $*"; }
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 pid_of() { [[ -f "$state/$1.pid" ]] && kill -0 "$(cat "$state/$1.pid")" 2>/dev/null && cat "$state/$1.pid"; }
+# Each server leads its own session, so stop can kill its whole group. macOS has no setsid(1);
+# perl's POSIX::setsid does the same there.
+if command -v setsid >/dev/null; then new_session=(setsid)
+else new_session=(perl -e 'use POSIX; POSIX::setsid(); exec @ARGV or die "exec $ARGV[0]: $!\n"'); fi
 
 secret() { # one random secret per name, kept in the state dir
   local f="$state/secrets/$1"
@@ -151,7 +155,7 @@ start() {
   # cd, then exec: no shell is left behind waiting on the server (and holding the caller's stdout)
   (cd "$root/production-tool/relay" || exit 1; exec env -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET -u ANTHROPIC_API_KEY \
       -u NAPKIN_MODEL_API -u NAPKIN_MODEL_BASE_URL -u ANTHROPIC_BASE_URL -u AWS_PROFILE "${relay_env[@]}" \
-      setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
+      "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
       uv run -q --python 3.12 python -m local --port "$relay_port" --data "$state/relay-data" \
       >>"$state/relay.log" 2>&1 </dev/null) &
 
@@ -161,7 +165,7 @@ start() {
       NAPKIN_PRODUCTION_RELAY_SECRET="$token" \
       NAPKIN_PRODUCTION_STATIC="$dist" NAPKIN_WEB_STATIC="$root/app/dist" \
       NAPKIN_WEB_DATA="$state/webdata" NAPKIN_WEB_ADDR="127.0.0.1:$web_port" \
-      setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
+      "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
       "$root/target/debug/napkin-web" >>"$state/web.log" 2>&1 </dev/null) &
 
   for _ in $(seq 1 90); do
