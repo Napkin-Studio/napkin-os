@@ -115,10 +115,49 @@ def sheet_rules(sheet: dict) -> list[str]:
                 problems.append(f"ops.{op}: {name}'s default ratio {ratio} is not one the model takes")
             if pricing.op_usd(sheet, op, None if s is spec else name) is None:
                 problems.append(f"ops.{op}: {name} has no price at its defaults {s.get('defaults')}")
+            problems += quality_rules(sheet, op, spec, s, m)
         region = spec.get("regionModel")
         if region and region not in models:
             problems.append(f"ops.{op}: regionModel {region} is not in models")
     return problems
+
+
+LEVELS = ("draft", "standard", "final")
+
+
+def quality_rules(sheet: dict, op: str, spec: dict, s: dict, m: dict) -> list[str]:
+    """Clip quality (features/clip-quality.clan): each level is a size the model makes (a tier of its
+    ratios, or its resolution) and has a price there; a family's members are sizes of one model, in one
+    op, that together make every level; keepsSize is an edit's."""
+    out, name = [], s["model"]
+    q = s.get("quality") or {}
+    if (q or s.get("family")) and op not in ("clip", "clip_edit"):
+        out.append(f"ops.{op}: {name} has a quality, but only clips and clip edits do")
+    tiers = {r.get("tier") for r in m.get("ratios") or [] if r.get("tier")}
+    for level, e in q.items():
+        if e.get("resolution"):
+            if e["resolution"] not in (m.get("resolutions") or []) or e["tier"] != e["resolution"]:
+                out.append(f"ops.{op}: {name} {level} resolution {e['resolution']} is not one the model takes (tier {e['tier']})")
+        elif tiers and e["tier"] not in tiers:
+            out.append(f"ops.{op}: {name} {level} is {e['tier']}, which is not one of the model's tiers {sorted(tiers)}")
+        if op == "clip_edit" and not s.get("keepsSize") and not (m.get("v2v") or {}).get("ratio") and not s.get("family") \
+                and len({x["tier"] for x in q.values()}) > 1:
+            out.append(f"ops.{op}: {name} gives sizes by level but its edit takes no ratio (v2v.ratio) and is no family")
+        if pricing.op_usd(sheet, op, None if s is spec else name, {"resolution": e["tier"]}) is None:
+            out.append(f"ops.{op}: {name} has no price at {level} ({e['tier']})")
+        if e.get("draft") and not m.get("draftPromote"):
+            out.append(f"ops.{op}: {name} drafts, but the catalogue says no draftPromote")
+    if s.get("keepsSize") and op != "clip_edit":
+        out.append(f"ops.{op}: {name} keepsSize, which only an edit can")
+    family = s.get("family")
+    if family:
+        members = [x for x in [spec, *spec.get("alternates", [])] if x.get("family") == family]
+        made = [lvl for x in members for lvl in (x.get("quality") or {})]
+        if sorted(made) != sorted(LEVELS):
+            out.append(f"ops.{op}: family {family} makes {sorted(made)}, not each of {list(LEVELS)} once")
+        if len({x.get("familyLabel") for x in members}) != 1 or not s.get("familyLabel"):
+            out.append(f"ops.{op}: family {family} needs one familyLabel")
+    return out
 
 
 # What each instance file must match: (glob, schema file, $defs pointer, extra rules).

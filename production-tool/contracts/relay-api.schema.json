@@ -185,6 +185,14 @@
           "$ref": "#/$defs/ModelChoice",
           "description": "The model the person picked when regenerating (features/model-choice.clan): an op's model or one of its alternates on a provider routed for the op (Runway's models are always pickable). Absent: the routing's default. The job runs on that provider and model; when it fails for a provider or account reason, it runs once on Runway's default model for the op (Job.fallbackFrom says so)."
         },
+        "quality": {
+          "$ref": "common.schema.json#/$defs/clipQuality",
+          "description": "clip and clip_edit (features/clip-quality.clan): the size to make, from the video's default or the person's pick. Absent: standard. The model's sheet (ops[op].quality) says what size each level is; a level the model lacks runs at its nearest, and a family (Kling O3) runs the member that makes it. Job.quality says what ran. Added 2026-10-15 (additive)."
+        },
+        "promoteFrom": {
+          "$ref": "common.schema.json#/$defs/id",
+          "description": "clip and clip_edit: Remake as Final (features/clip-quality.clan). The id of a finished job of this project whose take is remade at `quality`: the relay runs that job's own input on the model it ran on (the family member for the level), reusing Dex's directed request, so the words, pictures and length are the draft's; this request's input and modelChoice are ignored. A Seedance 2.5 draft under 7 days old is made final by Runway itself (draftTaskId). Added 2026-10-15 (additive)."
+        },
         "projectId": {
           "$ref": "common.schema.json#/$defs/id",
           "description": "The document's project.id: jobs are the project's, whoever started them."
@@ -279,6 +287,39 @@
                   "text"
                 ]
               }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "not": {
+                  "enum": [
+                    "clip",
+                    "clip_edit"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "quality"
+                  ]
+                },
+                {
+                  "required": [
+                    "promoteFrom"
+                  ]
+                }
+              ]
             }
           }
         }
@@ -579,6 +620,24 @@
         },
         "model": {
           "type": "string"
+        },
+        "quality": {
+          "type": "object",
+          "description": "clip and clip_edit (features/clip-quality.clan): the level the job ran at and the size it asked the model for (\"720p\", \"2K\"). Absent where the model keeps the clip's own size. Added 2026-10-15 (additive).",
+          "properties": {
+            "level": {
+              "$ref": "common.schema.json#/$defs/clipQuality"
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(p|K)$"
+            }
+          },
+          "required": [
+            "level",
+            "size"
+          ],
+          "additionalProperties": false
         },
         "fallbackFrom": {
           "$ref": "#/$defs/ModelChoice",

@@ -1,0 +1,16 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CQ03",
+  "op": "frame",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_quality03a",
+  "node": {
+    "kind": "storyboard",
+    "id": "storyboard_01K7B00000000000000000SB01"
+  },
+  "parentIds": [],
+  "input": {
+    "ratio": "16:9"
+  },
+  "quality": "final"
+}

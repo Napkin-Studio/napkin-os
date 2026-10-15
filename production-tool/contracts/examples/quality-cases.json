@@ -1,0 +1,268 @@
+{
+  "description": "Clip quality vectors (features/clip-quality.clan): what runs for a level on a model, from contracts/capabilities/<sheet>.json. relay/providers/types.py quality_choice and web/src/capabilities.ts resolveQuality must both give exactly `want` (relay pytest and web vitest read this file). model null: the op's own; want.level and tier null: the model keeps the clip's size.",
+  "cases": [
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "veo3.1",
+      "level": "draft",
+      "want": {
+        "model": "veo3.1",
+        "level": "draft",
+        "tier": "720p"
+      },
+      "note": "Veo's cheapest size is 720p"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "veo3.1",
+      "level": null,
+      "want": {
+        "model": "veo3.1",
+        "level": "standard",
+        "tier": "720p"
+      },
+      "note": "no level: standard, today's size"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": null,
+      "level": "final",
+      "want": {
+        "model": "veo3.1",
+        "level": "final",
+        "tier": "1080p"
+      },
+      "note": "the op's own model"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "veo3.1_fast",
+      "level": "final",
+      "want": {
+        "model": "veo3.1_fast",
+        "level": "final",
+        "tier": "1080p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "klingO3_standard",
+      "level": "final",
+      "want": {
+        "model": "klingO3_pro",
+        "level": "final",
+        "tier": "1080p"
+      },
+      "note": "a family: Final runs the Pro id"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "klingO3_pro",
+      "level": "draft",
+      "want": {
+        "model": "klingO3_standard",
+        "level": "draft",
+        "tier": "720p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "klingO3_pro",
+      "level": "standard",
+      "want": {
+        "model": "klingO3_standard",
+        "level": "standard",
+        "tier": "720p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "kling3.0_standard",
+      "level": "final",
+      "want": {
+        "model": "kling3.0_pro",
+        "level": "final",
+        "tier": "1080p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "kling3.0_pro",
+      "level": "final",
+      "want": {
+        "model": "kling3.0_pro",
+        "level": "final",
+        "tier": "1080p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "hailuo3",
+      "level": "final",
+      "want": {
+        "model": "hailuo3",
+        "level": "final",
+        "tier": "2k"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "hailuo3",
+      "level": "draft",
+      "want": {
+        "model": "hailuo3",
+        "level": "draft",
+        "tier": "768p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "gemini_omni_flash_1.1",
+      "level": "draft",
+      "want": {
+        "model": "gemini_omni_flash_1.1",
+        "level": "draft",
+        "tier": "360p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "wan3",
+      "level": "draft",
+      "want": {
+        "model": "wan3",
+        "level": "draft",
+        "tier": "480p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "seedance2_5",
+      "level": "draft",
+      "want": {
+        "model": "seedance2_5",
+        "level": "draft",
+        "tier": "480p"
+      },
+      "note": "sent with draft: true"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "seedance2_5",
+      "level": "final",
+      "want": {
+        "model": "seedance2_5",
+        "level": "final",
+        "tier": "1080p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "seedance2_fast",
+      "level": "final",
+      "want": {
+        "model": "seedance2_fast",
+        "level": "final",
+        "tier": "720p"
+      },
+      "note": "its best is 720p"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip",
+      "model": "wan3",
+      "level": "ultra",
+      "want": {
+        "model": "wan3",
+        "level": "standard",
+        "tier": "720p"
+      },
+      "note": "an unknown level is standard"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip_edit",
+      "model": "aleph2",
+      "level": "final",
+      "want": {
+        "model": "aleph2",
+        "level": null,
+        "tier": null
+      },
+      "note": "keeps the clip's own size"
+    },
+    {
+      "sheet": "runway",
+      "op": "clip_edit",
+      "model": "klingO3_standard",
+      "level": "final",
+      "want": {
+        "model": "klingO3_pro",
+        "level": "final",
+        "tier": "1080p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip_edit",
+      "model": "gemini_omni_flash_1.1",
+      "level": "draft",
+      "want": {
+        "model": "gemini_omni_flash_1.1",
+        "level": "draft",
+        "tier": "360p"
+      }
+    },
+    {
+      "sheet": "runway",
+      "op": "clip_edit",
+      "model": "seedance2_5",
+      "level": "final",
+      "want": {
+        "model": "seedance2_5",
+        "level": "final",
+        "tier": "1080p"
+      },
+      "note": "keepsSize: priced at the source's level, no size sent"
+    },
+    {
+      "sheet": "mock",
+      "op": "clip",
+      "model": "mock-hq",
+      "level": "draft",
+      "want": {
+        "model": "mock-hq",
+        "level": "final",
+        "tier": "1080p"
+      },
+      "note": "one size: the nearest level it has"
+    },
+    {
+      "sheet": "mock",
+      "op": "clip",
+      "model": "mock",
+      "level": "standard",
+      "want": {
+        "model": "mock",
+        "level": "standard",
+        "tier": "720p"
+      }
+    }
+  ]
+}

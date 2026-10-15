@@ -32,6 +32,7 @@
       "minS": 2,
       "maxS": 15,
       "label": "Mock",
+      "quality": {"draft": {"tier": "360p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
       "alternates": [
         {
           "model": "mock-hq",
@@ -40,6 +41,7 @@
           "defaults": {"durationS": 6},
           "label": "Mock HQ",
           "note": "Local stand-in for a better model",
+          "quality": {"final": {"tier": "1080p"}},
           "minS": 2,
           "maxS": 15
         }
