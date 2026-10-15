@@ -204,6 +204,9 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3]
     return a
   }, [cutPics])
+  /** What a cut-out's alpha is drawn from: its picture once loaded, '' before (a snap's cache key). */
+  const cutKey = session.edits.filter((e) => e.kind === 'cutout' && cutPics[e.id]).map((e) => `${e.id}=${resultOf(e)?.sha ?? ''}`).join(',')
+  const alphaKey = useCallback((id: string) => cutKey.split(',').find((x) => x.startsWith(`${id}=`))?.slice(id.length + 1) ?? '', [cutKey])
 
   const n = editCount(session)
   const activeMask = session.edits.find((e): e is MaskEdit => e.id === session.active && e.kind === 'mask')
@@ -526,7 +529,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
 
           {current && shownPlan ? (
             <Stage src={url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
-              before={view === 'before'} motion={motion} alphaOf={alphaOf} onMaskOp={onMaskOp} onClick={onClick} onAddText={onAddText} onText={onText} onCrop={onCrop}
+              before={view === 'before'} motion={motion} alphaOf={alphaOf} alphaKey={alphaKey} onMaskOp={onMaskOp} onClick={onClick} onAddText={onAddText} onText={onText} onCrop={onCrop}
               pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
               {view === 'before' && <span className="pt-mono ie-before">Before · v{version} as saved</span>}
             </Stage>

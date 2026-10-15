@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EditSession, MaskOp, Pt } from './edits'
-import { edges, rasterize, type AlphaOf } from './mask'
+import { edges, rasterize, RasterCache, type AlphaOf } from './mask'
 import { compose, type Plan } from './compose'
 import { cropRect, type ToolId } from './tools'
 
@@ -23,9 +23,21 @@ const UI = 'button, a, input, textarea, select, [data-ie-ui]'
 
 export interface Brush { size: number; soft: number; mode: 'add' | 'sub' }
 
+/** The marching ants on the rim's pixels only, then just the rim's box put back on the canvas (or all of it, once). */
+function antsOn(ctx: CanvasRenderingContext2D, s: { img: ImageData; rim: Int32Array; box: [number, number, number, number] }, ants: number, all: boolean) {
+  const d = s.img.data, w = s.img.width
+  for (const i of s.rim) {
+    const on = (((i % w) + ((i / w) | 0) + ants) & 7) < 4
+    d[i * 4] = on ? 255 : 20; d[i * 4 + 1] = on ? 255 : 22; d[i * 4 + 2] = on ? 255 : 27
+  }
+  const [x0, y0, x1, y1] = s.box
+  if (all) ctx.putImageData(s.img, 0, 0)
+  else if (x1 >= 0) ctx.putImageData(s.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+}
+
 type Live = { id: number; op: Extract<MaskOp, { t: 'brush' | 'lasso' }>; drawn: number }
 
-export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, motion, alphaOf,
+export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, motion, alphaOf, alphaKey,
   onMaskOp, onClick, onAddText, onText, onCrop, pending, progress, children }: {
   /** The frame as saved, for Before and while the preview draws. */
   src?: string
@@ -42,6 +54,8 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   before: boolean
   motion: boolean
   alphaOf: AlphaOf
+  /** What a cut-out's alpha is drawn from ('' while it loads): part of a snap step's cache key. */
+  alphaKey?: (cutoutId: string) => string
   onMaskOp: (op: MaskOp) => void
   onClick: (p: Pt) => void
   onAddText: (p: Pt) => void
@@ -65,6 +79,9 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   const [cropDrag, setCropDrag] = useState<{ a: Pt; b: Pt } | null>(null)
   const drag = useRef<{ kind: 'pan' | 'text'; from: Pt; start: Pt; id?: string } | null>(null)
   const [ants, setAnts] = useState(0)
+  // Committed masks, drawn incrementally: a new stroke draws only itself (features/image-editor-masks-layers.clan).
+  const [cache] = useState(() => new RasterCache())
+  const shown = useRef<{ img: ImageData; rim: Int32Array; box: [number, number, number, number] } | null>(null)
 
   // The picture as the edits make it (no text or crop: those are drawn over it here).
   const planKey = JSON.stringify(plan)
@@ -74,7 +91,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
     if (!c || before) return
     void compose(plan, image, (id, mw, mh) => {
       const m = session.edits.find((e) => e.id === id)
-      return m && m.kind === 'mask' ? rasterize(m.ops, mw, mh, alphaOf) : new Uint8Array(mw * mh)
+      return m && m.kind === 'mask' ? cache.get(m.id, m.ops, mw, mh, alphaOf, alphaKey) : new Uint8Array(mw * mh)
     }).then((out) => {
       if (!alive) return
       c.width = out.width
@@ -92,13 +109,13 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   const oh = Math.max(1, Math.round((ow * h) / w))
   const masks = useMemo(() => session.edits.filter((e) => e.kind === 'mask' && !session.hidden.includes(e.id)), [session])
   const raster = useMemo(() => {
+    cache.retain(new Set(session.edits.filter((e) => e.kind === 'mask').map((e) => e.id)))
+    const drawn = masks.flatMap((m) => (m.kind === 'mask' ? [cache.get(m.id, m.ops, ow, oh, alphaOf, alphaKey)] : []))
+    if (drawn.length === 1) return drawn[0]
     const out = new Uint8Array(ow * oh)
-    for (const m of masks) if (m.kind === 'mask') {
-      const r = rasterize(m.ops, ow, oh, alphaOf)
-      for (let i = 0; i < out.length; i++) if (r[i] > out[i]) out[i] = r[i]
-    }
+    for (const r of drawn) for (let i = 0; i < out.length; i++) if (r[i] > out[i]) out[i] = r[i]
     return out
-  }, [masks, ow, oh, alphaOf])
+  }, [cache, session.edits, masks, ow, oh, alphaOf, alphaKey])
   const rim = useMemo(() => edges(raster, ow, oh), [raster, ow, oh])
 
   // Marching ants: the edge's dashes move, unless motion is reduced (and they wait while a stroke is drawn).
@@ -108,28 +125,46 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
     return () => clearInterval(t)
   }, [motion])
 
+  // The masks drawn once per change: blue paint and the rim. The ants then move only the rim's pixels.
   useEffect(() => {
     const c = overlay.current
     if (!c) return
     c.width = ow
     c.height = oh
     const ctx = c.getContext('2d')
+    shown.current = null
     if (!ctx) return // no 2D canvas here (a test DOM): the masks are drawn nowhere
     ctx.clearRect(0, 0, ow, oh)
     if (before) return
     const img = ctx.createImageData(ow, oh)
     const d = img.data
+    let n = 0
+    for (let i = 0; i < raster.length; i++) if (rim[i]) n++
+    const rims = new Int32Array(n)
+    let k = 0, x0 = ow, y0 = oh, x1 = -1, y1 = -1
     for (let i = 0; i < raster.length; i++) {
       if (rim[i]) {
+        rims[k++] = i
         const x = i % ow, y = (i / ow) | 0
-        const on = ((x + y + ants) & 7) < 4
-        d[i * 4] = on ? 255 : 20; d[i * 4 + 1] = on ? 255 : 22; d[i * 4 + 2] = on ? 255 : 27; d[i * 4 + 3] = 255
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (y < y0) y0 = y
+        if (y > y1) y1 = y
+        d[i * 4 + 3] = 255
       } else if (raster[i]) {
         d[i * 4] = BLUE[0]; d[i * 4 + 1] = BLUE[1]; d[i * 4 + 2] = BLUE[2]; d[i * 4 + 3] = Math.round(raster[i] * 0.38)
       }
     }
-    ctx.putImageData(img, 0, 0)
-  }, [raster, rim, ants, ow, oh, before, redraw])
+    shown.current = { img, rim: rims, box: [x0, y0, x1, y1] }
+    antsOn(ctx, shown.current, ants, true)
+    c.dataset.drawn = String(Number(c.dataset.drawn ?? 0) + 1) // a count the e2e timing reads
+    // ants: drawn by the effect below from here on
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raster, rim, ow, oh, before, redraw])
+  useEffect(() => {
+    const ctx = overlay.current?.getContext('2d')
+    if (ctx && shown.current && !before) antsOn(ctx, shown.current, ants, false)
+  }, [ants, before])
 
   // The live stroke, once per animation frame: a brush adds only its new segments (on its own canvas,
   // or, subtracting, out of the committed one); a lasso redraws its outline.
