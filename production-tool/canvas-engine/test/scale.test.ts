@@ -24,8 +24,9 @@ function setup(records: ElementRecord[]) {
   return { scene, tool, steps, updates: () => updates }
 }
 
+// Filled, so a click anywhere inside hits it (an unfilled shape is hit only on its outline: hitStroke.test.ts).
 const shape = (id: string, x: number, y: number, w: number, h: number, extra: Partial<ElementRecord> = {}) =>
-  element({ id, kind: 'shape', z: `a${id}`, x, y, w, h, props: { geo: 'rect' }, ...extra })
+  element({ id, kind: 'shape', z: `a${id}`, x, y, w, h, style: { fill: '#dddddd' }, props: { geo: 'rect' }, ...extra })
 const area = (id: string, x: number, y: number, w: number, h: number, ratio?: string) =>
   element({ id, kind: 'sketch', z: `a${id}`, x, y, w, h, style: { fill: '#ffffff' }, props: ratio ? { ratio } : {}, customData: { kind: 'sketch', id: `sk_${id}` } })
 

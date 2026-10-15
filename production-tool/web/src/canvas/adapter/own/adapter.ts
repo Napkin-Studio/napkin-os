@@ -630,7 +630,8 @@ export class OwnAdapter implements CanvasAdapter {
     // Node cards sit above the canvas, and a link is hit along its line (canvas-nodes).
     const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitBoardTitle(this.scene, { x, y }, this.vp.zoom)
     if (top) return top
-    if (this.renderer) return this.renderer.hit(x, y)
+    // Lines (strokes, unfilled shapes) count only near their line, with a reach in screen pixels.
+    if (this.renderer) return this.renderer.hit(x, y, this.vp.zoom)
     return this.scene.all()
       .filter((r) => r.kind !== 'board' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]

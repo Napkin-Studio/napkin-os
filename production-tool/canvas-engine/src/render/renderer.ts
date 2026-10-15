@@ -21,6 +21,18 @@ import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
 import { FULL_RES_MIN_ZOOM } from './caps'
+import { hitsLine, HIT_SLOP_PX, isLineDrawn, lineReach } from '../select/hitStroke'
+
+/** How far around a click the index is searched, in screen pixels (the line slop, with room). */
+const HIT_SEARCH_PX = HIT_SLOP_PX + 2
+/** The widest half-width a line is drawn with (a highlighter is 18), in scene units. */
+const MAX_HALF_WIDTH = 16
+
+/** Is a scene point inside a record's box (either sign of w and h)? */
+const inBox = (r: ElementRecord, p: { x: number; y: number }) => {
+  const x0 = Math.min(r.x, r.x + r.w), y0 = Math.min(r.y, r.y + r.h)
+  return p.x >= x0 && p.y >= y0 && p.x <= x0 + Math.abs(r.w) && p.y <= y0 + Math.abs(r.h)
+}
 
 export interface Camera {
   scrollX: number
@@ -268,13 +280,21 @@ export class Renderer {
     return { minX: -cam.scrollX, minY: -cam.scrollY, maxX: -cam.scrollX + viewport.width / cam.zoom, maxY: -cam.scrollY + viewport.height / cam.zoom }
   }
 
-  /** The topmost element (not a node or board) under a scene point. */
-  hit(x: number, y: number): ElementRecord | undefined {
-    return this.tree.search({ minX: x, minY: y, maxX: x, maxY: y })
+  /**
+   * The topmost element (not a node or board) under a scene point. A stroke or an unfilled
+   * shape counts only near its line (select/hitStroke.ts), so a click in the gaps of a
+   * drawing falls through to what lies below it; the reach is in screen pixels at this zoom.
+   */
+  hit(x: number, y: number, zoom = 1): ElementRecord | undefined {
+    const p = { x, y }
+    // Grown by the widest reach: a thin line's box can be a pixel tall.
+    const grow = HIT_SEARCH_PX / (zoom > 0 ? zoom : 1) + MAX_HALF_WIDTH
+    return this.tree.search({ minX: x - grow, minY: y - grow, maxX: x + grow, maxY: y + grow })
       .map((b) => this.scene.get(b.id))
       // A bound link or arrow is drawn from its ends, not its stored box: it is hit along its route
       // (links.ts hitNodeOrLink), never at a box it no longer has (the "ghost" of a pile's arrow).
       .filter((r): r is ElementRecord => !!r && r.kind !== 'board' && !(r.kind === 'link' || (r.kind === 'arrow' && isBound(r))))
+      .filter((r) => isLineDrawn(r) ? hitsLine(r, this.scene.points(r.id), p, lineReach(r, zoom)) : inBox(r, p))
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
   }
 

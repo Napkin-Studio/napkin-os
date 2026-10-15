@@ -6,11 +6,11 @@
 // them in one step at pointer-up. Strokes drawn close in time and space share an
 // ink group (groupIds), so a word or a doodle moves as one.
 
-import { encodePoints, localPoints, type InkPoint } from '../model/points'
+import { encodePoints, type InkPoint } from '../model/points'
 import { element, type ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import { zTop } from '../model/z'
-import { strokeScale } from '../render/renderer'
+import { strokeDistance } from '../select/hitStroke'
 
 export type InkTool = 'pen' | 'highlighter' | 'eraser'
 
@@ -146,10 +146,8 @@ export class Ink {
       if (!near) continue
       const pts = this.scene.points(r.id)
       if (!pts) continue
-      const local = localPoints(pts)
-      // A stroke the handles scaled is where it is drawn.
-      const { sx, sy } = strokeScale(r, pts)
-      if (points.some((p) => local.some((q) => Math.hypot(r.x + q.x * sx - p.x, r.y + q.y * sy - p.y) <= reach))) this.erased.add(r.id)
+      // Measured to the stroke's segments where it is drawn (scaled by the handles), as a click is.
+      if (points.some((p) => strokeDistance(r, pts, p) <= reach)) this.erased.add(r.id)
     }
   }
 }
