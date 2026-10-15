@@ -28,8 +28,9 @@ describe('where the Napkin loader turns', () => {
       .filter((rel) => /\bNapkinLoader\b|napkin-loader/.test(readFileSync(join(SRC, rel), 'utf8')))
     expect(offenders).toEqual([])
   })
-  it('the top bars get it through the one job pill', () => {
+  it('the top bars get it through the one job pill: the canvas bar, the editor bar, the script editor\'s bar', () => {
     const bars = readFileSync(join(SRC, 'ui/chrome/TopBars.tsx'), 'utf8')
     expect(bars.match(/<JobTray \/>/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(readFileSync(join(SRC, 'script/ScriptEditor.tsx'), 'utf8')).toContain('<JobTray />')
   })
 })

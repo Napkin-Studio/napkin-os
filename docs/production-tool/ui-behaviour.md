@@ -1320,8 +1320,9 @@ The loader turns in two places only (owner, 2026-10-15):
 
 | Figure size | Where |
 |---|---|
-| 20–24px | inline lines: crew status lines, frame and clip badges ("Rendering clip"), node cards at work, the prompt start, the script editor's at-work line, toasts |
-| 28–36px | job cards: in the player (36), on shot, frame and clip tiles (28), send tray items, ask cards, History rows |
+| 20–24px | inline lines: crew status lines, frame and clip badges ("Rendering clip"), node cards at work and the frames drawing on them, the prompt start, the script editor's at-work line, toasts |
+| 28–36px | compact job cards on shot, frame and clip tiles (34), send tray items, ask cards, History rows |
+| 52px | the job overlay over a frame or the player: the Image editor's frame, the Video editor's player, a planning storyboard; one figure, with the sign-off, the line, state · model · time, and Cancel (`ui/JobNode.tsx`, shared by every editor through `JobSlot`) |
 | 64px | a page or panel loading or waiting for the first time, an empty state at work (Dex planning in the empty Video editor) |
 
 - **Queued** shows the figure with "is waiting to start"; **checking** (validating, uncertain) shows Jude working; **needs you** shows the figure's "!" bubble (5.2).

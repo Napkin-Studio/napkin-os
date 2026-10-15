@@ -139,7 +139,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
     <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
       {/* Who is doing the work, at work, and their sign-off (ui-behaviour 5.1, 6.5). */}
-      <AgentFigure agent={who.agent} state={who.state} size={compact ? 28 : 36} decorative />
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
       <div className="pt-say"><span className="who">{sayer(who.agent)}</span></div>
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>

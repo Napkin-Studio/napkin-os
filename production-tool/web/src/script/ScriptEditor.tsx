@@ -31,6 +31,7 @@ import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
 import { AgentFigure } from '../ui/agents/AgentFigure'
+import { JobTray } from '../ui/JobTray'
 import { useBlobUrl } from '../ui/hooks'
 import { CAST, type CastKey } from '../ui/agents/cast'
 import { CaretChain, caretKey } from './caret'
@@ -405,6 +406,8 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             <button aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
           </span>
         )}
+        {/* What is running, as on every editor bar: the one place besides the pointer the logo turns (ui-behaviour 6.5). */}
+        <JobTray />
         <span className="pt-grow" />
         {storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from

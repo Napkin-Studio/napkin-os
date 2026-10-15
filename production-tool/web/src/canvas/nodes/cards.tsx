@@ -139,9 +139,11 @@ export function StoryboardCard({ id, onOpen }: { id?: string; onOpen: () => void
 function FrameTile({ shot, n, drawing }: { shot: Shot; n: number; drawing: boolean }) {
   const doc = useDoc()
   const url = useBlobUrl(currentFrame(doc, shot)?.asset)
+  const chrome = useContext(CardChromeContext)
   return (
     <figure className="bl-frame">
-      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe">{drawing ? 'Wren is drawing' : 'No frame yet'}</span>}
+      {/* A frame being drawn shows Wren at work, never the loader (ui-behaviour 6.5). */}
+      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}Wren is drawing</> : 'No frame yet'}</span>}
       <figcaption>{n} · {cap(cameraLabel('size', shot.camera.size))}</figcaption>
     </figure>
   )
