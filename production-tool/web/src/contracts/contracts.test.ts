@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { CONTRACTS, loadJson, makeAjv, SCHEMA } from '../test/schemas'
 import { CAMERA_WORDS, LINK_RULE, quotaClassOf, REF_ROLE_TABLE } from './load'
 import {
-  CAMERA_ANGLES, CAMERA_MOVEMENTS, CAMERA_SIZES, OPS, REF_ROLES, type FrameEditOutput, type Job, type JobRequest, type ProductionDocument, type Question,
+  CAMERA_ANGLES, CAMERA_MOVEMENTS, CAMERA_SIZES, LINK_ENDPOINT_KINDS, OPS, REF_ROLES, type FrameEditOutput, type Job, type JobRequest, type ProductionDocument, type Question,
 } from './types'
 
 const ajv = makeAjv()
@@ -101,6 +101,14 @@ describe('the tables in common.schema.json', () => {
   it('lets a script drive a storyboard and no video drive a script', () => {
     expect(LINK_RULE.rules.some((r) => r.from.includes('script') && r.to.includes('storyboard') && r.roles.includes('drives'))).toBe(true)
     expect(LINK_RULE.rules.some((r) => r.from.includes('video') && r.to.includes('script'))).toBe(false)
+  })
+  it('lets a whole key feed a node once, in its ref role (owner 2026-10-15), and mirrors its endpoint kind', () => {
+    const row = LINK_RULE.rules.find((r) => r.from.includes('key'))
+    expect(row).toMatchObject({ per_target: 'many', per_source: 'one' })
+    expect(row?.to).toEqual(expect.arrayContaining(['script', 'storyboard', 'video', 'sketch', 'shot']))
+    expect(row?.roles).toEqual(expect.arrayContaining(['character', 'location', 'product']))
+    const common = loadJson<{ $defs: { linkEndpointKind: { enum: string[] } } }>('common.schema.json')
+    expect(common.$defs.linkEndpointKind.enum).toEqual([...LINK_ENDPOINT_KINDS])
   })
 })
 

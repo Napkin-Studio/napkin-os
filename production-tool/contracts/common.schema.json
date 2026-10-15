@@ -273,8 +273,8 @@
       "additionalProperties": false
     },
     "linkEndpointKind": {
-      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "frame", "render", "sketch", "document", "format_set", "shot"],
-      "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id."
+      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot"],
+      "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link."
     },
     "linkEndpoint": {
       "type": "object",
@@ -305,6 +305,7 @@
           { "from": ["script"], "to": ["video"], "roles": ["drives"], "per_target": "one" },
           { "from": ["ref", "frame"], "to": ["shot"], "roles": ["frame", "layout"], "per_target": "one" },
           { "from": ["ref"], "to": ["script", "storyboard", "video", "sketch", "format_set", "shot"], "roles": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"], "per_target": "many" },
+          { "from": ["key"], "to": ["script", "storyboard", "video", "sketch", "format_set", "shot"], "roles": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"], "per_target": "many", "per_source": "one" },
           { "from": ["board", "group"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["input"], "per_target": "many", "per_source": "one" },
           { "from": ["note", "ink", "document"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["note", "context"], "per_target": "many", "per_source": "one" },
           { "from": ["board"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["brand"], "per_target": "one", "board_purpose": "brand" },
