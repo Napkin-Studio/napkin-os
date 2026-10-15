@@ -199,3 +199,35 @@ describe('provenance arrows are bound (owner, 2026-10-15: they stayed behind whe
     expect(ops.filter((o) => o.op === 'line')).toHaveLength(0)
   })
 })
+
+describe('a quiet arrow (a key’s views from its front) shows only with its selection', () => {
+  const pic = (id: string, x: number, tag: Record<string, string>) =>
+    element({ id, kind: 'image', z: 'b0', x, y: 0, w: 200, h: 200, props: { assetSha: null, status: 'saved' }, customData: tag as never })
+  const arrow = (id: string, from: string, to: string) =>
+    element({ id, kind: 'arrow', z: 'e0', props: { start: { elementId: from }, end: { elementId: to } }, style: { stroke: '#ff5b2e', dash: 'dashed' }, customData: { kind: 'provenance', from, to } })
+  const scene = () => [pic('front', 0, { kind: 'pic', id: 'node_f' }), pic('side', 400, { kind: 'gen', id: 'side', op: 'view' }), pic('other', 800, { kind: 'gen', id: 'other', op: 'generate' }),
+    arrow('a1', 'front', 'side'), arrow('a2', 'front', 'other')]
+  function quietSetup() {
+    const s = new SceneStore(new Y.Doc())
+    s.seed(scene(), {})
+    const quiet = (r: ElementRecord) => {
+      const end = r.props.end as { elementId?: string } | undefined
+      const to = end?.elementId ? s.get(end.elementId) : undefined
+      return to?.customData?.op === 'view'
+    }
+    return new Renderer(s, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined, quiet })
+  }
+
+  it('is not drawn while nothing of it is selected; the other generation arrow is', () => {
+    const r = quietSetup()
+    expect(r.linkRoutes().map((x) => x.link.id)).toEqual(['a2'])
+  })
+
+  it('is drawn when its source, its view or itself is selected', () => {
+    const r = quietSetup()
+    for (const id of ['front', 'side', 'a1']) {
+      r.selected = new Set([id])
+      expect(r.linkRoutes().map((x) => x.link.id).sort()).toEqual(['a1', 'a2'])
+    }
+  })
+})

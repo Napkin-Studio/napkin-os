@@ -61,6 +61,7 @@ import { TABLET, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
+import { arrowShown, type ArrowLike } from '../canvas/arrowHit'
 import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { backWhenLive, goneWhenDead, offerGone, useUndo } from '../ui/useUndo'
@@ -576,7 +577,7 @@ export function Character({ initial, active, onPictureEditor }: {
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <div className="overlay-layer">
-          <FlowArrows els={els} toView={toView} />
+          <FlowArrows els={els} selectedIds={vs?.selected ?? []} toView={toView} />
           {els.map((e) => {
             const img = imageOf(e)
             const c = cd(e)
@@ -798,13 +799,17 @@ function curvePath(pts: Pt[]): string {
   return `M ${pts.map((p) => `${p.x} ${p.y}`).join(' L ')}`
 }
 
-function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
+function FlowArrows({ els, selectedIds, toView }: { els: El[]; selectedIds: readonly string[]; toView: (p: Pt) => Pt }) {
   const { runner } = useServices()
   const doc = useDoc()
   const paths: string[] = []
+  const byEl = new Map(els.map((e) => [e.id, e]))
+  const selected = new Set(selectedIds)
   for (const a of els) {
     const c = cd(a)
     if (c?.kind !== 'provenance' || a.type !== 'arrow') continue
+    // A key's views from its front only while one of them is selected, as the canvas draws them.
+    if (!arrowShown(a as unknown as ArrowLike, (id) => byEl.get(id), selected)) continue
     const job = doc.jobs[c.to]
     const state = runner.liveInfo(c.to)?.state ?? job?.state
     if (!state || !isActive(state)) continue

@@ -8,13 +8,22 @@
 // drag, tap, undo, redo, long press) is handed on for engine-select.
 
 import * as Y from 'yjs'
-import { drawDpr, INK_COLOURS, LIGHT_INK, liveOutline, Renderer, resolveInk, type Bitmap, type InkPalette, type Intent, type RawPointer } from '../../../../../canvas-engine/src'
+import { drawDpr, INK_COLOURS, LIGHT_INK, liveOutline, Renderer, resolveInk, type Bitmap, type ElementRecord, type InkPalette, type Intent, type RawPointer } from '../../../../../canvas-engine/src'
+import { quietArrow } from '../../arrowHit'
 import { aspectLabel } from '../../core/sketch'
 import { RATIOS, type Ratio } from '../../../contracts/types'
 import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } from '../../core/canvasAdapter'
 import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
 import { mountTextEditor } from './textEditor'
+
+/** A record's quiet arrow (arrowHit quietArrow): a provenance arrow to a key's view. */
+export function quietRecord(r: ElementRecord, get: (id: string) => ElementRecord | undefined): boolean {
+  if (r.kind !== 'arrow') return false
+  const end = r.props.end
+  const to = end && typeof end === 'object' && !Array.isArray(end) && typeof end.elementId === 'string' ? get(end.elementId) : undefined
+  return quietArrow({ type: 'arrow', customData: r.customData }, to ? { customData: to.customData } : undefined)
+}
 
 /** What this browser's pointer events can carry (ui-behaviour 8; fallbacks are raw events and pressure only). */
 export function probeCapabilities(): InputCapabilities {
@@ -111,6 +120,8 @@ export const ownEngine: CanvasEngine = {
     const renderer = new Renderer(adapter.scene, {
       newPath: () => new Path2D(),
       bitmap: (sha) => adapter.imageFor(sha) as unknown as Bitmap | undefined,
+      // A key's views from its front: drawn only while one of them is selected (canvas-nodes decision 2026-10-15).
+      quiet: (r) => quietRecord(r, (id) => adapter.scene.get(id)),
     })
     adapter.useRenderer(renderer)
     const caps = probeCapabilities()
