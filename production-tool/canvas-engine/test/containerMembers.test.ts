@@ -90,3 +90,18 @@ describe('a container’s contents never block its own board', () => {
     expect(scene.get('P')!.w).toBe(16 + 437 + 16)
   })
 })
+
+describe('a sketch area deleted takes its ink (owner, 2026-10-15: the drawing stayed where the area had been)', () => {
+  it('Delete on the area removes the ink in it, not ink elsewhere, in one undo step', () => {
+    const area = element({ id: 'A', kind: 'sketch', z: 'b1', x: 1000, y: 0, w: 320, h: 180, style: { fill: '#ffffff' }, props: { ratio: '16:9' }, customData: { kind: 'sketch', id: 'sketch_1' } })
+    const { scene, tool, undo } = setup([area, ink('s1', 1100, 10), ink('far', 2000, 10)])
+    tool.set(['A'])
+    expect(tool.deleteSelected()).toBe(2)
+    expect(scene.get('A')).toBeUndefined()
+    expect(scene.get('s1')).toBeUndefined()
+    expect(scene.get('far')).toBeDefined()
+    undo.undo()
+    expect(scene.get('A')).toBeDefined()
+    expect(scene.get('s1')).toBeDefined()
+  })
+})

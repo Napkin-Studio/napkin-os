@@ -760,6 +760,11 @@ export class SelectTool {
       return r && !r.locked
     })
     if (!ids.length) return 0
+    // A sketch area goes with the ink drawn in it (as it moves with it): left behind, the drawing lay
+    // loose where the white area had been (owner, 2026-10-15). One step, so undo brings both back.
+    const kids = this.membersByContainer()
+    for (const id of [...ids]) if (isArea(this.scene.get(id)!)) for (const k of kids.get(id) ?? []) if (!ids.includes(k) && !this.scene.get(k)?.locked) ids.push(k)
+    // Drawings that lose members refit in the same step (container-select).
     const was = ids.map((id) => this.scene.get(id)!)
     this.scene.change((tx) => {
       tx.remove(ids)
