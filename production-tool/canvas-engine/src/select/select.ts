@@ -18,8 +18,15 @@
 // - A drag that starts on the selection moves it: the movement is a preview the
 //   renderer draws (nothing is written to Y while dragging), then one undoable
 //   step at release. Locked elements are selected but never moved or deleted.
+// - Boards are spaces (owner decision 2026-10-15; boards/sizing.ts). A thing dropped onto a board from
+//   outside stays where it was dropped when that is inside and on nothing; else it goes in the board's
+//   next free slot, the board growing toward free canvas, or, when the board is hemmed in, just outside
+//   it ("Board is full"). Moved within its board and left sticking out, the board grows to hold it.
+//   A selected board has edge and corner handles: a drag resizes it (never through a member; members
+//   whose centre the edge passed leave the board), one step. Fit to contents is fitBoard.
 
-import { recordBounds, unionRects } from '../model/bounds'
+import { recordBounds, unionRects, type Rect } from '../model/bounds'
+import { containsRect, fitRect, growToHold, innerRect, overlaps, placeInBoard, resizeRect, type Edge } from '../boards/sizing'
 import type { PointerKind } from '../input/router'
 import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
@@ -51,6 +58,21 @@ export interface Box {
   w: number
   h: number
 }
+
+/** A board being resized by a handle: drawn at `rect`, written at release. */
+export interface BoardResize {
+  id: string
+  edge: Edge
+  rect: Box
+  /** The members whose centre the dragged edge has passed: they leave at release. */
+  leaving: string[]
+}
+
+/** What a board did that the person should hear about: it was full (a thing landed outside), or things left it on a resize. */
+export type BoardEvent = { kind: 'full'; board: string; ids: string[] } | { kind: 'left'; board: string; ids: string[] }
+
+/** Kinds that never block a board's growth: they follow their ends, or are boards' own business. */
+const NO_BLOCK = new Set(['link', 'arrow'])
 
 /** The handles sit this far (screen pixels) outside the box's corners, where the renderer draws them. */
 export const HANDLE_PAD = 6
@@ -99,6 +121,9 @@ export class SelectTool {
   marquee: { x0: number; y0: number; x1: number; y1: number } | null = null
   lasso: Pt[] | null = null
   scaling: ScalePreview | null = null
+  resizing: BoardResize | null = null
+  private resizeUnits: { ids: string[]; rect: Rect }[] = []
+  private readonly boardCbs = new Set<(e: BoardEvent) => void>()
   private scaleFrom: { box: Box; ox: number; oy: number } | null = null
   private dragFrom: Pt | null = null
   private additive = false
@@ -118,6 +143,120 @@ export class SelectTool {
 
   private changed() {
     for (const cb of this.cbs) cb()
+  }
+
+  /** Hear when a board was full or things left it (the host says so, with Undo). */
+  onBoard(cb: (e: BoardEvent) => void): () => void {
+    this.boardCbs.add(cb)
+    return () => void this.boardCbs.delete(cb)
+  }
+
+  private tell(e: BoardEvent) {
+    for (const cb of this.boardCbs) cb(e)
+  }
+
+  // ── boards as spaces (owner decision 2026-10-15) ──
+
+  /** The one board selected (nothing else, not locked), or null: it gets the resize handles. */
+  soleBoard(): ElementRecord | null {
+    if (this.selected.size !== 1) return null
+    const r = this.scene.get([...this.selected][0])
+    return r && r.kind === 'board' && !r.locked ? r : null
+  }
+
+  /** What is on a board, a group as one unit, each with its box (positions as `at` has them). */
+  boardUnits(boardId: string, at: ReadonlyMap<string, ElementRecord> = new Map()): { ids: string[]; rect: Rect }[] {
+    const by = new Map<string, ElementRecord[]>()
+    for (const r0 of this.scene.all()) {
+      const r = at.get(r0.id) ?? r0
+      if (r.parentId !== boardId || NO_BLOCK.has(r.kind)) continue
+      const key = r.groupIds.at(-1) ?? `#${r.id}`
+      by.set(key, [...(by.get(key) ?? []), r])
+    }
+    return [...by.values()].map((rs) => ({ ids: rs.map((r) => r.id), rect: unionRects(rs.map(recordBounds)) }))
+  }
+
+  /** What a board must not grow onto: the other boards and loose things (not links), except `skip`. */
+  private blockers(boardId: string, skip: ReadonlySet<string>, at: ReadonlyMap<string, ElementRecord> = new Map()): Rect[] {
+    const out: Rect[] = []
+    for (const r0 of this.scene.all()) {
+      const r = at.get(r0.id) ?? r0
+      if (r.id === boardId || skip.has(r.id) || NO_BLOCK.has(r.kind)) continue
+      if (r.kind === 'board' ? r.parentId !== boardId : r.parentId === null) out.push(recordBounds(r))
+    }
+    return out
+  }
+
+  /** The handle of the selected board at a scene point (HANDLE_PX on screen), or null. */
+  boardHandleAt(p: Pt, zoom: number): Edge | null {
+    const b = this.soleBoard()
+    if (!b) return null
+    const reach = HANDLE_PX / zoom
+    const { x, y, w, h } = this.resizing?.rect ?? b
+    const near = (cx: number, cy: number) => Math.abs(p.x - cx) <= reach && Math.abs(p.y - cy) <= reach
+    const corners: [Edge, number, number][] = [['nw', x, y], ['ne', x + w, y], ['sw', x, y + h], ['se', x + w, y + h], ['n', x + w / 2, y]]
+    const hit = corners.find(([, cx, cy]) => near(cx, cy))
+    if (hit) return hit[0]
+    // The sides and the foot are handles all along; the top is the title (it moves the board), so only its middle.
+    const alongY = p.y >= y && p.y <= y + h
+    if (alongY && Math.abs(p.x - x) <= reach) return 'w'
+    if (alongY && Math.abs(p.x - (x + w)) <= reach) return 'e'
+    if (p.x >= x && p.x <= x + w && Math.abs(p.y - (y + h)) <= reach) return 's'
+    return null
+  }
+
+  /** Fit to contents: the board round what is on it with its padding, one step. False when nothing changes. */
+  fitBoard(id: string): boolean {
+    const b = this.scene.get(id)
+    if (!b || b.kind !== 'board' || b.locked) return false
+    const units = this.boardUnits(id)
+    if (!units.length) return false
+    const r = fitRect(b, units.map((u) => u.rect))
+    if (r.x === b.x && r.y === b.y && r.w === b.w && r.h === b.h) return false
+    this.scene.change((tx) => tx.put([{ ...tx.get(id)!, ...r }]))
+    this.changed()
+    return true
+  }
+
+  /**
+   * The moved things that are now on a board, fitted to it as the owner's rules say: `placed` (id → the
+   * record as it is about to be written) gets their final places and parents, and the boards' new boxes.
+   */
+  private fitToBoards(placed: Map<string, ElementRecord>, carried: ReadonlySet<string>, before: (id: string) => ElementRecord | undefined): BoardEvent[] {
+    const events: BoardEvent[] = []
+    const units = new Map<string, ElementRecord[]>()
+    for (const r of placed.values()) {
+      if (carried.has(r.id) || r.kind === 'board' || !r.parentId) continue
+      const parent = placed.get(r.parentId) ?? before(r.parentId)
+      if (parent?.kind !== 'board') continue
+      const key = `${r.parentId} ${r.groupIds.at(-1) ?? `#${r.id}`}`
+      units.set(key, [...(units.get(key) ?? []), r])
+    }
+    for (const rs of units.values()) {
+      const boardId = rs[0].parentId!
+      const board = placed.get(boardId) ?? before(boardId)!
+      const ids = new Set<string>(rs.map((r) => r.id))
+      const rect = unionRects(rs.map(recordBounds))
+      const occupied = this.boardUnits(boardId, placed).filter((u) => !u.ids.some((id) => ids.has(id))).map((u) => u.rect)
+      const blockers = this.blockers(boardId, ids, placed)
+      const joined = rs.some((r) => before(r.id)?.parentId !== boardId)
+      const inner = innerRect(board)
+      if (containsRect(inner, rect) && (!joined || !occupied.some((o) => overlaps(rect, o)))) continue
+      if (!joined) {
+        const g = growToHold(board, [rect], blockers)
+        if (g) {
+          placed.set(boardId, { ...board, ...g })
+          continue
+        }
+      }
+      const p = placeInBoard(board, occupied, { w: rect.w, h: rect.h }, blockers)
+      const dx = p.box.x - rect.x
+      const dy = p.box.y - rect.y
+      for (const r of rs) placed.set(r.id, { ...r, x: r.x + dx, y: r.y + dy, parentId: p.full ? null : boardId })
+      if (p.full) events.push({ kind: 'full', board: boardId, ids: [...ids] })
+      else if (p.board !== board) placed.set(boardId, { ...board, ...p.board })
+    }
+    return events
   }
 
   /** An element and the rest of its outermost group (the last of its groupIds). */
@@ -240,6 +379,14 @@ export class SelectTool {
   }
 
   press(p: Pt, opts: { shift?: boolean; by?: PointerKind; zoom?: number } = {}) {
+    const edge = opts.shift ? null : this.boardHandleAt(p, opts.zoom ?? 1)
+    const board = edge ? this.soleBoard() : null
+    if (edge && board) {
+      this.resizeUnits = this.boardUnits(board.id)
+      this.resizing = { id: board.id, edge, rect: { x: board.x, y: board.y, w: board.w, h: board.h }, leaving: [] }
+      this.changed()
+      return
+    }
     const corner = opts.shift ? null : this.handleAt(p, opts.zoom ?? 1)
     if (corner) {
       const box = this.frame()!.box
@@ -274,7 +421,12 @@ export class SelectTool {
   }
 
   drag(p: Pt) {
-    if (this.scaling && this.scaleFrom) {
+    const rz = this.resizing
+    const rb = rz ? this.scene.get(rz.id) : undefined
+    if (rz && rb) {
+      const { rect, leaving } = resizeRect(rb, rz.edge, p, this.resizeUnits.map((u) => u.rect))
+      this.resizing = { ...rz, rect, leaving: leaving.flatMap((i) => this.resizeUnits[i].ids) }
+    } else if (this.scaling && this.scaleFrom) {
       const { box, ox, oy } = this.scaleFrom
       const want = Math.max(Math.abs(p.x - ox) / Math.max(1e-9, box.w), Math.abs(p.y - oy) / Math.max(1e-9, box.h))
       // Never smaller than 8 px on its long side.
@@ -292,7 +444,21 @@ export class SelectTool {
 
   release(p: Pt) {
     this.drag(p)
-    if (this.scaling) {
+    let told: BoardEvent[] = []
+    if (this.resizing) {
+      const { id, rect, leaving } = this.resizing
+      this.resizing = null
+      this.resizeUnits = []
+      const b = this.scene.get(id)
+      if (b && (rect.x !== b.x || rect.y !== b.y || rect.w !== b.w || rect.h !== b.h)) {
+        // One step: the board's new box, and what it let go of leaves it.
+        this.scene.change((tx) => tx.put([
+          { ...tx.get(id)!, ...rect },
+          ...leaving.map((m) => tx.get(m)).filter((r): r is ElementRecord => !!r).map((r) => ({ ...r, parentId: null })),
+        ]))
+        if (leaving.length) told = [{ kind: 'left', board: id, ids: leaving }]
+      }
+    } else if (this.scaling) {
       const { ids, ox, oy, s } = this.scaling
       this.scaling = null
       this.scaleFrom = null
@@ -328,6 +494,7 @@ export class SelectTool {
             const parent = this.containerAt(centre(r), r.id, placed)
             if (parent !== r.parentId) placed.set(r.id, { ...r, parentId: parent })
           }
+          told = this.fitToBoards(placed, carried, (id) => tx.get(id))
           if (placed.size) tx.put([...placed.values()])
         })
       }
@@ -346,6 +513,7 @@ export class SelectTool {
       if (poly.length > 2) this.add(this.scene.all().filter((r) => r.kind !== 'board' && inPolygon(centre(r), poly)))
     }
     this.changed()
+    for (const e of told) this.tell(e)
   }
 
   private add(rs: ElementRecord[]) {
@@ -369,6 +537,8 @@ export class SelectTool {
   }
 
   cancel() {
+    this.resizing = null
+    this.resizeUnits = []
     this.scaling = null
     this.scaleFrom = null
     this.preview = null

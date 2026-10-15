@@ -89,6 +89,8 @@ export interface SelectionFrame {
   box: { x: number; y: number; w: number; h: number }
   dashed: boolean
   handles: boolean
+  /** A selected board: square handles on its corners and the middles of its edges (it resizes). */
+  edges?: boolean
   /** Above the box ("Ink · 9 strokes · one group"). */
   label?: string
 }
@@ -188,6 +190,8 @@ export class Renderer {
   moving: { ids: ReadonlySet<string>; dx: number; dy: number } | null = null
   /** A scale being dragged (select tool's handles): drawn scaled round (ox, oy), never written until release. */
   scaling: { ids: ReadonlySet<string>; ox: number; oy: number; s: number } | null = null
+  /** A board being resized by its handles: drawn at this box until release. */
+  resizing: { id: string; rect: { x: number; y: number; w: number; h: number } } | null = null
   /** The selection's frame, drawn on top; a dashed group box replaces the members' own outlines. */
   frame: SelectionFrame | null = null
   boardLook: BoardLook | null = null
@@ -381,8 +385,9 @@ export class Renderer {
     if (this.tween && !this.animating(now)) this.tween = null
     this.order()
     const paint = (rec: ElementRecord) => {
-      const r = this.tween ? this.tweened(rec, now) : rec
-      if (!visible.has(r.id)) {
+      const r0 = this.tween ? this.tweened(rec, now) : rec
+      const r = this.resizing?.id === r0.id ? { ...r0, ...this.resizing.rect } : r0
+      if (!visible.has(r.id) && r === r0) {
         stats.culled++
         return
       }
@@ -566,6 +571,15 @@ export class Renderer {
     if (f.handles) {
       const hs = 8 * k
       for (const [cx, cy] of [[x - pad, y - pad], [x + w + pad, y - pad], [x - pad, y + h + pad], [x + w + pad, y + h + pad]]) {
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs)
+        ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs)
+      }
+    }
+    if (f.edges) {
+      const hs = 9 * k
+      ctx.strokeRect(x, y, w, h)
+      for (const [cx, cy] of [[x, y], [x + w / 2, y], [x + w, y], [x + w, y + h / 2], [x + w, y + h], [x + w / 2, y + h], [x, y + h], [x, y + h / 2]]) {
         ctx.fillStyle = '#FFFFFF'
         ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs)
         ctx.strokeRect(cx - hs / 2, cy - hs / 2, hs, hs)
