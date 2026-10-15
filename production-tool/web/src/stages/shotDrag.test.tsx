@@ -156,7 +156,7 @@ describe('the drag over the cards', () => {
     // Shot 5's handle is at (130, 110); shot 2's card centre is (170, 40), shot 3's (290, 40).
     await pointer(handle(5), 'pointerdown', 130, 110)
     await pointer(document, 'pointermove', 140, 110)
-    // The dragged card's centre (start 170,140) goes left of shot 3's centre: before 3.
+    // The pointer goes onto the left half of shot 3: before 3.
     await pointer(document, 'pointermove', 240, 10)
     expect(el.querySelector(`[data-card="${o[4]}"]`)?.className).toContain('slot')
     expect(el.querySelector(`[data-card="${o[2]}"] .line`)?.textContent).toBe('Shot 5 moves here')
