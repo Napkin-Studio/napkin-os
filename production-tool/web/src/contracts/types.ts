@@ -219,6 +219,8 @@ export interface OpSheet {
   durationsS?: number[]
   regionModel?: string
   regionEndpoint?: string
+  /** clip only: where a clip with no first frame goes, made from words alone (ui-behaviour 3.5). */
+  textEndpoint?: string
   /** The model's name in the regenerate menu, and one line on what it is good for. */
   label?: string
   note?: string
@@ -230,6 +232,7 @@ export interface OpSheet {
 export interface OpAlternate {
   model: string
   endpoint: string
+  textEndpoint?: string
   defaults: OpDefaults
   label: string
   note?: string

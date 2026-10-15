@@ -90,6 +90,7 @@
     "clip": {
       "model": "veo3.1",
       "endpoint": "POST /v1/image_to_video",
+      "textEndpoint": "POST /v1/text_to_video",
       "defaults": {"durationS": 6, "audio": false},
       "label": "Veo 3.1",
       "durationsS": [4, 6, 8],
@@ -98,6 +99,7 @@
         {
           "model": "veo3.1_fast",
           "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
           "defaults": {"durationS": 6, "audio": false},
           "label": "Veo 3.1 Fast",
           "note": "Faster and cheaper; the previous default",

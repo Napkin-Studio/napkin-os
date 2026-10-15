@@ -32,7 +32,7 @@ OUT = RELAY / "tests" / "fixtures" / "schemas"
 PRICING_OUT = RELAY / "tests" / "fixtures" / "pricing" / "runway.json"
 RUNWAY_OPENAPI = "https://docs.dev.runwayml.com/openapi.json"
 RUNWAY_PRICING = "https://docs.dev.runwayml.com/guides/pricing.md"
-RUNWAY_PATHS = ("/v1/text_to_image", "/v1/image_to_video", "/v1/video_to_video",
+RUNWAY_PATHS = ("/v1/text_to_image", "/v1/image_to_video", "/v1/text_to_video", "/v1/video_to_video",
                 "/v1/image_upscale", "/v1/video_upscale")
 
 

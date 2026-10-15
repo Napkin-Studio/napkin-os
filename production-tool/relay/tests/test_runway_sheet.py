@@ -134,6 +134,9 @@ def problems(sheet: dict) -> list[str]:
         for s in [spec, *spec.get("alternates", [])]:
             if s["model"] not in sheet["models"]:
                 out.append(f"ops.{op}: {s['model']} is not in the catalogue")
+            # A clip from words alone (ui-behaviour 3.5) goes to the textEndpoint, which must take the model.
+            if s.get("textEndpoint") and branch(s["textEndpoint"], s["model"]) is None:
+                out.append(f"ops.{op}: {s['model']} is not in the {s['textEndpoint']} snapshot's oneOf (textEndpoint)")
     return out
 
 
@@ -175,6 +178,7 @@ def _mutated(change) -> dict:
     (lambda s: s["models"].__setitem__("kling3.0_pro", {**s["models"]["veo3.1"], "label": "Kling"}), "kling3.0_pro"),
     (lambda s: s.__setitem__("usdPerCredit", 0.02), "usdPerCredit"),
     (lambda s: s["ops"]["clip"].__setitem__("model", "gen4.5"), "not in the catalogue"),
+    (lambda s: s["ops"]["clip"].__setitem__("textEndpoint", "POST /v1/text_to_image"), "textEndpoint"),
 ])
 def test_a_sheet_that_disagrees_with_runway_is_refused(change, says):
     found = problems(_mutated(change))

@@ -191,10 +191,26 @@ def test_a_clip_whose_frame_is_a_video_is_refused_before_quota(h):
     assert h.store.counters("spend").get("usd", 0) == 0
 
 
-def test_a_clip_with_no_frame_and_no_ref_is_refused(h):
+def test_a_clip_with_no_frame_no_ref_and_no_words_is_refused(h):
     token = h.as_person()
-    _, out = h.post_job(token, op="clip", expect=400, text="a clip of nothing")
-    assert out["error"]["code"] == "invalid_input" and "no frame" in out["error"]["message"]
+    _, out = h.post_job(token, op="clip", expect=400, ratio="16:9")
+    assert out["error"]["code"] == "invalid_input" and "no frame and no words" in out["error"]["message"]
+    assert h.relay.remaining(participant_id("blue", "alice"))["video"] == 6
+
+
+def test_a_clip_straight_from_the_script_runs_from_its_words(h):
+    """ui-behaviour 3.5: Make clips straight from the script sends a shot's words and no frame."""
+    token = h.as_person()
+    shot = {"id": new_id("shot"), "kind": "shot", "duration_s": 4, "camera": {"size": "wide", "movement": "static"},
+            "action": "A runner crests the cliff at dawn.", "refs": []}
+    _, job = h.post_job(token, op="clip", expect=200, shot=shot, ratio="16:9")
+    prov = h.providers["runway"]
+    sent = prov.submits[-1]
+    assert "firstFrame" not in sent and "runner" in sent["prompt"]
+    prov.succeed(job["requestId"])
+    h.clock.tick(10)
+    out = h.poll(token, job["jobId"])
+    assert out["state"] == "completed", out.get("error")
 
 
 def test_a_clip_edit_with_no_region_is_a_feel_edit_for_its_switch(h):

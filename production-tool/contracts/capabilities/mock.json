@@ -27,6 +27,7 @@
     "clip": {
       "model": "mock",
       "endpoint": "mock://video",
+      "textEndpoint": "mock://video",
       "defaults": {"durationS": 6},
       "minS": 2,
       "maxS": 15,
@@ -35,6 +36,7 @@
         {
           "model": "mock-hq",
           "endpoint": "mock://video",
+          "textEndpoint": "mock://video",
           "defaults": {"durationS": 6},
           "label": "Mock HQ",
           "note": "Local stand-in for a better model",

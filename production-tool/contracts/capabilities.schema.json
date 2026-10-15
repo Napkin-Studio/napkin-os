@@ -82,6 +82,10 @@
           "regionEndpoint": {
             "type": "string"
           },
+          "textEndpoint": {
+            "type": "string",
+            "description": "clip only: where a clip with no first frame goes, made from words alone (a clip straight from the script; ui-behaviour 3.5). Absent: a clip needs its first frame. Added 2026-10-15 (additive)."
+          },
           "seed": {
             "type": "boolean",
             "description": "This op's model takes a seed. Overrides the sheet-level seed. Added 2026-10-06 (additive)."
@@ -134,6 +138,9 @@
                   "type": "string"
                 },
                 "endpoint": {
+                  "type": "string"
+                },
+                "textEndpoint": {
                   "type": "string"
                 },
                 "defaults": {

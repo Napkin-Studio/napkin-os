@@ -110,6 +110,15 @@ def _clip_edit_source(job: dict, op: str, payload: dict) -> None:
 
 def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
     """Called after the artifact checks, so a ref that is not in the input still fails."""
+    words_only = op == "clip" and not job.get("firstFrame") and bool((sheet["ops"].get(op) or {}).get("textEndpoint"))
+    if words_only and job.get("refs"):
+        # A clip straight from the script (no frame, ui-behaviour 3.5) goes to the model's text endpoint,
+        # which takes no pictures: the refs go, and their names are said in words.
+        for ref in job["refs"]:
+            words = ref["name"].split("_")[0] if ref["role"] == "character" else ref["name"].replace("_", " ")
+            job["prompt"] = re.sub(rf"@{re.escape(ref['name'])}\b", words, job["prompt"])
+        job["refs"] = []
+        return
     if op == "clip" and job.get("firstFrame") and job.get("refs") and not sheet["video"]["firstFrameWithRefs"]:
         # 2026-10-07: every Runway clip failed ("cannot take a first frame together with refs").
         # The first frame is the storyboard frame, which already shows the character: keep it,

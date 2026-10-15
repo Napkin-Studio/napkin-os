@@ -852,15 +852,18 @@ class Relay:
 
     @staticmethod
     def _check_frame(req: dict) -> None:
-        """A clip starts from a picture (its shot's frame). Refused here, before quota or spend,
-        not later by the provider (a video as the frame reached Runway)."""
+        """A clip starts from a picture (its shot's frame), or from words alone: a clip straight from
+        the script (ui-behaviour 3.5) has the shot's words and no frame. Refused here, before quota or
+        spend, not later by the provider (a video as the frame reached Runway)."""
         if req["op"] != "clip":
             return
-        image = req["input"].get("image")
+        inp = req["input"]
+        image = inp.get("image")
         if image and not str(image.get("mime", "")).startswith("image/"):
             raise ApiError("invalid_input", "A clip starts from a picture, and this shot's frame is not one. Draw the frame again.")
-        if not image and not req["input"].get("refs"):
-            raise ApiError("invalid_input", "This shot has no frame yet. Draw its frame first.")
+        words = str((inp.get("shot") or {}).get("action") or "").strip() or str(inp.get("text") or "").strip()
+        if not image and not inp.get("refs") and not words:
+            raise ApiError("invalid_input", "This shot has no frame and no words yet. Write the shot, or draw its frame first.")
 
     def create_job(self, who: dict, req: dict) -> dict:
         existing = self.store.get_job(req["jobId"])
