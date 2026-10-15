@@ -155,7 +155,8 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         registry.register(StubMock(sheet), sheet)
         log.warning("providers/mock.py not found: using the local stub")
     director = load_director()
-    store = MemoryStore()
+    # Holds beside the bytes they are about, so a restart keeps every saved picture openable.
+    store = MemoryStore(held_file=data_dir / "held.txt")
     local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
     relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
