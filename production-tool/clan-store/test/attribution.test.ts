@@ -52,6 +52,13 @@ describe('attribution: people and the crew', () => {
     expect(r).toContain('41 s')
   })
 
+  it('names each reference Dex added beyond what the shot asked for, with why (owner 2026-10-15)', () => {
+    const j = realJob()
+    ;(j.director!.output as { added?: unknown }).added = [{ name: 'coat', why: 'the words ask for the raincoat; only this photo shows it' }]
+    expect(jobRationale(j)).toContain('Added by Dex: @coat, the words ask for the raincoat; only this photo shows it')
+    expect(jobRationale(realJob())).not.toContain('Added by Dex')
+  })
+
   it('a landing is the crew member\'s, citing the job', () => {
     const w = landingWhy('doc1', realJob(), `frames[${id('frame', 1)}]`)
     expect(w.agent).toBe('wren')

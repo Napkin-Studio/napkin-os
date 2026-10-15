@@ -772,7 +772,13 @@ export interface UploadResponse {
 }
 
 /** An image input: a named ref (name = key_variant) or an unnamed canvas node. The relay makes the wire tags. */
-export interface JobInputRef { id: Id; name?: RefName; role: RefRole; label?: string; kind: 'drawing' | 'picture' | 'generated'; asset: AssetRef }
+/** A job's input picture. `optional`: offered, not asked for (owner 2026-10-15, features/canvas-nodes.clan):
+ *  in the node's scope but not named by the shot's words or linked into the shot, so the director sends it
+ *  only as an addition with why (director output `added`). Absent: required. */
+export interface JobInputRef { id: Id; name?: RefName; role: RefRole; label?: string; kind: 'drawing' | 'picture' | 'generated'; asset: AssetRef; optional?: true }
+
+/** A reference the director sent beyond those asked for (director.schema.json `added`): its wire tag and why. */
+export interface DirectorAddition { name: string; why: string }
 
 export type Strength = 'adhere' | 'flex' | 'reimagine'
 

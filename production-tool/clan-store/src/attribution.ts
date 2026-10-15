@@ -133,10 +133,13 @@ export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
       providerJob?: { prompt?: string; refs?: { name: string; role: string; sha256: string }[]; firstFrame?: string }
       shots?: unknown[]
       question?: { text?: string } | null
+      added?: { name: string; why: string }[]
     }
     if (a.rationale?.trim()) parts.push(clip(a.rationale, 300))
     const pj = out.providerJob
     if (pj?.refs?.length) parts.push(`refs: ${pj.refs.map((r) => `${r.name} as ${r.role} (${short(r.sha256)})`).join(', ')}`)
+    // What Dex sent beyond what the shot asked for, and why (owner 2026-10-15, features/canvas-nodes.clan).
+    for (const a of out.added ?? []) parts.push(`Added by Dex: @${a.name}, ${clip(a.why, 120)}`)
     if (pj?.firstFrame) parts.push(`first frame ${short(pj.firstFrame)}`)
     if (pj?.prompt) parts.push(`prompt: "${clip(pj.prompt, 240)}"`)
     if (Array.isArray(out.shots)) parts.push(`${out.shots.length} shots`)

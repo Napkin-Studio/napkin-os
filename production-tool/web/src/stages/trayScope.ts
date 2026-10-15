@@ -6,7 +6,8 @@
 // A linked key is one row naming the views that go ("@samurai · 3 views · character (linked) · sends
 // front, side, back").
 
-import type { ProductionDocument } from '../contracts/types'
+import type { DirectorAddition, ProductionDocument } from '../contracts/types'
+import { shotRefSet, type ShotRefFrom } from '../jobs/select'
 import { byOwnId, cd } from '../canvas/sceneRead'
 import type { ElementLike } from '../canvas/core/canvasAdapter'
 import { refName } from '../model/selectors'
@@ -78,4 +79,75 @@ export function unknownTyped(doc: ProductionDocument, text: string): string[] {
     if (!known && !out.includes(n)) out.push(n)
   }
   return out
+}
+
+// ── a shot's references (owner 2026-10-15, features/canvas-nodes.clan) ─────────────────────────────
+
+/** One reference row of a shot in "What Dex will send": what the shot asks for (its words, its links), or
+ *  what Dex added last time, with why, which the person can untick. */
+export interface ShotRefRow {
+  key: string
+  kind: 'asked' | 'added'
+  /** "@samurai" (a key whose views all go), "@samurai_front", or "Added by Dex: @hall_wide". */
+  label: string
+  /** "front, three-quarter, side, back · from its words", "linked", or Dex's why. */
+  detail: string
+  /** The refs the row stands for. */
+  refIds: string[]
+  /** Ticked: it goes (asked rows always do). */
+  on: boolean
+}
+
+const FROM_WORDS: Record<Exclude<ShotRefFrom, 'offered'>, string> = { words: 'from its words', linked: 'linked to the shot' }
+
+/** What Dex added to this shot's newest frame or clip, by reference (the providerJob's ref with that tag,
+ *  matched to the reference whose picture it is). */
+export function lastAdditions(doc: ProductionDocument, shotId: string): { refId: string; name: string; why: string }[] {
+  const jobs = Object.values(doc.jobs ?? {})
+    .filter((j) => (j.op === 'frame' || j.op === 'clip') && j.node?.id === shotId)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+  for (const j of jobs) {
+    const out = (j.director?.output ?? {}) as { added?: DirectorAddition[]; providerJob?: { refs?: { name: string; sha256: string }[] } }
+    if (!out.added?.length) continue
+    return out.added.flatMap((a) => {
+      const sha = out.providerJob?.refs?.find((r) => r.name === a.name)?.sha256
+      const ref = sha ? Object.values(doc.refs ?? {}).find((r) => r.asset === sha) : undefined
+      return ref ? [{ refId: ref.id, name: refName(ref), why: a.why }] : []
+    })
+  }
+  return []
+}
+
+/**
+ * A shot's reference rows: first what its words name and what is linked into it, a key whose views all go
+ * as one row ("@samurai · front, three-quarter, side, back · from its words"); then each reference Dex added
+ * to the shot's newest frame or clip, "Added by Dex: @x · why", ticked unless the person unticked it
+ * (`declined`). Unticking keeps it out of what is offered to Dex for this shot (jobs/select.ts shotRefSet).
+ */
+export function shotRefRows(doc: ProductionDocument, shotId: string, declined: readonly string[] = []): ShotRefRow[] {
+  const shot = doc.shots[shotId]
+  if (!shot) return []
+  let set: ReturnType<typeof shotRefSet>
+  try { set = shotRefSet(doc, shot, '', declined) } catch { set = [] } // a name with no picture: the shot says so itself
+  const rows: ShotRefRow[] = []
+  const asked = set.filter((x) => x.from !== 'offered')
+  const groups = new Map<string, typeof asked>()
+  for (const x of asked) {
+    const k = `${x.from}:${x.ref.key}`
+    groups.set(k, [...(groups.get(k) ?? []), x])
+  }
+  for (const [k, xs] of groups) {
+    const from = FROM_WORDS[xs[0].from as Exclude<ShotRefFrom, 'offered'>]
+    const one = xs.length === 1
+    rows.push({
+      key: `asked:${k}`, kind: 'asked', on: true, refIds: xs.map((x) => x.ref.id),
+      label: one ? `@${refName(xs[0].ref)}` : `@${xs[0].ref.key}`,
+      detail: one ? from : `${xs.map((x) => x.ref.variant).join(', ')} · ${from}`,
+    })
+  }
+  for (const a of lastAdditions(doc, shotId)) {
+    if (rows.some((r) => r.kind === 'asked' && r.refIds.includes(a.refId))) continue // the words name it now
+    rows.push({ key: `added:${a.refId}`, kind: 'added', label: `Added by Dex: @${a.name}`, detail: a.why, refIds: [a.refId], on: !declined.includes(a.refId) })
+  }
+  return rows
 }

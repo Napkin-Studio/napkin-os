@@ -4,9 +4,13 @@
 // 3.5) its words alone. A shot with neither is listed and cannot be ticked, with why. A batch opens
 // expanded (5.4). No price (costs live in the decision tree). Nothing is sent until Make clips; Cancel
 // or Esc sends nothing.
+//
+// Under each shot, its references (owner 2026-10-15, features/canvas-nodes.clan): what its words name and
+// what is linked into it, always sent; then "Added by Dex: @x · why" for each reference Dex added to its
+// newest frame or clip, which the person can untick (it is then not offered to Dex on this shot again).
 
-import { useState, type RefObject } from 'react'
-import { useConfig, useDoc } from '../app/context'
+import { Fragment, useState, type RefObject } from 'react'
+import { useConfig, useDoc, useServices, useUi } from '../app/context'
 import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
 import type { ModelChoice, Shot } from '../contracts/types'
 import { clipSource, traySummary } from '../jobs/clips'
@@ -14,6 +18,7 @@ import { lastWorkedModel } from '../jobs/follow'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { Float } from '../ui/Float'
+import { shotRefRows } from './trayScope'
 
 export interface TrayShot { shot: Shot; n: number }
 
@@ -31,7 +36,15 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
   onMake: (shotIds: string[], modelChoice?: ModelChoice) => void
 }) {
   const doc = useDoc()
+  const ui = useUi()
+  const services = useServices()
   const { config } = useConfig()
+  const declined = (shotId: string) => ui.declinedAdds?.[shotId] ?? []
+  const decline = (shotId: string, refId: string) => services.ui.update((u) => {
+    const now = u.declinedAdds?.[shotId] ?? []
+    const next = now.includes(refId) ? now.filter((x) => x !== refId) : [...now, refId]
+    u.declinedAdds = { ...u.declinedAdds, [shotId]: next }
+  }, 'decline addition')
   const rows = shots.map((s) => ({ ...s, source: clipSource(doc, s.shot.id, fromWords) }))
   const makeable = rows.filter((r) => r.source)
   const [off, setOff] = useState<ReadonlySet<string>>(new Set())
@@ -60,7 +73,8 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
       {isOpen && (
         <div className="tray-rows" role="group" aria-label="Clips to make">
           {rows.map((r) => (
-            <label key={r.shot.id} className={`tray-row ${r.source ? '' : 'cannot'}`}>
+            <Fragment key={r.shot.id}>
+            <label className={`tray-row ${r.source ? '' : 'cannot'}`}>
               <input type="checkbox" checked={!!r.source && !off.has(r.shot.id)} disabled={!r.source} onChange={() => flip(r.shot.id)} />
               <span>
                 <b>Shot {r.n}</b>{' '}
@@ -69,6 +83,8 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
                 {!r.source && <span className="faint">· no frame yet. Draw it in the storyboard{fromWords ? ', or write the shot' : ', or make clips straight from the script'}.</span>}
               </span>
             </label>
+            {r.source && <RefRows doc={doc} shotId={r.shot.id} fromFrame={r.source === 'frame'} declined={declined(r.shot.id)} onFlip={(id) => decline(r.shot.id, id)} />}
+            </Fragment>
           ))}
         </div>
       )}
@@ -81,5 +97,33 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
         </button>
       </div>
     </Float>
+  )
+}
+
+/** A shot's references in the tray: what it asks for (no tick: they always go), then Dex's additions. */
+function RefRows({ doc, shotId, fromFrame, declined, onFlip }: {
+  doc: ReturnType<typeof useDoc>
+  shotId: string
+  fromFrame: boolean
+  declined: readonly string[]
+  onFlip: (refId: string) => void
+}) {
+  const rows = shotRefRows(doc, shotId, declined)
+  if (!rows.length) return null
+  return (
+    <div className="tray-refs" role="group" aria-label="References">
+      {rows.map((row) => row.kind === 'asked'
+        ? (
+          <div key={row.key} className="tray-ref" title={fromFrame ? 'Its frame already shows them' : undefined}>
+            <span className="pt-ref">{row.label}</span> <span className="faint">· {row.detail}{fromFrame ? ' · in its frame' : ''}</span>
+          </div>
+        )
+        : (
+          <label key={row.key} className="tray-ref added">
+            <input type="checkbox" checked={row.on} onChange={() => onFlip(row.refIds[0])} />
+            <span><span className="pt-ref">{row.label}</span> <span className="faint">· {row.detail}</span></span>
+          </label>
+        ))}
+    </div>
   )
 }
