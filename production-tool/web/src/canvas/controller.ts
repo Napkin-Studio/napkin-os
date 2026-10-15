@@ -827,11 +827,32 @@ export class CanvasController {
     // A Generate on a sketch area lands as a frame made from it, with its crop (frame-aspect).
     const p = this.doc().jobs[job.jobId] ? purposeOf(this.doc().jobs[job.jobId]) : null
     if (p?.for === 'sketch') await systemUpdate(this.s.doc, (d) => { applySketchFrame(d, job, p.sketchId) }, 'frame')
-    if (c.op === 'view' && c.view) {
-      const source = this.nameOn(c.parentIds[0])
-      const key = source?.key
-      if (key && !refByName(this.doc(), `${key}_${c.view}`)) this.name(job.jobId, key, c.view)
-    }
+    if (c.op === 'view' && c.view) this.claimViewName(job.jobId)
+  }
+
+  /**
+   * A finished view takes its name (key_view, the key of the front it was made from) when the name
+   * is free, or when the picture holding it is gone from the canvas: views made again after the
+   * first ones were deleted stayed unnamed, so they formed no key group (no Stack, no link to the
+   * Script as one character; owner, 2026-10-15). A name a picture on the canvas still holds stays.
+   */
+  claimViewName(nodeId: string): boolean {
+    const el = this.nodeEl(nodeId)
+    const c = el ? cd(el) : undefined
+    if (c?.kind !== 'gen' || c.op !== 'view' || !c.view || !imageOf(el)?.asset || this.nameOn(nodeId)) return false
+    const key = c.parentIds[0] ? this.nameOn(c.parentIds[0])?.key : undefined
+    if (!key) return false
+    const held = refByName(this.doc(), `${key}_${c.view}`)
+    if (held?.node && this.nodeEl(held.node)) return false
+    this.name(nodeId, key, c.view)
+    return true
+  }
+
+  /** On open: every finished, unnamed view takes its free name (claimViewName). How many did. */
+  claimViewNames(): number {
+    let n = 0
+    for (const e of alive(this.els())) if (this.claimViewName(e.id)) n++
+    return n
   }
 
   scrollTo(nodeId: string) {
