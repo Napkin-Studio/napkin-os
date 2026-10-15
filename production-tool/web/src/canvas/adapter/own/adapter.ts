@@ -59,6 +59,9 @@ export interface OwnOptions {
 type OwnEl = CanvasElement & { assetSha?: string | null; startBinding?: { elementId: string }; endBinding?: { elementId: string } }
 
 const CAPS_NONE: InputCapabilities = { coalesced: false, predicted: false, tilt: false, pressure: false }
+/** The entered container's inside outline (container-select): the selection blue, lightened on the dark canvas. */
+const SCOPE_LIGHT = '#2F64F5'
+const SCOPE_DARK = '#8EA6FF'
 
 function defaultRaster(w: number, h: number): Raster {
   if (typeof OffscreenCanvas !== 'undefined') {
@@ -747,6 +750,9 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.scaling = this.selector.scaling
       this.renderer.resizing = this.selector.resizing
       this.renderer.frame = this.selectionFrame()
+      // The entered Drawing, sketch area or group: a dashed inside outline, readable on either theme.
+      this.renderer.scope = this.selector.scopeBox()
+      this.renderer.scopeColour = this.theme === 'dark' ? SCOPE_DARK : SCOPE_LIGHT
       this.surfaceNow()
       this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK
       this.renderer.boardLook = this.surface?.s.board ?? null

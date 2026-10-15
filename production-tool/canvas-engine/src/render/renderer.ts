@@ -206,6 +206,9 @@ export class Renderer {
   resizing: { id: string; rect: { x: number; y: number; w: number; h: number } } | null = null
   /** The selection's frame, drawn on top; a dashed group box replaces the members' own outlines. */
   frame: SelectionFrame | null = null
+  /** The entered container (container-select): a dashed outline just inside its box, in `scopeColour`. */
+  scope: { x: number; y: number; w: number; h: number } | null = null
+  scopeColour = FRAME_COLOUR
   boardLook: BoardLook | null = null
   linkLook: LinkLook | null = null
   currentBoard: string | null = null
@@ -464,9 +467,23 @@ export class Renderer {
     // A link or bound arrow whose end is gone is not drawn at all (never a line to nowhere).
     for (const rec of this.passes.rest) paint(rec)
     ctx.globalAlpha = 1
+    if (this.scope) this.drawScope(ctx, this.scope, cam)
     if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
+  }
+
+  /** The entered container: a dashed outline 4 screen px inside its box (container-select), so it reads as "inside". */
+  private drawScope(ctx: DrawContext, b: { x: number; y: number; w: number; h: number }, cam: Camera) {
+    const k = 1 / cam.zoom
+    const inset = Math.min(4 * k, Math.abs(b.w) / 4, Math.abs(b.h) / 4)
+    ctx.save()
+    ctx.strokeStyle = this.scopeColour
+    ctx.lineWidth = 1.5 * k
+    ctx.setLineDash?.([6 * k, 4 * k])
+    ctx.strokeRect(b.x + inset, b.y + inset, b.w - 2 * inset, b.h - 2 * inset)
+    ctx.setLineDash?.([])
+    ctx.restore()
   }
 
   /**

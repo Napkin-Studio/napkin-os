@@ -360,8 +360,19 @@ export const ownEngine: CanvasEngine = {
         e.preventDefault()
         adapter.selector.deleteSelected()
       } else if (e.key === 'Escape') {
-        adapter.selector.cancel()
-        adapter.sketch.cancel()
+        // In order (container-select; ui-behaviour 7): another handler's Esc (a popover, placing, the
+        // link tool) wins; a running gesture is cancelled; an entered container is left, selected whole;
+        // else a plain selection is cleared. A selected node keeps its own Esc (scope focus, 3.16).
+        if (e.defaultPrevented) return
+        const sel = adapter.selector
+        if (sel.busy() || adapter.sketch.ghost) {
+          sel.cancel()
+          adapter.sketch.cancel()
+        } else if (sel.exitScope()) {
+          // Left the container; it is selected whole.
+        } else if (sel.selected.size && ![...sel.selected].some((id) => adapter.scene.get(id)?.kind === 'node')) {
+          sel.set([])
+        } else return
       }
       else if (!mod && !e.altKey && TOOL_KEYS[key]) adapter.setActiveTool({ type: 'native', id: TOOL_KEYS[key] })
       else return
