@@ -9,17 +9,20 @@ import { fellBack, madeWith, otherModels, startingChoice } from './ui/modelChoic
 // Runway's models (the floor of every job); a config that routes more providers lists them in order.
 const live: Config = CONFIGS.live
 const both: Config = { ...live, routing: { ...live.routing, frame: ['mock', 'runway'], clip: ['mock', 'runway'] } }
+// features/runway-video-models.clan: clips that carry characters, after Veo (no tiering yet).
+const NEW_CLIPS = ['klingO3_pro', 'klingO3_standard', 'kling3.0_pro', 'kling3.0_standard', 'hailuo3', 'gemini_omni_flash_1.1',
+  'wan3', 'seedance2_5', 'seedance2_fast'].map((m) => `runway:${m}`)
 const keys = (c: Config, op: 'frame' | 'clip') => modelChoicesFor(op, c).map((o) => `${o.provider}:${o.model}`)
 
 describe('the regenerate menu', () => {
   it('offers Runway alone on the live config: its default, then its alternates', () => {
     expect(keys(live, 'frame')).toEqual(['runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
-    expect(keys(live, 'clip')).toEqual(['runway:veo3.1', 'runway:veo3.1_fast'])
+    expect(keys(live, 'clip')).toEqual(['runway:veo3.1', 'runway:veo3.1_fast', ...NEW_CLIPS])
   })
 
   it('lists each routed provider as its jobs run, each model then its alternates', () => {
     expect(keys(both, 'frame')).toEqual(['mock:mock', 'mock:mock-hq', 'runway:gemini_image3_pro', 'runway:gemini_image3.1_flash'])
-    expect(keys(both, 'clip')).toEqual(['mock:mock', 'mock:mock-hq', 'runway:veo3.1', 'runway:veo3.1_fast'])
+    expect(keys(both, 'clip')).toEqual(['mock:mock', 'mock:mock-hq', 'runway:veo3.1', 'runway:veo3.1_fast', ...NEW_CLIPS])
   })
 
   it('carries labels and notes from the sheets, and no price (owner, 2026-10-13)', () => {
