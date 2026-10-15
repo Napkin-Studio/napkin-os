@@ -42,7 +42,10 @@ def test_a_still_is_looped_and_a_short_clip_held_in_the_command():
     j = cmd.index("/t/b.png")
     assert cmd[j - 3:j] == ["-t", "5", "-i"]  # no trimS: STILL_S
     graph = cmd[cmd.index("-filter_complex") + 1]
-    assert graph.count("tpad=stop_mode=clone") == 1  # the video only: a still is already as long as its shot
+    # Every clip with a length is held to it; a still too, since scaling a looped picture drops its last
+    # frame (features/connected-video.clan, 2026-10-15).
+    assert graph.count("tpad=stop_mode=clone") == 3
+    assert "tpad=stop_mode=clone:stop_duration=3,trim=duration=3,setpts=PTS-STARTPTS[v0]" in graph
     assert "tpad=stop_mode=clone:stop_duration=4,trim=duration=4,setpts=PTS-STARTPTS[v2]" in graph
 
 
