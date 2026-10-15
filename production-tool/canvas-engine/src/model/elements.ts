@@ -48,7 +48,11 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
       return { ...base, type: 'text', text: plain, originalText: plain, fontSize: r.style.fontSize ?? 20, textAlign: r.style.align ?? 'left', containerId: boundTo }
     }
     case 'image':
-      return { ...base, type: 'image', status: typeof r.props.status === 'string' ? r.props.status : 'saved', assetSha: typeof r.props.assetSha === 'string' ? r.props.assetSha : null }
+      return {
+        ...base, type: 'image', status: typeof r.props.status === 'string' ? r.props.status : 'saved', assetSha: typeof r.props.assetSha === 'string' ? r.props.assetSha : null,
+        // In a stack: how far its spread place is from here (web canvas/nodes/stack.ts).
+        ...(r.props.stack && typeof r.props.stack === 'object' ? { stack: r.props.stack } : {}),
+      }
     case 'arrow':
     case 'link': {
       const points: number[][] = []
@@ -68,7 +72,7 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
  */
 export function recordsFromElements(els: readonly ExcalidrawLike[], current: (id: string) => ElementRecord | undefined): { records: ElementRecord[]; points: Record<string, Uint8Array> } {
   const out = convertExcalidraw({ elements: els })
-  const byId = new Map(els.map((e) => [e.id, e as ExcalidrawLike & { assetSha?: string | null; tool?: string; ratio?: string }]))
+  const byId = new Map(els.map((e) => [e.id, e as ExcalidrawLike & { assetSha?: string | null; tool?: string; ratio?: string; stack?: unknown }]))
   const recs = out.records
   // Keep the longest run of existing keys that is still in order; everything else gets a new key.
   const kept = stayingKeys(recs.map((r) => current(r.id)?.z ?? null))
@@ -93,6 +97,9 @@ export function recordsFromElements(els: readonly ExcalidrawLike[], current: (id
     const props = { ...recs[i].props }
     // What the element knows beyond the Excalidraw fields: its picture and its ink tool.
     if (recs[i].kind === 'image' && typeof e?.assetSha === 'string') props.assetSha = e.assetSha
+    // A picture in a stack keeps the way back to its spread place.
+    const stack = (e as { stack?: unknown } | undefined)?.stack
+    if (recs[i].kind === 'image' && stack && typeof stack === 'object') props.stack = stack as Plain
     if (recs[i].kind === 'stroke' && typeof e?.tool === 'string') props.tool = e.tool
     // A sketch area's ratio, fixed once drawn (ui-behaviour 3.7; another shape is a copy, web canvas/core/sketchCopy).
     if (recs[i].kind === 'sketch' && typeof e?.ratio === 'string') props.ratio = e.ratio

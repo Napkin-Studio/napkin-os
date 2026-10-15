@@ -48,7 +48,7 @@ export interface Binding {
 export const PROPS: Record<Kind, readonly string[]> = {
   stroke: ['tool', 'inkGroup', 'convertedFrom'],
   text: ['doc', 'boundTo', 'plain'],
-  image: ['assetSha', 'crop', 'status'],
+  image: ['assetSha', 'crop', 'status', 'stack'],
   shape: ['geo'],
   arrow: ['start', 'end', 'route', 'bends'],
   frame: ['name'],

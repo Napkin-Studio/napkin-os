@@ -82,4 +82,17 @@ describe('scaled strokes and sketch ratios (canvas-edit-tools)', () => {
     expect(el.ratio).toBe('16:9')
     expect(recordsFromElements([el], () => r).records[0].props).toEqual({ ratio: '16:9' })
   })
+
+  it('a picture in a stack keeps its way back (props.stack) and its turn through the element view; out of the stack it has none', () => {
+    const r = element({ id: 'i', kind: 'image', z: 'a1', x: 10, y: 20, w: 300, h: 400, rotation: -0.15, props: { assetSha: SHA, status: 'saved', stack: { dx: 340, dy: 0, angle: 0 } } })
+    const el = elementFromRecord(r)
+    expect(el.stack).toEqual({ dx: 340, dy: 0, angle: 0 })
+    expect(el.angle).toBe(-0.15)
+    const back = recordsFromElements([el], () => r).records[0]
+    expect(back.props.stack).toEqual({ dx: 340, dy: 0, angle: 0 })
+    expect(back.rotation).toBe(-0.15)
+    const { stack: _gone, ...spread } = el
+    void _gone
+    expect(recordsFromElements([spread], () => r).records[0].props).toEqual({ assetSha: SHA, status: 'saved' })
+  })
 })

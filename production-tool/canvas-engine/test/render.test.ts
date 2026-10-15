@@ -94,6 +94,33 @@ describe('Renderer', () => {
     expect(r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1).drawn).toBe(1)
   })
 
+  it('turns a picture about its centre, draws a stacked one as a photo, and glides a tween in between', () => {
+    const store = new SceneStore(new Y.Doc())
+    store.seed([
+      element({ id: 'p', kind: 'image', z: 'a1', x: 0, y: 0, w: 100, h: 200, rotation: 0.2, props: { assetSha: null, status: 'saved', stack: { dx: 0, dy: 0, angle: 0 } } }),
+      element({ id: 'q', kind: 'image', z: 'a2', x: 300, y: 0, w: 100, h: 200, props: { assetSha: null, status: 'saved' } }),
+    ], {})
+    const r = new Renderer(store, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
+    const calls: string[] = []
+    const ctx = new Proxy({} as DrawContext, {
+      get: (_t, k) => (k === 'lineWidth' || k === 'globalAlpha' ? 1 : (...a: unknown[]) => { calls.push(`${String(k)}(${a.map((x) => (typeof x === 'number' ? Math.round(x * 100) / 100 : '')).join(',')})`) }),
+      set: () => true,
+    })
+    r.draw(ctx, { scrollX: 0, scrollY: 0, zoom: 1 }, { width: 800, height: 600 }, 1)
+    // p: about its centre (50, 100), a shadow and a white edge before the picture; q: as it lies.
+    expect(calls).toContain('rotate(0.2)')
+    expect(calls).toContain('translate(50,100)')
+    expect(calls.filter((c) => c.startsWith('rotate'))).toHaveLength(1)
+    expect(calls.filter((c) => c.startsWith('fillRect')).length).toBe(1 + 2 + 2)
+    // A tween from 200 px to the left at t0: drawn at the start, gone once it ends.
+    r.tween = { from: new Map([['q', { x: 100, y: 0, rotation: 0 }]]), t0: 1000, ms: 300 }
+    expect(r.tweened(store.get('q')!, 1000).x).toBe(100)
+    expect(r.tweened(store.get('q')!, 1150).x).toBeGreaterThan(200)
+    expect(r.tweened(store.get('q')!, 1300).x).toBe(300)
+    expect(r.animating(1100)).toBe(true)
+    expect(r.animating(1400)).toBe(false)
+  })
+
   it('hit-tests the topmost element under a point', () => {
     const { r } = setup()
     expect(r.hit(20, 12)?.id).toBe('top')
