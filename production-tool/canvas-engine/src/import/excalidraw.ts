@@ -39,8 +39,8 @@ export interface ExcalidrawLike {
   // linear and freedraw
   points?: readonly (readonly number[])[]
   pressures?: readonly number[]
-  startBinding?: { elementId?: string } | null
-  endBinding?: { elementId?: string } | null
+  startBinding?: { elementId?: string; group?: string } | null
+  endBinding?: { elementId?: string; group?: string } | null
   startArrowhead?: string | null
   endArrowhead?: string | null
   // text
@@ -163,7 +163,7 @@ export function convertExcalidraw(scene: { elements?: readonly unknown[]; files?
           if (typeof e.startArrowhead === 'string') style.arrowheadStart = e.startArrowhead
           if (typeof e.endArrowhead === 'string') style.arrowheadEnd = e.endArrowhead
         }
-        const end = (b: { elementId?: string } | null | undefined): Plain => (b?.elementId && ids.has(b.elementId) ? { elementId: b.elementId } : null)
+        const end = (b: { elementId?: string; group?: unknown } | null | undefined): Plain => (b?.elementId && ids.has(b.elementId) ? { elementId: b.elementId, ...(typeof b.group === 'string' ? { group: b.group } : {}) } : null)
         const props: Record<string, Plain> = { route, start: end(e.startBinding), end: end(e.endBinding) }
         if (tag?.kind === 'link' && typeof e.role === 'string') props.role = e.role
         return push(tag?.kind === 'link' ? 'link' : 'arrow', { style, props })

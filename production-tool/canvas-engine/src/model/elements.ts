@@ -22,7 +22,8 @@ export function elementFromRecord(r: ElementRecord, pts?: Uint8Array): Excalidra
     strokeStyle: r.style.dash ?? 'solid', fillStyle: 'solid', roughness: 0,
   }
   const route = Array.isArray(r.props.route) ? (r.props.route as number[]) : []
-  const binding = (b: Plain | undefined) => (b && typeof b === 'object' && !Array.isArray(b) && typeof b.elementId === 'string' ? { elementId: b.elementId } : null)
+  // A link's start may name the group it leaves from (a key link from a character's views: the group's bounds).
+  const binding = (b: Plain | undefined) => (b && typeof b === 'object' && !Array.isArray(b) && typeof b.elementId === 'string' ? { elementId: b.elementId, ...(typeof b.group === 'string' ? { group: b.group } : {}) } : null)
   switch (r.kind) {
     case 'stroke': {
       const local = pts ? localPoints(pts) : []
