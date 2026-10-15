@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# The Production Tool on this machine: napkin-web (roster sign-in, serves the OS shell and
+# /production) in front of the local relay, plus the one local model backend in --live mode.
+#
+#   scripts/run-production-local [start] [--live] [--build]
+#                                         build what is missing, then start web + relay
+#   scripts/run-production-local status   what runs, on which ports, in which mode
+#   scripts/run-production-local stop [--force]
+#                                         stop them; refuses while a job is unfinished
+#   scripts/run-production-local logs     tail the web and relay logs
+#
+# Modes:
+#   default (mock)  the relay's mock provider, no Runway key, the passthrough director.
+#                   Nothing costs money. Use it for building and testing.
+#   --live          real Runway (RUNWAY_API_KEY from the environment or the repo's .env,
+#                   never printed) and Dex/Skye on scripts/model-local (your Claude login).
+#                   Every Generate, frame and clip costs money; a hard spend stop applies
+#                   (PRODUCTION_SPEND_CAP, default 50 USD; warning at 80%).
+#
+# Open http://127.0.0.1:${PRODUCTION_WEB_PORT:-8091}/production/?engine=own and sign in with
+# the roster name printed at start (default dev@napkin).
+#
+# Settings (environment): PRODUCTION_WEB_PORT (8091), PRODUCTION_RELAY_PORT (8788),
+# PRODUCTION_SPEND_CAP (50), PRODUCTION_SIGN_IN (dev@napkin), PRODUCTION_STATE (state dir,
+# default ${XDG_STATE_HOME:-~/.local/state}/napkin-production). Projects, sign-ins, secrets,
+# logs and pids live in the state dir, outside the repo.
+#
+# Why stop refuses: the local relay keeps jobs in memory. Stopping it while a paid job runs
+# loses the job; Runway still finishes it and charges for it.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+web_port="${PRODUCTION_WEB_PORT:-8091}"
+relay_port="${PRODUCTION_RELAY_PORT:-8788}"
+state="${PRODUCTION_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/napkin-production}"
+sign_in="${PRODUCTION_SIGN_IN:-dev@napkin}"
+dist="$root/production-tool/web/dist"
+
+die() { echo "run-production-local: $*" >&2; exit 1; }
+say() { echo "run-production-local: $*"; }
+listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+pid_of() { [[ -f "$state/$1.pid" ]] && kill -0 "$(cat "$state/$1.pid")" 2>/dev/null && cat "$state/$1.pid"; }
+
+secret() { # one random secret per name, kept in the state dir
+  local f="$state/secrets/$1"
+  if [[ ! -s "$f" ]]; then
+    mkdir -p "$state/secrets" && chmod 700 "$state/secrets"
+    python3 -c 'import secrets; print(secrets.token_hex(24))' >"$f" && chmod 600 "$f"
+  fi
+  cat "$f"
+}
+
+build() { # build only what is missing or wrong; --build forces the Production Tool's web
+  local force="$1"
+  if [[ ! -x "$root/target/debug/napkin-web" ]]; then
+    say "building napkin-web (cargo, first time only)"
+    (cd "$root" && cargo build -q -p napkin-web)
+  fi
+  if [[ ! -f "$root/app/dist/index.html" ]]; then
+    say "building the OS shell (app/)"
+    (cd "$root/app" && { [[ -d node_modules ]] || npm ci --silent; } && npm run -s build)
+  fi
+  # scripts/check.sh builds this dist with base '/', which leaves /production blank; a dist
+  # that doesn't load its assets from /production/ is rebuilt.
+  if [[ "$force" == 1 || ! -f "$dist/index.html" ]] || ! grep -q '/production/assets/' "$dist/index.html"; then
+    # The web app builds on the CLAN store (napkin-wasm, compiled by its own build) and the
+    # canvas engine's sources, in the order scripts/check.sh uses.
+    local pt="$root/production-tool"
+    if [[ ! -d "$pt/clan-store/node_modules" || ! -d "$pt/clan-store/src/wasm" ]]; then
+      say "building the CLAN store (napkin-wasm; first time only)"
+      (cd "$pt/clan-store" && { [[ -d node_modules ]] || npm ci --silent --no-audit --no-fund; } && npm run -s build)
+    fi
+    [[ -d "$pt/canvas-engine/node_modules" ]] || (cd "$pt/canvas-engine" && npm ci --silent --no-audit --no-fund)
+    say "building the Production Tool web (base /production/)"
+    (cd "$pt/web" && { [[ -d node_modules ]] || npm ci --silent --no-audit --no-fund; } \
+      && VITE_RELAY_URL=/production/api VITE_BASE=/production/ npm run -s build:web)
+  fi
+}
+
+live_config() { # the relay's config for --live: real routing, the spend stop
+  local cap="${PRODUCTION_SPEND_CAP:-50}"
+  python3 - "$root/production-tool/contracts/examples/config.testing.json" "$state/live-config.json" "$cap" <<'EOF'
+import json, sys
+src, out, cap = sys.argv[1], sys.argv[2], float(sys.argv[3])
+c = json.load(open(src))
+c["spend"] = {"capUsd": cap, "warnUsd": round(cap * 0.8, 2)}
+c.setdefault("routing", {}).setdefault("upscale", ["runway"])
+json.dump(c, open(out, "w"), indent=2)
+EOF
+}
+
+unfinished_jobs() { # job ids the relay's log shows as started but not finished
+  [[ -f "$state/relay.log" ]] || return 0
+  python3 - "$state/relay.log" <<'EOF'
+import json, sys
+last = {}
+for line in open(sys.argv[1], errors="replace"):
+    if not line.startswith("{"):
+        continue
+    try:
+        d = json.loads(line)
+    except ValueError:
+        continue
+    if d.get("jobId") and d.get("state"):
+        last[d["jobId"]] = (d["state"], d.get("op", ""))
+for j, (s, op) in last.items():
+    if s not in ("completed", "failed", "cancelled", "refused"):
+        print(f"{j} {op} {s}")
+EOF
+}
+
+start() {
+  local live=0 force=0
+  for a in "$@"; do
+    case "$a" in
+      --live) live=1 ;;
+      --build) force=1 ;;
+      *) die "unknown option $a (try --live, --build)" ;;
+    esac
+  done
+  [[ -n "$(pid_of web || true)$(pid_of relay || true)" ]] && die "already running (scripts/run-production-local status)"
+  listening "$web_port" && die "port $web_port is taken by something else (set PRODUCTION_WEB_PORT)"
+  listening "$relay_port" && die "port $relay_port is taken by something else (set PRODUCTION_RELAY_PORT)"
+  command -v uv >/dev/null || die "uv is not on PATH (the relay runs with uv)"
+  mkdir -p "$state/webdata" "$state/relay-data"
+  build "$force"
+
+  local roster="$state/roster.tsv"
+  [[ -s "$roster" ]] || printf '%s\t%s\n' "$sign_in" "$(git -C "$root" config user.name || echo Developer)" >"$roster"
+  local token; token="$(secret relay-token)"
+
+  local relay_env=(TOKEN_SECRET="$token")
+  if [[ "$live" == 1 ]]; then
+    local key="${RUNWAY_API_KEY:-}"
+    if [[ -z "$key" && -f "$root/.env" ]]; then
+      key="$(grep -E '^RUNWAY_API_KEY=' "$root/.env" | tail -1 | cut -d= -f2- | sed -E 's/^"(.*)"$/\1/')"
+    fi
+    [[ -n "$key" ]] || die "--live needs RUNWAY_API_KEY (environment or $root/.env)"
+    "$root/scripts/model-local" start >/dev/null
+    live_config
+    local menv; menv="$("$root/scripts/model-local" env)"
+    while IFS= read -r line; do
+      [[ "$line" == export\ * ]] && relay_env+=("${line#export }")
+    done <<<"$menv"
+    relay_env+=(RUNWAY_API_KEY="$key" LOCAL_CONFIG="$state/live-config.json")
+    echo live >"$state/mode"
+  else
+    echo mock >"$state/mode"
+  fi
+
+  # cd, then exec: no shell is left behind waiting on the server (and holding the caller's stdout)
+  (cd "$root/production-tool/relay" || exit 1; exec env -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET -u ANTHROPIC_API_KEY \
+      -u NAPKIN_MODEL_API -u NAPKIN_MODEL_BASE_URL -u ANTHROPIC_BASE_URL -u AWS_PROFILE "${relay_env[@]}" \
+      setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
+      uv run -q --python 3.12 python -m local --port "$relay_port" --data "$state/relay-data" \
+      >>"$state/relay.log" 2>&1 </dev/null) &
+
+  (cd "$root" || exit 1; exec env NAPKIN_AUTH=roster NAPKIN_AUTH_ROSTER="$roster" \
+      NAPKIN_SESSION_SECRET="$(secret session)" \
+      NAPKIN_PRODUCTION_RELAY_URL="http://127.0.0.1:$relay_port" \
+      NAPKIN_PRODUCTION_RELAY_SECRET="$token" \
+      NAPKIN_PRODUCTION_STATIC="$dist" NAPKIN_WEB_STATIC="$root/app/dist" \
+      NAPKIN_WEB_DATA="$state/webdata" NAPKIN_WEB_ADDR="127.0.0.1:$web_port" \
+      setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
+      "$root/target/debug/napkin-web" >>"$state/web.log" 2>&1 </dev/null) &
+
+  for _ in $(seq 1 90); do
+    listening "$web_port" && listening "$relay_port" && break
+    sleep 1
+  done
+  listening "$web_port" && listening "$relay_port" || die "did not come up; see $state/web.log and $state/relay.log"
+  say "up in $(cat "$state/mode") mode"
+  say "open http://127.0.0.1:$web_port/production/?engine=own and sign in as $sign_in"
+  [[ "$live" == 1 ]] && say "LIVE: Runway costs money; spend stop ${PRODUCTION_SPEND_CAP:-50} USD"
+  return 0
+}
+
+stop() {
+  local force=0
+  [[ "${1:-}" == --force ]] && force=1
+  local busy; busy="$(unfinished_jobs)"
+  if [[ -n "$busy" && "$force" == 0 ]]; then
+    echo "run-production-local: jobs still running (stopping loses them; a paid one is still charged):" >&2
+    echo "$busy" | sed 's/^/  /' >&2
+    die "wait for them, or stop with --force"
+  fi
+  local p
+  for name in web relay; do
+    # each server runs as the leader of its own session, so its group holds uv's child too
+    if p="$(pid_of "$name")"; then kill -- -"$p" 2>/dev/null || kill "$p" 2>/dev/null || true; fi
+    rm -f "$state/$name.pid"
+  done
+  say "stopped (scripts/model-local stays up; stop it with scripts/model-local stop)"
+}
+
+status() {
+  local mode; mode="$(cat "$state/mode" 2>/dev/null || echo '-')"
+  for name in web relay; do
+    local port="$web_port"; [[ "$name" == relay ]] && port="$relay_port"
+    if p="$(pid_of "$name")"; then echo "$name: running (pid $p, port $port)"; else echo "$name: stopped"; fi
+  done
+  echo "mode: $mode   state: $state"
+  local busy; busy="$(unfinished_jobs)"; [[ -n "$busy" ]] && { echo "unfinished jobs:"; echo "$busy" | sed 's/^/  /'; }
+  return 0
+}
+
+cmd="${1:-start}"; [[ "$cmd" == --* ]] && cmd=start || shift || true
+case "$cmd" in
+  start) start "$@" ;;
+  stop) stop "$@" ;;
+  status) status ;;
+  logs) tail -n 40 -f "$state/web.log" "$state/relay.log" ;;
+  *) die "unknown command $cmd (start, status, stop, logs)" ;;
+esac
