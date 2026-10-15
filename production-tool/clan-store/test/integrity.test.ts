@@ -50,6 +50,17 @@ describe('integrity', () => {
       for (const n of [93, 94]) add(d, 'links', { id: id('link', n), from: { kind: 'key', id: k }, to: { kind: 'script', id: first(d, 'scripts').id }, role: 'character' })
     }, /2 links of one role on one port/],
   ]
+  broken.push(
+    // A text on the canvas as a link end (owner 2026-10-16, README item 20).
+    ['a text link whose text is gone', (d) => {
+      add(d, 'links', { id: id('link', 96), from: { kind: 'text', id: id('text', 99) }, to: { kind: 'script', id: first(d, 'scripts').id }, role: 'note' })
+    }, /its text .* is not in the document/],
+    ['a text feeding a text', (d) => {
+      (d as Record<string, unknown>).texts = {}
+      for (const n of [97, 98]) add(d, 'texts', { id: id('text', n), node: `own_text_${n}`, words: 'Rain' })
+      add(d, 'links', { id: id('link', 97), from: { kind: 'text', id: id('text', 97) }, to: { kind: 'text', id: id('text', 98) }, role: 'note' })
+    }, /A text cannot feed a text/],
+  )
   for (const [name, mutate, want] of broken) {
     it(`refuses ${name}`, () => {
       const d = ad()
@@ -57,6 +68,17 @@ describe('integrity', () => {
       expect(integrity(d).join('\n')).toMatch(want)
     })
   }
+
+  it('passes a text linked into a script as a note, and a document with no texts map', () => {
+    const d = ad()
+    // A document made before texts existed has no texts map: it still passes.
+    delete (d as Record<string, unknown>).texts
+    expect(integrity(d)).toEqual([])
+    ;(d as Record<string, unknown>).texts = {}
+    add(d, 'texts', { id: id('text', 1), node: 'own_text_1', words: 'Rain on the window.' })
+    add(d, 'links', { id: id('link', 99), from: { kind: 'text', id: id('text', 1) }, to: { kind: 'script', id: first(d, 'scripts').id }, role: 'note' })
+    expect(integrity(d)).toEqual([])
+  })
 
   it('passes a key link: the whole character into a script', () => {
     const d = ad()

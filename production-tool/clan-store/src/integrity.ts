@@ -25,10 +25,10 @@ const ROLE_TABLE = common.$defs.refRoleTable.const as Record<string, RoleLine>
 /** The largest a fragment's prose may be, serialised (collab.md §4). */
 export const MAX_PROSE_BYTES = 64 * 1024
 
-/** The map each document-entity endpoint kind lives in. group, note and ink are canvas things. */
+/** The map each document-entity endpoint kind lives in. group, note and ink are canvas things; a text is in texts (README item 20). */
 export const ENDPOINT_MAP: Record<string, string | null> = {
   board: 'boards', script: 'scripts', storyboard: 'storyboards', video: 'videos', ref: 'refs', key: 'keys', frame: 'frames', render: 'renders',
-  sketch: 'sketches', document: 'documents', format_set: 'format_sets', shot: 'shots', group: null, note: null, ink: null,
+  sketch: 'sketches', document: 'documents', format_set: 'format_sets', shot: 'shots', text: 'texts', group: null, note: null, ink: null,
 }
 
 /** The first rule that allows a link from `from` to `to` as `role`, or why none does (in the canvas's words). */

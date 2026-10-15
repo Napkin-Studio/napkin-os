@@ -95,3 +95,19 @@ describe('LocalUndo', () => {
     expect(undo.peek()).toBe('create shot 1')
   })
 })
+
+describe('a text on the canvas (README item 20)', () => {
+  it('is written to texts and linked into a script as a note; the schema and the integrity check take it', async () => {
+    const s = store()
+    await s.create({ person: MAYA })
+    const bus = new LocalPatchBus(s)
+    const t = id('text', 1)
+    const script = defaults(s).script
+    const r = await bus.apply({ patches: [
+      { op: 'create', entity: 'texts', id: t, value: { node: 'own_text_1', words: 'Rain on the window.' }, base_version: 0 },
+      { op: 'create', entity: 'links', id: id('link', 1), value: { from: { kind: 'text', id: t }, to: { kind: 'script', id: script }, role: 'note' }, base_version: 0 },
+    ], why: { action: 'link a text' } })
+    expect(r.refused).toEqual([])
+    expect(bus.doc().texts[t].words).toBe('Rain on the window.')
+  })
+})

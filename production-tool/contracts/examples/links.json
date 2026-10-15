@@ -164,6 +164,36 @@
       "to": "key",
       "role": "character",
       "ok": false
+    },
+    {
+      "from": "text",
+      "to": "script",
+      "role": "note",
+      "ok": true
+    },
+    {
+      "from": "text",
+      "to": "sketch",
+      "role": "note",
+      "ok": true
+    },
+    {
+      "from": "text",
+      "to": "video",
+      "role": "drives",
+      "ok": false
+    },
+    {
+      "from": "text",
+      "to": "text",
+      "role": "note",
+      "ok": false
+    },
+    {
+      "from": "text",
+      "to": "ref",
+      "role": "note",
+      "ok": false
     }
   ]
 }

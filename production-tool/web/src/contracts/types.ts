@@ -100,7 +100,7 @@ export type View = (typeof VIEWS)[number]
 
 export interface Region { x: number; y: number; w: number; h: number }
 
-export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot'] as const
+export const LINK_ENDPOINT_KINDS = ['board', 'group', 'note', 'ink', 'script', 'storyboard', 'video', 'ref', 'key', 'frame', 'render', 'sketch', 'document', 'format_set', 'shot', 'text'] as const
 export type LinkEndpointKind = (typeof LINK_ENDPOINT_KINDS)[number]
 export interface LinkEndpoint { kind: LinkEndpointKind; id: string }
 export type StructuralLinkRole = 'drives' | 'renders' | 'input' | 'note' | 'context' | 'brand' | 'master' | 'frame' | 'made_from' | 'note_on_shot'
@@ -567,6 +567,12 @@ export interface NamedRef extends EntityBase {
   library?: LibraryCopy
   named_at?: string
 }
+/** A text on the canvas (texts[id]; features/canvas-text.clan): its words and its canvas element. Linked into a node, its words are the node's input words. */
+export interface CanvasText extends EntityBase {
+  /** The canvas element that is this text (a sceneId). */
+  node: string
+  words: string
+}
 export interface DocDocument extends EntityBase {
   title: string
   file_name: string
@@ -695,6 +701,8 @@ export interface EntityMaps {
   keys: Record<Id, KeyEntry>
   refs: Record<Id, NamedRef>
   documents: Record<Id, DocDocument>
+  /** Optional: a document made before texts could be linked has none (contracts README item 20). */
+  texts?: Record<Id, CanvasText>
   format_sets: Record<Id, FormatSet>
   sizes: Record<Id, Size>
   checks: Record<Id, Check>
@@ -707,7 +715,7 @@ export interface EntityMaps {
 }
 export type MapName = keyof EntityMaps
 export const MAP_NAMES: readonly MapName[] = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'takes', 'renders', 'reviews',
-  'links', 'keys', 'refs', 'documents', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
+  'links', 'keys', 'refs', 'documents', 'texts', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports']
 
 export interface ProductionDocument extends EntityMaps {
   contract_version: ContractVersion

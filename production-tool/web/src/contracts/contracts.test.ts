@@ -102,6 +102,15 @@ describe('the tables in common.schema.json', () => {
     expect(LINK_RULE.rules.some((r) => r.from.includes('script') && r.to.includes('storyboard') && r.roles.includes('drives'))).toBe(true)
     expect(LINK_RULE.rules.some((r) => r.from.includes('video') && r.to.includes('script'))).toBe(false)
   })
+  it('lets a text on the canvas feed a generating node as a note, once per node, and nothing feed a text (owner 2026-10-16)', () => {
+    const row = LINK_RULE.rules.find((r) => r.from.includes('text'))
+    expect(row).toMatchObject({ roles: ['note', 'context'], per_target: 'many', per_source: 'one' })
+    expect(row?.to).toEqual(['script', 'storyboard', 'video', 'sketch', 'format_set'])
+    expect(LINK_RULE.rules.some((r) => r.to.includes('text'))).toBe(false)
+    const doc = loadJson<{ properties: Record<string, unknown>; required: string[] }>('document.schema.json')
+    expect(doc.properties.texts).toBeDefined()
+    expect(doc.required).not.toContain('texts')
+  })
   it('lets a whole key feed a node once, in its ref role (owner 2026-10-15), and mirrors its endpoint kind', () => {
     const row = LINK_RULE.rules.find((r) => r.from.includes('key'))
     expect(row).toMatchObject({ per_target: 'many', per_source: 'one' })
