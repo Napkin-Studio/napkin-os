@@ -62,7 +62,7 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
         <>
           <span aria-hidden="true" className="sep" />
           <button ref={moreRef} type="button" className="sb-icon" aria-label="More actions" aria-haspopup="menu" aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
-          <Float anchor={moreRef} open={more} onClose={() => setMore(false)} side="below" align="end" label="More" className="pt-menu sb-more">
+          <Float anchor={moreRef} open={more} onClose={() => setMore(false)} side="below" align="end" label="More" className="pt-menu selbar-more">
             {moreFor(info).map((m) => (
               <button key={m.id} type="button" role="menuitem" className={`pt-menurow ${m.id === 'delete' ? 'danger' : ''}`} disabled={!!m.off} title={m.off}
                 onClick={() => {
