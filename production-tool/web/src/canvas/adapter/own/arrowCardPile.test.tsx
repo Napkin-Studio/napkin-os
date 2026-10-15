@@ -7,12 +7,12 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ServicesContext, type Services } from '../app/context'
-import { OwnAdapter } from '../canvas/adapter/own/adapter'
-import { setStacked } from '../canvas/nodes/stack'
-import { snapshotDoc } from '../test/jobFixtures'
-import { initialUi } from '../doc/ui'
-import { ArrowCards } from './ArrowCard'
+import { ServicesContext, type Services } from '../../../app/context'
+import { OwnAdapter } from './adapter'
+import { setStacked } from '../../nodes/stack'
+import { snapshotDoc } from '../../../test/jobFixtures'
+import { initialUi } from '../../../doc/ui'
+import { ArrowCards } from '../../../ui/ArrowCard'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
