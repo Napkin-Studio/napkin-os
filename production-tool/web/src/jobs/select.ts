@@ -1,9 +1,10 @@
 // Finding the job that belongs at a spot in the UI (pending or failed), and
 // what a job sends about a shot and its names (contract 3).
 
-import type { JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, Shot } from '../contracts/types'
+import type { Id, JobInputRef, JobShot, NamedRef, ProductionDocument, Ratio, Shot } from '../contracts/types'
 import type { JobCtx, UiState } from '../doc/ui'
 import { KEY_EXTRAS, MENTION, NoFrontError } from '../lib/names'
+import { scopeOf, type ScopeItem } from '../model/scope'
 import { beatsOf, jobsList, refName, refNamed, refsList, shotName, shotSubjects } from '../model/selectors'
 import type { Relay } from '../relay'
 import { assetRef } from './assets'
@@ -75,26 +76,58 @@ export async function namedInput(relay: Relay, doc: ProductionDocument, r: Named
   return { id: r.id, name: refName(r), role: r.role, ...(r.label ? { label: r.label } : {}), kind, asset: await assetRef(relay, r.asset) }
 }
 
-/** The refs a shot names, as job inputs. A name with no picture is an error the participant can fix. */
-export async function shotRefs(relay: Relay, doc: ProductionDocument, shot: Shot): Promise<JobInputRef[]> {
-  const out: JobInputRef[] = []
-  for (const name of shotSubjects(doc, shot)) {
-    const found = subjectPictures(doc, name) // a bare key: its front and up to 3 more (throws with no front)
-    if (!found.length) throw new Error(`${capital(shotName(doc, shot.id))} uses @${name}, but no picture has that name. Name one on the canvas, or change the shot.`)
-    for (const r of found) if (!out.some((x) => x.id === r.id)) out.push(await namedInput(relay, doc, r))
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Where a shot's picture comes from (owner 2026-10-15, features/canvas-nodes.clan): its words name it
+ *  (the shot's text, or the person's words for this send), it is linked into the shot, or it is only in
+ *  the storyboard's scope and offered: Dex may add it only with a reason. */
+export type ShotRefFrom = 'words' | 'linked' | 'offered'
+
+export interface ShotRef { ref: NamedRef; from: ShotRefFrom }
+
+/** The pictures of a linked key or reference, as scope items name them (a key's held views stay out). */
+function scopePictures(doc: ProductionDocument, items: ScopeItem[]): NamedRef[] {
+  const out: NamedRef[] = []
+  for (const it of items) {
+    if (it.kind === 'ref' && !it.held && doc.refs[it.id]) out.push(doc.refs[it.id])
+    else if (it.kind === 'key' && it.sends) for (const id of it.sends) if (doc.refs[id]) out.push(doc.refs[id])
   }
   return out
 }
 
-const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-
-/** A shot's refs plus any name written in the participant's words (the relay must have each one). */
-export async function refsFor(relay: Relay, doc: ProductionDocument, shot: Shot, text?: string): Promise<JobInputRef[]> {
-  const refs = await shotRefs(relay, doc, shot)
-  for (const r of mentionedPictures(doc, text ?? '')) {
-    if (!refs.some((x) => x.id === r.id)) refs.push(await namedInput(relay, doc, r))
+/**
+ * What a frame or clip of this shot sends (owner 2026-10-15: "instead of just using '@samurai' [it] used
+ * different references for the frames, unless it offers a definite advantage"): first the pictures its
+ * words name (a bare @samurai is that key's views, the front first, at most 4) and those linked into the
+ * shot: required, never left out or swapped. Then, offered, what the storyboard's scope brings in that
+ * nothing asked for, less what the person unticked (`declined`): Dex may add one only with why. At most 14,
+ * the required first. A name with no picture throws, as before.
+ */
+export function shotRefSet(doc: ProductionDocument, shot: Shot, text = '', declined: readonly Id[] = []): ShotRef[] {
+  const out: ShotRef[] = []
+  const add = (ref: NamedRef, from: ShotRefFrom) => { if (ref.asset && !out.some((x) => x.ref.id === ref.id)) out.push({ ref, from }) }
+  for (const name of shotSubjects(doc, shot)) {
+    const found = subjectPictures(doc, name) // a bare key: its front and up to 3 more (throws with no front)
+    if (!found.length) throw new Error(`${capital(shotName(doc, shot.id))} uses @${name}, but no picture has that name. Name one on the canvas, or change the shot.`)
+    for (const r of found) add(r, 'words')
   }
-  return refs.slice(0, 14)
+  for (const r of mentionedPictures(doc, text)) add(r, 'words')
+  const linked = scopeOf(doc, shot.id).filter((it) => it.via === 'link' || (it.via === 'board' && it.through))
+  for (const r of scopePictures(doc, linked)) add(r, 'linked')
+  if (shot.storyboard_id && doc.storyboards[shot.storyboard_id]) {
+    const scope = scopeOf(doc, shot.storyboard_id).filter((it) => it.via !== 'mention')
+    for (const r of scopePictures(doc, scope)) if (!declined.includes(r.id)) add(r, 'offered')
+  }
+  return out.slice(0, 14)
+}
+
+/** A shot's refs plus any name written in the participant's words (the relay must have each one).
+ *  `offer` (a frame or a clip): the storyboard's other pictures go too, marked optional (shotRefSet). */
+export async function refsFor(relay: Relay, doc: ProductionDocument, shot: Shot, text?: string, opts: { offer?: boolean; declined?: readonly Id[] } = {}): Promise<JobInputRef[]> {
+  const set = shotRefSet(doc, shot, text ?? '', opts.declined).filter((x) => opts.offer || x.from !== 'offered')
+  const out: JobInputRef[] = []
+  for (const { ref, from } of set) out.push({ ...await namedInput(relay, doc, ref), ...(from === 'offered' ? { optional: true as const } : {}) })
+  return out
 }
 
 /** Every named picture, for the shot list: the director picks the names each shot shows. */

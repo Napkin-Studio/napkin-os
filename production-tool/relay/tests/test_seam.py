@@ -120,7 +120,7 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     (out,) = done["outputs"]
     assert out["url"].startswith(f"{CDN}/out/sha256:") and out["mime"] == "image/png"
     assert done["director"]["model"] == base_config()["director"]["perClickModel"]
-    assert done["director"]["promptVersion"] == base_config()["director"]["promptVersion"] == "director.v7"
+    assert done["director"]["promptVersion"] == base_config()["director"]["promptVersion"] == "director.v8"
 
 
 def test_director_wrapper_output_validates_against_the_contract():

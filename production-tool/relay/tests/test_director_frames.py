@@ -49,13 +49,14 @@ def direct(name, edit_reply=lambda r: None, edit_input=lambda i: None):
     return res, asked, wire
 
 
-def test_v6_is_the_default_and_the_configs_name_v7():
+def test_v6_is_the_default_and_the_configs_name_v8():
     # Contract 3 runs director.v6 (features/contract-v3.clan), per click on Sonnet. The configs name
-    # director.v7 (features/frame-change-edit.clan, after v6.1 of frame-aspect); the bundle's default stays v6.
+    # director.v8 (features/canvas-nodes.clan: a shot's required refs, Dex's additions with why; after v7
+    # of frame-change-edit and v6.1 of frame-aspect); the bundle's default stays v6.
     assert PROMPT_VERSION == "director.v6"
     for name in ("config.testing.json", "config.live.json", "config.pathway.runway.json"):
         director = json.loads((EXAMPLES / name).read_text())["director"]
-        assert director["promptVersion"] == "director.v7"
+        assert director["promptVersion"] == "director.v8"
         assert director["perClickModel"] == "eu.anthropic.claude-sonnet-5-5"
 
 
@@ -79,7 +80,7 @@ def test_first_frame_is_drawn_from_the_views_and_shows_the_setting():
     assert "anchorFrame" not in asked["input"] and "previousFrame" not in asked["input"]
     assert asked["input"]["script"].startswith("It starts to rain")  # the script reaches the director for the setting
     job = res.output["providerJob"]
-    assert [(r["name"], r["role"]) for r in job["refs"]] == [("hero_front", "character")]
+    assert [(r["name"], r["role"]) for r in job["refs"]] == [("hero_front", "character"), ("hero_side", "character")]
     assert "street" in job["prompt"] and "plain" not in job["prompt"]
     assert job["ratio"] == "768:1344"  # the plain 9:16 mapped to Runway's size
     assert res.agent_block["promptVersion"] == "director.v6"
@@ -194,3 +195,11 @@ def test_clip_requests_lose_spoken_beats_too_but_keep_moments_and_shot_lists_kee
     from director.director import _without_dialogue
     shot_list = {"script": "x", "targetS": 10, "shot": {"beats": [{"kind": "line", "at_s": 0, "text": "kept"}]}}
     assert _without_dialogue("shot_list", shot_list) is shot_list
+
+
+def test_a_frame_that_leaves_out_a_view_its_shot_names_is_refused():
+    # Owner 2026-10-15 (features/canvas-nodes.clan): the shot names hero_front and hero_side; both go.
+    def drop_side(r):
+        r["providerJob"]["refs"] = [x for x in r["providerJob"]["refs"] if x["name"] != "hero_side"]
+    with pytest.raises(DirectorError, match="left out @hero_side"):
+        direct("frame_runway_first", drop_side)

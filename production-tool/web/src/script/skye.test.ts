@@ -52,7 +52,8 @@ describe('the write request', () => {
     ])
     expect(input.seconds).toBe(5)
     expect(input.base_hash).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(input.context.refs).toEqual([{ name: 'maya_front', role: 'character' }])
+    // The whole key first, by its bare name (owner 2026-10-15: @maya stays @maya), then each view.
+    expect(input.context.refs).toEqual([{ name: 'maya', role: 'character', label: 'the whole character: front' }, { name: 'maya_front', role: 'character' }])
     expect(input.context.neighbours).toContain('Shot 1:')
     expect(input.context.neighbours).toContain('Shot 3:')
     expect(input.context.neighbours.length).toBeLessThanOrEqual(4000)

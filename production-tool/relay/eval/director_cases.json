@@ -4,7 +4,12 @@
     "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
     "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
     "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5",
-    "V1": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+    "V1": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "S1": "sha256:d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5",
+    "S2": "sha256:d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6",
+    "S3": "sha256:d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8",
+    "S4": "sha256:d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9",
+    "S5": "sha256:d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
   },
   "cards": {
     "handyman_front": "Full-body figure in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, standing front-on with feet together. Wears a short-sleeved royal-blue polo shirt with a small round white emblem on the chest. Carries a grey mop and bucket. Photoreal, plain light background.",
@@ -860,6 +865,85 @@
         "route": "fix"
       },
       "budget": 250
+    },
+    {
+      "id": "frame_samurai_keeps_refs",
+      "why": "The owner's case (2026-10-15): the shot's words say @samurai, a key with four views, so all four go (front first); the hall picture is in scope but not named, so it may go only with a reason in `added`. Never a view in place of @samurai, never one left out.",
+      "since": "director.v8",
+      "op": "frame",
+      "provider": "runway",
+      "input": {
+        "shot": {
+          "id": "shot_01M4YN0JD6N52M064C63XEW1Z4",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "track",
+            "movement_speed": "normal"
+          },
+          "action": "@samurai sweeps the hall in one clean arc. Dust lifts and vanishes out the door.",
+          "refs": [
+            "samurai"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M4YC0JWN000000000000001V",
+            "name": "samurai_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S1"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000002V",
+            "name": "samurai_three-quarter",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S2"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000003V",
+            "name": "samurai_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S3"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000004V",
+            "name": "samurai_back",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S4"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000005V",
+            "name": "hall_wide",
+            "role": "location",
+            "kind": "generated",
+            "asset": "S5",
+            "optional": true
+          }
+        ]
+      },
+      "must": [
+        [
+          "sweep"
+        ]
+      ],
+      "forbid": [
+        "armour",
+        "katana"
+      ],
+      "required": [
+        "samurai_front",
+        "samura_three_qua",
+        "samurai_side",
+        "samurai_back"
+      ],
+      "budget": 500
     }
   ],
   "frames": {

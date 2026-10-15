@@ -67,7 +67,7 @@ export async function makeClip(
   if (!source) throw new Error(extra.fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
   const image = frame ? await assetRef(deps.relay, frame.asset) : undefined
   const text = extra.text?.trim()
-  const refs = await refsFor(deps.relay, d, shot, text)
+  const refs = await refsFor(deps.relay, d, shot, text, { offer: true, declined: deps.ui.get().declinedAdds?.[shot.id] })
   const ratio = ratioOf(d, videoOfShot(d, shot.id, extra.videoId)?.id, shot.storyboard_id)
   const input: JobInput = { shot: jobShot(d, shot), ...(image ? { image } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}), ...(text ? { text: clipText(text, 1000) } : {}) }
   const purpose: JobPurpose = {

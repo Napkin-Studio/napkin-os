@@ -16,6 +16,8 @@ import { landingWhy } from '../jobs/landing'
 import { isActive } from '../jobs/runner'
 import { proseFromText } from '../model/diff'
 import type { ModelStore } from '../model/store'
+import { keyViews } from '../lib/names'
+import { keysList } from '../model/selectors'
 import { composeScript } from './compose'
 import { refNames } from './extensions'
 
@@ -68,6 +70,18 @@ export function fitSeconds(d: Doc, scriptId: Id, target: WriteTarget): number {
   return Math.max(0.5, Math.round((target_s / n) * 2) / 2)
 }
 
+/** The names Skye may write (context.refs): each whole key by its bare name first (owner 2026-10-15: Skye was
+ *  given only the views, so "@samurai is not in the references" and it wrote @samurai_front, @samurai_side…
+ *  instead), labelled with its views, then every view by its own name. */
+export function writeRefs(d: Doc): WriteInput['context']['refs'] {
+  const keys = keysList(d).flatMap((k) => {
+    const { views } = keyViews(d, k.key)
+    return views.length ? [{ name: k.key, role: k.role, label: `the whole ${k.role}: ${views.map((v) => v.variant).join(', ')}`.slice(0, 120) }] : []
+  })
+  const views = Object.values(d.refs).map((r) => ({ name: `${r.key}_${r.variant}`, role: r.role, ...(r.label ? { label: r.label.slice(0, 120) } : {}) }))
+  return [...keys, ...views]
+}
+
 /** Whether Skye leaves this item alone unless asked (Keep mine put skye in its hands_off). */
 export function handsOff(d: Doc, target: WriteTarget): boolean {
   const map = { scene: d.scenes, shot: d.shots, beat: d.beats }[target.kind] as Record<string, { hands_off?: string[] }>
@@ -80,7 +94,7 @@ export async function writeInput(store: ModelStore, scriptId: Id, target: WriteT
   const prose = store.text.prose(KIND[target.kind], target.id)
   const script = d.scripts[scriptId]
   const sceneId = target.kind === 'scene' ? target.id : target.kind === 'shot' ? d.shots[target.id]?.scene_id : d.shots[d.beats[target.id]?.shot_id ?? '']?.scene_id
-  const refs = Object.values(d.refs).map((r) => ({ name: `${r.key}_${r.variant}`, role: r.role, ...(r.label ? { label: r.label.slice(0, 120) } : {}) }))
+  const refs = writeRefs(d)
   return {
     intent,
     target,

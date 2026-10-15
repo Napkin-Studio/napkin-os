@@ -181,7 +181,7 @@ def test_a_camera_reading_runs_as_frame_with_the_current_frame_and_no_continuity
     (images,) = [t["images"] for t in wire.calls[0]["turns"][:1]]
     assert len(images) == 1 and images[0]["media_type"] == "image/jpeg"
     assert Image.open(io.BytesIO(__import__("base64").b64decode(images[0]["data"]))).size[0] <= 768
-    assert job["director"]["promptVersion"] == "director.v7"
+    assert job["director"]["promptVersion"] == "director.v8"  # the configs name v8 (features/canvas-nodes.clan); frame_edit is unchanged from v7
 
 
 def test_other_ops_send_the_model_no_image():

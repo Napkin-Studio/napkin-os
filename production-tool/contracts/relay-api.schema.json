@@ -352,6 +352,10 @@
                 "type": "string",
                 "maxLength": 60,
                 "description": "The ref's free label ('Maya's beach outfit')."
+              },
+              "optional": {
+                "const": true,
+                "description": "Offered, not asked for (owner 2026-10-15, features/canvas-nodes.clan): in the node's scope but not named by the shot's words or linked into the shot. The director may send it only as an addition that gives a definite advantage, listed in its output's `added` with why; the relay strips one sent without a reason. Absent: required, the job sends it (a frame or a clip may not leave it out or swap it for another picture)."
               }
             },
             "required": [

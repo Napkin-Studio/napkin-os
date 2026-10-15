@@ -76,6 +76,12 @@
 .tray-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 2px; font-size: 12px; line-height: 1.4; cursor: pointer; }
 .tray-row input { margin: 2px 0 0; width: 14px; height: 14px; accent-color: var(--tool); flex: none; }
 .tray-row b { font-weight: 600; }
+/* A shot's references under its row (features/canvas-nodes.clan): asked-for ones, then Dex's additions. */
+.tray-refs { display: flex; flex-direction: column; gap: 1px; margin: -2px 0 4px 26px; }
+.tray-ref { font-size: 11.5px; line-height: 1.4; padding: 1px 0; overflow-wrap: break-word; }
+.tray-ref .pt-ref { white-space: nowrap; }
+.tray-ref.added { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.tray-ref input { margin: 2px 0 0; width: 13px; height: 13px; accent-color: var(--tool); flex: none; }
 .tray-words { display: flex; flex-direction: column; gap: 4px; }
 .tray-words .textarea { min-height: 56px; font-size: 13px; }
 .send-tray .taghints { margin: 0; }

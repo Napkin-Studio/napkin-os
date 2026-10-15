@@ -101,8 +101,9 @@ def view_angle(op: str, inp: dict, sheet: dict | None) -> dict | None:
     return {"horizontal": VIEW_ANGLES[inp["view"]], "vertical": 0.0}
 def ref_roles(inp: dict, op: str, sheet: dict | None) -> list[tuple[dict, str]]:
     """The input refs in send order, each with its provider role: a character ref is `character`
-    and every other role is `object`. Refs carry wire tags (names.py) by now."""
-    refs = list(inp.get("refs") or [])
+    and every other role is `object`. Refs carry wire tags (names.py) by now. An `optional` ref (offered,
+    not asked for: owner 2026-10-15) is left out: with no model, nothing has a reason to add it."""
+    refs = [r for r in inp.get("refs") or [] if not r.get("optional")]
     return [(r, "character" if r["role"] == "character" else "object") for r in refs]
 
 

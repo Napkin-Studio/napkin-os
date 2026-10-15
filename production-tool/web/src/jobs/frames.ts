@@ -68,11 +68,12 @@ export function scriptText(d: ProductionDocument, storyboardId?: string): string
 }
 
 /** The whole frame request for the shot at `index` of a storyboard (absent: the main one). */
-export async function frameInput(relay: Relay, d: ProductionDocument, index: number, text?: string, strict = true, storyboardId?: string): Promise<JobInput> {
+export async function frameInput(relay: Relay, d: ProductionDocument, index: number, text?: string, strict = true, storyboardId?: string, declined: readonly string[] = []): Promise<JobInput> {
   const sb = boardOf(d, storyboardId)
   const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
-  const refs = await refsFor(relay, d, shot, text)
+  // The shot's named and linked refs, required; the storyboard's others, offered (features/canvas-nodes.clan).
+  const refs = await refsFor(relay, d, shot, text, { offer: true, declined })
   const script = scriptText(d, sb?.id)
   const ratio = sb?.ratio
   return {
@@ -92,7 +93,7 @@ export async function drawFrame(deps: FrameDeps, index: number, how: FrameHow, o
   const sb = boardOf(d, opts.storyboardId)
   const shot = shotsOf(d, sb?.id)[index]
   if (!shot) throw new Error('That shot is gone.')
-  const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent, sb?.id)
+  const input = await frameInput(deps.relay, d, index, opts.text, !opts.parent, sb?.id, deps.ui.get().declinedAdds?.[shot.id])
   const purpose: JobPurpose = { for: 'frame', shotId: shot.id, how, ...(opts.parent ? { parentFrameId: opts.parent.id } : {}) }
   const parents = opts.parent?.job_id ? [opts.parent.job_id] : []
   return deps.runner.submit('frame', input, parents, purpose, undefined, opts.modelChoice, opts.followRun ? { local: { followRun: opts.followRun } } : {})

@@ -25,7 +25,7 @@ from pathlib import Path
 from contracts import Contracts
 
 WRITE_MODEL = "claude-sonnet-5-5"
-PROMPT_VERSION = "skye.v1"
+PROMPT_VERSION = "skye.v2"  # skye.v1 stays bundled: ModelWriter(prompt_version="skye.v1") rolls back
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
@@ -51,16 +51,35 @@ def output_schema(contracts_root: Path) -> dict:
     }
 
 
+def keep_names(before: str, lines: list[dict]) -> list[dict]:
+    """A draft keeps the person's @names (owner 2026-10-15: the script turned '@samurai' into
+    @samurai_front, @samurai_side… shot by shot). Where the words say a bare @samurai, a view of it the
+    words never name (@samurai_back) goes back to @samurai."""
+    said = set(MENTION.findall(before))
+    bare = {n for n in said if "_" not in n}
+
+    def back(m: re.Match) -> str:
+        name = m.group(1)
+        key = name.split("_", 1)[0]
+        return "@" + (key if "_" in name and key in bare and name not in said else name)
+    return [{**x, "text": MENTION.sub(back, x["text"])} for x in lines]
+
+
 def settle(inp: dict, out: dict) -> dict:
     """The relay's part of the answer: target and base_hash from the input, other targets dropped,
-    new beats inside the shot, notes cut to 200 characters."""
+    the person's @names kept (keep_names), new beats inside the shot, notes cut to 200 characters."""
     w = inp["write"]
+    before = " ".join(x["text"] for x in w["lines"])
     target = w["target"]
     writes = []
     for d in out.get("writes") or []:
         if d.get("target", target) != target:
             continue
         d = {**d, "target": target, "base_hash": w["base_hash"], "note": (d.get("note") or "")[:200]}
+        if d.get("lines"):
+            d["lines"] = keep_names(before, d["lines"])
+        if d.get("new_beats"):
+            d["new_beats"] = [{**b, "text": keep_names(before, [{"text": b["text"]}])[0]["text"]} for b in d["new_beats"]]
         limit = d.get("duration_s") or w.get("seconds")
         if d.get("new_beats") and limit:
             d["new_beats"] = [{**b, "at_s": min(b["at_s"], int(limit * 2) / 2)} for b in d["new_beats"]]
@@ -73,9 +92,10 @@ class ModelWriter:
     model = WRITE_MODEL
     prompt_version = PROMPT_VERSION
 
-    def __init__(self, port, contracts_root: Path, prompt_dir: Path = PROMPTS):
+    def __init__(self, port, contracts_root: Path, prompt_dir: Path = PROMPTS, prompt_version: str = PROMPT_VERSION):
         self.port = port
-        self.system = (prompt_dir / f"{PROMPT_VERSION}.md").read_text()
+        self.prompt_version = prompt_version
+        self.system = (prompt_dir / f"{prompt_version}.md").read_text()
         self.schema = output_schema(contracts_root)
 
     def write(self, req: dict) -> dict:

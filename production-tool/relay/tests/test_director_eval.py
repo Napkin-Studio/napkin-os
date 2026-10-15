@@ -198,3 +198,27 @@ def test_every_clip_patch_case_passes_on_recorded_director_v7_replies():
     assert set(rows) >= {c["id"] for c in PATCH_CASES}, "record every clip_patch case"
     failing = {cid: r for cid, r in rows.items() if cid in {c["id"] for c in PATCH_CASES} and not all(r.values())}
     assert not failing, failing
+
+
+def test_v8_keeps_every_ref_the_shot_names_and_says_why_it_adds_one():
+    """The owner's case (2026-10-15, features/canvas-nodes.clan), recorded live on director.v8: the shot says
+    @samurai, so its four views go; the hall picture goes only as an addition with a reason."""
+    rows = table(load(), ["director.v8"])["director.v8"]
+    assert all(rows["frame_samurai_keeps_refs"].values()), rows["frame_samurai_keeps_refs"]
+
+
+def test_a_reply_that_swaps_samurai_for_one_view_fails_the_eval():
+    import json as _json
+
+    from eval.director_eval import Replay, answer, recorded, score
+    data = load()
+    case = next(c for c in data["cases"] if c["id"] == "frame_samurai_keeps_refs")
+    reply = _json.loads(recorded("director.v8", case["id"])["reply"])
+    job = reply["providerJob"]
+    # What the frames of 2026-10-15 did: one view per shot, the rest left out, nothing said.
+    job["refs"] = [r for r in job["refs"] if r["name"] == "samurai_side"]
+    job["prompt"] = "A wide shot. @samurai_side sweeps the hall in one clean arc. Dust lifts and vanishes out the door."
+    reply.pop("added", None)
+    out = answer(case, data, "director.v8", Replay(_json.dumps(reply)))
+    assert out == {"error": out.get("error")} and "left out" in out["error"]  # the relay refuses it
+    assert score(case, out) == {"valid": False}

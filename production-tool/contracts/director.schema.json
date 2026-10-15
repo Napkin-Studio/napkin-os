@@ -23,6 +23,20 @@
     "frameEdit": {
       "$ref": "#/$defs/frameEdit"
     },
+    "added": {
+      "type": "array",
+      "maxItems": 14,
+      "description": "The references sent beyond those asked for (owner 2026-10-15, features/canvas-nodes.clan): each an input ref marked `optional` that the providerJob sends because it gives a definite advantage, by its wire tag, with why in a few words. The person sees each as 'Added by Dex: @x · why' and can untick it. A required ref is never listed here; an optional ref sent without an entry here is stripped by the relay.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "The ref's wire tag, as in providerJob.refs." },
+          "why": { "type": "string", "minLength": 3, "maxLength": 120 }
+        },
+        "required": ["name", "why"],
+        "additionalProperties": false
+      }
+    },
     "rationale": {
       "type": "string",
       "maxLength": 300

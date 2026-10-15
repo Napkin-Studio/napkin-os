@@ -129,6 +129,48 @@ def _clip_frame_only(job: dict, op: str, sheet: dict) -> None:
         job["refs"] = []
 
 
+# The ops whose refs are a shot's (owner 2026-10-15, features/canvas-nodes.clan): the pictures its words
+# name and those linked into it are required; the rest of its scope comes `optional`.
+SHOT_OPS = ("frame", "clip")
+
+
+def _refs_go(op: str, job: dict, sheet: dict) -> bool:
+    """Whether this job can carry refs at all: a Runway clip takes none with a first frame
+    (video.firstFrameWithRefs false), nor from words alone (the text endpoint)."""
+    if op != "clip":
+        return True
+    if job.get("firstFrame"):
+        return bool(sheet["video"]["firstFrameWithRefs"])
+    return not (sheet["ops"].get(op) or {}).get("textEndpoint")
+
+
+def _hold_refs(op: str, job: dict, payload: dict, output: dict, sheet: dict) -> None:
+    """The references a shot sends are the ones asked for (owner 2026-10-15: "instead of just using
+    '@samurai' [it] used different references for the frames, unless it offers a definite advantage").
+
+    - A frame or clip that can carry refs sends every required input ref (one without `optional`):
+      an answer that leaves one out, or swaps it for another picture, is refused, and the relay then
+      makes the job as written (the passthrough sends exactly the required refs).
+    - An optional ref goes only with a reason in `added`; one sent without is taken out (its @tag is
+      then said in words, below), and `added` keeps only the optional refs the job sends.
+    """
+    refs_in = payload.get("refs") or []
+    optional = {r["asset"]["sha256"] for r in refs_in if r.get("optional")}
+    if op in SHOT_OPS and _refs_go(op, job, sheet):
+        sent = {r["sha256"] for r in job.get("refs") or []}
+        missing = [r for r in refs_in if not r.get("optional") and r["asset"]["sha256"] not in sent]
+        if missing:
+            r = missing[0]
+            raise DirectorError(f"left out @{r.get('tag') or r.get('name') or r['id']}, which the shot asks for")
+    why = {a["name"]: a["why"].strip() for a in output.get("added") or [] if (a.get("why") or "").strip()}
+    job["refs"] = [r for r in job.get("refs") or [] if r["sha256"] not in optional or r["name"] in why]
+    added = [{"name": r["name"], "why": why[r["name"]][:120]} for r in job["refs"] if r["sha256"] in optional]
+    if added:
+        output["added"] = added
+    else:
+        output.pop("added", None)
+
+
 def provider_sizes(provider: str, op: str, model: Optional[str] = None) -> Optional[frozenset]:
     """The sizes the provider's endpoint takes for this op and model, or None where it takes any W:H
     (or none). The one place the tables are read: provider_ratio, the relay mock and the crop all go
@@ -302,6 +344,39 @@ def load_prompt(path: Path, contracts: Path = CONTRACTS) -> str:
     return path.read_text().replace(ROLE_LINES, role_lines(contracts)).replace(CAMERA_WORDS, camera_lines(contracts))
 
 
+# An @name in a script or shot: key_variant (refName) or a bare key (relay/names.py MENTION).
+MENTION = re.compile(r"(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)")
+
+
+def _keep_script_names(payload: dict, shots: list) -> None:
+    """A plan keeps the script's @names (owner 2026-10-15): where the script says a bare @samurai, a
+    shot that names one of its views the script never names (@samurai_back) goes back to @samurai,
+    in its words and its refs. Applied to every answer, so no prompt version can swap them."""
+    said = set(MENTION.findall(payload.get("script") or ""))
+    for s in payload.get("shots") or []:  # a re-plan's shots are the script's words too
+        said |= set(MENTION.findall(" ".join(str(s.get(f) or "") for f in ("action", "direction"))))
+        said |= set(s.get("refs") or [])
+    bare = {n for n in said if "_" not in n}
+
+    def back(name: str) -> str:
+        key = name.split("_", 1)[0]
+        return key if "_" in name and key in bare and name not in said else name
+
+    for shot in shots:
+        for field in ("action", "direction"):
+            if shot.get(field):
+                shot[field] = MENTION.sub(lambda m: "@" + back(m.group(1)), shot[field])
+        for beat in shot.get("beats") or []:
+            if beat.get("text"):
+                beat["text"] = MENTION.sub(lambda m: "@" + back(m.group(1)), beat["text"])
+        if shot.get("refs"):
+            refs: list = []
+            for n in shot["refs"]:
+                if back(n) not in refs:
+                    refs.append(back(n))
+            shot["refs"] = refs
+
+
 class DirectorError(Exception):
     """The director's answer cannot be used: it breaks the routed sheet or the job's own facts."""
 
@@ -437,17 +512,21 @@ class Director:
         return DirectorResult(output, agent_block, usage.as_dict())
 
     def _check(self, op, payload, provider_name, sheet, output, extra=frozenset()) -> None:
+        asked = op  # a frame_edit runs as frame below; its refs are Dex's to choose (frame-change-edit)
         errs = sorted(self._validate("director.schema.json").iter_errors(output), key=lambda e: list(e.path))
         if errs:
             raise DirectorError("; ".join(f"{'/'.join(map(str, e.path)) or '$'}: {e.message}" for e in errs[:5]))
         if output["op"] != op:
             raise DirectorError(f"answered op {output['op']!r} for {op!r}")
+        if "providerJob" not in output:
+            output.pop("added", None)  # additions are refs a provider job sends
         if op == "shot_list":
             if output.get("question") is not None:
                 if "shots" in output:
                     raise DirectorError("answered with a question and shots; send one or the other")
                 return
             self._check_shots(payload, output["shots"])
+            _keep_script_names(payload, output["shots"])
             return
         if "shots" in output:
             raise DirectorError(f"shots belong to shot_list, not {op}")
@@ -496,6 +575,7 @@ class Director:
         if stray:
             raise DirectorError(f"the job names artifacts that are not in the input: {sorted(stray)[0]}")
         _clip_frame_only(job, op, sheet)
+        _hold_refs(asked, job, payload, output, sheet)
         names = [r["name"] for r in job["refs"]]
         if len(set(names)) != len(names) or not all(TAG.match(n) for n in names):
             raise DirectorError(f"ref names must be unique canonical tags: {names}")

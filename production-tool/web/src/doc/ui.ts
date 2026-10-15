@@ -78,6 +78,9 @@ export interface ProjectUi {
   frameRegions: Record<string, Region | undefined>
   /** "Draw the rest" is under way: each finished frame starts the next shot (jobs/frames.ts). */
   drawingRest?: boolean
+  /** Per shot, the references the person unticked from "Added by Dex" (features/canvas-nodes.clan): they are
+   *  not offered to Dex on that shot's frames and clips, so Dex cannot add them again (jobs/select.ts). */
+  declinedAdds?: Record<string, string[]>
   /** "Update what follows" is under way (jobs/follow.ts). */
   following?: FollowRun
   /** The person's undo and redo steps (clan-store LocalUndo), kept here so they survive a reload. */

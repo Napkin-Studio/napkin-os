@@ -6,7 +6,8 @@ logs the result in the record; CI only replays (`score`), so it makes no model c
   uv run python -m eval.skye_eval score               # replays eval/recorded/skye.v1/*.json
   uv run python -m eval.skye_eval score --passthrough # the checks over the no-model writer
 
-The checks: a draft comes back (or a question, never both); every @name is kept and none invented;
+The checks: a draft comes back (or a question, never both); every @name is kept (a draft too), none
+invented and none swapped for another (a bare @samurai never becomes @samurai_front);
 the blocks keep their types and order; Make it N s sets that length; a beat lands inside the shot;
 the note is one short first-person line with no price; the words are shorter for Tighten.
 """
@@ -58,7 +59,12 @@ def score(case: dict, intent: str, out: dict) -> dict[str, bool]:
     before = " ".join(x["text"] for x in req["lines"])
     names_before = set(MENTION.findall(before))
     known = {r["name"] for r in req["context"]["refs"]}
-    checks["keeps @names"] = names_before <= set(MENTION.findall(words)) or intent == "draft"
+    checks["keeps @names"] = names_before <= set(MENTION.findall(words))
+    # Never a view in place of the whole character the words name (owner 2026-10-15: @samurai became
+    # @samurai_front, @samurai_side… line by line).
+    bare = {n for n in names_before if "_" not in n}
+    checks["no swapped @name"] = not any("_" in n and n.split("_", 1)[0] in bare and n not in names_before
+                                         for n in MENTION.findall(words))
     checks["invents no @name"] = set(MENTION.findall(words)) <= (names_before | known)
     checks["hash and target"] = d["base_hash"] == BASE and d["target"] == req["target"]
     if intent != "draft":

@@ -245,9 +245,10 @@ for f in sorted(HERE.glob("examples/config.*.json")):
         fail(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
     # Contract 3 needs the director that asks (director.v6): v5 against v3 is refused by the relay.
     # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; director.v7
-    # (features/frame-change-edit.clan) adds Change this frame. v6 and v6.1 stay bundled for a rollback.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7"):
-        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1 or v7")
+    # (features/frame-change-edit.clan) adds Change this frame; director.v8 (features/canvas-nodes.clan)
+    # holds a shot's required references and lists Dex's additions. v6, v6.1 and v7 stay bundled for a rollback.
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8"):
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7 or v8")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.

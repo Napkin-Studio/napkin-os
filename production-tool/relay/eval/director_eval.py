@@ -21,6 +21,10 @@ Fix this moment (features/clip-moment-edit.clan): the clip_patch cases (`since` 
 the still at the note's moment (`frame`), as the relay does, and score route (a job, or the fix/remake
 ask exactly when the case expects one), ask, words_first, relay_keyframe (no keyframe, mask, region or
 ratio of Dex's own), take (the take as the one `current` ref) and length.
+
+A shot's references (features/canvas-nodes.clan, owner 2026-10-15): a case with `required` (`since`
+director.v8) scores keeps_refs (every ref the shot's words name is sent, by its own tag) and no_swap
+(any other picture goes only as an addition listed in `added` with why).
 """
 
 from __future__ import annotations
@@ -161,6 +165,12 @@ def score(case: dict, out: dict) -> dict:
     res["roles"] = all(roles.get(n) == r for n, r in (case.get("roles") or {}).items())
     res["refs"] = set(roles) <= set(case["only_refs"]) if case.get("only_refs") else True
     res["length"] = added <= case.get("budget", 500)
+    if case.get("required"):
+        # A shot's refs (owner 2026-10-15, features/canvas-nodes.clan): every ref its words name goes, by
+        # its own tag, and any other picture goes only as an addition with a reason.
+        why = {a.get("name") for a in out.get("added") or [] if (a.get("why") or "").strip()}
+        res["keeps_refs"] = set(case["required"]) <= set(roles)
+        res["no_swap"] = all(n in case["required"] or n in why or n in ("anchor", "previous") for n in roles)
     return res
 
 
