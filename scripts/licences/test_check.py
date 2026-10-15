@@ -253,10 +253,17 @@ def test_a_missing_licence_needs_a_clarification_checked_against_the_file_hash()
 
 
 # ==== scratch repositories =========================================================
+def outside_env(**extra) -> dict:
+    """os.environ without git's own GIT_* variables. Run inside a git hook (the pre-push hook runs
+    these tests), GIT_DIR and GIT_INDEX_FILE point at the real repository, so a fixture repo's
+    `git commit` would otherwise land on the branch being pushed."""
+    return {**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}, **extra}
+
+
 def git(repo: Path, *args: str, env=None) -> str:
     return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True,
-                          env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-                               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t", **(env or {})}).stdout
+                          env=outside_env(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                                          GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t", **(env or {}))).stdout
 
 
 def toml_dump(d: dict) -> str:
@@ -591,7 +598,7 @@ def _push(repo: Path, base: str, env: dict) -> subprocess.CompletedProcess:
     line = f"refs/heads/feat/x {head} refs/heads/feat/x {base}\n"
     return subprocess.run([str(repo / ".githooks" / "pre-push"), "origin", "x"], cwd=repo, input=line,
                           capture_output=True, text=True,
-                          env={**os.environ, "NAPKIN_SKIP_CHECKS": "1", "NAPKIN_NO_FEATURE": "1", **env})
+                          env=outside_env(NAPKIN_SKIP_CHECKS="1", NAPKIN_NO_FEATURE="1", **env))
 
 
 def test_pre_push_refuses_a_policy_change_without_napkin_licence_approved(tmp_path):
@@ -599,7 +606,7 @@ def test_pre_push_refuses_a_policy_change_without_napkin_licence_approved(tmp_pa
     pol = repo / "licences" / "policy.toml"
     pol.write_text(pol.read_text() + toml_dump({"exception": [EXC]}).lstrip())
     git(repo, "commit", "-qam", "exception")
-    env = {k: v for k, v in os.environ.items() if k != "NAPKIN_LICENCE_APPROVED"}
+    env = {k: v for k, v in os.environ.items() if k != "NAPKIN_LICENCE_APPROVED" and not k.startswith("GIT_")}
     r = _push(repo, base, {**env, "NAPKIN_LICENCE_APPROVED": ""})
     assert r.returncode == 1 and "approval" in r.stdout + r.stderr
     assert _push(repo, base, {"NAPKIN_LICENCE_APPROVED": "Shrey"}).returncode == 0
@@ -630,7 +637,7 @@ def test_check_sh_routes_lockfiles_and_code_to_the_licences_suite(tmp_path, path
     git(repo, "add", "-A")
     git(repo, "commit", "-qm", "change")
     out = subprocess.run(["bash", "scripts/check.sh", "--list", "--range", f"{base}..HEAD"], cwd=repo,
-                         capture_output=True, text=True).stdout
+                         capture_output=True, text=True, env=outside_env()).stdout
     assert "licences" in out.split("suites:")[-1], out
 
 
