@@ -611,8 +611,8 @@ export class CanvasController {
 
   // ── views: any named image is a key's front; the others are generated from it ──
 
-  /** Generate the other views of a key from its front (any image named key_front). */
-  async makeViews(key: Key, views: View[] = OTHER_VIEWS, modelChoice?: ModelChoice) {
+  /** What every view of a key is made from: its front's picture and shape, and the key's other named pictures. */
+  private async viewInputs(key: Key) {
     const doc = this.doc()
     const front = refByName(doc, `${key}_front`)
     if (!front) throw new Error(`Set an image as ${key}'s front first.`)
@@ -622,11 +622,17 @@ export class CanvasController {
     // Other variants of the key keep the identity (up to 3, KEY_EXTRAS in lib/names.ts).
     const refs: JobInputRef[] = []
     for (const r of refsList(doc).filter((x) => x.key === key && x.id !== front.id && x.asset).slice(0, 3)) refs.push(await namedInput(this.s.relay, doc, r))
-    const els = this.els()
-    const anchor = frontEl ? bounds([frontEl]) : { maxX: 0, minY: 0 }
     // The views keep the front's exact shape, so they line up with it (frame-aspect).
     const known = doc.assets[front.asset]
     const aspect: Aspect = known?.w && known?.h ? { w: known.w, h: known.h } : frontEl ? this.aspectOfEl(frontEl) : { w: 4, h: 5 }
+    return { front, frontEl, image, refs, aspect, parents: front.node ? [front.node] : [] }
+  }
+
+  /** Generate the other views of a key from its front (any image named key_front). */
+  async makeViews(key: Key, views: View[] = OTHER_VIEWS, modelChoice?: ModelChoice) {
+    const { front, frontEl, image, refs, aspect, parents } = await this.viewInputs(key)
+    const els = this.els()
+    const anchor = frontEl ? bounds([frontEl]) : { maxX: 0, minY: 0 }
     const size = nodeSize(aspect)
     // A row to the right of the front, clear of anything already there.
     const slot = nextSlot(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
@@ -634,7 +640,6 @@ export class CanvasController {
     let x = slot.x
     for (const view of views) {
       const jobId = newId('job')
-      const parents = front.node ? [front.node] : []
       let gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
       x += size.w + 40
       let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, { x: gen.x, y: gen.y })
@@ -647,10 +652,38 @@ export class CanvasController {
       placed.push({ jobId, view })
     }
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
-    for (const p of placed) {
-      // The front's own shape: the relay asks for the nearest size and crops back to it.
-      await this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), aspect }, front.node ? [front.node] : [], { for: 'canvas' }, p.jobId, modelChoice)
+    // Every view is written down at once, before any of them is answered: one at a time, a reload
+    // while the first was being directed left the others placed and never sent (2026-10-15).
+    // The front's own shape: the relay asks for the nearest size and crops back to it.
+    await Promise.all(placed.map((p) => this.s.runner.submit('view', { view: p.view, image, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, p.jobId, modelChoice)))
+  }
+
+  /** Make a view whose placeholder never started (runner.adopt), into that same placeholder. */
+  async remakeView(jobId: string, modelChoice?: ModelChoice) {
+    const c = cd(this.nodeEl(jobId))
+    if (c?.kind !== 'gen' || c.op !== 'view' || !c.view) throw new Error('This is not a view.')
+    const key = c.parentIds[0] ? this.nameOn(c.parentIds[0])?.key : undefined
+    if (!key) throw new Error('Its front has no name now: name the front, then make the views again.')
+    const { image, refs, aspect, parents } = await this.viewInputs(key)
+    await this.s.runner.submit('view', { view: c.view, image, ...(refs.length ? { refs } : {}), aspect }, parents, { for: 'canvas' }, jobId, modelChoice)
+  }
+
+  /**
+   * Placeholders with no job in the document and none running here (the page closed before it was
+   * written down): each is asked of the relay, which either has it (it is followed and lands) or never
+   * got it (its card says so). Run when the canvas opens.
+   */
+  async recoverPlaceholders(): Promise<number> {
+    const doc = this.doc()
+    let n = 0
+    for (const e of alive(this.els())) {
+      const c = cd(e)
+      if (c?.kind !== 'gen' || c.state === 'completed' || this.canvas.imageOf(e)?.sha256) continue
+      if (doc.jobs[c.id] || this.s.runner.liveInfo(c.id)) continue
+      const r = await this.s.runner.adopt(c.id, c.parentIds)
+      if (r === 'adopted' || r === 'unstarted') n++
     }
+    return n
   }
 
   // ── the library: a key's refs out to the workspace, and back into a document ──

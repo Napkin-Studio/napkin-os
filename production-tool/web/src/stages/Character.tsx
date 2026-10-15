@@ -103,6 +103,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
   useEffect(() => {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
+    // A placeholder whose job was never written down (the page closed first): followed if the relay has it, else "never started".
+    if (ctrl) void ctrl.recoverPlaceholders().catch((e) => console.warn('could not look up the canvas placeholders', e))
   }, [ctrl])
 
   // Switching project or going Home: the canvas is saved first (features/project-home.clan).
@@ -644,6 +646,23 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   const own = frame ? doc.assets[frame.asset] : undefined
   const caption = frame?.cropped_to && own?.w && own?.h ? croppedCaption({ w: own.w, h: own.h }, frame.cropped_to.to) : undefined
   const showNode = (isActive(state) || state === 'failed' || state === 'cancelled') && !dismissed && state !== 'completed'
+  // Nothing is making it (runner.adopt): say so, never a blank box (2026-10-15).
+  if (!job && !live && runner.isUnstarted(c.id)) {
+    const what = c.view ? `The ${viewLabel(c.view).toLowerCase()} view` : 'This picture'
+    return (
+      <div className="gennode" style={{ left: tl.x, top: tl.y, width: w, height: h }}>
+        <div className={`errnode ${w < 170 ? 'compact' : ''}`} role="alert">
+          <div className="msg">{what} never started: the page closed before it was sent.</div>
+          <div className="optbar" role="group" aria-label="What to do with it">
+            {c.op === 'view' && c.view && (
+              <button className="btn sm ghost" onClick={() => void ctrl?.remakeView(c.id).catch((e) => console.warn('could not make the view', e))}>Make it</button>
+            )}
+            <button className="btn sm ghost" onClick={() => ctrl?.deleteElements([el.id])}>Remove</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <>
       {showNode && (

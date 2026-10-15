@@ -265,6 +265,18 @@ describe('landing a sketch’s frame', () => {
   })
 })
 
+/** Maya's front (896×1120), named, on the canvas as node_f. */
+async function mayaFront(t: ReturnType<typeof setup>) {
+  await systemUpdate(t.doc, (d: ProductionDocument) => {
+    d.assets[SHA('f')] = asset(SHA('f'), 'image', { w: 896, h: 1120, origin: 'generated' })
+    const kid = 'key_01K7A00000000000000000KEY1'
+    d.keys[kid] = { id: kid, v: 1, field_v: {}, key: 'maya', role: 'character' }
+    const rid = 'ref_01K7A00000000000000000REF1'
+    d.refs[rid] = { id: rid, v: 1, field_v: {}, key: 'maya', variant: 'front', role: 'character', asset: SHA('f'), node: 'node_f' }
+  }, 'sync')
+  t.canvas.els = [{ id: 'Fr', type: 'image', x: 0, y: 0, width: 300, height: 375, isDeleted: false, frameId: null, customData: { kind: 'pic', id: 'node_f', asset: SHA('f') } } as unknown as El]
+}
+
 describe('the shape of a Generate without an area, and of the views', () => {
   it('a picture’s shape snapped to the nearest of the four; words only, the storyboard’s ratio', async () => {
     await systemUpdate(t.doc, (d) => { d.assets[SHA('p')] = asset(SHA('p'), 'image', { w: 600, h: 800, origin: 'uploaded' }) }, 'sync')
@@ -289,6 +301,33 @@ describe('the shape of a Generate without an area, and of the views', () => {
     expect(t.sent[0].op).toBe('view')
     expect(t.sent[0].input.aspect).toEqual({ w: 896, h: 1120 })
     expect(t.sent[0].input.ratio).toBeUndefined()
+  })
+
+  it('every view is written down before any is answered: a reload mid-way left the others never sent (2026-10-15)', async () => {
+    await mayaFront(t)
+    // The first answer never comes (the page closes while Wren directs it).
+    t.ctrl['s'].runner.submit = vi.fn((op: string, input: JobInput, _p: string[], purpose: Rec, jobId: string) => {
+      t.sent.push({ op, input, purpose, jobId })
+      return new Promise<string>(() => {})
+    }) as never
+    void t.ctrl.makeViews('maya')
+    await vi.waitFor(() => expect(t.sent.map((x) => x.input.view)).toEqual(['three-quarter', 'side', 'back']))
+    const gens = t.canvas.els.filter((e) => (e.customData as { kind?: string } | undefined)?.kind === 'gen').map((e) => e.id)
+    expect(t.sent.map((x) => x.jobId)).toEqual(gens)
+  })
+
+  it('a placeholder nothing is making is asked of the relay; one that never started is made into itself', async () => {
+    await mayaFront(t)
+    const adopt = vi.fn(async () => 'unstarted' as const)
+    Object.assign(t.ctrl['s'].runner, { adopt, liveInfo: () => undefined })
+    t.canvas.els.push({ id: 'job_side', type: 'image', x: 400, y: 0, width: 300, height: 375, isDeleted: false, frameId: null, status: 'pending',
+      customData: { kind: 'gen', id: 'job_side', op: 'view', parentIds: ['node_f'], state: 'queued', view: 'side' } } as unknown as El)
+    expect(await t.ctrl.recoverPlaceholders()).toBe(1)
+    expect(adopt).toHaveBeenCalledWith('job_side', ['node_f'])
+    await t.ctrl.remakeView('job_side')
+    expect(t.sent).toHaveLength(1)
+    expect(t.sent[0]).toMatchObject({ op: 'view', jobId: 'job_side', purpose: { for: 'canvas' } })
+    expect(t.sent[0].input).toMatchObject({ view: 'side', aspect: { w: 896, h: 1120 } })
   })
 
   it('a node’s size keeps 300 wide, at most 400 tall', () => {
