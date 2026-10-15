@@ -105,6 +105,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const [canvas, setCanvas] = useState<Canvas | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
   const ctrl = useMemo(() => (canvas ? new CanvasController(canvas, services) : null), [canvas, services])
+  // The e2e harness reads the canvas's elements and positions (web/e2e/README.md); never in a build.
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __canvas?: Canvas | null }).__canvas = canvas }, [canvas])
   // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
   useEffect(() => {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))

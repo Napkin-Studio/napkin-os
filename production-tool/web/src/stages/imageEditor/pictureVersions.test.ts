@@ -56,7 +56,9 @@ describe('Apply on a canvas picture', () => {
     const { s } = await world()
     await applyPictureEditedStep(s, pic, out('b'))
     expect(await undo(s)).toMatchObject({ done: true, label: 'apply edits to the picture as v2' })
-    expect(pictureVersions(s.get(), NODE)).toEqual([])
+    // v1 stays on record (kept before the step), so the canvas shows it again, after a reload too.
+    expect(pictureVersions(s.get(), NODE).map((f) => [f.version, f.kind, f.asset])).toEqual([[1, 'original', SHA('a')]])
+    expect(currentPictureFrame(s.get(), NODE)?.asset).toBe(SHA('a'))
     expect(refsList(s.get())[0].asset).toBe(SHA('a'))
     expect(staleList(s.get())).toEqual([])
     await redo(s)

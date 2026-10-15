@@ -291,12 +291,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       const p = fromClient(e.clientX, e.clientY)
       const el = cardAt(p)
       const c = el && cardOf(el)
-      // A double-click on the one picture selected opens it in the Image editor (edit-canvas-pictures);
+      // A double-click on a picture opens it in the Image editor, selected alone (edit-canvas-pictures);
       // on a picture in a group, whose click selects the group, it picks that one view out first.
       const picture = c ? null : pictureToOpen(canvas.elements(), canvas.view().selectedIds, p)
-      if (picture && canvasActions.editPicture(picture)) {
+      if (picture && canvasActions.editPicture(picture.node)) {
         e.preventDefault()
         e.stopPropagation()
+        canvas.select([picture.el])
         return
       }
       if (!c) {
