@@ -25,8 +25,10 @@
 # default ${XDG_STATE_HOME:-~/.local/state}/napkin-production). Projects, sign-ins, secrets,
 # logs and pids live in the state dir, outside the repo.
 #
-# Why stop refuses: the local relay keeps jobs in memory. Stopping it while a paid job runs
-# loses the job; Runway still finishes it and charges for it.
+# Jobs outlive a restart: the relay keeps them under $state/relay-data/state and, when it
+# starts again, polls each unfinished one at once, so a clip Runway finished meanwhile still
+# lands (features/relay-durable-jobs.clan). stop still names unfinished jobs and wants
+# --force: nothing lands while the relay is down.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -89,23 +91,17 @@ json.dump(c, open(out, "w"), indent=2)
 EOF
 }
 
-unfinished_jobs() { # job ids the relay's log shows as started but not finished
-  [[ -f "$state/relay.log" ]] || return 0
-  python3 - "$state/relay.log" <<'EOF'
-import json, sys
-last = {}
-for line in open(sys.argv[1], errors="replace"):
-    if not line.startswith("{"):
-        continue
+unfinished_jobs() { # the jobs the relay keeps (store.FileStore) that have not finished
+  [[ -d "$state/relay-data/state/jobs" ]] || return 0
+  python3 - "$state/relay-data/state/jobs" <<'EOF'
+import json, pathlib, sys
+for p in sorted(pathlib.Path(sys.argv[1]).glob("*.json")):
     try:
-        d = json.loads(line)
+        d = json.loads(p.read_text())
     except ValueError:
         continue
-    if d.get("jobId") and d.get("state"):
-        last[d["jobId"]] = (d["state"], d.get("op", ""))
-for j, (s, op) in last.items():
-    if s not in ("completed", "failed", "cancelled", "refused"):
-        print(f"{j} {op} {s}")
+    if d.get("state") not in ("completed", "failed", "cancelled", "uncertain"):
+        print(f"{d.get('jobId')} {d.get('op', '')} {d.get('state')}")
 EOF
 }
 
@@ -180,7 +176,7 @@ stop() {
   [[ "${1:-}" == --force ]] && force=1
   local busy; busy="$(unfinished_jobs)"
   if [[ -n "$busy" && "$force" == 0 ]]; then
-    echo "run-production-local: jobs still running (stopping loses them; a paid one is still charged):" >&2
+    echo "run-production-local: jobs still running (they resume when the relay starts again; nothing lands meanwhile):" >&2
     echo "$busy" | sed 's/^/  /' >&2
     die "wait for them, or stop with --force"
   fi

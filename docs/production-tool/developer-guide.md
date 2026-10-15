@@ -36,7 +36,7 @@ Related documents:
 
 ## Start the relay (the local server)
 
-The local relay keeps everything in memory, so restarting it forgets all jobs. There is no sign-in: it runs every request as a fixed local person (the identity seam, `relay/identity.py`). The hosted relay has no identity source until the Napkin OS sign-in is wired in (features/os-sign-in), so it answers 401 to everything. Set `NAPKIN_LOCAL_USER=handle@agency` to run as someone other than `local@napkin`.
+The local relay keeps its jobs, quotas and spend under its `--data` dir (`state/`, `relay/store.py` FileStore), so a restart forgets nothing: it polls every unfinished job again at once, and a result the provider finished meanwhile still lands. Delete `state/` to start clean. There is no sign-in: it runs every request as a fixed local person (the identity seam, `relay/identity.py`). The hosted relay has no identity source until the Napkin OS sign-in is wired in (features/os-sign-in), so it answers 401 to everything. Set `NAPKIN_LOCAL_USER=handle@agency` to run as someone other than `local@napkin`.
 
 ```
 cd production-tool/relay

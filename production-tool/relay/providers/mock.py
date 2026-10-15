@@ -10,16 +10,21 @@ Video ops have no encoder here, so they return the stamped first frame as a stil
 
 from __future__ import annotations
 
+import dataclasses
 import io
+import json
+import os
+import re
 import time
 import uuid
+from pathlib import Path
 from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .types import (
     VIDEO_OPS, AssetResolver, ProviderError, ProviderJob,
-    ProviderOutput, Status, check_capabilities, effective_sheet, load_sheet, video_audio,
+    ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, video_audio,
 )
 
 # The alternates in capabilities/mock.json, so local dev can exercise the regenerate menu.
@@ -75,7 +80,43 @@ class MockProvider:
         self._assets, self._fetch, self._delay = assets, fetch, delay_s
         self._clock, self._sheet = clock, sheet or load_sheet("mock")
         self._jobs: dict[str, dict] = {}
+        self._dir: Optional[Path] = None
         self.requests: list[dict] = []  # the request each submit would have sent
+
+    def keep_in(self, root) -> None:
+        """Keep each task under `root` and read it back there, as a real provider keeps its tasks
+        while the relay restarts (features/relay-durable-jobs.clan). Times are then wall-clock, since
+        a monotonic clock means nothing to the next process."""
+        self._dir = Path(root)
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._clock = time.time
+
+    def _task_file(self, request_id: str) -> Optional[Path]:
+        if self._dir is None or not re.fullmatch(r"mock_[0-9a-f]{12}", request_id):
+            return None
+        return self._dir / f"{request_id}.json"
+
+    def _keep(self, request_id: str) -> None:
+        path = self._task_file(request_id)
+        if path is None:
+            return
+        entry = self._jobs[request_id]
+        tmp = path.with_name(f".{path.name}.tmp")
+        tmp.write_text(json.dumps({**entry, "job": dataclasses.asdict(entry["job"])}))
+        os.replace(tmp, path)
+
+    def _recall(self, request_id: str) -> Optional[dict]:
+        path = self._task_file(request_id)
+        if path is None or not path.exists():
+            return None
+        try:
+            entry = json.loads(path.read_text())
+            raw = entry["job"]
+            entry["job"] = ProviderJob(**{**raw, "refs": [Ref(**r) for r in raw.get("refs") or []]})
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        self._jobs[request_id] = entry
+        return entry
 
     def capabilities(self) -> dict:
         return self._sheet
@@ -93,6 +134,7 @@ class MockProvider:
         sha = self._source_sha(job)
         self._jobs[request_id] = {"job": job, "at": self._clock(), "cancelled": False,
                                   "source": self._assets(sha).url if sha else None}
+        self._keep(request_id)
         return request_id
 
     @staticmethod
@@ -112,7 +154,7 @@ class MockProvider:
         return sha
 
     def status(self, request_id: str) -> Status:
-        entry = self._jobs.get(request_id)
+        entry = self._jobs.get(request_id) or self._recall(request_id)
         if entry is None:
             return Status("failed", error=ProviderError("provider_failed", "unknown mock request", False), kind="mock")
         if entry["cancelled"]:
@@ -147,8 +189,9 @@ class MockProvider:
         return Status("done", queue_position=0, outputs=outputs, kind="mock", cost_usd=0.0)
 
     def cancel(self, request_id: str) -> None:
-        if request_id in self._jobs:
+        if request_id in self._jobs or self._recall(request_id):
             self._jobs[request_id]["cancelled"] = True
+            self._keep(request_id)
 
 
 def make():
