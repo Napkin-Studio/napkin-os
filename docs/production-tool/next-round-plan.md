@@ -41,6 +41,7 @@ Sizes: S is up to 1 day, M is 2 to 3 days, L is 4 to 6 days, XL is more than
 | 8 | The drawing's frame is hard to select. | [container-select](../../features/container-select.clan) | M | **Approved** | board-move (shared press table) |
 | 9 | Each node could be a CLAN file with two props: what it shows and what it feeds. | [clan-nodes](../../features/clan-nodes.clan) | XL | Pending (**needs discussion**) | Owner answers; os-sign-in; brief-research-spin-in |
 | 10 | Making a frame or a picture from a prompt on the canvas is not built. | [prompt-to-frame](../../features/prompt-to-frame.clan) | L | Pending (owner answers) | Shrey's canvas work for items 7 and 8 (phases 3-5) |
+| 11 | One concept, every format: see it on billboards, TV, reels and print with one click (Shrey, 2026-10-15). | [campaign-formats](../../features/campaign-formats.clan) | XL | Pending (**needs owner answers**) | Owner answers CF1-CF11; ~$8.30 paid tests; connected-video phase 1; board-autolayout; audio-mix for phase 5's mix |
 | IM4 | Open canvas pictures and references in the Image editor (split out of image-editor-masks-layers, 2026-10-15). | none yet | ? | Pending (**new discussion**) | Owner discussion first |
 
 Each design was written by one agent and then checked by a second agent that
@@ -516,6 +517,68 @@ Record: [`features/prompt-to-frame.clan`](../../features/prompt-to-frame.clan) �
 
 ---
 
+## 11. One concept, every format
+
+Record: [`features/campaign-formats.clan`](../../features/campaign-formats.clan) · Size XL · Pending
+(**needs owner answers**). Full write-up with sources: [campaign-formats.md](campaign-formats.md).
+
+**What we found**
+
+- Agencies adapt one approved master into each format: re-laid stills, film cutdowns
+  (30, 15, 6 s) and native bumpers. The logo, line, colours and fonts stay locked, and a person
+  reviews every format.
+- Tools (Adobe GenStudio, Canva, Pencil, Celtra, Smartly, Meta and Google auto-crop or expand) make
+  "one click" reliable for stills only. Auto-crop cuts logos and heads, and generative fill goes
+  soft at print size.
+- 3.19, the format packs (67 draft formats) and contract-v3's `format_set`, `size`, `resize` and
+  `cutdown` exist, but nothing is built. `selbar.ts:55` is a stub.
+- 3.19 assumes things the models can't do:
+  - no Runway model tracks a subject;
+  - images have no outpaint, only an Ideogram 4.5 mask;
+  - Aleph 2 has no 4:5;
+  - Veo makes only 16:9 and 9:16.
+
+**The approach (D, a method per format)**
+
+- Wren asks once what must stay. Each format is then a free crop when that holds, an Ideogram extend
+  for moderate gaps, or a Gemini regeneration for extreme shapes. Banners are a layout.
+- Type, logo, supers and the end card are layers laid out per format, never painted into pictures.
+- Cutdowns re-edit the same takes. Dex picks the beats and Edie cuts.
+- Vertical, 4:5 and 1:1 video are crops per shot, with Aleph 2 only on the shots where the crop fails.
+- Everything lands on one Campaign board: a grid by channel with safe-area overlays, status, Jude's
+  checks, and Redo, Change method, Adjust crop, Edit type and Lock on each tile.
+- Export makes one zip at delivery size with a manifest. OOH files say "Confirm with the media owner".
+- A typical campaign costs about $7 for previews and about $15 delivered, shown only in History.
+
+**Phases**
+
+| Phase | Size |
+|---|---|
+| 0. Paid tests CF-T1..T6 (~$8.30, cap $10) | S |
+| 1. Contract | M |
+| 2. Campaign board and free crops (usable alone) | L |
+| 3. Type as layers, Jude per format | M |
+| 4. Paid stills: extend, regenerate, layout, delivery upscales | L |
+| 5. Cutdowns (re-edit) | L |
+| 6. Video re-aspect (crop, Aleph where needed) | L |
+| 7. Optional: in-place mock-ups; Seedance/WAN after model-swap | M |
+
+**Open questions for Shrey** (each has a recommendation in the record)
+
+- CF1. Method per format (D), or crop only first?
+- CF2. 2K previews, with delivery upscales only on export?
+- CF3. A mixed "Campaign launch" pack, plus clients' own mixes?
+- CF4. In-place mock-ups ("see it on a billboard") for pitching?
+- CF5. Default cutdown lengths: 15 s and 6 s?
+- CF6. Vertical video: crop and Aleph, or remake natively on Veo?
+- CF7. 4:5 video made at 3:4 and then cropped?
+- CF8. May Skye suggest a shorter OOH line (ask only)?
+- CF9. Burn captions into the social versions by default?
+- CF10. Show the Format set as a Campaign board instead of a node card?
+- CF11. Approve about $8.30 of paid tests?
+
+---
+
 ## Who does what (decided by Shrey, 2026-10-15)
 
 Shrey: "Assign me the open decision discussion we have. The rest you can divide as
@@ -539,6 +602,7 @@ to Sai."
 | board-autolayout (7) | 7 | yes | L |
 | connected-video (6) | 8, plus approving about $19 of paid tests | yes | XL |
 | clan-nodes (9) | 17, plus choosing option A-D | after Shrey decides and a design is written | XL |
+| campaign-formats (11) | 11, plus approving about $8.30 of paid tests | yes, after Shrey's answers | XL |
 
 ### Build order for Sai
 
@@ -559,6 +623,9 @@ earlier ones instead of colliding:
    2026-10-15 rework it adds no `grabOrder` rows).
 7. **connected-video**, after Shrey approves its paid tests (phase 0).
 8. **clan-nodes**, once Shrey has decided and its design is approved.
+9. **campaign-formats**, once Shrey has answered CF1-CF11 and approved the design. Phases 1-3
+   spend nothing and can start after board-autolayout. Phase 5 needs connected-video phase 1
+   (the stitch edit list).
 
 ### What Shrey's answers unblock
 
@@ -578,6 +645,8 @@ specific answer:
 - container-select phase 2: how sketch areas behave.
 - prompt-to-frame: whether Draw goes through the send tray, and recording director.v9
   evals (paid).
+- campaign-formats: everything (CF1-CF11). CF2 and CF6 set the cost per pass, and CF11 approves
+  about $8.30 of paid tests (phase 0).
 - clan-nodes: everything, except phase 1a (fill and read `JobInput.context`), which
   needs only its own approval.
 
