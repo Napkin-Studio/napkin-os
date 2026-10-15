@@ -10,6 +10,11 @@ Every record is `status: exploring`. Nobody writes feature code until Shrey
 approves the design and sets `design.approved_by` (CLAUDE.md, steps 2 and 3).
 Read a record with `scripts/feature show <slug>`.
 
+This branch holds only the plan and sits on `develop`. The code it refers to (file
+and line references, the canvas engine, the Image editor) is on `feat/production-ui`,
+pushed 2026-10-15 and not yet merged into `develop`. Build each item on a branch cut
+from `feat/production-ui` until that lands.
+
 Sizes: S is up to 1 day, M is 2 to 3 days, L is 4 to 6 days, XL is more than
 6 days. One engineer working with agents.
 
