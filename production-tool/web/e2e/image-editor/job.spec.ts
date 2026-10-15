@@ -41,6 +41,8 @@ test('a running Fill leaves the stage visible and paintable, with Cancel in its 
   const before = (await overlay(page)).painted
   await stroke(page, [0.1, 0.6], [0.3, 0.7], 12)
   await expect.poll(async () => (await overlay(page)).painted).toBeGreaterThan(before)
+  // The sent mask stays as it was sent: the stroke starts Mask 2.
+  await expect(page.locator('.ie-elist')).toContainText('Mask 2 · painting')
 
   // Status and Cancel in the job's row; Cancel takes it to cancelled and adds no mask.
   const row = page.locator('.ie-elist > li', { hasText: 'Fill Mask 1: "' })
@@ -65,6 +67,11 @@ test('a Fill that asks shows its question in the row, and answering lets it go o
   // The stage is not covered while it waits either.
   const [x, y] = await at(page, 0.5, 0.5)
   expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('.askcard, .ie-job'), [x, y])).toBe(false)
-  await card.locator('.askcard-opt').first().click()
+  const option = card.locator('.askcard-opt')
+  if (await option.count()) await option.first().click()
+  else {
+    await card.getByLabel('Your answer').fill('Open wide')
+    await card.getByRole('button', { name: 'Send' }).click()
+  }
   await expect.poll(() => jobState(page, jobId), { timeout: 20_000 }).toBe('completed')
 })

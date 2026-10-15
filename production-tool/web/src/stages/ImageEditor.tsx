@@ -151,9 +151,10 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     const s = jobState(id)
     return s === 'completed' ? 'ready' : s === 'failed' || s === 'cancelled' || s === 'uncertain' ? 'failed' : 'running'
   }
-  const runningEdit = session.edits.find((e) => 'jobId' in e && e.jobId && isActive(jobState(e.jobId) ?? 'completed'))
-  const runningJob = runningEdit && 'jobId' in runningEdit ? runningEdit.jobId : undefined
-  const running = !!runningJob || !!busy
+  // Running is what the list calls working: an 'uncertain' job reads as did not work, so it no longer holds
+  // the actions (features/image-editor-masks-layers.clan); its row still offers Stop waiting and Try again.
+  const runningEdit = session.edits.find((e) => 'jobId' in e && e.jobId && stateOf(e) === 'running')
+  const running = !!runningEdit || !!busy
 
   // Pictures, loaded once each.
   const pics = useRef(new Map<string, Promise<ImageBitmap>>())
@@ -273,7 +274,9 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const parents = current?.job_id ? [current.job_id] : []
 
   // ── the tools ──
-  const onMaskOp = (op: MaskOp) => setSession((s) => withMaskOp(s, op))
+  // A fill already sent keeps the mask it was sent with: painting while it runs starts a new mask.
+  const filling = runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined
+  const onMaskOp = (op: MaskOp) => setSession((s) => withMaskOp(filling && s.active === filling ? { ...s, active: undefined } : s, op))
   const onClick = (p: Pt) => void attempt('finding the object', async () => {
     if (!framePic || !shownPlan) return
     const base = shownPlan.steps.find((s) => s.kind === 'base')
@@ -469,9 +472,8 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
           {current && shownPlan ? (
             <Stage src={url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
               before={view === 'before'} motion={motion} alphaOf={alphaOf} onMaskOp={onMaskOp} onClick={onClick} onAddText={onAddText} onText={onText} onCrop={onCrop}
-              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined}>
+              pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
               {view === 'before' && <span className="pt-mono ie-before">Before · v{version} as saved</span>}
-              {runningJob && <div className="ie-job"><JobSlot jobId={runningJob} /></div>}
             </Stage>
           ) : (
             <div className="ie-viewport" style={{ aspectRatio: String(aspect) }}>
@@ -502,14 +504,18 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               {session.edits.filter((e) => !(e.kind === 'mask' && !e.ops.length && session.active !== e.id)).map((e, i) => {
                 const st = stateOf(e)
                 const label = editLabel(e, session, st)
+                const jobId = 'jobId' in e ? e.jobId : undefined
+                // The job's status, elapsed time and Cancel (or its question) live in its row, never over the stage.
+                const live = jobId && isActive(jobState(jobId) ?? 'completed') ? jobId : undefined
                 return (
-                  <li key={e.id} className={session.active === e.id ? 'on' : ''}>
+                  <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live ? 'ie-hasjob' : ''}`}>
                     <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') setSession((s) => ({ ...s, active: e.id })) }}>
                       <span className="pt-mono ie-n">{i + 1}</span> {label}
                       {st === 'ready' && <span className="ie-ok">ready</span>}
-                      {st === 'running' && <span className="ie-run">working</span>}
+                      {st === 'running' && !live && <span className="ie-run">working</span>}
                       {st === 'failed' && <span className="ie-bad">did not work</span>}
                     </button>
+                    {live && <span className="ie-jobrow"><JobSlot jobId={live} row onRetried={(id) => setSession((s) => updateEdit(s, e.id, { jobId: id }))} /></span>}
                     <button type="button" className="ie-undo" aria-label={`Undo edit ${i + 1}, ${label}`} onClick={() => setSession((s) => undoEdit(s, e.id))}>↶</button>
                   </li>
                 )

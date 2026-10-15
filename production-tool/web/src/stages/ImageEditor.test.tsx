@@ -19,7 +19,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addFrame, addShots, MAYA, SHA, wasm } from '../test/model'
+import { addFrame, addShots, job, MAYA, SHA, wasm } from '../test/model'
 import type { EditSession } from './imageEditor/edits'
 import { ImageEditor } from './ImageEditor'
 
@@ -227,5 +227,31 @@ describe('the actions (3.12), none with a price', () => {
     expect(tray.textContent).toContain('"add condensation drops"')
     expect(tray.textContent).toContain('Ideogram 4.5 on Runway')
     expect(tray.textContent).not.toMatch(/\$|credit|cost|price/i)
+  })
+})
+
+describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () => {
+  it("an 'uncertain' job reads as did not work and holds nothing: no stripes, the actions on, Try again in its row", async () => {
+    const { el, services, ids } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    let jobId = ''
+    await act(async () => {
+      await systemUpdate(services.doc, (d) => {
+        const j = job(d, 'region_edit', [], null, { state: 'uncertain', crew: 'rhea' })
+        d.jobs[j.id] = j
+        jobId = j.id
+      })
+      services.ui.update((u) => {
+        const s = u.imageEdits![ids.frame]
+        u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 'f1', kind: 'fill', maskId: 'm1', words: 'drops', keepOutside: true, jobId }] } }
+      })
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
+    expect(row.textContent).toContain('did not work')
+    expect(row.textContent).toContain('Try again')
+    expect(el.querySelector('.ie-pending')).toBeNull()
+    expect(el.querySelector('.ie-job')).toBeNull()
+    expect(byText(el, 'Apply as new version')?.disabled).toBe(false)
+    expect(byText(el, 'Remove')?.disabled).toBe(false)
   })
 })

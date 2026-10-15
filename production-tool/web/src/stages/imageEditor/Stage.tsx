@@ -2,6 +2,13 @@
 // with the edits drawn over it. Mask paint is translucent tool blue with marching ants ("Mask: blue
 // paint marks what changes"); text sits in front and moves with Select; crop keeps the ratio. The
 // pointer does what the tool says; Space held is the Hand.
+//
+// Input (features/image-editor-masks-layers.clan): the viewport takes the pointer, so a stroke can start
+// on the margin when zoomed out (Click and Text need a point on the picture). A stroke belongs to the
+// pointer that started it: another finger or pen is ignored, hover moves add nothing, and pointercancel
+// drops the stroke. The live stroke is drawn on its own canvas once per animation frame, so a move
+// never redraws the committed masks. A running job never covers the stage: its area shows the pending
+// stripes (a fill) or a progress edge (a whole-frame job), and its status and Cancel sit in its Edits row.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EditSession, MaskOp, Pt } from './edits'
@@ -11,11 +18,15 @@ import { cropRect, type ToolId } from './tools'
 
 const BLUE = [47, 100, 245]
 const OVERLAY_MAX = 1100
+/** Where a press belongs to the control under it, not to the stage. */
+const UI = 'button, a, input, textarea, select, [data-ie-ui]'
 
 export interface Brush { size: number; soft: number; mode: 'add' | 'sub' }
 
+type Live = { id: number; op: Extract<MaskOp, { t: 'brush' | 'lasso' }>; drawn: number }
+
 export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, motion, alphaOf,
-  onMaskOp, onClick, onAddText, onText, onCrop, pending, children }: {
+  onMaskOp, onClick, onAddText, onText, onCrop, pending, progress, children }: {
   /** The frame as saved, for Before and while the preview draws. */
   src?: string
   plan: Plan
@@ -38,14 +49,19 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   onCrop: (r: { x: number; y: number; w: number; h: number }) => void
   /** A fill is running on this mask: its area shows the pending stripes. */
   pending?: string
+  /** A whole-frame job is running: a progress edge along the top. */
+  progress?: boolean
   children?: ReactNode
 }) {
   const frame = useRef<HTMLDivElement>(null)
   const pic = useRef<HTMLCanvasElement>(null)
   const overlay = useRef<HTMLCanvasElement>(null)
+  const liveCanvas = useRef<HTMLCanvasElement>(null)
+  const cursorEl = useRef<HTMLDivElement>(null)
   const [drawn, setDrawn] = useState(false)
-  const [live, setLive] = useState<MaskOp | null>(null)
-  const [cursor, setCursor] = useState<Pt | null>(null)
+  const live = useRef<Live | null>(null)
+  const raf = useRef(0)
+  const [redraw, setRedraw] = useState(0)
   const [cropDrag, setCropDrag] = useState<{ a: Pt; b: Pt } | null>(null)
   const drag = useRef<{ kind: 'pan' | 'text'; from: Pt; start: Pt; id?: string } | null>(null)
   const [ants, setAnts] = useState(0)
@@ -85,10 +101,10 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   }, [masks, ow, oh, alphaOf])
   const rim = useMemo(() => edges(raster, ow, oh), [raster, ow, oh])
 
-  // Marching ants: the edge's dashes move, unless motion is reduced.
+  // Marching ants: the edge's dashes move, unless motion is reduced (and they wait while a stroke is drawn).
   useEffect(() => {
     if (!motion) return
-    const t = setInterval(() => setAnts((a) => (a + 1) % 8), 140)
+    const t = setInterval(() => { if (!live.current) setAnts((a) => (a + 1) % 8) }, 140)
     return () => clearInterval(t)
   }, [motion])
 
@@ -113,58 +129,141 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
       }
     }
     ctx.putImageData(img, 0, 0)
-    if (live && live.t === 'brush') {
-      ctx.save()
-      ctx.globalCompositeOperation = live.mode === 'add' ? 'source-over' : 'destination-out'
-      ctx.strokeStyle = ctx.fillStyle = `rgba(${BLUE.join(',')},0.38)`
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
-      ctx.lineWidth = live.r * 2 * ow
-      ctx.beginPath()
-      live.pts.forEach((p, i) => (i ? ctx.lineTo(p.x * ow, p.y * oh) : ctx.moveTo(p.x * ow, p.y * oh)))
-      if (live.pts.length === 1) ctx.lineTo(live.pts[0].x * ow + 0.1, live.pts[0].y * oh)
-      ctx.stroke()
-      ctx.restore()
-    }
-  }, [raster, rim, ants, live, ow, oh, before])
+  }, [raster, rim, ants, ow, oh, before, redraw])
 
-  const at = (e: { clientX: number; clientY: number }): Pt => {
-    const r = frame.current!.getBoundingClientRect()
-    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }
+  // The live stroke, once per animation frame: a brush adds only its new segments (on its own canvas,
+  // or, subtracting, out of the committed one); a lasso redraws its outline.
+  const paintLive = () => {
+    raf.current = 0
+    const s = live.current
+    const c = liveCanvas.current
+    if (!s || !c) return
+    if (c.width !== ow || c.height !== oh) { c.width = ow; c.height = oh }
+    const op = s.op
+    if (op.t === 'lasso') {
+      const ctx = c.getContext('2d')
+      if (!ctx) return
+      ctx.clearRect(0, 0, ow, oh)
+      ctx.beginPath()
+      op.pts.forEach((p, i) => (i ? ctx.lineTo(p.x * ow, p.y * oh) : ctx.moveTo(p.x * ow, p.y * oh)))
+      ctx.closePath()
+      ctx.fillStyle = `rgba(${BLUE.join(',')},${op.mode === 'add' ? 0.3 : 0.12})`
+      ctx.fill()
+      ctx.setLineDash([5, 4])
+      ctx.lineWidth = 1.4
+      ctx.strokeStyle = '#FFFFFF'
+      ctx.stroke()
+      return
+    }
+    const ctx = (op.mode === 'add' ? c : overlay.current)?.getContext('2d')
+    if (!ctx) return
+    ctx.save()
+    ctx.globalCompositeOperation = op.mode === 'add' ? 'source-over' : 'destination-out'
+    ctx.strokeStyle = ctx.fillStyle = `rgb(${BLUE.join(',')})`
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = op.r * 2 * ow
+    const from = Math.max(0, s.drawn - 1)
+    if (op.pts.length === 1 && s.drawn === 0) {
+      ctx.beginPath()
+      ctx.arc(op.pts[0].x * ow, op.pts[0].y * oh, op.r * ow, 0, Math.PI * 2)
+      ctx.fill()
+    } else if (op.pts.length - from > 1) {
+      ctx.beginPath()
+      ctx.moveTo(op.pts[from].x * ow, op.pts[from].y * oh)
+      for (let i = from + 1; i < op.pts.length; i++) ctx.lineTo(op.pts[i].x * ow, op.pts[i].y * oh)
+      ctx.stroke()
+    }
+    ctx.restore()
+    s.drawn = op.pts.length
   }
+  const schedule = () => { if (!raf.current) raf.current = requestAnimationFrame(paintLive) }
+  useEffect(() => () => cancelAnimationFrame(raf.current), [])
+
+  /** Where the pointer is, 0-1 of the picture (outside it on the margin). */
+  const rel = (e: { clientX: number; clientY: number }): Pt => {
+    const r = frame.current!.getBoundingClientRect()
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }
+  }
+  const clamp = (p: Pt): Pt => ({ x: Math.min(1, Math.max(0, p.x)), y: Math.min(1, Math.max(0, p.y)) })
+  const at = (e: { clientX: number; clientY: number }): Pt => clamp(rel(e))
   const r = brush.size / 2 / w
+
+  /** The stroke ends: kept (pointerup, or the pointer gone without one) or dropped (pointercancel). */
+  const finish = (keep: boolean) => {
+    const s = live.current
+    if (!s) return
+    live.current = null
+    if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0 }
+    const c = liveCanvas.current
+    c?.getContext('2d')?.clearRect(0, 0, c.width, c.height)
+    const ok = keep && (s.op.t !== 'lasso' || s.op.pts.length >= 3)
+    if (ok) onMaskOp(s.op)
+    // A dropped subtract drew out of the committed masks: draw them again.
+    if (!ok || s.op.mode === 'sub') setRedraw((n) => n + 1)
+  }
+
   const onDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 || before) return
-    const p = at(e)
+    if (e.button !== 0 || before || live.current) return // a second pointer during a stroke adds nothing
+    if ((e.target as Element).closest?.(UI)) return
+    const raw = rel(e)
+    const inside = raw.x >= 0 && raw.x <= 1 && raw.y >= 0 && raw.y <= 1
+    if ((tool === 'click' || tool === 'text') && !inside) return
+    const p = clamp(raw)
     ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
     if (tool === 'hand') drag.current = { kind: 'pan', from: { x: e.clientX, y: e.clientY }, start: pan }
     else if (tool === 'brush' || tool === 'eraser') {
-      setLive({ t: 'brush', mode: tool === 'eraser' ? 'sub' : brush.mode, r, soft: brush.soft / 100, pts: [p] })
-    } else if (tool === 'lasso') setLive({ t: 'lasso', mode: brush.mode, pts: [p] })
-    else if (tool === 'click') onClick(p)
+      live.current = { id: e.pointerId, drawn: 0, op: { t: 'brush', mode: tool === 'eraser' ? 'sub' : brush.mode, r, soft: brush.soft / 100, pts: [p] } }
+      liveCanvas.current?.setAttribute('data-mode', 'brush')
+      schedule()
+    } else if (tool === 'lasso') {
+      live.current = { id: e.pointerId, drawn: 0, op: { t: 'lasso', mode: brush.mode, pts: [p] } }
+      liveCanvas.current?.setAttribute('data-mode', 'lasso')
+      schedule()
+    } else if (tool === 'click') onClick(p)
     else if (tool === 'text') onAddText(p)
     else if (tool === 'crop') setCropDrag({ a: p, b: p })
   }
   const onMove = (e: React.PointerEvent) => {
-    const p = at(e)
-    setCursor(p)
+    const raw = rel(e)
+    const cur = cursorEl.current
+    if (cur) {
+      cur.style.display = ''
+      cur.style.left = `${raw.x * 100}%`
+      cur.style.top = `${raw.y * 100}%`
+    }
+    const s = live.current
+    if (s) {
+      if (e.pointerId !== s.id) return
+      if (!(e.buttons & 1)) return finish(true) // the button came up where we did not hear it
+      const pts = e.nativeEvent.getCoalescedEvents?.() ?? []
+      for (const ev of pts.length ? pts : [e]) s.op.pts.push(clamp(rel(ev)))
+      schedule()
+      return
+    }
+    const p = clamp(raw)
     const dr = drag.current
     if (dr?.kind === 'pan') onPan({ x: dr.start.x + (e.clientX - dr.from.x) / zoom, y: dr.start.y + (e.clientY - dr.from.y) / zoom })
     else if (dr?.kind === 'text' && dr.id) onText(dr.id, { x: Math.min(0.98, Math.max(0, dr.start.x + p.x - dr.from.x)), y: Math.min(0.98, Math.max(0, dr.start.y + p.y - dr.from.y)) })
-    if (live && (live.t === 'brush' || live.t === 'lasso')) setLive({ ...live, pts: [...live.pts, p] } as MaskOp)
     if (cropDrag) setCropDrag({ ...cropDrag, b: p })
   }
-  const onUp = () => {
+  const onUp = (e: React.PointerEvent) => {
+    const s = live.current
+    if (s && e.pointerId !== s.id) return
     drag.current = null
-    if (live) {
-      if (live.t !== 'lasso' || live.pts.length >= 3) onMaskOp(live)
-      setLive(null)
-    }
+    if (s) finish(true)
     if (cropDrag) {
       if (Math.abs(cropDrag.b.x - cropDrag.a.x) > 0.02 || Math.abs(cropDrag.b.y - cropDrag.a.y) > 0.02) onCrop(cropRect(cropDrag.a, cropDrag.b))
       setCropDrag(null)
     }
   }
+  const onCancel = (e: React.PointerEvent) => {
+    if (live.current?.id === e.pointerId) finish(false)
+    drag.current = null
+    setCropDrag(null)
+  }
+  const onLost = (e: React.PointerEvent) => { if (live.current?.id === e.pointerId) finish(true) }
+
   const kept = session.edits.find((e) => e.kind === 'crop' && !session.hidden.includes(e.id))
   const crop = cropDrag ? cropRect(cropDrag.a, cropDrag.b) : kept && kept.kind === 'crop' ? kept : undefined
   const texts = session.edits.filter((e) => e.kind === 'text' && !session.hidden.includes(e.id))
@@ -177,19 +276,17 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
     for (let y = 0; y < mh; y++) for (let x = 0; x < 64; x++) if (m[y * 64 + x] >= 128) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y) }
     return x1 < 0 ? null : { left: `${(x0 / 64) * 100}%`, top: `${(y0 / mh) * 100}%`, width: `${((x1 - x0 + 1) / 64) * 100}%`, height: `${((y1 - y0 + 1) / mh) * 100}%` }
   }, [pendingMask, w, h])
+  const brushy = !before && (tool === 'brush' || tool === 'eraser')
 
   return (
-    <div className="ie-viewport" style={{ aspectRatio: `${w} / ${h}` }} data-tool={tool}>
-      <div ref={frame} className={`ie-frame tool-${tool}`} style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => setCursor(null)}>
+    <div className="ie-viewport" style={{ aspectRatio: `${w} / ${h}` }} data-tool={tool}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onLostPointerCapture={onLost}
+      onPointerLeave={() => { if (cursorEl.current) cursorEl.current.style.display = 'none' }}>
+      <div ref={frame} className={`ie-frame tool-${tool}`} style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}>
         {src && (before || !drawn) && <img className="ie-pic" src={src} alt="" draggable={false} />}
         <canvas ref={pic} className="ie-pic" hidden={before || !drawn} />
         <canvas ref={overlay} className="ie-mask" aria-hidden="true" />
-        {live?.t === 'lasso' && (
-          <svg className="ie-lasso" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-            <polyline points={live.pts.map((p) => `${p.x},${p.y}`).join(' ')} vectorEffect="non-scaling-stroke" />
-          </svg>
-        )}
+        <canvas ref={liveCanvas} className="ie-live" aria-hidden="true" />
         {pendingBox && <div className="ie-pending pending" style={pendingBox} aria-hidden="true" />}
         {!before && texts.map((t) => t.kind === 'text' && (
           <div key={t.id} className="ie-text" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, fontSize: `${t.size * 100}cqh` }}
@@ -206,11 +303,10 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
         {!before && crop && (
           <div className="ie-crop" style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.w * 100}%`, height: `${crop.h * 100}%` }} aria-label="The crop, kept at the frame's ratio" />
         )}
-        {cursor && !before && (tool === 'brush' || tool === 'eraser') && (
-          <div className="ie-cursor" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, width: `${r * 200}%`, aspectRatio: '1' }} aria-hidden="true" />
-        )}
-        {children}
+        {brushy && <div ref={cursorEl} className="ie-cursor" style={{ display: 'none', width: `${r * 200}%`, aspectRatio: '1' }} aria-hidden="true" />}
       </div>
+      {progress && <div className="ie-progress" aria-hidden="true" />}
+      {children}
     </div>
   )
 }
