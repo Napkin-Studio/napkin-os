@@ -447,7 +447,10 @@ export class Renderer {
     // A link or bound arrow whose end is gone is not drawn at all (never a line to nowhere).
     for (const rec of this.passes.rest) paint(rec)
     ctx.globalAlpha = 1
-    // The boards' title chips, above what is on them: the handle that moves a board is always seen.
+    if (this.landing?.length) this.drawLanding(ctx, this.landing, cam)
+    if (this.frame) this.drawFrame(ctx, this.frame, cam)
+    // The boards' title chips, above what is on them and the selection's line (it breaks under the chip):
+    // the handle that moves a board is always seen.
     if (this.boardLook) {
       for (const rec of this.passes.boards) {
         const r0 = this.tween ? this.tweened(rec, now) : rec
@@ -461,8 +464,6 @@ export class Renderer {
         if (moving) ctx.restore()
       }
     }
-    if (this.landing?.length) this.drawLanding(ctx, this.landing, cam)
-    if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
   }

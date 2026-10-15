@@ -295,8 +295,11 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
       )}
       {sel && !editing && !draw && !resizing && mode !== 'board' && (() => {
         // Above the title chip (boards/grab), never over it: when the top bar leaves no room above, beside it.
-        const chip = chipOf(sel as FrameEl, view.zoom)
-        const p = toLocal({ x: sel.x + sel.width / 2, y: chip.y })
+        // While the board moves (a drag or a run of nudges), the bar goes with it.
+        const mv = canvas.dragOffset?.()
+        const at0 = mv?.ids.has(sel.id) ? { ...sel, x: sel.x + mv.dx, y: sel.y + mv.dy } : sel
+        const chip = chipOf(at0 as FrameEl, view.zoom)
+        const p = toLocal({ x: at0.x + at0.width / 2, y: chip.y })
         const right = toLocal({ x: chip.x + chip.w, y: chip.y + chip.h / 2 })
         const viewW = (canvas.visibleBounds().maxX - canvas.visibleBounds().minX) * view.zoom
         const empty = !contentsOf(canvas.elements(), sel.id).length

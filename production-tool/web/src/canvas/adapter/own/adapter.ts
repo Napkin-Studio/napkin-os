@@ -612,7 +612,12 @@ export class OwnAdapter implements CanvasAdapter {
   selectionFrame(): SelectionFrame | null {
     // A selected board: its edge and corner handles (it resizes; owner decision 2026-10-15).
     const board = this.selector.soleBoard()
-    if (board) return { box: this.selector.resizing?.rect ?? { x: board.x, y: board.y, w: board.w, h: board.h }, dashed: false, handles: false, edges: true }
+    if (board) {
+      // Moving (a drag or a run of nudges): the handles go with the board.
+      const mv = this.selector.preview?.ids.has(board.id) ? this.selector.preview : null
+      const box = this.selector.resizing?.rect ?? { x: board.x + (mv?.dx ?? 0), y: board.y + (mv?.dy ?? 0), w: board.w, h: board.h }
+      return { box, dashed: false, handles: false, edges: true }
+    }
     const f = this.selector.frame()
     if (!f) return null
     const k = this.selector.selectionKind()

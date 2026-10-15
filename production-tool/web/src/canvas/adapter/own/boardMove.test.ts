@@ -38,6 +38,8 @@ describe('board-move on the own engine', () => {
     a.press({ x: 300, y: 200 })
     a.drag({ x: 320, y: 200 })
     expect(a.cursorAt({ x: 320, y: 200 })).toBe('grabbing')
+    // The handles go with the board while it moves.
+    expect(a.selectionFrame()?.box).toMatchObject({ x: 20, y: 0 })
     a.release({ x: 320, y: 200 })
   })
 
