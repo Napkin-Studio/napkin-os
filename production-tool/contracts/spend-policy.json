@@ -1,8 +1,8 @@
 {
   "contractVersion": "3",
-  "decided": "2026-10-13",
+  "decided": "2026-10-15",
   "capUsdMonthly": null,
   "dailyQuotas": false,
-  "allow": { "claude": true, "makers": ["runway", "google"] },
+  "allow": { "claude": true, "makers": ["runway", "google", "ideogram", "magnific", "kuaishou", "minimax", "alibaba", "bytedance"] },
   "alwaysAllowed": ["napkin"]
 }
