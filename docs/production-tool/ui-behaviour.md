@@ -259,6 +259,10 @@ A new `drives` link to a storyboard planned from an older script is stale at onc
 Other selections:
 - **A Storyboard alone:** Make video makes the node and the `renders` link.
 - **A Script alone:** Make video makes the Video node with a `drives` link from the script, and Dex asks on it before anything is spent (3.17, artboard 4c): "Plan a storyboard first? Clips come out better from frames you've checked." The options are **Plan the storyboard first** (marked Recommended, "6 shots, with frames you check first") and **Make clips straight from the script** ("6 clips"), with "You can always switch later." and **Later**.
+  - **Plan the storyboard first** links the Storyboard the script drives (made beside the script when there is none) to the video, and Dex plans the shots there. Frames are drawn and checked in the Storyboard editor.
+  - **Make clips straight from the script** makes **no Storyboard node** (decided by the owner, 2026-10-15). The Video holds its own shot list: Dex plans the shots into the video, they belong to its timeline, and they are shown and edited in the Video editor (3.13). Each clip is made from its shot's words (text to video) through Make clips and the send tray. In the document the shots sit on the video's own storyboard (`storyboard.implicit` with `video_id`), which has no node and no link.
+  - **Make a storyboard from these shots** (Video editor, timeline head) later shows a direct video's shots as a Storyboard node beside the video, driven by its script, with the shots, frames and clips as they are. It is one canvas step, said with an Undo chip on the canvas. Undo, or deleting that node, puts the shots back in the video. **Change** to Plan the storyboard first does the same and opens the Storyboard editor.
+  - Deleting a direct Video deletes its shots and their clips with it (one undo step).
 - **Nothing linked** (a Video made from + Node): Dex asks "What should this video be?" This is the one hard block: the options are **Describe it**, **Link a script** and **Link a storyboard**, and nothing runs until one is done.
 - **Two scripts, or anything ambiguous:** Dex asks which one drives, with no default.
 
@@ -678,6 +682,15 @@ In the **Video · Audio view** the table takes the full width. The length strip 
    - **Sound on a patched take.** Aleph 2 keeps the clip's own sound, so a Path 1 line inside the window still plays as it was. When the change alters what should be heard (heavier rain, a door that now slams), Jude flags the layers in that window: "Jude · checks: the picture changed at shot 4, 0:02–0:04. The rain effect may not match now", with **Redo this cue** and **It's fine**.
    - **A note about the sound** ("the music is too loud here") is the same note. In the Sound view its window shades every lane, and the fixes are the sound ones (redo a line, cue or section, or a level; 3.21). Fix this moment stays the picture fix.
 7. **Fallback** when Aleph 2 isn't available: Veo 3.1 first/last frame over the window, generated at 4 s and trimmed. The panel says so before you run it ("Aleph 2 on Runway isn't available. Veo 3.1 on Runway will make 4 s and we'll keep the 2 s you need"). On a Path 1 shot the fallback makes new sound for the window, so the panel adds "Her line in this window will be said again. Check it after." An extend (Gemini Omni Flash on Runway) remakes the sound of the whole clip, and says the same for the whole shot.
+
+**A video's own shots** (made straight from the script, 3.5; decided 2026-10-15). There is no Storyboard node, so the timeline is where the shots are made and edited:
+- A shot with no clip shows its words on its card. Selecting it opens **Shot N** in the right panel: its action and direction (the same live text as the storyboard's, with @names), its **Length**, **←** and **→** (earlier, later; one rank write) and **Delete** (asks first when it has clips; Undo in the top bar puts it back).
+- **+** between two shots inserts an empty shot there; **+ Shot** after the last adds one at the end (8 shots at most).
+- **Make clips** opens the send tray; each row says "from its words, no frame". **New take**, a note's **Make a new version** and **Remake** make the clip from the words too. A boxed note on such a shot makes a new version (there is no frame to fix the box in).
+- **Make a storyboard from these shots** sits in the timeline head (3.5).
+- With no shots yet, Dex says so with **Plan the shots**.
+
+**The remake bar** ("2 clips not made yet · Make them") sits in the timeline head in the Video editor, never over the top bar.
 
 **Make all sizes** (in the top bar's More, and on the Video node) makes the cut-downs of the film: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. They are part of the first release. Section 3.19 has the flow.
 
