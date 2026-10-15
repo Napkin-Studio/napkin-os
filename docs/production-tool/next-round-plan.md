@@ -558,4 +558,4 @@ Waits for an answer from Shrey first:
 | Set `TOKEN_SECRET` before deploy. | S |
 | Skye's draft answered after its scene was undone lands nowhere, silently. Land it as a new first scene, or say so? (Recommended: a new first scene.) | S |
 | In another browser, Skye's waiting question shows only at the top of the page, not on its line (the target lives in the asking browser). Needs a contract field. | S |
-| Flaky under the full parallel test run, pass alone: `src/canvas/nodes/cards.test.tsx` (empty-node PromptStart) and `src/script/perf.test.ts` (compose under 100 ms). | S |
+| Flaky under the full parallel test run, pass alone: `src/canvas/nodes/cards.test.tsx` (empty-node PromptStart) and `src/script/perf.test.ts` (compose under 100 ms); in mock-backend, `test_model.ModelServer.test_concurrency_cap` (one request short under load). All three failed inside the pre-push hook once and passed on rerun. | S |
