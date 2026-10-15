@@ -33,6 +33,10 @@ export const CAST: Readonly<Record<CastKey, CastMember>> = {
   jude: { given: 'Jude', job: 'checks', role: 'Checks each result as it lands, and says when one needs you.', look: { shape: 'card', emblem: 'tick', tone: 'ink' } },
 }
 
+/** The whole crew in the crew sheet's order (5.1): five who make the ad, then the two house agents. */
+export const CREW_ORDER: readonly CastKey[] = ['dex', 'skye', 'wren', 'rhea', 'edie', 'ellis', 'jude']
+export const HOUSE_AGENTS: readonly CastKey[] = ['ellis', 'jude']
+
 /** How an agent signs what it says: 'Dex · directs'. */
 export const sayer = (k: CastKey) => `${CAST[k].given} · ${CAST[k].job}`
 
