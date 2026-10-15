@@ -31,7 +31,8 @@ describe('where the Napkin loader turns', () => {
   it('the top bars get it through the one job button: the canvas bar, the editor bar, the script editor\'s bar, the phone bar', () => {
     const bars = readFileSync(join(SRC, 'ui/chrome/TopBars.tsx'), 'utf8')
     expect(bars.match(/<JobTray \/>/g)?.length).toBeGreaterThanOrEqual(2)
-    expect(readFileSync(join(SRC, 'script/ScriptEditor.tsx'), 'utf8')).toContain('<JobTray />')
+    // Script is on the shared EditorBar (features/topbar-declutter.clan), so it gets the button from there.
+    expect(readFileSync(join(SRC, 'script/ScriptEditor.tsx'), 'utf8')).toContain('<EditorBar')
     expect(readFileSync(join(SRC, 'stages/PhoneReview.tsx'), 'utf8')).toContain('<JobTray phone />')
   })
 })

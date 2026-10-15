@@ -40,6 +40,7 @@ import { insertShot } from '../script/edits'
 import { ShotEditor } from '../script/ShotEditor'
 import { scriptMentionHooks } from '../script/mentionHooks'
 import { EditorBar } from '../ui/chrome/TopBars'
+import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import { Float } from '../ui/Float'
 import { trayGroups, type TrayRow } from '../ui/tray'
@@ -156,7 +157,8 @@ export function Storyboard() {
     <div className="editor">
       <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="storyboard"
         title={`Storyboard · ${nodeTitle(sb?.title, 'Storyboard', projectName)}`}
-        meta={<><RatioPill ratio={ratio} onPick={(r) => void updateDoc(docStore, (d) => setRatio(d, r), `set the storyboard format to ${r}`)} /><span className="pt-project">{projectName}</span></>}
+        meta={<RatioPill ratio={ratio} onPick={(r) => void updateDoc(docStore, (d) => setRatio(d, r), `set the storyboard format to ${r}`)} />}
+        more={() => <CopyLinkLater />}
         primary={primary} />
       <div className="sb-sub">
         <span className="pt-mono sb-len">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {total.toFixed(1)} s of{' '}
