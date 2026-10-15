@@ -561,5 +561,59 @@
    "target_s": 15,
    "title": "Household Samurai"
   }
+ ],
+ "proceed": [
+  {
+   "id": "empty-script-draft",
+   "sector": "Services",
+   "why": "The owner's case (2026-10-15): an empty script's one line, sent from its prompt start as a draft. skye.v2 asked 'Draft the scene as written?' with one option, 'Draft it', and the question was shown nowhere. A draft must come back; a question only with a real choice or a missing fact.",
+   "intent": "draft",
+   "lines": [
+    {
+     "type": "action",
+     "text": "@samurai is the samurai who does all the cleaning work for you."
+    }
+   ],
+   "refs": [
+    {
+     "name": "samurai",
+     "role": "character"
+    },
+    {
+     "name": "samurai_front",
+     "role": "character"
+    },
+    {
+     "name": "samurai_three-quarter",
+     "role": "character"
+    },
+    {
+     "name": "samurai_side",
+     "role": "character"
+    },
+    {
+     "name": "samurai_back",
+     "role": "character"
+    }
+   ],
+   "target_s": 15,
+   "title": "Script",
+   "skye_v2_reply": {
+    "question": {
+     "id": "q_00000000000000000000000000",
+     "kind": "nudge",
+     "text": "Draft the scene as written?",
+     "options": [
+      {
+       "id": "draft",
+       "label": "Draft it",
+       "value": "draft"
+      }
+     ],
+     "allow_text": true
+    },
+    "rationale": "Confirming before drafting."
+   }
+  }
  ]
 }

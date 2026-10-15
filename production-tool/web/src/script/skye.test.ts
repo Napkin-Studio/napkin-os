@@ -10,7 +10,7 @@ import { MockRelay } from '../relay/mock'
 import { mockWrites } from '../relay/mockWrite'
 import { addShots, asset, id, MAYA, modelStore, SHA } from '../test/model'
 import { makeAjv, SCHEMA } from '../test/schemas'
-import { fitSeconds, handsOff, keep, keepMineDraft, landWrites, neighbours, proposedOf, skyeState, wordDiff, writeInput } from './skye'
+import { fitSeconds, handsOff, keep, keepMineDraft, landWrites, neighbours, proposedOf, skyeAsks, skyeState, waitingLine, wordDiff, writeInput } from './skye'
 
 async function project() {
   const store = modelStore()
@@ -151,5 +151,48 @@ describe('wordDiff', () => {
     expect(wordDiff('She walks the length of the beach.', 'She walks the beach.')).toEqual([
       { kind: 'same', text: 'She walks the ' }, { kind: 'gone', text: 'length of the ' }, { kind: 'same', text: 'beach.' },
     ])
+  })
+})
+
+describe('a write waiting on her question (owner 2026-10-15)', () => {
+  async function asking(state: 'needs_input' | 'submitted' = 'needs_input') {
+    const p = await project()
+    const jobId = id('job')
+    const q = id('q')
+    await p.store.change((d) => {
+      d.jobs[jobId] = { id: jobId, v: 1, field_v: {}, op: 'write', state, node: { kind: 'script', id: p.scriptId }, started_by: `human:${MAYA.id}`, tenant_id: MAYA.tenant_id, nonce: 'n_yyyyyyyy', crew: 'skye', parent_ids: [], input_hashes: [], created_at: '2026-10-13T10:00:00Z', ask_id: q } as never
+      d.asks[q] = { id: q, v: 1, field_v: {}, node: { kind: 'script', id: p.scriptId }, job_id: jobId, crew: 'skye', state: 'open', answers: [],
+        question: { id: q, kind: 'nudge', text: 'Open wide or close?', options: [{ id: 'wide', label: 'Wide', value: 'wide' }, { id: 'close', label: 'Close', value: 'close' }], allow_text: true } }
+    }, { action: 'sync', quiet: true, undo: false })
+    await p.store.flush()
+    return { ...p, jobId, askId: q }
+  }
+
+  it('is waiting for you with the question, not writing', async () => {
+    const { store, scriptId, jobId, askId } = await asking()
+    const s = skyeState(store.get(), scriptId)
+    expect(s.working).toBeUndefined()
+    expect(s.waiting).toMatchObject({ jobId, ask: { id: askId } })
+    expect(waitingLine(s.waiting!.ask)).toBe('Waiting for you: Open wide or close?')
+    // The runner's live state goes first: still writing until it says needs_input.
+    expect(skyeState(store.get(), scriptId, () => 'submitted')).toMatchObject({ working: jobId })
+  })
+
+  it('shows on its item while that is on the page; a beat on its shot; anything else at the top', async () => {
+    const { store, scriptId, shots, jobId, askId } = await asking()
+    const at = (t?: { kind: 'scene' | 'shot' | 'beat'; id: string }) => skyeAsks(store.get(), scriptId, (j) => (j === jobId ? t : undefined))[0].at
+    expect(skyeAsks(store.get(), scriptId, () => undefined)).toEqual([expect.objectContaining({ jobId, at: null, ask: expect.objectContaining({ id: askId }) })])
+    expect(at({ kind: 'shot', id: shots[0] })).toEqual({ kind: 'shot', id: shots[0] })
+    expect(at({ kind: 'scene', id: id('scene') })).toBeNull()
+    const beat = id('beat')
+    await store.change((d) => { d.beats[beat] = { id: beat, v: 1, field_v: {}, shot_id: shots[2], kind: 'moment', at_s: 0.5, rank: 'a0' } as never }, { action: 'add beat' })
+    await store.flush()
+    expect(at({ kind: 'beat', id: beat })).toEqual({ kind: 'shot', id: shots[2] })
+  })
+
+  it('a job still writing has no question to show', async () => {
+    const { store, scriptId } = await asking('submitted')
+    expect(skyeAsks(store.get(), scriptId, () => undefined)).toEqual([])
+    expect(skyeState(store.get(), scriptId).waiting).toBeUndefined()
   })
 })

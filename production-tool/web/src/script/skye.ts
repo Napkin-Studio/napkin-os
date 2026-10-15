@@ -8,12 +8,12 @@
 // moved), the rows around it (at most 4,000 characters) and the names of the references.
 
 import { flatText, keepMine, keepSuggestion, newUlidId, proseHash, shapeProblem, type FragmentKind, type Prose } from '../../../clan-store/src'
-import type { Id, Job, ProductionDocument, Suggestion, Write, WriteInput, WriteIntent, WriteLine, WriteTarget } from '../contracts/types'
+import type { Ask, Id, Job, JobState, ProductionDocument, Suggestion, Write, WriteInput, WriteIntent, WriteLine, WriteTarget } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { FrameDeps } from '../jobs/frames'
 import { landingWhy } from '../jobs/landing'
-import { isActive } from '../jobs/runner'
+import { askOf, isActive } from '../jobs/runner'
 import { proseFromText } from '../model/diff'
 import type { ModelStore } from '../model/store'
 import { keyViews } from '../lib/names'
@@ -120,12 +120,50 @@ export async function startWrite(deps: FrameDeps & { doc: ModelStore | DocumentS
   return deps.runner.submit('write', { write: input }, [], { for: 'write', scriptId })
 }
 
-/** Skye's write job running on a script now, if any, and the last one's trouble (off, or out of allowance). */
-export function skyeState(d: Doc, scriptId: Id): { working?: string; off: boolean; quota: boolean } {
+/**
+ * Skye's write job on a script now: `working` while she writes, `waiting` (its question) while it waits on
+ * the person (needs_input: no "I'm writing that now", owner 2026-10-15), and the last one's trouble (off, or
+ * out of allowance). `liveState`: the runner's state, ahead of the document's.
+ */
+export function skyeState(d: Doc, scriptId: Id, liveState: (jobId: string) => JobState | undefined = () => undefined): { working?: string; waiting?: { jobId: string; ask?: Ask }; off: boolean; quota: boolean } {
   const jobs = Object.values(d.jobs).filter((j) => j.op === 'write' && j.node.kind === 'script' && j.node.id === scriptId).sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
-  const working = jobs.find((j) => isActive(j.state))?.id
+  const state = (id: string) => liveState(id) ?? d.jobs[id].state
+  const working = jobs.find((j) => isActive(state(j.id)) && state(j.id) !== 'needs_input')?.id
+  const asking = jobs.find((j) => state(j.id) === 'needs_input')
+  const ask = asking ? askOf(d, asking.id) : undefined
   const last = jobs.at(-1)
-  return { ...(working ? { working } : {}), off: last?.error?.code === 'capability_missing', quota: last?.error?.code === 'quota_exhausted' }
+  return {
+    ...(working ? { working } : {}),
+    ...(asking ? { waiting: { jobId: asking.id, ...(ask && ask.state === 'open' ? { ask } : {}) } } : {}),
+    off: last?.error?.code === 'capability_missing', quota: last?.error?.code === 'quota_exhausted',
+  }
+}
+
+/** What Skye says in the facts while a job of hers waits on the person: the question itself. */
+export const waitingLine = (ask?: Ask) => (ask ? `Waiting for you: ${ask.question.text}` : 'Waiting for you: Skye has a question about a draft.')
+
+/**
+ * Skye's waiting questions on a script and where each shows (owner 2026-10-15: "Draft the scene as
+ * written?" was shown nowhere): on the item the draft was for while it is on the page (a beat on its shot,
+ * since only the current shot's beats show), else `null`, the top of the page, where the work started.
+ * `targetOf`: the item a job was asked about (this browser's request; another person's is not known here).
+ */
+export function skyeAsks(d: Doc, scriptId: Id, targetOf: (jobId: string) => WriteTarget | undefined,
+  liveState: (jobId: string) => JobState | undefined = () => undefined): { ask: Ask; jobId: string; at: WriteTarget | null }[] {
+  const c = composeScript(d, scriptId)
+  const onPage = new Set((c?.rows ?? []).filter((r) => r.kind === 'scene' || r.kind === 'shot' || r.kind === 'end_card').map((r) => `${r.kind === 'end_card' ? 'shot' : r.kind}:${r.id}`))
+  const out: { ask: Ask; jobId: string; at: WriteTarget | null }[] = []
+  for (const j of Object.values(d.jobs).sort((a, b) => (a.created_at < b.created_at ? -1 : 1))) {
+    if (j.op !== 'write' || j.node.kind !== 'script' || j.node.id !== scriptId || (liveState(j.id) ?? j.state) !== 'needs_input') continue
+    const ask = askOf(d, j.id)
+    if (!ask || ask.state !== 'open') continue
+    const t = targetOf(j.id)
+    const at: WriteTarget | null = !t ? null
+      : t.kind === 'beat' ? (d.beats[t.id] && onPage.has(`shot:${d.beats[t.id].shot_id}`) ? { kind: 'shot', id: d.beats[t.id].shot_id } : null)
+      : onPage.has(`${t.kind}:${t.id}`) ? t : null
+    out.push({ ask, jobId: j.id, at })
+  }
+  return out
 }
 
 /** A draft as the suggestion's proposed words, or null when its blocks do not fit the item. */

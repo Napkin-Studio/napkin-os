@@ -9,6 +9,7 @@
 import { useContext, type CSSProperties, type ReactNode } from 'react'
 import { useDoc, useJobsTick, useUi } from '../../app/context'
 import { cameraLabel } from '../../jobs/frameEdit'
+import { askOf } from '../../jobs/runner'
 import { isRunning, jobAt } from '../../jobs/select'
 import { beatsOf, currentFrame, currentRender, currentTake, mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf, staleList, storyboardOfScript, storyboardOfVideo } from '../../model/selectors'
 import type { ProductionDocument, Shot } from '../../contracts/types'
@@ -76,7 +77,11 @@ export function ScriptCard({ id, onOpen }: { id?: string; onOpen: () => void }) 
   const shots = sb ? shotsOf(doc, sb.id) : []
   const scenes = scenesOf(doc, script?.id)
   const main = mainScript(doc)?.id
-  const writing = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'write' && (c.scriptId ?? main) === script?.id))
+  const writeJob = jobAt(doc, ui, (c) => c.for === 'write' && (c.scriptId ?? main) === script?.id)
+  // A draft waiting on the person's answer is not being written (owner 2026-10-15): its question shows instead.
+  const asking = writeJob && doc.jobs[writeJob]?.state === 'needs_input' ? askOf(doc, writeJob) : undefined
+  const waiting = !!writeJob && doc.jobs[writeJob]?.state === 'needs_input'
+  const writing = isRunning(doc, writeJob) && !waiting
   const sound = (s: Shot) => beatsOf(doc, s.id).filter((b) => b.kind !== 'moment' && b.kind !== 'camera')
     .map((b) => (b.kind === 'line' || b.kind === 'vo' ? `${b.kind === 'vo' ? 'VO: ' : b.speaker ? `${cap(b.speaker.toLowerCase())}: ` : ''}"${b.text ?? ''}"` : b.text ?? '')).filter(Boolean).join(' ')
   const words = scenes.map((s) => s.text ?? '').join(' ').trim()
@@ -101,6 +106,7 @@ export function ScriptCard({ id, onOpen }: { id?: string; onOpen: () => void }) 
       <span className="bl-meta">{scenes.length} {scenes.length === 1 ? 'scene' : 'scenes'} · {shots.length} {shots.length === 1 ? 'shot' : 'shots'}</span>
       <span className="pt-grow" />
       {writing && <AtWork agent="skye" line="Skye is writing a draft" />}
+      {waiting && <AtWork agent="skye" warm line={`Waiting for you: ${asking?.question.text ?? 'Skye has a question about a draft'}`} />}
     </Card>
   )
 }

@@ -77,6 +77,13 @@
 .se-meterlabels { width: 100%; display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink3); }
 .se-atwork { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: var(--r-pill); background: var(--create-soft); font-size: 12px; color: var(--ink); }
 .se-atwork .who { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.se-atwork.waiting { border-radius: 14px; align-items: flex-start; flex-wrap: wrap; }
+.se-atwork.waiting > span { flex: 1; min-width: 0; line-height: 1.4; padding-top: 2px; }
+/* Skye's waiting questions (owner 2026-10-15): at the top of the page, where the draft started, or on its item. */
+.se-asks { display: grid; gap: 10px; margin: 0 0 18px; }
+.se-page > .se-asks { max-width: 700px; margin: 18px auto 0; padding: 0 28px; }
+.se-asks .askcard, .se-ask .askcard { max-width: none; font-family: var(--f-display); }
+.se-ask { margin: 10px 0 6px; }
 .se-refs { display: flex; flex-direction: column; gap: 4px; }
 .se-refhead { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .se-ref { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }

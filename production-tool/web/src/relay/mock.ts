@@ -8,7 +8,8 @@
 //   #fail      → the job fails with provider_failed (retryable)
 //   #moderate  → the job fails with moderated (not retryable)
 //   [ask]      → the job stops at needs_input with a nudge question (two options, one recommended);
-//                POST /jobs/{id}/answer resumes it, and a second answer is 409 AnswerConflict
+//                POST /jobs/{id}/answer resumes it, and a second answer is 409 AnswerConflict (in a write,
+//                the item's lines say it, as the relay's passthrough reads them)
 //
 // Contract 3 (features/contract-v3.clan): a request of any other contractVersion is refused, the Job
 // names its project, tenant, starter, crew, node, nonce and purpose, a shot list is PlannedShot[], and
@@ -473,7 +474,8 @@ export class MockRelay implements Relay {
     const delay = this.delayFor(req.op)
     // Change this frame: the passthrough's reading of the words (jobs/frameEdit.ts), its ask included.
     const frameEdit = req.op === 'frame_edit' ? mockFrameEdit(req.input, frameAnswer(item)) : undefined
-    const asks = (ASK.test(`${req.input.text ?? ''} ${req.input.script ?? ''}`) || !!frameEdit?.question) && !req.input.answer
+    const words = `${req.input.text ?? ''} ${req.input.script ?? ''} ${(req.input.write?.lines ?? []).map((l) => l.text).join(' ')}`
+    const asks = (ASK.test(words) || !!frameEdit?.question) && !req.input.answer
     let state: JobState
     let queuePosition: number | undefined
     if (item.done) {

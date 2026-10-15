@@ -1,16 +1,21 @@
 // The job tray (features/production-tool-look.clan): the top bar's "N running · N queued"
 // as a button with the working agents' faces and a red count for failures. It opens a
 // floating list, Working now, Waiting for you (a job asking a question) and Needs you; Show on a row
-// goes to its stage and card.
+// goes to its stage and card, and on a waiting row to its question, with the focus on its first answer
+// (the Script editor for Skye's; the ask dock when no card shows it). The ask dock rides here, so every
+// bar has one (ui/AskDock.tsx).
 
-import { useCallback, useRef, useState } from 'react'
-import { useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { useCallback, useContext, useRef, useState } from 'react'
+import { RouterContext, useDoc, useJobsTick, useServices, useUi } from '../app/context'
+import { scriptRoute, type Router } from '../app/route'
 import { modelLabel } from '../capabilities'
 import type { StageName } from '../doc/ui'
 import type { UiStore } from '../projects/uiStore'
-import { ctxReader } from '../jobs/runner'
+import { askOf, ctxReader } from '../jobs/runner'
 import { jobsList, shotNumber } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
+import { AskDock } from './AskDock'
+import { hereOf, homeOf, sameHome, showAsk } from './askPlaces'
 import { whoIsWorking, workOf } from './agents/cast'
 import { NapkinLoader } from './loader/NapkinLoader'
 import { Float } from './Float'
@@ -51,6 +56,7 @@ export function JobTray() {
           {g.needsYou.length > 0 && <><span className="sep">·</span><span className="bad">{g.needsYou.length} failed</span></>}
         </button>
       )}
+      <AskDock />
       <Float anchor={ref} open={open} onClose={close} align="end" role="dialog" label="Jobs" className="traypop">
         {empty && <div className="tray-empty faint">Nothing is being made right now. Jobs show here while they run, and stay here if one fails.</div>}
         {busy && <div className="fhead">Working now</div>}
@@ -70,7 +76,8 @@ export function JobTray() {
 }
 
 function Row({ row, onShow }: { row: TrayRow; onShow: () => void }) {
-  const { ui: uiStore } = useServices()
+  const { ui: uiStore, project } = useServices()
+  const router = useContext(RouterContext)
   const doc = useDoc()
   const ui = useUi()
   const failed = row.state === 'failed'
@@ -84,8 +91,10 @@ function Row({ row, onShow }: { row: TrayRow; onShow: () => void }) {
     ? row.job.error?.message ?? 'Something went wrong.'
     : waiting ? WAITING
     : [model, row.state === 'queued' ? 'in the queue' : undefined, row.queuePosition ? `#${row.queuePosition} in queue` : undefined].filter(Boolean).join(' · ')
+  const ask = waiting ? askOf(doc, row.job.id) : undefined
   const show = () => {
     onShow()
+    if (ask) return void goToAsk(uiStore, router, project.id, ui.stage, row, ask.id)
     const where = whereIs(row.job, row.ctx)
     void goTo(uiStore, ui.stage, where.stage, where.shotId)
   }
@@ -101,6 +110,21 @@ function Row({ row, onShow }: { row: TrayRow; onShow: () => void }) {
         : <span className="trayrow-t">{fmtElapsed(elapsed)}<button className="btn xs ghost" onClick={show} aria-label={`Show ${w.line}`}>Show</button></span>}
     </div>
   )
+}
+
+/** A waiting job's question: go where it belongs (its script's editor for Skye's, else its stage), then bring
+ *  its card into view with the focus on the first answer; when no card shows it, the dock does. */
+async function goToAsk(uiStore: UiStore, router: Router | null, projectId: string, current: StageName, row: TrayRow, askId: string) {
+  const home = homeOf(row.job, row.ctx)
+  const here = hereOf(router?.get() ?? null, current)
+  if (!sameHome(home, here)) {
+    if ('script' in home) router?.push(scriptRoute(projectId, home.script))
+    else {
+      if (current !== home.stage) uiStore.update((u) => { u.stage = home.stage })
+      if (router?.get().kind === 'script') router.leave()
+    }
+  }
+  await showAsk(askId)
 }
 
 /** Go to a job's stage, then bring its card into view (and select a shot card on Video). */

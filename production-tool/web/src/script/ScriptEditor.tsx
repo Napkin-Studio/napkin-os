@@ -25,7 +25,8 @@ import { AgentAvatar } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { Float, MenuItem } from '../ui/Float'
 import { HistoryPanel, type HistoryFocus } from '../ui/History'
-import { AskOptions } from '../ui/AskCard'
+import { AskCard, AskOptions } from '../ui/AskCard'
+import { showAsk } from '../ui/askPlaces'
 import { UndoButtons } from '../ui/UndoButtons'
 import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
 import { nodeTitle } from '../ui/chrome/panels'
@@ -43,7 +44,7 @@ import { parseFountain } from './fountain'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
-import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeState, startWrite } from './skye'
+import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
 import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
 import { linkForMention, linkWords } from '../text/mention/source'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
@@ -257,7 +258,12 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const sb = composed?.storyboard
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const planning = sb ? runningPlan(doc, sb.id) : undefined
-  const skye = skyeState(doc, scriptId)
+  const liveState = (id: string) => runner.liveInfo(id)?.state
+  const skye = skyeState(doc, scriptId, liveState)
+  // Skye's waiting questions: on the item the draft was for, else at the top of the page (owner 2026-10-15).
+  const skyeQs = skyeAsks(doc, scriptId, (id) => ui.jobs[id]?.request?.input.write?.target, liveState)
+  const placedAt = (kind: WriteTarget['kind'], id: string) => (view === 'screenplay' && !phone ? skyeQs.filter((q) => q.at?.kind === kind && q.at.id === id) : [])
+  const topQs = skyeQs.filter((q) => !q.at || view !== 'screenplay' || phone)
   const skyeDeps = { relay, doc: docStore, ui: uiStore, runner }
   const ask = (target: WriteTarget, intent: WriteIntent, opts: Parameters<typeof startWrite>[5] = {}) =>
     attempt(() => startWrite(skyeDeps, store, scriptId, target, intent, opts))
@@ -274,12 +280,15 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   })()
   const whyOf = (kind: 'scene' | 'shot', id: string, label: string) => () => openWhy({ label, addresses: [`${docId}#${kind}s[${id}]`] })
   // Skye's drafts on each item, for the person they are for (others see her figure).
-  const drafts = (kind: WriteTarget['kind'], id: string) => Object.values(doc.suggestions)
-    .filter((x) => x.target.kind === kind && x.target.id === id && (x.state === 'open' || x.state === 'stale'))
-    .map((x) => (
-      <SuggestionCard key={x.id} sug={x} store={store} me={person} currentProse={() => store.text.prose(kind, id)} onWhy={openWhy} say={say}
-        askAgain={() => void ask(x.target, ui.jobs[x.job_id]?.request?.input.write?.intent ?? 'tighten')} />
-    ))
+  const drafts = (kind: WriteTarget['kind'], id: string) => [
+    ...Object.values(doc.suggestions)
+      .filter((x) => x.target.kind === kind && x.target.id === id && (x.state === 'open' || x.state === 'stale'))
+      .map((x) => (
+        <SuggestionCard key={x.id} sug={x} store={store} me={person} currentProse={() => store.text.prose(kind, id)} onWhy={openWhy} say={say}
+          askAgain={() => void ask(x.target, ui.jobs[x.job_id]?.request?.input.write?.intent ?? 'tighten')} />
+      )),
+    ...placedAt(kind, id).map((q) => <div key={q.ask.id} className="se-ask"><AskCard ask={q.ask} /></div>),
+  ]
   const behind = !!sb && (staleList(doc).some((m) => m.target.kind === ('storyboard' as string) && m.target.id === sb.id)
     || (composed!.shots.length > 0 && Object.values(doc.scenes).some((s) => s.script_id === scriptId && !!s.text?.trim())))
   // Plan shots needs words; with none it is off and says so (ui-behaviour 3.10).
@@ -362,6 +371,12 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const empty = !composed.shots.length && Object.values(doc.scenes).every((s) => s.script_id !== scriptId || (!s.heading.trim() && !s.text?.trim()))
   const title = nodeTitle(composed.script.title, 'Script', projectName)
 
+  // Where the work started: the top of the page, in place of the empty script's start.
+  const waitingHere = topQs.length > 0 && (
+    <div className="se-asks" aria-label="Skye is waiting for you">
+      {topQs.map((q) => <AskCard key={q.ask.id} ask={q.ask} />)}
+    </div>
+  )
   const page = (
     <main className="se-page" aria-label={view === 'av' ? 'Video and audio' : 'Screenplay'}
       onDragOver={(e) => { if ([...e.dataTransfer.items].some((i) => i.kind === 'file')) e.preventDefault() }}
@@ -372,10 +387,12 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
         void doImport(f)
       }}>
       {!phone && view === 'screenplay' && <ElementBar focus={focus} composed={composed} store={store} chain={chain} onError={setError} say={say} />}
+      {(view === 'av' && !phone) && waitingHere}
       {view === 'av' && !phone ? (
         <AVView composed={composed} doc={doc} store={store} chain={chain} current={current} setCurrent={(id) => setCurrent(id)}
           mentions={mentions} say={say} onError={setError} disabled={!!planning} onRemove={removeItem} />
       ) : <div className="sp-rows">
+        {waitingHere}
         {empty && !phone && <PromptStart kind="script" nodeId={scriptId} place="editor" />}
         {composed.rows.map((r) => (
           <Row key={`${r.kind}:${r.id}`} row={r} doc={doc} store={store} chain={chain} readOnly={phone}
@@ -386,7 +403,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
       </div>}
       {!phone && (
         <SkyeBar editor={focus?.editor ?? null} target={focusTarget} seconds={focusTarget ? fitSeconds(doc, scriptId, focusTarget) : 0}
-          handsOff={!!focusTarget && handsOff(doc, focusTarget)} off={skye.off} quota={skye.quota} working={!!skye.working}
+          handsOff={!!focusTarget && handsOff(doc, focusTarget)} off={skye.off} quota={skye.quota} working={!!skye.working || !!skye.waiting}
           onStart={(intent, opts) => focusTarget && void ask(focusTarget, intent, opts)} />
       )}
     </main>
@@ -479,7 +496,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <>
             <button className="se-handle right" aria-expanded={sheet === 'facts'} onClick={() => setSheet(sheet === 'facts' ? null : 'facts')}>Facts</button>
             <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError}
-              skyeWorking={skye.working} skyeOff={skye.off}
+              skyeWorking={skye.working} skyeWaiting={skye.waiting} skyeOff={skye.off}
               onLink={(refId, kind = 'ref') => {
                 const link = linkForMention(doc, { id: refId, kind }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
                 if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link ${link.from.kind}s[${link.from.id}] to scripts[${scriptId}]` }).then(() => say(`Linked ${linkWords(doc, link)} to this script.`, true)))
@@ -836,9 +853,9 @@ function WriterMark({ writer, person, onWhy }: { writer?: string; person: string
 }
 
 /** The right-hand area: only facts about the script. */
-function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeOff, onNameAnswer, onLink }: {
+function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeWaiting, skyeOff, onNameAnswer, onLink }: {
   composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void
-  skyeWorking?: string; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
+  skyeWorking?: string; skyeWaiting?: { jobId: string; ask?: Ask }; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
   /** Link a reference (or a whole key) named in the script but not linked to it. */
   onLink: (id: string, kind?: 'ref' | 'key') => void
 }) {
@@ -898,6 +915,13 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
         <section aria-label="Skye at work" className="se-atwork">
           <AgentFigure agent="skye" state="working" size={20} decorative />
           <span><span className="who">{SKYE}:</span> I'm writing that now.</span>
+        </section>
+      )}
+      {skyeWaiting && (
+        <section aria-label="Skye is waiting for you" className="se-atwork waiting">
+          <AgentFigure agent="skye" state="needs-you" size={20} decorative />
+          <span><span className="who">{SKYE}:</span> {waitingLine(skyeWaiting.ask)}</span>
+          {skyeWaiting.ask && <button type="button" className="btn xs" onClick={() => void showAsk(skyeWaiting.ask!.id)}>Show</button>}
         </section>
       )}
       {skyeOff && <section className="faint" role="status">{NOT_HERE}</section>}

@@ -21,7 +21,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addShots, asset, id, MAYA, SHA, wasm } from '../test/model'
+import { addShots, asset, id, job, MAYA, SHA, wasm } from '../test/model'
 import { systemUpdate, updateDoc } from '../doc/store'
 import { addScene, importFountain } from './edits'
 import { parseFountain } from './fountain'
@@ -284,5 +284,70 @@ describe('the Script editor page', () => {
     await settle()
     expect(headings()).toEqual(['INT. CAR - DAY'])
     expect(Object.keys(services.doc.get().shots)).toHaveLength(0)
+  })
+})
+
+describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writing that now')", () => {
+  /** Skye's write job waiting on her question, as the runner writes it: the job at needs_input, its open ask,
+   *  and this browser's request naming the item it was for. */
+  const waitingWrite = async (services: import('../app/context').Services, scriptId: string, target: { kind: 'scene' | 'shot' | 'beat'; id: string }) => {
+    const jobId = id('job')
+    const q = id('q')
+    await systemUpdate(services.doc, (d) => {
+      d.jobs[jobId] = job(d, 'write', [], null, { id: jobId, state: 'needs_input', node: { kind: 'script', id: scriptId }, crew: 'skye', purpose: 'write', ask_id: q })
+      d.asks[q] = {
+        id: q, v: 1, field_v: {}, node: { kind: 'script', id: scriptId }, job_id: jobId, crew: 'skye', state: 'open', answers: [],
+        question: { id: q, kind: 'nudge', text: 'Open on the hall or on the samurai?', options: [{ id: 'hall', label: 'The hall', value: 'hall' }, { id: 'him', label: 'The samurai', value: 'him' }], allow_text: true },
+      }
+    }, 'sync')
+    services.ui.update((u) => {
+      u.jobs[jobId] = { request: { op: 'write', input: { write: { intent: 'draft', target, base_hash: SHA('b'), lines: [], context: { target_s: 15, neighbours: '', refs: [] } } } } } as never
+    })
+    await services.doc.flush()
+    return { jobId, askId: q }
+  }
+
+  it('a question whose item is gone shows at the top of the page; the facts wait for you with the question', async () => {
+    const { services, el, render, scriptId } = await open()
+    let askId = ''
+    await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })
+    render()
+    await settle()
+    const top = el.querySelector(`.se-asks [data-ask="${askId}"]`)
+    expect(top?.textContent).toContain('Open on the hall or on the samurai?')
+    expect([...top!.querySelectorAll('button')].map((b) => b.textContent)).toEqual(expect.arrayContaining(['The hall', 'The samurai']))
+    const facts = el.querySelector('.se-facts')!.textContent
+    expect(facts).toContain('Waiting for you: Open on the hall or on the samurai?')
+    expect(facts).not.toContain("I'm writing that now")
+  })
+
+  it('a question on a scene that is on the page shows on that scene', async () => {
+    const { services, el, render, scriptId } = await open()
+    let askId = ''
+    await act(async () => {
+      const scene = await addScene(services.clan!, scriptId)
+      await updateDoc(services.doc, (d) => { d.scenes[scene].text = 'A samurai cleans the house.' }, 'edit')
+      askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: scene })).askId
+    })
+    render()
+    await settle()
+    expect(el.querySelector(`.sp-scene [data-ask="${askId}"]`)).not.toBeNull()
+    expect(el.querySelector('.se-asks')).toBeNull()
+  })
+
+  it("the tray's Show brings the question into view with the focus on its first answer", async () => {
+    const { services, el, render, scriptId } = await open()
+    let askId = ''
+    await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })
+    render()
+    await settle()
+    await act(async () => { (el.querySelector('.pt-status') as HTMLButtonElement).click() })
+    await settle()
+    const show = [...document.querySelectorAll<HTMLButtonElement>('.traypop button')].find((b) => b.textContent === 'Show')!
+    await act(async () => { show.click() })
+    await act(async () => { await new Promise((r) => setTimeout(r, 120)) })
+    const card = el.querySelector(`[data-ask="${askId}"]`)!
+    expect(card.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement?.textContent).toBe('The hall')
   })
 })
