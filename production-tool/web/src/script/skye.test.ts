@@ -10,7 +10,7 @@ import { MockRelay } from '../relay/mock'
 import { mockWrites } from '../relay/mockWrite'
 import { addShots, asset, id, MAYA, modelStore, SHA } from '../test/model'
 import { makeAjv, SCHEMA } from '../test/schemas'
-import { fitSeconds, handsOff, keep, keepMineDraft, landWrites, neighbours, proposedOf, skyeAsks, skyeState, waitingLine, wordDiff, writeInput } from './skye'
+import { fitSeconds, handsOff, keep, keepMineDraft, landWrites, NEW_SCENE_LINE, neighbours, proposedOf, sceneForJob, skyeAsks, skyeState, waitingLine, wordDiff, writeInput } from './skye'
 
 async function project() {
   const store = modelStore()
@@ -194,5 +194,52 @@ describe('a write waiting on her question (owner 2026-10-15)', () => {
     const { store, scriptId } = await asking('submitted')
     expect(skyeAsks(store.get(), scriptId, () => undefined)).toEqual([])
     expect(skyeState(store.get(), scriptId).waiting).toBeUndefined()
+  })
+})
+
+describe('a scene draft whose scene was undone while Skye asked (owner 2026-10-15)', () => {
+  it('lands as a new first scene in her words, one undo step, and her line says so', async () => {
+    const { store, scriptId } = await project()
+    const first = Object.values(store.get().scenes).find((x) => x.script_id === scriptId)
+    const gone = id('scene')
+    const job = jobOf(store, [{ target: { kind: 'scene', id: gone }, base_hash: SHA('b'), note: 'I drafted it from your line.',
+      lines: [{ type: 'action', text: 'Maya runs for the last ferry.' }, { type: 'character', text: 'MAYA' }, { type: 'dialogue', text: 'Wait!' }] }])
+    await store.change((d) => {
+      d.jobs[job.jobId] = { id: job.jobId, v: 1, field_v: {}, op: 'write', state: 'completed', node: { kind: 'script', id: scriptId }, started_by: `human:${MAYA.id}`, tenant_id: MAYA.tenant_id, nonce: 'n_yyyyyyyy', crew: 'skye', parent_ids: [], input_hashes: [], created_at: '2026-10-13T10:00:00Z' } as never
+    }, { action: 'sync', quiet: true, undo: false })
+    await store.flush()
+    const before = Object.keys(store.get().scenes).length
+
+    const ids = await landWrites(store, job)
+    const sceneId = sceneForJob(job.jobId)
+    expect(ids).toEqual([sceneId])
+    const d = store.get()
+    expect(Object.keys(d.suggestions)).toHaveLength(0)
+    expect(Object.keys(d.scenes)).toHaveLength(before + 1)
+    const scene = d.scenes[sceneId]
+    expect(scene).toMatchObject({ script_id: scriptId, heading: '', last_writer: 'skye' })
+    expect(scene.text).toBe('Maya runs for the last ferry.\nMAYA\nWait!')
+    expect((store.text.prose('scene', sceneId).content ?? []).map((b) => b.type)).toEqual(['action', 'character', 'dialogue'])
+    if (first) expect(scene.rank < first.rank).toBe(true)  // first in the script
+    expect(skyeState(d, scriptId)).toMatchObject({ newScene: sceneId })
+    expect(NEW_SCENE_LINE).toBe('That scene was gone, so I put my draft in a new first scene. Undo takes it back.')
+    expect((await store.chain())[0]).toMatchObject({ agent: 'skye' })
+
+    // Landing again (a reload) makes no second scene.
+    expect(await landWrites(store, job)).toEqual([])
+    expect(Object.keys(store.get().scenes)).toHaveLength(before + 1)
+
+    // One undo step takes the scene and its words back, and the line goes with it.
+    await store.undo()
+    expect(store.get().scenes[sceneId]).toBeUndefined()
+    expect(Object.keys(store.get().scenes)).toHaveLength(before)
+    expect(skyeState(store.get(), scriptId).newScene).toBeUndefined()
+  })
+
+  it('a shot draft whose shot is gone still lands nowhere', async () => {
+    const { store } = await project()
+    const ids = await landWrites(store, jobOf(store, [{ target: { kind: 'shot', id: id('shot') }, base_hash: SHA('b'), note: 'n', lines: [{ type: 'action', text: 'a' }] }]))
+    expect(ids).toEqual([])
+    expect(Object.keys(store.get().suggestions)).toHaveLength(0)
   })
 })

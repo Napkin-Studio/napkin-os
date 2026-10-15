@@ -44,7 +44,7 @@ import { parseFountain } from './fountain'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
-import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
+import { draftFromLine, fitSeconds, handsOff, NEW_SCENE_LINE, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
 import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
 import { linkForMention, linkWords } from '../text/mention/source'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
@@ -496,7 +496,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <>
             <button className="se-handle right" aria-expanded={sheet === 'facts'} onClick={() => setSheet(sheet === 'facts' ? null : 'facts')}>Facts</button>
             <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError}
-              skyeWorking={skye.working} skyeWaiting={skye.waiting} skyeOff={skye.off}
+              skyeWorking={skye.working} skyeWaiting={skye.waiting} skyeNewScene={!!skye.newScene} skyeOff={skye.off}
               onLink={(refId, kind = 'ref') => {
                 const link = linkForMention(doc, { id: refId, kind }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
                 if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link ${link.from.kind}s[${link.from.id}] to scripts[${scriptId}]` }).then(() => say(`Linked ${linkWords(doc, link)} to this script.`, true)))
@@ -853,9 +853,9 @@ function WriterMark({ writer, person, onWhy }: { writer?: string; person: string
 }
 
 /** The right-hand area: only facts about the script. */
-function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeWaiting, skyeOff, onNameAnswer, onLink }: {
+function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeWaiting, skyeNewScene, skyeOff, onNameAnswer, onLink }: {
   composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void
-  skyeWorking?: string; skyeWaiting?: { jobId: string; ask?: Ask }; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
+  skyeWorking?: string; skyeWaiting?: { jobId: string; ask?: Ask }; skyeNewScene?: boolean; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
   /** Link a reference (or a whole key) named in the script but not linked to it. */
   onLink: (id: string, kind?: 'ref' | 'key') => void
 }) {
@@ -922,6 +922,12 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
           <AgentFigure agent="skye" state="needs-you" size={20} decorative />
           <span><span className="who">{SKYE}:</span> {waitingLine(skyeWaiting.ask)}</span>
           {skyeWaiting.ask && <button type="button" className="btn xs" onClick={() => void showAsk(skyeWaiting.ask!.id)}>Show</button>}
+        </section>
+      )}
+      {skyeNewScene && !skyeWorking && !skyeWaiting && (
+        <section aria-label="Where Skye's draft went" className="se-atwork" role="status">
+          <AgentFigure agent="skye" state="idle" size={20} decorative />
+          <span><span className="who">{SKYE}:</span> {NEW_SCENE_LINE}</span>
         </section>
       )}
       {skyeOff && <section className="faint" role="status">{NOT_HERE}</section>}
