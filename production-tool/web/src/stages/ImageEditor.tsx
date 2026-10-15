@@ -751,16 +751,16 @@ function RheaLine({ busy, said, cutout, state, error, frameShown, drawError }: {
   )
 }
 
-function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPick: () => void }) {
+export function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPick: () => void }) {
   const url = useBlobUrl(f.asset)
   const who = f.crew === 'rhea' ? 'Rhea' : f.crew === 'dex' ? 'Dex' : 'Wren'
-  const what = f.kind === 'edited' ? 'edited' : f.version === 1 ? `drawn by ${who}` : `redrawn by ${who}`
+  const what = f.kind === 'edited' ? 'edited' : f.kind === 'original' ? 'as it was on the canvas' : f.version === 1 ? `drawn by ${who}` : `redrawn by ${who}`
   return (
     <button type="button" role="menuitem" className={`ie-vrow ${open ? 'on' : ''}`} aria-current={open || undefined} onClick={onPick}>
       <span className="ie-vthumb">{url && <img src={url} alt="" />}</span>
       <span className="ie-vtext">
         <span><span className="pt-mono">v{f.version}</span> · {what}{open ? ' · open now' : ''}</span>
-        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by Rhea` : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
+        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by Rhea` : f.kind === 'original' ? 'before its first edit' : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
       </span>
     </button>
   )
