@@ -42,7 +42,7 @@ Sizes: S is up to 1 day, M is 2 to 3 days, L is 4 to 6 days, XL is more than
 | 9 | Each node could be a CLAN file with two props: what it shows and what it feeds. | [clan-nodes](../../features/clan-nodes.clan) | XL | Pending (**needs discussion**) | Owner answers; os-sign-in; brief-research-spin-in |
 | 10 | Making a frame or a picture from a prompt on the canvas is not built. | [prompt-to-frame](../../features/prompt-to-frame.clan) | L | Pending (owner answers) | Shrey's canvas work for items 7 and 8 (phases 3-5) |
 | 11 | One concept, every format: see it on billboards, TV, reels and print with one click (Shrey, 2026-10-15). | [campaign-formats](../../features/campaign-formats.clan) | XL | Pending (**needs owner answers**) | Owner answers CF1-CF11; ~$8.30 paid tests; connected-video phase 1; board-autolayout; audio-mix for phase 5's mix |
-| IM4 | Open canvas pictures and references in the Image editor (split out of image-editor-masks-layers, 2026-10-15). | none yet | ? | Pending (**new discussion**) | Owner discussion first |
+| IM4 | Open canvas pictures and references in the Image editor (split out of image-editor-masks-layers, 2026-10-15). | [edit-canvas-pictures](../../features/edit-canvas-pictures.clan) | M | **Approved** (Edit button + double-click; new version in place) | fix/stack-member-select, image-editor-masks-layers |
 
 Each design was written by one agent and then checked by a second agent that
 tried to break it. Every record keeps the corrections from that review as a
