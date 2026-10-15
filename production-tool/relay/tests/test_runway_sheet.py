@@ -93,6 +93,7 @@ def video_problems(sheet: dict) -> list[str]:
                                                  if w.isdigit()), 0)
             if m["v2v"]["refsMax"] != said:
                 out.append(f"{name}: v2v.refsMax {m['v2v']['refsMax']} != the schema's {said}")
+    out += quality_problems(sheet)
     for op in ("clip", "clip_edit"):
         for a in sheet["ops"][op].get("alternates", []):
             name, video = a["model"], a.get("video") or sheet["video"]
@@ -121,6 +122,44 @@ def video_problems(sheet: dict) -> list[str]:
                     out.append(f"ops.clip_edit: {name} refs.max is not v2v.refsMax plus the clip")
                 if a.get("maxS") != v2v.get("inputMaxS"):
                     out.append(f"ops.clip_edit: {name} maxS {a.get('maxS')} != v2v.inputMaxS {v2v.get('inputMaxS')}")
+    return out
+
+
+def quality_problems(sheet: dict) -> list[str]:
+    """Clip quality (features/clip-quality.clan) held to the schemas: a draft level only where the model's
+    clip request takes `draft`, draftPromote exactly where text_to_video takes `draftTaskId`, an edit's
+    size (v2v.ratio) only where its edit mode takes a ratio, and keepsSize where the edit mode refuses one."""
+    out = []
+    for name, m in sheet["models"].items():
+        if m.get("endpoint") != "POST /v1/image_to_video":
+            continue
+        t = branch("POST /v1/text_to_video", name) or {}
+        if bool(m.get("draftPromote")) != ("draftTaskId" in t):
+            out.append(f"{name}: draftPromote {m.get('draftPromote')} disagrees with text_to_video's draftTaskId")
+        v2v = m.get("v2v") or {}
+        if v2v:
+            v = branch("POST /v1/video_to_video", name) or {}
+            refuses = "does not accept `ratio`" in (v.get("mode") or {}).get("description", "")
+            takes = "ratio" in v and not v["ratio"].get("deprecated") and not refuses
+            if v2v.get("ratio") and not takes:
+                out.append(f"{name}: v2v.ratio but its edit takes no ratio")
+    for op in ("clip", "clip_edit"):
+        spec = sheet["ops"][op]
+        for s in [spec, *spec.get("alternates", [])]:
+            name, q = s["model"], s.get("quality") or {}
+            drafts = [lvl for lvl, e in q.items() if e.get("draft")]
+            if drafts:
+                for endpoint in (s["endpoint"], s.get("textEndpoint")):
+                    if endpoint and "draft" not in (branch(endpoint, name) or {}):
+                        out.append(f"ops.{op}: {name} drafts, but {endpoint} takes no draft")
+            if s.get("keepsSize"):
+                v = branch("POST /v1/video_to_video", name) or {}
+                if "does not accept `ratio`" not in (v.get("mode") or {}).get("description", ""):
+                    out.append(f"ops.{op}: {name} keepsSize, but its edit mode is not said to refuse a ratio")
+            m = sheet["models"].get(name) or {}
+            for lvl, e in q.items():
+                if e.get("resolution") and e["resolution"] not in (m.get("resolutions") or []):
+                    out.append(f"ops.{op}: {name} {lvl} resolution {e['resolution']} is not in the schema's")
     return out
 
 
@@ -259,6 +298,12 @@ def _mutated(change) -> dict:
     (lambda s: s["ops"]["clip"].__setitem__("model", "gen4.5"), "not in the catalogue"),
     (lambda s: s["ops"]["clip"].__setitem__("textEndpoint", "POST /v1/text_to_image"), "textEndpoint"),
     (lambda s: s["models"]["hailuo3"].__setitem__("audioParam", True), "audioParam"),
+    # clip quality (features/clip-quality.clan)
+    (lambda s: s["models"]["wan3"].__setitem__("draftPromote", True), "draftPromote"),
+    (lambda s: s["models"]["seedance2_5"]["v2v"].__setitem__("ratio", True), "v2v.ratio"),
+    (lambda s: s["models"]["klingO3_pro"]["v2v"].__setitem__("ratio", True), "v2v.ratio"),
+    (lambda s: s["ops"]["clip"]["alternates"][6]["quality"]["draft"].__setitem__("draft", True), "takes no draft"),
+    (lambda s: s["ops"]["clip_edit"]["alternates"][2].__setitem__("keepsSize", True), "keepsSize"),
     (lambda s: s["models"]["klingO3_pro"].__setitem__("imagesMax", 9), "imagesMax"),
     (lambda s: s["models"]["seedance2_5"]["v2v"].__setitem__("refsMax", 9), "refsMax"),
     (lambda s: s["ops"]["clip"]["alternates"][3]["video"].__setitem__("refsWithoutFrame", True), "refsWithoutFrame"),

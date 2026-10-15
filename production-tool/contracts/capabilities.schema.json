@@ -210,6 +210,23 @@
                 "preciseEdit": {
                   "type": "boolean",
                   "description": "With no region and no mask, the op edits the whole image keeping its composition and size (ideogram_4_5 preciseEdit; providers.md fact 3). Added 2026-10-15 (additive, features/image-editor.clan)."
+                },
+                "quality": {
+                  "$ref": "#/$defs/quality"
+                },
+                "family": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.]+$",
+                  "description": "Models that are sizes of one model (Kling O3 Standard and Pro) share a family: the menu shows it once, as familyLabel, and Quality picks the member. Added 2026-10-15 (additive, features/clip-quality.clan)."
+                },
+                "familyLabel": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "description": "The family's name in the menu (\"Kling O3\")."
+                },
+                "keepsSize": {
+                  "type": "boolean",
+                  "description": "clip_edit: the edit keeps the clip's own size and takes no size (Seedance 2.5 edit mode refuses ratio); quality only prices it, at the source take's level. Added 2026-10-15 (additive, features/clip-quality.clan)."
                 }
               },
               "required": [
@@ -228,6 +245,23 @@
           "preciseEdit": {
             "type": "boolean",
             "description": "With no region and no mask, the op edits the whole image keeping its composition and size (ideogram_4_5 preciseEdit; providers.md fact 3). Added 2026-10-15 (additive, features/image-editor.clan)."
+          },
+          "quality": {
+            "$ref": "#/$defs/quality"
+          },
+          "family": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.]+$",
+            "description": "Models that are sizes of one model (Kling O3 Standard and Pro) share a family: the menu shows it once, as familyLabel, and Quality picks the member. Added 2026-10-15 (additive, features/clip-quality.clan)."
+          },
+          "familyLabel": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "The family's name in the menu (\"Kling O3\")."
+          },
+          "keepsSize": {
+            "type": "boolean",
+            "description": "clip_edit: the edit keeps the clip's own size and takes no size (Seedance 2.5 edit mode refuses ratio); quality only prices it, at the source take's level. Added 2026-10-15 (additive, features/clip-quality.clan)."
           }
         },
         "required": [
@@ -699,6 +733,10 @@
             "audioParam": {
               "type": "boolean",
               "description": "The edit's request has an `audio` switch (Seedance 2.5); sent explicitly, false today."
+            },
+            "ratio": {
+              "type": "boolean",
+              "description": "The edit takes a ratio, so its quality sets the output size (Omni Flash 1.1). Added 2026-10-15 (additive, features/clip-quality.clan)."
             }
           },
           "required": [
@@ -706,6 +744,10 @@
             "refsMax"
           ],
           "additionalProperties": false
+        },
+        "draftPromote": {
+          "type": "boolean",
+          "description": "A draft (quality draft: true) can be made at 1080p later without making it again: POST /v1/text_to_video {model, draftTaskId}, within 7 days (Seedance 2.5). Added 2026-10-15 (additive, features/clip-quality.clan)."
         }
       },
       "required": [
@@ -832,6 +874,80 @@
         "source"
       ],
       "additionalProperties": false
+    },
+    "quality": {
+      "type": "object",
+      "description": "Draft, Standard and Final for this op on this model (features/clip-quality.clan): the size each level makes. A level the model lacks is greyed in the menu and a request for it runs at the nearest level the model (or its family) has. Absent: the model keeps the clip's own size, or has one. Added 2026-10-15 (additive).",
+      "properties": {
+        "draft": {
+          "type": "object",
+          "properties": {
+            "tier": {
+              "type": "string",
+              "pattern": "^[0-9]+(p|k|K)$",
+              "description": "The output size tier: one of the model's ratio tiers (models[m].ratios[].tier) or its resolution (Hailuo 3: 768p, 2k). Shown on the take's card (\"Final 1080p\")."
+            },
+            "resolution": {
+              "type": "string",
+              "description": "Sent as the request's resolution, for a model whose size is a resolution beside an aspect ratio (Hailuo 3)."
+            },
+            "draft": {
+              "type": "boolean",
+              "description": "Sent as draft: true (Seedance 2.5: a cheap 480p preview that models[m].draftPromote can make 1080p later)."
+            }
+          },
+          "required": [
+            "tier"
+          ],
+          "additionalProperties": false
+        },
+        "standard": {
+          "type": "object",
+          "properties": {
+            "tier": {
+              "type": "string",
+              "pattern": "^[0-9]+(p|k|K)$",
+              "description": "The output size tier: one of the model's ratio tiers (models[m].ratios[].tier) or its resolution (Hailuo 3: 768p, 2k). Shown on the take's card (\"Final 1080p\")."
+            },
+            "resolution": {
+              "type": "string",
+              "description": "Sent as the request's resolution, for a model whose size is a resolution beside an aspect ratio (Hailuo 3)."
+            },
+            "draft": {
+              "type": "boolean",
+              "description": "Sent as draft: true (Seedance 2.5: a cheap 480p preview that models[m].draftPromote can make 1080p later)."
+            }
+          },
+          "required": [
+            "tier"
+          ],
+          "additionalProperties": false
+        },
+        "final": {
+          "type": "object",
+          "properties": {
+            "tier": {
+              "type": "string",
+              "pattern": "^[0-9]+(p|k|K)$",
+              "description": "The output size tier: one of the model's ratio tiers (models[m].ratios[].tier) or its resolution (Hailuo 3: 768p, 2k). Shown on the take's card (\"Final 1080p\")."
+            },
+            "resolution": {
+              "type": "string",
+              "description": "Sent as the request's resolution, for a model whose size is a resolution beside an aspect ratio (Hailuo 3)."
+            },
+            "draft": {
+              "type": "boolean",
+              "description": "Sent as draft: true (Seedance 2.5: a cheap 480p preview that models[m].draftPromote can make 1080p later)."
+            }
+          },
+          "required": [
+            "tier"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
     }
   }
 }

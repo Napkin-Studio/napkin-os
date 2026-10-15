@@ -324,12 +324,32 @@ class RunwayProvider:
         tier = next((r.get("tier") for r in m.get("ratios") or [] if r["ratio"] == ratio), None)
         return f"auto_{tier or '720p'}"
 
+    @staticmethod
+    def _in_tier(ratio: str, m: dict, tier: Optional[str]) -> str:
+        """The model's size of `tier` nearest the shape of `ratio` (features/clip-quality.clan): Final makes
+        1920:1080 where the director asked 1280:720. As it is when the model lists no pixel sizes in that
+        tier (Hailuo 3's aspect ratios: its size is the resolution) or no tier is asked."""
+        import re
+
+        sizes = tuple(r["ratio"] for r in m.get("ratios") or []
+                      if r.get("tier") == tier and re.fullmatch(r"[0-9]+:[0-9]+", r["ratio"]))
+        if not tier or not sizes or ratio in sizes:
+            return ratio
+        return nearest_ratio(ratio, sizes)
+
     def _clip(self, job: ProviderJob) -> tuple[str, dict]:
         self._check(job, job.prompt)
         sheet = effective_sheet(self._sheet, job.op, job.model)
         spec, video = sheet["ops"][job.op], sheet["video"]
         model = spec["model"]
         m = self._catalogue(model)
+        q = job.quality or {}
+        if job.draft_task:
+            # Remake as Final on a draft (features/clip-quality.clan): Runway makes the same draft at 1080p
+            # from its task id, with its own prompt, pictures and settings; no other field may go.
+            if not m.get("draftPromote"):
+                raise CapabilityMissing(f"{m.get('label', model)} cannot make a draft final")
+            return "/v1/text_to_video", {"model": model, "draftTaskId": job.draft_task}
         # A clip with no first frame goes to the model's text endpoint (a clip straight from the script,
         # ui-behaviour 3.5). It carries pictures only where the model takes references there
         # (video.refsWithoutFrame: Hailuo 3, Omni Flash 1.1, WAN 3, Seedance); Veo and Kling take none.
@@ -356,9 +376,12 @@ class RunwayProvider:
             body["references"] = [{"uri": self._assets(r.sha256).url} for r in job.refs]
         body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"])
         keyframed = not text_only and m.get("keyframeRatio") == "auto_tier"
-        body["ratio"] = self._auto_ratio(job.ratio, m) if keyframed else job.ratio
+        ratio = self._in_tier(job.ratio, m, q.get("tier"))  # the quality's size, in the shot's shape
+        body["ratio"] = self._auto_ratio(ratio, m) if keyframed else ratio
         if m.get("resolutions"):  # Hailuo 3: the size is a resolution beside an aspect ratio
-            body["resolution"] = (spec.get("defaults") or {}).get("resolution") or m["resolutions"][0]
+            body["resolution"] = q.get("resolution") or (spec.get("defaults") or {}).get("resolution") or m["resolutions"][0]
+        if q.get("draft"):  # Seedance 2.5's cheap 480p preview, which Remake as Final can promote
+            body["draft"] = True
         if m.get("audioParam", True):
             body["audio"] = video_audio(job)  # explicit wherever the model has the switch; Veo defaults to sound on
         if job.duration_s is not None:
@@ -395,6 +418,10 @@ class RunwayProvider:
             body["references"] = [{"uri": a.url} for _, a in pictures]
         if v2v.get("mode"):
             body["mode"] = v2v["mode"]
+        q = job.quality or {}
+        if v2v.get("ratio") and q.get("tier") and job.ratio:
+            # Omni Flash 1.1 makes the edit at the quality's size, in the clip's own shape (features/clip-quality.clan).
+            body["ratio"] = self._in_tier(job.ratio, m, q["tier"])
         if v2v.get("durationAuto"):
             body["duration"] = "auto"  # Seedance 2.5 edit keeps the clip's length
         if v2v.get("keepOriginalSound"):

@@ -898,6 +898,7 @@
       "title": "First Light",
       "ratio": "16:9",
       "target_s": 15,
+      "quality": "standard",
       "edl": {
         "edl_01K7A000000000000000000028": {
           "rank": "a0",
@@ -958,6 +959,8 @@
       "model": "veo3.1_fast",
       "provider": "runway",
       "duration_s": 5,
+      "quality": "draft",
+      "size": "720p",
       "segments": []
     },
     "take_01K7A000000000000000000025": {
