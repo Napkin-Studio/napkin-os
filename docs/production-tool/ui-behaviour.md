@@ -211,6 +211,14 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 | Video → anything but a Format set | none | Refused | Video is an output; it can only be the master of a cut-down set. |
 | A link that would form a loop | none | Refused | "That would make a loop." |
 
+**How a link is drawn** (owner, 2026-10-15):
+- **From the edge nearest the target.** A link leaves its source's edge that faces the target and arrives on the target's facing edge. A group, or a stack of pictures, attaches at its outer bounds (a stack's turned corners included).
+- **Under content.** Links run over boards but under pictures, cards, sketch areas and ink, never over their content.
+- **A gentle curve, round what is in the way.** Where the curve would cross a picture, a card or a sketch area, the link goes round them instead (an elbow above or below them, rounded). The same scene always routes the same way.
+- **One link per group and target.** A key group shows one link, the key link. When views form a key group, the links its views had into a target merge into it as one undo step ("Linked as @samurai · 3 views"); a view-only link stays only when made with ⌥ after grouping. Two arrows are never drawn between the same group and target.
+- **Generation arrows follow their ends.** The arrow from a sketch, picture or text to what was made from it is attached to both, follows them when they move, stack or spread, goes with either end, and follows the same routing rules. A link or arrow with an end missing is not drawn.
+- **Tags first, link to use** (owner, 2026-10-15). A script may say @samurai before any picture has that name. Naming pictures samurai_front, side and back never links them: the mentions stay underlined as not linked until the person links the group into the script, which resolves every @samurai at once. Unlinking underlines them again. Skye never offers to tag plain words.
+
 **Dragging a link** (Link tool L, or drag from an output port):
 - **Pointer:** a dashed blue line follows it, and the Link tool shows as pressed (`aria-pressed`).
 - **Compatible input ports glow blue.** Over one, a tooltip at the pointer reads "Drop to link · drives".
