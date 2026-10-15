@@ -96,6 +96,8 @@
   box-shadow: var(--shadow-pill); font: 600 12px var(--f-sans, Geist, sans-serif); color: var(--ink); white-space: nowrap;
 }
 .node-layer .nl-keychip.stacked { transform: translate(0, calc(-100% - 22px)); }
+.node-layer .nl-keychip.end { transform: translate(-100%, calc(-100% - 10px)); }
+.node-layer .nl-keychip.end.stacked { transform: translate(-100%, calc(-100% - 22px)); }
 .node-layer .nl-keychip:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
 /* Linked as @samurai · 3 views: under the group, with Undo. */
 .node-layer .nl-said { position: absolute; pointer-events: auto; z-index: 4; }
