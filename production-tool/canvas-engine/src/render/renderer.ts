@@ -407,7 +407,8 @@ export class Renderer {
         ctx.translate(-scaling.ox, -scaling.oy)
       }
       this.drawOne(ctx, r, cam, level, stats)
-      if (this.selected.has(r.id) && !this.frame?.dashed) {
+      // A selected board's own frame (its handles) is its outline.
+      if (this.selected.has(r.id) && !this.frame?.dashed && !(this.frame?.edges && r.kind === 'board')) {
         ctx.strokeStyle = '#4a7fd4'
         ctx.lineWidth = 2 / (cam.zoom * (scaling?.s ?? 1))
         const pad = 4 / (cam.zoom * (scaling?.s ?? 1))

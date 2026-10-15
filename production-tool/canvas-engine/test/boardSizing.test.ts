@@ -102,6 +102,16 @@ describe('placing on a board (pure)', () => {
     for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) expect(overlaps(r.boxes[i], r.boxes[j])).toBe(false)
   })
 
+  it('outsideSpot slides along a side before going far out: the nearest free spot', () => {
+    const avoid = [
+      { x: 410, y: -1000, w: 800, h: 1300 }, // right
+      { x: -600, y: -1000, w: 590, h: 3000 }, // left
+      { x: -1000, y: -2000, w: 3000, h: 1990 }, // above
+      { x: 0, y: 310, w: 300, h: 400 }, // below, under its left part
+    ]
+    expect(outsideSpot(board, PIC, avoid)).toEqual({ x: 320, y: 324 })
+  })
+
   it('outsideSpot steps further out until it is clear', () => {
     const avoid = [{ x: 0, y: 300, w: 400, h: 200 }, { x: 400, y: 0, w: 400, h: 400 }]
     const s = outsideSpot(board, PIC, avoid)

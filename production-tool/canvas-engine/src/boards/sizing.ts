@@ -92,22 +92,32 @@ export function rowSlot(occupied: readonly Rect[], size: { w: number; h: number 
   return null
 }
 
-/** The nearest free spot of `size` just outside the board: below it, then right, left, above, further out each round. */
+/**
+ * The nearest free spot of `size` just outside the board: on any side, BOARD_CLEAR out at least, slid
+ * along the side or further out as little as it takes to be clear of `avoid` (by half a gap). Ties go
+ * below, then right, left, above.
+ */
 export function outsideSpot(board: Rect, size: { w: number; h: number }, avoid: readonly Rect[]): { x: number; y: number } {
-  for (let k = 0; k < 200; k++) {
-    const out = BOARD_CLEAR + k * BOARD_GAP
-    const tries = [
-      { x: board.x, y: bottomOf(board) + out },
-      { x: rightOf(board) + out, y: board.y },
-      { x: board.x - out - size.w, y: board.y },
-      { x: board.x, y: board.y - out - size.h },
-    ]
-    for (const t of tries) {
-      const r = { ...t, ...size }
-      if (!overlaps(r, board, BOARD_CLEAR) && !avoid.some((a) => overlaps(r, a, BOARD_GAP / 2))) return t
+  const step = BOARD_GAP / 2
+  const sides = [
+    (out: number, t: number) => ({ x: board.x + t, y: bottomOf(board) + out }),
+    (out: number, t: number) => ({ x: rightOf(board) + out, y: board.y + t }),
+    (out: number, t: number) => ({ x: board.x - out - size.w, y: board.y + t }),
+    (out: number, t: number) => ({ x: board.x + t, y: board.y - out - size.h }),
+  ]
+  const tries: { at: { x: number; y: number }; cost: number; side: number }[] = []
+  for (let k = 0; k <= 60; k++) {
+    for (let j = -30; j <= 30; j++) {
+      const t = j * step
+      sides.forEach((at, side) => tries.push({ at: at(BOARD_CLEAR + k * step, t), cost: k * step + Math.abs(t) * 0.5, side }))
     }
   }
-  return { x: board.x, y: bottomOf(board) + BOARD_CLEAR }
+  tries.sort((a, b) => a.cost - b.cost || a.side - b.side)
+  for (const t of tries) {
+    const r = { ...t.at, ...size }
+    if (!overlaps(r, board, BOARD_CLEAR) && !avoid.some((a) => overlaps(r, a, BOARD_GAP / 2))) return t.at
+  }
+  return { x: board.x, y: bottomOf(board) + BOARD_CLEAR + 61 * step }
 }
 
 export interface Placement {

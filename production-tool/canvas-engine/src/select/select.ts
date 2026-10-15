@@ -446,7 +446,10 @@ export class SelectTool {
     this.drag(p)
     let told: BoardEvent[] = []
     if (this.resizing) {
-      const { id, rect, leaving } = this.resizing
+      const { id, leaving } = this.resizing
+      // Whole scene units: a drag at any zoom leaves a board of round size.
+      const r0 = this.resizing.rect
+      const rect = { x: Math.round(r0.x), y: Math.round(r0.y), w: Math.round(r0.x + r0.w) - Math.round(r0.x), h: Math.round(r0.y + r0.h) - Math.round(r0.y) }
       this.resizing = null
       this.resizeUnits = []
       const b = this.scene.get(id)
