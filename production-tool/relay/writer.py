@@ -4,16 +4,18 @@ One job per action a person presses in the Script editor (Tighten, Make it 10 s,
 Write the VO, Say it another way, a draft from one line, Cut him). In: the target's lines, the
 neighbouring rows (at most 4,000 characters) and the names of the references with their
 roles (relay-api WriteInput). Out: drafts that land as suggestions (relay-api Write), or a
-question when the input is too thin to draft from (needs_input). Nothing is sent to an image
+question when she cannot go on without the person (needs_input): a real choice or a fact only
+they know. A question that offers no choice (one option that restates the press) is answered by
+the relay for them, and she drafts (`empty_nudge`, skye.v3). Nothing is sent to an image
 or video provider and no Runway money is spent: it is an internal op on the text quota.
 
 `ModelWriter` asks Claude through the director's model port with an explicit model (as the
 director does for shot_list), so the relay needs no new setting. `PassthroughWriter` answers
 deterministically with no model: the local relay, and the tests' fake-model contract.
 
-The relay, not the model, owns three things: each draft's target and base_hash are the
-input's (echoed back, so a draft lands after a reload and a stale one is caught on Keep), a
-draft for any other target is dropped, and new beats keep inside the shot.
+The relay, not the model, owns four things: each draft's target and base_hash are the input's
+(echoed back, so a draft lands after a reload and a stale one is caught on Keep), a draft for any
+other target is dropped, new beats keep inside the shot, and a one-option nudge goes ahead.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from pathlib import Path
 from contracts import Contracts
 
 WRITE_MODEL = "claude-sonnet-5-5"
-PROMPT_VERSION = "skye.v2"  # skye.v1 stays bundled: ModelWriter(prompt_version="skye.v1") rolls back
+PROMPT_VERSION = "skye.v3"  # skye.v1 and v2 stay bundled: ModelWriter(prompt_version="skye.v2") rolls back
 PURPOSE = "writer"
 PROMPTS = Path(__file__).parent / "prompts"
 ASK_HOOK = "[ask]"
@@ -88,6 +90,22 @@ def settle(inp: dict, out: dict) -> dict:
             "rationale": out.get("rationale", "")}
 
 
+def empty_nudge(question: dict | None) -> bool:
+    """A question that offers no choice (owner 2026-10-15: "Draft the scene as written?" with one option,
+    "Draft it", on an empty script): a nudge with exactly one option that goes ahead. The person already
+    pressed what they want, so the relay takes it as asked and Skye drafts. A real choice (two options or
+    more) and a question for a fact only the person knows (no options, text) still reach them."""
+    if not question or question.get("kind") != "nudge":
+        return False
+    return len([o for o in question.get("options") or [] if "value" in o]) == 1
+
+
+def went_ahead(question: dict) -> dict:
+    """The answer the relay gives for the person to a one-option nudge: its one option."""
+    [opt] = [o for o in question["options"] if "value" in o]
+    return {k: v for k, v in (("questionId", question.get("id")), ("optionId", opt.get("id")), ("label", opt.get("label"))) if v}
+
+
 class ModelWriter:
     model = WRITE_MODEL
     prompt_version = PROMPT_VERSION
@@ -104,9 +122,20 @@ class ModelWriter:
         inp = req["input"]
         usage = Usage()
         t0 = time.monotonic()
-        out = self.port.call(PURPOSE, self.system, {"op": "write", "input": inp}, self.schema, usage=usage,
-                             attribution=req.get("jobId", "write"), model=self.model, max_tokens=3000)
-        res = settle(inp, out)
+
+        def ask(payload: dict) -> dict:
+            return self.port.call(PURPOSE, self.system, {"op": "write", "input": payload}, self.schema, usage=usage,
+                                  attribution=req.get("jobId", "write"), model=self.model, max_tokens=3000)
+
+        res = settle(inp, ask(inp))
+        if empty_nudge(res.get("question")) and not inp.get("answer"):
+            # Skye asked whether to do what the person pressed: go ahead, once, as if they chose it.
+            q = res["question"]
+            res = settle(inp, ask({**inp, "answer": went_ahead(q)}))
+            if empty_nudge(res.get("question")):
+                # Asked the same again: no draft and no question, so the job fails with "Try again".
+                res.pop("question")
+            res["rationale"] = f"relay: went ahead on a one-option nudge ({q.get('text', '')[:120]}). {res.get('rationale', '')}".strip()
         res["_latencyMs"] = round((time.monotonic() - t0) * 1000)
         res["_usage"] = {"input_tokens": getattr(usage, "input_tokens", 0), "output_tokens": getattr(usage, "output_tokens", 0)}
         return res

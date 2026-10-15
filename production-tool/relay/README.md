@@ -18,7 +18,9 @@ Implements `production-tool/contracts/relay-api.schema.json`, contract 3
   records the first answer (`answeredBy`, `answer`) with the ledger's conditional write and re-runs
   the director on the same job; a second answer is 409 `AnswerConflict` with the winner. Change is
   a new job with `input.answer` and `parentIds: [jobId]`. Locally, words with `[ask]` make the
-  passthrough director ask (a Mock run of the whole flow).
+  passthrough director ask (a Mock run of the whole flow). Skye (`write`, writer.py) never makes a
+  person answer a question that offers no choice: a nudge with one option ("Draft it") is answered
+  for them and she drafts (skye.v3); a real choice or a missing fact still waits in `needs_input`.
 - Stitch: a clip with `endCard` is left out of the stitch payload (stitch draws its own card).
 - The library is shelved: `GET /library/{shelf}`, `GET|POST /library/{shelf}/{key}[/{ver}]`, at
   `tenants/<tenantId>/library/<shelf>/…`; kinds key, brand_kit and format_pack.

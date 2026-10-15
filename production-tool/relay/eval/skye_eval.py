@@ -3,13 +3,15 @@ writer, scored by checks in code. A person runs `record` with the eval key befor
 logs the result in the record; CI only replays (`score`), so it makes no model call.
 
   uv run python -m eval.skye_eval record              # live: Bedrock (or locally under scripts/model-local run)
-  uv run python -m eval.skye_eval score               # replays eval/recorded/skye.v1/*.json
+  uv run python -m eval.skye_eval score               # replays eval/recorded/<PROMPT_VERSION>/*.json
   uv run python -m eval.skye_eval score --passthrough # the checks over the no-model writer
 
 The checks: a draft comes back (or a question, never both); every @name is kept (a draft too), none
 invented and none swapped for another (a bare @samurai never becomes @samurai_front);
 the blocks keep their types and order; Make it N s sets that length; a beat lands inside the shot;
-the note is one short first-person line with no price; the words are shorter for Tighten.
+the note is one short first-person line with no price; the words are shorter for Tighten; a question
+offers a real choice or asks for a missing fact, never one option that restates the press (skye.v3).
+The `proceed` cases are drafts that must come back as drafts (the owner's empty script, 2026-10-15).
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from writer import PROMPT_VERSION, WRITE_MODEL, ModelWriter, PassthroughWriter, settle  # noqa: E402
+from writer import PROMPT_VERSION, WRITE_MODEL, ModelWriter, PassthroughWriter, empty_nudge, settle  # noqa: E402
 
 CASES = HERE / "skye_cases.json"
 RECORDED = HERE / "recorded" / PROMPT_VERSION
@@ -37,7 +39,7 @@ def load() -> dict:
 
 
 def request(case: dict, intent: str) -> dict:
-    lines = case["lines"] if intent != "draft" else [{"type": "action", "text": case["lines"][0]["text"].split(". ")[0]}]
+    lines = case["lines"] if intent != "draft" or case.get("intent") else [{"type": "action", "text": case["lines"][0]["text"].split(". ")[0]}]
     write = {
         "intent": intent, "target": {"kind": "shot" if intent != "draft" else "scene", "id": "shot_00000000000000000000000001"},
         "base_hash": BASE, "lines": lines,
@@ -52,6 +54,10 @@ def score(case: dict, intent: str, out: dict) -> dict[str, bool]:
     req = request(case, intent)["input"]["write"]
     writes = out.get("writes") or []
     checks: dict[str, bool] = {"answers": bool(writes) != bool(out.get("question"))}
+    if out.get("question"):
+        checks["no empty ask"] = not empty_nudge(out["question"])
+    if case.get("intent"):
+        checks["drafts"] = bool(writes)
     if not writes:
         return checks
     d = writes[0]
@@ -102,6 +108,12 @@ def run(writer, data: dict, cases=None) -> dict:
             if out is None:
                 continue
             table[f"{case['id']}/{intent}"] = score(case, intent, out)
+    for case in data.get("proceed", []):
+        if cases and case["id"] not in cases:
+            continue
+        out = writer(case, case["intent"])
+        if out is not None:
+            table[f"{case['id']}/{case['intent']}"] = score(case, case["intent"], out)
     return table
 
 
