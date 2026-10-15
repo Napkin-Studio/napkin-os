@@ -38,6 +38,8 @@ const SAY_MS = 7000
 type FrameEl = CanvasElement & { name?: string; purpose?: string }
 /** A board frame's title chip in scene units: the engine's (boards/grab), so the rename field, the bar and the press agree. */
 const chipOf = (f: FrameEl, zoom: number) => boardTitleRect({ x: f.x, y: f.y, w: f.width, h: f.height, props: { name: f.name ?? '' } }, zoom)
+/** Browser storage key of the one-time "next free spot" note (per viewer). */
+const NOTE_KEY = 'pt.boards.nextSlotNote'
 /** A drag smaller than this (screen pixels) makes a board of the default size where it started. */
 const MIN_DRAG = 24
 const typing = (t: EventTarget | null) => !!(t as { closest?: (s: string) => unknown } | null)?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
@@ -268,6 +270,20 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
     ;(canvas as Sized).fitBoard?.(frameId)
     refocus()
   }
+  // The one-time note (BA7): the first board this viewer selects says how boards place things now.
+  const [noteSeen] = useState(() => {
+    try {
+      return localStorage.getItem(NOTE_KEY) === '1'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    if (!sel || noteSeen) return
+    try {
+      localStorage.setItem(NOTE_KEY, '1')
+    } catch { /* private window: it shows again next time */ }
+  }, [sel, noteSeen])
   const tidyNow = (frameId: string) => {
     tidyBoard(canvas, doc, frameId)
     refocus()
@@ -319,6 +335,7 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
         const at = beside ? { left: right.x + 8, top: Math.max(right.y, BAR_TOP - 16) } : { left: Math.min(Math.max(p.x, 120), viewW - 120), top: p.y - 6 }
         return (
           <div className={`toolbar selbar bd-bar ${beside ? 'beside' : ''}`} role="toolbar" aria-label="Board actions" style={at} onPointerDown={(e) => e.stopPropagation()}>
+            {!noteSeen && <span className="bd-tip" role="note">New pictures take the next free spot. Tidy lines up the rest.</span>}
             <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Line what is on it up by what the board is for (one undo step)'} data-frame={sel.id} onClick={(e) => tidyNow(e.currentTarget.dataset.frame!)}>Tidy</button>
             <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Shrink or grow the board to what is on it'} data-frame={sel.id} onClick={(e) => fit(e.currentTarget.dataset.frame!)}>Fit to contents</button>
           </div>
