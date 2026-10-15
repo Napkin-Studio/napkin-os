@@ -113,3 +113,30 @@ describe('arrow keys on the mounted canvas', () => {
     a.destroy()
   })
 })
+
+describe('the Delete key on a selected link', () => {
+  it('a link picked on the canvas (mouse, pen, or a finger’s tap) goes with Delete, one step, and Ctrl+Z brings it back', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const a = (await ownEngine.mount(host, { initial: null, onChange: () => {}, theme: 'light' })) as OwnAdapter
+    a.setViewport({ zoom: 1, scrollX: 0, scrollY: 0 })
+    const sc = a.node({ x: 0, y: 0, width: 200, height: 100, customData: { kind: 'script', id: 'script_1' } })
+    const sb = a.node({ x: 0, y: 400, width: 300, height: 100, customData: { kind: 'storyboard', id: 'storyboard_1' } })
+    const link = a.link({ fromElId: sc.id, toElId: sb.id, role: 'drives', linkId: 'link_1' })
+    a.transact(() => [sc, sb, link], { undoable: false })
+    for (const by of ['mouse', 'pen', 'touch'] as const) {
+      // Halfway down the line between the cards, over nothing else.
+      if (by === 'touch') a.tap({ x: 100, y: 250 })
+      else {
+        a.press({ x: 100, y: 250 }, { by })
+        a.release({ x: 100, y: 250 })
+      }
+      expect(a.view().selectedIds).toEqual([link.id])
+      host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
+      expect(a.elements().some((e) => e.id === link.id)).toBe(false)
+      host.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))
+      expect(a.elements().some((e) => e.id === link.id)).toBe(true)
+    }
+    a.destroy()
+  })
+})
