@@ -15,6 +15,9 @@ import type { CanvasEngine, InputCapabilities, MountOptions, PointerSample } fro
 import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
 
+/** The cursor over each of a selected board's handles. */
+const RESIZE_CURSOR: Record<string, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }
+
 /** What this browser's pointer events can carry (ui-behaviour 8; fallbacks are raw events and pressure only). */
 export function probeCapabilities(): InputCapabilities {
   const pe = typeof PointerEvent !== 'undefined' ? PointerEvent.prototype : undefined
@@ -306,6 +309,12 @@ export const ownEngine: CanvasEngine = {
       if (phase === 'down' || phase === 'up') sample(phase, e)
       else if (phase === 'move' && e.buttons) sample('move', e)
       for (const i of adapter.router.handle(raw(phase, e))) act(i)
+      // A selected board's handles show their resize cursor.
+      if (phase === 'move' && !e.buttons) {
+        const edge = adapter.boardHandleAt(toScene(e.clientX, e.clientY))
+        const want = edge ? RESIZE_CURSOR[edge] : ''
+        if (live.style.cursor !== want) live.style.cursor = want
+      }
     }
     const handlers: [string, (e: PointerEvent) => void][] = [
       ['pointerdown', feed('down')], ['pointermove', feed('move')], ['pointerup', feed('up')], ['pointercancel', feed('cancel')], ['pointerleave', feed('leave')],

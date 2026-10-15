@@ -22,6 +22,7 @@ import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { canLink, checkLink, endName, type LinkEnd as CoreEnd, type LinkGraph, type LinkKind, type LinkRole as CoreRole } from '../core/links'
 import type { CardKind } from './cardChrome'
 import { adLayout, CARD_SIZE } from '../boards/layout'
+import { boardAt, fitInto, tellFull, withFields } from '../boards/fitting'
 import { isKeyGroup, keyViews } from '../../lib/names'
 import { keyGroupId } from './keyGroups'
 
@@ -289,15 +290,14 @@ export function newEntity(doc: ProductionDocument, kind: CardKind): { kind: Card
 
 type Box = { x: number; y: number; w: number; h: number }
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-const PAD = { x: 16, top: 22, bottom: 16 }
 
 /**
  * Where a new node of this kind goes (ui-behaviour 3.3): centred on `at`, else on the middle of the
- * view, nudged clear of the nodes already there. When that spot is on a board whose purpose fits the
- * kind (the board in view, the one the rail jumped to), the node joins it and the board grows to hold
- * it. Pure: returns the box, the board it joins and the board's grown box.
+ * view, nudged clear of the nodes already there; and the board it joins, when that spot is on a board
+ * whose purpose fits the kind (the board in view, the one the rail jumped to). On a board, createNode
+ * puts it in the board's next free slot instead (boards/fitting). Pure.
  */
-export function placeNode(canvas: CanvasAdapter, doc: ProductionDocument, kind: CardKind, at?: Pt): { box: Box; board: CanvasElement | null; grow: Box | null } {
+export function placeNode(canvas: CanvasAdapter, doc: ProductionDocument, kind: CardKind, at?: Pt): { box: Box; board: CanvasElement | null } {
   const els = canvas.elements()
   const size = CARD_SIZE[kind]
   const v = canvas.visibleBounds()
@@ -306,19 +306,11 @@ export function placeNode(canvas: CanvasAdapter, doc: ProductionDocument, kind: 
     const id = (e.customData as { id?: string } | undefined)?.id
     return (id && doc.boards?.[id]?.purpose) || (e as CanvasElement & { purpose?: string }).purpose
   }
-  const boards = els.filter((e) => !e.isDeleted && (e.customData as { kind?: string } | undefined)?.kind === 'board')
-  const board = boards.filter((b) => c.x >= b.x && c.y >= b.y && c.x <= b.x + b.width && c.y <= b.y + b.height && purposeOf(b) === kind).at(-1) ?? null
+  const board = boardAt(els, c, (b) => purposeOf(b) === kind) ?? null
   const nodes = els.filter((e) => cardOf(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
   let box: Box = { x: Math.round(c.x - size.w / 2), y: Math.round(c.y - size.h / 2), ...size }
-  if (board) box = { ...box, x: Math.max(box.x, board.x + PAD.x), y: Math.max(box.y, board.y + PAD.top) }
   for (let i = 0; i < 24 && nodes.some((n) => overlaps(n, box)); i++) box = { ...box, x: box.x + 40, y: box.y + 40 }
-  let grow: Box | null = null
-  if (board) {
-    const right = Math.max(board.x + board.width, box.x + box.w + PAD.x)
-    const bottom = Math.max(board.y + board.height, box.y + box.h + PAD.bottom)
-    if (right > board.x + board.width || bottom > board.y + board.height) grow = { x: board.x, y: board.y, w: right - board.x, h: bottom - board.y }
-  }
-  return { box, board, grow }
+  return { box, board }
 }
 
 /** What createNode needs: the canvas and the document. */
@@ -341,13 +333,19 @@ export async function createNode(env: NodeEnv, kind: CardKind, at?: Pt): Promise
     else if (made.kind === 'storyboard') d.storyboards[made.entity.id] = made.entity as Storyboard
     else d.videos[made.entity.id] = made.entity as Video
   }, `add a ${kind}`)
-  const { box, board, grow } = placeNode(canvas, env.doc.get(), kind, at)
+  const { box, board } = placeNode(canvas, env.doc.get(), kind, at)
   const el = canvas.node({ x: box.x, y: box.y, width: box.w, height: box.h, customData: { kind, id: made.entity.id } })
-  const placed = board ? canvas.patch(el, { frameId: board.id }) : el
-  canvas.transact((all) => [
-    ...all.map((e) => (grow && board && e.id === board.id ? canvas.patch(e, { width: grow.w, height: grow.h }) : e)),
-    placed,
-  ], { undoable: true })
+  // On a board: its next free slot, the board growing toward free canvas, never over its neighbours
+  // (owner decision 2026-10-15); when it cannot grow, just outside it, and the board says so.
+  let fit: ReturnType<typeof fitInto> | null = null
+  canvas.transact((all) => {
+    const next = [...all, el]
+    if (!board) return next
+    fit = fitInto(next, board.id, [[el.id]])
+    return withFields(canvas, next, fit.fields)
+  }, { undoable: true })
+  if (board && fit) tellFull(board.id, fit)
+  const placed = canvas.elements().find((e) => e.id === el.id) ?? el
   canvas.select([placed.id])
   return placed
 }

@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../../../contracts/types'
 import { modelStore, MAYA } from '../../../test/model'
-import { boardIdOf, jumpTo, seedBoards } from '../../boards/boards'
+import { boardIdOf, isBoard, jumpTo, seedBoards } from '../../boards/boards'
+import { boardNotices } from '../../boards/fitting'
 import { cardOf, createNode, isEmptyNode, seedNodes } from '../../nodes/nodes'
 import { OwnAdapter } from './adapter'
 
@@ -27,12 +28,16 @@ const boxOf = (e: { x: number; y: number; width: number; height: number }) => ({
 const overlap = (p: ReturnType<typeof boxOf>, q: ReturnType<typeof boxOf>) => p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
 
 describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
-  it('a new Script is its own empty script, a second node, selected, in the Script board in view, and undo takes it away', async () => {
+  it('a new Script is its own empty script, a second node, selected; the Script board is hemmed in, so it lands just outside it, and undo takes it away', async () => {
     const { a, s, doc } = await seeded()
     const scriptBoard = Object.values(doc().boards).find((b) => b.purpose === 'script')!
     jumpTo(a, doc(), Object.values(doc().boards).sort((x, y) => (x.rank < y.rank ? -1 : 1)).indexOf(scriptBoard), false)
     const first = nodesOf(a, 'script')[0]
+    const heard: string[] = []
+    const off = boardNotices.subscribe((n) => heard.push(n.frameId))
+    const frame0 = boxOf(a.elements().find((e) => boardIdOf(e) === scriptBoard.id)!)
     const el = await createNode({ canvas: a, doc: s }, 'script')
+    off()
     const scripts = Object.values(doc().scripts)
     expect(scripts).toHaveLength(2)
     const made = cardOf(el)!
@@ -42,15 +47,46 @@ describe('+ Node makes a new node (ui-behaviour 3.3)', () => {
     expect(isEmptyNode(doc(), 'script', made.id)).toBe(true)
     expect(nodesOf(a, 'script')).toHaveLength(2)
     expect(a.view().selectedIds).toEqual([el.id])
-    // In the Script board (it was in view), clear of the first script, the board grown to hold it.
+    // The Script board has Characters to its right and Storyboard below (owner decision 2026-10-15): it
+    // does not grow over them; the new script lands just outside, on no board, over nothing, and the
+    // board says it is full.
     const frame = a.elements().find((e) => boardIdOf(e) === scriptBoard.id)!
-    expect(el.frameId).toBe(frame.id)
-    expect(overlap(boxOf(el), boxOf(first))).toBe(false)
-    expect(el.x + el.width).toBeLessThanOrEqual(frame.x + frame.width)
-    expect(el.y + el.height).toBeLessThanOrEqual(frame.y + frame.height)
-    // One undo step takes the node (and the board's growth) away.
+    expect(boxOf(frame)).toEqual(frame0)
+    expect(el.frameId ?? null).toBeNull()
+    for (const other of a.elements().filter((e) => e.id !== el.id && !e.isDeleted && (isBoard(e) || cardOf(e)))) expect(overlap(boxOf(el), boxOf(other))).toBe(false)
+    expect(heard).toEqual([frame.id])
+    // One undo step takes the node away.
     a.undoScene('undo')
     expect(nodesOf(a, 'script')).toHaveLength(1)
+    await s.close()
+  })
+
+  it('"Storyboard 2" goes in the Storyboard board, which grows down, never over the Video board beside it (one undo step)', async () => {
+    const { a, s, doc } = await seeded()
+    const ranked = Object.values(doc().boards).sort((x, y) => (x.rank < y.rank ? -1 : 1))
+    const sbBoard = ranked.find((b) => b.purpose === 'storyboard')!
+    const vBoard = ranked.find((b) => b.purpose === 'video')!
+    jumpTo(a, doc(), ranked.indexOf(sbBoard), false)
+    const frameOf = (id: string) => a.elements().find((e) => boardIdOf(e) === id)!
+    const before = boxOf(frameOf(sbBoard.id))
+    const video = boxOf(frameOf(vBoard.id))
+    const first = nodesOf(a, 'storyboard')[0]
+    const el = await createNode({ canvas: a, doc: s }, 'storyboard')
+    expect(doc().storyboards[cardOf(el)!.id].title).toBe('Storyboard 2')
+    const after = boxOf(frameOf(sbBoard.id))
+    expect(el.frameId).toBe(frameOf(sbBoard.id).id)
+    expect(overlap(boxOf(el), boxOf(first))).toBe(false)
+    // Down: the same left, top and width, taller, holding the new card; clear of the Video board.
+    expect([after.x, after.y, after.w]).toEqual([before.x, before.y, before.w])
+    expect(after.h).toBeGreaterThan(before.h)
+    expect(el.y).toBeGreaterThan(first.y + first.height)
+    expect(el.y + el.height).toBeLessThanOrEqual(after.y + after.h)
+    expect(overlap(after, video)).toBe(false)
+    expect(boxOf(frameOf(vBoard.id))).toEqual(video)
+    // One undo step: the node and the growth.
+    a.undoScene('undo')
+    expect(nodesOf(a, 'storyboard')).toHaveLength(1)
+    expect(boxOf(frameOf(sbBoard.id))).toEqual(before)
     await s.close()
   })
 

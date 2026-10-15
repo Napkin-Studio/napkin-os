@@ -343,10 +343,13 @@ export function hitNodeOrLink(scene: Pick<SceneStore, 'all' | 'get'>, p: Pt, zoo
   const all = scene.all().sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))
   const node = all.find((r) => r.kind === 'node' && p.x >= r.x && p.y >= r.y && p.x <= r.x + r.w && p.y <= r.y + r.h)
   if (node) return node
-  if (!all.some((r) => r.kind === 'link')) return undefined
+  // Links, and bound arrows (a generation's provenance arrow), along the line they are drawn on; one
+  // with no line (both ends in one pile) cannot be hit at all.
+  const follows = (r: ElementRecord) => r.kind === 'link' || (r.kind === 'arrow' && !!boundEnds((id) => scene.get(id), r))
+  if (!all.some(follows)) return undefined
   const env = sceneLinkEnv(scene)
   return all.find((r) => {
-    if (r.kind !== 'link') return false
+    if (!follows(r)) return false
     const route = linkRoute(env, r)
     return !!route && toPolyline(p, route.pts) <= 6 / zoom
   })

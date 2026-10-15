@@ -95,10 +95,16 @@ export function ArrowCards({ canvas, wrap, selected, toView }: {
   }, [canvas, hover, pinnedArrow, setHover, clearTimer])
 
   if (pinnedArrow) {
-    // Beside the arrow's middle, so it is where the person looked.
-    const path = arrowPath(pinnedArrow as unknown as ArrowLike)
+    // Beside the arrow's middle, as it is drawn now, so it is where the person looked. An arrow with no
+    // line (both ends in one closed pile) or whose middle is out of view shows no card: never one
+    // anchored at a place the arrow no longer is (owner screenshots 2026-10-15).
+    const path = (pinnedArrow as unknown as ArrowLike).points?.length ? arrowPath(pinnedArrow as unknown as ArrowLike) : []
     const mid = path[Math.floor(path.length / 2)]
-    return <CardView arrow={pinnedArrow} at={toView(mid)} pinned canvas={canvas} />
+    if (!mid) return null
+    const at = toView(mid)
+    const w = wrap.current
+    if (w && (at.x < 0 || at.y < 0 || at.x > w.clientWidth || at.y > w.clientHeight)) return null
+    return <CardView arrow={pinnedArrow} at={at} pinned canvas={canvas} />
   }
   if (!hover) return null
   const arrow = canvas.elements().find((x) => x.id === hover.arrowId)

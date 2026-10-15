@@ -65,6 +65,10 @@ describe('key groups follow the names', () => {
     expect([el(0).x, el(0).y]).toEqual([900, 0])
     expect([el(1).x, el(1).y]).toEqual([900 + 300 + 40, 0])
     expect(el(1).frameId).toBe(board.id)
+    // The board grew toward it to hold it (owner decision 2026-10-15: boards grow to fit what lands on them).
+    const grown = a.elements().find((e) => e.id === board.id)!
+    expect(grown.x + grown.width).toBe(el(1).x + el(1).width + 16)
+    expect([grown.x, grown.y, grown.height]).toEqual([850, -50, 600])
     await name(2, 'samurai', 'back')
     follow()
     expect([el(2).x, el(2).y, el(2).groupIds]).toEqual([900 + 2 * 340, 0, ['key:samurai']])

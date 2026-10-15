@@ -2,7 +2,9 @@
 // the Picture tool's file picker, a dropped file and a pasted image all land here. Each picture is
 // downscaled to at most 1536 px, kept by its sha256, given to the engine and placed as a `pic` node
 // (as the controller's intake makes them on Excalidraw), all of them as one undoable step, and
-// selected, so the selection bar offers naming it (@name and its role).
+// selected, so the selection bar offers naming it (@name and its role). Dropped on a board (or placed
+// with a board in the middle of the view), they go into it: its next free slots, the board growing to
+// hold them, or just outside when it cannot grow (boards/fitting; owner decision 2026-10-15).
 
 import type { Mime } from '../../contracts/types'
 import { systemUpdate } from '../../doc/store'
@@ -12,6 +14,7 @@ import { downscale } from '../../lib/fitImage'
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement, Pt } from '../core/canvasAdapter'
 import { assetData } from '../scene'
+import { boardAt, fitInto, tellFull, withFields } from '../boards/fitting'
 
 /** A picture node's width on the canvas (the controller's NODE). */
 export const PICTURE_W = 300
@@ -59,9 +62,19 @@ export async function placePictures(canvas: CanvasAdapter, doc: DocumentStore, f
     x: row[i].x, y: row[i].y, width: row[i].w, height: row[i].h, assetSha: g.sha, status: 'saved',
     customData: { kind: 'pic', id: newId('node'), asset: g.sha },
   }))
-  canvas.transact((all) => [...all, ...els], { undoable: true })
-  canvas.select(els.map((e) => e.id))
-  return els
+  const board = boardAt(canvas.elements(), centre)
+  let fit: ReturnType<typeof fitInto> | null = null
+  canvas.transact((all) => {
+    const next = [...all, ...els]
+    if (!board) return next
+    fit = fitInto(next, board.id, els.map((e) => [e.id]))
+    return withFields(canvas, next, fit.fields)
+  }, { undoable: true })
+  if (board && fit) tellFull(board.id, fit)
+  const ids = new Set(els.map((e) => e.id))
+  const placed = canvas.elements().filter((e) => ids.has(e.id))
+  canvas.select(placed.map((e) => e.id))
+  return placed
 }
 
 /** Ask the person for picture files (the Picture tool): resolves with what they picked, [] for none. */

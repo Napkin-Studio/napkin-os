@@ -8,6 +8,7 @@
 // A stacked card keeps `stack`: {dx, dy, angle}, the way back to its spread place from where it lies
 // (relative, so a stack moved as one spreads out where it now is).
 
+import { holdFields, withFields } from '../boards/fitting'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
 
 /** How far a card below the top may turn: 12°. */
@@ -124,16 +125,20 @@ export function setStacked(canvas: CanvasAdapter, members: readonly CanvasElemen
   const fields = on ? stackFields(members) : spreadFields(members)
   if (!fields.size) return false
   const before = new Map(members.map((m) => [m.id, { x: m.x, y: m.y, angle: m.angle ?? 0 }]))
+  const home = members[0]?.frameId ?? null
   canvas.transact((all) => {
     const next = all.map((e) => (fields.has(e.id) ? canvas.patch(e, fields.get(e.id)!) : e))
-    if (!on) return next
+    // On a board, the board grows to hold them, laid out or piled (the pile's turned corners), when it
+    // can (owner decision 2026-10-15).
+    const hold = (els: CanvasElement[]) => (home ? withFields(canvas, els, holdFields(els, home)) : els)
+    if (!on) return hold(next)
     // Bottom to top in paint order, where the topmost of them was.
     const ids = new Set(fields.keys())
     const at = Math.max(...next.map((e, i) => (ids.has(e.id) ? i : -1)))
     const pile = [...members].reverse().map((m) => next.find((e) => e.id === m.id)!)
     const rest = next.filter((e) => !ids.has(e.id))
     const before = next.slice(0, at + 1).filter((e) => !ids.has(e.id)).length
-    return [...rest.slice(0, before), ...pile, ...rest.slice(before)]
+    return hold([...rest.slice(0, before), ...pile, ...rest.slice(before)])
   }, { undoable: true })
   if (opts.animate) canvas.animate?.(before, STACK_MS)
   return true
