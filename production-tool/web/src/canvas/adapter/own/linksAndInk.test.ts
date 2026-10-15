@@ -180,9 +180,12 @@ describe('the pen owns the pointer', () => {
 describe('"N deleted · Undo" leaves once ⌘Z took the step back', () => {
   it('a delete’s offer goes when what it deleted is live again; a make’s when what it made is gone', () => {
     const del = { label: '2 deleted', undo: () => {}, gone: backWhenLive(['a', 'b']) }
+    // The canvas a frame behind: still shows them; the offer stays.
+    expect(offerGone(del, new Set(['a', 'b', 'c']))).toBe(false)
     expect(offerGone(del, new Set(['c']))).toBe(false)
     expect(offerGone(del, new Set(['a', 'c']))).toBe(true)
     const make = { label: 'Video made', undo: () => {}, gone: goneWhenDead(['v']) }
+    expect(offerGone(make, new Set())).toBe(false)
     expect(offerGone(make, new Set(['v']))).toBe(false)
     expect(offerGone(make, new Set())).toBe(true)
     expect(offerGone(null, new Set())).toBe(false)

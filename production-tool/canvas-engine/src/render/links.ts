@@ -269,6 +269,8 @@ export function linkRoute(env: LinkEnv, link: ElementRecord): LinkRoute | null {
   if (!ends) return null
   const fromGroup = endGroup(env, link, ends.from, 'start')
   const toGroup = endGroup(env, link, ends.to, 'end')
+  // Both ends in one pile (a picture and what was made from it, stacked together): nothing to draw between.
+  if (fromGroup && fromGroup === toGroup) return null
   const fb = endBox(env, ends.from, fromGroup)
   const tb = endBox(env, ends.to, toGroup)
   const { a, b, sa, sb } = linkPorts(fb, tb)

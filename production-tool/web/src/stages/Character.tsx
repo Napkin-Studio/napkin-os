@@ -237,7 +237,9 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     setConfirming(null)
     const r = ctrl.deleteElements(ids)
     if (r) offerUndo({ label: r.label, at: r.at, undo: () => ctrl.undelete(r.ids), gone: backWhenLive(r.ids) })
-  }, [ctrl, offerUndo])
+    // The 🗑 had the focus: the next ⌘Z is the canvas's, and takes the delete back (its chip leaves with it).
+    ;(canvas as unknown as { focusCanvas?: (() => void) | null } | null)?.focusCanvas?.()
+  }, [ctrl, offerUndo, canvas])
 
   /** The 🗑 and the Delete key: straight away, or first a confirm when something is still being made. */
   const requestDelete = useCallback((sel: El[]) => {

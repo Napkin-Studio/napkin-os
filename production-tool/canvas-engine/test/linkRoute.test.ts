@@ -59,6 +59,11 @@ describe('a key group shows one link, at the pile’s edge', () => {
     expect(routes[0].all.map((l) => l.id).sort()).toEqual(['l1', 'l2', 'l3'])
   })
 
+  it('an arrow between two photos of one pile is not drawn (nothing lies between them)', () => {
+    const { r } = setup([...pile(), link('l', 'v1', 'v2')])
+    expect(r.linkRoutes()).toHaveLength(0)
+  })
+
   it('attaches at the pile’s outer bounds, its turned corners included, on the side facing the target', () => {
     const { scene } = setup([...pile(), node('s', 0, 150), link('l', 'v1', 's', 'd0', G)])
     const route = linkRoute(sceneLinkEnv(scene), scene.get('l')!)!
