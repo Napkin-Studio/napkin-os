@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardLook, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
+  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -591,6 +591,9 @@ export class OwnAdapter implements CanvasAdapter {
 
   /** The selection's frame: dashed round a group, with handles when it can be scaled, the ink group's label. */
   selectionFrame(): SelectionFrame | null {
+    // A selected board: its edge and corner handles (it resizes; owner decision 2026-10-15).
+    const board = this.selector.soleBoard()
+    if (board) return { box: this.selector.resizing?.rect ?? { x: board.x, y: board.y, w: board.w, h: board.h }, dashed: false, handles: false, edges: true }
     const f = this.selector.frame()
     if (!f) return null
     const k = this.selector.selectionKind()
@@ -598,6 +601,25 @@ export class OwnAdapter implements CanvasAdapter {
     const label = k.kind === 'group' && k.ink ? `Ink · ${k.count} ${k.count === 1 ? 'stroke' : 'strokes'} · one group` : undefined
     if (!dashed && !f.scalable) return null
     return { box: f.box, dashed, handles: f.scalable, ...(label ? { label } : {}) }
+  }
+
+  // ── boards as spaces (owner decision 2026-10-15; canvas-engine boards/sizing) ──
+
+  /** A board was full (what was dropped landed outside it), or things left it on a resize. */
+  onBoardEvent(cb: (e: BoardEvent) => void): () => void {
+    return this.selector.onBoard(cb)
+  }
+
+  /** Fit to contents on a board frame: round what is on it with its padding, one undo step. */
+  fitBoard(frameId: string): boolean {
+    const done = this.selector.fitBoard(frameId)
+    if (done) this.changed()
+    return done
+  }
+
+  /** The selected board's handle under a scene point (the cursor shows it), or null. */
+  boardHandleAt(p: Pt): Edge | null {
+    return this.sketching() ? null : this.selector.boardHandleAt(p, this.vp.zoom)
   }
 
   /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
@@ -719,6 +741,7 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.selected = this.selector.selected
       this.renderer.moving = this.selector.preview
       this.renderer.scaling = this.selector.scaling
+      this.renderer.resizing = this.selector.resizing
       this.renderer.frame = this.selectionFrame()
       this.surfaceNow()
       this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK

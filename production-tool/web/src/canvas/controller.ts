@@ -20,6 +20,7 @@ import { markStale } from '../doc/remove'
 import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
+import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
 import { applySketchFrame } from '../jobs/handlers'
 import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
@@ -630,9 +631,10 @@ export class CanvasController {
     for (const view of views) {
       const jobId = newId('job')
       const parents = front.node ? [front.node] : []
-      const gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
+      let gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
       x += size.w + 40
-      let all = [...this.els(), gen]
+      let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, { x: gen.x, y: gen.y })
+      gen = all.find((e) => e.id === gen.id) ?? gen
       if (frontEl && front.node) {
         const arrow = makeArrow(this.canvas, frontEl, gen, front.node, jobId, 0, true)
         all = this.canvas.bindArrow([...all, arrow], arrow)
@@ -724,14 +726,28 @@ export class CanvasController {
   // ── jobs that land on the canvas ──
 
   private placeGen(jobId: string, op: 'generate' | 'view', parentIds: string[], sources: { el: El; id: string }[], at: { x: number; y: number; w: number; h: number }, view?: View) {
-    const gen = makeGenPlaceholder(this.canvas, jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
-    let els = [...this.els(), gen]
+    let gen = makeGenPlaceholder(this.canvas, jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
+    let els = this.onSourceBoard([...this.els(), gen], gen, sources[0]?.el, at)
+    gen = els.find((e) => e.id === gen.id) ?? gen
     sources.forEach((s, i) => {
       const arrow = makeArrow(this.canvas, s.el, gen, s.id, jobId, i)
       els = this.canvas.bindArrow([...els, arrow], arrow)
     })
     this.setEls(els)
     this.reveal([gen.id, ...sources.map((s) => s.el.id)])
+  }
+
+  /**
+   * A new result whose source sits on a board goes on that board too (owner decision 2026-10-15):
+   * beside the source when that is clear (the board growing toward it), else the board's next free slot,
+   * or just outside a board that cannot grow. `els` already holds `gen`; returns them with it placed.
+   */
+  private onSourceBoard(els: El[], gen: El, source: El | undefined, at: { x: number; y: number }): El[] {
+    const frameId = source?.frameId
+    if (!frameId || !boardFrame(els, frameId)) return els
+    const fit = fitInto(els, frameId, [[gen.id]], () => at)
+    tellFull(frameId, fit)
+    return withFields(this.canvas, els, fit.fields)
   }
 
   /** Make sure new results land in view: zoom out to them and their inputs when any part is off-screen. */
@@ -794,10 +810,12 @@ export class CanvasController {
     this.canvas.addAssets([await assetData(out.sha256, blob)])
     const c = cd(el) as Extract<CustomData, { kind: 'gen' }>
     const h = out.w && out.h ? Math.round((el.width * out.h) / out.w) : el.height
-    this.patchEl(el.id, (e) => this.canvas.patch(this.canvas.withAsset(e, out.sha256), {
+    const landed = this.els().map((e) => (e.id === el.id ? this.canvas.patch(this.canvas.withAsset(e, out.sha256), {
       height: h,
       customData: { ...c, state: 'completed', asset: out.sha256, ...(job.kind === 'mock' ? { mock: true } : {}) },
-    }))
+    }) : e))
+    // Landed taller than its placeholder on a board: the board grows to hold it when it can.
+    this.setEls(el.frameId ? withFields(this.canvas, landed, holdFields(landed, el.frameId)) : landed, false)
     // The landing is the crew's decision, citing the job and the refs it used, as for frames and clips.
     const why = landingWhy(this.s.doc, job.jobId, c.op === 'view' && c.view ? `the ${c.view} view on the canvas` : 'a picture on the canvas')
     if (this.s.doc.record) {

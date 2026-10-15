@@ -10,6 +10,7 @@ import type { NamedRef, ProductionDocument } from '../../contracts/types'
 import { keyViews } from '../../lib/names'
 import type { CanvasElement } from '../core/canvasAdapter'
 import { isStacked, spreadPlace, stackFields } from './stack'
+import { boardFrame, fitInto, tellFull } from '../boards/fitting'
 
 export const KEY_GROUP = 'key:'
 export const keyGroupId = (key: string) => `${KEY_GROUP}${key}`
@@ -137,6 +138,14 @@ export function keyGroupFields(els: readonly CanvasElement[], doc: ProductionDoc
       })
       for (const [id, f] of stackFields(members)) put(id, f as Partial<CanvasElement>)
       for (const id of placed.keys()) put(id, { frameId })
+    } else if (frameId && boardFrame(els, frameId) && placed.size) {
+      // On a board: next to the group when that is clear, the board growing toward it, else the board's
+      // next free slot (owner decision 2026-10-15; boards/fitting).
+      const view = els.map((e) => (out.has(e.id) ? { ...e, ...out.get(e.id) } as CanvasElement : e))
+      const ids = [...placed.keys()]
+      const fit = fitInto(view, frameId, ids.map((id) => [id]), (i) => placed.get(ids[i]))
+      for (const [id, f] of fit.fields) put(id, f)
+      tellFull(frameId, fit)
     } else for (const [id, at] of placed) put(id, { ...at, frameId })
   }
   return out

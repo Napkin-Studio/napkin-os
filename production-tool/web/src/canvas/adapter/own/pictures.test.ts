@@ -12,6 +12,9 @@ vi.mock('../../../lib/blobs', () => ({
 vi.mock('../../scene', () => ({ assetData: async (sha: string, b: Blob) => ({ sha256: sha, dataURL: 'data:image/png;base64,AA==', mimeType: b.type }) }))
 
 import { canvasActions } from '../../chrome/actions'
+import { BOARD_GAP, BOARD_PAD } from '../../../../../canvas-engine/src'
+import { newId } from '../../../lib/ulid'
+import { boardNotices } from '../../boards/fitting'
 import { imageFiles, pictureRow, placePictures, PICTURE_W } from '../../nodes/pictures'
 import { snapshotDoc } from '../../../test/jobFixtures'
 import { OwnAdapter } from './adapter'
@@ -38,6 +41,57 @@ describe('pictures on the own engine', () => {
     expect(a.view().selectedIds.sort()).toEqual(els.map((e) => e.id).sort())
     a.undoScene('undo')
     expect(a.elements().filter((e) => e.type === 'image')).toHaveLength(0)
+  })
+
+  // Board sizing (owner decision, Shrey 2026-10-15): a board is a space; what is dropped on it fills its
+  // rows, and it grows to hold them, down first, never over a neighbour.
+  const characters = (a: OwnAdapter, w = 700, h = 300) => {
+    const f = a.board({ x: 0, y: 0, width: w, height: h, title: 'Characters', boardId: newId('board'), purpose: 'character' })
+    a.transact((all) => [f, ...all], { undoable: false })
+    return f
+  }
+  const frame = (a: OwnAdapter, id: string) => a.elements().find((e) => e.id === id)!
+
+  it('pictures dropped on a board go in, in rows from its top left, and it grows down to hold them, as one undo step', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const f = characters(a)
+    const doc = snapshotDoc()
+    // Five 300 x 200 pictures on a 700-wide board: two to a row (16, 356), three rows.
+    const els = await placePictures(a, doc, ['a', 'b', 'c', 'd', 'e'].map(png), { x: 100, y: 100 })
+    expect(els.every((e) => e.frameId === f.id)).toBe(true)
+    const row1 = BOARD_PAD.top
+    const row2 = row1 + 200 + BOARD_GAP
+    const row3 = row2 + 200 + BOARD_GAP
+    expect(els.map((e) => [e.x, e.y])).toEqual([[16, row1], [16 + 300 + BOARD_GAP, row1], [16, row2], [16 + 300 + BOARD_GAP, row2], [16, row3]])
+    const b = frame(a, f.id)
+    expect([b.x, b.y, b.width]).toEqual([0, 0, 700])
+    expect(b.height).toBe(row3 + 200 + BOARD_PAD.bottom)
+    // One step: the pictures and the growth go together.
+    a.undoScene('undo')
+    expect(a.elements().filter((e) => e.type === 'image')).toHaveLength(0)
+    expect(frame(a, f.id).height).toBe(300)
+  })
+
+  it('a board hemmed in below and to the right does not grow over its neighbours: what does not fit lands just outside, on no board, and it says so', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const f = characters(a, 700, 300)
+    const below = a.board({ x: 0, y: 324, width: 1400, height: 300, title: 'Storyboard', boardId: newId('board'), purpose: 'storyboard' })
+    const right = a.board({ x: 724, y: 0, width: 400, height: 300, title: 'Locations', boardId: newId('board'), purpose: 'location' })
+    a.transact((all) => [below, right, ...all], { undoable: false })
+    const heard: string[] = []
+    const off = boardNotices.subscribe((n) => heard.push(n.frameId))
+    const els = await placePictures(a, snapshotDoc(), ['a', 'b', 'c'].map(png), { x: 100, y: 100 })
+    off()
+    expect(els.map((e) => e.frameId ?? null)).toEqual([f.id, f.id, null])
+    expect([frame(a, f.id).width, frame(a, f.id).height]).toEqual([700, 300])
+    const out = els[2]
+    for (const b of [f, below, right]) {
+      const r = frame(a, b.id)
+      expect(out.x < r.x + r.width && r.x < out.x + out.width && out.y < r.y + r.height && r.y < out.y + out.height).toBe(false)
+    }
+    expect(heard).toEqual([f.id])
   })
 
   it('keeps only image files, and lays a row out centred', () => {

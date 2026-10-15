@@ -8,6 +8,7 @@
 // A stacked card keeps `stack`: {dx, dy, angle}, the way back to its spread place from where it lies
 // (relative, so a stack moved as one spreads out where it now is).
 
+import { holdFields, withFields } from '../boards/fitting'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
 
 /** How far a card below the top may turn: 12°. */
@@ -124,9 +125,11 @@ export function setStacked(canvas: CanvasAdapter, members: readonly CanvasElemen
   const fields = on ? stackFields(members) : spreadFields(members)
   if (!fields.size) return false
   const before = new Map(members.map((m) => [m.id, { x: m.x, y: m.y, angle: m.angle ?? 0 }]))
+  const home = members[0]?.frameId ?? null
   canvas.transact((all) => {
     const next = all.map((e) => (fields.has(e.id) ? canvas.patch(e, fields.get(e.id)!) : e))
-    if (!on) return next
+    // Laid out again on a board, the board grows to hold them when it can (owner decision 2026-10-15).
+    if (!on) return home ? withFields(canvas, next, holdFields(next, home)) : next
     // Bottom to top in paint order, where the topmost of them was.
     const ids = new Set(fields.keys())
     const at = Math.max(...next.map((e, i) => (ids.has(e.id) ? i : -1)))
