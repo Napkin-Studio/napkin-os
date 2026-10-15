@@ -14,6 +14,7 @@ import type { SerializedUndo } from '../../../clan-store/src'
 import type { DirectorCard, JobRequest, Me, ModelChoice, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { JobPurpose } from '../model/purpose'
+import type { EditSession } from '../stages/imageEditor/edits'
 
 export type { JobPurpose } from '../model/purpose'
 
@@ -76,6 +77,9 @@ export interface ProjectUi {
   openNode?: { storyboard?: string; video?: string }
   /** Region drawn on each frame (by frame id) before Regenerate. */
   frameRegions: Record<string, Region | undefined>
+  /** The Image editor's edits not applied yet, by frame id (stages/imageEditor/edits.ts): kept for later
+   *  when the person moves to another frame and chooses Keep (features/image-editor.clan). */
+  imageEdits?: Record<string, EditSession>
   /** "Draw the rest" is under way: each finished frame starts the next shot (jobs/frames.ts). */
   drawingRest?: boolean
   /** "Update what follows" is under way (jobs/follow.ts). */

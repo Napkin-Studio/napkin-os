@@ -1,0 +1,96 @@
+// The Image editor's edits list (ui-behaviour 3.12, features/image-editor.clan).
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import {
+  EMPTY, addEdit, applyLine, clearMask, editCount, editLabel, editsForFrame, layersOf, leaveAsk, nextStep, notApplied,
+  toggleHidden, undoEdit, undoMaskOp, upscaleSize, withMaskOp, type EditSession, type MaskOp,
+} from './edits'
+
+const SPEC = readFileSync(new URL('../../../../../docs/production-tool/ui-behaviour.md', import.meta.url), 'utf8')
+const stroke = (mode: 'add' | 'sub' = 'add'): MaskOp => ({ t: 'brush', mode, r: 0.02, soft: 0.2, pts: [{ x: 0.5, y: 0.5 }] })
+
+describe('the words match 3.12', () => {
+  it('says what Apply makes, what is not applied, and asks before leaving', () => {
+    expect(applyLine(3, 3)).toBe('Apply saves your 3 edits as v4. v3 stays.')
+    expect(SPEC).toContain(applyLine(3, 3))
+    expect(SPEC).toContain(leaveAsk(3))
+    expect(SPEC).toContain(notApplied(3))
+    expect(notApplied(1)).toBe('1 edit not applied')
+  })
+  it('names the next Runway step for a painted mask with no fill', () => {
+    const s = withMaskOp(EMPTY, stroke())
+    expect(nextStep(s)).toBe('Next: Fill Mask 1')
+    expect(SPEC).toContain(nextStep(s)!)
+    const m = s.edits[0].id
+    expect(nextStep(addEdit(s, { id: 'f', kind: 'fill', maskId: m, words: 'drops', keepOutside: true, jobId: 'job_1' }))).toBeUndefined()
+  })
+  it('gives the upscale output size from our 1344 x 768 frames (providers.md fact 7)', () => {
+    expect(upscaleSize(1344, 768, 2)).toBe('→ 2688 × 1536')
+    expect(upscaleSize(1344, 768, 4)).toBe('→ 5376 × 3072')
+    expect(SPEC).toContain(upscaleSize(1344, 768, 2))
+  })
+})
+
+describe('masks', () => {
+  it('starts Mask 1 on the first stroke and adds later strokes to it', () => {
+    let s = withMaskOp(EMPTY, stroke())
+    s = withMaskOp(s, stroke())
+    expect(s.edits).toHaveLength(1)
+    expect(s.edits[0]).toMatchObject({ kind: 'mask', name: 'Mask 1' })
+    expect(s.active).toBe(s.edits[0].id)
+    expect(editLabel(s.edits[0], s)).toBe('Mask 1 · painting')
+  })
+  it('erasing with no mask does nothing, and ⌘Z takes back the last stroke only', () => {
+    expect(withMaskOp(EMPTY, stroke('sub'))).toBe(EMPTY)
+    let s = withMaskOp(withMaskOp(EMPTY, stroke()), stroke('sub'))
+    s = undoMaskOp(s)
+    expect(s.edits[0]).toMatchObject({ ops: [{ mode: 'add' }] })
+  })
+  it('Clear mask empties the mask, which then does not count', () => {
+    const s = clearMask(withMaskOp(EMPTY, stroke()))
+    expect(s.edits[0]).toMatchObject({ ops: [] })
+    expect(editCount(s)).toBe(0)
+  })
+  it('names a second mask Mask 2', () => {
+    let s = withMaskOp(EMPTY, stroke())
+    s = withMaskOp({ ...s, active: undefined }, stroke())
+    expect(s.edits.map((e) => e.kind === 'mask' && e.name)).toEqual(['Mask 1', 'Mask 2'])
+  })
+})
+
+describe('each edit has its own undo', () => {
+  const base = (): EditSession => {
+    let s = withMaskOp(EMPTY, stroke())
+    const m = s.edits[0].id
+    s = addEdit(s, { id: 'c', kind: 'cutout', where: 'device', sha: 'sha256:x' })
+    s = withMaskOp(s, { t: 'snap', cutout: 'c' })
+    s = addEdit(s, { id: 't', kind: 'text', text: 'Drink the morning.', x: 0.05, y: 0.86, size: 0.06 })
+    s = addEdit(s, { id: 'f', kind: 'fill', maskId: m, words: 'drops', keepOutside: true, jobId: 'job_1' })
+    return s
+  }
+  it('undoing a mask takes its fill with it', () => {
+    const s = base()
+    const out = undoEdit(s, s.edits[0].id)
+    expect(out.edits.map((e) => e.id)).toEqual(['c', 't'])
+    expect(out.active).toBeUndefined()
+  })
+  it("undoing a cut-out drops the mask's snap to it, and the mask stays", () => {
+    const out = undoEdit(base(), 'c')
+    expect(out.edits[0]).toMatchObject({ kind: 'mask', ops: [{ t: 'brush' }] })
+  })
+  it('undoing the text leaves the rest', () => {
+    expect(undoEdit(base(), 't').edits.map((e) => e.kind)).toEqual(['mask', 'cutout', 'fill'])
+  })
+  it('lists text, masks, cut-outs, results and then the locked frame, front first', () => {
+    let s = toggleHidden(base(), 'frame')
+    s = addEdit(s, { id: 'u', kind: 'upscale', scale: 2, jobId: 'job_2' })
+    const layers = layersOf(s, 3)
+    expect(layers.map((l) => l.kind)).toEqual(['text', 'mask', 'cutout', 'upscale', 'fill', 'frame'])
+    expect(layers.at(-1)).toMatchObject({ label: 'Frame', locked: true, hidden: true })
+  })
+  it('keeps the edits on the frame it makes, at most 64', () => {
+    const ops = editsForFrame(base())
+    expect(ops.map((o) => o.op)).toEqual(['mask', 'cutout', 'text', 'fill'])
+    expect(ops[3].params).toMatchObject({ words: 'drops', keep_outside: true })
+  })
+})

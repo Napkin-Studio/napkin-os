@@ -33,6 +33,8 @@ export function wireJobs(deps: FrameDeps) {
     if (ctx.for !== 'clip') return
     void landTake(doc, job, ctx).then(() => continueFollow(deps)).catch(warn('update what follows'))
   })
+  // The Image editor's actions land nowhere: the editor shows each result as a layer until Apply.
+  runner.onComplete('image_edit', () => {})
   runner.onComplete('write', (job) => void landWrites(doc, job).catch(warn("Skye's draft")))
   runner.onComplete('stitch', (job, ctx) => void landRender(doc, job, ctx.for === 'stitch' ? ctx : undefined)
     .then(() => continueFollow(deps)).catch(warn('update what follows')))
