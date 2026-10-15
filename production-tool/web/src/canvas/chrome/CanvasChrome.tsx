@@ -104,7 +104,7 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys =
     const cur = rows.find((r) => r.id === current)
     return (
       <>
-        <button ref={pillRef} type="button" className="br-pill pt-panel" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button ref={pillRef} type="button" className="br-pill pt-panel" data-float-avoid="" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="2" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><rect x="10" y="2" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><rect x="2" y="10" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" /><rect x="10" y="10" width="6" height="6" rx="1.5" fill="#2F64F5" /></svg>
           <b>Boards</b>{cur && <span className="br-cur">{cur.title}</span>}
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
@@ -118,7 +118,7 @@ export function BoardRail({ rows, current, onPick, onFit, narrow = false, keys =
     )
   }
   return (
-    <nav className="board-rail pt-panel" aria-label="Boards">
+    <nav className="board-rail pt-panel" aria-label="Boards" data-float-avoid="">
       <div className="br-head">Boards</div>
       {items}
       {newBoard}
@@ -240,7 +240,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
   )
   if (vertical) {
     return (
-      <div className="canvas-toolbar vertical" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
+      <div className="canvas-toolbar vertical" data-float-avoid="" role="toolbar" aria-label="Canvas tools" aria-orientation="vertical">
         {penOptions}
         {t('pen', 'Pen', 'P')}
         {t('eraser', 'Eraser', 'E')}
@@ -259,7 +259,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
     )
   }
   return (
-    <div className="canvas-toolbar" role="toolbar" aria-label="Canvas tools">
+    <div className="canvas-toolbar" data-float-avoid="" role="toolbar" aria-label="Canvas tools">
       {penOptions}
       {t('select', 'Select', 'V')}
       {t('hand', 'Hand', 'H')}
