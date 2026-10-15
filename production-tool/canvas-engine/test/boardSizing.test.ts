@@ -61,15 +61,38 @@ describe('placing on a board (pure)', () => {
     expect(overlaps(p.board, below)).toBe(false)
   })
 
-  it('when both ways are blocked it does not grow: the thing goes just outside, clear of everything', () => {
+  it('hemmed in below and to the right (the Ad template\'s Characters), it grows up: a new row above, nothing there moves', () => {
     const full = [{ x: 16, y: 22, w: 368, h: 244 }]
     const below = { x: 0, y: 330, w: 800, h: 300 }
     const right = { x: 430, y: -200, w: 300, h: 500 }
     const p = placeInBoard(board, full, PIC, [below, right])
+    expect(p.full).toBe(false)
+    expect(p.grew).toBe('up')
+    expect(p.box).toEqual({ x: 16, y: 22 - BOARD_GAP - PIC.h, ...PIC })
+    expect(inside(p.board, p.box)).toBe(true)
+    expect([p.board.x, p.board.w, p.board.y + p.board.h]).toEqual([0, 400, 300])
+    for (const b of [below, right]) expect(overlaps(p.board, b, BOARD_CLEAR)).toBe(false)
+  })
+
+  it('hemmed in below, right and above, it grows left', () => {
+    const full = [{ x: 16, y: 22, w: 368, h: 244 }]
+    const p = placeInBoard(board, full, PIC, [{ x: 0, y: 330, w: 800, h: 300 }, { x: 430, y: -200, w: 300, h: 500 }, { x: -900, y: -300, w: 1700, h: 270 }])
+    expect(p.grew).toBe('left')
+    expect(p.box).toEqual({ x: 16 - BOARD_GAP - PIC.w, y: 22, ...PIC })
+    expect(inside(p.board, p.box)).toBe(true)
+  })
+
+  it('when every way is blocked it does not grow: the thing goes just outside, clear of everything', () => {
+    const full = [{ x: 16, y: 22, w: 368, h: 244 }]
+    const below = { x: 0, y: 330, w: 800, h: 300 }
+    const right = { x: 430, y: -200, w: 300, h: 500 }
+    const above = { x: -100, y: -200, w: 520, h: 170 }
+    const left = { x: -330, y: -200, w: 300, h: 900 }
+    const p = placeInBoard(board, full, PIC, [below, right, above, left])
     expect(p.full).toBe(true)
     expect(p.board).toEqual(board)
     expect(overlaps(p.box, board)).toBe(false)
-    for (const b of [below, right]) expect(overlaps(p.box, b)).toBe(false)
+    for (const b of [below, right, above, left]) expect(overlaps(p.box, b)).toBe(false)
   })
 
   it('a neighbour it already touches does not stop it growing the other way (Storyboard beside Video)', () => {
@@ -92,7 +115,7 @@ describe('placing on a board (pure)', () => {
 
   it('places several in order, and once full the rest land outside, apart', () => {
     const low = { ...board, h: 180 }
-    const r = placeAllInBoard(low, [], [PIC, PIC, PIC, PIC], [{ x: 0, y: 220, w: 2000, h: 10 }, { x: 430, y: -500, w: 10, h: 2000 }])
+    const r = placeAllInBoard(low, [], [PIC, PIC, PIC, PIC], [{ x: 0, y: 220, w: 2000, h: 10 }, { x: 430, y: -500, w: 10, h: 2000 }, { x: -500, y: -40, w: 2000, h: 10 }, { x: -40, y: -500, w: 10, h: 2000 }])
     // Two fit in a row of the 368 inside; with no room to grow, the third and fourth go outside.
     expect(r.full).toEqual([false, false, true, true])
     expect(r.board).toEqual(low)
@@ -204,9 +227,10 @@ describe('the select tool and boards as spaces', () => {
     expect(scene.get('C')!.h).toBe(grown)
   })
 
-  it('blocked below and to the right, a board does not grow: the picture lands just outside, on no board, and the host hears "full"', () => {
+  it('blocked every way, a board does not grow: the picture lands just outside, on no board, and the host hears "full"', () => {
     const { scene, tool, events } = setup([
       board('C', 0, 0, 400, 180), board('D', 0, 204, 900, 200), board('R', 424, -300, 300, 480),
+      board('U', -300, -224, 700, 200), board('L', -324, -300, 300, 480),
       pic('a', 16, 22, 'C'), pic('b', 156, 22, 'C'), pic('c', 296, 22, 'C'), pic('p', 1500, 1500),
     ])
     tool.set(['p'])
@@ -214,7 +238,7 @@ describe('the select tool and boards as spaces', () => {
     tool.release({ x: 50, y: 50 })
     const p = scene.get('p')!
     expect(p.parentId).toBeNull()
-    for (const id of ['C', 'D', 'R']) expect(overlaps(box(p), box(scene.get(id)!))).toBe(false)
+    for (const id of ['C', 'D', 'R', 'U', 'L']) expect(overlaps(box(p), box(scene.get(id)!))).toBe(false)
     expect(box(scene.get('C')!)).toEqual({ x: 0, y: 0, w: 400, h: 180 })
     expect(events).toEqual([{ kind: 'full', board: 'C', ids: ['p'] }])
   })

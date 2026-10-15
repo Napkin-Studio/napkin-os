@@ -73,13 +73,15 @@ describe('pictures on the own engine', () => {
     expect(frame(a, f.id).height).toBe(300)
   })
 
-  it('a board hemmed in below and to the right does not grow over its neighbours: what does not fit lands just outside, on no board, and it says so', async () => {
+  it('a board hemmed in on every side does not grow over its neighbours: what does not fit lands just outside, on no board, and it says so', async () => {
     const a = new OwnAdapter()
     a.resize(1200, 800, 0, 0)
     const f = characters(a, 700, 300)
     const below = a.board({ x: 0, y: 324, width: 1400, height: 300, title: 'Storyboard', boardId: newId('board'), purpose: 'storyboard' })
     const right = a.board({ x: 724, y: 0, width: 400, height: 300, title: 'Locations', boardId: newId('board'), purpose: 'location' })
-    a.transact((all) => [below, right, ...all], { undoable: false })
+    const above = a.board({ x: -400, y: -324, width: 1600, height: 300, title: 'Above', boardId: newId('board'), purpose: 'none' })
+    const left = a.board({ x: -424, y: 0, width: 400, height: 300, title: 'Left', boardId: newId('board'), purpose: 'none' })
+    a.transact((all) => [below, right, above, left, ...all], { undoable: false })
     const heard: string[] = []
     const off = boardNotices.subscribe((n) => heard.push(n.frameId))
     const els = await placePictures(a, snapshotDoc(), ['a', 'b', 'c'].map(png), { x: 100, y: 100 })
@@ -87,7 +89,7 @@ describe('pictures on the own engine', () => {
     expect(els.map((e) => e.frameId ?? null)).toEqual([f.id, f.id, null])
     expect([frame(a, f.id).width, frame(a, f.id).height]).toEqual([700, 300])
     const out = els[2]
-    for (const b of [f, below, right]) {
+    for (const b of [f, below, right, above, left]) {
       const r = frame(a, b.id)
       expect(out.x < r.x + r.width && r.x < out.x + out.width && out.y < r.y + r.height && r.y < out.y + out.height).toBe(false)
     }
