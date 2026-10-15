@@ -4,8 +4,8 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { hexOf, PenOptions } from './PenOptions'
-import { DEFAULT_PEN, getPen, loadPen, PEN_COLOURS, PEN_KEY, PEN_WIDTHS, resetPenForTests, savePen, setPen } from './penStyle'
+import { PenOptions } from './PenOptions'
+import { DEFAULT_PEN, getPen, hexOf, loadPen, PEN_COLOURS, PEN_KEY, PEN_WIDTHS, resetPenForTests, savePen, setPen } from './penStyle'
 
 describe('the pen\'s options', () => {
   it('six inks, the theme\'s ink first and the default; three widths each', () => {
