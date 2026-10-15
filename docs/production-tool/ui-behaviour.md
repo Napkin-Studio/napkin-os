@@ -88,7 +88,7 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 
 ### 2.4 Deep links and sharing
 
-- **Share (canvas top bar)** copies the canvas link. Each editor's More menu has **Copy link to this**, which copies the current route with its focus parameters.
+- **Share (canvas top bar)** copies the canvas link; below 1024px wide it moves into the canvas's More as **Copy link**. Each editor's More menu has **Copy link to this**, which copies the current route with its focus parameters. It works in the Script editor, which has a route; in Storyboard, Video and Image it shows off, with "Not in this version yet", until those editors have routes of their own.
 - **A link opens only for people in the project's tenant who can see the project.** Anyone else sees the signed-out or "You don't have access to this project" page. That page shows no title or thumbnail.
 - **A link to something deleted** opens the canvas with a toast: "That shot was deleted. Undo is with the person who deleted it." No blank editor is shown.
 
@@ -112,16 +112,31 @@ Each table uses four columns: trigger, result, states, and how undo treats it. T
 
 ### 3.1 The top bar (canvas)
 
-The bar is 48px tall. From left to right:
+The bar is 48px tall (56px on touch). From left to right:
 - the Home mark ("Home: your projects", which goes to the Napkin OS project list);
 - "Napkin Studio" and "Production" in blue;
-- the project name ("Lumen Water · First Light");
-- the questions pill, only while asks are open ("2 questions waiting", with ‹ › and its position "1 of 2"; section 3.17);
+- the project name ("Lumen Water · First Light"), which shrinks first, with an ellipsis and its full text as a tooltip;
+- the questions pill, only while asks are open ("2 questions waiting", with ‹ ›; its position "1 of 2" is in its label and tooltip; section 3.17);
 - presence avatars, with "Sai and Maya are here";
 - the job button, only while something runs, waits for you or failed: the Napkin logo alone, turning while a job runs (6.5);
-- **History** (opens the decision tree panel, 3.20), **Assets** (opens the Assets drawer, 3.18), **Export** (a menu, 3.18), **Share** and the account button.
+- the save state ("Saved · 13:20", "Not saved · retry"; it saves on click and on Ctrl+S);
+- **History** (opens the decision tree panel, 3.20), **Assets** (opens the Assets drawer, 3.18), **Share**, **More** (⋯) and the account button.
 
-Every editor's top bar also carries **History**, before its primary button.
+**More** holds Export's rows (3.18) and **Save now (Ctrl+S)**, which reads the same save state as the bar.
+
+**The bar rule** (features/topbar-declutter.clan). Every bar, on the canvas and in every editor, keeps a small fixed set: the way back, the title, at most one view switch, the job button, History, More, one primary button and the account. Every other action, and every new one (Video's Export, Make all sizes, ad versions), goes into that surface's **More**, never into the bar.
+
+**Fit levels.** The bar always fits the window, at three levels set by the window's width (`ui/chrome/fit.ts`; `fit.test.ts` holds each bar's width budget):
+
+| Level | Width | What changes |
+|---|---|---|
+| Full | 1280px and wider | Everything with its words. |
+| Compact | 1024–1279px | History and Assets show their icons alone (their names are their tooltips and labels). An editor's meta pills (the ratio, "16:9 · 15 s", "Saved") move into the head of its More. The questions pill shows its count alone. |
+| Tight | under 1024px | "Napkin Studio" hides (the Home mark is the logo). Share moves into More. The save state is a dot, unless the save failed. An editor's back button is the arrow alone, and its view switch and History move into More. Undo and Redo move into More on a mouse; on touch they stay in the bar. |
+
+Titles shrink, with an ellipsis, before any control moves. The way back, the job button, the primary and the account are never pushed out of the window.
+
+Every editor's top bar also carries **History** and **More**, before its primary button.
 
 - **No spend pill.** The top bar shows no spend, cost or limit (principle 4). What each job cost is in the decision tree (3.20).
 - **Presence avatars:** click one to follow that person's viewport. Section 4.2 covers following.
@@ -423,13 +438,14 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 - **Shared live text:** action, direction, beat text and dialogue are shared live text. They are the same Y.Text the Storyboard card edits, so typing in either place shows in the other immediately.
 - **Single-value fields:** camera fields, duration and rank are single-value fields written as patches.
 
-**Top bar:**
+**Top bar** (the shared editor bar, 3.1):
 - "← Canvas", "Script · First Light", then "Saved" ("Saving…", or "Offline, saved on this device"). Until canvas-nodes gives the canvas its Script node, the editor opens from **Open script** on the Storyboard stage's Script card (or a deep link), and its back button reads "← Storyboard" (features/script-editor.clan).
 - The view switch.
-- Presence ("Sai is in shot 2 · Maya is reading").
+- Presence ("Sai is in shot 2 · Maya is reading"), then the job button.
 - Undo and Redo.
 - **History** (3.20).
-- **Plan shots**, or **Update storyboard** when a storyboard exists and is behind (primary).
+- **More:** Import Fountain…, Copy link to this, and "Shots from" when the script has more than one storyboard.
+- **Plan shots**, or **Update storyboard** when a storyboard exists and is behind (primary). When it is off, why ("Write the script first") is its tooltip and is read with it (`aria-describedby`). Dex's next-step line under the bar does not repeat it: its buttons are the other ways on (Make video, Open the storyboard, Open the video).
 
 **No chat** (principle 10). The Script editor has no Skye panel, no chat box and no "Ask Skye". Skye works in the text itself, as agents do in Brief Maker.
 - The account button.
@@ -517,11 +533,11 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 ### 3.11 Storyboard editor (artboard 8; review items 3, 5, 6)
 
-**Top bar:**
-- "← Canvas", "Storyboard · First Light", the ratio pill and the project.
-- Presence.
-- What is left to make ("5 clips to make").
-- **Make clips** (primary).
+**Top bar** (the shared editor bar, 3.1):
+- "← Canvas", "Storyboard · First Light" and the ratio pill. The project's name is not repeated: the title already names the ad.
+- Presence, then the job button.
+- **History**, then **More** (Copy link to this: off, "Not in this version yet").
+- **Draw frame 1**, **Draw the rest** or **Make clips** (primary).
 - The account button.
 
 **Sub bar:**
@@ -581,14 +597,16 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 ### 3.12 Image editor (artboard 9; review items 4, 5 local, 10)
 
-**Top bar:**
-- Back, "Frame 3 · Insert" and "16:9 locked · 1920 × 1080".
-- Zoom (−, 100%, +, Fit).
-- Presence.
-- "3 edits not applied".
-- The versions menu ("v3 of 3 ▾").
+**Top bar** (the shared editor bar, 3.1):
+- Back, "Frame 3 · Insert" and "16:9 locked". The size ("1920 × 1080") is at the head of the versions menu.
+- Presence, then the job button.
+- "3 edits not applied" ("3 edits" at tight).
+- The versions menu ("v3 of 3 ▾"; "v3 ▾" at tight).
+- **History**, then **More** (Copy link to this: off, "Not in this version yet").
 - **Apply as new version**, the only primary button.
 - The account button.
+
+**Zoom** (−, 100%, +, Fit) is a pill on the stage, at its bottom right, as the canvas's zoom pill is (owner, 2026-10-15).
 
 **The stage:**
 - Locked to the frame's ratio. Zoom and pan; the crop keeps the ratio (review item 10).
@@ -657,14 +675,13 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Two views, one editor.** A **Picture | Sound** switch sits in the top bar, after the title (artboard 10b). Picture is this section; Sound is 3.21. Both views share the playhead, the selected shot, notes and the top bar. Switching keeps the playhead and the selection. The choice is remembered per person and per video (local preference), and `?view=` opens either one.
 
-**Top bar:**
+**Top bar** (the shared editor bar, 3.1):
 - "← Canvas", "Video · First Light" and "16:9 · 15 s".
 - The **Picture | Sound** switch.
-- The running-job pill ("Wren · renders: shot 5, take 2 · about 0:40 left · started by Sai"; in the Sound view while the mix rebuilds, "Edie · edits: mixing your changes into mix v4 · started by you").
-- Presence.
-- Ad versions (v1, v2), with **Compare**.
+- Presence, then the job button: the Napkin logo turning while a clip renders or the mix rebuilds; its tooltip, label and popover say the line ("Wren is making the clip for shot 5"; in the Sound view while the mix rebuilds, "Edie is mixing your changes into mix v4").
+- **Make clips**.
 - **History** (3.20).
-- **Export** (a menu: the film and its sound deliverables, 3.21).
+- **More:** Copy link to this (off, "Not in this version yet"); ad versions (v1, v2) with **Compare**, and **Export** (the film and its sound deliverables, 3.21) go here when they are built, never into the bar.
 - **Render ad** (primary; a render that remakes clips or sound opens the send tray).
 
 **Preview:**
@@ -722,7 +739,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **The remake bar** ("2 clips not made yet · Make them") sits in the timeline head in the Video editor, never over the top bar.
 
-**Make all sizes** (in the top bar's More, and on the Video node) makes the cut-downs of the film: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. They are part of the first release. Section 3.19 has the flow.
+**Make all sizes** (in the Video editor's More, and on the Video node) makes the cut-downs of the film: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. They are part of the first release. Section 3.19 has the flow.
 
 **Takes for a shot:** a list of v1, v2 and v3, each with the model ("Veo 3.1 on Runway"), length, who made it and when. **Use** puts a take in the cut (one undo step). **Another take** opens the send tray and makes a new take. On a Path 1 shot a take brings its own sound; using another take swaps the shot's sound with it, and the lines it carries come in as new line takes (3.21).
 
@@ -734,7 +751,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 ### 3.14 Phone review (artboard 11; review item 8 on phone)
 
 From top to bottom:
-- **Top bar:** Home, "Production" over the project name, a presence pill ("Maya is editing"), the account button. The project name truncates first.
+- **Top bar:** Home, "Production" over the project name, a presence pill ("Maya is editing"), the job button (6.5; its popover lists the jobs, without Show), the account button. The project name truncates first.
 - **Banner:** "You can watch and leave notes here. Open on a laptop or iPad to edit."
 - **Player:** "The ad · v2 · rendered by Edie 12 min ago", a 56px play/pause button, the shot caption (it follows the playhead), and the timecode.
 - **Scrubber:**
@@ -877,7 +894,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 - Nothing happens until **Bring in**. Bring in creates the nodes and links as one undo step; Skye's draft then runs as her job.
 - **Not now** closes the card and leaves the spin-in under the From Napkin tab.
 
-**Export** (top bar menu):
+**Export** (the canvas bar's More, under "Export"):
 - Download all media (zip) · "46 files";
 - Project as .clan + assets · "412 MB";
 - Script as PDF; Script as Fountain;
@@ -1062,7 +1079,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 - **Under speech** lists the dips as levels per layer: "Effects −8 dB · Ambience −6 dB · Music −12 dB". Each can be changed (a single-value field, one undo step).
 - Edie normalises every export to its target and measures it. If a file misses its target after that, it is not delivered as on target: its report says "Measured −14.9 LUFS, target −18", in warn.
 
-**Export menu** (Video editor top bar). No item shows a price or a size estimate.
+**Export menu** (the Video editor's More). No item shows a price or a size estimate.
 - **Film for online** · "MP4 · −14 LUFS".
 - **TV master** · "−23 LUFS · true peak −1 dB".
 - **Stems** · "One file per layer".
@@ -1506,7 +1523,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
   - **Sheets** and **+ Node**.
 - **Ink group panel** (lasso around handwriting): Ellis's reading first, then **Convert to text**, **Send to shot N** and Delete, with "Converting keeps your ink. Undo brings the strokes back."
   - **Send to shot N** attaches the group as a note on the shot. A "note on shot N" link is drawn, and the frame caption gets a red "1 note" badge.
-- **Targets:** every touch target is at least 44px. The top bar is 56px tall. Node **Open** buttons are 44px tall and at least 112px wide in headers, or full width on narrow nodes.
+- **Targets:** every touch target is at least 44px. The top bar is 56px tall: its buttons, the job button, More and the account are 44px. Undo and Redo stay in the editor bars at every width on touch (3.1). There is no hover on touch, so what a tooltip says is also in the control's label, or in the first row of what it opens (the job button's popover). Node **Open** buttons are 44px tall and at least 112px wide in headers, or full width on narrow nodes.
 - **Assets on iPad:** the drawer opens as a sheet over the Boards pill. Drag from it with a finger or the Pencil onto a board.
 - **Ask cards and the send tray:** option buttons, checkboxes and Generate are at least 44px tall.
 - **Editors on iPad:** the mask brush, timeline handles and drag handles work with Pencil and finger. Side panels become sheets below 1180px wide.
