@@ -5,7 +5,7 @@
 import { CaptureUpdateAction } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
-import { LIGHT_INK } from '../../../../../canvas-engine/src/ink/palette'
+import { LIGHT_INK, resolveInk } from '../../../../../canvas-engine/src/ink/palette'
 
 const TO_ENGINE: Record<ChromeTool, string> = {
   select: 'selection', hand: 'hand', pen: 'freedraw', text: 'text', sketch: 'frame', image: 'image', eraser: 'eraser',
@@ -22,7 +22,7 @@ export function excalidrawChrome(api: ExcalidrawImperativeAPI): CanvasChrome {
       const look = p[p.mode]
       api.updateScene({
         appState: {
-          currentItemStrokeColor: LIGHT_INK[look.color],
+          currentItemStrokeColor: resolveInk(look.color, LIGHT_INK),
           currentItemStrokeWidth: look.width / 2,
           currentItemOpacity: p.mode === 'highlighter' ? 35 : 100,
         },
