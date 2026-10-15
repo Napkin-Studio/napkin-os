@@ -128,9 +128,29 @@ def test_audio_is_explicit_on_every_video_request_even_if_asked_for_sound(runway
     assert "audio" in server.body
 
 
-def test_clip_needs_a_first_frame_and_a_valid_duration(runway):
+def test_a_clip_with_no_first_frame_is_made_from_words_on_text_to_video(runway, server):
+    """A clip straight from the script (ui-behaviour 3.5): the sheet's textEndpoint, no pictures."""
+    runway.submit(job("clip", refs=[], duration_s=4, ratio="1280:720", prompt="a runner crests the cliff at dawn"))
+    assert server.requests[0].url.path == "/v1/text_to_video"
+    assert server.body == {"model": "veo3.1", "promptText": "a runner crests the cliff at dawn", "ratio": "1280:720",
+                           "audio": False, "duration": 4}
+    from provider_schemas import errors
+    assert errors("runway", "POST /v1/text_to_video", server.body) == []
+
+
+def test_a_clip_from_words_takes_no_pictures_and_needs_a_text_endpoint(server):
+    runway = RunwayProvider("key_test", resolve, client=httpx.Client(transport=httpx.MockTransport(server)))
+    with pytest.raises(CapabilityMissing):
+        runway.submit(job("clip", duration_s=4, ratio="1280:720"))  # a character ref and no frame
+    sheet = load_sheet("runway")
+    del sheet["ops"]["clip"]["textEndpoint"]
+    runway = RunwayProvider("key_test", resolve, client=httpx.Client(transport=httpx.MockTransport(server)), sheet=sheet)
     with pytest.raises(CapabilityMissing):
         runway.submit(job("clip", refs=[], duration_s=4, ratio="1280:720"))
+    assert server.requests == []
+
+
+def test_clip_needs_a_valid_duration(runway):
     with pytest.raises(CapabilityMissing):
         runway.submit(job("clip", refs=[], first_frame=SHA, duration_s=5, ratio="1280:720"))
     with pytest.raises(CapabilityMissing):

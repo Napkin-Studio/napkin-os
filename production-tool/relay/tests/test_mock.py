@@ -115,6 +115,16 @@ def test_video_returns_a_still_with_its_duration(mock, clock):
     assert out.mime == "image/png" and out.duration_s == 6
 
 
+def test_a_clip_from_words_alone_is_a_blank_still_with_its_duration(mock, clock):
+    """A clip straight from the script (ui-behaviour 3.5): no frame, no refs; the mock still makes one."""
+    rid = mock.submit(job("clip", refs=[], duration_s=4))
+    clock.t = 3
+    out = mock.status(rid).outputs[0]
+    assert out.mime == "image/png" and out.duration_s == 4
+    assert mock.fetched == []
+    assert load_sheet("mock")["ops"]["clip"]["textEndpoint"]
+
+
 def test_cancel(mock, clock):
     rid = mock.submit(job())
     mock.cancel(rid)

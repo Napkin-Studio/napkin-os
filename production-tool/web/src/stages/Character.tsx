@@ -22,6 +22,12 @@ import { runningOn } from '../canvas/sync'
 import { CardChromeContext } from '../canvas/nodes/cardChrome'
 import { boardKey, boardsByRank, isBoard, jumpTo } from '../canvas/boards/boards'
 import type { CanvasChrome } from '../canvas/chrome/controls'
+import { canvasActions } from '../canvas/chrome/actions'
+import { drivers, type MakeVideoFrom } from '../canvas/nodes/make'
+import { planShotsBlocked, planFromScript } from '../jobs/scriptVideo'
+import { planOrJoin } from '../jobs/plan'
+import { linkInto } from '../jobs/prompt'
+import { AskOptions } from '../ui/AskCard'
 import { usePanels } from '../ui/chrome/panels'
 import { AssetsDrawer } from '../ui/assets/AssetsDrawer'
 import { AgentFigure } from '../ui/agents/AgentFigure'
@@ -112,6 +118,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   /** Waiting for a click that says where the next result goes. */
   const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
+  /** Dex's question when Make video has two scripts or two storyboards (3.5): which one drives. */
+  const [which, setWhich] = useState<{ scripts: string[]; storyboards: string[]; at: Pt } | null>(null)
   /** Wren's ask from a placed Generate on a sketch with no words: answered here, then it goes. */
   const [asking, setAsking] = useState<{ ask: Ask; job: { ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice }; at: { x: number; y: number } } | null>(null)
 
@@ -197,8 +205,21 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     const group = kind.kind === 'group' ? { ink: kind.ink } : null
     if (!cards.length && !links && !group) return null
     const units = kind.kind === 'several' ? kind.count : kind.kind === 'none' ? 0 : 1
-    return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked) }, els: all }
-  }, [ownEdit, vs, els])
+    // What cannot run on this selection now, with why (3.9: greyed with the reason).
+    const d = doc
+    const ids = all.map(cardOf).filter((c): c is NonNullable<ReturnType<typeof cardOf>> => !!c)
+    const scripts = ids.filter((c) => c.kind === 'script').map((c) => c.id)
+    const boards = ids.filter((c) => c.kind === 'storyboard').map((c) => c.id)
+    const off: SelInfo['off'] = {}
+    if (scripts.length === 1) {
+      const why = planShotsBlocked(d, scripts[0])
+      if (why) off['plan-shots'] = why
+      const other = boards.length === 1 ? drivers(d, { kind: 'storyboard', id: boards[0] }).filter((s) => s !== scripts[0]) : []
+      if (!why && other.length) off['plan-shots'] = 'That storyboard follows another script'
+    }
+    if (!canvasActions.canMake()) off['make-video'] = 'Make video needs the canvas'
+    return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off }, els: all }
+  }, [ownEdit, vs, els, doc])
   const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
@@ -299,6 +320,63 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     }
   }, [ctrl, asking, limits])
 
+  /** Make video from a script, a storyboard or both (3.5): one undo step, said with Undo. */
+  const makeVideoFrom = useCallback(async (from: MakeVideoFrom) => {
+    setWhich(null)
+    setPlaceError(null)
+    try {
+      const made = canvasActions.makeVideo(from)
+      if (!made) throw new Error('Make video needs the canvas.')
+      const r = await made
+      const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
+      offerUndo({ label: r.label, at: { x: r.el.x + r.el.width / 2, y: r.el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
+    } catch (err) {
+      setPlaceError(errText(err))
+    }
+  }, [canvas, offerUndo])
+
+  /** The selection's scripts and storyboards, as document ids. */
+  const selected3 = (sel: El[]) => {
+    const cs = sel.map(cardOf).filter((c): c is NonNullable<ReturnType<typeof cardOf>> => !!c)
+    return { scripts: cs.filter((c) => c.kind === 'script').map((c) => c.id), storyboards: cs.filter((c) => c.kind === 'storyboard').map((c) => c.id) }
+  }
+
+  const onMakeVideo = useCallback((sel: El[]) => {
+    const { scripts, storyboards } = selected3(sel)
+    if (scripts.length > 1 || storyboards.length > 1) {
+      const b = bounds(sel)
+      setWhich({ scripts, storyboards, at: { x: b.minX + b.w / 2, y: b.minY } })
+      return
+    }
+    void makeVideoFrom({ ...(scripts[0] ? { scriptId: scripts[0] } : {}), ...(storyboards[0] ? { storyboardId: storyboards[0] } : {}) })
+  }, [makeVideoFrom])
+
+  /** Plan shots from the selection (3.10): the script's storyboard (made beside it when it has none), or the selected one. */
+  const onPlanShots = useCallback(async (sel: El[]) => {
+    const { scripts, storyboards } = selected3(sel)
+    const scriptId = scripts[0]
+    if (!scriptId) return
+    setPlaceError(null)
+    try {
+      if (storyboards[0]) {
+        const d = docStore.get()
+        if (!drivers(d, { kind: 'storyboard', id: storyboards[0] }).includes(scriptId)) {
+          await linkInto(docStore, { kind: 'script', id: scriptId }, { kind: 'storyboard', id: storyboards[0] })
+        }
+        await planOrJoin(services, { storyboardId: storyboards[0] })
+        return
+      }
+      const r = await planFromScript(services, scriptId)
+      if (r.made) {
+        const el = canvas ? alive(canvas.elements()).find((e) => cardOf(e)?.id === r.storyboardId) : undefined
+        const undoScene = (canvas as unknown as { undoScene?: (dir: 'undo' | 'redo') => boolean } | null)?.undoScene
+        if (el) offerUndo({ label: 'Storyboard made from Script · Dex is planning the shots', at: { x: el.x + el.width / 2, y: el.y }, undo: () => { undoScene?.call(canvas, 'undo') } })
+      }
+    } catch (err) {
+      setPlaceError(errText(err))
+    }
+  }, [docStore, services, canvas, offerUndo])
+
   const showHint = showStartCard(els, { dismissed: !!ui.hintDismissed, refs: Object.keys(doc.refs).length })
 
   // Our own engine has the boards as real frames and the nodes as real elements (art-boards,
@@ -319,13 +397,16 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     return n
   }, [els, own])
   const rows = useMemo(() => boardRows(doc, own, counts), [doc, own, counts])
-  const open = useCallback((editor: 'script' | 'storyboard' | 'video') => {
+  const open = useCallback((editor: 'script' | 'storyboard' | 'video', id?: string) => {
     if (editor === 'script') {
-      const sc = mainScript(docStore.get())
-      if (sc) router.push(scriptRoute(project.id, sc.id))
+      const sc = id ?? mainScript(docStore.get())?.id
+      if (sc) router.push(scriptRoute(project.id, sc))
       return
     }
-    uiStore.update((u) => { u.stage = editor }, 'stage')
+    uiStore.update((u) => {
+      if (id) u.openNode = { ...u.openNode, [editor]: id }
+      u.stage = editor
+    }, 'stage')
   }, [docStore, router, project.id, uiStore])
   const pickBoard = useCallback((row: BoardRow) => {
     setBoard(row.id)
@@ -417,12 +498,14 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
               </span>
             )
           })}
-          {ctrl && canvas && ownSel && !confirming && !placing && (() => {
+          {ctrl && canvas && ownSel && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             return (
               <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y }} actions={{
-                open: () => { const c = ownSel.els.map(cardOf).find(Boolean); if (c) open(c.kind) },
+                open: () => { const c = ownSel.els.map(cardOf).find(Boolean); if (c) open(c.kind, c.id) },
+                makeVideo: () => onMakeVideo(ownSel.els),
+                planShots: () => void onPlanShots(ownSel.els),
                 group: () => { ownEdit?.group?.() },
                 ungroup: () => { ownEdit?.ungroup?.() },
                 lock: (locked) => {
@@ -447,6 +530,35 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
             )
           })()}
           {canvas && !confirming && !placing && <ArrowCards canvas={canvas} wrap={wrap} selected={selected} toView={toView} />}
+          {which && (() => {
+            const p = toView(which.at)
+            const d = docStore.get()
+            const pickScript = which.scripts.length > 1
+            const ids = pickScript ? which.scripts : which.storyboards
+            const title = (id: string) => (pickScript ? d.scripts[id]?.title : d.storyboards[id]?.title)?.trim() || (pickScript ? 'Script' : 'Storyboard')
+            const q = { id: 'q_which', kind: 'ambiguity' as const, text: `Which ${pickScript ? 'script' : 'storyboard'} drives the video?`, allow_text: false,
+              why: `You picked ${ids.length} ${pickScript ? 'scripts' : 'storyboards'}. A video follows one.`,
+              options: ids.map((id) => ({ id, label: title(id), value: { route: id } })) }
+            return (
+              <Floating className="popover" anchor={{ x: p.x, top: p.y, bottom: p.y }}>
+                <section className="askcard open" role="group" aria-label={`dex asks: ${q.text}`}>
+                  <div className="askcard-head">
+                    <AgentFigure agent="dex" size={28} state="needs-you" decorative />
+                    <span className="askcard-who">{sayer('dex')}</span>
+                    <span className="askcard-sp" />
+                    <button className="askcard-latr" onClick={() => setWhich(null)}>Cancel</button>
+                  </div>
+                  <div className="askcard-q">{q.text}</div>
+                  <div className="askcard-why faint">{q.why}</div>
+                  <AskOptions q={q} disabled={false} onPick={(id) => {
+                    const next = pickScript ? { ...which, scripts: [id] } : { ...which, storyboards: [id] }
+                    if (next.scripts.length > 1 || next.storyboards.length > 1) { setWhich(next); return }
+                    void makeVideoFrom({ ...(next.scripts[0] ? { scriptId: next.scripts[0] } : {}), ...(next.storyboards[0] ? { storyboardId: next.storyboards[0] } : {}) })
+                  }} />
+                </section>
+              </Floating>
+            )
+          })()}
           {asking && (() => {
             const p = toView(asking.at)
             return (

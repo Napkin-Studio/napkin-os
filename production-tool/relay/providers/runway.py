@@ -225,27 +225,34 @@ class RunwayProvider:
 
     def _clip(self, job: ProviderJob) -> tuple[str, dict]:
         self._check(job, job.prompt)
-        if not job.first_frame:
+        # A clip with no first frame is made from words alone (a clip straight from the script,
+        # ui-behaviour 3.5), where the model's sheet names a text endpoint; it takes no pictures.
+        text_only = not job.first_frame
+        endpoint = effective_sheet(self._sheet, job.op, job.model)["ops"][job.op].get("textEndpoint")
+        if text_only and not endpoint:
             raise CapabilityMissing("clip needs a first frame")
+        if text_only and (job.refs or job.last_frame):
+            raise CapabilityMissing("a clip from words alone takes no pictures")
         if not job.ratio:
             raise ProviderError("invalid_input", "clip needs a ratio", False)
-        frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]
-        if job.last_frame:
-            frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
-        body = {
-            "model": self._model(job),
-            "promptImage": frames,
+        body = {"model": self._model(job)}
+        if not text_only:
+            frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]
+            if job.last_frame:
+                frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
+            body["promptImage"] = frames
+        body.update({
             "promptText": self._tagged([r.name for r in job.refs], job.prompt),
             "ratio": job.ratio,
             "audio": video_audio(job),  # Veo defaults to sound on
-        }
+        })
         if job.duration_s is not None:
             body["duration"] = int(job.duration_s)
         if job.negative:
             body["negativePrompt"] = job.negative
         if job.seed is not None:
             body["seed"] = job.seed
-        return "/v1/image_to_video", body
+        return (endpoint.split(" ", 1)[-1] if text_only else "/v1/image_to_video"), body
 
     def _clip_edit(self, job: ProviderJob) -> tuple[str, dict]:
         self._check(job, job.prompt)

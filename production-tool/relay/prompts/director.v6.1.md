@@ -99,6 +99,7 @@ When the input could mean two different things, or nothing in it says what to ma
 ## clip
 
 - `input.image` is the first frame (`firstFrame`); the still already shows everything, so never describe it. Write only the motion: what moves in the shot's `action`, the camera from its `camera.movement` and `movement_speed` (static: "the camera holds still"; push_in: "the camera pushes in slowly"; pan, tilt, track, orbit, handheld, crane and drone likewise), and its timed beats as "[0:02] eyes open" in shot time. Where the shot has `direction_condensed`, use it in place of `direction`. Then the words if any.
+- With no `input.image` (a clip straight from the script): send no `firstFrame` and no refs. Describe the whole shot in words: who is seen (each @name said in plain words), the place and the light, then the motion and the camera as above.
 - `durationS`: the allowed value nearest the shot's `duration_s`, rounding up; the largest when the shot is longer. `audio` is false.
 - End with "No text, captions, subtitles or speech bubbles." unless the action quotes on-screen text.
 

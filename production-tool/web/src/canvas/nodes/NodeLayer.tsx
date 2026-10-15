@@ -18,6 +18,7 @@ import type { CardKind } from './cardChrome'
 import { NodeCard } from './cards'
 import { cardOf, CARD_KINDS, createNode, elementOfEnd, endOf, linkCheck, linkMemory, linkNodes, reconcileLinks, seedNodes } from './nodes'
 import { imageFiles, pickPictureFiles, placePictures } from './pictures'
+import { makeVideo, storyboardFor } from './make'
 import './nodes.css'
 
 type Local = { x: number; y: number }
@@ -70,6 +71,34 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
         .catch((e) => console.warn('the node was not made', e))
     },
   }), [canvas, services, markNew])
+
+  // Nodes made from nodes (3.5 Make video, 3.10 Plan shots), for the selection bar and the editors:
+  // beside what they come from, with their links, marked new.
+  useEffect(() => {
+    // A node made beside one at the edge of the view may land outside it: bring both into view.
+    const show = (el: CanvasElement, near: { kind: string; id: string }) => {
+      const v = canvas.visibleBounds()
+      if (el.x >= v.minX && el.y >= v.minY && el.x + el.width <= v.maxX && el.y + el.height <= v.maxY) return
+      const src = elementOfEnd(canvas.elements(), services.doc.get(), near as LinkEndpoint)
+      canvas.fit(src ? [src, el] : [el], { zoomFactor: 0.8, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
+    }
+    return canvasActions.register({
+      storyboardFor: async (scriptId) => {
+        const r = await storyboardFor({ canvas, doc: services.doc }, scriptId)
+        if (r.el) {
+          markNew(r.el.id)
+          show(r.el, { kind: 'script', id: scriptId })
+        }
+        return { storyboardId: r.storyboardId, made: r.made }
+      },
+      makeVideo: async (from) => {
+        const r = await makeVideo({ canvas, doc: services.doc }, from)
+        markNew(r.el.id)
+        show(r.el, from.storyboardId ? { kind: 'storyboard', id: from.storyboardId } : { kind: 'script', id: from.scriptId! })
+        return r
+      },
+    })
+  }, [canvas, services, markNew])
 
   // Pictures (ui-behaviour 3.6, 3.18): the Picture tool's file picker, a dropped file, a pasted image.
   useEffect(() => {

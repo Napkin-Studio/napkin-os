@@ -248,6 +248,21 @@ def test_clips_that_cannot_take_refs_send_the_frame_and_name_the_character_in_wo
     assert "@" not in body["promptText"]
 
 
+def test_a_clip_straight_from_the_script_goes_to_text_to_video_and_says_the_names_in_words():
+    """ui-behaviour 3.5: no frame, so Veo 3.1 makes it from words alone; the refs cannot go with it."""
+    h, stand = pathway("runway")
+    job = run(h, "clip", {"shot": SHOT, "refs": MAYA, "ratio": "16:9"})
+    assert job["state"] == "completed", (job.get("error"), stand.sent)
+    sent = stand.to("runway")
+    assert [s["endpoint"] for s in sent] == ["POST /v1/text_to_video"]
+    assert not sent[0]["errors"], sent[0]["errors"]
+    body = sent[0]["body"]
+    assert "promptImage" not in body and "referenceImages" not in body
+    assert "@" not in body["promptText"] and "maya" in body["promptText"]
+    sheet = h.relay.registry.sheet("runway")
+    assert job["cost"]["estimate"] == pricing().op_usd(sheet, "clip", None, sent_settings("clip", body))
+
+
 def test_runway_region_edits_send_the_image_and_a_copy_with_the_box_drawn():
     h, stand = pathway("runway")
     run(h, "region_edit", INPUTS["region_edit"])

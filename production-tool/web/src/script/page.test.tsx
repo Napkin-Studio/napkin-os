@@ -22,8 +22,8 @@ import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
 import { addShots, asset, id, MAYA, SHA, wasm } from '../test/model'
-import { updateDoc } from '../doc/store'
-import { importFountain } from './edits'
+import { systemUpdate, updateDoc } from '../doc/store'
+import { addScene, importFountain } from './edits'
 import { parseFountain } from './fountain'
 import { ScriptEditor } from './ScriptEditor'
 
@@ -62,7 +62,7 @@ function memoryHistory(): { history: HistoryLike; location: { pathname: string; 
   }
 }
 
-async function open() {
+async function open(pick?: (services: import('../app/context').Services) => Promise<string>) {
   const storage = memoryStorage()
   const index = new ProjectIndex(storage, () => new Date('2026-10-13T10:00:00Z'))
   const app = new SnapshotStore<AppUi>({ ...initialAppUi(), me: ME }, null)
@@ -73,7 +73,7 @@ async function open() {
   const services = session.services
   const h = memoryHistory()
   const router = new Router({ base: '/', history: h.history, location: h.location, win: h.win as never })
-  const scriptId = mainScript(services.doc.get())!.id
+  const scriptId = pick ? await pick(services) : mainScript(services.doc.get())!.id
   router.push(scriptRoute(session.id, scriptId))
   const el = document.createElement('div')
   document.body.appendChild(el)
@@ -88,6 +88,49 @@ async function open() {
 }
 
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+
+/** A second script, as + Node makes it: no storyboard. With `words`, its first scene says them. */
+const secondScript = (words: string) => async (services: import('../app/context').Services): Promise<string> => {
+  const sc = id('script')
+  await systemUpdate(services.doc, (d) => { d.scripts[sc] = { id: sc, v: 1, field_v: {}, title: 'Script 2', target_s: 15 } }, 'add a script')
+  if (words) {
+    const scene = await addScene(services.clan!, sc)
+    await updateDoc(services.doc, (d) => { d.scenes[scene].text = words }, 'edit')
+  }
+  await services.doc.flush()
+  return sc
+}
+
+const button = (el: HTMLElement, name: string) => [...el.querySelectorAll('button')].find((b) => b.textContent === name)
+
+describe('Plan shots and what comes next (ui-behaviour 3.10, 3.5)', () => {
+  it('a script with no words: Plan shots is off and says why', async () => {
+    const { el } = await open(secondScript(''))
+    await settle()
+    const plan = button(el, 'Plan shots')!
+    expect(plan.disabled).toBe(true)
+    expect(el.querySelector('.se-why')?.textContent).toBe('Write the script first')
+    expect(el.querySelector('.se-next')).toBeNull()
+  })
+
+  it('a script with words and no storyboard: Dex says what is next, and Plan shots makes the storyboard and plans on it', async () => {
+    const { el, services, scriptId } = await open(secondScript('EXT. CLIFFS - DAWN. A runner crests the cliff and drinks Lumen water.'))
+    await settle()
+    expect(el.querySelector('.se-next')?.textContent).toMatch(/Dex · directs: Ready when you are: Plan shots turns this into about 6 shots\./)
+    expect(el.querySelector('.se-next')?.textContent).toContain('Make video')
+    const plan = button(el, 'Plan shots')!
+    expect(plan.disabled).toBe(false)
+    expect(el.querySelector('.se-why')).toBeNull()
+    await act(async () => { plan.click() })
+    await settle()
+    const d = services.doc.get()
+    const drives = Object.values(d.links).filter((l) => l.role === 'drives' && l.from.id === scriptId && l.to.kind === 'storyboard')
+    expect(drives).toHaveLength(1)
+    const sb = drives[0].to.id
+    expect(Object.values(d.jobs).some((j) => j.op === 'shot_list' && j.node.kind === 'storyboard' && j.node.id === sb)).toBe(true)
+    expect(el.textContent).toContain('Planning…')
+  })
+})
 
 describe('the Script editor page', () => {
   it('an empty script says what to do, with the top bar and the facts', async () => {

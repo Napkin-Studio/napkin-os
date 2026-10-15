@@ -41,3 +41,16 @@
 .snd-track { display: flex; gap: 2px; min-height: 36px; align-items: center; border-radius: 6px; background: var(--soft); padding: 0 8px; }
 .snd-seg { height: 26px; border-radius: 4px; background: var(--soft-2); border: 1px solid var(--line); font-family: var(--f-mono); font-size: 11px; display: flex; align-items: center; padding: 0 6px; }
 .snd-empty { margin: 0; font-size: 12.5px; color: var(--ink2); line-height: 1.45; }
+
+/* Make clips' send tray (stages/ClipTray.tsx; ui-behaviour 3.16): the canvas tray's rows in a float. */
+.float.clip-tray { width: 400px; max-width: calc(100vw - 32px); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.clip-tray .tray-rows { max-height: 46vh; overflow: auto; }
+.clip-tray .tray-row.cannot { cursor: default; color: var(--ink2); }
+
+/* How the clips are made, with Change (stages/ClipChoice.tsx; ui-behaviour 3.5). */
+.ve-choice { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 16px; font-size: 13px; background: var(--card); border-bottom: 1px solid var(--line-soft); }
+.ve-choice .who { font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.ve-choice-ask { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; flex: 1; min-width: 0; }
+.ve-choice-ask .askcard-options { width: min(560px, 100%); }
+.ve-choice-error { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+.ve-planning { display: flex; align-items: center; gap: 8px; justify-content: center; }

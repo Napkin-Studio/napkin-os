@@ -44,6 +44,11 @@ import './video.css'
 import { SoundView } from './SoundView'
 import { addTakeNote, pickTake } from './videoEdits'
 import { PromptStart } from '../ui/prompt/PromptStart'
+import { clipMode, waitsOnScriptAsk } from '../jobs/scriptVideo'
+import { runningPlan } from '../jobs/plan'
+import { ClipTray } from './ClipTray'
+import { ClipChoice } from './ClipChoice'
+import { NapkinLoader } from '../ui/loader/NapkinLoader'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -84,17 +89,24 @@ export function Video() {
   const [makingAll, sendAll] = useSending()
   const [rendering, sendRender] = useSending()
 
-  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id })
+  // Straight from the script (ui-behaviour 3.5): a shot with no frame yet makes its clip from its words.
+  const fromWords = clipMode(doc, video?.id) === 'straight'
+  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
+  // Make clips opens the send tray first (3.16): nothing paid starts until its Make clips.
+  const [tray, setTray] = useState(false)
+  const trayRef = useRef<HTMLButtonElement>(null)
+  const toMake = shots.map((s, i) => ({ shot: s, n: i + 1 })).filter(({ shot: s }) => !takesOf(doc, s.id).length && !isRunning(doc, clipJob(s.id)))
 
-  /** A clip for every shot without one. A shot that cannot be made (no frame yet) does not stop the
-   *  others; each one that failed is named. */
-  const makeAll = () => sendAll(async () => {
+  /** A clip for every shot picked in the tray. A shot that cannot be made does not stop the others; each
+   *  one that failed is named. */
+  const makeAll = (ids: string[], modelChoice?: ModelChoice) => sendAll(async () => {
     setError(null)
+    setTray(false)
     const failed: string[] = []
     for (const [i, s] of shots.entries()) {
-      if (takesOf(doc, s.id).length || isRunning(doc, clipJob(s.id))) continue
+      if (!ids.includes(s.id) || takesOf(doc, s.id).length || isRunning(doc, clipJob(s.id))) continue
       try {
-        await makeClip(s, { modelChoice: choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)) })
+        await makeClip(s, { modelChoice: modelChoice ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)) })
       } catch (e) {
         failed.push(`Shot ${i + 1}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }
@@ -126,21 +138,28 @@ export function Video() {
       title={`Video · ${isMain ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
       meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
       middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
-      right={<button className="btn" disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => void makeAll()}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>}
+      right={<>
+        <button ref={trayRef} className="btn" aria-haspopup="dialog" aria-expanded={tray} disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => setTray(!tray)}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
+        {tray && <ClipTray anchor={trayRef} open={tray} onClose={() => setTray(false)} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'} onMake={(ids, m) => void makeAll(ids, m)} />}
+      </>}
       primary={controls.stitch ? (
         <button className="btn primary" disabled={empty || rendering || !!renderBlocked} onClick={() => void render()} title={empty ? 'Plan the shots first' : renderBlocked ?? 'Join the clips into one ad with the end card'}>
           {rendering ? 'Sending…' : isMoving(doc, stitchJob) ? 'Rendering…' : 'Render ad'}
         </button>
       ) : undefined} />
   )
+  const planning = sb ? runningPlan(doc, sb.id) : undefined
   if (empty) {
     return (
       <div className="editor">
         {bar}
+        {video && <ClipChoice videoId={video.id} />}
         <div className="panel"><div className="empty-state">
           <AgentFigure agent="dex" size={64} decorative />
           <span className="sayer">{sayer('dex')}</span>
-          <b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}
+          {video && waitsOnScriptAsk(doc, video.id) ? null : planning
+            ? <div className="ve-planning" role="status"><NapkinLoader work="plan" size={18} /><span>I'm planning the shots from the script. {fromWords ? 'Then Make clips makes them straight from its words.' : 'Then draw and check their frames in the storyboard.'}</span></div>
+            : <><b>No shots yet.</b>{sb ? 'Plan your shots and draw the frames first; I make one clip per frame.' : 'Link a storyboard to this video on the canvas; I make one clip per frame.'}</>}
           {video && <PromptStart kind="video" nodeId={video.id} place="editor" />}
           {sb && <div style={{ marginTop: 14 }}><button className="btn" onClick={() => uiStore.update((u) => { u.openNode = { ...u.openNode, storyboard: sb.id }; u.stage = 'storyboard' })}>Open the storyboard</button></div>}
         </div></div>
@@ -151,6 +170,7 @@ export function Video() {
   return (
     <div className="editor">
       {bar}
+      {video && <ClipChoice videoId={video.id} />}
       <div className="panel ve-body pt-grid">
         {error && <div role="alert" className="ve-error">{error}</div>}
         {view === 'sound' ? <SoundView /> : <Player mode={mode} shot={shot} take={take} onPickShot={setShotId}

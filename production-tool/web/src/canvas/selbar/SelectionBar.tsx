@@ -13,6 +13,10 @@ import './selbar.css'
 
 export interface SelectionBarActions {
   open(): void
+  /** Make video (3.5): the Video node beside the selection, with its links. */
+  makeVideo(): void
+  /** Plan shots (3.10): on the storyboard the selected script drives, made when there is none. */
+  planShots(): void
   group(): void
   ungroup(): void
   lock(locked: boolean): void
@@ -34,6 +38,8 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
   if (!bar.length) return null
   const run = (id: ActionId) => {
     if (id === 'open') actions.open()
+    else if (id === 'make-video') actions.makeVideo()
+    else if (id === 'plan-shots') actions.planShots()
     else if (id === 'group') actions.group()
     else if (id === 'ungroup') actions.ungroup()
     else if (id === 'delete') actions.remove()
