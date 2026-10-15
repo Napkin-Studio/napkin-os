@@ -128,15 +128,17 @@ export function setStacked(canvas: CanvasAdapter, members: readonly CanvasElemen
   const home = members[0]?.frameId ?? null
   canvas.transact((all) => {
     const next = all.map((e) => (fields.has(e.id) ? canvas.patch(e, fields.get(e.id)!) : e))
-    // Laid out again on a board, the board grows to hold them when it can (owner decision 2026-10-15).
-    if (!on) return home ? withFields(canvas, next, holdFields(next, home)) : next
+    // On a board, the board grows to hold them, laid out or piled (the pile's turned corners), when it
+    // can (owner decision 2026-10-15).
+    const hold = (els: CanvasElement[]) => (home ? withFields(canvas, els, holdFields(els, home)) : els)
+    if (!on) return hold(next)
     // Bottom to top in paint order, where the topmost of them was.
     const ids = new Set(fields.keys())
     const at = Math.max(...next.map((e, i) => (ids.has(e.id) ? i : -1)))
     const pile = [...members].reverse().map((m) => next.find((e) => e.id === m.id)!)
     const rest = next.filter((e) => !ids.has(e.id))
     const before = next.slice(0, at + 1).filter((e) => !ids.has(e.id)).length
-    return [...rest.slice(0, before), ...pile, ...rest.slice(before)]
+    return hold([...rest.slice(0, before), ...pile, ...rest.slice(before)])
   }, { undoable: true })
   if (opts.animate) canvas.animate?.(before, STACK_MS)
   return true

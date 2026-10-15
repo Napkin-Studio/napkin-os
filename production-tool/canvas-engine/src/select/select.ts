@@ -26,6 +26,7 @@
 //   whose centre the edge passed leave the board), one step. Fit to contents is fitBoard.
 
 import { recordBounds, unionRects, type Rect } from '../model/bounds'
+import { boundEnds } from '../render/links'
 import { containsRect, fitRect, growToHold, innerRect, overlaps, placeInBoard, resizeRect, type Edge } from '../boards/sizing'
 import type { PointerKind } from '../input/router'
 import type { ElementRecord } from '../model/records'
@@ -362,7 +363,9 @@ export class SelectTool {
 
   /** The box round the selection, and whether its handles scale it (no node, board or link in it), or null. */
   frame(): { box: Box; scalable: boolean } | null {
-    const rs = this.shown().filter((r) => r.kind !== 'link')
+    // Links and bound arrows follow their ends: their stored box is not where they are drawn (inside a
+    // closed pile they are not drawn at all), so they neither make the frame nor get handles.
+    const rs = this.shown().filter((r) => r.kind !== 'link' && !(r.kind === 'arrow' && boundEnds((id) => this.scene.get(id), r)))
     if (!rs.length) return null
     return { box: boxOfAll(rs), scalable: rs.every((r) => !UNSCALED.has(r.kind)) && rs.some((r) => !r.locked) }
   }

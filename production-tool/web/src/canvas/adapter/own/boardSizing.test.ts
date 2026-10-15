@@ -10,6 +10,7 @@ import { CanvasController } from '../../controller'
 import { newId } from '../../../lib/ulid'
 import { snapshotDoc } from '../../../test/jobFixtures'
 import { setStacked } from '../../nodes/stack'
+import { elementBounds } from '../../core/geometry'
 import { OwnAdapter } from './adapter'
 
 vi.mock('../../../lib/idb', () => ({ idbPut: async () => {}, idbGet: async () => undefined }))
@@ -89,6 +90,12 @@ describe('board sizing on the own engine', () => {
     a.transact(() => [{ ...board, width: 700 }, f, s], { undoable: false })
     const members = () => a.elements().filter((e) => e.groupIds?.includes('key:sam'))
     setStacked(a, members(), true)
+    // Piled at the board's padding, the turned cards' corners stick out: the board grows to hold them.
+    const pile = elementBounds(members())
+    const held = frame()
+    expect(pile.minX).toBeGreaterThanOrEqual(held.x + 16 - 1e-6)
+    expect(pile.minY).toBeGreaterThanOrEqual(held.y + 22 - 1e-6)
+    expect(pile.maxX).toBeLessThanOrEqual(held.x + held.width - 16 + 1e-6)
     a.transact((all) => all.map((e) => (e.id === board.id ? a.patch(e, { width: 300 }) : e)), { undoable: false })
     setStacked(a, members(), false)
     const b = frame()

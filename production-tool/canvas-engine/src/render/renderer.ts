@@ -272,7 +272,9 @@ export class Renderer {
   hit(x: number, y: number): ElementRecord | undefined {
     return this.tree.search({ minX: x, minY: y, maxX: x, maxY: y })
       .map((b) => this.scene.get(b.id))
-      .filter((r): r is ElementRecord => !!r && r.kind !== 'board')
+      // A bound link or arrow is drawn from its ends, not its stored box: it is hit along its route
+      // (links.ts hitNodeOrLink), never at a box it no longer has (the "ghost" of a pile's arrow).
+      .filter((r): r is ElementRecord => !!r && r.kind !== 'board' && !(r.kind === 'link' || (r.kind === 'arrow' && isBound(r))))
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
   }
 

@@ -174,6 +174,9 @@ export class OwnAdapter implements CanvasAdapter {
     return all.map((r) => {
       const el = elementFromRecord(r, this.scene.points(r.id)) as unknown as CanvasElement
       const route = env && r.kind === 'arrow' ? linkRoute(env, r) : null
+      // Bound, but with no line (both ends in one closed pile): not drawn, so served with no points, and
+      // never hovered or hit at the box it had when it was made (the pile's "ghost").
+      if (!route && env && r.kind === 'arrow' && boundEnds((id) => this.scene.get(id), r)) return { ...el, width: 0, height: 0, points: [] }
       if (!route) return el
       const o = route.pts[0]
       const xs = route.pts.map((p) => p.x)

@@ -197,15 +197,28 @@ export function fitRect(board: Rect, members: readonly Rect[]): Rect {
 }
 
 /**
- * Grow the board (any way) to hold `members` with its padding, unless that would come onto a blocker.
- * Null when it already holds them or cannot grow.
+ * Grow the board to hold `members` with its padding, each way it needs to (up, down, left, right) that
+ * does not come onto a blocker; a way that is blocked is left as it is. Null when nothing changes.
  */
 export function growToHold(board: Rect, members: readonly Rect[], blockers: readonly Rect[]): Rect | null {
   if (!members.length) return null
   const need = aroundRect(unionRects(members))
   if (containsRect(board, need)) return null
-  const g = unionRects([board, need])
-  return growthBlocked(board, g, blockers) ? null : g
+  let x0 = board.x
+  let y0 = board.y
+  let x1 = rightOf(board)
+  let y1 = bottomOf(board)
+  const tryWay = (nx0: number, ny0: number, nx1: number, ny1: number) => {
+    const before = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+    const g = { x: nx0, y: ny0, w: nx1 - nx0, h: ny1 - ny0 }
+    if (!growthBlocked(before, g, blockers)) [x0, y0, x1, y1] = [nx0, ny0, nx1, ny1]
+  }
+  if (need.y < y0) tryWay(x0, need.y, x1, y1)
+  if (bottomOf(need) > y1) tryWay(x0, y0, x1, bottomOf(need))
+  if (need.x < x0) tryWay(need.x, y0, x1, y1)
+  if (rightOf(need) > x1) tryWay(x0, y0, rightOf(need), y1)
+  if (x0 === board.x && y0 === board.y && x1 === rightOf(board) && y1 === bottomOf(board)) return null
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
 
 export type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'

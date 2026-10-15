@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
-import { BOARD_GAP, BOARD_PAD, fitRect, innerRect, outsideSpot, overlaps, placeAllInBoard, placeInBoard, resizeRect, rowSlot } from '../src/boards/sizing'
+import { BOARD_GAP, BOARD_PAD, fitRect, growToHold, innerRect, outsideSpot, overlaps, placeAllInBoard, placeInBoard, resizeRect, rowSlot } from '../src/boards/sizing'
 import type { Rect } from '../src/model/bounds'
 import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore, type Step } from '../src/model/store'
@@ -286,5 +286,18 @@ describe('the select tool and boards as spaces', () => {
     undo.undo()
     expect(box(scene.get('C')!)).toEqual({ x: 0, y: 0, w: 400, h: 300 })
     expect(tool.fitBoard('E')).toBe(false)
+  })
+})
+
+describe('growing to hold what sticks out', () => {
+  it('grows each free way and leaves a blocked way as it is', () => {
+    const board = { x: 0, y: 0, w: 400, h: 300 }
+    // Sticks out above and to the left; a neighbour sits just left of the board.
+    const pile = { x: -30, y: -40, w: 300, h: 200 }
+    const g = growToHold(board, [pile], [{ x: -300, y: -500, w: 270, h: 1000 }])!
+    expect(g.x).toBe(0)
+    expect(g.y).toBe(-40 - BOARD_PAD.top)
+    expect(g.x + g.w).toBe(400)
+    expect(growToHold(board, [{ x: 20, y: 30, w: 50, h: 50 }], [])).toBeNull()
   })
 })
