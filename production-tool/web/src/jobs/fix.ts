@@ -31,13 +31,20 @@ function clipText(notes: Review[], boxedId: string): string | undefined {
   return rest.length ? cutText(rest.join('\n'), 1000) : undefined
 }
 
+/** Whether open notes on a shot's clip are fixed in its frame: one has a box, the fix is on, and the shot
+ *  has a frame to fix. A shot made straight from its words has none, so its notes make a new version of the
+ *  clip instead ("This shot has no frame to fix" stopped every boxed note there, 2026-10-15). */
+export function fixesInFrame(d: ProductionDocument, shotId: string, notes: Pick<Review, 'region'>[], on: boolean): boolean {
+  return on && notes.some((r) => !!r.region) && !!selectedFrame(d, shotId)
+}
+
 /** Start the fix: the region edit on the shot's picked frame. `notes` are the open notes on the clip; one has a box.
  * `modelChoice`: the clip model picked in the menu, kept with the fix so step 3 uses it, after a reload too. */
 export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
   const boxed = notes.find((r) => r.region)
   if (!boxed?.region) throw new Error('Draw a box on the paused clip first.')
   const d = deps.doc.get()
-  const index = shotsOf(d).findIndex((s) => s.id === shotId)
+  const index = shotsOf(d, d.shots[shotId]?.storyboard_id).findIndex((s) => s.id === shotId)
   const frame = selectedFrame(d, shotId)
   if (index < 0 || !frame) throw new Error('This shot has no frame to fix.')
   const image = await assetRef(deps.relay, frame.asset)

@@ -8,16 +8,18 @@ import type { JobInput, Op, ProductionDocument } from '../contracts/types'
 import type { JobPurpose } from '../model/purpose'
 import { systemUpdate, updateDoc } from '../doc/store'
 import { putBlob } from '../lib/blobs'
-import { mainScript, mainStoryboard, scenesOf, shotsOf } from '../model/selectors'
+import { mainScript, mainStoryboard, mainVideo, scenesOf, shotsOf } from '../model/selectors'
 import type { ModelStore } from '../model/store'
 import { MockRelay } from '../relay/mock'
 import { addScene } from '../script/edits'
 import { nextStep } from '../script/nextStep'
 import { addFrame, addShots, asset, id, job, MAYA, modelStore } from '../test/model'
 import { clipSource, makeClip, traySummary } from './clips'
+import { fixesInFrame } from './fix'
+import { planFor } from './follow'
 import type { FrameDeps } from './frames'
 import {
-  answerScriptVideo, clipMode, PLAN_FIRST, planFromScript, planShotsBlocked, scriptVideoAsk, scriptVideoQuestion, shotCount, STRAIGHT,
+  answerScriptVideo, clipMode, PLAN_FIRST, planFromScript, planShotsBlocked, recordScriptVideoAnswer, scriptVideoAsk, scriptVideoQuestion, shotCount, STRAIGHT,
   waitsOnScriptAsk,
 } from './scriptVideo'
 
@@ -181,6 +183,39 @@ describe('clips straight from the script (3.5)', () => {
     expect(clipSource(doc(store), shotId, true)).toBe('frame')
     await makeClip(deps, shotId, { fromWords: true })
     expect(sent[0].input.image?.sha256).toBe(sha)
+  })
+
+  it('in a video made straight from the script, every clip request on a frameless shot uses its words (2026-10-15)', async () => {
+    // New take, a note's new version and Remake call makeClip without fromWords: they failed with
+    // "This shot has no frame yet." on every shot the Video editor had made from its words.
+    const { store, deps, sent } = await project()
+    const v = mainVideo(doc(store))!.id
+    let shotId = ''
+    await updateDoc(store, (d) => { shotId = addShots(d, 2, { action: 'A runner crests the cliff at dawn.' })[0].id }, 'plan')
+    await recordScriptVideoAnswer(store, v, STRAIGHT, 'human:p_maya01')
+    await store.flush()
+    await makeClip(deps, shotId)
+    expect(sent.map((x) => [x.op, !!x.input.image])).toEqual([['clip', false]])
+    // Remake this and the clips after: a shot with words but no frame is in the plan.
+    expect(planFor(doc(store), { kind: 'after', item: { kind: 'clip', shotId } }).clips).toHaveLength(2)
+    // A boxed note on it makes a new version; there is no frame to fix the box in.
+    expect(fixesInFrame(doc(store), shotId, [{ region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }], true)).toBe(false)
+  })
+
+  it('a boxed note is fixed in the frame only when the shot has one', async () => {
+    const { store } = await project()
+    const sha = await putBlob(new Blob(['frame'], { type: 'image/png' }))
+    let shotId = ''
+    await updateDoc(store, (d) => {
+      d.assets[sha] = asset(sha)
+      const s = addShots(d, 1, { action: 'She smiles.' })[0]
+      shotId = s.id
+      addFrame(d, s, sha, { pick: true })
+    }, 'plan')
+    const box = [{ region: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } }]
+    expect(fixesInFrame(doc(store), shotId, box, true)).toBe(true)
+    expect(fixesInFrame(doc(store), shotId, box, false)).toBe(false)
+    expect(fixesInFrame(doc(store), shotId, [{}], true)).toBe(false)
   })
 
   it('the tray says what each clip is made from', () => {

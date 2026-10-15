@@ -11,7 +11,9 @@
 // when there is none) with a `renders` link, and Dex plans its shots there: nothing is hidden, and the
 // shots are what Make clips makes clips of. Planning is free; no clip starts here.
 
-import type { Ask, Id, ProductionDocument, Question } from '../contracts/types'
+import type { Id, ProductionDocument, Question } from '../contracts/types'
+import { PLAN_FIRST, STRAIGHT, scriptVideoAsk } from './clipMode'
+
 import { canvasActions } from '../canvas/chrome/actions'
 import { systemUpdate, updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
@@ -21,14 +23,9 @@ import type { FrameDeps } from './frames'
 import { planOrJoin, runningPlan } from './plan'
 import { linkInto, scriptOf, storyboardOfVideo } from './prompt'
 
+export { clipMode, isScriptVideoAsk, PLAN_FIRST, scriptVideoAsk, STRAIGHT, type ClipMode } from './clipMode'
+
 type Doc = ProductionDocument
-
-/** The answers' option ids (and their routes). */
-export const PLAN_FIRST = 'plan_first'
-export const STRAIGHT = 'straight'
-
-/** How the video's clips are made: from frames you check (the default), or straight from the script. */
-export type ClipMode = 'frames' | 'straight'
 
 /** About how long a shot runs when Dex has not planned yet: 15 s is about 6 shots (mock Asks). */
 const SHOT_S = 2.5
@@ -68,23 +65,6 @@ export function scriptVideoQuestion(count: { n: number; exact: boolean }, id = n
 export function scriptOfVideo(d: Doc, videoId: Id): Id | undefined {
   const l = Object.values(d.links ?? {}).find((x) => x.role === 'drives' && x.from.kind === 'script' && x.to.kind === 'video' && x.to.id === videoId)
   return l && d.scripts[l.from.id] ? l.from.id : undefined
-}
-
-/** Is this ask Dex's "Plan a storyboard first?" (found by its options' routes)? */
-export function isScriptVideoAsk(a: Ask): boolean {
-  return a.question.options.some((o) => (o.value as { route?: string } | undefined)?.route === STRAIGHT)
-}
-
-/** The person's stored answer about this video, if they gave one. */
-export function scriptVideoAsk(d: Doc, videoId: Id): Ask | undefined {
-  return Object.values(d.asks ?? {}).find((a) => a.node.kind === 'video' && a.node.id === videoId && isScriptVideoAsk(a))
-}
-
-/** How this video's clips are made: straight from the script once that was chosen (and not changed back). */
-export function clipMode(d: Doc, videoId: Id | undefined): ClipMode {
-  if (!videoId) return 'frames'
-  const a = scriptVideoAsk(d, videoId)
-  return a?.answers.at(-1)?.option_id === STRAIGHT ? 'straight' : 'frames'
 }
 
 /**

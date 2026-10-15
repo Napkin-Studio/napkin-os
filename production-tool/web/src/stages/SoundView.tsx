@@ -3,8 +3,7 @@
 // its real empty state. Sound comes with the audio features (audio-*); nothing here pretends to play,
 // mix or measure.
 
-import { useDoc } from '../app/context'
-import { shotsOf } from '../model/selectors'
+import type { Shot } from '../contracts/types'
 import { cameraLabel } from '../jobs/frameEdit'
 
 const LANES: { name: string; sub: string; empty: string }[] = [
@@ -16,9 +15,8 @@ const LANES: { name: string; sub: string; empty: string }[] = [
   { name: 'Music', sub: 'sections', empty: 'No music yet.' },
 ]
 
-export function SoundView() {
-  const doc = useDoc()
-  const shots = shotsOf(doc)
+/** `shots`: the open video's shots in order (the main storyboard's showed on every video, 2026-10-15). */
+export function SoundView({ shots }: { shots: Shot[] }) {
   const total = shots.reduce((a, s) => a + s.duration_s, 0) || 1
   return (
     <div className="snd">

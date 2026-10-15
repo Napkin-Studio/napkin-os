@@ -11,6 +11,7 @@ import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
 import { jobShot, refsFor } from './select'
+import { shotFromWords } from './clipMode'
 
 export { jobShot }
 
@@ -51,8 +52,9 @@ export function traySummary(sources: ClipSource[]): string {
 
 /**
  * A clip for a shot from its picked storyboard frame, on `modelChoice` when the participant picked one.
- * `fromWords` (a video made straight from the script, ui-behaviour 3.5): a shot with no frame yet is made
- * from its words alone (the model's text-to-video; the relay sends it to the sheet's textEndpoint).
+ * A shot with no frame yet in a video made straight from the script (ui-behaviour 3.5) is made from its
+ * words alone (the model's text-to-video; the relay sends it to the sheet's textEndpoint). `fromWords`
+ * overrides what the video says (absent: the video's clip mode, jobs/clipMode.ts).
  */
 export async function makeClip(
   deps: FrameDeps,
@@ -63,8 +65,9 @@ export async function makeClip(
   const shot = d.shots[shotId]
   if (!shot) throw new Error('That shot is gone.')
   const frame = selectedFrame(d, shot.id)
-  const source = clipSource(d, shot.id, !!extra.fromWords)
-  if (!source) throw new Error(extra.fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
+  const fromWords = extra.fromWords ?? shotFromWords(d, shot.id, extra.videoId)
+  const source = clipSource(d, shot.id, fromWords)
+  if (!source) throw new Error(fromWords ? 'This shot has no frame and no words yet.' : 'This shot has no frame yet.')
   const image = frame ? await assetRef(deps.relay, frame.asset) : undefined
   const text = extra.text?.trim()
   const refs = await refsFor(deps.relay, d, shot, text)
