@@ -423,9 +423,9 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
             <button aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
           </span>
         )}
+        <span className="pt-grow" />
         {/* What is running, as on every editor bar: the one place besides the pointer the logo turns (ui-behaviour 6.5). */}
         <JobTray />
-        <span className="pt-grow" />
         {storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
             <select className="select xs" value={sb?.id ?? ''} onChange={(e) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { view, ...u.script?.[scriptId], storyboard: e.target.value } } })}>

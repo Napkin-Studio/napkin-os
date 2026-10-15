@@ -24,7 +24,6 @@ import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { EditorBar } from '../ui/chrome/TopBars'
-import { Presence } from '../ui/chrome/Bar'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
@@ -398,7 +397,6 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => zoomStep(z, 1))}>+</button>
               <button type="button" className="ie-fit" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>Fit</button>
             </div>
-            <Presence />
             {n > 0 && <span className="pt-mono ie-pill">{notApplied(n)}</span>}
             {frames.length > 0 && (
               <button ref={versionsBtn} type="button" className="btn ie-vbtn" aria-haspopup="menu" aria-expanded={versionsOpen} onClick={() => setVersionsOpen((o) => !o)}>

@@ -11,6 +11,7 @@ import { personOf } from '../projects/session'
 import { currentFrame, currentRender, currentTake, openAsks, reviewsList, shotsOf } from '../model/selectors'
 import { useBlobUrl } from '../ui/hooks'
 import { Account, MarkTile } from '../ui/chrome/Bar'
+import { JobTray } from '../ui/JobTray'
 import { initials } from '../ui/chrome/panels'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { addTakeNote } from './videoEdits'
@@ -57,6 +58,7 @@ export function PhoneReview() {
         <MarkTile />
         <span className="ph-brand"><b>Production</b><span>{name}</span></span>
         <span className="pt-grow" />
+        <JobTray phone />
         <Account />
       </header>
       <div className="ph-scroll">

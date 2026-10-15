@@ -152,10 +152,10 @@ export function CanvasBar({ presence }: { presence?: string }) {
       <Brand project={name} />
       <BetaTag screen={{ stage: 'canvas', project: project.id }} />
       {mock && relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
-      <JobTray />
       <AsksPill />
       <span className="pt-grow" />
       <Presence line={presence} />
+      <JobTray />
       <SaveButton />
       <HistoryButton />
       <AssetsButton />
@@ -166,7 +166,8 @@ export function CanvasBar({ presence }: { presence?: string }) {
   )
 }
 
-/** An editor's bar: ← back, the node mark and title, what follows it, then the right side (presence, History, the primary). */
+/** An editor's bar: ← back, the node mark and title, what follows it, then the right side: presence, the job
+ *  button (the same slot on every bar), the editor's own controls, History, the primary. */
 export function EditorBar({ back, onBack, icon, title, meta, middle, right, primary }: {
   back: string
   onBack: () => void
@@ -185,8 +186,9 @@ export function EditorBar({ back, onBack, icon, title, meta, middle, right, prim
       <h1 className="pt-title">{title}</h1>
       {meta}
       {middle}
-      <JobTray />
       <span className="pt-grow" />
+      <Presence />
+      <JobTray />
       {right}
       <HistoryButton />
       {primary}
