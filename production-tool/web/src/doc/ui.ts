@@ -11,7 +11,7 @@
 // script's words into the document (features/contract-v3.clan).
 
 import type { SerializedUndo } from '../../../clan-store/src'
-import type { DirectorCard, JobRequest, Me, ModelChoice, Region } from '../contracts/types'
+import type { ClipQuality, DirectorCard, JobRequest, Me, ModelChoice, Region } from '../contracts/types'
 import type { ConfigChoice, ProviderChoice } from '../capabilities'
 import type { JobPurpose } from '../model/purpose'
 import type { EditSession } from '../stages/imageEditor/edits'
@@ -40,6 +40,8 @@ export interface JobLocal {
   followRun?: string
   /** A "Fix it in the shot" edit: the clip model the person picked for the clip made after it lands. */
   fixModelChoice?: ModelChoice
+  /** …and the quality picked for it (features/clip-quality.clan). */
+  fixQuality?: ClipQuality
 }
 
 /** A job's purpose (from the document) with what this browser keeps about it: what handlers get. */

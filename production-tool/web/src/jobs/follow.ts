@@ -30,7 +30,7 @@
 import type { Config, ModelChoice, Op, ProductionDocument } from '../contracts/types'
 import type { FollowItem, FollowRun, JobCtx } from '../doc/ui'
 import { describeFollow } from '../doc/describe'
-import { choiceToSend, modelChoicesFor, type Sheets } from '../capabilities'
+import { choiceToSend, modelChoicesFor, sameOption, type Sheets } from '../capabilities'
 import { updateDoc } from '../doc/store'
 import { newId } from '../lib/ulid'
 import { jobsList, shotsOf } from '../model/selectors'
@@ -175,7 +175,7 @@ export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, s
   for (let i = jobs.length - 1; i >= 0; i--) {
     const j = jobs[i]
     if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model || (real && j.provider === 'mock')) continue
-    const o = offered.find((x) => x.provider === j.provider && x.model === j.model)
+    const o = offered.find((x) => sameOption(x, { provider: j.provider, model: j.model! }))
     if (o) return { provider: o.provider, model: o.model }
   }
   const first = offered.find((o) => !real || o.provider !== 'mock')

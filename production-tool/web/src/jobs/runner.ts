@@ -12,7 +12,7 @@
 
 import { crewFor } from '../../../clan-store/src'
 import type {
-  AgentBlock, AnswerConflict, Ask, AskAnswer, ContractError, CrewId, DocAsset, DocJob, Job, JobAnswer, JobInput, JobInputRow, JobRequest, JobState,
+  AgentBlock, AnswerConflict, Ask, AskAnswer, ClipQuality, ContractError, CrewId, DocAsset, DocJob, Job, JobAnswer, JobInput, JobInputRow, JobRequest, JobState,
   LinkEndpoint, LogEntry, Mime, ModelChoice, Op, ProductionDocument, Region,
 } from '../contracts/types'
 import { CONTRACT_VERSION, TERMINAL_STATES } from '../contracts/types'
@@ -64,6 +64,9 @@ export type Purpose = JobPurpose['for']
 export interface SubmitExtras {
   local?: Omit<Partial<JobLocal>, 'request'>
   node?: LinkEndpoint
+  /** clip, clip_edit (features/clip-quality.clan): the size to make, and Remake as Final's draft job. */
+  quality?: ClipQuality
+  promoteFrom?: string
 }
 
 /** A person's answer to a job's question. */
@@ -198,6 +201,8 @@ export class JobRunner {
     const request: JobRequest = {
       contractVersion: CONTRACT_VERSION, jobId, op, projectId: d.project.id, nonce, purpose: words, node, parentIds, input,
       ...(modelChoice ? { modelChoice } : {}),
+      ...(extras.quality && (op === 'clip' || op === 'clip_edit') ? { quality: extras.quality } : {}),
+      ...(extras.promoteFrom && (op === 'clip' || op === 'clip_edit') ? { promoteFrom: extras.promoteFrom } : {}),
     }
     const hashes = new Set<string>()
     collectHashes(input, hashes)
@@ -322,8 +327,11 @@ export class JobRunner {
     const keep: SubmitExtras['local'] = {
       ...(local.followRun ? { followRun: local.followRun } : {}),
       ...(local.fixModelChoice ? { fixModelChoice: local.fixModelChoice } : {}),
+      ...(local.fixQuality ? { fixQuality: local.fixQuality } : {}),
     }
-    await this.submit(request.op, request.input, request.parentIds, purpose, newJobId, pick, { local: keep, node: j.node })
+    await this.submit(request.op, request.input, request.parentIds, purpose, newJobId, pick, {
+      local: keep, node: j.node, ...(request.quality ? { quality: request.quality } : {}), ...(request.promoteFrom ? { promoteFrom: request.promoteFrom } : {}),
+    })
     return newJobId
   }
 
@@ -444,6 +452,7 @@ export class JobRunner {
     record('job-action', 'change-answer', { jobId })
     const newJobId = await this.submit(j.op, input, [jobId], purpose, undefined, local?.request?.modelChoice, {
       node: j.node, local: local?.followRun ? { followRun: local.followRun } : undefined,
+      ...(local?.request?.quality ? { quality: local.request.quality } : {}),
     })
     await this.doc.change((x) => {
       const a = x.asks[ask.id]

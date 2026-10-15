@@ -3,7 +3,8 @@
 // is its video's cut item for it (its edl pick: the video its storyboard renders,
 // selectors videoOfShot); the ad is a render of a video (contract 3).
 
-import type { JobInput, ModelChoice, ProductionDocument, Shot, Take } from '../contracts/types'
+import type { ClipQuality, JobInput, ModelChoice, ProductionDocument, Shot, Take } from '../contracts/types'
+import { DEFAULT_QUALITY, resolveQuality } from '../capabilities'
 import type { JobPurpose } from '../model/purpose'
 import { currentTake, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
 import { clipText } from '../lib/guard'
@@ -24,6 +25,17 @@ export function selectedTake(d: ProductionDocument, shotId: string, videoId?: st
 function ratioOf(d: ProductionDocument, videoId: string | undefined, storyboardId?: string) {
   const v = videoId ? d.videos[videoId] : undefined
   return v?.ratio ?? (storyboardId ? d.storyboards[storyboardId]?.ratio : undefined) ?? storyboardOfVideo(d, v?.id)?.ratio
+}
+
+/** The quality a video's clips are made at unless a send picks another (features/clip-quality.clan): the
+ *  video's default, set in the Video editor's bar; standard when it has none. */
+export function videoQuality(d: ProductionDocument, videoId: string | undefined): ClipQuality {
+  return (videoId && d.videos[videoId]?.quality) || DEFAULT_QUALITY
+}
+
+/** The quality a shot's clips default to: its video's. */
+export function shotQuality(d: ProductionDocument, shotId: string, videoId?: string): ClipQuality {
+  return videoQuality(d, videoId ?? videoOfShot(d, shotId)?.id ?? mainVideo(d)?.id)
 }
 
 /** Where a shot's clip comes from: its picked frame, or (straight from the script, ui-behaviour 3.5) its words. */
@@ -59,7 +71,7 @@ export function traySummary(sources: ClipSource[]): string {
 export async function makeClip(
   deps: FrameDeps,
   shotId: string,
-  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean } = {},
+  extra: { text?: string; reviewIds?: string[]; parentTake?: Take; followRun?: string; modelChoice?: ModelChoice; videoId?: string; fromWords?: boolean; quality?: ClipQuality } = {},
 ): Promise<string> {
   const d = deps.doc.get()
   const shot = d.shots[shotId]
@@ -80,7 +92,8 @@ export async function makeClip(
     ...(extra.reviewIds?.length ? { reviewIds: extra.reviewIds } : {}),
   }
   const parents = [frame?.job_id, extra.parentTake?.job_id].filter(Boolean) as string[]
-  return deps.runner.submit('clip', input, parents, purpose, undefined, extra.modelChoice, extra.followRun ? { local: { followRun: extra.followRun } } : {})
+  const quality = extra.quality ?? shotQuality(d, shot.id, extra.videoId)
+  return deps.runner.submit('clip', input, parents, purpose, undefined, extra.modelChoice, { quality, ...(extra.followRun ? { local: { followRun: extra.followRun } } : {}) })
 }
 
 /**
@@ -95,13 +108,36 @@ export async function changeFeel(
   text: string,
   feel: JobInput['feel'],
   modelChoice?: ModelChoice,
+  quality?: ClipQuality,
 ): Promise<string> {
   const d = deps.doc.get()
   const video = await assetRef(deps.relay, take.asset, d)
   const pictures = mentionedPictures(d, text).filter((r) => r.asset).slice(0, 14)
   const refs = await Promise.all(pictures.map((r) => namedInput(deps.relay, d, r)))
-  const input: JobInput = { video, text, ...(feel ? { feel } : {}), ...(refs.length ? { refs } : {}) }
-  return deps.runner.submit('clip_edit', input, [take.job_id], { for: 'clip', shotId, parentTakeId: take.id }, undefined, modelChoice)
+  // The clip's shape, so an edit that takes a size (Omni Flash 1.1) keeps it (features/clip-quality.clan).
+  const ratio = ratioOf(d, videoOfShot(d, shotId)?.id, d.shots[shotId]?.storyboard_id)
+  const input: JobInput = { video, text, ...(feel ? { feel } : {}), ...(refs.length ? { refs } : {}), ...(ratio ? { ratio } : {}) }
+  return deps.runner.submit('clip_edit', input, [take.job_id], { for: 'clip', shotId, parentTakeId: take.id }, undefined, modelChoice,
+    { quality: quality ?? shotQuality(d, shotId) })
+}
+
+/** An edit's level on the model shown (`shown`, the menu's pick or its first): the asked one, except on a
+ *  model that keeps the clip's own size, where it is the clip's, so the relay prices it at the source's size. */
+export function editQuality(take: Pick<Take, 'quality'>, shown: ModelChoice | undefined, asked: ClipQuality): ClipQuality {
+  if (!shown) return asked
+  const sized = resolveQuality('clip_edit', shown.provider, shown.model, asked)
+  return sized.keepsSize || !sized.level ? (take.quality ?? DEFAULT_QUALITY) : asked
+}
+
+/** Remake as Final (features/clip-quality.clan): the draft take made again at Final with its own words,
+ *  pictures and length, on the same model (its family's Final member). The relay reuses the draft's
+ *  request; a Seedance 2.5 draft is made final by Runway itself. It lands as a new take of the draft. */
+export async function remakeAsFinal(deps: Pick<FrameDeps, 'doc' | 'ui' | 'runner'>, take: Take): Promise<string> {
+  const d = deps.doc.get()
+  const op = d.jobs[take.job_id]?.op === 'clip_edit' ? 'clip_edit' : 'clip'
+  const held = deps.ui.get().jobs[take.job_id]?.request
+  return deps.runner.submit(op, held?.input ?? {}, [take.job_id], { for: 'clip', shotId: take.shot_id, parentTakeId: take.id }, undefined,
+    held?.modelChoice, { quality: 'final', promoteFrom: take.job_id })
 }
 
 /** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length. An end

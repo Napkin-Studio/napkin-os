@@ -9,8 +9,9 @@ import { fellBack, madeWith, otherModels, startingChoice } from './ui/modelChoic
 // Runway's models (the floor of every job); a config that routes more providers lists them in order.
 const live: Config = CONFIGS.live
 const both: Config = { ...live, routing: { ...live.routing, frame: ['mock', 'runway'], clip: ['mock', 'runway'] } }
-// features/runway-video-models.clan: clips that carry characters, after Veo (no tiering yet).
-const NEW_CLIPS = ['klingO3_pro', 'klingO3_standard', 'kling3.0_pro', 'kling3.0_standard', 'hailuo3', 'gemini_omni_flash_1.1',
+// features/runway-video-models.clan: clips that carry characters, after Veo. Kling O3 and Kling 3.0 show once
+// each, as their Standard id; Quality picks Pro (features/clip-quality.clan).
+const NEW_CLIPS = ['klingO3_standard', 'kling3.0_standard', 'hailuo3', 'gemini_omni_flash_1.1',
   'wan3', 'seedance2_5', 'seedance2_fast'].map((m) => `runway:${m}`)
 const keys = (c: Config, op: 'frame' | 'clip') => modelChoicesFor(op, c).map((o) => `${o.provider}:${o.model}`)
 
