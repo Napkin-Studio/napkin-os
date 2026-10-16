@@ -157,10 +157,11 @@
       "method": "extend",
       "defaults": {"outputs": 1, "quality": "high"},
       "seed": false,
+      "mask": "png_black_edit",
       "label": "Ideogram 4.5",
-      "note": "Extends the master at high: fills the padding of the clean plate",
+      "note": "Extends the master at high: fills round the clean plate",
       "alternates": [
-        {"model": "gemini_image3_pro", "endpoint": "POST /v1/text_to_image", "method": "regenerate", "defaults": {"outputs": 1, "ratio": "768:1344"}, "seed": false, "label": "Gemini 3 Pro", "note": "Remakes the master at a new shape, the master and refs as references"}
+        {"model": "gemini_image3_pro", "endpoint": "POST /v1/text_to_image", "method": "regenerate", "defaults": {"outputs": 1, "ratio": "768:1344"}, "seed": false, "mask": "none", "label": "Gemini 3 Pro", "note": "Remakes the master at a new shape, the master as reference"}
       ]
     },
     "cutdown": {

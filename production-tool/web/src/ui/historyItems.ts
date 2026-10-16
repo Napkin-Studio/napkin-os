@@ -46,6 +46,15 @@ export function historyItems(doc: ProductionDocument, docId: string): HistoryIte
       items.push({ key: `take:${s.id}`, label: `Shot ${n} clip`, addresses: takes.flatMap((t) => [...at('takes', t.id), ...at('jobs', t.job_id)]) })
     }
   }
+  // Each Campaign board (features/campaign-formats.clan): its set, its sizes, and every job that made one
+  // (a crop is free; an extend, a regenerate and a full-size upscale show their cost here, and only here).
+  const sets = Object.values(doc.format_sets ?? {})
+  for (const [i, set] of sets.entries()) {
+    const sizes = Object.values(doc.sizes ?? {}).filter((s) => s.set_id === set.id)
+    if (!sizes.length) continue
+    items.push({ key: `fset:${set.id}`, label: `Campaign${sets.length > 1 ? ` ${i + 1}` : ''} · ${sizes.length} formats`, addresses: [...at('format_sets', set.id),
+      ...sizes.flatMap((s) => [...at('sizes', s.id), ...at('jobs', s.job_id), ...at('jobs', s.full?.job_id)])] })
+  }
   const renders = rendersOf(doc)
   if (renders.length) {
     const video = currentRender(doc)?.video_id

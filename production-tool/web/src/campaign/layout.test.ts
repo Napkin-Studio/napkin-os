@@ -5,13 +5,13 @@
 import { describe, expect, it } from 'vitest'
 import type { FormatSet, ProductionDocument, Region, Size } from '../contracts/types'
 import { PACKS } from './formats'
-import { brandKit, CLEAR, layoutType, MIN_CAP, type LayoutIn } from './layout'
+import { brandKit, layoutPanel, panelCrop, CLEAR, layoutType, MIN_CAP, type LayoutIn } from './layout'
 import { checksFor } from './checks'
 import { rowFracs } from './rules'
 import { channelOf } from './formats'
 
 const LOGO = `sha256:${'a'.repeat(64)}`
-const brand = { logo: { sha256: LOGO, w: 600, h: 200 }, colour: '#FFFFFF' }
+const brand = { logo: { sha256: LOGO, w: 600, h: 200 }, colour: '#FFFFFF', field: '#141414' }
 const copy = { line: 'First light. First sip.', legal: 'Enjoy responsibly. 18+ only.' }
 const overlaps = (a: Region, b: Region) => a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y < b.y + b.h - 1e-9 && b.y < a.y + a.h - 1e-9
 
@@ -46,13 +46,13 @@ describe('the type layout, every format', () => {
     expect(laid.some((l) => l.kind === 'legal')).toBe(false)
     expect(laid.find((l) => l.kind === 'line')!.sizeFrac).toBeCloseTo(0.035 * 1.5)
   })
-  it('the brand kit is the Brand board\'s logo, a light palette swatch and the font', () => {
+  it('the brand kit is the Brand board\'s logo, a light palette swatch (words), a dark one (a layout\'s field) and the font', () => {
     const d = { refs: {
       r1: { id: 'r1', role: 'logo', asset: LOGO, key: 'brand', variant: 'logo' },
       r2: { id: 'r2', role: 'palette', swatches: [{ hex: '#111111' }, { hex: '#F4E9D8' }], key: 'brand', variant: 'palette' },
       r3: { id: 'r3', role: 'typography', font: { family: 'Geist' }, key: 'brand', variant: 'type' },
     }, assets: { [LOGO]: { w: 300, h: 100 } } } as unknown as ProductionDocument
-    expect(brandKit(d)).toEqual({ logo: { sha256: LOGO, w: 300, h: 100 }, colour: '#F4E9D8', font: 'Geist' })
+    expect(brandKit(d)).toEqual({ logo: { sha256: LOGO, w: 300, h: 100 }, colour: '#F4E9D8', field: '#111111', font: 'Geist' })
   })
 })
 
@@ -89,5 +89,24 @@ describe('Jude on the fixtures', () => {
     const withCard = checksFor({ ...film, edl: [...film.edl!, { shot_id: 'shot_01K7C00000000000000000CH09', in_s: 0, out_s: 2, end_card: true }] }, { ...SET, copy: { ...copy, supers: ['Every morning starts somewhere.'] } }, DOC)
     expect(withCard.end_card?.result).toBe('pass')
     expect(withCard.sound_off?.result).toBe('pass')
+  })
+})
+
+describe('layout: the picture in a panel on the brand colour field', () => {
+  const M = { w: 1536, h: 864 }
+  it('a banner strip puts the picture at its left end, at most 40%, the type beside it', () => {
+    const p = layoutPanel({ w: 728, h: 90 }, M)
+    expect(p.x).toBe(0)
+    expect(p.w * 728).toBeCloseTo(160, 0)
+    expect(layoutPanel({ w: 320, h: 50 }, M).w).toBeLessThanOrEqual(0.4)
+    const tall = layoutPanel({ w: 160, h: 600 }, M)
+    expect(tall.w).toBe(1)
+    expect(tall.h * 600).toBeCloseTo(160 / (4 / 3), 0)
+  })
+  it('the panel crop keeps the subject and has the panel\'s shape', () => {
+    const c = panelCrop(M, { w: 728, h: 90 }, [{ role: 'subject', x: 690, y: 140, w: 160, h: 360 }])
+    expect(c.w / c.h).toBeCloseTo(160 / 90, 1)
+    expect(c.x).toBeLessThanOrEqual(690)
+    expect(c.x + c.w).toBeGreaterThanOrEqual(850)
   })
 })

@@ -97,3 +97,15 @@
 .cb-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink2); }
 .cb-tick { display: inline-flex; align-items: center; gap: 4px; }
 .cb-warn { margin: 0; font-size: 12px; color: var(--warn); }
+/* The tile's and the board's send tray (phase 4): method and model per size, never a price. */
+.cb-tray { position: absolute; right: 24px; top: 56px; transform-origin: 100% 0; z-index: 4; width: 380px; max-height: 60vh; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; pointer-events: auto; }
+.cb-trayhead { display: flex; align-items: baseline; gap: 8px; }
+.cb-trayrows { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+.cb-trayrow { display: flex; align-items: baseline; gap: 6px; }
+.cb-trayname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+.cb-traywords { white-space: nowrap; color: var(--ink2); }
+/* The picked tile's bar and Jude's flag list (pick.ts): on the page, one at a time, placed like the
+   canvas's floating toolbars (above the tile, below only without room), never scaled with the canvas. */
+.cb-float { position: fixed; z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: auto; }
+.cb-float .cb-tools { position: static; transform: none; }
+.cb-flags { display: flex; flex-direction: column; gap: 6px; padding: 10px; width: 300px; font-size: 12.5px; }

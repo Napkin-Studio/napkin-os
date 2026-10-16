@@ -13,9 +13,11 @@ import { isFreeRequest } from '../jobs/runner'
 import { boardLayout, tileSize } from './board'
 import { cropBox, previewSize, protectedInside, safeFracs, panCrop, zoomCrop } from './crop'
 import { channelOf, PACKS, planChoices, rowsOf } from './formats'
-import { availableMethods, methodFor, REGENERATE_BELOW, filled } from './rules'
+import { availableMethods, methodFor, methodModels, methodWords, REGENERATE_BELOW, filled } from './rules'
+import { deliveryInput, deliveryScale, fullPlan } from './delivery'
 import { checksFor, flagged } from './checks'
-import { applySize } from './make'
+import { applySize, placeBoard } from './make'
+import { keepsPick, onScreen, tilePick } from './pick'
 import { exportSizes, fileName } from './exportZip'
 
 describe('the subject-aware crop', () => {
@@ -49,17 +51,34 @@ const MASTER = { w: 1536, h: 864, media: 'image' as const }
 const SUBJECT: ProtectBox[] = [{ role: 'subject', x: 690, y: 140, w: 160, h: 360 }]
 
 describe('the rule table', () => {
-  it('picks a method for every format of every pack, and only crop runs now', () => {
+  it('picks a method for every format of every pack, and every still method runs now', () => {
     for (const choice of planChoices()) {
       for (const row of rowsOf(choice)) {
         const m = methodFor(row, MASTER, SUBJECT)
         if (row.media === 'video') expect(m.unavailable).toBeTruthy()
         else {
-          expect(m.now).toBe('crop')
-          if (m.method !== 'crop') expect(m.waits).toMatch(/needs phase 4/)
+          expect(m.now).toBe(m.method)
+          expect(m.waits).toBeUndefined()
         }
       }
     }
+  })
+  it('an agency with Ideogram off regenerates on Gemini 3 Pro where it would extend', () => {
+    const rows = rowsOf({ kind: 'plan', id: 'campaign-launch' })
+    const wide: ProtectBox[] = [{ role: 'subject', x: 100, y: 100, w: 300, h: 600 }, { role: 'product', x: 1200, y: 400, w: 200, h: 300 }]
+    const all = methodModels({ routing: { resize: ['runway'] }, allow: { claude: true, makers: ['runway', 'google', 'ideogram'] } } as never)
+    expect(all.extend?.label).toBe('Ideogram 4.5')
+    expect(all.regenerate?.label).toBe('Gemini 3 Pro')
+    const noIdeogram = methodModels({ routing: { resize: ['runway'] }, allow: { claude: true, makers: ['runway', 'google'] } } as never)
+    expect(noIdeogram.extend).toBeUndefined()
+    const row = rows.find((r) => r.format.id === 'meta-feed-image-1x1')!
+    expect(methodFor(row, MASTER, wide, availableMethods(all)).method).toBe('extend')
+    expect(methodFor(row, MASTER, wide, availableMethods(noIdeogram)).method).toBe('regenerate')
+    // The tray and the tile name the method and the model, never a price.
+    expect(methodWords('extend', all)).toBe('Extend · Ideogram 4.5')
+    expect(methodWords('regenerate', all)).toBe('Regenerate · Gemini 3 Pro')
+    expect(methodWords('crop', all)).toBe('Crop · free')
+    expect(methodWords('extend', noIdeogram)).toBe('Extend · off for your agency')
   })
   it('crops when the subject fits, extends when it does not, regenerates when an extend leaves it small', () => {
     const rows = rowsOf({ kind: 'plan', id: 'campaign-launch' })
@@ -166,5 +185,99 @@ describe('Export zip', () => {
     const text = strFromU8(files['manifest.json'])
     expect(JSON.parse(text).files[0]).toMatchObject({ format_id: 'uk-48-sheet', method: 'crop', preview: true, locked: true, confirm: 'Confirm with the media owner' })
     expect(text).not.toMatch(/cost|usd|\$|credit/i)
+  })
+  it('at full size: the upscaled file at the delivery size, labelled with the model and the scale', async () => {
+    const sha = `sha256:${'7'.repeat(64)}`
+    const big = `sha256:${'8'.repeat(64)}`
+    const ooh = size({ id: 'size_01K7C00000000000000000CS02', format: { pack_id: 'ooh-uk-ie', pack_version: 'x', format_id: 'uk-48-sheet' }, delivery: { width: 7200, height: 3600 }, asset: sha, plate: sha, status: 'ready', full: { from: sha, asset: big, scale: 4, job_id: 'job_01K7C00000000000000000UP01' } })
+    const banner = size({ id: 'size_01K7C00000000000000000CS03', format: { pack_id: 'display', pack_version: 'x', format_id: 'iab-300x250' }, delivery: { width: 300, height: 250 }, asset: sha, status: 'ready', method: 'layout' })
+    const d = doc([ooh, banner])
+    d.assets = { [sha]: { sha256: sha, kind: 'image', mime: 'image/png', w: 2048, h: 1024, origin: 'generated', locations: [] }, [big]: { sha256: big, kind: 'image', mime: 'image/png', w: 7200, h: 3600, origin: 'generated', locations: [] } } as never
+    const out = await exportSizes(d, SET.id, 'First Light', undefined, { model: 'Magnific Precision Upscaler v2' })
+    const files = unzipSync(new Uint8Array(await out.blob.arrayBuffer()))
+    expect(out.name).toBe('first-light_campaign_full-size.zip')
+    expect(Object.keys(files)).toContain('first-light_uk-48-sheet_7200x3600.png')
+    const m = JSON.parse(strFromU8(files['manifest.json']))
+    expect(m.files.find((f: { format_id: string }) => f.format_id === 'uk-48-sheet')).toMatchObject({ delivery: 'upscaled', upscale: { model: 'Magnific Precision Upscaler v2', scale: 4 }, preview: false })
+    expect(m.files.find((f: { format_id: string }) => f.format_id === 'iab-300x250')).toMatchObject({ delivery: 'exact', method: 'layout' })
+    expect(JSON.stringify(m)).not.toMatch(/cost|usd|\$|credit/i)
+  })
+})
+
+describe('phase 4: paid sizes, plates and full size', () => {
+  const PLATE = `sha256:${'7'.repeat(64)}`
+  const out = { sha256: `sha256:${'6'.repeat(64)}`, url: 'https://x/y', mime: 'image/png', w: 1152, h: 2048 }
+  it('a paid size lands with its plate, which Edit type draws on again', () => {
+    const d = doc([size({ method: 'extend' })])
+    const plate = { sha256: PLATE, kind: 'image', mime: 'image/png', origin: 'generated', locations: [], w: 1152, h: 2048 } as never
+    applySize(d, { jobId: 'job_01K7C00000000000000000CJ01', op: 'resize', outputs: [out], resize: { method: 'extend', crop: { x: 0, y: 0, w: 1536, h: 864 }, previewPx: { width: 1152, height: 2048 } } } as never, 'size_01K7C00000000000000000CS01', plate)
+    const s = d.sizes['size_01K7C00000000000000000CS01']
+    expect(s.plate).toBe(PLATE)
+    expect(d.assets[PLATE]).toBeTruthy()
+    // The crop the size had is kept: a paid size's job says the whole master.
+    expect(s.crop).toEqual({ x: 525, y: 0, w: 486, h: 864 })
+  })
+  it('an upscale lands as the size\'s full file only for the picture it was made for', () => {
+    const d = doc([size({ asset: out.sha256, plate: PLATE, full: { from: out.sha256, job_id: 'job_01K7C00000000000000000UP01', scale: 4 } })])
+    applySize(d, { jobId: 'job_01K7C00000000000000000UP01', op: 'upscale', outputs: [{ ...out, sha256: `sha256:${'8'.repeat(64)}` }] } as never, 'size_01K7C00000000000000000CS01')
+    const s = d.sizes['size_01K7C00000000000000000CS01']
+    expect(s.full?.asset).toBe(`sha256:${'8'.repeat(64)}`)
+    expect(s.asset).toBe(out.sha256)
+    expect(fullPlan(s)).toEqual({ kind: 'ready', scale: 4 })
+    // A new picture (Redo, Edit type) puts it out of date: the next Export at full size upscales again.
+    expect(fullPlan({ ...s, asset: `sha256:${'9'.repeat(64)}` })).toEqual({ kind: 'upscale', scale: 4 })
+  })
+  it('Export at full size: x4, else x8, under Magnific\'s 25.3 MP (the relay\'s vectors)', () => {
+    expect(deliveryScale([2048, 1024], [6096, 3048])).toBe(4)
+    expect(deliveryInput([2048, 1024], [6096, 3048], 4)).toEqual([1524, 762])
+    expect(deliveryScale([1024, 1024], [5000, 5000])).toBe(8)
+    expect(deliveryScale([2048, 512], [14400, 3600])).toBe(8)
+    expect(deliveryInput([2048, 512], [14400, 3600], 8)).toEqual([1257, 314])
+    expect(deliveryScale([300, 250], [300, 250])).toBeNull()
+    expect(deliveryScale([728, 90], [1456, 180])).toBeNull()
+    expect(fullPlan(size({ asset: out.sha256, delivery: { width: 300, height: 250 } }))).toEqual({ kind: 'exact' })
+    expect(fullPlan(size({ asset: out.sha256 }))).toEqual({ kind: 'preview' }) // no plate yet
+    expect(fullPlan(size({ asset: out.sha256, plate: PLATE }))).toEqual({ kind: 'upscale', scale: 4 })
+  })
+  it('a layout is free like a crop; extend and regenerate are not', () => {
+    const req = (method: string) => ({ op: 'resize', input: { resize: { method } } }) as never
+    expect(isFreeRequest(req('layout'))).toBe(true)
+    expect(isFreeRequest(req('extend'))).toBe(false)
+    expect(isFreeRequest(req('regenerate'))).toBe(false)
+  })
+})
+
+describe('one tile bar at a time, boards placed clear (owner bug 2026-10-16)', () => {
+  it('picking a tile on another board closes the first; its flags close with it; clear closes all', () => {
+    tilePick.clear()
+    tilePick.pick('fset_a', 'size_1')
+    tilePick.toggleFlags('fset_a', 'size_1')
+    expect(tilePick.get()).toEqual({ setId: 'fset_a', sizeId: 'size_1', flags: true })
+    tilePick.pick('fset_b', 'size_9')
+    expect(tilePick.get()).toEqual({ setId: 'fset_b', sizeId: 'size_9', flags: false })
+    tilePick.toggleFlags('fset_b', 'size_9')
+    tilePick.toggleFlags('fset_b', 'size_9')
+    expect(tilePick.get()?.flags).toBe(false)
+    tilePick.clear()
+    expect(tilePick.get()).toBeNull()
+  })
+  it('a click outside the tiles, bars, trays and menus clears it; the tile panned off screen too', () => {
+    const at = (cls: string) => ({ closest: (sel: string) => (sel.split(', ').some((c) => c === `.${cls}`) ? {} : null) }) as unknown as Element
+    expect(keepsPick(at('cb-tile'))).toBe(true)
+    expect(keepsPick(at('cb-float'))).toBe(true)
+    expect(keepsPick(at('excalidraw'))).toBe(false)
+    expect(keepsPick(null)).toBe(false)
+    expect(onScreen({ left: -300, top: 10, right: -20, bottom: 200 }, { w: 1200, h: 800 })).toBe(false)
+    expect(onScreen({ left: 1100, top: 10, right: 1300, bottom: 200 }, { w: 1200, h: 800 })).toBe(true)
+  })
+  it('a second board from another master lands clear of the first and of every picture', () => {
+    const el = (id: string, x: number, y: number, width: number, height: number, kind?: string) => ({ id, x, y, width, height, type: 'rectangle', isDeleted: false, customData: kind ? { kind, id } : undefined }) as never
+    const first = el('b1', 600, 0, 1800, 1400, 'board')
+    const masterA = el('m1', 0, 0, 500, 280)
+    const masterB = el('m2', 0, 400, 500, 280)
+    const box = placeBoard([first, masterA, masterB], masterB as never, 1800, 1400)
+    const overlap = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; width: number; height: number }) => a.x < b.x + b.width && b.x < a.x + a.w && a.y < b.y + b.height && b.y < a.y + a.h
+    for (const e of [first, masterA, masterB] as { x: number; y: number; width: number; height: number }[]) expect(overlap(box, e)).toBe(false)
+    expect(box.y).toBe(400)
   })
 })

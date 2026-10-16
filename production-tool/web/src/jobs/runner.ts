@@ -78,7 +78,7 @@ function collectHashes(v: unknown, out: Set<string>) {
 
 /** A job the relay runs free and outside the in-flight limit (relay service.free_resize; features/campaign-formats.clan). */
 export function isFreeRequest(r: Pick<JobRequest, 'op' | 'input'>): boolean {
-  return r.op === 'resize' && r.input.resize?.method === 'crop'
+  return r.op === 'resize' && (r.input.resize?.method === 'crop' || r.input.resize?.method === 'layout')
 }
 
 export function isActive(state: JobState): boolean {

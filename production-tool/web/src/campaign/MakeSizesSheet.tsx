@@ -4,14 +4,14 @@
 
 import { useMemo, useRef, useState } from 'react'
 import type { PersonRef, ProtectBox } from '../contracts/types'
-import { useDoc } from '../app/context'
+import { useConfig, useDoc } from '../app/context'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { useBlobUrl } from '../ui/hooks'
 import { DEFAULT_LENGTHS, LANES, planChoices, rowsOf, shortName, sizeWords } from './formats'
 import { makeAllSizes, type CampaignDeps, type TrayRow } from './make'
 import { setsOf, type MasterInfo } from './master'
-import { availableMethods, METHOD_WORD, methodFor } from './rules'
+import { availableMethods, METHOD_WORD, methodFor, methodModels, methodWords, PAID } from './rules'
 import './campaign.css'
 
 type Step = 'plan' | 'protect' | 'tray'
@@ -42,12 +42,15 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const available = useMemo(() => availableMethods(), [])
+  const { config } = useConfig()
+  const models = useMemo(() => methodModels(config), [config])
+  const available = useMemo(() => availableMethods(models), [models])
   const rows: TrayRow[] = useMemo(() => rowsOf(choice, choice.kind === 'pack' ? lengths : lengths).map((r) => {
     const pick = methodFor(r, master, keepMiddle ? [] : boxes, available, master.length_s)
     return { ...r, pick, on: !pick.unavailable && !off.has(r.key) }
   }), [choice, lengths, master, boxes, keepMiddle, available, off])
   const makeable = rows.filter((r) => r.on)
+  const paidCount = makeable.filter((r) => r.pick.now && PAID.has(r.pick.now)).length
 
   const send = async () => {
     setBusy(true)
@@ -143,7 +146,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
                         <span className="cf-dots" />
                         <span className={`cf-method ${r.pick.waits || r.pick.unavailable ? 'waits' : ''}`} title={r.pick.unavailable ?? r.pick.waits}>
                           {r.pick.unavailable ? r.pick.unavailable
-                            : r.pick.now === r.pick.method ? METHOD_WORD[r.pick.method] + (r.pick.method === 'crop' ? ' · free' : '')
+                            : r.pick.now === r.pick.method ? methodWords(r.pick.method, models)
                               : r.pick.now ? `${METHOD_WORD[r.pick.method]} · needs ${r.pick.waits?.split(' needs ')[1] ?? 'a later build'} · cropped for now`
                                 : r.pick.waits}
                         </span>
@@ -155,7 +158,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
             </div>
             {error && <p className="cf-error" role="alert">{error}</p>}
             <footer className="cf-foot">
-              <span className="cf-note">{makeable.length} of {rows.length} can be made now. Each lands on a Campaign board beside the master.</span>
+              <span className="cf-note">{makeable.length} of {rows.length} can be made now{paidCount ? `; ${paidCount} on a model (cost in History)` : ''}. Each lands on a Campaign board beside the master.</span>
               <span className="pt-grow" />
               <button type="button" className="btn ghost" onClick={() => setStep(master.media === 'image' ? 'protect' : 'plan')}>Back</button>
               <button type="button" className="btn primary" disabled={busy || !makeable.length} onClick={() => void send()}>

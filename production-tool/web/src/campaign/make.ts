@@ -1,19 +1,23 @@
 // Make all sizes (features/campaign-formats.clan): the format set and its sizes in the document, the
-// Campaign board on the canvas, and a free crop job per size on the relay. Then the per-tile actions:
-// Adjust crop, Lock, Change method, Update sizes, and the landing of each crop.
+// Campaign board on the canvas, and a resize job per size on the relay: crop and layout free, extend and
+// regenerate paid (phase 4, each its own job with its own reservation and History cost). Then the
+// per-tile actions: Adjust crop, Lock, Change method, Redo, Edit type (drawn again on the size's plate,
+// free), Update sizes, and the landing of each size.
 //
 // Writes: the board and the set are one person's step (the canvas's undoable transact, then the
 // document as a system write, as nodes/make.ts does); a tile's Adjust crop, Lock and method are each
 // one undo step (updateDoc); a landing is Wren's (landUpdate), never an undo step.
 
 import { newUlidId, rankBetween, ranksBetween } from '../../../clan-store/src'
-import type { Board, FormatSet, Job, JobInput, PersonRef, ProductionDocument, ProtectBox, PxBox, Size, SizeMethod } from '../contracts/types'
+import type { AssetRef, Board, DocAsset, FormatSet, InputMime, Job, JobInput, PersonRef, ProductionDocument, ProtectBox, PxBox, Size, SizeMethod } from '../contracts/types'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
 import { isBoard, boardsByRank } from '../canvas/boards/boards'
 import { landUpdate, systemUpdate, updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
-import { assetRef } from '../jobs/assets'
+import { assetRef, remoteUrl } from '../jobs/assets'
+import { outputLocations } from '../jobs/runner'
+import { getBlob, putBlobAs } from '../lib/blobs'
 import { landingWhy } from '../jobs/landing'
 import type { JobRunner } from '../jobs/runner'
 import type { Relay } from '../relay'
@@ -21,9 +25,9 @@ import { boardLayout, PAD } from './board'
 import { cropBox, previewSize } from './crop'
 import { channelOf, formatById, PACKS_VERSION, type PlanRow } from './formats'
 import { currentMasterAsset, type MasterInfo } from './master'
-import { aspectOf, rowFracs, type MethodChoice } from './rules'
+import { aspectOf, PAID, rowFracs, type MethodChoice } from './rules'
 import { checksFor, flagged } from './checks'
-import { layersFor } from './layout'
+import { brandKit, layersFor, layoutPanel, panelCrop } from './layout'
 
 export const FRAME_PAD = 32
 export const FRAME_TOP = 48
@@ -69,23 +73,30 @@ export function sizesOf(d: ProductionDocument, setId: string): Size[] {
   return Object.values(d.sizes ?? {}).filter((s) => s.set_id === setId).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
 }
 
-/** Where a new board goes: right of every board on the canvas, level with the top one (else beside `near`). */
-function placeBoard(els: readonly CanvasElement[], near: CanvasElement | undefined, w: number, h: number): Box {
-  const frames = els.filter((e) => isBoard(e))
-  if (frames.length) {
-    const right = Math.max(...frames.map((f) => f.x + f.width))
-    const top = Math.min(...frames.map((f) => f.y))
-    return { x: Math.round(right + 96), y: Math.round(top), w, h }
+/**
+ * Where a new board goes: clear of everything on the canvas (owner bug 2026-10-16: two Campaign boards
+ * from different masters landed on top of each other). Level with the master (else the top board),
+ * at the nearest x where its whole box overlaps nothing; never on another board or picture.
+ */
+export function placeBoard(els: readonly CanvasElement[], near: CanvasElement | undefined, w: number, h: number, gap = 96): Box {
+  const alive = els.filter((e) => !e.isDeleted && e.type !== 'arrow')
+  const frames = alive.filter((e) => isBoard(e))
+  const y = Math.round(near ? near.y : frames.length ? Math.min(...frames.map((f) => f.y)) : 0)
+  let x = Math.round(near ? near.x + near.width + gap : 0)
+  const hits = (x0: number) => alive.filter((e) => e.x < x0 + w + gap && e.x + e.width + gap > x0 && e.y < y + h + gap && e.y + e.height + gap > y)
+  for (let i = 0; i < 200; i++) {
+    const hit = hits(x)
+    if (!hit.length) break
+    x = Math.round(Math.max(...hit.map((e) => e.x + e.width)) + gap)
   }
-  if (near) return { x: Math.round(near.x + near.width + 96), y: Math.round(near.y), w, h }
-  return { x: 0, y: 0, w, h }
+  return { x, y, w, h }
 }
 
 /** The safe area copied onto a size, when its format has one. */
 function sizeFromRow(row: TrayRow, setId: string, rank: string, master: MasterInfo, protect: ProtectBox[]): Size {
   const f = row.format
   const method: SizeMethod = row.pick.now ?? row.pick.method
-  const { crop } = cropBox(master, aspectOf(row), protect, rowFracs(row))
+  const crop = method === 'layout' ? panelCrop(master, aspectOf(row), protect) : cropBox(master, aspectOf(row), protect, rowFracs(row)).crop
   const size: Size = {
     id: newUlidId('size'), v: 1, field_v: {}, set_id: setId, rank,
     format: { pack_id: row.pack.id, pack_version: PACKS_VERSION, format_id: f.id },
@@ -143,34 +154,68 @@ export async function makeAllSizes(deps: CampaignDeps, req: MakeRequest, by: Per
   return { setId, el }
 }
 
-/** The job input for one size: the master's clean plate, the shape, the crop and the type layers. */
-export async function sizeInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size): Promise<JobInput> {
+/** A picture the relay made (a size's plate), named as it is: never fitted or padded for sending. Its relay
+ *  location when the document has one, else the bytes in this browser (the relay knows them: no upload). */
+export async function plainRef(relay: CampaignDeps['relay'], sha: string, d: Pick<ProductionDocument, 'assets'>): Promise<AssetRef> {
+  const mime = (d.assets[sha]?.mime ?? 'image/png') as InputMime
+  const at = remoteUrl(d, sha)
+  if (at) return { sha256: sha, url: at, mime }
+  const blob = await getBlob(sha)
+  if (!blob) return assetRef(relay, sha, d)
+  const res = await relay.upload(blob, mime)
+  return { sha256: res.sha256, url: res.url, mime }
+}
+
+/** The job input for one size: the master's clean plate, the shape, the crop (a layout's panel and
+ *  colour field) and the type layers. `retype`: the size's own plate, drawn again with its type (free). */
+export async function sizeInput(deps: Pick<CampaignDeps, 'relay' | 'doc'>, set: FormatSet, size: Size, retype = false): Promise<JobInput> {
   const d = deps.doc.get()
-  const image = await assetRef(deps.relay, set.master.asset!, d)
   const layers = await layersFor(deps, set, size)
-  return {
-    image,
+  const base = {
     aspect: { w: size.delivery.width, h: size.delivery.height },
     delivery: size.delivery,
     ...(size.safe_area ? { safeArea: size.safe_area } : {}),
+  }
+  const plate = retype && size.plate ? d.assets[size.plate] : undefined
+  if (retype && size.plate) {
+    const p = previewSize(size.delivery)
+    const w = plate?.w ?? p.width
+    const h = plate?.h ?? p.height
+    return {
+      ...base, image: await plainRef(deps.relay, size.plate, d),
+      resize: { method: 'crop', masterSize: { w, h }, crop: { x: 0, y: 0, w, h }, previewMaxPx: 2048, ...(layers.length ? { layers } : {}) },
+    }
+  }
+  const master = { w: set.master.w!, h: set.master.h! }
+  const layout = size.method === 'layout'
+  return {
+    ...base,
+    image: await assetRef(deps.relay, set.master.asset!, d),
     resize: {
       method: size.method,
-      masterSize: { w: set.master.w!, h: set.master.h! },
+      masterSize: master,
       ...(set.protect?.boxes?.length ? { protect: set.protect.boxes } : {}),
-      ...(size.crop ? { crop: size.crop } : {}),
+      ...(size.crop && (size.method === 'crop' || layout) ? { crop: size.crop } : {}),
+      ...(layout ? { panel: layoutPanel({ w: size.delivery.width, h: size.delivery.height }, master), background: brandKit(d).field } : {}),
       previewMaxPx: 2048,
       ...(layers.length ? { layers } : {}),
     },
   }
 }
 
-/** Send one size's crop (free, on the relay). The size is marked making and names the job. */
-export async function sendSize(deps: CampaignDeps, setId: string, sizeId: string, _by?: PersonRef): Promise<string | null> {
+/**
+ * Send one size: crop and layout are free on the relay, extend and regenerate are paid jobs (each its own
+ * reservation, recorded with its cost in History). `retype`: only the type changed, so a paid size is
+ * drawn again on its plate for free; a free size is simply made again. The size is marked making and
+ * names the job.
+ */
+export async function sendSize(deps: CampaignDeps, setId: string, sizeId: string, _by?: PersonRef, opts: { retype?: boolean } = {}): Promise<string | null> {
   const d = deps.doc.get()
   const set = d.format_sets[setId]
   const size = d.sizes[sizeId]
-  if (!set || !size || size.media !== 'image' || size.method !== 'crop') return null
-  const input = await sizeInput(deps, set, size)
+  if (!set || !size || size.media !== 'image' || !['crop', 'layout', 'extend', 'regenerate'].includes(size.method)) return null
+  const retype = !!opts.retype && PAID.has(size.method) && !!size.plate
+  const input = await sizeInput(deps, set, size, retype)
   const jobId = newUlidId('job')
   await systemUpdate(deps.doc, (x) => {
     const s = x.sizes[sizeId]
@@ -182,26 +227,56 @@ export async function sendSize(deps: CampaignDeps, setId: string, sizeId: string
   return jobId
 }
 
-/** A crop's result as the size's picture (Wren's landing). A job the size no longer names is dropped. */
-export function applySize(d: ProductionDocument, job: Job, sizeId: string): Size | undefined {
+/** A size's result as its picture (Wren's landing): the typed preview, and the plate it was drawn on.
+ *  A job the size no longer names is dropped. An upscale for delivery lands as the size's full file. */
+export function applySize(d: ProductionDocument, job: Job, sizeId: string, plate?: DocAsset): Size | undefined {
   const size = d.sizes[sizeId]
   const out = job.outputs?.[0]
-  if (!size || !out || size.job_id !== job.jobId) return undefined
+  if (!size || !out) return undefined
+  if (job.op === 'upscale') {
+    if (size.full?.job_id !== job.jobId) return undefined
+    size.full = { ...size.full, asset: out.sha256 }
+    return size
+  }
+  if (size.job_id !== job.jobId) return undefined
   const set = d.format_sets[size.set_id]
   size.asset = out.sha256
+  if (plate) {
+    if (!d.assets[plate.sha256]) d.assets[plate.sha256] = plate
+    size.plate = plate.sha256
+  }
   if (job.resize?.crop && !size.crop) size.crop = job.resize.crop
   if (set) size.checks = checksFor(size, set, d)
   size.status = flagged(size) ? 'look' : 'ready'
   return size
 }
 
-export function landSize(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'size' }>) {
+/** The plate of a size's result, kept in this browser (Edit type and Export at full size send it again). */
+async function keepPlate(relay: CampaignDeps['relay'] | undefined, job: Job): Promise<DocAsset | undefined> {
+  const p = job.resize?.plate
+  if (!p) return undefined
+  if (relay) {
+    try {
+      await putBlobAs(p.sha256, await relay.fetchOutput(p))
+    } catch (e) {
+      console.warn('the size\'s plate did not download', e)
+    }
+  }
+  const a: DocAsset = { sha256: p.sha256, kind: 'image', mime: 'image/png', origin: job.kind === 'mock' ? 'mock' : 'generated', job_id: job.jobId, locations: outputLocations(p.sha256, p.url) }
+  if (p.w) a.w = p.w
+  if (p.h) a.h = p.h
+  if (p.bytes) a.bytes = p.bytes
+  return a
+}
+
+export async function landSize(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'size' }>, relay?: CampaignDeps['relay']) {
   const d = store.get()
   const s = d.sizes[ctx.sizeId]
-  if (!s || s.job_id !== job.jobId) return Promise.resolve(d)
+  if (!s || (job.op === 'upscale' ? s.full?.job_id !== job.jobId : s.job_id !== job.jobId)) return d
   const f = formatById(s.format.format_id)
-  const what = `the ${f?.format.name ?? s.format.format_id} size`
-  return landUpdate(store, (x) => { applySize(x, job, ctx.sizeId) }, landingWhy(store, job.jobId, what))
+  const what = job.op === 'upscale' ? `the ${f?.format.name ?? s.format.format_id} file at full size` : `the ${f?.format.name ?? s.format.format_id} size`
+  const plate = await keepPlate(relay, job)
+  return landUpdate(store, (x) => { applySize(x, job, ctx.sizeId, plate) }, landingWhy(store, job.jobId, what))
 }
 
 /** Sizes that are out of date: their master changed (and they are not locked), or they were marked stale. */
@@ -245,7 +320,8 @@ export async function updateSizes(deps: CampaignDeps, setId: string, by: PersonR
       const row = formatById(s.format.format_id)
       if (s.crop_by !== 'person' || !s.crop || s.crop.x + s.crop.w > dims.w + 0.5 || s.crop.y + s.crop.h > dims.h + 0.5) {
         const fr = row ? rowFracs({ format: row.format }) : undefined
-        s.crop = cropBox(dims, { w: s.delivery.width, h: s.delivery.height }, s0.protect?.boxes, fr).crop
+        const shape = { w: s.delivery.width, h: s.delivery.height }
+        s.crop = s.method === 'layout' ? panelCrop(dims, shape, s0.protect?.boxes) : cropBox(dims, shape, s0.protect?.boxes, fr).crop
         s.crop_by = 'rule'
       }
       s.from_asset = now
@@ -284,6 +360,70 @@ export function setLocked(store: DocumentStore, sizeId: string, locked: boolean)
   }, `${locked ? 'lock' : 'unlock'} sizes[${sizeId}]`)
 }
 
+/**
+ * Change method on a tile (one undo step), then the size is made again with it: crop and layout free,
+ * extend and regenerate paid (the tile's send tray names the model first). A crop or a layout gets the
+ * rule's crop for its shape; the person's own crop is kept for a crop.
+ */
+export async function changeMethod(deps: CampaignDeps, sizeId: string, method: SizeMethod, by: PersonRef) {
+  const d = deps.doc.get()
+  const size = d.sizes[sizeId]
+  const set = size && d.format_sets[size.set_id]
+  if (!size || !set || size.media !== 'image' || size.method === method) return null
+  const master = { w: set.master.w!, h: set.master.h! }
+  const shape = { w: size.delivery.width, h: size.delivery.height }
+  const row = formatById(size.format.format_id)
+  await updateDoc(deps.doc, (x) => {
+    const s = x.sizes[sizeId]
+    if (!s) return
+    s.method = method
+    if (method === 'layout') {
+      s.crop = panelCrop(master, shape, set.protect?.boxes)
+      s.crop_by = 'rule'
+    } else if (method === 'crop' && (s.crop_by !== 'person' || !s.crop)) {
+      s.crop = cropBox(master, shape, set.protect?.boxes, row ? rowFracs({ format: row.format }) : undefined).crop
+      s.crop_by = 'rule'
+    }
+    s.from_asset = set.master.asset
+    s.checks = checksFor(s, set, x)
+  }, `change the method of sizes[${sizeId}] to ${method}`)
+  return sendSize(deps, size.set_id, sizeId, by)
+}
+
+/**
+ * Export at full size, one size: Magnific upscales its plate at `scale` (Rhea's job, paid, its cost in
+ * History) and the relay draws the type again at the delivery size. The size keeps the job as its
+ * full file in the making; it lands as size.full.asset.
+ */
+export async function upscaleForDelivery(deps: CampaignDeps, sizeId: string, scale: 4 | 8): Promise<string | null> {
+  const d = deps.doc.get()
+  const size = d.sizes[sizeId]
+  const set = size && d.format_sets[size.set_id]
+  if (!size || !set || !size.plate || !size.asset) return null
+  const p = previewSize(size.delivery)
+  const layers = await layersFor(deps, set, size)
+  const input: JobInput = {
+    image: await plainRef(deps.relay, size.plate, d), scale,
+    aspect: { w: d.assets[size.plate]?.w ?? p.width, h: d.assets[size.plate]?.h ?? p.height },
+    delivery: size.delivery, ...(layers.length ? { layers } : {}),
+  }
+  const jobId = newUlidId('job')
+  const from = size.asset
+  await systemUpdate(deps.doc, (x) => {
+    const s = x.sizes[sizeId]
+    if (s) s.full = { from, job_id: jobId, scale }
+  }, 'sync')
+  await deps.runner.submit('upscale', input, [], { for: 'size', setId: size.set_id, sizeId }, jobId)
+  return jobId
+}
+
+/** Redo: another take of a paid size with the same method (a new job, its own cost in History). */
+export function redoSize(deps: CampaignDeps, sizeId: string, by: PersonRef) {
+  const size = deps.doc.get().sizes[sizeId]
+  if (!size || !PAID.has(size.method)) return Promise.resolve(null)
+  return sendSize(deps, size.set_id, sizeId, by)
+}
+
 /** What must stay changed: crop sizes go out of date, nothing is sent until Update sizes. */
 export function setProtect(store: DocumentStore, setId: string, protect: { boxes: ProtectBox[]; keep_middle?: boolean }) {
   return updateDoc(store, (x) => {
@@ -292,7 +432,8 @@ export function setProtect(store: DocumentStore, setId: string, protect: { boxes
     set.protect = { ...set.protect, boxes: protect.boxes, ...(protect.keep_middle ? { keep_middle: true } : {}) }
     if (!protect.keep_middle) delete set.protect.keep_middle
     for (const s of Object.values(x.sizes)) {
-      if (s.set_id !== setId || s.locked || s.method !== 'crop' || s.crop_by === 'person') continue
+      // A crop, a layout's panel and an extend's placement follow what must stay; a regenerate does not.
+      if (s.set_id !== setId || s.locked || !['crop', 'layout', 'extend'].includes(s.method) || s.crop_by === 'person') continue
       if (s.asset) s.status = 'stale'
     }
   }, `change what must stay in format_sets[${setId}]`)

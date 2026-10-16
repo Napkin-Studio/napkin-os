@@ -638,12 +638,20 @@
           "description": "clip_patch: the edited still at atS (the review's still, from Edit still). Absent: no keyframe is sent at the default context 0, so an unedited frame never anchors the edit."
         },
         "scale": {
-          "enum": [2, 4],
-          "description": "upscale: how many times each side grows (the Image editor's 2x or 4x). Absent: 2. Added 2026-10-15 (additive, features/image-editor.clan)."
+          "enum": [2, 4, 8],
+          "description": "upscale: how many times each side grows (the Image editor's 2x or 4x; Export at full size's 4x, or 8x for the largest print sizes). Absent: 2. Added 2026-10-15 (additive, features/image-editor.clan); 8 added 2026-10-16 (features/campaign-formats.clan)."
+        },
+        "layers": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/TypeLayer"
+          },
+          "description": "upscale for delivery (Export at full size; features/campaign-formats.clan, with input.delivery): the size's type layers, drawn by the relay at the delivery size over the upscaled plate. Never sent to the model. Added 2026-10-16 (additive)."
         },
         "resize": {
           "type": "object",
-          "description": "resize (Make all sizes; features/campaign-formats.clan): one size of a format set, made from the master's clean plate (input.image: the picture with no type and no logo). method crop and layout are free: the relay crops (subject-aware: the crop keeps every protected box, as much of the safe area as the shape allows), scales to the preview and draws the type layers itself; no provider, no spend, not counted in a quota. extend and regenerate run on the op's models (they answer capability_missing until they are built). Never carries words for a model: layers are drawn by the relay.",
+          "description": "resize (Make all sizes; features/campaign-formats.clan): one size of a format set, made from the master's clean plate (input.image: the picture with no type and no logo). method crop and layout are free: the relay crops (subject-aware: the crop keeps every protected box, as much of the safe area as the shape allows), scales to the preview and draws the type layers itself; no provider, no spend, not counted in a quota. extend and regenerate run on the op's models (phase 4): extend an Ideogram 4.5 mask on the relay's padded canvas of the master, regenerate Gemini 3 Pro with the master as @master at the nearest ratio; both cropped to the exact shape. reedit, reframe and nearest answer capability_missing. Never carries words for a model: layers are drawn by the relay.",
           "properties": {
             "method": {
               "$ref": "common.schema.json#/$defs/sizeMethod"
@@ -673,6 +681,10 @@
               "type": "string",
               "pattern": "^#[0-9A-Fa-f]{6}$",
               "description": "layout: the brand colour the picture sits on."
+            },
+            "panel": {
+              "$ref": "common.schema.json#/$defs/region",
+              "description": "layout: where the picture sits on the colour field, in 0-1 coordinates of the size; crop is then the part of the master at the panel's shape. Absent: the whole size. Added 2026-10-16 (additive)."
             },
             "layers": {
               "type": "array",
@@ -901,7 +913,7 @@
         },
         "resize": {
           "type": "object",
-          "description": "resize only: how the size was made. crop: the part of the master used, in masterSize pixels. previewPx: the result's size.",
+          "description": "resize only: how the size was made. crop: the part of the master used, in masterSize pixels (the whole master for extend and regenerate). previewPx: the result's size. plate: the picture before type.",
           "properties": {
             "method": {
               "$ref": "common.schema.json#/$defs/sizeMethod"
@@ -916,6 +928,10 @@
               "type": "integer",
               "minimum": 0,
               "description": "How many type layers the relay drew."
+            },
+            "plate": {
+              "$ref": "common.schema.json#/$defs/output",
+              "description": "The size's picture before its type layers, at the preview size: Edit type draws on it again for free, and Export at full size upscales it. Added 2026-10-16 (additive)."
             }
           },
           "required": [

@@ -60,10 +60,11 @@ def test_a_contract_3_job_carries_who_started_it_where_and_for_what(h):
 def test_an_op_not_built_yet_is_422_capability_missing_before_quota(h, op):
     token = h.as_person()
     inp = {"text": "x"}
-    if op in ("resize", "cutdown"):  # their input has a shape (features/campaign-formats.clan); extend is paid, not built yet
+    if op in ("resize", "cutdown"):  # their input has a shape (features/campaign-formats.clan); a still is
+        # never re-edited (extend and regenerate are built: tests/test_campaign.py)
         inp = json.loads((contracts_dir() / "examples" / f"job-request.{op}.json").read_text())["input"]
         if op == "resize":
-            inp["resize"]["method"] = "extend"
+            inp["resize"]["method"] = "reedit"
     _, out = h.call("POST", "/jobs", {**envelope(op, new_id("job")), "input": inp}, token, expect=422)
     assert out["error"]["code"] == "capability_missing"
     assert h.relay.remaining(h.people[token]["pid"]) == h.cfg["quotas"]

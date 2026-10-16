@@ -1,6 +1,7 @@
 // Edit type on a tile (features/campaign-formats.clan, phase 3): the words every size lays out (the
 // brand line, legal) and this size's own changes (its own words, hide a layer, bigger or smaller).
-// Saving is one undo step; the sizes it changes are made again on the relay (free). The overlay shows
+// Saving is one undo step; the sizes it changes are drawn again on the relay (free: a paid size's
+// picture is kept, its plate drawn on again). The overlay shows
 // the layout on the tile while it is being edited or before the relay's picture lands.
 
 import { useState } from 'react'
@@ -71,8 +72,9 @@ export function TypeEditor({ size, set, deps, by, zoom, onClose }: { size: Size;
       }
     }, `edit the type of ${everyChanged ? `every size of format_sets[${set.id}]` : `sizes[${size.id}]`}`)
     const d = deps.doc.get()
-    const again = sizesOf(d, set.id).filter((s) => s.media === 'image' && s.method === 'crop' && (s.id === size.id || (everyChanged && !s.locked)))
-    for (const s of again) void sendSize(deps, set.id, s.id, by).catch((e) => console.warn('the size was not sent', e))
+    // Only the type changed: a paid size is drawn again on its plate, free; nothing goes to a model.
+    const again = sizesOf(d, set.id).filter((s) => s.media === 'image' && s.asset && (s.id === size.id || (everyChanged && !s.locked)))
+    for (const s of again) void sendSize(deps, set.id, s.id, by, { retype: true }).catch((e) => console.warn('the size was not sent', e))
     setBusy(false)
     onClose()
   }

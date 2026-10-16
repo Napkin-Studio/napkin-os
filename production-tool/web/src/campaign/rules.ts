@@ -5,20 +5,25 @@
 // shape tested, up to 4:1 and 9:16), or regenerate on Gemini 3 Pro when an extend would leave the
 // subject small (the master would fill under 35% of the size); layout for banner strips.
 //
-// What runs today: crop (free, on the relay). Extend, regenerate and layout need phase 4, cutdowns
-// phase 5 and reframes phase 6; until then a still whose method is not built is made as a crop, and
-// its tile and tray row say which method it waits for (approach A, usable alone).
+// What runs (phase 4): crop and layout (free, on the relay), extend (Ideogram 4.5 at high) and
+// regenerate (Gemini 3 Pro), each paid method on the model the agency allows (an agency with Ideogram
+// off regenerates instead of extending). Cutdowns need phase 5 and reframes phase 6.
 
-import type { Aspect, CapabilitySheet, ProtectBox, SizeMethod } from '../contracts/types'
+import type { Aspect, CapabilitySheet, Config, Provider, ProtectBox, SizeMethod } from '../contracts/types'
 import { SHEETS } from '../contracts/load'
+import { modelOn, type Sheets } from '../capabilities'
 import { cropBox, safeFracs, type Fracs } from './crop'
 import type { PlanRow } from './formats'
 
 /** Methods built now, and the build each other one waits for. */
-export const RUNNABLE: ReadonlySet<SizeMethod> = new Set(['crop'])
+export const RUNNABLE: ReadonlySet<SizeMethod> = new Set(['crop', 'layout', 'extend', 'regenerate'])
 export const WAITS_FOR: Partial<Record<SizeMethod, string>> = {
-  extend: 'phase 4', regenerate: 'phase 4', layout: 'phase 4', nearest: 'phase 4', reedit: 'phase 5', reframe: 'phase 6',
+  nearest: 'a later build', reedit: 'phase 5', reframe: 'phase 6',
 }
+/** The methods a still can be changed to on its tile. */
+export const STILL_METHODS = ['crop', 'extend', 'regenerate', 'layout'] as const
+/** The methods that spend (a job on a provider, recorded with its cost in History). */
+export const PAID: ReadonlySet<SizeMethod> = new Set(['extend', 'regenerate'])
 
 export const METHOD_WORD: Record<SizeMethod, string> = {
   crop: 'Crop', extend: 'Extend', regenerate: 'Regenerate', layout: 'Layout', nearest: 'Nearest ratio', reedit: 'Re-edit', reframe: 'Reframe',
@@ -44,17 +49,45 @@ export interface MethodChoice {
   fits: boolean
 }
 
+type ResizeSpec = { model: string; label?: string; method?: SizeMethod; alternates?: { model: string; label?: string; method?: SizeMethod }[] }
+
 /** The paid methods a capability sheet offers for resize (its method field; contracts check.py). */
 export function sheetMethods(sheet: CapabilitySheet | undefined): Set<SizeMethod> {
-  const spec = (sheet?.ops as Record<string, { method?: SizeMethod; alternates?: { method?: SizeMethod }[] } | undefined> | undefined)?.resize
+  const spec = (sheet?.ops as Record<string, ResizeSpec | undefined> | undefined)?.resize
   const out = new Set<SizeMethod>()
   for (const s of spec ? [spec, ...(spec.alternates ?? [])] : []) if (s.method) out.add(s.method)
   return out
 }
 
-/** The methods the rule table may pick: the free ones and what the routed sheet offers. */
-export function availableMethods(sheet: CapabilitySheet | undefined = SHEETS.runway): Set<SizeMethod> {
-  return new Set<SizeMethod>(['crop', 'layout', 'reedit', 'reframe', ...sheetMethods(sheet)])
+/** The model a paid method runs on, in the tray's and the tile's words ("Ideogram 4.5"). */
+export interface MethodModel { provider: Provider; model: string; label: string }
+
+/**
+ * The model each paid method runs on for this agency: on the first provider the config routes resize
+ * to, the op's own model or its alternate whose method it is, when the agency allows its maker (the
+ * relay picks the same: service._run_model). No config: Runway's sheet, every maker on.
+ */
+export function methodModels(config?: Pick<Config, 'routing' | 'allow'>, sheets: Sheets = SHEETS): Partial<Record<SizeMethod, MethodModel>> {
+  const out: Partial<Record<SizeMethod, MethodModel>> = {}
+  for (const provider of config ? config.routing.resize ?? [] : ['runway' as Provider]) {
+    const spec = (sheets[provider]?.ops as Record<string, ResizeSpec | undefined> | undefined)?.resize
+    for (const s of spec ? [spec, ...(spec.alternates ?? [])] : []) {
+      if (!s.method || out[s.method] || !modelOn(sheets, provider, s.model, config?.allow)) continue
+      out[s.method] = { provider, model: s.model, label: s.label ?? s.model }
+    }
+  }
+  return out
+}
+
+/** The methods the rule table may pick: the free ones and the paid ones the agency can run. */
+export function availableMethods(models: Partial<Record<SizeMethod, MethodModel>> = methodModels()): Set<SizeMethod> {
+  return new Set<SizeMethod>(['crop', 'layout', 'reedit', 'reframe', ...(Object.keys(models) as SizeMethod[])])
+}
+
+/** A method in the tray's and the tile's words: "Extend · Ideogram 4.5", "Crop · free". No price. */
+export function methodWords(method: SizeMethod, models: Partial<Record<SizeMethod, MethodModel>>): string {
+  if (PAID.has(method)) return models[method] ? `${METHOD_WORD[method]} · ${models[method]!.label}` : `${METHOD_WORD[method]} · off for your agency`
+  return method === 'crop' || method === 'layout' ? `${METHOD_WORD[method]} · free` : METHOD_WORD[method]
 }
 
 /** The share of the size the master fills when extended to it (1: same shape). */
@@ -94,6 +127,6 @@ export function methodFor(row: PlanRow, master: Master, protect: readonly Protec
   else if (fits || (!available.has('extend') && !available.has('regenerate'))) method = 'crop'
   else if (filled(master, target) < REGENERATE_BELOW && available.has('regenerate')) method = 'regenerate'
   else method = available.has('extend') ? 'extend' : 'regenerate'
-  if (RUNNABLE.has(method)) return { method, now: method, fits }
+  if (RUNNABLE.has(method) && (!PAID.has(method) || available.has(method))) return { method, now: method, fits }
   return { method, now: 'crop', waits: wait(method), fits }
 }

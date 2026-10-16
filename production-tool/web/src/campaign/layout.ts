@@ -10,12 +10,15 @@
 //   portrait and square:  logo at the top centre, line in the lower third, legal at the foot
 // Type sizes are cap heights as a share of the size's height, never under the channel's minimum
 // (OOH is read at a distance; print and display have a floor in pixels).
+//
+// A size made by layout (display banners, phase 4) is a brand colour field with the picture in a panel
+// (layoutPanel): the type is laid out on the field beside the panel, never over the picture.
 
-import type { AssetRef, FormatChannel, FormatSet, NamedRef, ProductionDocument, Region, Size, TypeLayer, TypeLayerKind, TypeLayerOverride } from '../contracts/types'
+import type { Aspect, AssetRef, FormatChannel, FormatSet, NamedRef, ProductionDocument, ProtectBox, PxBox, Region, Size, TypeLayer, TypeLayerKind, TypeLayerOverride } from '../contracts/types'
 import type { DocumentStore } from '../doc/types'
 import { assetRef } from '../jobs/assets'
 import type { Relay } from '../relay'
-import type { Fracs } from './crop'
+import { cropBox, type Fracs } from './crop'
 import { formatById } from './formats'
 import { rowFracs } from './rules'
 import { channelOfSize } from './make'
@@ -25,6 +28,8 @@ export interface BrandKit {
   logo?: { sha256: string; w: number; h: number }
   /** The words' colour: the palette's first light swatch, else white. */
   colour: string
+  /** A layout's colour field: the palette's first dark swatch, else near black (the words stay light on it). */
+  field: string
   font?: string
 }
 
@@ -71,10 +76,13 @@ export function brandKit(d: ProductionDocument): BrandKit {
   const a = logoRef?.asset ? d.assets[logoRef.asset] : undefined
   const swatches = refs.filter((r) => r.role === 'palette').flatMap((r) => r.swatches ?? [])
   const light = swatches.map((s) => s.hex).find((hex) => luminance(hex) > 0.6)
+  const dark = swatches.map((s) => s.hex).find((hex) => luminance(hex) < 0.25)
   const font = refs.find((r) => r.role === 'typography' && r.font?.family)?.font?.family
+  const hex = (x: string) => (x.startsWith('#') ? x : `#${x}`).toUpperCase()
   return {
     ...(logoRef?.asset ? { logo: { sha256: logoRef.asset, w: a?.w ?? 400, h: a?.h ?? 160 } } : {}),
-    colour: light ? (light.startsWith('#') ? light : `#${light}`).toUpperCase() : '#FFFFFF',
+    colour: light ? hex(light) : '#FFFFFF',
+    field: dark ? hex(dark) : '#141414',
     ...(font ? { font } : {}),
   }
 }
@@ -148,12 +156,41 @@ export function layoutType(inp: LayoutIn): Laid[] {
   return out
 }
 
+/**
+ * Where the picture sits on a layout size's colour field, in 0-1 of the size: at the left end of a
+ * banner strip (at most 40% of it), at the top of a tall one (at most 45%), else the larger part
+ * (the left 55% of a landscape size, the top 60% of a portrait or square one). Its shape follows the
+ * master's within those bounds, so the crop of the master inside it stays large.
+ */
+export function layoutPanel(size: Aspect, master: Aspect): Region {
+  const r = size.w / size.h
+  const m = master.w / master.h
+  const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x))
+  if (r >= 3) return { x: 0, y: 0, w: Math.min((clamp(m, 1, 16 / 9) * size.h) / size.w, 0.4), h: 1 }
+  if (r <= 1 / 3) return { x: 0, y: 0, w: 1, h: Math.min(size.w / clamp(m, 3 / 4, 4 / 3) / size.h, 0.45) }
+  return r >= 1.2 ? { x: 0, y: 0, w: 0.55, h: 1 } : { x: 0, y: 0, w: 1, h: 0.6 }
+}
+
+/** The part of the master a layout size's panel shows: the subject-aware crop at the panel's shape. */
+export function panelCrop(master: Aspect, size: Aspect, protect?: readonly ProtectBox[]): PxBox {
+  const p = layoutPanel(size, master)
+  return cropBox(master, { w: Math.max(1, Math.round(p.w * size.w)), h: Math.max(1, Math.round(p.h * size.h)) }, protect).crop
+}
+
+/** The safe area a layout's type keeps to: the format's, and clear of the panel. */
+function besidePanel(fr: Fracs, panel: Region): Fracs {
+  const [l, t, r, b] = fr
+  return panel.h >= 0.999 ? [Math.max(l, panel.x + panel.w), t, r, b] : [l, Math.max(t, panel.y + panel.h), r, b]
+}
+
 /** The layout input for a size of a set. */
 export function layoutInput(d: ProductionDocument, set: FormatSet, size: Size): LayoutIn {
   const f = formatById(size.format.format_id)
+  const fracs: Fracs = f ? rowFracs({ format: f.format }) : [0, 0, 0, 0]
+  const master = { w: set.master.w ?? 16, h: set.master.h ?? 9 }
   return {
     w: size.delivery.width, h: size.delivery.height, channel: channelOfSize(size), kind: f?.format.kind,
-    fracs: f ? rowFracs({ format: f.format }) : [0, 0, 0, 0],
+    fracs: size.method === 'layout' ? besidePanel(fracs, layoutPanel({ w: size.delivery.width, h: size.delivery.height }, master)) : fracs,
     copy: set.copy ?? {}, brand: brandKit(d), overrides: size.layers,
   }
 }

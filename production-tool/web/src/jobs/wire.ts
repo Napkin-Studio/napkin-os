@@ -39,7 +39,7 @@ export function wireJobs(deps: FrameDeps) {
   runner.onComplete('write', (job) => void landWrites(doc, job).catch(warn("Skye's draft")))
   // Make all sizes: a crop lands as its size's picture (features/campaign-formats.clan).
   runner.onComplete('size', (job, ctx) => {
-    if (ctx.for === 'size') void landSize(doc, job, ctx).catch(warn('the size'))
+    if (ctx.for === 'size') void landSize(doc, job, ctx, deps.relay).catch(warn('the size'))
   })
   runner.onComplete('stitch', (job, ctx) => void landRender(doc, job, ctx.for === 'stitch' ? ctx : undefined)
     .then(() => continueFollow(deps)).catch(warn('update what follows')))

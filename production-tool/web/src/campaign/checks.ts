@@ -2,7 +2,8 @@
 // "Needs a look" until it is fixed or ignored. Pure: a size, its set and the document in, the size's
 // checks out (an Ignore recorded on a check is kept while its result stands).
 //
-//   subject_safe    every protected box inside the safe area of the crop
+//   subject_safe    every protected box inside the safe area of the crop (a layout: of its panel; an
+//                   extend keeps the whole master; a regenerate is not measured)
 //   logo_safe       the logo inside the safe area (a logo on the Brand board that is not on the size too)
 //   clear_space     no words inside the logo's clear space
 //   type_size       every word at least the channel's minimum size
@@ -31,10 +32,15 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   const out: Checks = {}
   const f = formatById(size.format.format_id)
   const fr = f ? rowFracs({ format: f.format }) : ([0, 0, 0, 0] as const)
-  if (size.media === 'image' && size.crop && set.protect?.boxes?.length) {
-    out.subject_safe = protectedInside(size.crop, set.protect.boxes, fr)
-      ? pass('What must stay is inside the safe area.')
-      : flag('The crop cuts what must stay, or puts it outside the safe area. Adjust crop, or wait for Extend.')
+  if (size.media === 'image' && set.protect?.boxes?.length) {
+    // An extend keeps the whole master, placed with what must stay in the middle of the safe area (relay
+    // formats.pad_plan); a regenerate is a new picture Jude cannot measure, so it makes no claim.
+    if (size.method === 'extend') out.subject_safe = pass('Extended round the whole master: what must stay is kept, in the safe area.')
+    else if (size.crop && (size.method === 'crop' || size.method === 'layout')) {
+      out.subject_safe = protectedInside(size.crop, set.protect.boxes, size.method === 'layout' ? [0, 0, 0, 0] : fr)
+        ? pass('What must stay is inside the safe area.')
+        : flag('The crop cuts what must stay, or puts it outside the safe area. Adjust crop, or change the method to Extend.')
+    }
   }
   const inp = layoutInput(d, set, size)
   const laid = layoutType(inp)

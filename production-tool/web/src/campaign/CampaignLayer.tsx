@@ -5,23 +5,30 @@
 //
 // Per tile: status (making, ready, needs a look, out of date, locked, not made), the safe-area overlay
 // (S), Jude's flags with Ignore, Adjust crop (drag to move, wheel to zoom; free, on device, then made
-// again on the relay), Lock, Change method (crop now; the paid methods wait for phase 4) and Edit type.
-// The board: Update sizes when the master changed, Export zip.
+// again on the relay), Lock, Change method and Redo (a paid method goes through the tile's send tray,
+// which names the method and the model, never a price), and Edit type.
+// The board: Update sizes when the master changed, Export zip, Export at full size (Magnific upscales,
+// through the same tray).
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { useDoc, useServices, useUi } from '../app/context'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
+import { placeFloating } from '../lib/place'
+import { keepsPick, onScreen, tilePick } from './pick'
+import { useConfig, useDoc, useServices, useUi } from '../app/context'
+import { modelChoicesFor } from '../capabilities'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
-import type { FormatCheckCode, FormatSet, PersonRef, PxBox, Size } from '../contracts/types'
+import type { FormatCheckCode, FormatSet, PersonRef, PxBox, Size, SizeMethod } from '../contracts/types'
 import { updateDoc } from '../doc/store'
 import { download } from '../export'
 import { useBlobUrl } from '../ui/hooks'
 import { useProjectName } from '../ui/useDownload'
 import { boardLayout, CAPTION_H, type TileBox } from './board'
 import { panCrop, zoomCrop } from './crop'
+import { fullPlan } from './delivery'
 import { exportSizes } from './exportZip'
 import { formatById, shortName, sizeWords } from './formats'
-import { adjustCrop, channelOfSize, setLocked, sizesOf, staleSizes, updateSizes, type CampaignDeps } from './make'
-import { METHOD_WORD, rowFracs, methodFor } from './rules'
+import { adjustCrop, changeMethod, channelOfSize, redoSize, setLocked, sizesOf, staleSizes, updateSizes, upscaleForDelivery, type CampaignDeps } from './make'
+import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
 import { campaignSheet } from './sheet'
 import { TypeEditor, TypeOverlay } from './TypeEditor'
 import './campaign.css'
@@ -35,6 +42,20 @@ export function CampaignLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: n
   const els = canvas.elements()
   const boards = els.filter((e) => !e.isDeleted && (e.customData as { kind?: string } | undefined)?.kind === 'format_set'
     && !!doc.format_sets?.[(e.customData as { id: string }).id])
+  const selection = view.selectedIds.join(',')
+  // One tile bar at a time, for the picked tile only (owner bug 2026-10-16): a canvas selection, a click
+  // on empty canvas or anywhere outside the boards' own surfaces, and Esc close it, on every board.
+  useEffect(() => { if (selection) tilePick.clear() }, [selection])
+  useEffect(() => {
+    const down = (e: PointerEvent) => { if (!keepsPick(e.target as Element | null)) tilePick.clear() }
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') tilePick.clear() }
+    document.addEventListener('pointerdown', down, true)
+    window.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('keydown', key)
+    }
+  }, [])
   if (!boards.length) return null
   const moving = canvas.dragOffset?.() ?? null
   return (
@@ -58,7 +79,8 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
   const by: PersonRef = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
   const deps: CampaignDeps = { canvas, doc: services.doc, runner: services.runner, relay: services.relay }
   const safe = useSyncExternalStore(campaignSheet.subscribe, campaignSheet.safeAreas)
-  const [picked, setPicked] = useState<string | null>(null)
+  const pk = useSyncExternalStore(tilePick.subscribe, tilePick.get)
+  const picked = pk?.setId === set.id ? pk.sizeId : null
   const [adjusting, setAdjusting] = useState<{ id: string; crop: PxBox } | null>(null)
   const [typing, setTyping] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -67,6 +89,11 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
   const stale = staleSizes(doc, els, set.id)
   const staleIds = new Set(stale.map((s) => s.id))
   const masterUrl = useBlobUrl(set.master.asset)
+  const { config } = useConfig()
+  const models = methodModels(config)
+  const upscaler = modelChoicesFor('upscale', config)[0]
+  const [tray, setTray] = useState<TrayOpen | null>(null)
+  const [fullWanted, setFullWanted] = useState(false)
 
   // The board grows with its sizes (a new length, a new format): its element and frame follow the layout.
   useEffect(() => {
@@ -89,14 +116,13 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
         e.preventDefault()
         campaignSheet.toggleSafeAreas()
       }
-      if (e.key === 'Escape') {
-        setPicked(null)
-        setAdjusting(null)
-      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selected, picked])
+  // Adjust crop and Edit type belong to the picked tile: they end when it is no longer picked.
+  const adjustingNow = adjusting && adjusting.id === picked ? adjusting : null
+  const typingNow = typing && typing === picked ? typing : null
 
   const say = useCallback((t: string) => {
     setNote(t)
@@ -109,14 +135,49 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
     making: sizes.filter((s) => s.status === 'making').length,
     notMade: sizes.filter((s) => !s.status).length,
   }
-  const exportAll = async () => {
+  const exportAll = async (full = false) => {
     try {
-      const out = await exportSizes(doc, set.id, project || doc.project.title)
+      const out = await exportSizes(doc, set.id, project || doc.project.title, undefined, full ? { model: upscaler?.label ?? 'Magnific' } : undefined)
       download(out.blob, out.name)
-      say(`Exported ${out.files} ${out.files === 1 ? 'size' : 'sizes'}${out.missing ? ` · ${out.missing} not in this browser` : ''}`)
+      say(`Exported ${out.files} ${out.files === 1 ? 'size' : 'sizes'}${full ? ' at full size' : ''}${out.missing ? ` · ${out.missing} not in this browser` : ''}`)
     } catch (e) {
       say(e instanceof Error ? e.message : 'The export did not work.')
     }
+  }
+  // Export at full size: the sizes Magnific upscales first (through the tray), then the zip.
+  const plans = sizes.map((s) => ({ s, plan: fullPlan(s) }))
+  const toUpscale = plans.filter((p) => p.plan?.kind === 'upscale')
+  const upscaling = sizes.filter((s) => s.full?.job_id && !s.full.asset && s.full.from === s.asset && isLive(services.runner, doc, s.full.job_id))
+  const exportFull = () => {
+    if (!toUpscale.length) {
+      void exportAll(true)
+      return
+    }
+    if (!upscaler) {
+      say('Upscaling is off for your agency: Export zip has the previews.')
+      return
+    }
+    setTray({
+      who: 'rhea', title: 'Export at full size',
+      rows: toUpscale.map(({ s, plan }) => ({ id: s.id, name: tileName(s), words: `Upscale ×${plan!.kind === 'upscale' ? plan!.scale : 4} · ${upscaler.label}` })),
+      note: `${plans.filter((p) => p.plan && p.plan.kind !== 'upscale').length} more go as they are. The type is drawn again at full size on our server.`,
+      send: async () => {
+        setFullWanted(true)
+        for (const { s, plan } of toUpscale) if (plan?.kind === 'upscale') await upscaleForDelivery(deps, s.id, plan.scale)
+        say(`Upscaling ${toUpscale.length} for delivery`)
+      },
+    })
+  }
+  const update = () => {
+    const paid = stale.filter((s) => PAID.has(s.method))
+    const go = () => void updateSizes(deps, set.id, by).then((n) => say(`Updating ${n} sizes`))
+    if (!paid.length) return go()
+    setTray({
+      who: 'wren', title: 'Update sizes',
+      rows: stale.map((s) => ({ id: s.id, name: tileName(s), words: methodWords(s.method, models) })),
+      note: 'Locked sizes stay as they are.',
+      send: async () => go(),
+    })
   }
   const title = doc.boards ? Object.values(doc.boards).find((b) => b.id === (els.find((e) => e.id === el.frameId)?.customData as { id?: string } | undefined)?.id)?.title : undefined
 
@@ -128,11 +189,16 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
         <span className="pt-grow" />
         {stale.length > 0 && (
           <span className="cb-stale" role="status">Master changed · {stale.length} out of date
-            <button type="button" className="btn xs primary" onClick={() => void updateSizes(deps, set.id, by).then((n) => say(`Updating ${n} sizes`))}>Update sizes</button>
+            <button type="button" className="btn xs primary" onClick={update}>Update sizes</button>
           </span>
         )}
         <button type="button" className={`btn xs ${safe ? 'on' : 'ghost'}`} aria-pressed={safe} title="Safe areas (S)" onClick={() => campaignSheet.toggleSafeAreas()}>Safe areas <kbd>S</kbd></button>
         <button type="button" className="btn xs" onClick={() => void exportAll()}>Export zip</button>
+        {upscaling.length > 0
+          ? <span className="cb-stale" role="status">Upscaling {upscaling.length} for delivery…</span>
+          : fullWanted && !toUpscale.length
+            ? <button type="button" className="btn xs primary" onClick={() => { setFullWanted(false); void exportAll(true) }}>Full size ready · Download</button>
+            : <button type="button" className="btn xs" onClick={exportFull} title="Each size at its delivery size: Magnific upscales what needs it">Export at full size</button>}
       </header>
       {layout.lanes.map((l) => (
         <div key={l.channel} className="cb-lane" style={{ top: l.y }}>{l.label}<span className="cb-lanecount">{l.count}</span></div>
@@ -141,12 +207,14 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
         const box = layout.tiles[s.id]
         if (!box) return null
         return <Tile key={s.id} size={s} set={set} box={box} masterUrl={masterUrl} safe={safe} stale={staleIds.has(s.id)} zoom={zoom}
-          picked={picked === s.id} adjusting={adjusting?.id === s.id ? adjusting.crop : null} typing={typing === s.id}
-          onPick={() => { setPicked(s.id); canvas.select([]) }}
+          picked={picked === s.id} flagsOpen={picked === s.id && !!pk?.flags} adjusting={adjustingNow?.id === s.id ? adjustingNow.crop : null} typing={typingNow === s.id}
+          onPick={() => { tilePick.pick(set.id, s.id, picked === s.id && !!pk?.flags); canvas.select([]) }}
           onAdjust={(crop) => setAdjusting(crop ? { id: s.id, crop } : null)}
           onAdjustDone={(crop) => { setAdjusting(null); void adjustCrop(deps, s.id, crop, by) }}
           onLock={(on) => void setLocked(services.doc, s.id, on)}
           onType={(on) => setTyping(on ? s.id : null)}
+          models={models}
+          onTray={setTray}
           onIgnore={(code) => void updateDoc(services.doc, (x) => {
             const c = x.sizes[s.id]?.checks?.[code as FormatCheckCode]
             if (c) c.ignored = { by, at: new Date().toISOString() }
@@ -156,13 +224,56 @@ function CampaignBoard({ el, set, canvas, style, selected, els, zoom }: { el: Ca
           deps={deps} by={by} say={say} />
       })}
       {note && <div className="cb-note" role="status">{note}</div>}
+      {tray && <SendTray tray={tray} zoom={zoom} onClose={() => setTray(null)} />}
+    </div>
+  )
+}
+
+/** A job of this browser's runner, or of the document, still under way. */
+function isLive(runner: CampaignDeps['runner'], doc: ReturnType<typeof useDoc>, jobId: string): boolean {
+  const state = runner.liveInfo(jobId)?.state ?? doc.jobs[jobId]?.state
+  return !!state && !['completed', 'failed', 'cancelled', 'uncertain'].includes(state)
+}
+
+function tileName(s: Size): string {
+  const f = formatById(s.format.format_id)
+  return `${f ? shortName(f.format) : s.format.format_id} · ${s.delivery.width}×${s.delivery.height}`
+}
+
+/** What a send tray lists: who makes it, each size with its method and model (never a price), Send. */
+interface TrayOpen {
+  who: 'wren' | 'rhea'
+  title: string
+  rows: { id: string; name: string; words: string }[]
+  note?: string
+  send(): Promise<void>
+}
+
+function SendTray({ tray, zoom, onClose }: { tray: TrayOpen; zoom: number; onClose(): void }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="cb-tray pt-panel" role="dialog" aria-label={tray.title} style={{ transform: `scale(${1 / zoom})` }} onPointerDown={(e) => e.stopPropagation()}>
+      <div className="cb-trayhead"><b>{tray.title}</b><span className="faint">{tray.who === 'rhea' ? 'Rhea' : 'Wren'} will make</span></div>
+      <div className="cb-trayrows" role="list">
+        {tray.rows.map((r) => (
+          <div key={r.id} className="cb-trayrow" role="listitem"><span className="cb-trayname">{r.name}</span><span className="cf-dots" /><span className="cb-traywords">{r.words}</span></div>
+        ))}
+      </div>
+      {tray.note && <p className="cb-hint">{tray.note}</p>}
+      <div className="cb-row">
+        <span className="pt-grow" />
+        <button type="button" className="btn xs ghost" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn xs primary" disabled={busy} onClick={() => { setBusy(true); void tray.send().finally(onClose) }}>
+          {busy ? 'Sending…' : `Send ${tray.rows.length === 1 ? '' : tray.rows.length}`.trim()}
+        </button>
+      </div>
     </div>
   )
 }
 
 const STATUS: Record<NonNullable<Size['status']>, string> = { making: 'Making…', ready: 'Ready', look: 'Needs a look', stale: 'Out of date' }
 
-function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting, typing, onPick, onAdjust, onAdjustDone, onLock, onType, onIgnore, deps, by, say }: {
+function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen, adjusting, typing, onPick, onAdjust, onAdjustDone, onLock, onType, onIgnore, deps, by, say, models, onTray }: {
   size: Size
   set: FormatSet
   box: TileBox
@@ -171,6 +282,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
   stale: boolean
   zoom: number
   picked: boolean
+  flagsOpen: boolean
   adjusting: PxBox | null
   typing: boolean
   onPick(): void
@@ -182,6 +294,8 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
   deps: CampaignDeps
   by: PersonRef
   say(t: string): void
+  models: Partial<Record<SizeMethod, MethodModel>>
+  onTray(t: TrayOpen): void
 }) {
   const doc = useDoc()
   const { runner } = useServices()
@@ -193,25 +307,36 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
   const live = size.job_id ? runner.liveInfo(size.job_id)?.state ?? job?.state : undefined
   const failed = live === 'failed'
   const status = failed ? 'failed' : (size.status === 'ready' || size.status === 'look') && stale ? 'stale' : size.status
-  const ideal = f ? methodFor({ key: f.format.id, pack: f.pack, format: f.format, channel: channelOfSize(size), media: size.media, ...(size.length_s ? { length_s: size.length_s } : {}) },
-    { ...master, media: set.master.kind === 'video' ? 'video' : 'image' }, set.protect?.boxes) : null
   const crop = adjusting ?? size.crop
   const flags = Object.entries(size.checks ?? {}).filter(([, c]) => c && c.result === 'flag')
   const [drag, setDrag] = useState<{ x: number; y: number; crop: PxBox } | null>(null)
-  const [flagsOpen, setFlagsOpen] = useState(false)
+  const pic = useRef<HTMLDivElement>(null)
   const [methodOpen, setMethodOpen] = useState(false)
 
   const s = crop ? box.w / crop.w : 1
-  const showMaster = !!crop && !!masterUrl && (adjusting || !url || status === 'making')
+  // The master shows through while a crop is adjusted or made; a paid method's tile waits on its own picture.
+  const showMaster = !!crop && !!masterUrl && size.method === 'crop' && (adjusting || !url || status === 'making')
   const methodLine = size.media === 'video'
     ? `${METHOD_WORD[size.method]} · needs ${size.method === 'reframe' ? 'phase 6' : 'phase 5'}`
-    : ideal && ideal.method !== size.method ? `${METHOD_WORD[size.method]} · ${METHOD_WORD[ideal.method]} needs phase 4` : METHOD_WORD[size.method]
+    : methodWords(size.method, models)
+  const failure = failed ? job?.error?.message : undefined
+  const name = `${f ? shortName(f.format) : size.format.format_id} · ${size.delivery.width}×${size.delivery.height}`
+  const paidTray = (method: SizeMethod, title: string, send: () => Promise<unknown>) => onTray({
+    who: 'wren', title, rows: [{ id: size.id, name, words: methodWords(method, models) }],
+    note: method === 'extend' ? 'Keeps the picture exactly and makes its new edges.' : 'Remakes the picture at this shape from the master.',
+    send: async () => { await send() },
+  })
+  const pickMethod = (m: SizeMethod) => {
+    setMethodOpen(false)
+    if (PAID.has(m)) paidTray(m, 'Change method', () => changeMethod(deps, size.id, m, by))
+    else void changeMethod(deps, size.id, m, by).then(() => say(`${METHOD_WORD[m]} · making it again`))
+  }
 
   return (
     <div className={`cb-tile ${picked ? 'picked' : ''} ${size.locked ? 'locked' : ''} ${status ?? 'notmade'} ${adjusting ? 'adjusting' : ''}`}
       style={{ left: box.x, top: box.y, width: box.w }} data-format={size.format.format_id} data-size={size.id}
       onPointerDown={(e) => { e.stopPropagation(); if (!adjusting) onPick() }}>
-      <div className="cb-pic" style={{ height: box.h }}
+      <div ref={pic} className="cb-pic" style={{ height: box.h }}
         onPointerDown={(e) => {
           if (!adjusting) return
           e.stopPropagation()
@@ -242,19 +367,20 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
         {safe && adjusting && set.protect?.boxes?.map((b, i) => (
           <span key={i} className="cb-pbox" style={{ left: (b.x - adjusting.x) * s, top: (b.y - adjusting.y) * s, width: b.w * s, height: b.h * s }} />
         ))}
-        <span className={`cb-status ${status ?? 'notmade'}`}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
+        <span className={`cb-status ${status ?? 'notmade'}`} title={failure}>{status === 'failed' ? 'Failed' : status ? STATUS[status] : 'Not made'}</span>
         {size.locked && <span className="cb-lock" title="Locked: Update sizes never changes it">🔒</span>}
         {flags.length > 0 && (
           <button type="button" className={`cb-flag ${flags.every(([, c]) => c!.ignored) ? 'ignored' : ''}`} onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setFlagsOpen(!flagsOpen)} aria-expanded={flagsOpen}>⚑ Jude · {flags.length}</button>
+            onClick={() => tilePick.toggleFlags(set.id, size.id)} aria-expanded={flagsOpen}>⚑ Jude · {flags.length}</button>
         )}
       </div>
       <div className="cb-caption" style={{ height: CAPTION_H }}>
         <span className="cb-name">{f ? shortName(f.format) : size.format.format_id}{size.length_s ? ` · ${size.length_s} s` : ''}</span>
         <span className="cb-meta">{f ? sizeWords(f.format) : `${size.delivery.width}×${size.delivery.height}`} · {methodLine}</span>
       </div>
-      {flagsOpen && (
-        <div className="cb-pop pt-panel" style={{ transform: `scale(${1 / zoom})` }} role="dialog" aria-label="Jude's checks" onPointerDown={(e) => e.stopPropagation()}>
+      {picked && !typing && <TileFloat anchor={pic}>
+      {flagsOpen && flags.length > 0 && (
+        <div className="cb-flags pt-panel" role="dialog" aria-label="Jude's checks">
           {flags.map(([code, c]) => (
             <div key={code} className="cb-check">
               <span>{c!.note}</span>
@@ -263,8 +389,8 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
           ))}
         </div>
       )}
-      {picked && !adjusting && !typing && (
-        <div className="cb-tools toolbar" style={{ transform: `scale(${1 / zoom})` }} role="toolbar" aria-label="Size actions" onPointerDown={(e) => e.stopPropagation()}>
+      {!adjusting && (
+        <div className="cb-tools toolbar" role="toolbar" aria-label="Size actions">
           <button type="button" className="btn sm" disabled={size.media !== 'image' || !size.crop || size.method !== 'crop'} title={size.media !== 'image' ? 'Films are reframed in phase 6' : undefined}
             onClick={() => onAdjust(size.crop!)}>Adjust crop</button>
           <button type="button" className="btn sm" disabled={size.media !== 'image'} onClick={() => onType(true)}>Edit type</button>
@@ -272,23 +398,28 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
             <button type="button" className="btn sm" aria-haspopup="menu" aria-expanded={methodOpen} onClick={() => setMethodOpen(!methodOpen)}>Change method</button>
             {methodOpen && (
               <div className="cb-menu pt-panel" role="menu">
-                {(['crop', 'extend', 'regenerate', 'layout'] as const).map((m) => (
-                  <button key={m} type="button" role="menuitemradio" aria-checked={size.method === m} className="pt-menurow" disabled={m !== 'crop' || size.media !== 'image'}
-                    title={m !== 'crop' ? `${METHOD_WORD[m]} needs phase 4` : undefined}
-                    onClick={() => setMethodOpen(false)}>
-                    {METHOD_WORD[m]}{m !== 'crop' && <span className="hint">phase 4</span>}{size.method === m && ' ✓'}
-                  </button>
-                ))}
+                {STILL_METHODS.map((m) => {
+                  const off = size.media !== 'image' || (PAID.has(m) && !models[m])
+                  return (
+                    <button key={m} type="button" role="menuitemradio" aria-checked={size.method === m} className="pt-menurow" disabled={off || size.method === m}
+                      title={PAID.has(m) && !models[m] ? 'Off for your agency' : undefined}
+                      onClick={() => pickMethod(m)}>
+                      {METHOD_WORD[m]}<span className="hint">{PAID.has(m) ? models[m]?.label ?? 'off' : 'free'}</span>{size.method === m && ' ✓'}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </span>
-          <button type="button" className="btn sm" disabled title="Redo is another take of a paid method (phase 4); a crop is the same each time.">Redo</button>
+          <button type="button" className="btn sm" disabled={!PAID.has(size.method) || !models[size.method] || status === 'making' || !!size.locked}
+            title={!PAID.has(size.method) ? 'A crop is the same each time: Redo is another take of Extend or Regenerate.' : size.locked ? 'Unlock it first' : undefined}
+            onClick={() => paidTray(size.method, 'Redo', () => redoSize(deps, size.id, by))}>Redo</button>
           <button type="button" className="btn sm" disabled title="Fix in image editor comes with a later build">Fix in image editor</button>
           <button type="button" className="btn sm" onClick={() => onLock(!size.locked)}>{size.locked ? 'Unlock' : 'Lock'}</button>
         </div>
       )}
       {adjusting && (
-        <div className="cb-tools toolbar" style={{ transform: `scale(${1 / zoom})` }} role="toolbar" aria-label="Adjust crop" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="cb-tools toolbar" role="toolbar" aria-label="Adjust crop">
           <span className="cb-hint">Drag to move · scroll to zoom</span>
           <button type="button" className="btn sm ghost" onClick={() => onAdjust(zoomCrop(adjusting, 1 / 1.15, master))} aria-label="Closer">+</button>
           <button type="button" className="btn sm ghost" onClick={() => onAdjust(zoomCrop(adjusting, 1.15, master))} aria-label="Wider">−</button>
@@ -297,7 +428,40 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
           <button type="button" className="btn sm primary" onClick={() => { onAdjustDone(adjusting); say('Crop saved · making it again') }}>Done</button>
         </div>
       )}
+      </TileFloat>}
       {typing && <TypeEditor size={size} set={set} deps={deps} by={by} zoom={zoom} onClose={() => onType(false)} />}
     </div>
+  )
+}
+
+/**
+ * The picked tile's bar (and Jude's flag list above it), on the page rather than on the canvas: a fixed
+ * size whatever the zoom, placed as the canvas's floating toolbars are (lib/place.ts placeFloating:
+ * centred above the tile, below it only when there is no room above), so it never covers the next
+ * row. The tile panned or zoomed off screen closes it.
+ */
+function TileFloat({ anchor, children }: { anchor: RefObject<HTMLDivElement | null>; children: ReactNode }) {
+  const panel = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const a = anchor.current?.getBoundingClientRect()
+    const el = panel.current
+    if (!a || !el) return
+    const view = { w: window.innerWidth, h: window.innerHeight }
+    if (!onScreen(a, view)) {
+      tilePick.clear()
+      return
+    }
+    const p = placeFloating({ x: (a.left + a.right) / 2, top: a.top, bottom: a.bottom }, { w: el.offsetWidth, h: el.offsetHeight }, view, 10)
+    // Placed on the element itself after every render (the board moves with the canvas's view).
+    el.style.left = `${p.left}px`
+    el.style.top = `${p.top}px`
+    el.style.visibility = 'visible'
+  })
+  return createPortal(
+    <div ref={panel} className="cb-float" style={{ left: 0, top: 0, visibility: 'hidden' }}
+      onPointerDown={(e) => e.stopPropagation()}>
+      {children}
+    </div>,
+    document.body,
   )
 }

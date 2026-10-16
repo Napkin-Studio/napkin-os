@@ -636,6 +636,10 @@ export interface Size extends EntityBase {
   length_s?: number
   edl?: SizeEdlWindow[]
   checks?: Partial<Record<FormatCheckCode, FormatCheck>>
+  /** The picture before its type layers: Edit type draws on it again for free; Export at full size upscales it. */
+  plate?: Sha256
+  /** The delivery-size file Export at full size made, for the asset it was made for (from). */
+  full?: { asset?: Sha256; job_id?: Id; from: Sha256; scale?: 4 | 8 }
 }
 export interface Check extends EntityBase {
   target: Target
@@ -875,8 +879,10 @@ export interface JobInput {
   write?: WriteInput
   /** Change: the new answer to the parent job's question. */
   answer?: JobAnswer
-  /** upscale: how many times each side grows (features/image-editor.clan). */
-  scale?: 2 | 4
+  /** upscale: how many times each side grows (features/image-editor.clan; 8 for Export at full size). */
+  scale?: 2 | 4 | 8
+  /** upscale for delivery (Export at full size, with delivery): the size's type layers, drawn by the relay. */
+  layers?: TypeLayer[]
   /** resize: one size of a format set (features/campaign-formats.clan). */
   resize?: ResizeInput
   /** cutdown: a length or shape of the film from the same takes (phases 5 and 6). */
@@ -890,6 +896,8 @@ export interface ResizeInput {
   crop?: PxBox
   previewMaxPx?: number
   background?: string
+  /** layout: where the picture sits on the colour field, 0-1 of the size. */
+  panel?: Region
   layers?: TypeLayer[]
 }
 export interface CutdownInput {
@@ -989,7 +997,7 @@ export interface Job {
   /** clip_patch only: what was patched and how (relay-api Job.patch). */
   patch?: JobPatch
   /** resize only: how the size was made. */
-  resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number }
+  resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
   /** A clip_patch answered "Remake the whole clip": the client makes this op through the send tray. */
   handoff?: { op: 'clip' }
   createdAt: string

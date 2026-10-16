@@ -2045,6 +2045,38 @@
           ],
           "description": "person: Adjust crop set it, so Update sizes keeps it."
         },
+        "plate": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The size's picture before its type layers (the relay's resize result plate): Edit type draws on it again for free, without making the picture again, and Export at full size upscales it. Added 2026-10-16 (phase 4, additive)."
+        },
+        "full": {
+          "type": "object",
+          "description": "The delivery-size file Export at full size made (Magnific's upscale of the plate, the type drawn again at full size), kept so a second export spends nothing. Out of date when the plate or the type changed since (from differs from plate). Added 2026-10-16 (phase 4, additive).",
+          "properties": {
+            "asset": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "job_id": {
+              "type": "string",
+              "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "from": {
+              "$ref": "common.schema.json#/$defs/sha256",
+              "description": "The size's asset (the typed preview) it was made for."
+            },
+            "scale": {
+              "enum": [
+                4,
+                8
+              ],
+              "description": "Magnific's scale; absent when the plate was only scaled (Magnific cannot take a side under 300 px)."
+            }
+          },
+          "required": [
+            "from"
+          ],
+          "additionalProperties": false
+        },
         "layers": {
           "type": "object",
           "propertyNames": {

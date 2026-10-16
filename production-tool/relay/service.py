@@ -32,6 +32,7 @@ jobs nobody is polling, so no worker is needed.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import math
@@ -118,15 +119,15 @@ INTERNAL_OPS = {"shot_list", "stitch", "write", "cutout"}
 BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch",
              "stitch", "write", "upscale", "cutout", "resize"}
 # Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan).
-NO_DIRECTOR_OPS = {"upscale"}
+NO_DIRECTOR_OPS = {"upscale", "resize"}
 # What the editor says when Remove background cannot run here (features/image-editor.clan).
 NO_CUTOUT = "Rhea can't remove backgrounds on our server yet. Open this on a device with WebGPU to do it there."
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 # Ops whose models the capability sheets list for the Make all sizes method table (features/campaign-formats.clan)
-# but no adapter builds yet: extend and regenerate (phase 4), Aleph 2 reframes (phase 6).
-NO_ADAPTER_YET = {"resize", "cutdown"}
-NOT_YET_METHOD = ("{method} comes with a later build of Make all sizes. Crop works now: change this size's method "
-                  "to Crop, or keep it for when {method} lands.")
+# but no adapter builds yet: Aleph 2 reframes (phase 6). resize's extend and regenerate run since phase 4.
+NO_ADAPTER_YET = {"cutdown"}
+NOT_YET_METHOD = ("{method} comes with a later build of Make all sizes. Change this size's method to Crop, Extend "
+                  "or Regenerate, or keep it for when {method} lands.")
 
 
 def free_resize(req: dict) -> bool:
@@ -469,6 +470,10 @@ class Relay:
             return pick["model"] if self._model_on(provider, pick["model"], allow) else None
         if op == "clip_edit" and (inp.get("region") or inp.get("mask")) and spec.get("regionModel"):
             return spec["regionModel"] if self._model_on(provider, spec["regionModel"], allow) else None
+        if op == "resize":  # the size's method names the model (the op's own, or the alternate for it)
+            method = (inp.get("resize") or {}).get("method")
+            model = next((s["model"] for s in [spec, *spec.get("alternates", [])] if s.get("method") == method), None)
+            return model if model and self._model_on(provider, model, allow) else None
         return next((m for m in op_models(sheet, op) if self._model_on(provider, m, allow)), None)
 
     def _picked(self, job: dict, provider: str) -> str | None:
@@ -785,7 +790,7 @@ class Relay:
         if op == "write" and not allow["claude"]:
             # Script text is the agency's: it goes to the text model only where the agency allows Claude.
             raise ApiError("not_allowed", CLAUDE_OFF_WRITE)
-        if op in INTERNAL_OPS:
+        if op in INTERNAL_OPS or free_resize(req):  # a crop or a layout runs on our server, on no model
             return
         if pick and not self._model_on(pick["provider"], pick["model"], allow):
             sheet = self.registry.sheet(pick["provider"]) or {}
@@ -843,11 +848,20 @@ class Relay:
                 billed = max(spec.get("minS", 0), math.ceil(seconds - 1e-9))
                 settings["inputS" if spec.get("mode") != "first_last" else "durationS"] = billed
             return settings
+        if op == "resize":  # regenerate: the ratio it is sent at sets Gemini's tier; extend: the sheet's quality
+            ratio = Relay._resize_ratio(sheet, spec.get("model"), inp)
+            if ratio:
+                settings["ratio"] = ratio
+            return settings
         if op == "upscale":  # Magnific's price turns on the output's longest side (providers.md fact 7)
             settings["scaleFactor"] = inp.get("scale") or 2
             a = inp.get("aspect") or {}
             if isinstance(a.get("w"), int) and isinstance(a.get("h"), int):
                 settings["inputPx"] = max(a["w"], a["h"])
+                d = inp.get("delivery")
+                if d:  # Export at full size: the plate goes at the size the delivery needs (formats.delivery_input)
+                    import formats
+                    settings["inputPx"] = max(formats.delivery_input((a["w"], a["h"]), (d["width"], d["height"]), settings["scaleFactor"]))
             return settings
         price = ((sheet.get("models") or {}).get(spec.get("model")) or {}).get("pricing") or {}
         if op == "region_edit" and "byQuality" in price:  # ideogram_4_5: the image is a reference
@@ -911,9 +925,13 @@ class Relay:
         if op == "write" and not isinstance(req["input"].get("write"), dict):
             raise ApiError("invalid_input", "A write job says what to write (input.write).")
         free = free_resize(req)
-        if op == "resize" and not free:  # extend and regenerate: phase 4 (features/campaign-formats.clan)
+        if op == "resize" and not free:
+            import formats
             method = str((req["input"].get("resize") or {}).get("method") or "this method")
-            raise ApiError("capability_missing", NOT_YET_METHOD.format(method=method.capitalize()))
+            if method not in formats.PAID_METHODS:  # nearest, reframe, reedit: not a still's paid method
+                raise ApiError("capability_missing", NOT_YET_METHOD.format(method=method.capitalize()))
+        if op == "upscale":
+            self._check_upscale(req["input"])
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
@@ -1278,6 +1296,12 @@ class Relay:
                 run_as, pjob, made = self._patch_provider_job(job, pjob, provider)
             except ApiError as e:
                 return self._fail(job, e.code, e.message, paid=False, refund=True, director=block)
+        if job["op"] == "resize" or (job["op"] == "upscale" and job["_req"]["input"].get("delivery")):
+            try:
+                pjob, made = (self._resize_provider_job(job, pjob, provider, sheet) if job["op"] == "resize"
+                              else self._delivery_provider_job(job, pjob))
+            except ApiError as e:
+                return self._fail(job, e.code, e.message, paid=False, refund=True, director=block)
         set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
         try:
             request_id = self._adapter(job, provider).submit(pjob)
@@ -1530,9 +1554,10 @@ class Relay:
         return self._finish(saved, "completed", outputs=[out], kind=self.segmenter.kind, paid=False)
 
     def _run_resize_free(self, job: dict) -> dict:
-        """A size made by crop on our server (formats.py; features/campaign-formats.clan): the master's
-        clean plate cropped (subject-aware when the web sent no crop), scaled to the preview, type layers
-        drawn. No provider, no spend, nothing counted."""
+        """A size made on our server (formats.py; features/campaign-formats.clan): crop, the master's clean
+        plate cropped (subject-aware when the web sent no crop); layout, the crop in its panel on the brand
+        colour field. Scaled to the preview, kept clean as the size's plate, type layers drawn on a copy.
+        No provider, no spend, nothing counted."""
         import formats
         saved = self._save(job, state="submitting", _queue="r")
         if saved is None:
@@ -1543,26 +1568,189 @@ class Relay:
         try:
             data = self.blobs.fetch(inp["image"]["url"])
             ms = rz["masterSize"]
-            crop = rz.get("crop")
-            if not crop:
-                fracs = formats.safe_fracs(inp.get("safeArea"), inp.get("delivery"))
-                crop, _ = formats.crop_box(ms["w"], ms["h"], inp["aspect"]["w"], inp["aspect"]["h"], rz.get("protect"), fracs)
             out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
-            png, drawn = formats.render(data, ms, crop, (out_w, out_h), rz.get("layers"), self.blobs.fetch)
+            crop = rz.get("crop")
+            if rz["method"] == "layout":
+                panel = rz.get("panel") or {"x": 0, "y": 0, "w": 1, "h": 1}
+                if not crop:
+                    pw, ph = max(1, round(panel["w"] * out_w)), max(1, round(panel["h"] * out_h))
+                    crop, _ = formats.crop_box(ms["w"], ms["h"], pw, ph, rz.get("protect"))
+                plate, png, drawn = formats.layout_render(data, ms, crop, (out_w, out_h), panel, rz.get("background"),
+                                                          rz.get("layers"), self.blobs.fetch)
+            else:
+                if not crop:
+                    fracs = formats.safe_fracs(inp.get("safeArea"), inp.get("delivery"))
+                    crop, _ = formats.crop_box(ms["w"], ms["h"], inp["aspect"]["w"], inp["aspect"]["h"], rz.get("protect"), fracs)
+                plate, png, drawn = formats.render(data, ms, crop, (out_w, out_h), rz.get("layers"), self.blobs.fetch)
         except Exception as e:
             log.exception("resize of %s failed", saved["jobId"])
-            return self._fail(saved, "internal", f"Wren could not crop this size ({type(e).__name__}).",
+            return self._fail(saved, "internal", f"Wren could not make this size ({type(e).__name__}).",
                               retryable=True, paid=False, refund=True)
+        out = self._keep_png(saved, png, out_w, out_h)
+        log.info("job %s: %s size %dx%d in %d ms", saved["jobId"], rz["method"], out_w, out_h, int((self.clock() - start) * 1000))
+        result = {"method": rz["method"], "crop": crop, "previewPx": {"width": out_w, "height": out_h}, "layers": drawn,
+                  "plate": self._keep_png(saved, plate, out_w, out_h)}
+        return self._finish(saved, "completed", outputs=[out], kind="generated", paid=False, resize=result)
+
+    def _keep_png(self, job: dict, png: bytes, w: int, h: int) -> dict:
+        """A PNG the relay made, kept under out/<sha> for the job's agency; its assetRef."""
         sha = "sha256:" + hashlib.sha256(png).hexdigest()
         key = f"out/{sha}"
         if not self.blobs.exists(key):
             self.blobs.put(key, png, "image/png")
-        if saved.get("_tenant"):
-            self.store.hold(saved["_tenant"], sha)
-        out = {"sha256": sha, "url": self.blobs.public_url(key), "mime": "image/png", "bytes": len(png), "w": out_w, "h": out_h}
-        log.info("job %s: %s size %dx%d in %d ms", saved["jobId"], rz["method"], out_w, out_h, int((self.clock() - start) * 1000))
-        result = {"method": rz["method"], "crop": crop, "previewPx": {"width": out_w, "height": out_h}, "layers": drawn}
-        return self._finish(saved, "completed", outputs=[out], kind="generated", paid=False, resize=result)
+        if job.get("_tenant"):
+            self.store.hold(job["_tenant"], sha)
+        return {"sha256": sha, "url": self.blobs.public_url(key), "mime": "image/png", "bytes": len(png), "w": w, "h": h}
+
+    # ── Make all sizes' paid methods (features/campaign-formats.clan, phase 4) ──
+    @staticmethod
+    def _resize_ratio(sheet: dict, model: str | None, inp: dict) -> str | None:
+        """regenerate: the ratio of the model's that is nearest the size's shape, at 1K or 2K (the preview
+        is at most 2048 px; Export at full size upscales). A model with no ratio list gets the shape."""
+        rz = inp.get("resize") or {}
+        a = inp.get("aspect") or {}
+        if rz.get("method") != "regenerate" or not a.get("w") or not a.get("h"):
+            return None
+        ratios = [r for r in (((sheet.get("models") or {}).get(model) or {}).get("ratios") or [])
+                  if r.get("ratio") != "auto" and r.get("tier") in (None, "1K", "2K")]
+        if not ratios:
+            g = math.gcd(int(a["w"]), int(a["h"])) or 1
+            return f"{int(a['w']) // g}:{int(a['h']) // g}"
+        want = math.log(a["w"] / a["h"])
+
+        def rank(r: dict) -> tuple[float, int]:
+            w, h = (int(x) for x in r["ratio"].split(":"))
+            return round(abs(math.log(w / h) - want), 6), -(w * h)
+        return min(ratios, key=rank)["ratio"]
+
+    def _resize_provider_job(self, job: dict, directed: dict, provider: str, sheet: dict) -> tuple[dict, list]:
+        """The provider job for a paid size, built here from the master's clean plate (input.image), never
+        with a word of the size's type. extend: the padded canvas as the picture to edit and our mask
+        (white = fill); regenerate: the master as @master at the nearest ratio. (providerJob, the
+        relay's own assets it names)."""
+        import formats
+        from providers import ProviderJob, check_capabilities
+        from providers.types import CapabilityMissing
+
+        inp = job["_req"]["input"]
+        rz = inp["resize"]
+        aw, ah = inp["aspect"]["w"], inp["aspect"]["h"]
+        model = sheet["ops"]["resize"]["model"]
+        pjob = {"provider": provider, "model": model, "outputs": 1}
+        made: list = []
+        if rz["method"] == "extend":
+            try:
+                data = self.blobs.fetch(inp["image"]["url"])
+                ms = rz["masterSize"]
+                from PIL import Image
+                with Image.open(io.BytesIO(data)) as im:
+                    pw, ph = im.size
+                k = pw / ms["w"]  # protect is in masterSize pixels; the plate may be another size
+                boxes = [{**b, "x": b["x"] * k, "y": b["y"] * ph / ms["h"], "w": b["w"] * k, "h": b["h"] * ph / ms["h"]}
+                         for b in rz.get("protect") or []]
+                plan = formats.pad_plan(pw, ph, aw, ah, boxes, formats.safe_fracs(inp.get("safeArea"), inp.get("delivery")))
+                canvas, mask = formats.padded(data, plan)
+            except Exception as e:
+                log.exception("job %s: could not pad the master", job["jobId"])
+                raise ApiError("invalid_input", f"Wren could not read the master to extend it ({type(e).__name__}).") from e
+            scratch = self._scratch(job)
+            plate = self._put_made(f"{scratch}/canvas.jpg", canvas, "image/jpeg")
+            ours = self._put_made(f"{scratch}/mask.png", mask, "image/png")
+            pjob.update(prompt=formats.EXTEND_PROMPT, refs=[{"sha256": plate["sha256"], "name": "current", "role": "current"}],
+                        mask=ours["sha256"])
+            made = [plate, ours]
+        else:  # regenerate
+            ratio = self._resize_ratio(sheet, model, inp)
+            pjob.update(prompt=formats.REGENERATE_PROMPT.format(shape=formats.shape_words(aw, ah)),
+                        refs=[{"sha256": inp["image"]["sha256"], "name": "master", "role": "object"}], ratio=ratio)
+        try:
+            check_capabilities(sheet, ProviderJob.from_director("resize", pjob))
+        except CapabilityMissing as e:
+            raise ApiError("capability_missing", sheet_refusal("resize", f"{provider}: {e}")) from e
+        return pjob, made
+
+    def _put_made(self, key: str, data: bytes, mime: str) -> dict:
+        """A picture the relay made for a provider to read (an extend's canvas and mask): its assetRef."""
+        self.blobs.put(key, data, mime)
+        return {"sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "url": self.blobs.public_url(key), "mime": mime}
+
+    def _land_resize(self, job: dict, raw: dict, cost_usd: float | None) -> dict:
+        """A paid size's picture: cropped to the size's exact shape, scaled to the preview, kept clean as the
+        plate, the type layers drawn on a copy. The provider's bill stands whatever happens here."""
+        import formats
+        inp = job["_req"]["input"]
+        rz = inp["resize"]
+        try:
+            data = self.blobs.fetch(raw["url"])
+            out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
+            plate, png, (rw, rh), drawn = formats.finish(data, (inp["aspect"]["w"], inp["aspect"]["h"]), (out_w, out_h),
+                                                         rz.get("layers"), self.blobs.fetch)
+        except Exception as e:
+            log.exception("finishing the size of %s failed", job["jobId"])
+            return self._fail(job, "internal", f"Wren made this size but could not finish it ({type(e).__name__}). Redo it.",
+                              retryable=True, confirmed=cost_usd)
+        out = self._keep_png(job, png, out_w, out_h)
+        out["croppedFrom"] = {"w": rw, "h": rh}
+        ms = rz["masterSize"]
+        result = {"method": rz["method"], "crop": {"x": 0, "y": 0, "w": ms["w"], "h": ms["h"]},
+                  "previewPx": {"width": out_w, "height": out_h}, "layers": drawn,
+                  "plate": self._keep_png(job, plate, out_w, out_h)}
+        kind = "mock" if job["provider"] == "mock" else "generated"
+        return self._finish(job, "completed", outputs=[out], kind=kind, confirmed=cost_usd, resize=result)
+
+    @staticmethod
+    def _check_upscale(inp: dict) -> None:
+        """An upscale for delivery (Export at full size): Magnific's limits, before any spend. The relay
+        sends the plate at formats.delivery_input, so the output stays under 25.3 MP; each side of what
+        goes must be 300 to 8000 px. input.aspect is the plate's own size."""
+        import formats
+        a, d, scale = inp.get("aspect") or {}, inp.get("delivery"), inp.get("scale") or 2
+        if not d:
+            return
+        if not a.get("w") or not a.get("h"):
+            raise ApiError("invalid_input", "An upscale for delivery says the picture's size (input.aspect).")
+        iw, ih = formats.delivery_input((a["w"], a["h"]), (d["width"], d["height"]), scale)
+        if min(iw, ih) < formats.UPSCALE_MIN_IN or max(iw, ih) > formats.UPSCALE_MAX_IN:
+            raise ApiError("invalid_input", "Magnific takes pictures 300 to 8000 px on each side.")
+
+    def _delivery_provider_job(self, job: dict, pjob: dict) -> tuple[dict, list]:
+        """Export at full size: the plate at the size the delivery needs (formats.delivery_input), made here
+        when that is smaller than the plate. (providerJob, the relay's own assets it names)."""
+        import formats
+        inp = job["_req"]["input"]
+        a, d = inp["aspect"], inp["delivery"]
+        iw, ih = formats.delivery_input((a["w"], a["h"]), (d["width"], d["height"]), inp.get("scale") or 2)
+        if (iw, ih) == (a["w"], a["h"]):
+            return pjob, []
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(self.blobs.fetch(inp["image"]["url"])))
+            img.load()
+            buf = io.BytesIO()
+            img.convert("RGB").resize((iw, ih), Image.LANCZOS).save(buf, format="PNG")
+        except Exception as e:
+            raise ApiError("invalid_input", f"The size's picture could not be read ({type(e).__name__}).") from e
+        made = self._put_made(f"{self._scratch(job)}/plate.png", buf.getvalue(), "image/png")
+        return {**pjob, "refs": [{"sha256": made["sha256"], "name": "current", "role": "current"}]}, [made]
+
+    def _land_delivery(self, job: dict, raw: dict, cost_usd: float | None) -> dict:
+        """Export at full size: Magnific's upscale of a size's plate, scaled to the exact delivery size and
+        the type layers drawn again at that size. The upscale itself is kept as the model made it."""
+        import formats
+        inp = job["_req"]["input"]
+        d = inp["delivery"]
+        try:
+            data = self.blobs.fetch(raw["url"])
+            png, drawn = formats.deliver(data, (d["width"], d["height"]), inp.get("layers"), self.blobs.fetch)
+        except Exception as e:
+            log.exception("delivering %s failed", job["jobId"])
+            return self._fail(job, "internal", f"The size was upscaled but could not be finished ({type(e).__name__}).",
+                              retryable=True, confirmed=cost_usd)
+        out = self._keep_png(job, png, d["width"], d["height"])
+        if raw.get("w") and raw.get("h"):
+            out["croppedFrom"] = {"w": raw["w"], "h": raw["h"]}
+        kind = "mock" if job["provider"] == "mock" else "generated"
+        return self._finish(job, "completed", outputs=[out], kind=kind, confirmed=cost_usd)
 
     # ── asks (needs_input, ui-behaviour 3.17, 5.2) ──────────────────────────
     def _ask(self, job: dict, question: dict, block: dict) -> dict:
@@ -2072,6 +2260,10 @@ class Relay:
             return self._with_poll(back or claimed)
         if job["op"] == "clip_patch":  # the model's window, spliced back into the take before it lands
             return self._run_splice(claimed, outputs[0], st.cost_usd)
+        if job["op"] == "resize":  # cropped to the exact shape, scaled to the preview, the type drawn
+            return self._land_resize(claimed, outputs[0], st.cost_usd)
+        if job["op"] == "upscale" and (job["_req"].get("input") or {}).get("delivery"):
+            return self._land_delivery(claimed, outputs[0], st.cost_usd)
         kind = "mock" if job["provider"] == "mock" else "generated"
         return self._finish(claimed, "completed", outputs=outputs, kind=kind, confirmed=st.cost_usd)
 

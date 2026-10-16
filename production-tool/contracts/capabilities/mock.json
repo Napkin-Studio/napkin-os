@@ -63,7 +63,8 @@
       "label": "Mock"
     },
     "upscale": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}, "label": "Mock"},
-    "resize": {"model": "mock", "endpoint": "mock://image", "method": "extend", "defaults": {"outputs": 1}, "label": "Mock"},
+    "resize": {"model": "mock", "endpoint": "mock://image", "method": "extend", "defaults": {"outputs": 1}, "label": "Mock",
+      "alternates": [{"model": "mock-hq", "endpoint": "mock://image", "method": "regenerate", "defaults": {"outputs": 1}, "label": "Mock HQ", "note": "Remakes the master at the new shape"}]},
     "cutdown": {"model": "mock", "endpoint": "mock://video", "method": "reframe", "defaults": {"durationS": 3}, "label": "Mock"}
   },
   "models": {
