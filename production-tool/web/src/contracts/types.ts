@@ -954,6 +954,8 @@ export interface ResizeInput {
   /** layout: where the picture sits on the colour field, 0-1 of the size. */
   panel?: Region
   layers?: TypeLayer[]
+  /** regenerate: what the picture is; a sketch (a scamp) is drawn as a finished picture. */
+  source?: 'picture' | 'sketch'
 }
 export interface CutdownInput {
   lengthS: number

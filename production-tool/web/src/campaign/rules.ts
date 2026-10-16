@@ -130,3 +130,19 @@ export function methodFor(row: PlanRow, master: Master, protect: readonly Protec
   if (RUNNABLE.has(method) && (!PAID.has(method) || available.has(method))) return { method, now: method, fits }
   return { method, now: 'crop', waits: wait(method), fits }
 }
+
+/** Auto on a loose picture (features/resize-selection.clan): a crop keeps at least this share of it. */
+export const AUTO_CROP_KEEPS = 0.8
+
+/**
+ * Auto for Resize… on canvas pictures, which have no protected boxes: the rule table's order. Crop when
+ * the crop keeps most of the picture (it "fits"); else extend; regenerate where the picture would fill
+ * under REGENERATE_BELOW of the shape (the subject must fill it), or when extend is off for the agency.
+ */
+export function autoMethod(master: Aspect, target: Aspect, available: ReadonlySet<SizeMethod> = availableMethods()): SizeMethod {
+  const f = filled(master, target)
+  if (f >= AUTO_CROP_KEEPS) return 'crop'
+  if (f < REGENERATE_BELOW && available.has('regenerate')) return 'regenerate'
+  if (available.has('extend')) return 'extend'
+  return available.has('regenerate') ? 'regenerate' : 'crop'
+}

@@ -74,7 +74,11 @@ import { linkedRows, sketchOf, unknownTyped } from './trayScope'
 import './inputs.css'
 import { campaignSheet } from '../campaign/sheet'
 import { MakeSizesSheet } from '../campaign/MakeSizesSheet'
-import { pictureMaster, pictureOf, videoMaster } from '../campaign/master'
+import { pictureMaster, videoMaster } from '../campaign/master'
+import { ResizePanel } from '../campaign/ResizePanel'
+import { resizableIn, resizePictures } from '../campaign/resizeSelection'
+import { assetRef } from '../jobs/assets'
+import { namedInput } from '../jobs/select'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -143,6 +147,8 @@ export function Character({ initial, active, onPictureEditor }: {
   /** Waiting for a click that says where the next result goes. */
   const [placing, setPlacing] = useState<{ ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice } | null>(null)
   const [placeError, setPlaceError] = useState<string | null>(null)
+  /** Resize… from the node bar (a selection with nodes and pictures): the pictures it resizes. */
+  const [resizeOn, setResizeOn] = useState<{ els: El[]; key: string } | null>(null)
   /** Dex's question when Make video has two scripts or two storyboards (3.5): which one drives. */
   // Generate opened from an ink group's bar (container-select): the popover over the group's strokes.
   const [genFor, setGenFor] = useState<string[] | null>(null)
@@ -250,6 +256,10 @@ export function Character({ initial, active, onPictureEditor }: {
     if (undo && offerGone(undo, new Set(els.map((e) => e.id)))) offerUndo(null)
   }, [els, undo, offerUndo])
   const selected = useMemo(() => els.filter((e) => vs?.selected.includes(e.id) && !cardOf(e) && !isBoard(e)), [els, vs])
+  // Resize… from the node bar is for the selection it opened on: another selection closes it.
+  const selKey = vs?.selected.join(',') ?? ''
+  const resizing = resizeOn && resizeOn.key === selKey ? resizeOn.els : null
+  const setResizing = (els: El[] | null) => setResizeOn(els ? { els, key: selKey } : null)
   // Our own engine's bar for nodes, links and groups (ui-behaviour 3.9); pictures, marks and sketch areas keep the Generate bar.
   const ownEdit = canvas?.engine === 'own' ? (canvas as unknown as OwnEdit) : null
   const ownSel = useMemo((): { info: SelInfo; els: El[] } | null => {
@@ -279,7 +289,8 @@ export function Character({ initial, active, onPictureEditor }: {
     }
     if (!canvasActions.canMake()) off['make-video'] = 'Make video needs the canvas'
     if (!controls.generate) off.generate = 'Generate is turned off here'
-    return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off }, els: all }
+    const pictures = resizableIn(all).items.length
+    return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off, ...(pictures ? { pictures } : {}) }, els: all }
   }, [ownEdit, vs, els, doc, controls.generate])
   const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
@@ -596,7 +607,13 @@ export function Character({ initial, active, onPictureEditor }: {
               </span>
             )
           })}
-          {ctrl && canvas && ownSel && !confirming && !placing && !which && (() => {
+          {ctrl && resizing && (() => {
+            const r = resizableIn(resizing)
+            const b = bounds(resizing)
+            const top = toView({ x: b.minX + b.w / 2, y: b.minY })
+            return r.items.length ? <ResizeFor ctrl={ctrl} items={r.items} total={r.total} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} onClose={() => setResizing(null)} /> : null
+          })()}
+          {ctrl && canvas && ownSel && !resizing && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
             const ids = ownSel.els.map((e) => e.id)
@@ -624,6 +641,7 @@ export function Character({ initial, active, onPictureEditor }: {
                   if (!m) { setPlaceError('Render the ad first: Make all sizes starts from the rendered ad.'); return }
                   campaignSheet.open({ master: m, nearId: ownSel.els[0]?.id })
                 },
+                resize: () => setResizing(ownSel.els),
                 stack: (on) => {
                   const kg = keyGroupsOn(canvas.elements(), docStore.get()).find((g) => g.members.some((m) => ownSel.els.some((e) => e.id === m.id)))
                   if (kg) setStacked(canvas, kg.members, on, { animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
@@ -634,9 +652,12 @@ export function Character({ initial, active, onPictureEditor }: {
           {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing} gather={gather} onGather={onGather}
               onSizes={own ? (el) => {
-                const pic = pictureOf(el)
-                if (!pic) return
-                void pictureMaster(docStore.get(), pic).then((m) => campaignSheet.open({ master: m, nearId: el.id })).catch((e) => setPlaceError(errText(e)))
+                // A picture, or a scamp's picture (a Drawing's strokes, a sketch area's region) as the master.
+                void ctrl.resizeSources([el.id]).then(async ([src]) => {
+                  if (!src) return
+                  const m = await pictureMaster(docStore.get(), { id: src.nodeId, asset: src.asset })
+                  campaignSheet.open({ master: { ...m, w: src.w, h: src.h, ...(src.kind !== 'picture' && m.label === 'Key visual' ? { label: src.kind === 'sketch' ? 'Sketch' : 'Drawing' } : {}) }, nearId: el.id })
+                }).catch((e) => setPlaceError(errText(e)))
               } : undefined}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
@@ -800,9 +821,11 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
           <JobNode jobId={c.id} compact={w < 170} onRetried={(id) => ctrl?.retarget(c.id, id)} />
         </div>
       )}
+      {c.shape && state !== 'completed' && <div className="genlabel" style={{ left: tl.x, top: tl.y - 24 }}><span className="pill">{c.shape}</span></div>}
       {state === 'completed' && !named && (
         <div className="genlabel" style={{ left: tl.x, top: tl.y }}>
           {c.view && <span className="pill">{viewLabel(c.view)}</span>}
+          {c.shape && <span className="pill" title="Resized to this shape">{c.shape}</span>}
           {showMock && c.mock && <span className="mockbadge">MOCK</span>}
         </div>
       )}
@@ -853,7 +876,7 @@ function FlowArrows({ els, selectedIds, toView }: { els: El[]; selectedIds: read
 
 // ── The floating toolbar on the selection ───────────────────────────────────
 
-type Popover = null | 'generate' | 'name'
+type Popover = null | 'generate' | 'name' | 'resize'
 
 export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit, gather, onGather, onSizes }: {
   ctrl: CanvasController
@@ -918,9 +941,15 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
   const single = meaningful.length === 1 ? imageOf(meaningful[0]) : undefined
   const singleImage = single?.asset ? single : undefined
   const named = singleImage ? ctrl.nameOn(singleImage.id, doc) : undefined
+  // Resize… (features/resize-selection.clan): pictures, results and scamps (a Drawing, a sketch area).
+  const resizable = resizableIn(meaningful)
+  const scampAlone = meaningful.length === 1 && resizable.items.length === 1 && !singleImage ? meaningful[0] : undefined
 
   if (open === 'generate') {
     return <GeneratePopover ctrl={ctrl} ids={ids} at={at} limits={limits} onClose={() => setOpen(null)} onPlace={onPlace} />
+  }
+  if (open === 'resize' && resizable.items.length) {
+    return <ResizeFor ctrl={ctrl} items={resizable.items} total={resizable.total} at={at} onClose={() => setOpen(null)} />
   }
   if (open === 'name' && singleImage) {
     return <NamePopover ctrl={ctrl} nodeId={singleImage.id} current={named} presetVariant={nameVariant} at={at} onClose={() => setOpen(null)} />
@@ -957,7 +986,8 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
       groups.push(<button key="edit" className="btn sm" title="Open in the Image editor (or double-click the picture)" onClick={() => onEdit(singleImage.id)}>Edit</button>)
     }
   }
-  if (singleImage && onSizes) groups.push(<button key="sizes" className="btn sm" title="Every format of a campaign from this picture" onClick={() => onSizes(meaningful[0])}>Make all sizes…</button>)
+  if ((singleImage || scampAlone) && onSizes) groups.push(<button key="sizes" className="btn sm" title="Every still format of a campaign from this picture" onClick={() => onSizes(meaningful[0])}>Make all sizes…</button>)
+  if (resizable.items.length) groups.push(<button key="resize" className="btn sm" title="Make these pictures at other shapes, each beside its original" onClick={() => setOpen('resize')}>Resize…</button>)
   // The beta's thumbs on a picture the tool made (features/production-tool-dogfood.clan).
   const made = singleImage?.kind === 'gen' ? cd(meaningful[0]) : undefined
   if (made?.kind === 'gen' && singleImage?.asset) {
@@ -994,6 +1024,22 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
       ))}
       {error && <span className="row" role="alert" style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 600, padding: '0 6px' }}>{error}</span>}
     </Floating>
+  )
+}
+
+/** Resize… on these pictures (features/resize-selection.clan): the panel, and Send placing every result. */
+function ResizeFor({ ctrl, items, total, at, onClose }: { ctrl: CanvasController; items: El[]; total: number; at: Anchor; onClose: () => void }) {
+  const services = useServices()
+  return (
+    <ResizePanel anchor={at} total={total} load={() => ctrl.resizeSources(items.map((e) => e.id))} onClose={onClose}
+      send={async (planned) => {
+        const jobs = await resizePictures({
+          canvas: ctrl.canvasAdapter, runner: services.runner, doc: () => services.doc.get(),
+          ref: (sha) => assetRef(services.relay, sha, services.doc.get()),
+          named: (r) => namedInput(services.relay, services.doc.get(), r),
+        }, planned)
+        ctrl.reveal([...jobs, ...items.map((e) => e.id)])
+      }} />
   )
 }
 
