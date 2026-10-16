@@ -21,6 +21,8 @@ export interface SelectionBarActions {
   ungroup(): void
   lock(locked: boolean): void
   remove(): void
+  /** Make all sizes from a Video node (features/campaign-formats.clan). */
+  makeSizes?(): void
   /** A key group: pile its views up (true) or lay them out (false), one undo step. */
   stack?(on: boolean): void
 }
@@ -46,6 +48,7 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
     else if (id === 'ungroup') actions.ungroup()
     else if (id === 'delete') actions.remove()
     else if (id === 'stack' || id === 'spread') actions.stack?.(id === 'stack')
+    else if (id === 'make-sizes') actions.makeSizes?.()
   }
   const label = info.group?.key ? `${info.group.key.label} actions` : info.group?.ink ? 'Ink group actions' : info.cards.length ? 'Node actions' : 'Selection actions'
   return (

@@ -8,7 +8,7 @@
 
 import { CanvasMount } from '../canvas/CanvasMount'
 import type { ViewSnapshot } from '../canvas/core/canvasAdapter'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import { scriptRoute } from '../app/route'
 import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
@@ -64,6 +64,9 @@ import { useProjectName } from '../ui/useDownload'
 import { mediaItem, viewsOnCanvas, type MediaItem } from '../media/names'
 import { linkedRows, sketchOf, unknownTyped } from './trayScope'
 import './inputs.css'
+import { campaignSheet } from '../campaign/sheet'
+import { MakeSizesSheet } from '../campaign/MakeSizesSheet'
+import { pictureMaster, pictureOf, videoMaster } from '../campaign/master'
 
 type Pt = { x: number; y: number }
 interface ViewState {
@@ -96,6 +99,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const ui = useUi()
   useJobsTick()
   const theme = useColorScheme()
+  const sheet = useSyncExternalStore(campaignSheet.subscribe, campaignSheet.get)
   const { config, controls } = useConfig()
   const [canvas, setCanvas] = useState<Canvas | null>(null)
   const [vs, setVs] = useState<ViewState | null>(null)
@@ -532,6 +536,13 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
                   canvas.transact((all) => all.map((e) => (ids.has(e.id) ? canvas.patch(e, { locked } as Partial<El>) : e)), { undoable: true })
                 },
                 remove: () => requestDelete(ownSel.els),
+                makeSizes: () => {
+                  const c = ownSel.els.map(cardOf).find((x) => x?.kind === 'video')
+                  if (!c) return
+                  const m = videoMaster(docStore.get(), c.id)
+                  if (!m) { setPlaceError('Render the ad first: Make all sizes starts from the rendered ad.'); return }
+                  campaignSheet.open({ master: m, nearId: ownSel.els[0]?.id })
+                },
                 stack: (on) => {
                   const kg = keyGroupsOn(canvas.elements(), docStore.get()).find((g) => g.members.some((m) => ownSel.els.some((e) => e.id === m.id)))
                   if (kg) setStacked(canvas, kg.members, on, { animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
@@ -541,6 +552,11 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           })()}
           {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
             <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits}
+              onSizes={own ? (el) => {
+                const pic = pictureOf(el)
+                if (!pic) return
+                void pictureMaster(docStore.get(), pic).then((m) => campaignSheet.open({ master: m, nearId: el.id })).catch((e) => setPlaceError(errText(e)))
+              } : undefined}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
@@ -600,6 +616,16 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           <div className="placing" onPointerDown={onPlace} role="button" aria-label="Click where the new image goes">
             <div className="placing-hint">Click where the new image goes · <button className="btn xs ghost" onPointerDown={(e) => { e.stopPropagation(); setPlacing(null) }}>Cancel</button></div>
           </div>
+        )}
+        {sheet && canvas && (
+          <MakeSizesSheet master={sheet.master} deps={{ canvas, doc: docStore, runner, relay: services.relay }}
+            by={ui.me ? `human:${ui.me.participantId}` : 'human:p_local'}
+            near={sheet.nearId ? canvas.elements().find((e) => e.id === sheet.nearId) : undefined}
+            onClose={() => campaignSheet.close()}
+            onMade={(el) => {
+              const frame = el.frameId ? canvas.elements().find((e) => e.id === el.frameId) : undefined
+              canvas.fit(frame ? [frame] : [el], { zoomFactor: 0.85, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
+            }} />
         )}
         {placeError && <div className="place-error" role="alert">{placeError} <button className="btn xs ghost" onClick={() => setPlaceError(null)}>OK</button></div>}
         {showHint && <StartCard onScript={() => open('script')} onPictures={() => chrome?.setTool('image')} />}
@@ -701,7 +727,7 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
 
 type Popover = null | 'generate' | 'name'
 
-function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup }: {
+function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onSizes }: {
   ctrl: CanvasController
   selected: El[]
   toView: (p: Pt) => Pt
@@ -710,6 +736,8 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, on
   onGroup?: () => void
   onPlace: (ids: string[], text: string, more: boolean, modelChoice?: ModelChoice) => void
   limits: { max: number; characters: number }
+  /** Make all sizes from this picture (features/campaign-formats.clan); our own engine only. */
+  onSizes?: (el: El) => void
 }) {
   const doc = useDoc()
   const project = useProjectName()
@@ -729,7 +757,8 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, on
     setOpen(null)
   }
 
-  const meaningful = selected.filter((e) => cd(e)?.kind !== 'provenance')
+  // A Campaign board has its own actions on its tiles (features/campaign-formats.clan).
+  const meaningful = selected.filter((e) => cd(e)?.kind !== 'provenance' && (e.customData as { kind?: string } | undefined)?.kind !== 'format_set')
   if (!meaningful.length) return null
   const b = bounds(meaningful)
   const raw = toView({ x: b.minX + b.w / 2, y: b.minY })
@@ -791,6 +820,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, on
       </span>,
     )
   }
+  if (singleImage && onSizes) groups.push(<button key="sizes" className="btn sm" title="Every format of a campaign from this picture" onClick={() => onSizes(meaningful[0])}>Make all sizes…</button>)
   // The beta's thumbs on a picture the tool made (features/production-tool-dogfood.clan).
   const made = singleImage?.kind === 'gen' ? cd(meaningful[0]) : undefined
   if (made?.kind === 'gen' && singleImage?.asset) {

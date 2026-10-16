@@ -116,7 +116,7 @@ QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
 INTERNAL_OPS = {"shot_list", "stitch", "write", "cutout"}
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
 BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch",
-             "stitch", "write", "upscale", "cutout"}
+             "stitch", "write", "upscale", "cutout", "resize"}
 # Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan).
 NO_DIRECTOR_OPS = {"upscale"}
 # What the editor says when Remove background cannot run here (features/image-editor.clan).
@@ -125,6 +125,15 @@ UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 # Ops whose models the capability sheets list for the Make all sizes method table (features/campaign-formats.clan)
 # but no adapter builds yet: extend and regenerate (phase 4), Aleph 2 reframes (phase 6).
 NO_ADAPTER_YET = {"resize", "cutdown"}
+NOT_YET_METHOD = ("{method} comes with a later build of Make all sizes. Crop works now: change this size's method "
+                  "to Crop, or keep it for when {method} lands.")
+
+
+def free_resize(req: dict) -> bool:
+    """Make all sizes' free methods (formats.py): no provider, no spend, no quota, no in-flight place.
+    A crop lands in about a second, and a campaign sends twenty at once."""
+    import formats
+    return req.get("op") == "resize" and ((req.get("input") or {}).get("resize") or {}).get("method") in formats.FREE_METHODS
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
@@ -815,7 +824,7 @@ class Relay:
         elif op == "clip_edit" and not (inp.get("region") or inp.get("mask")) and not flags["feelEdit"]:
             # A clip_edit with no region and no mask is a feel edit, with or without a feel block.
             off = "Feel edits are switched off for now."
-        elif op not in INTERNAL_OPS and not cfg["routing"].get(op):
+        elif op not in INTERNAL_OPS and not free_resize(req) and not cfg["routing"].get(op):
             off = "This step is switched off for now."
         if off:
             raise ApiError("flag_off", off)
@@ -877,7 +886,7 @@ class Relay:
         the script (ui-behaviour 3.5) has the shot's words and no frame. Refused here, before quota or
         spend, not later by the provider (a video as the frame reached Runway)."""
         inp = req["input"]
-        if req["op"] in ("upscale", "cutout"):
+        if req["op"] in ("upscale", "cutout", "resize"):
             image = inp.get("image")
             if not image or not str(image.get("mime", "")).startswith("image/"):
                 raise ApiError("invalid_input", "Rhea needs the picture itself (input.image) for this.")
@@ -901,6 +910,10 @@ class Relay:
             raise ApiError("capability_missing", "This step is not built yet.")
         if op == "write" and not isinstance(req["input"].get("write"), dict):
             raise ApiError("invalid_input", "A write job says what to write (input.write).")
+        free = free_resize(req)
+        if op == "resize" and not free:  # extend and regenerate: phase 4 (features/campaign-formats.clan)
+            method = str((req["input"].get("resize") or {}).get("method") or "this method")
+            raise ApiError("capability_missing", NOT_YET_METHOD.format(method=method.capitalize()))
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
@@ -915,7 +928,7 @@ class Relay:
             raise ApiError("invalid_input", str(e)) from None
         patch = self._patch_admit(cfg, req) if op == "clip_patch" else None
         estimate, unknown = 0.0, False
-        if op not in INTERNAL_OPS:
+        if op not in INTERNAL_OPS and not free:
             # Reserved at the dearest provider it may run on, with the model it would run there.
             candidates = self._chain(cfg, op, pick, policy["allow"], req["input"])
             if not candidates:
@@ -935,14 +948,14 @@ class Relay:
         except ApiError:
             self._release_take(patch, req["jobId"])
             raise
-        if not self.store.incr(f"inflight#{pid}", "n", 1, cfg["inFlightPerParticipant"]):
+        if not free and not self.store.incr(f"inflight#{pid}", "n", 1, cfg["inFlightPerParticipant"]):
             self.ledger.adjust(tenant, month, -estimate)
             self._release_take(patch, req["jobId"])
             raise ApiError("queue_full", f"You have {cfg['inFlightPerParticipant']} jobs running; wait for one to finish.",
                            retryable=True, retry_after=10)
         day = self._day()
         # Counted always, enforced only while the agency's daily quotas are on (off by default).
-        counted = qclass in cfg["quotas"]
+        counted = qclass in cfg["quotas"] and not free
         limit = cfg["quotas"][qclass] if counted and policy["dailyQuotas"] else None
         if counted and not self.store.incr(f"{pid}#{day}", qclass, 1, limit):
             self.store.incr(f"inflight#{pid}", "n", -1)
@@ -961,12 +974,15 @@ class Relay:
             "_req": req, "_day": day, "_counted": counted, "_queue": "q", "_tenant": who["tenant"]["id"],
             "_released": False, "_tried": [], "_month": month,
         }
+        if free:
+            job["_free"] = True
         if pick:  # where the job meant to run, for fallbackFrom
             job["_first"] = {"provider": pick["provider"], "model": pick["model"]}
         if patch:  # the model is chosen before the job runs, and shown on it from the start
             job.update(model=patch["model"], patch=patch["record"], _patch=patch["settings"], _lock=patch["lock"])
         if not self.store.create_job(job):  # the same jobId raced in: undo, return theirs
-            self.store.incr(f"inflight#{pid}", "n", -1)
+            if not free:
+                self.store.incr(f"inflight#{pid}", "n", -1)
             if counted:
                 self.store.incr(f"{pid}#{day}", qclass, -1)
             self.ledger.adjust(tenant, month, -estimate)
@@ -1025,7 +1041,8 @@ class Relay:
             return self._reload(job)
         self._release_take(job, job["jobId"])  # a clip_patch's take is free for the next fix, whatever the end
         if not job.get("_released"):
-            self.store.incr(f"inflight#{job['participantId']}", "n", -1)
+            if not job.get("_free"):
+                self.store.incr(f"inflight#{job['participantId']}", "n", -1)
             if job.get("_slot"):
                 self.store.incr(job["_slot"], "n", -1)
             if refund and job.get("_counted"):
@@ -1108,6 +1125,8 @@ class Relay:
             return self._run_write(job)
         if op == "cutout":
             return self._run_cutout(job)
+        if job.get("_free"):
+            return self._run_resize_free(job)
         if op == "stitch":
             return self._run_stitch(job, cfg)
         if op == "clip_patch" and not job.get("_stage"):
@@ -1509,6 +1528,41 @@ class Relay:
         log.info("job %s: cut out on the server by %s in %d ms", saved["jobId"], self.segmenter.model,
                  int((self.clock() - start) * 1000))
         return self._finish(saved, "completed", outputs=[out], kind=self.segmenter.kind, paid=False)
+
+    def _run_resize_free(self, job: dict) -> dict:
+        """A size made by crop on our server (formats.py; features/campaign-formats.clan): the master's
+        clean plate cropped (subject-aware when the web sent no crop), scaled to the preview, type layers
+        drawn. No provider, no spend, nothing counted."""
+        import formats
+        saved = self._save(job, state="submitting", _queue="r")
+        if saved is None:
+            return self._reload(job)
+        inp = saved["_req"]["input"]
+        rz = inp["resize"]
+        start = self.clock()
+        try:
+            data = self.blobs.fetch(inp["image"]["url"])
+            ms = rz["masterSize"]
+            crop = rz.get("crop")
+            if not crop:
+                fracs = formats.safe_fracs(inp.get("safeArea"), inp.get("delivery"))
+                crop, _ = formats.crop_box(ms["w"], ms["h"], inp["aspect"]["w"], inp["aspect"]["h"], rz.get("protect"), fracs)
+            out_w, out_h = formats.preview_size(inp["delivery"], rz.get("previewMaxPx"))
+            png, drawn = formats.render(data, ms, crop, (out_w, out_h), rz.get("layers"), self.blobs.fetch)
+        except Exception as e:
+            log.exception("resize of %s failed", saved["jobId"])
+            return self._fail(saved, "internal", f"Wren could not crop this size ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        sha = "sha256:" + hashlib.sha256(png).hexdigest()
+        key = f"out/{sha}"
+        if not self.blobs.exists(key):
+            self.blobs.put(key, png, "image/png")
+        if saved.get("_tenant"):
+            self.store.hold(saved["_tenant"], sha)
+        out = {"sha256": sha, "url": self.blobs.public_url(key), "mime": "image/png", "bytes": len(png), "w": out_w, "h": out_h}
+        log.info("job %s: %s size %dx%d in %d ms", saved["jobId"], rz["method"], out_w, out_h, int((self.clock() - start) * 1000))
+        result = {"method": rz["method"], "crop": crop, "previewPx": {"width": out_w, "height": out_h}, "layers": drawn}
+        return self._finish(saved, "completed", outputs=[out], kind="generated", paid=False, resize=result)
 
     # ── asks (needs_input, ui-behaviour 3.17, 5.2) ──────────────────────────
     def _ask(self, job: dict, question: dict, block: dict) -> dict:
