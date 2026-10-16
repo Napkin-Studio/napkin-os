@@ -61,6 +61,15 @@ describe('the bar entry and a mixed selection', () => {
     const r = resizableIn([pic, gen, pending, drawing, area, node])
     expect(r.items.map((e) => e.id)).toEqual([pic.id, gen.id, drawing.id, area.id])
     expect(r.total).toBe(6)
+    // Loose pen strokes are one drawing (wrapped as a Drawing when sent); those inside a selected sketch area are its own.
+    const stroke = (id: string, x: number, y: number) => ({ ...pic, id, type: 'freedraw', customData: undefined, x, y, width: 80, height: 40 }) as CanvasElement
+    const ink = stroke('ink1', 1200, 0)
+    const ink2 = stroke('ink2', 1300, 0)
+    const inArea = stroke('ink3', 720, 20)
+    const withInk = resizableIn([pic, area, ink, ink2, inArea])
+    expect(withInk.strokes.map((e) => e.id)).toEqual([ink.id, ink2.id])
+    expect(withInk.count).toBe(3)
+    expect(withInk.total).toBe(3)
     expect(mixedLine(3, 5)).toBe('3 of 5 selected are pictures')
     expect(mixedLine(1, 2)).toBe('1 of 2 selected is a picture')
     expect(mixedLine(3, 3)).toBeUndefined()
@@ -71,6 +80,7 @@ describe('the bar entry and a mixed selection', () => {
     expect(barFor(sel({ cards: ['script'], units: 3 })).map((x) => x.id)).toEqual(['group', 'move-to-board', 'delete'])
     expect(barFor(sel({ group: { ink: false, key: { label: 'Samurai · 3 views', stacked: false } }, pictures: 3 })).map((x) => x.id)).toEqual(['stack', 'resize', 'move-to-board', 'delete'])
     expect(barFor(sel({ cards: ['script'], units: 3, pictures: 2 }))[0]).toMatchObject({ label: 'Resize…' })
+    expect(barFor(sel({ group: { ink: true }, pictures: 1 })).map((x) => x.id)).toEqual(['convert', 'resize', 'ungroup', 'move-to-board', 'delete'])
   })
 })
 
@@ -94,7 +104,7 @@ describe('how, and the count', () => {
     expect(planned).toHaveLength(6)
     expect(makeWords(planned.length)).toBe('Make 6 pictures')
     expect(makeWords(1)).toBe('Make 1 picture')
-    const rows = trayRows(planned, models, (s, i) => `Picture ${i + 1}`)
+    const rows = trayRows(planned, models, (_s, i) => `Picture ${i + 1}`)
     expect(rows[0]).toMatchObject({ name: 'Picture 1 · 9:16', words: 'Redraw · Gemini 3 Pro' })
     expect(rows[5].name).toBe('Picture 3 · 1:1')
     expect(trayRows(planResize(sources, [shape('9:16')], 'crop', models), models, () => 'P')[0].words).toBe('Crop · free')

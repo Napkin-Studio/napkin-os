@@ -289,7 +289,7 @@ export function Character({ initial, active, onPictureEditor }: {
     }
     if (!canvasActions.canMake()) off['make-video'] = 'Make video needs the canvas'
     if (!controls.generate) off.generate = 'Generate is turned off here'
-    const pictures = resizableIn(all).items.length
+    const pictures = resizableIn(all).count
     return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off, ...(pictures ? { pictures } : {}) }, els: all }
   }, [ownEdit, vs, els, doc, controls.generate])
   const zoom = vs?.view.zoom ?? 1
@@ -303,6 +303,17 @@ export function Character({ initial, active, onPictureEditor }: {
     // The 🗑 had the focus: the next ⌘Z is the canvas's, and takes the delete back (its chip leaves with it).
     ;(canvas as unknown as { focusCanvas?: (() => void) | null } | null)?.focusCanvas?.()
   }, [ctrl, offerUndo, canvas])
+
+  /** Resize… placed its results: one Undo takes every one away, made or still making (Ctrl+Z does too
+   *  until the first lands; a landed picture is the crew's change, which the canvas's undo leaves). */
+  const onResized = useCallback((jobs: string[]) => {
+    if (!canvas || !ctrl) return
+    const els = alive(canvas.elements()).filter((e) => jobs.includes(e.id))
+    if (!els.length) return
+    const b = bounds(els)
+    offerUndo({ label: `${jobs.length} ${jobs.length === 1 ? 'picture' : 'pictures'} on the way`, at: { x: b.minX + b.w / 2, y: b.maxY + 16 },
+      undo: () => { ctrl.deleteElements(jobs) }, gone: goneWhenDead(jobs) })
+  }, [canvas, ctrl, offerUndo])
 
   /** The 🗑 and the Delete key: straight away, or first a confirm when something is still being made. */
   const requestDelete = useCallback((sel: El[]) => {
@@ -611,7 +622,7 @@ export function Character({ initial, active, onPictureEditor }: {
             const r = resizableIn(resizing)
             const b = bounds(resizing)
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
-            return r.items.length ? <ResizeFor ctrl={ctrl} items={r.items} total={r.total} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} onClose={() => setResizing(null)} /> : null
+            return r.count ? <ResizeFor ctrl={ctrl} items={r.items} strokes={r.strokes} total={r.total} onSent={onResized} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} onClose={() => setResizing(null)} /> : null
           })()}
           {ctrl && canvas && ownSel && !resizing && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
@@ -659,6 +670,7 @@ export function Character({ initial, active, onPictureEditor }: {
                   campaignSheet.open({ master: { ...m, w: src.w, h: src.h, ...(src.kind !== 'picture' && m.label === 'Key visual' ? { label: src.kind === 'sketch' ? 'Sketch' : 'Drawing' } : {}) }, nearId: el.id })
                 }).catch((e) => setPlaceError(errText(e)))
               } : undefined}
+              onResized={onResized}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
@@ -821,7 +833,7 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
           <JobNode jobId={c.id} compact={w < 170} onRetried={(id) => ctrl?.retarget(c.id, id)} />
         </div>
       )}
-      {c.shape && state !== 'completed' && <div className="genlabel" style={{ left: tl.x, top: tl.y - 24 }}><span className="pill">{c.shape}</span></div>}
+      {c.shape && state !== 'completed' && <div className="genlabel" style={{ left: tl.x, top: tl.y }}><span className="pill">{c.shape}</span></div>}
       {state === 'completed' && !named && (
         <div className="genlabel" style={{ left: tl.x, top: tl.y }}>
           {c.view && <span className="pill">{viewLabel(c.view)}</span>}
@@ -878,7 +890,7 @@ function FlowArrows({ els, selectedIds, toView }: { els: El[]; selectedIds: read
 
 type Popover = null | 'generate' | 'name' | 'resize'
 
-export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit, gather, onGather, onSizes }: {
+export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit, gather, onGather, onSizes, onResized }: {
   ctrl: CanvasController
   /** Open the one selected picture in the Image editor (edit-canvas-pictures). */
   onEdit: (nodeId: string) => void
@@ -894,6 +906,8 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
   limits: { max: number; characters: number }
   /** Make all sizes from this picture (features/campaign-formats.clan); our own engine only. */
   onSizes?: (el: El) => void
+  /** Resize… placed its results (features/resize-selection.clan): offer Undo for all of them. */
+  onResized?: (jobs: string[]) => void
 }) {
   const doc = useDoc()
   const project = useProjectName()
@@ -948,8 +962,8 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
   if (open === 'generate') {
     return <GeneratePopover ctrl={ctrl} ids={ids} at={at} limits={limits} onClose={() => setOpen(null)} onPlace={onPlace} />
   }
-  if (open === 'resize' && resizable.items.length) {
-    return <ResizeFor ctrl={ctrl} items={resizable.items} total={resizable.total} at={at} onClose={() => setOpen(null)} />
+  if (open === 'resize' && resizable.count) {
+    return <ResizeFor ctrl={ctrl} items={resizable.items} strokes={resizable.strokes} total={resizable.total} at={at} onClose={() => setOpen(null)} onSent={onResized} />
   }
   if (open === 'name' && singleImage) {
     return <NamePopover ctrl={ctrl} nodeId={singleImage.id} current={named} presetVariant={nameVariant} at={at} onClose={() => setOpen(null)} />
@@ -987,7 +1001,7 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
     }
   }
   if ((singleImage || scampAlone) && onSizes) groups.push(<button key="sizes" className="btn sm" title="Every still format of a campaign from this picture" onClick={() => onSizes(meaningful[0])}>Make all sizes…</button>)
-  if (resizable.items.length) groups.push(<button key="resize" className="btn sm" title="Make these pictures at other shapes, each beside its original" onClick={() => setOpen('resize')}>Resize…</button>)
+  if (resizable.count) groups.push(<button key="resize" className="btn sm" title="Make these pictures at other shapes, each beside its original" onClick={() => setOpen('resize')}>Resize…</button>)
   // The beta's thumbs on a picture the tool made (features/production-tool-dogfood.clan).
   const made = singleImage?.kind === 'gen' ? cd(meaningful[0]) : undefined
   if (made?.kind === 'gen' && singleImage?.asset) {
@@ -1028,17 +1042,19 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
 }
 
 /** Resize… on these pictures (features/resize-selection.clan): the panel, and Send placing every result. */
-function ResizeFor({ ctrl, items, total, at, onClose }: { ctrl: CanvasController; items: El[]; total: number; at: Anchor; onClose: () => void }) {
+function ResizeFor({ ctrl, items, strokes, total, at, onClose, onSent }: { ctrl: CanvasController; items: El[]; strokes: El[]; total: number; at: Anchor; onClose: () => void; onSent?: (jobs: string[]) => void }) {
   const services = useServices()
   return (
-    <ResizePanel anchor={at} total={total} load={() => ctrl.resizeSources(items.map((e) => e.id))} onClose={onClose}
+    <ResizePanel anchor={at} total={total} load={() => ctrl.resizeSources(items.map((e) => e.id), strokes.map((e) => e.id))} onClose={onClose}
       send={async (planned) => {
         const jobs = await resizePictures({
           canvas: ctrl.canvasAdapter, runner: services.runner, doc: () => services.doc.get(),
           ref: (sha) => assetRef(services.relay, sha, services.doc.get()),
           named: (r) => namedInput(services.relay, services.doc.get(), r),
+          wrap: (s) => ctrl.wrapForResize(s),
         }, planned)
         ctrl.reveal([...jobs, ...items.map((e) => e.id)])
+        onSent?.(jobs)
       }} />
   )
 }
