@@ -31,6 +31,8 @@ import { adjustCrop, changeMethod, channelOfSize, redoSize, setLocked, sizesOf, 
 import { METHOD_WORD, methodModels, methodWords, PAID, rowFracs, STILL_METHODS, type MethodModel } from './rules'
 import { campaignSheet } from './sheet'
 import { TypeEditor, TypeOverlay } from './TypeEditor'
+import { FilmPic, FilmTools } from './FilmTile'
+import { filmWords } from './film'
 import './campaign.css'
 
 const LOCAL_PERSON: PersonRef = 'human:p_local'
@@ -316,9 +318,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
   const s = crop ? box.w / crop.w : 1
   // The master shows through while a crop is adjusted or made; a paid method's tile waits on its own picture.
   const showMaster = !!crop && !!masterUrl && size.method === 'crop' && (adjusting || !url || status === 'making')
-  const methodLine = size.media === 'video'
-    ? `${METHOD_WORD[size.method]} · needs ${size.method === 'reframe' ? 'phase 6' : 'phase 5'}`
-    : methodWords(size.method, models)
+  const methodLine = size.media === 'video' ? filmWords(set, size) : methodWords(size.method, models)
   const failure = failed ? job?.error?.message : undefined
   const name = `${f ? shortName(f.format) : size.format.format_id} · ${size.delivery.width}×${size.delivery.height}`
   const paidTray = (method: SizeMethod, title: string, send: () => Promise<unknown>) => onTray({
@@ -353,8 +353,9 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
         onWheel={(e) => { if (adjusting) { e.stopPropagation(); onAdjust(zoomCrop(adjusting, e.deltaY > 0 ? 1.06 : 1 / 1.06, master)) } }}>
         {showMaster && crop
           ? <img className="cb-master" src={masterUrl} alt="" draggable={false} style={{ width: master.w * s, height: master.h * s, left: -crop.x * s, top: -crop.y * s }} />
-          : url ? <img className="cb-made" src={url} alt={`${f ? shortName(f.format) : size.format.format_id}`} draggable={false} />
-            : <div className="cb-empty">{size.media === 'video' ? 'Film' : 'Not made yet'}</div>}
+          : size.media === 'video' && size.asset ? <FilmPic sha={size.asset} picked={picked} label={`${f ? shortName(f.format) : size.format.format_id} · ${size.length_s ?? ''} s`} />
+            : url ? <img className="cb-made" src={url} alt={`${f ? shortName(f.format) : size.format.format_id}`} draggable={false} />
+              : <div className="cb-empty">{size.media === 'video' ? (status === 'making' ? 'Cutting…' : 'Film') : 'Not made yet'}</div>}
         {(typing || showMaster) && crop && <TypeOverlay size={size} set={set} box={box} />}
         {safe && (fr[0] || fr[1] || fr[2] || fr[3]) ? (
           <div className="cb-safe" aria-hidden="true">
@@ -389,7 +390,10 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, flagsOpen,
           ))}
         </div>
       )}
-      {!adjusting && (
+      {!adjusting && size.media === 'video' && (
+        <FilmTools size={size} set={set} deps={deps} by={by} say={say} onTray={onTray} onLock={onLock} />
+      )}
+      {!adjusting && size.media !== 'video' && (
         <div className="cb-tools toolbar" role="toolbar" aria-label="Size actions">
           <button type="button" className="btn sm" disabled={size.media !== 'image' || !size.crop || size.method !== 'crop'} title={size.media !== 'image' ? 'Films are reframed in phase 6' : undefined}
             onClick={() => onAdjust(size.crop!)}>Adjust crop</button>

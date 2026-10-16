@@ -129,6 +129,7 @@ function making(d: ProductionDocument, j: DocJob): string {
     case 'shot_list': return 'the shots'
     case 'write': return 'a draft'
     case 'stitch': return 'the ad'
+    case 'cutdown': return 'a version of the film'
     default: return 'a picture'
   }
 }

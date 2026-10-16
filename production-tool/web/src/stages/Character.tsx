@@ -74,6 +74,7 @@ import { linkedRows, sketchOf, unknownTyped } from './trayScope'
 import './inputs.css'
 import { campaignSheet } from '../campaign/sheet'
 import { MakeSizesSheet } from '../campaign/MakeSizesSheet'
+import { FilmSizesSheet } from '../campaign/FilmSizesSheet'
 import { pictureMaster, videoMaster } from '../campaign/master'
 import { ResizePanel } from '../campaign/ResizePanel'
 import { resizableIn, resizePictures } from '../campaign/resizeSelection'
@@ -731,7 +732,18 @@ export function Character({ initial, active, onPictureEditor }: {
             <div className="placing-hint">Click where the new image goes · <button className="btn xs ghost" onPointerDown={(e) => { e.stopPropagation(); setPlacing(null) }}>Cancel</button></div>
           </div>
         )}
-        {sheet && canvas && (
+        {sheet && canvas && sheet.master.media === 'video' && (
+          <FilmSizesSheet master={sheet.master} deps={{ canvas, doc: docStore, runner, relay: services.relay }}
+            by={ui.me ? `human:${ui.me.participantId}` : 'human:p_local'}
+            near={sheet.nearId ? canvas.elements().find((e) => e.id === sheet.nearId)
+              : sheet.node ? canvas.elements().find((e) => { const c = cardOf(e); return !e.isDeleted && c?.kind === sheet.node!.kind && c.id === sheet.node!.id }) : undefined}
+            onClose={() => campaignSheet.close()}
+            onMade={(el) => {
+              const frame = el.frameId ? canvas.elements().find((e) => e.id === el.frameId) : undefined
+              canvas.fit(frame ? [frame] : [el], { zoomFactor: 0.85, animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })
+            }} />
+        )}
+        {sheet && canvas && sheet.master.media !== 'video' && (
           <MakeSizesSheet master={sheet.master} deps={{ canvas, doc: docStore, runner, relay: services.relay }}
             by={ui.me ? `human:${ui.me.participantId}` : 'human:p_local'}
             near={sheet.nearId ? canvas.elements().find((e) => e.id === sheet.nearId) : undefined}
