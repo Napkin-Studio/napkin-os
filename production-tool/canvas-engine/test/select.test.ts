@@ -22,7 +22,8 @@ function setup(records: ElementRecord[]) {
   return { scene, tool, steps, updates: () => updates }
 }
 
-const box = (id: string, x: number, y: number, extra: Partial<ElementRecord> = {}) => element({ id, kind: 'shape', z: `a${x / 100}`, x, y, w: 50, h: 50, props: { geo: 'rect' }, ...extra })
+// Filled, so a click anywhere inside hits it (an unfilled shape is hit only on its outline: hitStroke.test.ts).
+const box = (id: string, x: number, y: number, extra: Partial<ElementRecord> = {}) => element({ id, kind: 'shape', z: `a${x / 100}`, x, y, w: 50, h: 50, style: { fill: '#dddddd' }, props: { geo: 'rect' }, ...extra })
 
 describe('boards as containers (art-boards)', () => {
   const board = (id: string, x: number, extra: Partial<ElementRecord> = {}) => element({ id, kind: 'board', z: `a0${x}`, x, y: 0, w: 400, h: 300, props: { name: id, purpose: 'location' }, ...extra })

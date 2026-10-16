@@ -39,12 +39,13 @@
 // - A locked container is selected but never moved, and nothing in it moves with it.
 
 import { recordBounds, unionRects, type Rect } from '../model/bounds'
-import { boundEnds } from '../render/links'
+import { boundEnds, hitFrameLabel } from '../render/links'
 import { BlockerIndex, BOARD_CLEAR, clampGrowth, clampMove, containsRect, fitRect, freeOffset, growToHold, innerRect, overlaps, placeInBoard, resizeRect, type Edge } from '../boards/sizing'
 import { boardGrabAt, type BoardGrab } from '../boards/grab'
 import type { PointerKind } from '../input/router'
 import type { ElementRecord } from '../model/records'
-import type { SceneStore } from '../model/store'
+import type { SceneStore, SceneTx } from '../model/store'
+import { isDrawn, refitDrawn } from './drawn'
 
 export interface Pt {
   x: number
@@ -97,6 +98,8 @@ export interface PressAt {
   zoom: number
   shift: boolean
   by: PointerKind
+  /** The second press of a double press (press() times it; a look-ahead such as grabbableAt never is). */
+  twice?: boolean
 }
 
 /**
@@ -120,26 +123,21 @@ const boardAt = (tool: SelectTool, at: PressAt, part: BoardGrab['part']) => {
   return g?.part === part ? g.board : null
 }
 
+/** A press that is not on what the entered container holds leaves it (container-select). */
+const leave = (t: SelectTool) => {
+  t.scope = null
+}
+
 /**
  * The press priority, top to bottom: the first row that finds something takes the press. Shared by
  * board-move (item 5), container-select (item 8) and board-autolayout (item 7): each adds or moves rows
  * here, with a test per row in test/grabOrder.test.ts, instead of branching in press().
+ *
+ * The merge of board-move and container-select (2026-10-16, decided for the owner on "continue the merge
+ * train"; the order is ours to revise): nodes and links, titles and labels, handles, double press, the
+ * entered container's inside, picks, then the board rules and empty canvas.
  */
 export const grabOrder: GrabRow[] = [
-  row<Edge>({
-    name: 'board-handle',
-    says: 'A selected board’s square handles (corners and edge middles) resize it.',
-    test: (t, at) => (at.shift ? null : t.boardHandleAt(at.p, at.zoom, at.by)),
-    start: (t, edge) => t.startResize(edge),
-    moves: () => true,
-  }),
-  row<Corner>({
-    name: 'scale-handle',
-    says: 'The selection’s corner handles scale it (not nodes, boards or links).',
-    test: (t, at) => (at.shift ? null : t.handleAt(at.p, at.zoom)),
-    start: (t, corner) => t.startScale(corner),
-    moves: () => true,
-  }),
   row<ElementRecord>({
     name: 'node-or-link',
     says: 'A node card, or a link along its line, is picked (it sits above the canvas).',
@@ -155,8 +153,47 @@ export const grabOrder: GrabRow[] = [
     moves: () => true,
   }),
   row<ElementRecord>({
+    name: 'drawing-label',
+    says: 'A Drawing’s label (above its top-left) picks the Drawing up whole, with its strokes.',
+    test: (t, at) => t.labelAt(at) ?? null,
+    start: (t, f, at) => t.startPick(f, at),
+    moves: () => true,
+  }),
+  row<Edge>({
+    name: 'board-handle',
+    says: 'A selected board’s square handles (corners and edge middles) resize it.',
+    test: (t, at) => (at.shift ? null : t.boardHandleAt(at.p, at.zoom, at.by)),
+    start: (t, edge) => t.startResize(edge),
+    moves: () => true,
+  }),
+  row<Corner>({
+    name: 'scale-handle',
+    says: 'The selection’s corner handles scale it (not nodes, boards or links); a Drawing scales with its strokes.',
+    test: (t, at) => (at.shift ? null : t.handleAt(at.p, at.zoom)),
+    start: (t, corner) => t.startScale(corner),
+    moves: () => true,
+  }),
+  row<ElementRecord>({
+    name: 'enter',
+    says: 'A double press on a member enters its container and picks the member alone; a drag then moves only it.',
+    test: (t, at) => (at.twice && !at.shift ? t.hitElement(at.p) ?? null : null),
+    start: (t, _hit, at) => t.startEnter(at),
+    moves: () => true,
+  }),
+  row<ElementRecord>({
+    name: 'scope-inside',
+    says: 'The empty inside of the entered container: a marquee (the pen lassoes) over its members only.',
+    test: (t, at) => {
+      if (!t.scope) return null
+      const hit = t.hitElement(at.p)
+      return hit && hit.id === t.scope ? hit : null
+    },
+    start: (t, _hit, at) => t.startArea(at, null, t.scopeMembersNow()),
+    moves: () => false,
+  }),
+  row<ElementRecord>({
     name: 'element',
-    says: 'The topmost element (picture, ink, shape, text, drawn frame, sketch area) is picked with its group.',
+    says: 'The topmost element is picked: a click takes its whole container (Drawing, sketch area, outermost group), or the member alone inside the entered one.',
     test: (t, at) => t.hitElement(at.p) ?? null,
     start: (t, hit, at) => t.startPick(hit, at),
     moves: () => true,
@@ -175,27 +212,50 @@ export const grabOrder: GrabRow[] = [
       const b = at.shift ? null : boardAt(t, at, 'inside')
       return b && t.selected.has(b.id) ? b : null
     },
-    start: (t, _b, at) => t.startMove(at.p),
+    start: (t, _b, at) => {
+      leave(t)
+      t.startMove(at.p)
+    },
     moves: () => true,
   }),
   row<ElementRecord>({
     name: 'board-inside',
     says: 'The empty inside of an unselected board: a drag marquees (the pen lassoes); a click under the slop selects the board.',
     test: (t, at) => boardAt(t, at, 'inside'),
-    start: (t, b, at) => t.startArea(at, b.id),
+    start: (t, b, at) => {
+      leave(t)
+      t.startArea(at, b.id)
+    },
     moves: () => false,
   }),
   row<true>({
     name: 'empty',
-    says: 'Empty canvas: a drag marquees (the pen lassoes); a click clears the selection.',
+    says: 'Empty canvas: leaves the entered container; a drag marquees (the pen lassoes); a click clears the selection.',
     test: () => true,
-    start: (t, _x, at) => t.startArea(at, null),
+    start: (t, _x, at) => {
+      leave(t)
+      t.startArea(at, null)
+    },
     moves: () => false,
   }),
 ]
 
 /** Kinds that never block a board's growth: they follow their ends, or are boards' own business. */
 const NO_BLOCK = new Set(['link', 'arrow'])
+
+/** Two presses this close in time (ms) and on screen (px) are a double press: double-click, or double-tap with pen or touch. */
+export const DOUBLE_PRESS_MS = 350
+export const DOUBLE_PRESS_PX = 16
+
+/**
+ * One level of what a click can select, innermost first: the element alone, the drawn frame or sketch
+ * area it is in, then its groups out to the outermost (container-select). `key` is what `scope` holds
+ * when this level is entered: an element or container id, or a group id.
+ */
+interface Level {
+  key: string
+  ids: string[]
+}
 
 /** The handles sit this far (screen pixels) outside the box's corners, where the renderer draws them. */
 export const HANDLE_PAD = 6
@@ -224,6 +284,7 @@ export function scaled(r: ElementRecord, ox: number, oy: number, s: number, rati
 const boxOfAll = (rs: readonly ElementRecord[]): Box => unionRects(rs.map(recordBounds))
 
 const centre = (r: ElementRecord): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
+const inBox = (p: Pt, r: ElementRecord) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h
 
 /** Is p inside the polygon (even-odd)? */
 export function inPolygon(p: Pt, poly: readonly Pt[]): boolean {
@@ -252,18 +313,164 @@ export class SelectTool {
   private additive = false
   private readonly cbs = new Set<() => void>()
   private readonly newId: () => string
+  private readonly now: () => number
+  /**
+   * The container the person entered (a drawn frame, a sketch area or a group: its `Level.key`), or null.
+   * While entered, clicks inside pick members alone; Esc or a click outside leaves it (container-select).
+   */
+  scope: string | null = null
+  /** A marquee started on the empty inside of the entered container: it selects only members. */
+  private marqueeIn: Set<string> | null = null
+  /** The last press, for double-press detection: when, where (screen px at its zoom), and by what. */
+  private lastPress: { t: number; p: Pt; zoom: number; by?: PointerKind } | null = null
 
   private readonly above: ((x: number, y: number) => ElementRecord | undefined) | undefined
 
   /**
    * `hit`: the topmost element at a scene point (the renderer's index). `above`: what sits above the
    * canvas and comes first (node cards, links along their line). Boards are found by boards/grab.
+   * `now`: the clock a double press is timed by.
    */
-  constructor(scene: SceneStore, hit: (x: number, y: number) => ElementRecord | undefined, opts: { newId?: () => string; above?: (x: number, y: number) => ElementRecord | undefined } = {}) {
+  constructor(
+    scene: SceneStore,
+    hit: (x: number, y: number) => ElementRecord | undefined,
+    opts: { newId?: () => string; now?: () => number; above?: (x: number, y: number) => ElementRecord | undefined } = {},
+  ) {
     this.scene = scene
     this.hit = hit
     this.above = opts.above
     this.newId = opts.newId ?? (() => `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`)
+    this.now = opts.now ?? (() => Date.now())
+  }
+
+  // ── containers: drawn frames, sketch areas and groups selected as one (container-select) ──
+
+  /** Is this record a container that is selected as one thing: a drawn frame (a Drawing) or a sketch area? Boards are not. */
+  isObjectContainer(r: ElementRecord | undefined): r is ElementRecord {
+    return !!r && (r.kind === 'frame' || isArea(r))
+  }
+
+  /** The drawn frame or sketch area an element is in (by parentId, or a sketch area's ink by geometry), or null. */
+  private objectContainerOf(r: ElementRecord, kids?: Map<string, string[]>): ElementRecord | null {
+    const parent = r.parentId ? this.scene.get(r.parentId) : undefined
+    if (parent && this.isObjectContainer(parent)) return parent
+    if (r.kind !== 'stroke' && r.kind !== 'shape') return null
+    for (const [id, members] of kids ?? this.membersByContainer()) {
+      if (!members.includes(r.id)) continue
+      const c = this.scene.get(id)
+      if (c && isArea(c)) return c
+    }
+    return null
+  }
+
+  /** What a click on `r` can select, innermost first: r alone, its drawn frame or sketch area, then that one's groups outward. */
+  private levels(r: ElementRecord): Level[] {
+    const out: Level[] = [{ key: r.id, ids: [r.id] }]
+    const c = this.objectContainerOf(r)
+    const top = c ?? r
+    if (c) out.push({ key: c.id, ids: [c.id] })
+    const all = this.scene.all()
+    for (const g of top.groupIds) out.push({ key: g, ids: all.filter((x) => x.groupIds.includes(g)).map((x) => x.id) })
+    return out
+  }
+
+  /** Is `key` (a scope) still a container: a drawn frame or sketch area that exists, or a group with members? */
+  private scopeAlive(key: string): boolean {
+    const r = this.scene.get(key)
+    if (r) return this.isObjectContainer(r)
+    return this.scene.all().some((x) => x.groupIds.includes(key))
+  }
+
+  /** The level the scope names, as a selection (the container whole). */
+  private scopeIds(key: string): string[] {
+    return this.scene.get(key) ? [key] : this.scene.all().filter((x) => x.groupIds.includes(key)).map((x) => x.id)
+  }
+
+  /** The members of the entered container (what a click or marquee inside may pick), or an empty set. */
+  private scopeMembers(): Set<string> {
+    const key = this.scope
+    if (!key) return new Set()
+    if (this.scene.get(key)) {
+      const out = this.withMembers([key])
+      out.delete(key)
+      return out
+    }
+    return new Set(this.scene.all().filter((x) => x.groupIds.includes(key)).map((x) => x.id))
+  }
+
+  /**
+   * What a press on `hit` selects. Not entered: the outermost level (the drawn frame, sketch area or group,
+   * whole). Entered and the hit is inside the scope: the member alone. A hit outside the scope leaves it.
+   */
+  private resolveHit(hit: ElementRecord): string[] {
+    const levels = this.levels(hit)
+    if (this.scope) {
+      if (levels.some((l) => l.key === this.scope)) return levels[0].ids
+      this.scope = null
+    }
+    return levels[levels.length - 1].ids
+  }
+
+  /** Enter the container at a point (a double press, or a double-click): select the member there alone. Its id, or null. */
+  enterAt(p: Pt): string | null {
+    const hit = this.hitAbove(p) ?? this.hitElement(p)
+    if (!hit) return null
+    const levels = this.levels(hit)
+    // A container's own frame or area (its empty inside): nothing inside to enter on.
+    if (levels.length > 1) this.scope = levels[levels.length - 1].key
+    this.selected = new Set([hit.id])
+    this.changed()
+    return hit.id
+  }
+
+  /** Leave the entered container and select it whole. False when nothing was entered. */
+  exitScope(): boolean {
+    const key = this.scope
+    if (!key) return false
+    this.scope = null
+    if (this.scopeAlive(key)) this.selected = new Set(this.scopeIds(key))
+    this.changed()
+    return true
+  }
+
+  /** The box of the entered container (its frame or area, or its group's members), for the inside outline; null when none. */
+  scopeBox(): Box | null {
+    const key = this.scope
+    if (!key || !this.scopeAlive(key)) return null
+    const rs = this.scopeIds(key).map((id) => this.scene.get(id)).filter((r): r is ElementRecord => !!r)
+    return rs.length ? boxOfAll(rs) : null
+  }
+
+  /**
+   * The container a click at `p` would select whole (a Drawing, sketch area or group), for a faint
+   * outline under the pointer; null over a lone element, inside the entered container, over what is
+   * already selected, or while a gesture runs.
+   */
+  hoverBox(p: Pt): Box | null {
+    if (this.busy()) return null
+    const hit = this.hit(p.x, p.y)
+    if (!hit) return null
+    const levels = this.levels(hit)
+    if (levels.length < 2 || (this.scope && levels.some((l) => l.key === this.scope))) return null
+    const top = levels[levels.length - 1]
+    if (top.ids.every((id) => this.selected.has(id))) return null
+    const rs = top.ids.map((id) => this.scene.get(id)).filter((r): r is ElementRecord => !!r)
+    return rs.length ? boxOfAll(rs) : null
+  }
+
+  /** Is a gesture running (a move, scale, resize, marquee or lasso)? Esc cancels it first. */
+  busy(): boolean {
+    return !!(this.preview || this.scaling || this.resizing || this.marquee || this.lasso)
+  }
+
+  /** Is this press the second of a double press (time and screen distance, any pointer)? Records it either way. */
+  private doublePress(p: Pt, zoom: number, by?: PointerKind): boolean {
+    const t = this.now()
+    const last = this.lastPress
+    const twice = !!last && t - last.t <= DOUBLE_PRESS_MS && (last.by ?? 'mouse') === (by ?? 'mouse')
+      && Math.hypot((p.x - last.p.x) * zoom, (p.y - last.p.y) * zoom) <= DOUBLE_PRESS_PX
+    this.lastPress = twice ? null : { t, p, zoom, by }
+    return twice
   }
 
   onChange(cb: () => void): () => void {
@@ -402,12 +609,15 @@ export class SelectTool {
     return this.scene.all().filter((x) => x.groupIds.includes(g)).map((x) => x.id)
   }
 
-  /** The selection's units: each outermost group once, and each ungrouped element. */
+  /** The selection's units: each outermost group once, and each ungrouped element; a member of a selected Drawing or sketch area is part of it. */
   private units(): Map<string, string[]> {
     const out = new Map<string, string[]>()
+    const kids = this.selected.size > 1 ? this.membersByContainer() : undefined
     for (const id of this.selected) {
       const r = this.scene.get(id)
       if (!r) continue
+      const c = kids ? this.objectContainerOf(r, kids) : null
+      if (c && this.selected.has(c.id)) continue
       const key = r.groupIds.at(-1) ?? `#${id}`
       out.set(key, [...(out.get(key) ?? []), id])
     }
@@ -500,13 +710,9 @@ export class SelectTool {
     return hit?.id ?? null
   }
 
-  /** The topmost element at a point, alone, even when it is in a group (a double-click). Its id, or null. */
+  /** The topmost element at a point, alone, even when it is in a group or a Drawing (a double-click): enters its container. Its id, or null. */
   pickOne(p: Pt): string | null {
-    const hit = this.hitAbove(p) ?? this.hitElement(p)
-    if (!hit) return null
-    this.selected = new Set([hit.id])
-    this.changed()
-    return hit.id
+    return this.enterAt(p)
   }
 
   set(ids: Iterable<string>) {
@@ -567,7 +773,9 @@ export class SelectTool {
 
   press(p: Pt, opts: { shift?: boolean; by?: PointerKind; zoom?: number } = {}) {
     this.flushNudge()
-    const at: PressAt = { p, zoom: opts.zoom ?? 1, shift: !!opts.shift, by: opts.by ?? 'mouse' }
+    const zoom = opts.zoom ?? 1
+    const by = opts.by ?? 'mouse'
+    const at: PressAt = { p, zoom, shift: !!opts.shift, by, twice: this.doublePress(p, zoom, by) }
     const { row: r, found } = this.resolve(at)
     this.pressed = r.name
     r.start(this, found, at)
@@ -611,20 +819,41 @@ export class SelectTool {
     const ox = corner === 'nw' || corner === 'sw' ? box.x + box.w : box.x
     const oy = corner === 'nw' || corner === 'ne' ? box.y + box.h : box.y
     this.scaleFrom = { box, ox, oy }
-    this.scaling = { ids: new Set(this.selected), ox, oy, s: 1 }
+    // A Drawing scales with its strokes, as it moves with them.
+    const ids = new Set(this.selected)
+    for (const id of this.selected) if (isDrawn(this.scene.get(id))) for (const r of this.scene.all()) if (r.parentId === id) ids.add(r.id)
+    this.scaling = { ids, ox, oy, s: 1 }
   }
 
-  /** A press on a thing: select it with its outermost group (shift adds or removes), then move the selection. */
+  /** A Drawing (a named frame) by its label above its top-left (render/links hitFrameLabel). */
+  labelAt(at: PressAt): ElementRecord | undefined {
+    return hitFrameLabel(this.scene, at.p, at.zoom)
+  }
+
+  /**
+   * A press on a thing: select what a click on it takes (resolveHit: the whole container, or the member
+   * alone inside the entered one; shift adds or removes), then move the selection.
+   */
   startPick(hit: ElementRecord, at: PressAt) {
-    const ids = this.withGroup(hit)
+    const ids = this.resolveHit(hit)
+    const on = ids.every((id) => this.selected.has(id))
     if (at.shift) {
-      const on = this.selected.has(hit.id)
       for (const id of ids) {
         if (on) this.selected.delete(id)
         else this.selected.add(id)
       }
-    } else if (!this.selected.has(hit.id)) this.selected = new Set(ids)
-    if (this.selected.has(hit.id)) this.startMove(at.p)
+    } else if (!on) this.selected = new Set(ids)
+    if (ids.some((id) => this.selected.has(id))) this.startMove(at.p)
+  }
+
+  /** A double press on a member: enter its container, pick the member alone, and move only it on a drag. */
+  startEnter(at: PressAt) {
+    if (this.enterAt(at.p)) this.startMove(at.p)
+  }
+
+  /** The members of the entered container (what a marquee on its empty inside may take). */
+  scopeMembersNow(): Set<string> {
+    return this.scopeMembers()
   }
 
   /** Move the selection from `p`: what is in it and in its containers, never what is locked. */
@@ -635,9 +864,13 @@ export class SelectTool {
     this.landing = null
   }
 
-  /** A marquee (mouse, touch) or a lasso (pen) from `at`; a click on a board's inside under the slop selects `board`. */
-  startArea(at: PressAt, board: string | null) {
+  /**
+   * A marquee (mouse, touch) or a lasso (pen) from `at`; a click on a board's inside under the slop selects
+   * `board`. `within`: inside an entered container, the area takes only its members.
+   */
+  startArea(at: PressAt, board: string | null, within: Set<string> | null = null) {
     this.additive = at.shift
+    this.marqueeIn = within
     if (!at.shift) this.selected = new Set()
     this.area = { board, zoom: at.zoom }
     if (at.by === 'pen') this.lasso = [at.p]
@@ -753,6 +986,8 @@ export class SelectTool {
             out.push(scaled(r, ox, oy, s, ratio))
           }
           if (out.length) tx.put(out)
+          // A member scaled without its Drawing: the Drawing refits round it.
+          this.refitParents(tx, out.filter((r) => r.parentId && !ids.has(r.parentId)))
         })
       }
     } else if (this.preview) {
@@ -783,6 +1018,7 @@ export class SelectTool {
       else if (poly.length > 2) this.add(this.scene.all().filter((r) => r.kind !== 'board' && inPolygon(centre(r), poly)))
     }
     this.area = null
+    this.marqueeIn = null
     this.changed()
     for (const e of told) this.tell(e)
   }
@@ -823,9 +1059,10 @@ export class SelectTool {
       const placed = new Map(moved.map((r) => [r.id, r]))
       for (const r of moved) {
         if (carried.has(r.id) || r.kind === 'board') continue
-        // Strokes in a drawn frame or a sketch area keep that container; only board membership follows the drop.
+        // A member dropped with its centre outside its Drawing leaves it (container-select). Other frames and
+        // sketch areas keep their strokes; board membership follows the drop.
         const cur = r.parentId ? tx.get(r.parentId) : undefined
-        if (cur && cur.kind !== 'board') continue
+        if (cur && cur.kind !== 'board' && !(isDrawn(cur) && !inBox(centre(r), cur))) continue
         const parent = this.containerAt(centre(r), r.id, placed)
         if (parent !== r.parentId) placed.set(r.id, { ...r, parentId: parent })
       }
@@ -837,6 +1074,8 @@ export class SelectTool {
       }
       told = this.fitToBoards(placed, carried, (id) => tx.get(id))
       if (placed.size) tx.put([...placed.values()])
+      // The Drawings members were moved in or out of refit, in this same step.
+      this.refitParents(tx, moved.filter((r) => !carried.has(r.id)))
     })
     return told
   }
@@ -891,9 +1130,21 @@ export class SelectTool {
 
   private add(rs: ElementRecord[]) {
     const next = this.additive ? new Set(this.selected) : new Set<string>()
-    for (const r of rs) for (const id of this.withGroup(r)) next.add(id)
+    const within = this.marqueeIn
+    // Inside an entered container: members alone. Outside: each with its whole outermost group.
+    for (const r of rs) {
+      if (within) {
+        if (within.has(r.id)) next.add(r.id)
+      } else for (const id of this.withGroup(r)) next.add(id)
+    }
     this.selected = next
     this.additive = false
+    this.marqueeIn = null
+  }
+
+  /** Refit the Drawings these records were in (their parentId before the change), inside the caller's change. */
+  private refitParents(tx: SceneTx, rs: ElementRecord[]) {
+    for (const id of new Set(rs.map((r) => r.parentId).filter((id): id is string => !!id))) refitDrawn(this.scene, tx, id)
   }
 
   /** Delete the selection (not what is locked) as one step. Returns how many went. */
@@ -903,7 +1154,11 @@ export class SelectTool {
       return r && !r.locked
     })
     if (!ids.length) return 0
-    this.scene.change((tx) => tx.remove(ids))
+    const was = ids.map((id) => this.scene.get(id)!)
+    this.scene.change((tx) => {
+      tx.remove(ids)
+      this.refitParents(tx, was.filter((r) => !ids.includes(r.parentId ?? '')))
+    })
     for (const id of ids) this.selected.delete(id)
     this.changed()
     return ids.length
@@ -922,12 +1177,14 @@ export class SelectTool {
     this.preview = null
     this.marquee = null
     this.lasso = null
+    this.marqueeIn = null
     this.dragFrom = null
     this.changed()
   }
 
-  /** Drop ids that are gone (deleted here or by someone else). */
+  /** Drop ids that are gone (deleted here or by someone else), and the scope when its container is gone or no longer one. */
   prune() {
     for (const id of [...this.selected]) if (!this.scene.get(id)) this.selected.delete(id)
+    if (this.scope && !this.scopeAlive(this.scope)) this.scope = null
   }
 }

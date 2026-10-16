@@ -64,6 +64,9 @@ const RESIZE_CURSOR: Record<string, string> = { n: 'ns-resize', s: 'ns-resize', 
 export const NUDGE_IDLE_MS = 400
 
 const CAPS_NONE: InputCapabilities = { coalesced: false, predicted: false, tilt: false, pressure: false }
+/** The entered container's inside outline (container-select): the selection blue, lightened on the dark canvas. */
+const SCOPE_LIGHT = '#2F64F5'
+const SCOPE_DARK = '#8EA6FF'
 
 function defaultRaster(w: number, h: number): Raster {
   if (typeof OffscreenCanvas !== 'undefined') {
@@ -641,6 +644,17 @@ export class OwnAdapter implements CanvasAdapter {
     return done
   }
 
+  /** The container a click would take whole, outlined faintly under the pointer (container-select). */
+  private hover: { x: number; y: number; w: number; h: number } | null = null
+
+  /** Point the hover outline at a scene point (null: the pointer left). True when it changed, so the caller redraws. */
+  hoverAt(p: Pt | null): boolean {
+    const next = p && !this.sketching() && !this.pointersDown ? this.selector.hoverBox(p) : null
+    const same = next === this.hover || (!!next && !!this.hover && next.x === this.hover.x && next.y === this.hover.y && next.w === this.hover.w && next.h === this.hover.h)
+    this.hover = next
+    return !same
+  }
+
   /** The selected board's square handle under a scene point (the cursor shows it), or null. */
   boardHandleAt(p: Pt): Edge | null {
     return this.sketching() ? null : this.selector.boardHandleAt(p, this.vp.zoom)
@@ -714,7 +728,10 @@ export class OwnAdapter implements CanvasAdapter {
 
   /** The topmost element at a scene point (never a board: boards are grabbed by boards/grab): the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
-    if (this.renderer) return this.renderer.hit(x, y)
+    // Lines (strokes, unfilled shapes) count only near their line, with a reach in screen pixels
+    // (container-select). Node cards and links (above), board titles and Drawing labels are the select
+    // tool's own grabOrder rows.
+    if (this.renderer) return this.renderer.hit(x, y, this.vp.zoom)
     return this.scene.all()
       .filter((r) => r.kind !== 'board' && r.kind !== 'node' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
@@ -833,6 +850,10 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.resizing = this.selector.resizing
       this.renderer.landing = this.selector.landing
       this.renderer.frame = this.selectionFrame()
+      // The entered Drawing, sketch area or group: a dashed inside outline, readable on either theme.
+      this.renderer.scope = this.selector.scopeBox()
+      this.renderer.hover = this.hover
+      this.renderer.scopeColour = this.theme === 'dark' ? SCOPE_DARK : SCOPE_LIGHT
       this.surfaceNow()
       this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK
       this.renderer.boardLook = this.surface?.s.board ?? null

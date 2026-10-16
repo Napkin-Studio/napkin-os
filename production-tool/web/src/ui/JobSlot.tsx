@@ -7,9 +7,9 @@ import { AskCard } from './AskCard'
 import { waitingAsk } from './asks'
 import { JobNode } from './JobNode'
 
-export function JobSlot({ jobId, compact = false, onRetried }: { jobId: string; compact?: boolean; onRetried?: (newId: string) => void }) {
+export function JobSlot({ jobId, compact = false, row = false, onRetried }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void }) {
   const doc = useDoc()
   const ask = waitingAsk(doc, jobId)
   if (ask) return <div className="jobslot-ask" style={{ overflow: 'auto', maxHeight: '100%' }}><AskCard ask={ask} /></div>
-  return <JobNode jobId={jobId} compact={compact} onRetried={onRetried} />
+  return <JobNode jobId={jobId} compact={compact} row={row} onRetried={onRetried} />
 }

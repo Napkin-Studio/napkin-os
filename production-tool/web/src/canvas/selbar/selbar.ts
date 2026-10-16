@@ -29,7 +29,7 @@ export interface SelInfo {
 
 export type ActionId =
   | 'open' | 'make-video' | 'plan-shots' | 'make-clips' | 'render-ad' | 'make-sizes'
-  | 'convert' | 'group' | 'ungroup' | 'move-to-board' | 'delete' | 'stack' | 'spread'
+  | 'generate' | 'convert' | 'group' | 'ungroup' | 'move-to-board' | 'delete' | 'stack' | 'spread'
 
 export interface BarAction {
   id: ActionId
@@ -74,8 +74,9 @@ export function barFor(s: SelInfo): BarAction[] {
   if (s.group && s.units === 1) {
     // A key's views (owner 2026-10-15): derived from their names, so no Ungroup; Stack or Spread instead.
     if (s.group.key) return [s.group.key.stacked ? act('spread', 'Spread') : act('stack', 'Stack'), act('move-to-board', 'Move to board'), DELETE]
+    // An ink group generates as it is, with no Ungroup first (owner, container-select): the strokes become a Drawing.
     return s.group.ink
-      ? [act('convert', 'Convert to text'), act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
+      ? [act('generate', 'Generate', { primary: true }), act('convert', 'Convert to text'), act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
       : [act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
   }
   const only = s.cards.length === s.units && !s.links

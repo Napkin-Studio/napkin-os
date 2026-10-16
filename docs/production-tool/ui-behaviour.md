@@ -163,7 +163,7 @@ Every editor's top bar also carries **History**, before its primary button.
 - **The title chip** sits on the board's top edge, at least 20 px tall on screen at any zoom, drawn above what is on the board. Pressing it (and 4 px round it) picks the board up with everything on it: its members, a drawn frame's strokes, the ink on it. The cursor is a grab hand over it and a closed hand while moving. Double-clicking it renames the board; the board bar sits just above it, or beside it when the top bar leaves no room, and never covers it.
 - **The edge** (6 px either side of the frame line) moves the board too, selected or not. Only the square handles resize.
 - **The inside.** A click on an unselected board's empty inside (moving less than 4 px) selects the board, so its handles and **Fit to contents** show. A drag there draws a selection box (the Pencil, a lasso), to pick the pictures on it. Once the board is selected, a drag on its inside moves it.
-- **What comes first** when things overlap is one table (grabOrder in the canvas engine): a selected board's handles, the selection's corner handles, a node card or a link, a board's title chip, the thing under the pointer (a picture, ink, a drawn frame), a board's edge, a selected board's inside, an unselected board's inside, empty canvas. So a picture or ink on a board moves alone, as before.
+- **What comes first** when things overlap is one table (grabOrder in the canvas engine): a node card or a link, a board's title chip, a Drawing's label, a selected board's handles, the selection's corner handles, a double press (enter the container, pick the member alone), the empty inside of the entered container (a marquee over its members), the thing under the pointer (a click takes its whole Drawing, sketch area or group), a board's edge, a selected board's inside, an unselected board's inside, empty canvas (which leaves the entered container). So a picture or ink on a board moves alone, as before.
 - **Where it lands.** A moved board never ends up over, or within 24 of, another board or a loose picture, ink or node (links and arrows don't count). While you drag, a dashed outline in the tool colour shows where it will land; let go and it goes to the nearest free spot to where you dropped it. That is one undo step with the move. Several selected boards move by one offset and land together, never blocking each other. Boards never go inside other boards.
 - **Locked:** a locked board is selected but never moved, and neither is anything on it.
 - **Arrow keys** nudge the selection 1 px (⇧ 10 px) on screen. A run of nudges is one undo step, written 400 ms after the last key, or at once on undo, a click, a tool change, leaving the canvas, or someone else changing what you nudge. A nudged board stops 24 short of what is in its way and never jumps it.
@@ -372,7 +372,17 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 - **Re-grouping:** a lasso around strokes groups them again.
 - **Holding the pen** at the end of a stroke snaps it to a shape ($Q).
 
-**Selection bar for an ink group:** **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
+**Selecting containers** (features/container-select.clan). A Drawing (the frame Generate wraps around strokes), a sketch area and a group are each selected as one thing, the same way on mouse, pen and touch:
+- **Click** on a Drawing's label, edge, empty inside or any of its strokes selects the Drawing. A thing that is not a member and lies above it at that point (a picture, a note, a link, loose ink) wins there. A click on ink inside a sketch area selects the area; a click on a member of a group selects the whole group.
+- **Strokes and unfilled shapes** are hit only near their line: within half their width plus 6 screen px, at any zoom. A click in the gaps of a drawing falls through to what lies below it.
+- **Double-click** (mouse) or **double-tap** (pen or touch: two presses within 350 ms and 16 screen px) on a member enters the container and selects that member alone. While entered, single clicks inside pick members alone, a drag on the empty inside draws a marquee over members only, and the container shows a dashed outline just inside its edge.
+- **Esc** leaves the entered container and selects it whole. A click outside it leaves it and acts as a normal click there. It is also left when someone else deletes the container.
+- **Hover** (mouse or pen, Select tool): a faint outline shows round the container a click there would select whole. There is none over a lone element, inside the entered container, or over what is already selected.
+- **Right after Generate** wraps loose strokes, the new Drawing is selected, so the next drag moves it and its strokes together.
+- **A Drawing keeps itself up to date.** A pen stroke that starts and ends inside it joins it. Moving, scaling, erasing or deleting one of its strokes refits the frame round its strokes (16 px pad), in the same undo step. A stroke dropped with its centre outside the frame leaves it. A Drawing whose last stroke leaves stays where it was. Its picture is redrawn shortly after its strokes change. Scaling a Drawing scales its strokes with it.
+- **Boards are unchanged:** the title selects and moves the board, and a click on a member selects that member (or the Drawing it is in).
+
+**Selection bar for an ink group:** **Generate** (primary: the strokes become a Drawing, no Ungroup first), **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
 
 **Idle suggestion** (decision D13): 2 s after you stop writing, Ellis may show a quiet chip, "Ellis can read this", that opens the same preview. Nothing converts on its own.
 
@@ -403,7 +413,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 | Reference picture | Role chip · Rename · Use in shot… · More (adds Publish to team library) |
 | Frame or key visual | Open · Use in shot N · Make all sizes… · Make another · More |
 | Sketch area | Generate · More |
-| Ink group | Convert to text · Ungroup · Move to board · Delete |
+| Ink group | Generate · Convert to text · Ungroup · Move to board · Delete |
 | Document | Link to… · More |
 | Format set | Open · Export zip · More |
 | Several mixed things | Group · Move to board · Delete |
@@ -593,6 +603,9 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **The stage:**
 - Locked to the frame's ratio. Zoom and pan; the crop keeps the ratio (review item 10).
+- At Fit the whole frame shows: as wide as the column, never taller than the room under the strip (a 9:16 frame fits too).
+- A stroke belongs to the pointer that started it: a second finger or pen is ignored, hover adds nothing, and a cancelled pointer drops the stroke. Brush, Lasso, Hand and Crop can start on the margin when zoomed out; Click-select and Text need a point on the picture.
+- When the picture cannot be drawn, the last good one stays and Rhea's line says why.
 - Prev and next frame links sit below ("← Frame 2 · Medium", "Frame 4 · Close →"). If edits are not applied, moving between frames asks first: "Keep the 3 edits for later, or discard them?"
 
 **Tools (left):**
@@ -610,6 +623,9 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 - Brackets `[ ]` change the brush size.
 - **The brush strip** holds: mask name, Size, Soft, Add/Subtract, **Snap to cut-out** (fits the mask to Rhea's cut-out edge) and **Clear mask**.
+  The name reads "New mask" until the first paint.
+- **What a stroke paints into:** the active mask. Painting a hidden mask shows it first. Subtract, the Eraser or a Subtract lasso with no mask makes no edit and says "Nothing to take away yet: paint an area first". Painting while a Fill runs on the active mask starts a new mask, so the sent mask stays as it was sent.
+- **Ctrl/⌘Z in the editor takes back the last stroke** (or the last edit when no mask has strokes); ⇧⌘Z or Ctrl+Y puts it back. The document's undo is not touched; the legend under the stage says "⌘Z takes back your last stroke here".
 - **Mask paint** is translucent tool blue with marching ants: "Mask: blue paint marks what changes".
 
 **Edits are a non-destructive list:**
@@ -617,7 +633,12 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - Each edit is numbered and has its own undo. "Next: Fill Mask 1" names the next Runway step.
 
 **Layers (front first):** Text, masks, cut-outs and Frame (the locked input version).
-- Each layer can be hidden.
+- Each layer can be hidden. A mask's row picks it (the brush paints it next), as its Edits row does.
+- **What you see is what is sent and applied** (owner, 2026-10-15): hidden layers are left out of Fill, Change, Upscale and Apply, and the pill, the Apply line and the send tray say so: "1 hidden layer is left out". A frame's edits list only what was applied.
+- Hiding **Frame** hides only the original picture: Fill results and Change or Upscale results stay unless their own eye is off.
+- **Remove background** never hides Frame by itself; Rhea's line says "hide Frame to see the cut-out alone".
+- A hidden mask cannot be filled: "Mask 1 is hidden. Show it to fill."
+- Hidden edits are kept: after Apply they stay, still hidden, on the new version.
 - A cut-out offers **Save as reference**, which opens Name this picture with the role preselected.
 - Upstream inputs arrive as locked layers.
 
@@ -641,7 +662,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Before / After** toggles the view. Before hides masks, cut-out outlines and text, and labels the frame "Before · v3 as saved".
 
-**Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes.
+**Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes; a whole-frame job shows a thin progress edge along the top of the stage. Nothing covers the picture: the job's status, elapsed time and Cancel (with its confirm) sit in its Edits row, and a question the job asks shows there too. You can keep painting while it runs. A job with no answer in time reads "did not work" in its row, with Stop waiting and Try again, and holds nothing else.
 
 ### 3.13 Video editor (artboards 10 and 10b; review items 7, 8)
 
@@ -1422,6 +1443,8 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Canvas | Tab / ⇧Tab | Move focus between nodes; with L pressed, between compatible link targets |
 | Canvas | ⌘+ / ⌘− / ⇧1 | Zoom in / out / fit |
 | Canvas | Esc with a generating node selected | Ends the scope focus (3.16) |
+| Canvas | Double-click, or double-tap with pen or touch | Enter a Drawing, sketch area or group and select the member there alone (3.8) |
+| Canvas | Esc | In order: cancels a running drag; leaves an entered Drawing, area or group, selecting it whole; else clears the selection (3.8) |
 | Questions pill | Tab to it; Enter, or ‹ › buttons | Go to the next or previous open ask (3.17) |
 | Ask card | Tab, Enter | Options are buttons; Enter picks the focused one. Later is the last button |
 | Send tray | Tab, Space, Enter, Esc | Move through rows, tick or untick a row, press the focused button (Generate is last), Cancel |

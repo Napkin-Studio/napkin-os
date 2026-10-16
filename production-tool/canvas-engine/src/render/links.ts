@@ -14,6 +14,7 @@
 import type { ElementRecord, Plain } from '../model/records'
 import type { SceneStore } from '../model/store'
 import { recordBounds, unionRects, type Rect } from '../model/bounds'
+import { boardGrabAt } from '../boards/grab'
 
 interface Pt {
   x: number
@@ -328,6 +329,34 @@ export function sceneLinkEnv(scene: Pick<SceneStore, 'all' | 'get'>): LinkEnv {
     members: (g) => groups.get(g) ?? [],
     obstacles: (box) => blocks.filter(({ b }) => b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y).map(({ r }) => r),
   }
+}
+
+/** A frame label's drawn width in screen px (14 px Geist, as the renderer draws it): an estimate, with room for a short name. */
+export function labelWidthPx(name: string): number {
+  return Math.max(48, name.length * 8.2 + 8)
+}
+
+/** A board by its title chip (boards/grab: the chip on its top edge), how a board is picked up by its name. */
+export function hitBoardTitle(scene: Pick<SceneStore, 'all'>, p: Pt, zoom: number): ElementRecord | undefined {
+  const g = boardGrabAt(scene, p, zoom)
+  return g?.part === 'title' ? g.board : undefined
+}
+
+/** A named frame (a Drawing) by its label, drawn just above the frame's top-left (container-select phase 3). */
+export function hitFrameLabel(scene: Pick<SceneStore, 'all'>, p: Pt, zoom: number): ElementRecord | undefined {
+  const band = 28 / zoom
+  return scene.all()
+    .filter((r) => {
+      if (r.kind !== 'frame') return false
+      const name = typeof r.props.name === 'string' ? r.props.name : ''
+      return !!name && p.x >= r.x && p.x <= r.x + labelWidthPx(name) / zoom && p.y >= r.y - band && p.y <= r.y
+    })
+    .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+}
+
+/** A board by its title chip, else a Drawing by its label: board titles come first (the select tool's title row). */
+export function hitTitle(scene: Pick<SceneStore, 'all'>, p: Pt, zoom: number): ElementRecord | undefined {
+  return hitBoardTitle(scene, p, zoom) ?? hitFrameLabel(scene, p, zoom)
 }
 
 /** The topmost node or bound link at a scene point (nodes are DOM cards above the canvas). */

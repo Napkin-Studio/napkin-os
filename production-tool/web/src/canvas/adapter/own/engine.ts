@@ -323,6 +323,12 @@ export const ownEngine: CanvasEngine = {
         const want = e.pointerType === 'touch' ? '' : adapter.cursorAt(toScene(e.clientX, e.clientY))
         if (live.style.cursor !== want) live.style.cursor = want
       }
+      // The container a click would take: a faint outline while hovering (container-select). Select tool only.
+      if (phase === 'move' && !e.buttons) {
+        if (adapter.hoverAt(adapter.router.tool === 'select' && e.pointerType !== 'touch' ? toScene(e.clientX, e.clientY) : null)) draw()
+      } else if (phase === 'leave' || phase === 'down') {
+        if (adapter.hoverAt(null)) draw()
+      }
     }
     const handlers: [string, (e: PointerEvent) => void][] = [
       ['pointerdown', feed('down')], ['pointermove', feed('move')], ['pointerup', feed('up')], ['pointercancel', feed('cancel')], ['pointerleave', feed('leave')],
@@ -374,8 +380,19 @@ export const ownEngine: CanvasEngine = {
         const step = e.shiftKey ? 10 : 1
         adapter.nudge(dx * step, dy * step)
       } else if (e.key === 'Escape') {
-        adapter.selector.cancel()
-        adapter.sketch.cancel()
+        // In order (container-select; ui-behaviour 7): another handler's Esc (a popover, placing, the
+        // link tool) wins; a running gesture is cancelled; an entered container is left, selected whole;
+        // else a plain selection is cleared. A selected node keeps its own Esc (scope focus, 3.16).
+        if (e.defaultPrevented) return
+        const sel = adapter.selector
+        if (sel.busy() || adapter.sketch.ghost) {
+          sel.cancel()
+          adapter.sketch.cancel()
+        } else if (sel.exitScope()) {
+          // Left the container; it is selected whole.
+        } else if (sel.selected.size && ![...sel.selected].some((id) => adapter.scene.get(id)?.kind === 'node')) {
+          sel.set([])
+        } else return
       }
       else if (!mod && !e.altKey && TOOL_KEYS[key]) adapter.setActiveTool({ type: 'native', id: TOOL_KEYS[key] })
       else return

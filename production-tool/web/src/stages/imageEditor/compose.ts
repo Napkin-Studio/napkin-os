@@ -7,9 +7,11 @@
 //   cutout   Remove background's picture, on top
 //   text     text layers, in front
 //   crop     the kept area, scaled back to the full size (the frame's ratio is kept)
-// A hidden layer is left out; hiding Frame leaves out the picture under the cut-outs.
+// A hidden layer is left out; hiding Frame leaves out only the original picture (fills and Change /
+// Upscale results stay unless their own eye is off). What is sent and what Apply saves both come from
+// sendPlan: exactly what is visible (features/image-editor-masks-layers.clan, owner answer IM1).
 
-import type { Edit, EditSession } from './edits'
+import { hiddenCount, type Edit, type EditSession } from './edits'
 
 export interface Pic { sha: string; w: number; h: number }
 export type ResultOf = (e: Edit) => Pic | undefined
@@ -38,11 +40,22 @@ export function plan(s: EditSession, frame: Pic, resultOf: ResultOf, opts: { tex
     else if (e.kind === 'text' && opts.text !== false && e.text.trim()) steps.push({ kind: 'text', text: e.text, x: e.x, y: e.y, size: e.size })
     else if (e.kind === 'crop' && opts.crop !== false) crop = { x: e.x, y: e.y, w: e.w, h: e.h }
   }
-  if (s.hidden.includes('frame')) steps = steps.filter((x) => x.kind !== 'base' && x.kind !== 'fill')
+  // Frame hidden: the original picture goes; a Change or Upscale result that replaced it stays.
+  if (s.hidden.includes('frame')) steps = steps.filter((x) => !(x.kind === 'base' && x.pic.sha === frame.sha))
   // Bases first (only the last stands), then fills, cut-outs and text in their order.
   const order = { base: 0, fill: 1, cutout: 2, text: 3 } as const
   steps = steps.map((x, i) => ({ x, i })).sort((a, b) => order[a.x.kind] - order[b.x.kind] || a.i - b.i).map(({ x }) => x)
   return { w, h, steps, ...(crop ? { crop } : {}) }
+}
+
+/**
+ * What an action is sent ('action': the picture without text, masks or crop) or what Apply saves
+ * ('apply': with text and crop): the visible layers only, and how many hidden layers that leaves out,
+ * for the pill, the Apply line and the send tray ("1 hidden layer is left out").
+ */
+export function sendPlan(s: EditSession, frame: Pic, resultOf: ResultOf, purpose: 'action' | 'apply'): { plan: Plan; leftOut: number } {
+  const p = purpose === 'apply' ? plan(s, frame, resultOf) : plan(s, frame, resultOf, { text: false, crop: false })
+  return { plan: p, leftOut: hiddenCount(s, purpose === 'action' ? ['text', 'crop', 'mask'] : ['mask']) }
 }
 
 /** The plan is the frame as it was: nothing to send but the frame itself. */

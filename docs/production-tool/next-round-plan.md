@@ -6,8 +6,9 @@ in the Production Tool. Each one now has a feature record on the branch
 is a discussion paper, because it needs Shrey's answers before anyone can design
 it.
 
-Every record is `status: exploring`. Nobody writes feature code until Shrey
-approves the design and sets `design.approved_by` (CLAUDE.md, steps 2 and 3).
+Every record started as `status: exploring`. Nobody writes feature code until
+Shrey approves the design and sets `design.approved_by` (CLAUDE.md, steps 2 and 3).
+By the end of 2026-10-15 Shrey had approved six of them (the Status column below).
 Read a record with `scripts/feature show <slug>`.
 
 How we work this round (Shrey, 2026-10-15):
@@ -30,16 +31,18 @@ Sizes: S is up to 1 day, M is 2 to 3 days, L is 4 to 6 days, XL is more than
 
 | # | Shrey's words (short) | Record | Size | Status | Depends on |
 |---|---|---|---|---|---|
-| 1 | The image tool hangs and doesn't work. Click select is slow, and the fill is atrocious. | [image-perf-fill](../../features/image-perf-fill.clan) | L | Design ready | Owner call on Ideogram; production-csp; server cut-out (infra, a person applies) |
-| 2 | Lasso and Brush mask don't work at all. | [image-editor-masks-layers](../../features/image-editor-masks-layers.clan) | L (with 3) | Design ready | Shares ImageEditor.tsx with item 1 |
-| 3 | Hiding and showing layers is buggy. | [image-editor-masks-layers](../../features/image-editor-masks-layers.clan) | (with 2) | Design ready | Owner call on the hidden-layer rules |
-| 4 | The top bar has too many buttons. The Job button can be just the turning wheel. | [topbar-declutter](../../features/topbar-declutter.clan) | M | Design ready | None |
-| 5 | You can't move the boards around. | [board-move](../../features/board-move.clan) | M | Design ready | Owner call on inside-click and touch |
-| 6 | Storyboards are treated as the source of truth, so clips come out disjointed. Make one video, or give start and end references. | [connected-video](../../features/connected-video.clan) | XL | Design ready | Paid tests (phase 0); clip-moment-edit; model-swap |
-| 7 | Boards don't organise what is put on them. | [board-autolayout](../../features/board-autolayout.clan) | L | Design ready | board-move (shared press table) |
-| 8 | The drawing's frame is hard to select. | [container-select](../../features/container-select.clan) | M | Design ready | board-move (shared press table) |
-| 9 | Each node could be a CLAN file with two props: what it shows and what it feeds. | [clan-nodes](../../features/clan-nodes.clan) | XL | **Needs discussion** | Owner answers; os-sign-in; brief-research-spin-in |
-| 10 | Making a frame or a picture from a prompt on the canvas is not built. | [prompt-to-frame](../../features/prompt-to-frame.clan) | L | Design ready | Shrey's canvas work for items 7 and 8 (phases 3-5) |
+| 1 | The image tool hangs and doesn't work. Click select is slow, and the fill is atrocious. | [image-perf-fill](../../features/image-perf-fill.clan) | L | Pending (owner answers) | Owner call on Ideogram; production-csp; server cut-out (infra, a person applies) |
+| 2 | Lasso and Brush mask don't work at all. | [image-editor-masks-layers](../../features/image-editor-masks-layers.clan) | L (with 3) | **Approved** | Shares ImageEditor.tsx with item 1 |
+| 3 | Hiding and showing layers is buggy. | [image-editor-masks-layers](../../features/image-editor-masks-layers.clan) | (with 2) | **Approved** | None (IM1-IM3 answered; IM4 split out, see below) |
+| 4 | The top bar has too many buttons. The Job button can be just the turning wheel. | [topbar-declutter](../../features/topbar-declutter.clan) | M | **Approved** | None |
+| 5 | You can't move the boards around. | [board-move](../../features/board-move.clan) | M | **Approved** | None |
+| 6 | Storyboards are treated as the source of truth, so clips come out disjointed. Make one video, or give start and end references. | [connected-video](../../features/connected-video.clan) | XL | **Approved** | Paid tests (phase 0); clip-moment-edit; model-swap |
+| 7 | Boards don't organise what is put on them. | [board-autolayout](../../features/board-autolayout.clan) | L | **Approved** (reworked) | board-move (nearestFree); container-select |
+| 8 | The drawing's frame is hard to select. | [container-select](../../features/container-select.clan) | M | **Approved** | board-move (shared press table) |
+| 9 | Each node could be a CLAN file with two props: what it shows and what it feeds. | [clan-nodes](../../features/clan-nodes.clan) | XL | Pending (**needs discussion**) | Owner answers; os-sign-in; brief-research-spin-in |
+| 10 | Making a frame or a picture from a prompt on the canvas is not built. | [prompt-to-frame](../../features/prompt-to-frame.clan) | L | Pending (owner answers) | Shrey's canvas work for items 7 and 8 (phases 3-5) |
+| 11 | One concept, every format: see it on billboards, TV, reels and print with one click (Shrey, 2026-10-15). | [campaign-formats](../../features/campaign-formats.clan) | XL | Pending (**needs owner answers**) | Owner answers CF1-CF11; ~$8.30 paid tests; connected-video phase 1; board-autolayout; audio-mix for phase 5's mix |
+| IM4 | Open canvas pictures and references in the Image editor (split out of image-editor-masks-layers, 2026-10-15). | none yet | ? | Pending (**new discussion**) | Owner discussion first |
 
 Each design was written by one agent and then checked by a second agent that
 tried to break it. Every record keeps the corrections from that review as a
@@ -49,7 +52,7 @@ decision. File and line references were checked against the code on this branch.
 
 ## 1. Image tool hangs, slow Click-select, poor Fill
 
-Record: [`features/image-perf-fill.clan`](../../features/image-perf-fill.clan) · Size L · Design ready
+Record: [`features/image-perf-fill.clan`](../../features/image-perf-fill.clan) · Size L · Pending
 
 **What we found**
 
@@ -106,7 +109,7 @@ It ships as two PRs: PR 1 is the web (phases 1-4), PR 2 is the relay (phases 5-7
 
 ## 2 and 3. Brush and Lasso, layer hide and show
 
-Record: [`features/image-editor-masks-layers.clan`](../../features/image-editor-masks-layers.clan) · Size L · Design ready
+Record: [`features/image-editor-masks-layers.clan`](../../features/image-editor-masks-layers.clan) · Size L · Approved
 
 **What we found**
 
@@ -156,7 +159,7 @@ The brush and lasso maths is correct. The problems are around it:
 
 ## 4. Top bar is cluttered
 
-Record: [`features/topbar-declutter.clan`](../../features/topbar-declutter.clan) · Size M · Design ready
+Record: [`features/topbar-declutter.clan`](../../features/topbar-declutter.clan) · Size M · Approved
 
 **What we found**
 
@@ -197,7 +200,7 @@ Record: [`features/topbar-declutter.clan`](../../features/topbar-declutter.clan)
 
 ## 5. Boards can't be moved
 
-Record: [`features/board-move.clan`](../../features/board-move.clan) · Size M · Design ready
+Record: [`features/board-move.clan`](../../features/board-move.clan) · Size M · Approved
 
 **What we found**
 
@@ -241,7 +244,7 @@ Record: [`features/board-move.clan`](../../features/board-move.clan) · Size M �
 
 ## 6. Clips don't join into one film
 
-Record: [`features/connected-video.clan`](../../features/connected-video.clan) · Size XL · Design ready
+Record: [`features/connected-video.clan`](../../features/connected-video.clan) · Size XL · Approved
 
 **What we found**
 
@@ -296,7 +299,7 @@ Cost: about $3.40 for a 15 s ad on veo3.1_fast, against about $2.40 today.
 
 ## 7. Boards don't organise themselves
 
-Record: [`features/board-autolayout.clan`](../../features/board-autolayout.clan) · Size L · Design ready
+Record: [`features/board-autolayout.clan`](../../features/board-autolayout.clan) · Size L · Approved (reworked 2026-10-15)
 
 **What we found**
 
@@ -308,42 +311,65 @@ Record: [`features/board-autolayout.clan`](../../features/board-autolayout.clan)
 - Placement knows nothing about keys, roles or shot order. The placement rules
   exist in two copies.
 
-**The approach**
+**The approach (reworked to Shrey's answers, 2026-10-15)**
 
-- An own-engine template with room under the picture boards. Excalidraw doesn't
-  change.
-- One arranger. Characters, Locations and Products get one row per key.
-  References get rows by role. Storyboard keeps shot order.
-- New things go to the next slot. The board grows by the 2026-10-15 rules.
-  What doesn't fit goes in one row outside.
-- Naming a loose picture moves it to its board, with Undo.
-- Tidy on every board. Dragging inside a board re-orders it.
+Shrey: "Don't shuffle the old things, make space for the new thing" (BA1), and
+start new projects on an empty canvas (BA2 = c).
+
+- **An empty canvas.** A new project has no Ad template and no boards. Its
+  Script, Storyboard and Video nodes are placed as today, and never get a board.
+  Excalidraw doesn't change.
+- **Boards are for collections of pictures.** A person makes one ("+ New board",
+  or B and drag), or accepts the nudge: when two or more loose pictures share a
+  role, their selection bar offers "Gather into a Characters board". That is one
+  undo step: the board lands clear of its neighbours (board-move's `nearestFree`)
+  and the pictures go in, laid out by the board's purpose. If a Characters board
+  already exists, the bar offers "Move to Characters" instead.
+- **The rail lists nodes and boards.** Script, Storyboard and Video first, then
+  the boards by rank, so ⌥1 still jumps to Script (review item 1).
+- **Make space, never shuffle.** Nothing already on a board moves by itself. A
+  new picture takes the next free slot of its board's layout: a key's new view
+  goes after its other views, a new key starts a new row, References go in rows
+  by role (no row labels in v1), and many views of one key stay one full row.
+  The board grows to fit it by the 2026-10-15 rules. What can't fit goes in one
+  row outside. A drop that lands free inside a board stays exactly there.
+- **Naming routes.** Naming a loose picture moves it to its role's board, with
+  Undo, when there is one. A picture already on another board stays, with
+  "Move to Characters" in its bar.
+- **Tidy** in the board bar lines a board up by its purpose. It is the only time
+  existing members move.
+- **Existing projects keep their boards**, node boards included. Nothing is
+  removed. Their picture boards follow the next-slot rule, with a one-time note.
+- Paste, Picture (I) and + Node off a board land clear of everything.
+
+Dropped from the reviewed design: the roomier template, re-ordering by drag
+and its insertion marker, the "Arranges itself" switch (and its board prop),
+and the order on a Storyboard board (a storyboard's frames stay inside its node).
+There is no document or canvas contract change.
 
 **Phases**
 
 | Phase | Size |
 |---|---|
-| 1. Stop the scatter (room, free-spot paste, one overflow row) | S |
-| 2. Engine packer | M |
-| 3. Lanes per purpose, routing after naming | M |
-| 4. Re-order by drag, Tidy, glides | M |
+| 1. Empty canvas, the rail lists nodes, free-spot paste, one overflow row | S |
+| 2. Engine placer: next free slot and Tidy | M |
+| 3. Lanes per purpose, routing after naming, Move to <Board> | M |
+| 4. The Gather nudge, Tidy in the bar, the one-time note, glides | M |
 | 5. Spec and smoke | S |
 
-**Open questions for Shrey**
+**Shrey's answers (2026-10-15), all in the record**
 
-- On auto boards, should a drop re-order instead of staying exactly where it was
-  let go? This changes the 2026-10-15 rule. Do you want a per-board "Arranges
-  itself" switch?
-- The own-engine template layout: production nodes on top, picture boards below?
-- A picture on one board named with another board's role: stay or move?
-- Many views of one key: one full row, or a stack?
-- Labels at the start of each References row?
-- Storyboard board order: nodes first, then shot pictures?
-- Should existing boards arrange themselves, or stay free?
+- BA1: new things take the next free slot; old things never move on their own.
+- BA2 = (c): empty canvas; nodes never get boards; boards by hand or the nudge.
+- BA3 yes: a picture named for another board's role stays, with "Move to Characters".
+- BA4 yes: many views of one key make one full row.
+- BA5 yes: no role labels on References rows in v1.
+- BA6 dropped: a storyboard's frames stay inside its node.
+- BA7 yes: existing boards follow the new rule, with a one-time note.
 
 ## 8. A drawing's frame is hard to select
 
-Record: [`features/container-select.clan`](../../features/container-select.clan) · Size M · Design ready
+Record: [`features/container-select.clan`](../../features/container-select.clan) · Size M · Approved
 
 **What we found**
 
@@ -442,7 +468,7 @@ Size S. Every option above needs it.
 
 ## 10. Prompt to frame or picture on the canvas
 
-Record: [`features/prompt-to-frame.clan`](../../features/prompt-to-frame.clan) · Size L · Design ready
+Record: [`features/prompt-to-frame.clan`](../../features/prompt-to-frame.clan) · Size L · Pending
 
 **What we found**
 
@@ -491,6 +517,68 @@ Record: [`features/prompt-to-frame.clan`](../../features/prompt-to-frame.clan) �
 
 ---
 
+## 11. One concept, every format
+
+Record: [`features/campaign-formats.clan`](../../features/campaign-formats.clan) · Size XL · Pending
+(**needs owner answers**). Full write-up with sources: [campaign-formats.md](campaign-formats.md).
+
+**What we found**
+
+- Agencies adapt one approved master into each format: re-laid stills, film cutdowns
+  (30, 15, 6 s) and native bumpers. The logo, line, colours and fonts stay locked, and a person
+  reviews every format.
+- Tools (Adobe GenStudio, Canva, Pencil, Celtra, Smartly, Meta and Google auto-crop or expand) make
+  "one click" reliable for stills only. Auto-crop cuts logos and heads, and generative fill goes
+  soft at print size.
+- 3.19, the format packs (67 draft formats) and contract-v3's `format_set`, `size`, `resize` and
+  `cutdown` exist, but nothing is built. `selbar.ts:55` is a stub.
+- 3.19 assumes things the models can't do:
+  - no Runway model tracks a subject;
+  - images have no outpaint, only an Ideogram 4.5 mask;
+  - Aleph 2 has no 4:5;
+  - Veo makes only 16:9 and 9:16.
+
+**The approach (D, a method per format)**
+
+- Wren asks once what must stay. Each format is then a free crop when that holds, an Ideogram extend
+  for moderate gaps, or a Gemini regeneration for extreme shapes. Banners are a layout.
+- Type, logo, supers and the end card are layers laid out per format, never painted into pictures.
+- Cutdowns re-edit the same takes. Dex picks the beats and Edie cuts.
+- Vertical, 4:5 and 1:1 video are crops per shot, with Aleph 2 only on the shots where the crop fails.
+- Everything lands on one Campaign board: a grid by channel with safe-area overlays, status, Jude's
+  checks, and Redo, Change method, Adjust crop, Edit type and Lock on each tile.
+- Export makes one zip at delivery size with a manifest. OOH files say "Confirm with the media owner".
+- A typical campaign costs about $7 for previews and about $15 delivered, shown only in History.
+
+**Phases**
+
+| Phase | Size |
+|---|---|
+| 0. Paid tests CF-T1..T6 (~$8.30, cap $10) | S |
+| 1. Contract | M |
+| 2. Campaign board and free crops (usable alone) | L |
+| 3. Type as layers, Jude per format | M |
+| 4. Paid stills: extend, regenerate, layout, delivery upscales | L |
+| 5. Cutdowns (re-edit) | L |
+| 6. Video re-aspect (crop, Aleph where needed) | L |
+| 7. Optional: in-place mock-ups; Seedance/WAN after model-swap | M |
+
+**Open questions for Shrey** (each has a recommendation in the record)
+
+- CF1. Method per format (D), or crop only first?
+- CF2. 2K previews, with delivery upscales only on export?
+- CF3. A mixed "Campaign launch" pack, plus clients' own mixes?
+- CF4. In-place mock-ups ("see it on a billboard") for pitching?
+- CF5. Default cutdown lengths: 15 s and 6 s?
+- CF6. Vertical video: crop and Aleph, or remake natively on Veo?
+- CF7. 4:5 video made at 3:4 and then cropped?
+- CF8. May Skye suggest a shorter OOH line (ask only)?
+- CF9. Burn captions into the social versions by default?
+- CF10. Show the Format set as a Campaign board instead of a node card?
+- CF11. Approve about $8.30 of paid tests?
+
+---
+
 ## Who does what (decided by Shrey, 2026-10-15)
 
 Shrey: "Assign me the open decision discussion we have. The rest you can divide as
@@ -514,6 +602,7 @@ to Sai."
 | board-autolayout (7) | 7 | yes | L |
 | connected-video (6) | 8, plus approving about $19 of paid tests | yes | XL |
 | clan-nodes (9) | 17, plus choosing option A-D | after Shrey decides and a design is written | XL |
+| campaign-formats (11) | 11, plus approving about $8.30 of paid tests | yes, after Shrey's answers | XL |
 
 ### Build order for Sai
 
@@ -529,10 +618,14 @@ earlier ones instead of colliding:
    so it lands before prompt-to-frame and connected-video touch `ScriptEditor.tsx`.
 4. **image-perf-fill**, after masks-layers (both touch `ImageEditor.tsx` and `Stage.tsx`).
 5. **prompt-to-frame.** It creates `director.v9`, which connected-video extends.
-6. **board-autolayout**, after board-move and container-select (it extends
-   `grabOrder` and reuses board-move's `nearestFree`).
+6. **board-autolayout**, after board-move and container-select (it reuses
+   board-move's `nearestFree` and container-select's membership map; since the
+   2026-10-15 rework it adds no `grabOrder` rows).
 7. **connected-video**, after Shrey approves its paid tests (phase 0).
 8. **clan-nodes**, once Shrey has decided and its design is approved.
+9. **campaign-formats**, once Shrey has answered CF1-CF11 and approved the design. Phases 1-3
+   spend nothing and can start after board-autolayout. Phase 5 needs connected-video phase 1
+   (the stitch edit list).
 
 ### What Shrey's answers unblock
 
@@ -546,11 +639,14 @@ specific answer:
 - board-move phases 1 and 4: what a click inside a board does, and touch.
 - connected-video phase 0: approve about $19 of paid Runway tests. Phase 3 and later
   follow their results.
-- board-autolayout phase 4: whether a drop re-orders an auto board (this changes the
-  2026-10-15 "stays where dropped" rule).
+- board-autolayout: answered and approved (reworked: an empty canvas, picture
+  boards by hand or by the Gather nudge, new things take the next free slot, and
+  the 2026-10-15 "stays where dropped" rule is kept).
 - container-select phase 2: how sketch areas behave.
 - prompt-to-frame: whether Draw goes through the send tray, and recording director.v9
   evals (paid).
+- campaign-formats: everything (CF1-CF11). CF2 and CF6 set the cost per pass, and CF11 approves
+  about $8.30 of paid tests (phase 0).
 - clan-nodes: everything, except phase 1a (fill and read `JobInput.context`), which
   needs only its own approval.
 
@@ -558,18 +654,21 @@ specific answer:
 
 ## Backlog: earlier open items (not designed here)
 
+Shrey answered "yes" to the recommended fix for several of these on 2026-10-15.
+They are marked **Decided**, with where each one is being done.
+
 | Item | Suggested size |
 |---|---|
-| The local relay saves jobs to disk, so a restart can't lose a paid clip. | S |
-| Decide where pictures are saved. 17 pictures existed only in the browser, not on the relay. | M |
+| **Decided (yes, 2026-10-15).** The local relay saves jobs to disk, so a restart can't lose a paid clip. Being built on `fix/relay-durable-jobs`. | S |
+| **Decided (yes, 2026-10-15).** Decide where pictures are saved. 17 pictures existed only in the browser, not on the relay. Being investigated on `fix/picture-storage`. | M |
 | Ideogram and Magnific on by default? (Also an open question in item 1.) | S (a decision) |
-| Ad template: growing room for boards. (Covered by board-autolayout phase 1.) | S |
-| Ink drawn on a board joins the board. | S |
+| Ad template: growing room for boards. Moot: board-autolayout's rework (2026-10-15) drops the template; new projects start on an empty canvas. | — |
+| **Decided (yes, 2026-10-15).** Ink drawn on a board joins the board. In `feat/board-move`. | S |
 | Strokes move with their Drawing frame. (Partly covered by container-select.) | S |
 | A drawn frame's label overlaps the board title. | S |
-| The Delete key deletes a selected link. | S |
-| Does picking from the @ popover link the key or not? | S (a decision) |
-| The phone bar has no job pill. | S |
+| **Decided (yes, 2026-10-15).** The Delete key deletes a selected link. In `feat/board-move`. | S |
+| **Decided (yes, 2026-10-15).** Picking `@samurai` from the @ popover links the key. Checked on 2026-10-15: **it already does, in the Script editor.** The popover offers a key with two or more views as one row, "@samurai · 3 views" (`text/mention/source.ts` `mentionSource`). Picking it, or any one of its views, adds one key→script link in the key's role, as one undo step, and the page says "Linked @samurai · 3 views to this script" with Undo (`linkForMention` in source.ts, `scriptMentionHooks` in `script/mentionHooks.ts`, the toast in `ScriptEditor.tsx:154`). Test: `text/mention/source.test.ts` ("a view of a key with two or more views links the whole key, once, in its role"). In the Storyboard and Video shot editors nothing links, because they have no script (`Storyboard.tsx:102` and `VideoShots.tsx:29` pass no script, so every reference counts as in scope). A test that picks the group row itself (kind `key`, not yet linked) is missing; add it with the next change there. | S (a test) |
+| **Decided (yes, 2026-10-15).** The phone bar gets the job icon. Added to `topbar-declutter` for Sai (decision and `next_step` on the record). | S |
 | Nvidia CUDA server exception: keep it or drop it? | S (a decision) |
 | A third-party notices page before the first customer. | S |
 | Host the client model weights on our CDN. (Also an open question in item 1.) | S-M |
@@ -578,6 +677,7 @@ specific answer:
 | The `production-csp` and `clan-sdk-repack` records, on `feat/production-tool-overhaul` (PR #75). | M each |
 | Terraform applies for os-sign-in and the image editor's server cut-out. A person runs them. | S each |
 | Set `TOKEN_SECRET` before deploy. | S |
-| Skye's draft answered after its scene was undone lands nowhere, silently. Land it as a new first scene, or say so? (Recommended: a new first scene.) | S |
+| **Decided (yes, 2026-10-15).** Skye's draft answered after its scene was undone lands as a new first scene. In `fix/relay-durable-jobs`. | S |
 | In another browser, Skye's waiting question shows only at the top of the page, not on its line (the target lives in the asking browser). Needs a contract field. | S |
 | Flaky under the full parallel test run, pass alone: `src/canvas/nodes/cards.test.tsx` (empty-node PromptStart) and `src/script/perf.test.ts` (compose under 100 ms); in mock-backend, `test_model.ModelServer.test_concurrency_cap` (one request short under load). All three failed inside the pre-push hook once and passed on rerun. | S |
+| **Decided (yes, 2026-10-15).** The pre-push hook change. Shrey approved it, but the agent permission classifier blocks it as a CI change, so a person applies it to `.githooks/pre-push`. | S |

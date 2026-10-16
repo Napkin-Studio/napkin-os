@@ -1,4 +1,5 @@
-// Where Ctrl/Cmd+Z belongs to something else: a field being typed in, or the canvas (Excalidraw, or our own engine's [data-own-canvas], features/engine-select.clan),
+// Where Ctrl/Cmd+Z belongs to something else: a field being typed in, the Image editor ([data-image-editor]: ⌘Z
+// takes back a stroke there, features/image-editor-masks-layers.clan), or the canvas (Excalidraw, or our own engine's [data-own-canvas], features/engine-select.clan),
 // which keeps its own undo (ui/UndoButtons.tsx). The script editors keep none:
 // their typing is LocalUndo steps (features/script-editor.clan), so ⌘Z there is the person's.
 
@@ -6,5 +7,5 @@
 export function keepsItsOwnUndo(target: EventTarget | null): boolean {
   const el = target instanceof Element ? target : null
   if (el?.closest('[data-script-editor]') && !el.closest('input, textarea, select')) return false
-  return !!el?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], .excalidraw, [data-own-canvas]')
+  return !!el?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], .excalidraw, [data-own-canvas], [data-image-editor]')
 }

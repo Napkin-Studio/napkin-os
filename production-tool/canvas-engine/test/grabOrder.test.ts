@@ -1,9 +1,12 @@
 // The press priority (features/board-move.clan): one case per row of grabOrder, top to bottom,
 // including the overlaps the order decides (a node over a board, ink and a drawn frame on a board,
 // a link across a title chip). Items 7 and 8 add their rows here with a case each.
+// The merge with container-select (2026-10-16) re-ordered the table: nodes and links, then titles and
+// Drawing labels, then the handles, then double press and the entered container's inside, then picks.
 
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
+import { encodePoints } from '../src/model/points'
 import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore } from '../src/model/store'
 import { Renderer } from '../src/render/renderer'
@@ -11,21 +14,35 @@ import { hitNodeOrLink } from '../src/render/links'
 import { grabOrder, SelectTool } from '../src/select/select'
 import { boardGrabAt } from '../src/boards/grab'
 
-function setup(records: ElementRecord[], zoom = 1) {
+function setup(records: ElementRecord[], zoom = 1, points: Record<string, Uint8Array> = {}) {
   const scene = new SceneStore(new Y.Doc())
-  scene.seed(records)
+  scene.seed(records, points)
   const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
-  const tool = new SelectTool(scene, (x, y) => r.hit(x, y), { above: (x, y) => hitNodeOrLink(scene, { x, y }, zoom) })
-  const press = (x: number, y: number, opts: { shift?: boolean; by?: 'mouse' | 'pen' | 'touch' } = {}) => tool.press({ x, y }, { zoom, ...opts })
+  let t = 0
+  const tool = new SelectTool(scene, (x, y) => r.hit(x, y, zoom), { above: (x, y) => hitNodeOrLink(scene, { x, y }, zoom), now: () => t })
+  // Each press is a second later than the last unless `at` says when (a double press is two within 350 ms).
+  const press = (x: number, y: number, opts: { shift?: boolean; by?: 'mouse' | 'pen' | 'touch'; at?: number } = {}) => {
+    t = opts.at ?? t + 1000
+    tool.press({ x, y }, { zoom, ...opts })
+  }
   return { scene, tool, press }
 }
+
+/** A diagonal stroke's points, w by h (relative to its box): strokes are hit along their line (container-select). */
+const line = (w: number, h: number) =>
+  encodePoints([{ x: 0, y: 0, pressure: 0.5 }, { x: w, y: h, pressure: 0.5 }], { x: 0, y: 0 })
 
 const board = (id: string, x: number, y = 0, extra: Partial<ElementRecord> = {}) => element({ id, kind: 'board', z: `a0${id}`, x, y, w: 400, h: 300, props: { name: id, purpose: 'reference' }, ...extra })
 const pic = (id: string, x: number, y: number, parentId: string | null = null) => element({ id, kind: 'image', z: `b${id}`, x, y, w: 100, h: 80, parentId, props: { assetSha: null, status: 'saved' } })
 
 describe('grabOrder', () => {
   it('is one table, in the documented order, every row explained', () => {
-    expect(grabOrder.map((r) => r.name)).toEqual(['board-handle', 'scale-handle', 'node-or-link', 'board-title', 'element', 'board-edge', 'board-inside-selected', 'board-inside', 'empty'])
+    // Was board-handle, scale-handle, node-or-link, board-title, element, …: the order decided when
+    // container-select merged (nodes and titles before handles; double press and scope before picks).
+    expect(grabOrder.map((r) => r.name)).toEqual([
+      'node-or-link', 'board-title', 'drawing-label', 'board-handle', 'scale-handle', 'enter', 'scope-inside',
+      'element', 'board-edge', 'board-inside-selected', 'board-inside', 'empty',
+    ])
     for (const r of grabOrder) expect(r.says.length).toBeGreaterThan(10)
   })
 
@@ -83,8 +100,9 @@ describe('grabOrder', () => {
 
   it('element: ink on a board is the ink’s', () => {
     const ink = element({ id: 'k', kind: 'stroke', z: 'c', x: 100, y: 100, w: 60, h: 40, parentId: 'B', props: { tool: 'pen' } })
-    const { tool, press } = setup([board('B', 0), ink])
-    press(120, 120)
+    // A stroke is hit along its line since container-select, so it has points and the press is on them.
+    const { tool, press } = setup([board('B', 0), ink], 1, { k: line(60, 40) })
+    press(130, 120)
     expect(tool.pressed).toBe('element')
     expect([...tool.selected]).toEqual(['k'])
   })
@@ -140,6 +158,57 @@ describe('grabOrder', () => {
     press(2000, 2000)
     expect(tool.pressed).toBe('empty')
     expect(tool.selected.size).toBe(0)
+  })
+
+  it('drawing-label: a Drawing’s label above its top-left picks the Drawing up whole; a board’s chip comes first', () => {
+    const frame = element({ id: 'D', kind: 'frame', z: 'c', x: 600, y: 100, w: 200, h: 150, customData: { kind: 'drawn' }, props: { name: 'Drawing' } })
+    const s1 = element({ id: 's1', kind: 'stroke', z: 'd', x: 650, y: 150, w: 50, h: 50, parentId: 'D', props: { tool: 'pen' } })
+    const { tool, press } = setup([board('B', 0), frame, s1], 1, { s1: line(50, 50) })
+    press(610, 90)
+    expect(tool.pressed).toBe('drawing-label')
+    expect([...tool.selected]).toEqual(['D'])
+    expect([...tool.preview!.ids].sort()).toEqual(['D', 's1'])
+    press(30, 0)
+    expect(tool.pressed).toBe('board-title')
+  })
+
+  it('board-title comes before a selected board’s handles where they meet (a long name over the top-middle handle)', () => {
+    const long = board('B', 0, 0, { props: { name: 'A board with a really long name here', purpose: 'reference' } })
+    const { tool, press } = setup([long])
+    tool.set(['B'])
+    press(200, 0)
+    expect(tool.pressed).toBe('board-title')
+    expect(tool.resizing).toBeNull()
+  })
+
+  it('enter: a double press on a Drawing’s stroke picks the stroke alone; a drag moves only it', () => {
+    const frame = element({ id: 'D', kind: 'frame', z: 'c', x: 600, y: 100, w: 200, h: 150, customData: { kind: 'drawn' }, props: { name: 'Drawing' } })
+    const s1 = element({ id: 's1', kind: 'stroke', z: 'd', x: 650, y: 150, w: 50, h: 50, parentId: 'D', props: { tool: 'pen' } })
+    const { tool, press } = setup([frame, s1], 1, { s1: line(50, 50) })
+    press(675, 175, { at: 0 })
+    expect(tool.pressed).toBe('element')
+    expect([...tool.selected]).toEqual(['D'])
+    tool.release({ x: 675, y: 175 })
+    press(675, 175, { at: 200 })
+    expect(tool.pressed).toBe('enter')
+    expect(tool.scope).toBe('D')
+    expect([...tool.selected]).toEqual(['s1'])
+    expect([...tool.preview!.ids]).toEqual(['s1'])
+  })
+
+  it('scope-inside: the empty inside of the entered Drawing marquees over its members only; empty canvas leaves it', () => {
+    const frame = element({ id: 'D', kind: 'frame', z: 'c', x: 600, y: 100, w: 200, h: 150, customData: { kind: 'drawn' }, props: { name: 'Drawing' } })
+    const s1 = element({ id: 's1', kind: 'stroke', z: 'd', x: 650, y: 150, w: 50, h: 50, parentId: 'D', props: { tool: 'pen' } })
+    const { tool, press } = setup([frame, s1], 1, { s1: line(50, 50) })
+    tool.enterAt({ x: 675, y: 175 })
+    press(780, 240)
+    expect(tool.pressed).toBe('scope-inside')
+    tool.release({ x: 610, y: 110 })
+    expect([...tool.selected]).toEqual(['s1'])
+    expect(tool.scope).toBe('D')
+    press(2000, 2000)
+    expect(tool.pressed).toBe('empty')
+    expect(tool.scope).toBeNull()
   })
 
   it('grabbableAt reads the same rows: what a press would pick up, not what it would marquee', () => {

@@ -1,5 +1,7 @@
 import io
 import json
+import shutil
+import subprocess
 
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
@@ -108,7 +110,8 @@ def test_every_video_request_sets_audio_explicitly(mock):
     assert len(video) == 2 and all(r["audio"] is False for r in video)
 
 
-def test_video_returns_a_still_with_its_duration(mock, clock):
+def test_video_without_ffmpeg_returns_a_still_with_its_duration(mock, clock):
+    mock._ffmpeg = None  # the relay Lambda: no ffmpeg on PATH
     rid = mock.submit(job("clip", first_frame=SHA, duration_s=6))
     clock.t = 3
     out = mock.status(rid).outputs[0]
@@ -117,6 +120,7 @@ def test_video_returns_a_still_with_its_duration(mock, clock):
 
 def test_a_clip_from_words_alone_is_a_blank_still_with_its_duration(mock, clock):
     """A clip straight from the script (ui-behaviour 3.5): no frame, no refs; the mock still makes one."""
+    mock._ffmpeg = None
     rid = mock.submit(job("clip", refs=[], duration_s=4))
     clock.t = 3
     out = mock.status(rid).outputs[0]
@@ -193,3 +197,47 @@ def test_the_input_is_resolved_at_submit_because_status_runs_outside_the_job(clo
     clock.t = 10
     status = provider.status(rid)
     assert status.state == "done" and status.outputs
+
+
+# ── the drifting MP4 (features/connected-video.clan, phase 1) ───────────────
+
+HAVE_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+
+
+def _frames(mp4: bytes, tmp_path) -> list[bytes]:
+    f = tmp_path / "clip.mp4"
+    f.write_bytes(mp4)
+    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(f), "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                       capture_output=True, check=True)
+    return r.stdout
+
+
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="needs ffmpeg")
+def test_video_with_ffmpeg_is_a_one_second_drifting_mp4(clock, tmp_path):
+    stripes = Image.new("RGB", (65, 48), (10, 120, 200))  # odd width: the MP4's is even
+    for x in range(0, 65, 8):
+        for y in range(48):
+            stripes.putpixel((x, y), (250, 250, 250))
+    buf = io.BytesIO()
+    stripes.save(buf, format="PNG")
+    m = MockProvider(lambda sha: AssetRef(sha, "https://cdn.test/x.png", "image/png"), lambda url: buf.getvalue(),
+                     clock=clock)
+    rid = m.submit(job("clip", first_frame=SHA, duration_s=6))
+    clock.t = 3
+    out = m.status(rid).outputs[0]
+    assert out.mime == "video/mp4" and out.data[4:8] == b"ftyp"
+    assert (out.w, out.h, out.duration_s) == (64, 48, 1.0)
+    raw = _frames(out.data, tmp_path)
+    n = 64 * 48
+    assert len(raw) == 24 * n  # 1 s at 24 fps
+    assert raw[:n] != raw[-n:]  # it drifts: the last frame is not the first
+
+
+def test_ffmpeg_none_or_failing_falls_back_to_the_still(clock):
+    for ffmpeg in (None, "/nonexistent/ffmpeg"):
+        m = MockProvider(lambda sha: AssetRef(sha, "https://cdn.test/x.png", "image/png"), lambda url: _png(),
+                         clock=clock, ffmpeg=ffmpeg)
+        rid = m.submit(job("clip", first_frame=SHA, duration_s=4))
+        clock.t += 3
+        out = m.status(rid).outputs[0]
+        assert out.mime == "image/png" and out.duration_s == 4, ffmpeg

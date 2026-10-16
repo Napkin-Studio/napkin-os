@@ -4,14 +4,16 @@
 // and written once at pointer-up as one undoable step: a record and its
 // immutable points. The eraser marks the strokes its path touches and removes
 // them in one step at pointer-up. Strokes drawn close in time and space share an
-// ink group (groupIds), so a word or a doodle moves as one. A stroke whose centre lies on a board
-// joins it (parentId, as a picture dropped there does), so it moves with the board (board-move).
+// ink group (groupIds), so a word or a doodle moves as one. A stroke that starts and ends inside a
+// Drawing joins it (container-select); otherwise one whose centre lies on a board joins the board
+// (parentId, as a picture dropped there does), so it moves with the board (board-move).
 
-import { encodePoints, localPoints, type InkPoint } from '../model/points'
+import { encodePoints, type InkPoint } from '../model/points'
 import { element, type ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import { zTop } from '../model/z'
-import { strokeScale } from '../render/renderer'
+import { drawnAt, refitDrawn } from '../select/drawn'
+import { strokeDistance } from '../select/hitStroke'
 
 export type InkTool = 'pen' | 'highlighter' | 'eraser'
 
@@ -109,7 +111,13 @@ export class Ink {
     if (c.tool === 'eraser') {
       const ids = [...this.erased]
       this.erased.clear()
-      if (ids.length) this.scene.change((tx) => tx.remove(ids))
+      if (!ids.length) return null
+      const parents = ids.map((id) => this.scene.get(id)?.parentId).filter((id): id is string => !!id)
+      // The Drawings that lost strokes refit in the same step.
+      this.scene.change((tx) => {
+        tx.remove(ids)
+        for (const f of new Set(parents)) refitDrawn(this.scene, tx, f)
+      })
       return null
     }
     const xs = c.points.map((p) => p.x)
@@ -118,17 +126,21 @@ export class Ink {
     const id = this.newId('stroke')
     const at = this.now()
     const prev = this.last && this.scene.get(this.last.id)
-    const joins = !!prev && at - this.last!.at <= GROUP_MS && gap(box, boxOf(prev)) <= GROUP_PX
-    const group = joins ? (prev!.groupIds[0] ?? this.newId('ink')) : null
     const all = this.scene.all()
     const cx = (box.minX + box.maxX) / 2
     const cy = (box.minY + box.maxY) / 2
-    // The topmost board under its centre: the centre rule a move uses (select.ts containerAt).
-    const board = all
+    // A stroke that starts and ends inside a Drawing joins it (features/container-select.clan); otherwise
+    // the topmost board under its centre (board-move: the centre rule a move uses, select.ts containerAt).
+    const into = drawnAt(this.scene, c.points[0], c.points[c.points.length - 1])?.id ?? null
+    const board = into ? undefined : all
       .filter((r) => r.kind === 'board' && cx >= Math.min(r.x, r.x + r.w) && cx <= Math.max(r.x, r.x + r.w) && cy >= Math.min(r.y, r.y + r.h) && cy <= Math.max(r.y, r.y + r.h))
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+    const parentId = into ?? board?.id ?? null
+    // Strokes group only within the same container (a Drawing's strokes never group with the board's).
+    const joins = !!prev && at - this.last!.at <= GROUP_MS && gap(box, boxOf(prev)) <= GROUP_PX && (prev.parentId ?? null) === parentId
+    const group = joins ? (prev!.groupIds[0] ?? this.newId('ink')) : null
     const rec = element({
-      id, kind: 'stroke', z: zTop(all.map((r) => r.z)), parentId: board?.id ?? null,
+      id, kind: 'stroke', z: zTop(all.map((r) => r.z)), parentId,
       x: box.minX, y: box.minY, w: box.maxX - box.minX, h: box.maxY - box.minY,
       groupIds: group ? [group] : [],
       opacity: c.tool === 'highlighter' ? HIGHLIGHTER.opacity : 1,
@@ -140,6 +152,7 @@ export class Ink {
       tx.put([rec])
       tx.setPoints(id, pts)
       if (joins && group && !prev!.groupIds.includes(group)) tx.put([{ ...prev!, groupIds: [group, ...prev!.groupIds] }])
+      if (into) refitDrawn(this.scene, tx, into)
     })
     this.last = { id, at, box }
     return rec
@@ -154,10 +167,8 @@ export class Ink {
       if (!near) continue
       const pts = this.scene.points(r.id)
       if (!pts) continue
-      const local = localPoints(pts)
-      // A stroke the handles scaled is where it is drawn.
-      const { sx, sy } = strokeScale(r, pts)
-      if (points.some((p) => local.some((q) => Math.hypot(r.x + q.x * sx - p.x, r.y + q.y * sy - p.y) <= reach))) this.erased.add(r.id)
+      // Measured to the stroke's segments where it is drawn (scaled by the handles), as a click is.
+      if (points.some((p) => strokeDistance(r, pts, p) <= reach)) this.erased.add(r.id)
     }
   }
 }
