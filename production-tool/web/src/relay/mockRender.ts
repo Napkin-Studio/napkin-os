@@ -423,36 +423,75 @@ function endCard(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillText('MOCK render', w / 2, h * 0.62)
 }
 
+/** A stitch clip's place in the mock ad: when it starts, how long its slot is, and the join into it. */
+export interface StitchSlot { start: number; dur: number; kind: 'cut' | 'dissolve' | 'dip'; s: number }
+
+/** Like stitch.py's joins(): the slots one after another (a transition overlaps the outgoing clip's
+ *  out-handle, so it never changes the length); a transition is at most the incoming slot and 2 s long,
+ *  0.5 s when the request names none, and the first clip always starts on a cut. */
+export function stitchTimeline(clips: { dur: number; transition?: { kind: 'cut' | 'dissolve' | 'dip'; s?: number } }[]): StitchSlot[] {
+  let start = 0
+  return clips.map((c, i) => {
+    const kind = i > 0 && c.transition && c.transition.kind !== 'cut' ? c.transition.kind : 'cut'
+    const s = kind === 'cut' ? 0 : Math.min(c.transition?.s ?? 0.5, c.dur, 2)
+    const slot: StitchSlot = { start, dur: c.dur, kind: s > 0 ? kind : 'cut', s }
+    start += c.dur
+    return slot
+  })
+}
+
+/** What the mock ad shows at t: the clip whose slot holds t, and in a transition's first s seconds the
+ *  outgoing one too, with how far through it is (p, 0 to 1). idx -1: the end card. */
+export function stitchAt(slots: StitchSlot[], t: number): { idx: number; prev?: number; p?: number } {
+  const idx = slots.findIndex((x) => t >= x.start && t < x.start + x.dur)
+  if (idx < 0) return { idx: -1 }
+  const x = slots[idx]
+  return x.kind !== 'cut' && t - x.start < x.s ? { idx, prev: idx - 1, p: (t - x.start) / x.s } : { idx }
+}
+
 async function renderStitch(req: JobRequest, input: Input): Promise<RenderedOutput> {
   const { w, h } = sizeFor(req.input.ratio ?? '9:16', 640)
-  const clips: { v: HTMLVideoElement; dur: number }[] = []
+  const clips: { v: HTMLVideoElement; dur: number; inS: number; outS?: number; transition?: { kind: 'cut' | 'dissolve' | 'dip'; s?: number } }[] = []
   for (const c of req.input.clips ?? []) {
     const blob = await input(c.asset.sha256)
     if (!blob) continue
     const v = await loadVideo(blob)
     const full = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : CLIP_MAX_S
-    // Like the real stitch (stitch.py): each clip is cut to its shot's length (trimS).
-    clips.push({ v, dur: c.trimS ? Math.min(full, c.trimS) : full })
+    const inS = c.inS ?? 0
+    // Like the real stitch (stitch.py): each clip starts at its in point and fills its shot's length (trimS),
+    // held on its last frame (or its out point's) when it runs out.
+    const dur = c.trimS ?? (c.outS !== undefined && c.outS > inS ? c.outS - inS : Math.max(0.1, full - inS))
+    clips.push({ v, dur, inS, ...(c.outS !== undefined ? { outS: c.outS } : {}), ...(c.transition ? { transition: c.transition } : {}) })
   }
+  const slots = stitchTimeline(clips)
   const total = clips.reduce((s, c) => s + c.dur, 0) + END_CARD_S
-  let current = -1
+  const started = new Set<number>()
   const out = await record(w, h, total, async (ctx, t) => {
-    let acc = 0
-    let idx = -1
-    for (let i = 0; i < clips.length; i++) {
-      if (t < acc + clips[i].dur) { idx = i; break }
-      acc += clips[i].dur
-    }
+    const { idx, prev, p } = stitchAt(slots, t)
     if (idx >= 0) {
-      if (idx !== current) {
-        clips[current]?.v.pause()
-        current = idx
-        clips[idx].v.currentTime = 0
+      if (!started.has(idx)) {
+        started.add(idx)
+        clips[idx].v.currentTime = clips[idx].inS
         await clips[idx].v.play().catch(() => undefined)
       }
-      contain(ctx, clips[idx].v, 0, 0, w, h)
+      clips.forEach((c, i) => {
+        if (i !== idx && i !== prev) c.v.pause()
+        if (c.outS !== undefined && c.v.currentTime >= c.outS) c.v.pause() // nothing past the out point
+      })
+      if (prev !== undefined && p !== undefined && slots[idx].kind === 'dissolve') {
+        contain(ctx, clips[prev].v, 0, 0, w, h)
+        ctx.globalAlpha = p
+        contain(ctx, clips[idx].v, 0, 0, w, h)
+        ctx.globalAlpha = 1
+      } else if (prev !== undefined && p !== undefined) { // a dip: out to black, then in from it
+        contain(ctx, clips[p < 0.5 ? prev : idx].v, 0, 0, w, h)
+        ctx.fillStyle = `rgba(0,0,0,${p < 0.5 ? 2 * p : 2 * (1 - p)})`
+        ctx.fillRect(0, 0, w, h)
+      } else {
+        contain(ctx, clips[idx].v, 0, 0, w, h)
+      }
     } else {
-      clips[current]?.v.pause()
+      clips.forEach((c) => c.v.pause())
       // The end card, as its last frame (the real one is stitch.py's roll-up card).
       endCard(ctx, w, h)
     }

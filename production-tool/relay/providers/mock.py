@@ -4,13 +4,19 @@ Returns the input stamped "MOCK" after a delay, with a fake queue position, so t
 whole UI can be built and load-tested before any real key exists. Its outputs are
 labelled kind "mock" and can never count as final.
 
-Video ops have no encoder here, so they return the stamped first frame as a still
-(image/png) with the requested duration attached.
+Video ops return the stamped first frame drifting sideways for 1 s as an MP4 when ffmpeg
+is on PATH (features/connected-video.clan: a take with motion and a last frame, so joins can
+be tried locally); without ffmpeg (the relay Lambda), the stamped still (image/png) with the
+requested duration attached.
 """
 
 from __future__ import annotations
 
 import io
+import os
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
 from typing import Callable, Optional
@@ -21,6 +27,10 @@ from .types import (
     VIDEO_OPS, AssetResolver, ProviderError, ProviderJob,
     ProviderOutput, Status, check_capabilities, effective_sheet, load_sheet, video_audio,
 )
+
+DRIFT_S = 1.0  # the mock clip's length when it is encoded
+DRIFT_FPS = 24
+_WHICH = object()  # MockProvider's ffmpeg default: whatever is on PATH
 
 # The alternates in capabilities/mock.json, so local dev can exercise the regenerate menu.
 ALTERNATES = {"frame": {"mock-hq"}, "clip": {"mock-hq"}}
@@ -52,6 +62,25 @@ def stamp(png_or_jpeg: Optional[bytes], label: str, size: Optional[tuple[int, in
     return out.getvalue(), w, h
 
 
+def drift_mp4(png: bytes, ffmpeg: str) -> tuple[bytes, int, int]:
+    """A DRIFT_S MP4 of the picture drifting sideways (8 % across), so a mock take has motion and a last
+    frame unlike its first. Even sides, as H.264 wants."""
+    w0, h0 = Image.open(io.BytesIO(png)).size
+    w, h = max(2, w0 // 2 * 2), max(2, h0 // 2 * 2)
+    with tempfile.TemporaryDirectory() as tmp:
+        src, out = os.path.join(tmp, "in.png"), os.path.join(tmp, "out.mp4")
+        with open(src, "wb") as f:
+            f.write(png)
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-loop", "1", "-framerate", str(DRIFT_FPS),
+                        "-i", src, "-frames:v", str(round(DRIFT_S * DRIFT_FPS)),
+                        "-vf", f"scale=trunc(iw*1.08/2)*2:trunc(ih*1.08/2)*2,"
+                               f"crop={w}:{h}:x='(in_w-out_w)*t/{DRIFT_S:g}':y='(in_h-out_h)/2',format=yuv420p",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-movflags", "+faststart", out],
+                       check=True, capture_output=True, timeout=60)
+        with open(out, "rb") as f:
+            return f.read(), w, h
+
+
 def runway_size(job: ProviderJob) -> Optional[tuple[int, int]]:
     """The size Runway would render an image job at: its table's snap of the job's shape
     (frame-aspect), so the relay's crop after it runs locally and in tests as it does live.
@@ -71,8 +100,11 @@ class MockProvider:
     name = "mock"
 
     def __init__(self, assets: AssetResolver, fetch: Fetch, delay_s: float = 2.0,
-                 clock: Callable[[], float] = time.monotonic, sheet: Optional[dict] = None):
+                 clock: Callable[[], float] = time.monotonic, sheet: Optional[dict] = None,
+                 ffmpeg: Optional[str] | object = _WHICH):
         self._assets, self._fetch, self._delay = assets, fetch, delay_s
+        # Video ops come back as a drifting MP4 with ffmpeg, else as a still (None: always the still).
+        self._ffmpeg = shutil.which("ffmpeg") if ffmpeg is _WHICH else ffmpeg
         self._clock, self._sheet = clock, sheet or load_sheet("mock")
         self._jobs: dict[str, dict] = {}
         self.requests: list[dict] = []  # the request each submit would have sent
@@ -141,6 +173,14 @@ class MockProvider:
         outputs = []
         for i in range(n):
             data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", size)
+            if job.op in VIDEO_OPS and self._ffmpeg:
+                try:
+                    mp4, w2, h2 = drift_mp4(data, self._ffmpeg)
+                    outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="video/mp4", w=w2, h=h2,
+                                                  duration_s=DRIFT_S, data=mp4))
+                    continue
+                except (subprocess.SubprocessError, OSError):  # an ffmpeg that cannot: the still, as before
+                    pass
             outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="image/png", w=w, h=h,
                                           duration_s=job.duration_s if job.op in VIDEO_OPS else None,
                                           data=data))

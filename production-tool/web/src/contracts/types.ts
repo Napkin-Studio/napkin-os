@@ -8,6 +8,9 @@
 // ── common.schema.json ──────────────────────────────────────────────────────
 
 export type ContractVersion = '3'
+
+/** The join into a stitch clip (relay-api clips[].transition): a dissolve or dip overlaps s seconds. */
+export interface StitchTransition { kind: 'cut' | 'dissolve' | 'dip'; s?: number }
 export const CONTRACT_VERSION: ContractVersion = '3'
 /** `sha256:<64 hex>` */
 export type Sha256 = string
@@ -825,7 +828,9 @@ export interface JobInput {
   delivery?: DeliveryPx
   safeArea?: SafeArea
   context?: JobContext[]
-  clips?: { asset: AssetRef; trimS?: number; endCard?: boolean }[]
+  /** stitch: the takes in cut order. inS/outS: the edl item's in and out points; transition: the join into this
+   *  clip (features/connected-video.clan; absent: a cut). */
+  clips?: { asset: AssetRef; trimS?: number; inS?: number; outS?: number; transition?: StitchTransition; endCard?: boolean }[]
   /** write: what Skye drafts or rewrites (features/script-editor.clan). */
   write?: WriteInput
   /** Change: the new answer to the parent job's question. */
