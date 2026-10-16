@@ -8,7 +8,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
-vi.mock('../ml/runtime', () => ({ deviceEnv: async () => ({ webgpu: false }) }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { ServicesContext, ShellContext, type Services } from '../app/context'
 import { SnapshotStore, systemUpdate } from '../doc/store'
@@ -217,12 +216,12 @@ describe("arriving from Jude's brand flag", () => {
 })
 
 describe('the actions (3.12), none with a price', () => {
-  it('offers Remove background, Fill area, Change whole frame and Upscale with its output size', async () => {
+  it('offers Fill area, Change whole frame and Upscale with its output size, and no Remove background (owner, 2026-10-16)', async () => {
     const { el } = await open()
     const actions = el.querySelector('[aria-label="Actions"]')!
     const titles = [...actions.querySelectorAll('.ie-action b')].map((b) => b.textContent)
-    expect(titles).toEqual(['Remove background', 'Fill area', 'Change whole frame', 'Upscale'])
-    expect(actions.textContent).toContain('On our server (no WebGPU here)')
+    expect(titles).toEqual(['Fill area', 'Change whole frame', 'Upscale'])
+    expect(el.textContent).not.toMatch(/background|cut-out/i)
     expect(actions.textContent).toContain('→ 2688 × 1536')
     act(() => byText(el, '4×')!.click())
     expect(actions.textContent).toContain('→ 5376 × 3072')
@@ -293,7 +292,7 @@ describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () 
       })
       services.ui.update((u) => {
         const s = u.imageEdits![ids.frame]
-        u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 'f1', kind: 'fill', maskId: 'm1', words: 'drops', keepOutside: true, jobId }] } }
+        u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 'f1', kind: 'fill', maskId: 'm1', ops: [stroke], words: 'drops', keepOutside: true, jobId }] } }
       })
       await new Promise((r) => setTimeout(r, 20))
     })

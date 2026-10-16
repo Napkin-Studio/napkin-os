@@ -6,6 +6,10 @@ labelled kind "mock" and can never count as final.
 
 Video ops have no encoder here, so they return the stamped first frame as a still
 (image/png) with the requested duration attached.
+
+A region_edit paints its area (the mask, ours: white = change; else the region box) with bold
+stripes, magenta and yellow, fully opaque: a result lost on its way to the saved picture is plain
+to see in a screenshot or a pixel test (fix/editor-apply-keeps-edits, 2026-10-16).
 """
 
 from __future__ import annotations
@@ -52,6 +56,35 @@ def stamp(png_or_jpeg: Optional[bytes], label: str, size: Optional[tuple[int, in
     return out.getvalue(), w, h
 
 
+def striped(png: bytes, mask: Optional[bytes], region: Optional[dict]) -> bytes:
+    """The picture with its edit area (the mask's white, else the region box) painted in bold diagonal
+    stripes, what the mock "changed", impossible to miss; a whole-frame change is striped faintly all over."""
+    img = Image.open(io.BytesIO(png)).convert("RGB")
+    w, h = img.size
+    band = max(6, min(w, h) // 40)
+    tile = Image.new("RGB", (2 * band, 2 * band))
+    pix = tile.load()
+    for y in range(2 * band):
+        for x in range(2 * band):
+            pix[x, y] = (230, 0, 160) if ((x + y) // band) % 2 == 0 else (255, 230, 0)
+    stripes = Image.new("RGB", (w, h))
+    for y in range(0, h, 2 * band):
+        for x in range(0, w, 2 * band):
+            stripes.paste(tile, (x, y))
+    if mask:
+        area = Image.open(io.BytesIO(mask)).convert("L").resize((w, h)).point(lambda v: 255 if v > 127 else 0)
+    else:
+        area = Image.new("L", (w, h), 0 if region else 90)
+        if region:
+            from region.image_ops import _pixel_box  # the box the pipeline pastes back and checks for leaks
+            left, top, right, bottom = _pixel_box((w, h), region)
+            ImageDraw.Draw(area).rectangle((left, top, right - 1, bottom - 1), fill=255)
+    img.paste(stripes, (0, 0), area)
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
 def runway_size(job: ProviderJob) -> Optional[tuple[int, int]]:
     """The size Runway would render an image job at: its table's snap of the job's shape
     (frame-aspect), so the relay's crop after it runs locally and in tests as it does live.
@@ -92,7 +125,8 @@ class MockProvider:
         # relay's asset URLs are gone, so a lookup then fails ("no URL for asset").
         sha = self._source_sha(job)
         self._jobs[request_id] = {"job": job, "at": self._clock(), "cancelled": False,
-                                  "source": self._assets(sha).url if sha else None}
+                                  "source": self._assets(sha).url if sha else None,
+                                  "mask": self._assets(job.mask).url if job.op == "region_edit" and job.mask else None}
         return request_id
 
     @staticmethod
@@ -139,6 +173,12 @@ class MockProvider:
             w0, h0 = Image.open(io.BytesIO(source)).size
             size = (w0 * (job.scale or 2), h0 * (job.scale or 2))
         outputs = []
+        if job.op == "region_edit" and source:
+            try:
+                source = striped(source, self._fetch(entry["mask"]) if entry["mask"] else None, job.region)
+            except Exception as exc:
+                return Status("failed", kind="mock",
+                              error=ProviderError("provider_failed", f"mock could not read its mask: {exc}", True))
         for i in range(n):
             data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", size)
             outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="image/png", w=w, h=h,

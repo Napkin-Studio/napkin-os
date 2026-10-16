@@ -283,8 +283,7 @@ export async function nameMadePicture(store: DocumentStore, jobId: Id, name: { k
   return nameAsset(store, asset, name, nodeId)
 }
 
-/** A picture in the document named as a reference (Name this picture): also the Image editor's
- *  cut-out, Save as reference (features/image-editor.clan). A name in use elsewhere is refused. */
+/** A picture in the document named as a reference (Name this picture). A name in use elsewhere is refused. */
 export async function nameAsset(store: DocumentStore, asset: string, name: { key: string; variant: string; role: RefRole; label?: string }, nodeId?: Id): Promise<Id> {
   const problem = nameProblem(name.key, name.variant)
   if (problem) throw new Error(problem)

@@ -8,7 +8,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../canvas/adapter/excalidraw/serialize', () => ({ serializeScene: () => '{}' }))
-vi.mock('../ml/runtime', () => ({ deviceEnv: async () => ({ webgpu: false }) }))
 import { ClanDocumentStore } from '../../../clan-store/src'
 import { ServicesContext, ShellContext, type Services } from '../app/context'
 import type { CanvasController } from '../canvas/controller'
