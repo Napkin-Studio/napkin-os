@@ -22,7 +22,7 @@ import json
 import re
 
 from ..doc import (CAMPAIGN_FIELDS, GATES, LIST_FIELDS, NOT_EXTRACTED, build_materials, ctx_data, ctx_decisions,
-                   ctx_facts, decision, field_value, human_owned, read_of)
+                   current_facts, decision, field_value, human_owned, read_of)
 from ..rules import budget as budget_rules
 from ..rules import markets as market_rules
 from ..rules.quotes import find_quote
@@ -278,7 +278,7 @@ def run_extract(doc, base, clan, inp, handler, caps, skip=(), did=None, action="
     for n in reading.read_inputs(caps.model, inp, caps.runlog.note):
         log.warning("%s: %s", handler, n)
     data = ctx_data(clan)
-    facts = ctx_facts(clan)
+    facts = current_facts(clan)
     decisions = ctx_decisions(clan)
     mats, unread = build_materials(inp, data)
     if not mats:

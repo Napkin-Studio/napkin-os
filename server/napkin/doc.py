@@ -102,6 +102,16 @@ def ctx_facts(clan: dict) -> list:
     return [x for x in (f or []) if isinstance(x, dict)]
 
 
+def current_facts(clan: dict) -> list:
+    """The facts as they stand: every row but one a person corrected (`replaced_by`, which
+    the host sets and leaves the status `active`: Contract 4 §4) and one superseded or
+    rejected. Anything that hands facts to a model to write or check from reads these;
+    `ctx_facts` (every row) is for lookups by id, duplicate checks and copies
+    (features/replaced-facts.clan; tests/test_replaced_facts.py holds the line)."""
+    return [f for f in ctx_facts(clan)
+            if not f.get("replaced_by") and f.get("status") not in ("superseded", "rejected")]
+
+
 def ctx_findings(clan: dict) -> list:
     f = clan.get("findings")
     if isinstance(f, dict):

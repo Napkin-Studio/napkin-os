@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
 from .. import runlog
-from ..doc import ISO_3166, LENSES, ctx_data, ctx_facts, ctx_findings, ctx_sources, lens_of_key
+from ..doc import ISO_3166, LENSES, ctx_data, ctx_facts, current_facts, ctx_findings, ctx_sources, lens_of_key, current_facts
 from ..jev import JevError, noul
 from ..rules import merge as merge_rules
 from ..util import iso
@@ -252,9 +252,9 @@ class PlannedBriefJob(BriefJob):
         excluded = {e.get("fact_id") for e in ((ctx_data(self.clan).get("selection") or {}).get("excluded") or [])
                     if isinstance(e, dict)}
         seen, out = set(), []
-        for f in list(ctx_facts(self.clan)) + list(self.new_pins):
+        for f in list(current_facts(self.clan)) + list(self.new_pins):
             fid = f.get("id")
-            if isinstance(fid, str) and fid not in seen and fid not in excluded and f.get("status") != "superseded":
+            if isinstance(fid, str) and fid not in seen and fid not in excluded:
                 seen.add(fid)
                 out.append(f)
         return out

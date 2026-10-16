@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from ..doc import LICENCE_RANK, ctx_facts, ctx_findings
+from ..doc import LICENCE_RANK, current_facts, ctx_findings
 from ..layers import origin_uri
 from ..layers.http import LayersError
 from ..util import TaskError, bad, iso, today
@@ -43,7 +43,7 @@ def run(req, caps):
         raise TaskError(404, "unknown_finding", f"finding {fid} is not in this document")
     if finding.get("status") != "proposed":
         raise TaskError(409, "finding_state", f"finding {fid} is already {finding.get('status')}")
-    pins = {p["id"]: p for p in ctx_facts(req.clan) if isinstance(p.get("id"), str)}
+    pins = {p["id"]: p for p in current_facts(req.clan) if isinstance(p.get("id"), str)}
     cites = [c for c in finding.get("cites") or [] if isinstance(c, str)]
     missing = [c for c in cites if c not in pins]
     if not cites or missing:

@@ -43,7 +43,7 @@ import re
 import httpx
 
 from .. import reasoning as rsn
-from ..doc import ctx_facts, ctx_findings
+from ..doc import current_facts, ctx_findings
 from ..util import iso
 from . import capture as cap_stage
 from .fields import KEYS, LABELS, clean, get, put
@@ -260,7 +260,7 @@ class Resolver:
     the finding whose `verification.fact_id` it is (clan-extract.md §11.4)."""
 
     def __init__(self, clan: dict):
-        self.pins = {f["id"]: f for f in ctx_facts(clan) if isinstance(f.get("id"), str)}
+        self.pins = {f["id"]: f for f in current_facts(clan) if isinstance(f.get("id"), str)}
         self.by_fact = {}
         for fi in ctx_findings(clan):
             v = fi.get("verification") if isinstance(fi.get("verification"), dict) else {}

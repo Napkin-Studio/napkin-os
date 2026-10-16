@@ -27,7 +27,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
-from ..doc import ctx_facts
+from ..doc import current_facts
 from ..retrieval import RetrievalError
 from ..util import iso
 from .fields import LABELS, RUBRIC_FIELDS
@@ -144,7 +144,7 @@ class DraftContext:
                         for cid, it in list((capture_items or {}).items())[:40]]
         self.pins = [{"id": f["id"], "entity": f.get("entity"), "key": f.get("key"), "value": f.get("value"),
                       "unit": f.get("unit"), "as_of": f.get("as_of"), "layer": f.get("layer"),
-                      "origin": f.get("origin")} for f in ctx_facts(clan) if isinstance(f.get("id"), str)][:40]
+                      "origin": f.get("origin")} for f in current_facts(clan) if isinstance(f.get("id"), str)][:40]
         self.hits = []
         self._lock = threading.Lock()
         self.org = caps.scope["org"]
