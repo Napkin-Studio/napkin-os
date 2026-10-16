@@ -78,6 +78,8 @@ function collectHashes(v: unknown, out: Set<string>) {
 
 /** A job the relay runs free and outside the in-flight limit (relay service.free_resize; features/campaign-formats.clan). */
 export function isFreeRequest(r: Pick<JobRequest, 'op' | 'input'>): boolean {
+  // A film's plan and its renders are free the same way; only an outpaint is paid (features/campaign-formats.clan).
+  if (r.op === 'cutdown') return (r.input.cutdown?.step ?? 'render') !== 'outpaint'
   return r.op === 'resize' && (r.input.resize?.method === 'crop' || r.input.resize?.method === 'layout')
 }
 

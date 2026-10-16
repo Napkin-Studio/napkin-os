@@ -93,11 +93,13 @@ export function jobWhat(job: Pick<DocJob, 'op'>, ctx: JobPurpose | undefined, sh
     case 'clip': case 'clip_edit': return 'a clip'
     case 'view': return 'a view'
     case 'region_edit': return 'a change in a box'
+    // A film's version (features/campaign-formats.clan): Dex's plan, a cut, or a shot's new edges.
+    case 'cutdown': return ctx?.for === 'film_plan' ? 'the cuts' : ctx?.for === 'reframe' ? 'a shot for a new shape' : 'a version of the film'
     default: return 'a picture'
   }
 }
 
-const VERB: Partial<Record<DocJob['op'], string>> = { write: 'writing', shot_list: 'planning', generate: 'drawing', view: 'drawing', frame: 'drawing', stitch: 'putting together', clip: 'making', clip_edit: 'changing' }
+const VERB: Partial<Record<DocJob['op'], string>> = { write: 'writing', shot_list: 'planning', generate: 'drawing', view: 'drawing', frame: 'drawing', stitch: 'putting together', clip: 'making', clip_edit: 'changing', cutdown: 'cutting' }
 
 /**
  * Who is shown for a job, and the line under them: Dex for planning, the job's crew member

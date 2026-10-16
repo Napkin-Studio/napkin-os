@@ -18,6 +18,7 @@ import { protectedInside } from './crop'
 import { formatById } from './formats'
 import { CLEAR, OOH_WORDS, MIN_CAP, layoutInput, layoutType } from './layout'
 import { rowFracs } from './rules'
+import { spokenOf } from './film'
 
 type Checks = Partial<Record<FormatCheckCode, FormatCheck>>
 
@@ -73,11 +74,15 @@ export function checksFor(size: Size, set: FormatSet, d: ProductionDocument): Ch
   }
   if (size.media === 'video') {
     const edl = size.edl ?? []
-    if (edl.length) out.end_card = edl.at(-1)?.end_card ? pass('The film ends on its end card.') : flag('This film does not end on its end card.')
+    // A cutdown made from a Video node (it has Dex's beats) always ends on the end card stitch draws at its size.
+    if (edl.length) out.end_card = edl.at(-1)?.end_card || size.beats ? pass('The film ends on its end card.') : flag('This film does not end on its end card.')
     const r = size.delivery.width / size.delivery.height
     if (SOCIAL_SHAPES.some(([a, b]) => Math.abs(r - a / b) < 0.02)) {
       const supers = (set.copy?.supers?.length ?? 0) > 0 && !size.layers?.supers?.hidden
-      out.sound_off = supers ? pass('It carries supers for sound off.') : flag('No supers or captions: most social video plays without sound.')
+      // Captions of the spoken lines are on by default on the social shapes (CF9), off when hidden on the tile.
+      const captions = !size.layers?.captions?.hidden && edl.some((w) => spokenOf(d, w.shot_id).length > 0)
+      out.sound_off = supers || captions ? pass(captions ? 'Its spoken lines are captioned for sound off.' : 'It carries supers for sound off.')
+        : flag('No supers or captions: most social video plays without sound.')
       if (edl.length) {
         // The brand is on screen from the start when the logo or the line is laid over the film.
         const branded = !!logo || laid.some((l) => l.kind === 'line') || !!edl[0]?.end_card

@@ -15,6 +15,10 @@
 .cf-chip.on { border-color: var(--tool); background: var(--tool-soft); color: var(--ink); font-weight: 600; }
 .cf-len { width: 84px; height: 30px; border-radius: var(--r-pill); border: 1px dashed var(--line); background: transparent; color: var(--ink); padding: 0 10px; font: inherit; font-size: 13px; }
 .cf-note { margin: 0; font-size: 12.5px; color: var(--ink3); }
+/* The Script editor's .cf-label and .cf-note (script/fragment.css, one line with an ellipsis) stay out of the sheet. */
+.cf-sheet .cf-note, .cf-sheet .cf-label { white-space: normal; overflow: visible; text-overflow: clip; margin-left: 0; }
+.cf-sheet .cf-label { font-size: 12px; }
+.cf-sheet .cf-note { font-size: 12.5px; }
 .cf-error { margin: 0; font-size: 13px; color: var(--danger); }
 .cf-foot { display: flex; align-items: center; gap: 8px; padding-top: 6px; }
 .cf-ask { margin: 0; }

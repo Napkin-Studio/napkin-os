@@ -54,6 +54,8 @@ import { ClipChoice } from './ClipChoice'
 import { selectedFrame } from '../jobs/frames'
 import { RemakeBar } from '../ui/Follow'
 import { MAX_SHOTS } from '../lib/shots'
+import { videoMaster } from '../campaign/master'
+import { campaignSheet } from '../campaign/sheet'
 
 const STRENGTHS: { id: Strength; label: string; hint: string }[] = [
   { id: 'adhere', label: 'Adhere', hint: 'Small change, keeps the clip' },
@@ -172,6 +174,13 @@ export function Video() {
       more={() => <CopyLinkLater />}
       right={<>
         <button ref={trayRef} className="btn" aria-haspopup="dialog" aria-expanded={tray} disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => setTray(!tray)}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
+        <button className="btn" disabled={!latestAd || !video} title={!latestAd ? 'Render the ad first: its lengths and shapes are cut from it' : 'Shorter lengths and other shapes of this film (features/campaign-formats.clan)'}
+          onClick={() => {
+            const m = video ? videoMaster(doc, video.id) : null
+            if (!m || !video) return
+            uiStore.update((u) => { u.stage = 'character' }, 'stage')
+            campaignSheet.open({ master: m, node: { kind: 'video', id: video.id } })
+          }}>Make all sizes…</button>
         {tray && <ClipTray anchor={trayRef} open={tray} onClose={() => setTray(false)} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'} onMake={(ids, m) => void makeAll(ids, m)} />}
       </>}
       primary={controls.stitch ? (
