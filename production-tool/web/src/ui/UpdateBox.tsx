@@ -9,9 +9,9 @@
 import { useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, modelChoicesFor } from '../capabilities'
-import type { ModelChoice } from '../contracts/types'
+import type { ClipQuality, ModelChoice } from '../contracts/types'
 import type { FollowItem } from '../doc/ui'
-import { selectedTake } from '../jobs/clips'
+import { selectedTake, shotQuality } from '../jobs/clips'
 import { beginFollow, cancelFollow, followState, makeAwaited, planWords, restAsTheyAre } from '../jobs/follow'
 import { selectedFrame } from '../jobs/frames'
 import { frameStale, takeStale } from '../jobs/stale'
@@ -22,6 +22,7 @@ import { behindLabel } from './behind'
 import { useBlobUrl } from './hooks'
 import { JobSlot } from './JobSlot'
 import { ModelPick } from './ModelPick'
+import { QualityPick } from './QualityPick'
 
 const keyOf = (c: ModelChoice) => `${c.provider}:${c.model}`
 
@@ -133,6 +134,7 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
   const deps = { relay, doc: docStore, ui: uiStore, runner }
   const [words, setWords] = useState('')
   const [pick, setPick] = useState<ModelChoice | undefined>()
+  const [qPick, setQPick] = useState<ClipQuality | undefined>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -148,6 +150,8 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
   const why = making ? (mark ? 'Updating…' : 'Making it…') : mark ? behindLabel(doc, mark) : item.kind === 'frame' ? 'It has no frame' : 'It has no clip'
   const n = Math.min(run.framesDone.length + run.clipsDone.length + (run.awaiting ? 1 : 0), run.total ?? 99)
   const toSend = () => (choice ? choiceToSend(item.kind, config, choice) ?? null : null)
+  // Clips: the quality beside the model (features/clip-quality.clan), the run's pick, else the video's default.
+  const quality = item.kind === 'clip' ? qPick ?? run.clipQuality ?? shotQuality(doc, shot.id) : undefined
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -183,13 +187,16 @@ function Box({ item, jobId, onMinimise }: { item: FollowItem; jobId?: string; on
         <>
           <textarea className="textarea" rows={2} maxLength={1000} value={words} onChange={(e) => setWords(e.target.value)}
             placeholder={`Add words for this ${item.kind} only (optional)`} />
-          <ModelPick op={item.kind} value={choice} onChange={setPick} />
+          <div className="row wrap" style={{ gap: 6 }}>
+            <ModelPick op={item.kind} value={choice} onChange={setPick} />
+            {quality && <QualityPick op="clip" choice={choice} value={quality} onChange={setQPick} />}
+          </div>
           <div className="faint" style={{ fontSize: 12 }}>{item.kind === 'frame' ? 'The old frame is replaced once the new one lands.' : 'The old clip is replaced once the new one lands.'}</div>
           {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
           <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn sm" disabled={busy} onClick={() => act(() => restAsTheyAre(deps, toSend()))}
+            <button className="btn sm" disabled={busy} onClick={() => act(() => restAsTheyAre(deps, toSend(), quality))}
               title="Make this and every one after it on these models, with no words; the ad renders at the end">Do the rest as they are</button>
-            <button className="btn sm primary" disabled={busy} onClick={() => act(() => makeAwaited(deps, { text: words, modelChoice: toSend() }))}>
+            <button className="btn sm primary" disabled={busy} onClick={() => act(() => makeAwaited(deps, { text: words, modelChoice: toSend(), ...(quality ? { quality } : {}) }))}>
               {job ? 'Make it again' : 'Make it'}
             </button>
           </div>

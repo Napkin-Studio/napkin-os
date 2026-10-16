@@ -1245,6 +1245,15 @@
           "minimum": 0,
           "maximum": 60
         },
+        "quality": {
+          "$ref": "common.schema.json#/$defs/clipQuality",
+          "description": "The level the take was made at (features/clip-quality.clan), so a draft and a final are never confused: the relay's Job.quality, or for an edit that keeps the clip's size, its source take's. Absent on takes from before quality existed."
+        },
+        "size": {
+          "type": "string",
+          "pattern": "^[0-9]+(p|K)$",
+          "description": "The size it was asked at, as its card says it (\"360p\", \"1080p\", \"2K\")."
+        },
         "segments": {
           "type": "array",
           "items": {
@@ -1320,6 +1329,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 600
+        },
+        "quality": {
+          "$ref": "common.schema.json#/$defs/clipQuality",
+          "description": "The project's default quality for this video's clips (features/clip-quality.clan); a send may pick another. Absent: standard."
         },
         "pick": {
           "$ref": "#/$defs/pick"

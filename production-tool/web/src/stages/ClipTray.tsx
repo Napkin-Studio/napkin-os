@@ -11,8 +11,9 @@
 
 import { Fragment, useState, type RefObject } from 'react'
 import { useConfig, useDoc, useServices, useUi } from '../app/context'
-import { choiceToSend, modelChoicesFor, modelWhere } from '../capabilities'
-import type { ModelChoice, Shot } from '../contracts/types'
+import { choiceToSend, modelChoicesFor, modelWhere, qualityLabel, resolveQuality } from '../capabilities'
+import type { ClipQuality, ModelChoice, Shot } from '../contracts/types'
+import { QualityPick } from '../ui/QualityPick'
 import { clipSource, traySummary } from '../jobs/clips'
 import { lastWorkedModel } from '../jobs/follow'
 import { AgentFigure } from '../ui/agents/AgentFigure'
@@ -24,7 +25,7 @@ export interface TrayShot { shot: Shot; n: number }
 
 const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s)
 
-export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMake }: {
+export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, quality: start, onMake }: {
   anchor: RefObject<HTMLElement | null>
   open: boolean
   onClose: () => void
@@ -33,7 +34,9 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
   /** The video makes clips straight from the script: a shot with no frame goes from its words. */
   fromWords: boolean
   ratio: string
-  onMake: (shotIds: string[], modelChoice?: ModelChoice) => void
+  /** The video's default quality (features/clip-quality.clan); the tray may pick another for this batch. */
+  quality: ClipQuality
+  onMake: (shotIds: string[], modelChoice?: ModelChoice, quality?: ClipQuality) => void
 }) {
   const doc = useDoc()
   const ui = useUi()
@@ -53,7 +56,11 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
   const picked = makeable.filter((r) => !off.has(r.shot.id))
   const choice = lastWorkedModel(doc, 'clip', config)
   const shown = choice ?? modelChoicesFor('clip', config)[0]
-  const model = shown ? modelWhere(shown.provider, shown.model) : undefined
+  const [quality, setQuality] = useState<ClipQuality>(start)
+  // What each clip will be: the level and the size the model makes at it (the family's member for Kling).
+  const sized = shown ? resolveQuality('clip', shown.provider, shown.model, quality) : undefined
+  const model = shown ? modelWhere(shown.provider, sized?.model ?? shown.model) : undefined
+  const level = qualityLabel(sized?.level, sized?.tier)
   const flip = (id: string) => setOff((o) => {
     const n = new Set(o)
     if (n.has(id)) n.delete(id)
@@ -88,11 +95,15 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, onMak
           ))}
         </div>
       )}
+      <div className="tray-quality row" style={{ gap: 8, padding: '6px 12px 0' }}>
+        <span className="faint" style={{ fontSize: 12 }}>Quality</span>
+        <QualityPick op="clip" choice={shown} value={quality} onChange={setQuality} />
+      </div>
       <div className="tray-foot nowrap" title="Nothing is sent until you press Make clips.">
-        <span className="pt-mono tray-model">{model ?? 'The default model'} · {ratio}</span>
+        <span className="pt-mono tray-model">{model ?? 'The default model'} · {level ? `${level} · ` : ''}{ratio}</span>
         <button type="button" className="btn sm" onClick={onClose}>Cancel</button>
         <button type="button" className="btn sm primary" disabled={!picked.length}
-          onClick={() => onMake(picked.map((r) => r.shot.id), choiceToSend('clip', config, choice))}>
+          onClick={() => onMake(picked.map((r) => r.shot.id), choiceToSend('clip', config, choice), quality)}>
           {picked.length > 1 ? `Make ${picked.length} clips` : 'Make clips'}
         </button>
       </div>

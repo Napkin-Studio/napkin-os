@@ -15,7 +15,7 @@
 //
 // It needs no video region support at the provider, only frame region edits.
 
-import type { ModelChoice, ProductionDocument, Review } from '../contracts/types'
+import type { ClipQuality, ModelChoice, ProductionDocument, Review } from '../contracts/types'
 import type { JobCtx } from '../doc/ui'
 import { clipText as cutText } from '../lib/guard'
 import { jobsList, shotsOf } from '../model/selectors'
@@ -40,7 +40,7 @@ export function fixesInFrame(d: ProductionDocument, shotId: string, notes: Pick<
 
 /** Start the fix: the region edit on the shot's picked frame. `notes` are the open notes on the clip; one has a box.
  * `modelChoice`: the clip model picked in the menu, kept with the fix so step 3 uses it, after a reload too. */
-export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
+export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice, quality?: ClipQuality): Promise<string> {
   const boxed = notes.find((r) => r.region)
   if (!boxed?.region) throw new Error('Draw a box on the paused clip first.')
   const d = deps.doc.get()
@@ -62,7 +62,7 @@ export async function fixInShot(deps: FrameDeps, shotId: string, notes: Review[]
     { for: 'frame', shotId, parentFrameId: frame.id, how: 'again', fixReviewIds: notes.map((r) => r.id) },
     undefined,
     undefined,
-    modelChoice ? { local: { fixModelChoice: modelChoice } } : {},
+    { local: { ...(modelChoice ? { fixModelChoice: modelChoice } : {}), ...(quality ? { fixQuality: quality } : {}) } },
   )
 }
 
@@ -89,7 +89,7 @@ export async function continueFix(deps: FrameDeps, jobId: string, ctx: JobCtx | 
   if (!Object.values(d.frames).some((f) => f.job_id === jobId)) return null // the frame has not landed
   const notes = open(d, ctx.fixReviewIds)
   if (!notes.length || clipStarted(d, deps, ctx.fixReviewIds)) return null
-  return fixClip(deps, ctx.shotId, notes, ctx.fixModelChoice)
+  return fixClip(deps, ctx.shotId, notes, ctx.fixModelChoice, ctx.fixQuality)
 }
 
 /**
@@ -113,22 +113,22 @@ export function fixFrameLanded(d: ProductionDocument, ctxOf: (id: string) => Job
 }
 
 /** Make the fix's clip again from its landed frame (fixFrameLanded), on `modelChoice` or the fix's own pick. */
-export async function remakeFixClip(deps: FrameDeps, frameJobId: string, modelChoice?: ModelChoice): Promise<string> {
+export async function remakeFixClip(deps: FrameDeps, frameJobId: string, modelChoice?: ModelChoice, quality?: ClipQuality): Promise<string> {
   const ctx = ctxFor(deps, frameJobId)
   if (ctx?.for !== 'frame' || !ctx.fixReviewIds?.length) throw new Error('That fix is gone.')
   const d = deps.doc.get()
   const notes = open(d, ctx.fixReviewIds)
   if (!notes.length) throw new Error('Those notes are already addressed.')
-  return fixClip(deps, ctx.shotId, notes, modelChoice ?? ctx.fixModelChoice)
+  return fixClip(deps, ctx.shotId, notes, modelChoice ?? ctx.fixModelChoice, quality ?? ctx.fixQuality)
 }
 
 /** Step 3's clip: from the shot's picked (fixed) frame, for these notes, as a new take of theirs. */
-function fixClip(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice): Promise<string> {
+function fixClip(deps: FrameDeps, shotId: string, notes: Review[], modelChoice?: ModelChoice, quality?: ClipQuality): Promise<string> {
   const d = deps.doc.get()
   const parentTake = (notes[0].target.kind === 'take' ? d.takes[notes[0].target.id] : undefined) ?? selectedTake(d, shotId)
   const boxed = notes.find((r) => r.region) ?? notes[0]
   return makeClip(deps, shotId, {
-    text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice,
+    text: clipText(notes, boxed.id), reviewIds: notes.map((r) => r.id), ...(parentTake ? { parentTake } : {}), modelChoice, ...(quality ? { quality } : {}),
   })
 }
 

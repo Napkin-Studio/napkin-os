@@ -124,6 +124,12 @@ export function applyTake(d: ProductionDocument, job: Job, ctx: ClipCtx): Take |
     duration_s: out.durationS ?? shot.duration_s,
     segments: [],
   }
+  // Its level and size (features/clip-quality.clan): what the relay ran, or for an edit that keeps the clip's
+  // size, its source take's.
+  const parent = ctx.parentTakeId ? d.takes[ctx.parentTakeId] : undefined
+  const sized = job.quality ?? (job.op === 'clip_edit' && parent?.quality ? { level: parent.quality, size: parent.size } : undefined)
+  if (sized?.level) take.quality = sized.level
+  if (sized?.size) take.size = sized.size
   d.takes[take.id] = take
   const video = videoOfShot(d, shot.id)
   if (video) {

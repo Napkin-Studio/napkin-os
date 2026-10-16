@@ -8,10 +8,10 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
+import type { ClipQuality, ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
-import { changeFeel, makeClip as submitClip, renderAd } from '../jobs/clips'
+import { changeFeel, editQuality, makeClip as submitClip, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, takeStale } from '../jobs/stale'
@@ -30,7 +30,9 @@ import type { FollowScope } from '../jobs/follow'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { madeWith, startingChoice } from '../ui/modelChoice'
-import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
+import { choiceToSend, modelChoicesFor, modelLabel, QUALITY_NAMES, qualityLabel } from '../capabilities'
+import { SHEETS } from '../contracts/load'
+import { QualityPick } from '../ui/QualityPick'
 import { Thumbs } from '../dogfood/Dogfood'
 import { DownloadButton } from '../ui/Download'
 import { downloadLabel, useDownload, useProjectName } from '../ui/useDownload'
@@ -122,7 +124,7 @@ export function Video() {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   })
-  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
+  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
   // Make clips opens the send tray first (3.16): nothing paid starts until its Make clips.
   const [tray, setTray] = useState(false)
   const trayRef = useRef<HTMLButtonElement>(null)
@@ -130,14 +132,14 @@ export function Video() {
 
   /** A clip for every shot picked in the tray. A shot that cannot be made does not stop the others; each
    *  one that failed is named. */
-  const makeAll = (ids: string[], modelChoice?: ModelChoice) => sendAll(async () => {
+  const makeAll = (ids: string[], modelChoice?: ModelChoice, quality?: ClipQuality) => sendAll(async () => {
     setError(null)
     setTray(false)
     const failed: string[] = []
     for (const [i, s] of shots.entries()) {
       if (!ids.includes(s.id) || takesOf(doc, s.id).length || isRunning(doc, clipJob(s.id))) continue
       try {
-        await makeClip(s, { modelChoice: modelChoice ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)) })
+        await makeClip(s, { modelChoice: modelChoice ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)), ...(quality ? { quality } : {}) })
       } catch (e) {
         failed.push(`Shot ${i + 1}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }
@@ -167,12 +169,14 @@ export function Video() {
   const bar = (
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
       title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
-      meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
+      meta={<><span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>
+        {video && <QualityDefault videoId={video.id} />}</>}
       view={{ label: 'View', value: view, onPick: (v) => setView(v as typeof view), options: [{ id: 'picture', label: 'Picture' }, { id: 'sound', label: 'Sound' }] }}
       more={() => <CopyLinkLater />}
       right={<>
         <button ref={trayRef} className="btn" aria-haspopup="dialog" aria-expanded={tray} disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => setTray(!tray)}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
-        {tray && <ClipTray anchor={trayRef} open={tray} onClose={() => setTray(false)} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'} onMake={(ids, m) => void makeAll(ids, m)} />}
+        {tray && <ClipTray anchor={trayRef} open={tray} onClose={() => setTray(false)} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'}
+          quality={videoQuality(doc, video?.id)} onMake={(ids, m, q) => void makeAll(ids, m, q)} />}
       </>}
       primary={controls.stitch ? (
         <button className="btn primary" disabled={empty || rendering || !!renderBlocked} onClick={() => void render()} title={empty ? 'Plan the shots first' : renderBlocked ?? 'Join the clips into one ad with the end card'}>
@@ -246,18 +250,19 @@ export function Video() {
 }
 
 /** Make clip's box (like the update box): words for this clip only, the model, "Make it". */
-function MakeClipBox({ index, onMake }: { index: number; onMake: (opts: { text?: string; modelChoice?: ModelChoice }) => Promise<unknown> }) {
+function MakeClipBox({ index, quality: start, onMake }: { index: number; quality: ClipQuality; onMake: (opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality }) => Promise<unknown> }) {
   const doc = useDoc()
   const { config } = useConfig()
   const [text, setText] = useState('')
   const [pick, setPick] = useState<ModelChoice | undefined>()
+  const [quality, setQuality] = useState<ClipQuality>(start)
   const [busy, send] = useSending()
   const [error, setError] = useState<string | null>(null)
   const choice = pick ?? lastWorkedModel(doc, 'clip', config)
   const make = () => send(async () => {
     setError(null)
     try {
-      await onMake({ ...(text.trim() ? { text: text.trim() } : {}), modelChoice: choiceToSend('clip', config, choice) })
+      await onMake({ ...(text.trim() ? { text: text.trim() } : {}), modelChoice: choiceToSend('clip', config, choice), quality })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
@@ -268,7 +273,10 @@ function MakeClipBox({ index, onMake }: { index: number; onMake: (opts: { text?:
       <textarea className="textarea" rows={2} maxLength={1000} autoFocus value={text} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !busy && void make()}
         placeholder="Add words for this clip only (optional)" />
-      <ModelPick op="clip" value={choice} onChange={setPick} />
+      <div className="row wrap" style={{ gap: 6 }}>
+        <ModelPick op="clip" value={choice} onChange={setPick} />
+        <QualityPick op="clip" choice={choice} value={quality} onChange={setQuality} />
+      </div>
       {error && <div role="alert" style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 12.5 }}>{error}</div>}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <button className="btn sm primary" disabled={busy} onClick={() => void make()}>{busy ? 'Sending…' : 'Make it'}</button>
@@ -279,7 +287,7 @@ function MakeClipBox({ index, onMake }: { index: number; onMake: (opts: { text?:
 
 function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
   shot: Shot; index: number; videoId?: string; selected: boolean; jobId?: string; onSelect: () => void
-  onMake: (opts: { text?: string; modelChoice?: ModelChoice }) => Promise<unknown>
+  onMake: (opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality }) => Promise<unknown>
 }) {
   const makeRef = useRef<HTMLButtonElement>(null)
   const [making, setMaking] = useState(false)
@@ -328,7 +336,7 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         <div className="row wrap" style={{ gap: 4 }}>
           {takes.map((t, i) => (
-            <button key={t.id} className={`vchip ${t.id === sel?.id ? 'on' : ''}`} title={t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : ''}
+            <button key={t.id} className={`vchip ${t.id === sel?.id ? 'on' : ''}`} title={[t.kind === 'mock' ? 'Mock clip' : t.model ? `${modelLabel(t.provider, t.model)} (${t.provider})` : '', qualityLabel(t.quality, t.size)].filter(Boolean).join(' · ')}
               onClick={(e) => {
                 e.stopPropagation()
                 void updateDoc(docStore, (d) => pickTake(d, shot.id, t.id, videoId), 'pick take')
@@ -336,8 +344,9 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake }: {
           ))}
           {!takes.length && !jobId && <button ref={makeRef} className="btn xs" aria-haspopup="dialog" aria-expanded={making} onClick={(e) => { e.stopPropagation(); setMaking(!making) }}>Make clip</button>}
           <Float anchor={makeRef} open={making} onClose={() => setMaking(false)} role="dialog" label={`Make the clip for shot ${index + 1}`} className="clipbox">
-            {making && <MakeClipBox index={index} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
+            {making && <MakeClipBox index={index} quality={shotQuality(doc, shot.id, videoId)} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
           </Float>
+          {sel?.quality && <TakeQuality take={sel} />}
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
           {selMade.fallback && <span className="madeon" title={`${selMade.fallback}. ${ui.jobs[sel?.job_id ?? '']?.fallbackReason ?? ''}`.trim()}>Made on Runway</span>}
         </div>
@@ -389,7 +398,7 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
     void send(async () => {
       onError(null)
       try {
-        await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice) })
+        await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice), quality: take.quality ?? shotQuality(doc, shot.id) })
       } catch (e) {
         onError(e instanceof Error ? e.message : 'That did not work.')
       }
@@ -410,6 +419,16 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError }: {
             <div className="fhead">Shot {shotNumber(doc, shot.id)} · clip v{n}</div>
             <MenuItem icon="▶" disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : 'New take'}</MenuItem>
             {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
+            {take.quality === 'draft' && (
+              <MenuItem icon="★" disabled={busy || sending} hint={finalHint(doc, take)} onSelect={() => { close(); void send(async () => {
+                onError(null)
+                try {
+                  await remakeAsFinal({ doc: docStore, ui: uiStore, runner }, take)
+                } catch (e) {
+                  onError(e instanceof Error ? e.message : 'That did not work.')
+                }
+              }) }}>Remake as Final</MenuItem>
+            )}
             {clip && (
               <MenuItem icon="↓" disabled={saving === 'busy'} hint={saving === 'idle' ? clip.name.split('.').pop() : undefined}
                 onSelect={() => void save([clip]).then((ok) => ok && close())}>{downloadLabel(saving, `Download v${n}`)}</MenuItem>
@@ -458,6 +477,8 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
 
   // The regenerate menu (features/model-choice.clan): starts on the model that made this take.
   const [pick, setPick] = useState<ModelChoice | undefined>()
+  // Quality beside it (features/clip-quality.clan): the video's default unless picked for this clip.
+  const [qPick, setQPick] = useState<ClipQuality | undefined>()
 
   // New clip: reset the composer bits that belong to the old one, and the model picked and the
   // error left from it (another shot's pick and error stayed on screen, 2026-10-09).
@@ -467,6 +488,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
     setRegion(null)
     setDrawing(false)
     setPick(undefined)
+    setQPick(undefined)
     setError(null)
   }
 
@@ -480,6 +502,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
   const [sending, send] = useSending()
   const made = madeWith(doc, ui, cur?.take.job_id)
   const choice = pick ?? startingChoice(modelChoicesFor('clip', config), made.made)
+  const quality = qPick ?? (cur ? shotQuality(doc, cur.shot.id, videoId) : 'standard')
   const project = useProjectName()
   const playing = cur ? mediaItem(doc, project, cur.take.asset, 'clip') : undefined
 
@@ -491,7 +514,18 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
     if (!cur) return
     setError(null)
     try {
-      await submitClip(deps, cur.shot.id, { parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice) })
+      await submitClip(deps, cur.shot.id, { parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice), quality })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work.')
+    }
+  })
+
+  /** Remake as Final: this draft at Final, its own words, pictures and length (features/clip-quality.clan). */
+  const toFinal = () => send(async () => {
+    if (!cur) return
+    setError(null)
+    try {
+      await remakeAsFinal(deps, cur.take)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
@@ -538,15 +572,15 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
       const one = openNotes.length === 1 ? openNotes[0] : undefined
       const ids = openNotes.map((r) => r.id)
       if (fixedFrame) {
-        await remakeFixClip(deps, fixedFrame, choiceToSend('clip', config, choice))
+        await remakeFixClip(deps, fixedFrame, choiceToSend('clip', config, choice), quality)
       } else if (fixesInShot) {
-        await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice))
+        await fixInShot(deps, cur.shot.id, openNotes, choiceToSend('clip', config, choice), quality)
       } else if (one?.region && controls.videoRegionEdit) {
         const v = await assetRef(relay, cur.take.asset, docStore.get())
         await runner.submit('clip_edit', { video: v, region: one.region, atS: one.at_s ?? 0, text: one.text ?? '' }, [cur.take.job_id], { for: 'clip', shotId: cur.shot.id, parentTakeId: cur.take.id, reviewIds: ids })
       } else {
         const text = clipText(openNotes.map((r) => `At ${fmtTime(r.at_s ?? 0)}: ${r.text ?? ''}`).join('\n'), 1000)
-        await submitClip(deps, cur.shot.id, { text, reviewIds: ids, parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice) })
+        await submitClip(deps, cur.shot.id, { text, reviewIds: ids, parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice), quality })
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -665,6 +699,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
           <div className="row">
             <h2>Notes</h2>
             <span className="faint" style={{ fontSize: 12 }}>Shot {shotNumber(doc, cur.shot.id)} · v{takesOf(doc, cur.shot.id).findIndex((x) => x.id === cur.take.id) + 1}</span>
+            {cur.take.quality && <TakeQuality take={cur.take} />}
             <Thumbs key={cur.take.id} compact target={{
               kind: 'clip', id: cur.take.id, jobId: cur.take.job_id, shot: shotNumber(doc, cur.shot.id), provider: cur.take.provider, model: cur.take.model,
             }} />
@@ -737,9 +772,13 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
               {sending ? 'Sending…' : fixing ? (progress?.step === 'frame' ? 'Fixing the frame…' : 'Making a new version…') : `${fixedFrame ? 'Make the clip from the fixed frame' : fixesInShot ? 'Fix it in the shot' : 'Make a new version'} (${openNotes.length} note${openNotes.length > 1 ? 's' : ''})`}
             </button>
           )}
-          <div className="row" title={made.label}>
+          <div className="row wrap" title={made.label} style={{ gap: 6 }}>
             <ModelPick op="clip" value={choice} onChange={setPick} />
+            <QualityPick op="clip" choice={choice} value={quality} onChange={setQPick} />
             <span className="spacer" />
+            {cur.take.quality === 'draft' && (
+              <button className="btn sm" disabled={fixing || sending} onClick={() => void toFinal()} title={finalHint(doc, cur.take)}>Remake as Final</button>
+            )}
             <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title={selectedFrame(doc, cur.shot.id) ? 'Make this shot again from its frame' : 'Make this shot again from its words'}>{sending ? 'Sending…' : 'New take'}</button>
           </div>
           </div>
@@ -760,6 +799,9 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
   // Which model makes the change (features/runway-video-models.clan): Aleph 2 by default, or one that
   // edits with the pictures the words name.
   const [pick, setPick] = useState<ModelChoice | undefined>(undefined)
+  const [qPick, setQPick] = useState<ClipQuality | undefined>(undefined)
+  const shown = pick ?? modelChoicesFor('clip_edit', config)[0]
+  const quality = editQuality(take, shown, qPick ?? shotQuality(doc, shot.id))
   const [strength, setStrength] = useState<Strength>('flex')
   const [error, setError] = useState<string | null>(null)
   const running = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id))
@@ -768,7 +810,7 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
     setError(null)
     try {
       await changeFeel({ relay, doc: docStore, runner }, shot.id, take, text.trim(), controls.feelStrength ? { strength } : {},
-        choiceToSend('clip_edit', config, pick))
+        choiceToSend('clip_edit', config, pick), quality)
       setText('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -788,6 +830,7 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
       )}
       <div className="row">
         <ModelPick op="clip_edit" value={pick} onChange={setPick} />
+        <QualityPick op="clip_edit" choice={shown} value={quality} onChange={setQPick} />
         <span className="spacer" />
         <button className="btn sm primary" disabled={!text.trim() || running || sending} onClick={() => void apply()}>{sending ? 'Sending…' : running ? 'Working…' : 'Apply'}</button>
       </div>
@@ -828,4 +871,38 @@ function ellisLine(n: number, boxed: number, inShot: boolean, frameFixed: boolea
   if (frameFixed) return `${notes} The frame is fixed; Dex makes the clip from it next.`
   if (inShot) return `${notes} The box is fixed in the shot's frame first, then Dex makes the clip again.`
   return `${notes} Dex makes a new version from them; this one is kept.`
+}
+
+/** A take's level and size on its card (features/clip-quality.clan): "Draft 360p", "Final 1080p", so a draft
+ *  and a final are never confused. */
+function TakeQuality({ take }: { take: Take }) {
+  return <span className={`qchip ${take.quality ?? ''}`} title={take.quality === 'draft' ? 'A draft: Remake as Final makes it at full size' : undefined}>{qualityLabel(take.quality, take.size)}</span>
+}
+
+/** What Remake as Final will do with this draft: Runway makes a Seedance 2.5 draft final itself within
+ *  7 days; any other is made again at Final with its own words, pictures and length. */
+function finalHint(doc: ReturnType<typeof useDoc>, take: Take): string {
+  const job = doc.jobs[take.job_id]
+  const fresh = job?.created_at ? Date.now() - Date.parse(job.created_at) < 7 * 24 * 3600 * 1000 : false
+  if (take.provider === 'runway' && SHEETS.runway?.models[take.model]?.draftPromote && fresh) return 'Runway makes this draft at 1080p, without making it again'
+  return `Makes it again at Final on ${modelLabel(take.provider, take.model)}: the same words, pictures and length`
+}
+
+/** The video's default quality for its clips (features/clip-quality.clan), in the editor's bar. A send can
+ *  pick another beside its model. */
+function QualityDefault({ videoId }: { videoId: string }) {
+  const { doc: docStore } = useServices()
+  const doc = useDoc()
+  const value = videoQuality(doc, videoId)
+  return (
+    <label className="qdefault" title="The quality new clips are made at. Pick another beside the model for one clip.">
+      Clips at
+      <select aria-label="Default clip quality" value={value} onChange={(e) => {
+        const q = e.target.value as ClipQuality
+        void updateDoc(docStore, (d) => { const v = d.videos[videoId]; if (v) v.quality = q }, 'clip quality')
+      }}>
+        {(['draft', 'standard', 'final'] as const).map((q) => <option key={q} value={q}>{QUALITY_NAMES[q]}</option>)}
+      </select>
+    </label>
+  )
 }

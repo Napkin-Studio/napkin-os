@@ -40,15 +40,17 @@ function deps(d: ProductionDocument) {
 describe('the Model menu offers the new Runway models', () => {
   it('lists every clip model after Veo, with its note and no price', () => {
     const clip = modelChoicesFor('clip', live)
-    expect(clip.map((o) => o.label)).toEqual(['Veo 3.1', 'Veo 3.1 Fast', 'Kling O3 Pro', 'Kling O3 Standard', 'Kling 3.0 Pro',
-      'Kling 3.0 Standard', 'Hailuo 3', 'Gemini Omni Flash 1.1', 'WAN 3', 'Seedance 2.5', 'Seedance 2.0 Fast'])
+    // Kling O3 and Kling 3.0 once each: Quality picks Standard or Pro (features/clip-quality.clan).
+    expect(clip.map((o) => o.label)).toEqual(['Veo 3.1', 'Veo 3.1 Fast', 'Kling O3', 'Kling 3.0',
+      'Hailuo 3', 'Gemini Omni Flash 1.1', 'WAN 3', 'Seedance 2.5', 'Seedance 2.0 Fast'])
+    expect(clip.find((o) => o.label === 'Kling O3')?.members).toEqual(['klingO3_pro', 'klingO3_standard'])
     for (const o of clip.slice(2)) expect(o.note).toBeTruthy()
     expect(JSON.stringify(clip)).not.toMatch(/\$\s?\d|credit/i)
   })
 
   it('lists the clip-edit models after Aleph 2', () => {
     expect(modelChoicesFor('clip_edit', live).map((o) => o.model)).toEqual(
-      ['aleph2', 'klingO3_pro', 'klingO3_standard', 'gemini_omni_flash_1.1', 'seedance2_5'])
+      ['aleph2', 'klingO3_standard', 'gemini_omni_flash_1.1', 'seedance2_5'])
   })
 
   it('says plainly that Seedance refuses photoreal faces', () => {

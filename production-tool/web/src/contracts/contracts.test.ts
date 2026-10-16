@@ -53,7 +53,7 @@ describe('contract 3 examples', () => {
   // check refuse the rest (a key that is not its id, a 1 s window, a link
   // linkRule does not allow, a map key with a dot).
   const SCHEMA_REFUSED = ['document.v2', 'document.action-601', 'document.role-feel', 'document.rank-space', 'document.ambiguity-recommended',
-    'job-request.contract-2', 'job-request.frame_edit-anchor', 'job-answer.both', 'patch-batch.no-why', 'customdata.pin',
+    'job-request.contract-2', 'job-request.frame_edit-anchor', 'job-request.quality-frame', 'job-answer.both', 'patch-batch.no-why', 'customdata.pin',
     'question.ambiguity-recommended', 'director.frame_edit-movement-job']
   const target: Record<string, string> = {
     document: SCHEMA('document'),

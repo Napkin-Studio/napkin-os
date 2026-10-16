@@ -27,10 +27,10 @@
 // completion hooks and at boot, so it resumes after a reload. Stop ends it after
 // the job running now.
 
-import type { Config, ModelChoice, Op, ProductionDocument } from '../contracts/types'
+import type { ClipQuality, Config, ModelChoice, Op, ProductionDocument } from '../contracts/types'
 import type { FollowItem, FollowRun, JobCtx } from '../doc/ui'
 import { describeFollow } from '../doc/describe'
-import { choiceToSend, modelChoicesFor, type Sheets } from '../capabilities'
+import { choiceToSend, modelChoicesFor, sameOption, type Sheets } from '../capabilities'
 import { updateDoc } from '../doc/store'
 import { newId } from '../lib/ulid'
 import { jobsList, shotsOf } from '../model/selectors'
@@ -175,7 +175,7 @@ export function lastWorkedModel(d: ProductionDocument, op: Op, config: Config, s
   for (let i = jobs.length - 1; i >= 0; i--) {
     const j = jobs[i]
     if (j.op !== op || j.state !== 'completed' || !j.provider || !j.model || (real && j.provider === 'mock')) continue
-    const o = offered.find((x) => x.provider === j.provider && x.model === j.model)
+    const o = offered.find((x) => sameOption(x, { provider: j.provider, model: j.model! }))
     if (o) return { provider: o.provider, model: o.model }
   }
   const first = offered.find((o) => !real || o.provider !== 'mock')
@@ -221,7 +221,7 @@ export async function beginFollow(deps: FrameDeps) {
 
 /** The update box's "Make it": the awaited item, with the user's words for this request only (never the
  *  script) and the model picked (null: the routed default). A failed try of it is put aside first. */
-export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelChoice?: ModelChoice | null } = {}): Promise<string | null> {
+export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelChoice?: ModelChoice | null; quality?: ClipQuality } = {}): Promise<string | null> {
   const run = deps.ui.get().following
   const item = run?.awaiting
   if (!run || !item) return null
@@ -240,6 +240,7 @@ export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelC
       if (opts.modelChoice) r.models[item.kind] = opts.modelChoice
       else delete r.models[item.kind]
     }
+    if (opts.quality && item.kind === 'clip') r.clipQuality = opts.quality
     if (item.kind === 'frame' && !r.framesDone.includes(item.shotId)) r.framesDone.push(item.shotId)
     if (item.kind === 'clip' && !r.clipsDone.includes(item.shotId)) r.clipsDone.push(item.shotId)
   })
@@ -248,13 +249,13 @@ export async function makeAwaited(deps: FrameDeps, opts: { text?: string; modelC
 
 /** The update box's "Do the rest as they are" (on a plan shown first: "Do them as they are"): this item and
  *  every one after it on the box's models, no words. */
-export async function restAsTheyAre(deps: FrameDeps, modelChoice?: ModelChoice | null) {
+export async function restAsTheyAre(deps: FrameDeps, modelChoice?: ModelChoice | null, quality?: ClipQuality) {
   deps.ui.update((u) => {
     if (!u.following) return
     u.following.steer = false
     u.following.reviewing = false
   })
-  if (deps.ui.get().following?.awaiting) await makeAwaited(deps, { modelChoice })
+  if (deps.ui.get().following?.awaiting) await makeAwaited(deps, { modelChoice, ...(quality ? { quality } : {}) })
   else await continueFollow(deps)
 }
 
@@ -279,7 +280,10 @@ async function send(deps: FrameDeps, run: FollowRun, item: FollowItem, words?: s
   const parentTake = selectedTake(d, item.shotId)
   const made = parentTake ? d.jobs[parentTake.job_id] : undefined
   const text = words ?? (made?.op === 'clip' ? made.text : undefined)
-  return makeClip(deps, item.shotId, { ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), followRun: run.id, ...(modelChoice ? { modelChoice } : {}) })
+  return makeClip(deps, item.shotId, {
+    ...(parentTake ? { parentTake } : {}), ...(text ? { text } : {}), followRun: run.id, ...(modelChoice ? { modelChoice } : {}),
+    ...(run.clipQuality ? { quality: run.clipQuality } : {}),
+  })
 }
 
 /** A replacement that landed takes its old version out (once). Only versions this run replaced. */

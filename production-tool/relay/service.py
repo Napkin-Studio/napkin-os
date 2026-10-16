@@ -55,7 +55,7 @@ from director.base import Director, PassthroughDirector, PromptTooOld, fit_durat
 from ledger import Ledger, LimitReached, SpendStop
 from providers import Registry
 from providers.base import CapabilityMissing, Moderated, ProviderError, set_job_context
-from providers.types import effective_sheet, op_models
+from providers.types import effective_sheet, op_models, quality_choice, tier_label
 
 log = logging.getLogger("relay")
 
@@ -119,6 +119,9 @@ BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edi
              "stitch", "write", "upscale", "cutout"}
 # Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan).
 NO_DIRECTOR_OPS = {"upscale"}
+# Ops with Draft, Standard and Final (features/clip-quality.clan); Remake as Final promotes a draft within this.
+QUALITY_OPS = ("clip", "clip_edit")
+DRAFT_KEEP_S = 7 * 24 * 3600  # Runway keeps a Seedance 2.5 draft promotable for 7 days (openapi: draftTaskId)
 # What the editor says when Remove background cannot run here (features/image-editor.clan).
 NO_CUTOUT = "Rhea can't remove backgrounds on our server yet. Open this on a device with WebGPU to do it there."
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
@@ -445,24 +448,34 @@ class Relay:
         sheet = self.registry.sheet(provider) or {}
         return self._maker_on(((sheet.get("models") or {}).get(model) or {}).get("maker"), allow)
 
-    def _run_model(self, provider: str, op: str, pick: dict | None, inp: dict, allow: dict) -> str | None:
+    def _run_model(self, provider: str, op: str, pick: dict | None, inp: dict, allow: dict,
+                   level: str | None = None) -> str | None:
         """The model `provider` runs `op` with, for this agency: the pick on its own provider, else the
         op's own model, else the op's first alternate whose maker the agency allows. None: nothing it
-        allows (the provider leaves the chain)."""
+        allows (the provider leaves the chain). `level` (features/clip-quality.clan) picks the member of a
+        family that makes it (Kling O3 Final runs klingO3_pro)."""
         sheet = self.registry.sheet(provider)
         spec = ((sheet or {}).get("ops") or {}).get(op)
         if spec is None:
             return None
         if pick and pick["provider"] == provider:
-            return pick["model"] if self._model_on(provider, pick["model"], allow) else None
-        if op == "clip_edit" and (inp.get("region") or inp.get("mask")) and spec.get("regionModel"):
+            model = pick["model"] if self._model_on(provider, pick["model"], allow) else None
+        elif op == "clip_edit" and (inp.get("region") or inp.get("mask")) and spec.get("regionModel"):
             return spec["regionModel"] if self._model_on(provider, spec["regionModel"], allow) else None
-        return next((m for m in op_models(sheet, op) if self._model_on(provider, m, allow)), None)
+        else:
+            model = next((m for m in op_models(sheet, op) if self._model_on(provider, m, allow)), None)
+        if model is None or op not in QUALITY_OPS:
+            return model
+        sized = quality_choice(sheet, op, model, level)[0]
+        return sized if self._model_on(provider, sized, allow) else model
+
+    def _level(self, job: dict) -> str | None:
+        return job["_req"].get("quality")
 
     def _picked(self, job: dict, provider: str) -> str | None:
         """What effective_sheet takes for `provider`: the model to run when it is not the op's own."""
         model = self._run_model(provider, job["op"], job["_req"].get("modelChoice"), job["_req"].get("input") or {},
-                                self._policy(job.get("_tenant"))["allow"])
+                                self._policy(job.get("_tenant"))["allow"], self._level(job))
         spec = ((self.registry.sheet(provider) or {}).get("ops") or {}).get(job["op"]) or {}
         return None if model in (None, spec.get("model"), spec.get("regionModel")) else model
 
@@ -818,7 +831,8 @@ class Relay:
             raise ApiError("flag_off", off)
 
     @staticmethod
-    def _settings(op: str, spec: dict, sheet: dict, inp: dict, seconds: float | None = None) -> dict:
+    def _settings(op: str, spec: dict, sheet: dict, inp: dict, seconds: float | None = None,
+                  sized: dict | None = None) -> dict:
         """What the request says about the settings its price depends on (contracts/pricing.py):
         four options, the clip's length, an edit's input length, a clip_patch's billed seconds (the
         range or the cut, whole seconds, at least the op's minS: features/clip-moment-edit.clan).
@@ -852,6 +866,8 @@ class Relay:
                 settings["refs"] = bool(inp.get("image")) + (min(refs, sheet["refs"]["max"]) if goes else 0)
             else:
                 settings["refs"] = min(refs, max(0, sheet["refs"]["max"] - 1))  # the clip itself is a ref too
+        if sized and sized.get("tier"):  # the quality's size (features/clip-quality.clan): its tier's price
+            settings["resolution"] = sized["tier"]
         seconds = (inp.get("shot") or {}).get("duration_s")
         if seconds:
             if op == "clip":
@@ -861,16 +877,18 @@ class Relay:
         return settings
 
     def _estimate(self, op: str, provider: str, model: str | None = None, inp: dict | None = None,
-                  seconds: float | None = None) -> tuple[float, bool]:
+                  seconds: float | None = None, level: str | None = None) -> tuple[float, bool]:
         """One job's price on `provider` (and `model`, default the op's own) at the request's settings,
         from the sheet through contracts/pricing.py; (UNKNOWN_PRICE_USD, True) when it has none.
-        `seconds`: a clip_patch's billed length (the range or the cut)."""
+        `seconds`: a clip_patch's billed length (the range or the cut). `level`: the clip's quality, whose
+        size sets the price (features/clip-quality.clan)."""
         sheet = self.registry.sheet(provider)
         if not sheet or op not in sheet.get("ops", {}):
             return UNKNOWN_PRICE_USD, True
+        sized = quality_choice(sheet, op, model, level)[2] if op in QUALITY_OPS else None
         sheet = effective_sheet(sheet, op, model)
         spec = sheet["ops"][op]
-        price = pricing().op_usd(sheet, op, None, self._settings(op, spec, sheet, inp or {}, seconds))
+        price = pricing().op_usd(sheet, op, None, self._settings(op, spec, sheet, inp or {}, seconds, sized))
         return (UNKNOWN_PRICE_USD, True) if price is None else (float(price), False)
 
     @staticmethod
@@ -908,6 +926,8 @@ class Relay:
             raise ApiError("capability_missing", "This step is not built yet.")
         if op == "write" and not isinstance(req["input"].get("write"), dict):
             raise ApiError("invalid_input", "A write job says what to write (input.write).")
+        if req.get("promoteFrom"):  # Remake as Final: the draft's own request, at the asked level
+            req = self._promotion(who, req)
         qclass = QUOTA_CLASS[op]
         self._check_flags(cfg, req)
         pick = req.get("modelChoice")
@@ -927,8 +947,9 @@ class Relay:
             candidates = self._chain(cfg, op, pick, policy["allow"], req["input"])
             if not candidates:
                 raise ApiError("capability_missing", "No provider can do this step right now.")
-            prices = [self._estimate(op, p, patch["model"] if patch else self._run_model(p, op, pick, req["input"], policy["allow"]),
-                                     req["input"], seconds=patch["seconds"] if patch else None)
+            level = req.get("quality")
+            prices = [self._estimate(op, p, patch["model"] if patch else self._run_model(p, op, pick, req["input"], policy["allow"], level),
+                                     req["input"], seconds=patch["seconds"] if patch else None, level=level)
                       for p in candidates]
             estimate = max(p for p, _ in prices)
             unknown = any(u for _, u in prices)
@@ -980,6 +1001,42 @@ class Relay:
             return self._existing(who, self.store.get_job(req["jobId"]))
         self._dog_job(job, None)
         return self._dispatch(job, cfg)
+
+    def _promotion(self, who: dict, req: dict) -> dict:
+        """Remake as Final (features/clip-quality.clan): the request becomes the draft job's own (its input,
+        and the model it ran on, so a family swaps to the member that makes the level). _submit reuses the
+        draft's directed provider job, and promotes a Seedance 2.5 draft by its task id where it can."""
+        draft = self.store.get_job(req["promoteFrom"])
+        if (not draft or draft.get("tenantId") != who["tenant"]["id"] or draft.get("projectId") != req["projectId"]
+                or draft.get("op") != req["op"] or req["op"] not in QUALITY_OPS):
+            raise ApiError("invalid_input", "That take cannot be remade here: it is not a clip of this project.")
+        if draft.get("state") != "completed" or not draft.get("provider") or not draft.get("model"):
+            raise ApiError("invalid_input", "That take is not finished, so it cannot be remade yet.")
+        old = draft.get("_req") or {}
+        return {**req, "input": old.get("input") or {}, "modelChoice": {"provider": draft["provider"], "model": draft["model"]}}
+
+    def _promote_job(self, job: dict, provider: str, model: str) -> tuple[dict, dict] | None:
+        """The draft's directed provider job at this job's level, on `model`, and its director block; with
+        draftTask when Runway can make the draft final itself (the same model, a draft the sheet promotes,
+        under 7 days old). None when the draft has no directed job to reuse: Dex directs it again."""
+        draft = self.store.get_job(job["_req"]["promoteFrom"]) or {}
+        block = draft.get("director") or {}
+        pjob = (block.get("output") or {}).get("providerJob")
+        if not pjob:
+            return None
+        pjob = {**pjob, "model": model}
+        sheet = self.registry.sheet(provider) or {}
+        was = (draft.get("quality") or {}).get("level")
+        drafted = (quality_choice(sheet, job["op"], draft.get("model"), was)[2] or {}).get("draft")
+        promotes = ((sheet.get("models") or {}).get(model) or {}).get("draftPromote")
+        fresh = self.clock() - parse_iso(draft.get("createdAt") or iso(0)) < DRAFT_KEEP_S
+        how = "the same words, pictures and length"
+        if (drafted and promotes and model == draft.get("model") and provider == draft.get("provider")
+                and draft.get("requestId") and fresh and job["_req"].get("quality") == "final"):
+            pjob["draftTask"] = draft["requestId"]
+            how = "Runway makes the draft itself at full size"
+        why = f"Remade at {(job['_req'].get('quality') or 'standard').title()} from {draft['jobId']}: {how}."
+        return pjob, {**block, "rationale": why[:300], "latencyMs": 0}
 
     def _reserve(self, tenant: str, usd: float, cfg: dict, policy: dict | None = None) -> str:
         """New spend for the agency in the current month, under its cap and the global stop; the month.
@@ -1221,7 +1278,8 @@ class Relay:
         # model was chosen before the job ran (config clipPatch.model), its price by the cut's length.
         picked = job.get("model") if job["op"] == "clip_patch" else self._picked(job, provider)
         sheet = effective_sheet(self.registry.sheet(provider), job["op"], picked)
-        estimate, unknown = self._estimate(job["op"], provider, picked, job["_req"]["input"], seconds=self._cut_seconds(job))
+        estimate, unknown = self._estimate(job["op"], provider, picked, job["_req"]["input"], seconds=self._cut_seconds(job),
+                                           level=self._level(job))
         refused, new_month = self._floor_admission(job, cfg, estimate)
         if refused is not None:
             self.store.incr(slot, "n", -1)
@@ -1244,8 +1302,9 @@ class Relay:
             self.ledger.adjust(job.get("_tenant"), month, estimate - job["cost"].get("reserved", 0))
         job = saved
 
+        reused = self._promote_job(job, provider, model) if job["_req"].get("promoteFrom") else None
         try:
-            directed, block = self._direct(job, sheet)
+            directed, block = ({"providerJob": reused[0]}, reused[1]) if reused else self._direct(job, sheet)
         except ApiError as e:
             return self._fail(job, e.code, e.message, paid=False, refund=True)
         if directed.get("question"):
@@ -1266,6 +1325,7 @@ class Relay:
                 run_as, pjob, made = self._patch_provider_job(job, pjob, provider)
             except ApiError as e:
                 return self._fail(job, e.code, e.message, paid=False, refund=True, director=block)
+        sized = self._sized(job, provider, model, pjob)
         set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
         try:
             request_id = self._adapter(job, provider).submit(pjob)
@@ -1319,12 +1379,28 @@ class Relay:
         now = self.clock()
         min_poll = (sheet.get("results") or {}).get("minPollS", 1)
         saved = self._save(job, state="submitted", requestId=str(request_id), director=block,
-                           _submittedAt=now, _nextCheckAt=now + min_poll)
+                           _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized)
         if saved is None:
             log.error("job %s: provider %s accepted request %s but the ledger write lost a race",
                       job["jobId"], provider, request_id)
             return self._reload(job)
         return self._with_poll(saved)
+
+    def _sized(self, job: dict, provider: str, model: str, pjob: dict) -> dict | None:
+        """The clip's quality on the provider job (features/clip-quality.clan): the level and its size for the
+        adapter, and for an edit that takes a size, the clip's shape. Returns what the job records
+        ({level, size}); None where the model keeps the clip's own size."""
+        if job["op"] not in QUALITY_OPS:
+            return None
+        _, level, entry = quality_choice(self.registry.sheet(provider) or {}, job["op"], model, self._level(job))
+        spec = effective_sheet(self.registry.sheet(provider) or {}, job["op"], model)["ops"][job["op"]]
+        if not entry or spec.get("keepsSize"):
+            return None
+        pjob["quality"] = {"level": level, **entry}
+        shape = (job["_req"].get("input") or {}).get("ratio")
+        if job["op"] == "clip_edit" and shape and not pjob.get("ratio"):
+            pjob["ratio"] = shape
+        return {"level": level, "size": tier_label(entry["tier"])}
 
     def _reserve_as(self, job: dict, provider: str, op: str) -> dict:
         """A frame_edit reserved the dearer of its two ops; once Dex has read the words, the reservation

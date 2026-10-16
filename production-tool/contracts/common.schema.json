@@ -48,6 +48,10 @@
       "enum": ["16:9", "9:16", "1:1", "4:5"],
       "description": "The ratios a person picks for a storyboard, a video or a sketch area. A format's exact shape is an aspect, never a new ratio."
     },
+    "clipQuality": {
+      "enum": ["draft", "standard", "final"],
+      "description": "A clip's quality (features/clip-quality.clan): draft is the cheapest size the model makes, standard 720p (the size before quality existed), final the best it makes up to 1080p. The size each means per model is the capability sheet's ops[op].quality."
+    },
     "aspect": {
       "type": "object",
       "description": "An exact shape in whole units (1080 x 1920, 1.91:1 as 191 x 100). Used where a format's shape is not one of the four ratios.",

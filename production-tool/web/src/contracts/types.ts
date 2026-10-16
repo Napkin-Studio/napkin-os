@@ -233,7 +233,19 @@ export interface OpSheet {
   mask?: CapabilitySheet['mask']
   /** With no region and no mask, the op edits the whole image keeping its composition. */
   preciseEdit?: boolean
+  /** clip, clip_edit (features/clip-quality.clan): the size each level makes; a family's name; an edit that keeps the clip's size. */
+  quality?: QualityMap
+  family?: string
+  familyLabel?: string
+  keepsSize?: boolean
 }
+
+/** Clip quality (features/clip-quality.clan; common.schema.json clipQuality). */
+export const QUALITIES = ['draft', 'standard', 'final'] as const
+export type ClipQuality = (typeof QUALITIES)[number]
+/** The size one level makes on a model (capabilities.schema.json $defs/quality). */
+export interface QualityEntry { tier: string; resolution?: string; draft?: boolean }
+export type QualityMap = Partial<Record<ClipQuality, QualityEntry>>
 
 /** One alternate model for an op: its fields replace the op's, its overrides the sheet's. */
 export interface OpAlternate {
@@ -255,6 +267,10 @@ export interface OpAlternate {
   video?: CapabilitySheet['video']
   mask?: CapabilitySheet['mask']
   preciseEdit?: boolean
+  quality?: QualityMap
+  family?: string
+  familyLabel?: string
+  keepsSize?: boolean
 }
 
 /** One model in the sheet's catalogue: its checked limits and its published price (read by the relay). */
@@ -285,7 +301,9 @@ export interface ModelSheet {
   negativePrompt?: boolean
   imagesMax?: number
   keyframeRatio?: 'auto_tier'
-  v2v?: { videoField: 'videoUri' | 'promptVideo'; mode?: 'edit'; durationAuto?: boolean; keepOriginalSound?: boolean; audioParam?: boolean; refsMax: number; inputMaxS?: number }
+  v2v?: { videoField: 'videoUri' | 'promptVideo'; mode?: 'edit'; durationAuto?: boolean; keepOriginalSound?: boolean; audioParam?: boolean; ratio?: boolean; refsMax: number; inputMaxS?: number }
+  /** A draft can be made at 1080p later from its task id (Seedance 2.5; features/clip-quality.clan). */
+  draftPromote?: boolean
   pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
 }
 
@@ -531,6 +549,9 @@ export interface Take extends EntityBase {
   model: string
   provider: MadeBy
   duration_s: number
+  /** The level it was made at and its size ("Draft 360p"; features/clip-quality.clan). */
+  quality?: ClipQuality
+  size?: string
   segments: TakeSegment[]
 }
 export interface EdlItem { rank: Rank; kind: 'shot' | 'bridge'; shot_id?: Id; pick?: Pick; in_s?: number; out_s?: number }
@@ -538,6 +559,8 @@ export interface Video extends EntityBase {
   title: string
   ratio: Ratio
   target_s?: number
+  /** The project's default quality for this video's clips (absent: standard). */
+  quality?: ClipQuality
   pick?: Pick
   edl: Record<Id, EdlItem>
 }
@@ -896,6 +919,9 @@ export interface JobRequest {
   input: JobInput
   /** The model picked when regenerating; absent means the routing's default. */
   modelChoice?: ModelChoice
+  /** clip, clip_edit: the size to make (absent: standard); promoteFrom: Remake as Final of that job's take. */
+  quality?: ClipQuality
+  promoteFrom?: Id
 }
 
 export interface ModelChoice {
@@ -930,6 +956,8 @@ export interface Job {
   model?: string
   fallbackFrom?: ModelChoice
   fallbackReason?: string
+  /** clip, clip_edit: the level it ran at and the size asked ("360p", "2K"). */
+  quality?: { level: ClipQuality; size: string }
   requestId?: string
   inputHashes: Sha256[]
   director?: AgentBlock

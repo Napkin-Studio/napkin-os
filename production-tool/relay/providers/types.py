@@ -110,6 +110,10 @@ class ProviderJob:
     outputs: Optional[int] = None
     strength: Optional[str] = None
     scale: Optional[int] = None  # upscale: how many times each side grows (2 or 4)
+    # clip, clip_edit (features/clip-quality.clan): the level and its sheet entry ({level, tier, resolution?,
+    # draft?}) the relay resolved, and a draft's Runway task id when Remake as Final promotes it.
+    quality: Optional[dict] = None
+    draft_task: Optional[str] = None
 
     @classmethod
     def from_director(cls, op: str, job: dict) -> "ProviderJob":
@@ -126,6 +130,7 @@ class ProviderJob:
             keyframe=job.get("keyframe"), angle=job.get("angle"), ratio=job.get("ratio"),
             duration_s=job.get("durationS"), seed=job.get("seed"), audio=job.get("audio"),
             outputs=job.get("outputs"), strength=job.get("strength"), scale=job.get("scale"),
+            quality=job.get("quality"), draft_task=job.get("draftTask"),
         )
 
 
@@ -228,6 +233,47 @@ def effective_sheet(sheet: dict, op: str, model: Optional[str]) -> dict:
     if "seed" in alt:
         out["seed"] = alt["seed"]
     return out
+
+
+# Clip quality (features/clip-quality.clan): Draft, Standard and Final, each a size the model makes.
+QUALITIES = ("draft", "standard", "final")
+DEFAULT_QUALITY = "standard"  # a request that names none: today's size
+
+
+def _op_entries(sheet: dict, op: str) -> list[dict]:
+    spec = (sheet.get("ops") or {}).get(op)
+    return [] if spec is None else [spec, *spec.get("alternates", [])]
+
+
+def quality_choice(sheet: dict, op: str, model: Optional[str], level: Optional[str]) -> tuple[str, Optional[str], Optional[dict]]:
+    """What runs for `level` on `model` (None: the op's own) for `op`: (model, level, its quality entry).
+
+    A family (Kling O3 Standard and Pro) is one model in sizes: the level picks the member that makes it.
+    A level the model (or its family) lacks runs at the nearest level it has. A model with no quality map
+    keeps the clip's own size, or has one: (model, None, None). contracts/examples/quality-cases.json holds
+    the vectors; web/src/capabilities.ts resolveQuality answers the same."""
+    entries = _op_entries(sheet, op)
+    if not entries:
+        return model or "", None, None
+    model = model or entries[0]["model"]
+    own = next((e for e in entries if e["model"] == model), None)
+    if own is None or not own.get("quality"):
+        return model, None, None
+    family = own.get("family")
+    members = [e for e in entries if family and e.get("family") == family] or [own]
+    offered = {lvl: (e["model"], e["quality"][lvl]) for e in members for lvl in QUALITIES if lvl in (e.get("quality") or {})}
+    want = level if level in QUALITIES else DEFAULT_QUALITY
+    if want not in offered:
+        i = QUALITIES.index(want)
+        want = min(offered, key=lambda lvl: (abs(QUALITIES.index(lvl) - i), QUALITIES.index(lvl)))
+    # The asked model when it makes this level itself, else the member that does.
+    run, entry = (model, own["quality"][want]) if want in own["quality"] else offered[want]
+    return run, want, entry
+
+
+def tier_label(tier: Optional[str]) -> Optional[str]:
+    """A tier as people read it: 360p, 1080p, 2K, 4K."""
+    return None if tier is None else tier[:-1] + "K" if tier.lower().endswith("k") else tier
 
 
 def nearest_ratio(ratio: str, allowed: tuple[str, ...]) -> str:
