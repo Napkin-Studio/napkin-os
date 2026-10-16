@@ -1,6 +1,6 @@
 """Where artifacts live: S3 behind CloudFront (Lambda) or a local directory
 served by the dev server. Keys: in/sha256:<hex> (uploads), out/sha256:<hex>
-(provider outputs), ads/<jobId>.mp4 and ads/<jobId>.json (stitch),
+(provider outputs), ads/<jobId>.mp4 and ads/<jobId>.json (stitch), ads/cuts/<jobId>.* (a cutdown),
 library/<participantId>/… (the person's library, library.py), clan/<participantId>/… (saved
 projects, projects.py) and cards/<hex>.json (cards.py).
 

@@ -421,10 +421,32 @@ class RunwayProvider:
             body["seed"] = job.seed
         return "/v1/video_to_video", body
 
+    def _outpaint(self, job: ProviderJob) -> tuple[str, dict]:
+        """A cutdown shot's new edges (features/campaign-formats.clan, phase 6): Aleph 2 on the take, with
+        targetAspectRatio (the job's ratio: one of the model's targetAspectRatios) and fixed words asking for
+        continuation only. The take goes whole (at most 30 s; shots are 2-8 s)."""
+        self._check(job, job.prompt)
+        model = self._model(job)
+        m = self._catalogue(model)
+        current = next((r for r in job.refs if r.role == "current"), job.refs[0] if job.refs else None)
+        if current is None:
+            raise CapabilityMissing("an outpaint needs the clip")
+        video = self._assets(current.sha256)
+        if video.mime != "video/mp4":
+            raise CapabilityMissing("an outpaint needs the clip itself (video/mp4)")
+        ratios = m.get("targetAspectRatios") or []
+        if job.ratio not in ratios:
+            raise CapabilityMissing(f"{m.get('label', model)} makes new edges only at {', '.join(ratios) or 'no shape'}")
+        body = {"model": model, "videoUri": video.url, "targetAspectRatio": job.ratio, "promptText": job.prompt}
+        if job.seed is not None and self._sheet["ops"]["cutdown"].get("seed", self._sheet.get("seed")):
+            body["seed"] = job.seed
+        return "/v1/video_to_video", body
+
     # The Provider interface
 
     def submit(self, job: ProviderJob) -> str:
-        build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale}.get(job.op, self._image)
+        build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale,
+                 "cutdown": self._outpaint}.get(job.op, self._image)
         if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
             build = self._ideogram
         path, body = build(job)

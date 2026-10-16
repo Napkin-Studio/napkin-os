@@ -55,12 +55,13 @@ def test_a_contract_3_job_carries_who_started_it_where_and_for_what(h):
     assert plan["crew"] == "dex" and plan["quotaClass"] == "text"
 
 
-# cutout and upscale are built (features/image-editor.clan; tests/test_image_editor.py).
-@pytest.mark.parametrize("op", ["bridge", "transcribe", "read", "check", "resize", "cutdown"])
+# cutout and upscale are built (features/image-editor.clan; tests/test_image_editor.py); cutdown too
+# (features/campaign-formats.clan phases 5 and 6; tests/test_cutdowns.py).
+@pytest.mark.parametrize("op", ["bridge", "transcribe", "read", "check", "resize"])
 def test_an_op_not_built_yet_is_422_capability_missing_before_quota(h, op):
     token = h.as_person()
     inp = {"text": "x"}
-    if op in ("resize", "cutdown"):  # their input has a shape (features/campaign-formats.clan); a still is
+    if op == "resize":  # its input has a shape (features/campaign-formats.clan); a still is
         # never re-edited (extend and regenerate are built: tests/test_campaign.py)
         inp = json.loads((contracts_dir() / "examples" / f"job-request.{op}.json").read_text())["input"]
         if op == "resize":
