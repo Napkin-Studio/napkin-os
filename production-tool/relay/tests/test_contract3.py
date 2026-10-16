@@ -57,11 +57,11 @@ def test_a_contract_3_job_carries_who_started_it_where_and_for_what(h):
 
 # upscale is built (features/image-editor.clan; tests/test_image_editor.py); cutout is not, since Remove
 # background left the editor (owner, 2026-10-16).
-@pytest.mark.parametrize("op", ["bridge", "transcribe", "read", "check", "resize", "cutdown", "cutout"])
+@pytest.mark.parametrize("op", ["bridge", "transcribe", "read", "check", "resize", "cutout"])
 def test_an_op_not_built_yet_is_422_capability_missing_before_quota(h, op):
     token = h.as_person()
     inp = {"text": "x"}
-    if op in ("resize", "cutdown"):  # their input has a shape (features/campaign-formats.clan); a still is
+    if op == "resize":  # its input has a shape (features/campaign-formats.clan); a still is
         # never re-edited (extend and regenerate are built: tests/test_campaign.py)
         inp = json.loads((contracts_dir() / "examples" / f"job-request.{op}.json").read_text())["input"]
         if op == "resize":

@@ -47,6 +47,7 @@ import identity
 import library
 import names
 import writer as writers
+import cutdowns
 import projects
 import time_rules
 from blobs import checksum_header
@@ -131,34 +132,39 @@ def words_for_remove(inp: dict) -> dict:
 
 
 BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch",
-             "stitch", "write", "upscale", "resize"}
+             "stitch", "write", "upscale", "resize", "cutdown"}
 # cutout (Remove background) is not built: the editor no longer offers it (owner, 2026-10-16). The op stays
 # in the contract for the cut-out jobs older documents hold.
-# Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan).
-NO_DIRECTOR_OPS = {"upscale", "resize"}
+# Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan);
+# a cutdown's outpaint sends fixed words that ask for new edges only (cutdowns.OUTPAINT_PROMPT).
+NO_DIRECTOR_OPS = {"upscale", "resize", "cutdown"}
 # Ops with Draft, Standard and Final (features/clip-quality.clan); Remake as Final promotes a draft within this.
 QUALITY_OPS = ("clip", "clip_edit")
 DRAFT_KEEP_S = 7 * 24 * 3600  # Runway keeps a Seedance 2.5 draft promotable for 7 days (openapi: draftTaskId)
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
 # Ops whose models the capability sheets list for the Make all sizes method table (features/campaign-formats.clan)
-# but no adapter builds yet: Aleph 2 reframes (phase 6). resize's extend and regenerate run since phase 4.
-NO_ADAPTER_YET = {"cutdown"}
+# but no adapter builds yet: none since phase 6 (cutdown's outpaint runs on Aleph 2).
+NO_ADAPTER_YET: set[str] = set()
 NOT_YET_METHOD = ("{method} comes with a later build of Make all sizes. Change this size's method to Crop, Extend "
                   "or Regenerate, or keep it for when {method} lands.")
 
 
 def free_resize(req: dict) -> bool:
     """Make all sizes' free methods (formats.py): no provider, no spend, no quota, no in-flight place.
-    A crop lands in about a second, and a campaign sends twenty at once."""
+    A crop lands in about a second, and a campaign sends twenty at once. A film's plan and its renders
+    (cutdowns.py: Dex's beats and crops, stitch's cutdown) are free the same way; only an outpaint is paid."""
     import formats
-    return req.get("op") == "resize" and ((req.get("input") or {}).get("resize") or {}).get("method") in formats.FREE_METHODS
+    inp = req.get("input") or {}
+    if req.get("op") == "cutdown":
+        return (inp.get("cutdown") or {}).get("step", "render") in ("plan", "render")
+    return req.get("op") == "resize" and (inp.get("resize") or {}).get("method") in formats.FREE_METHODS
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
 def crew_for(op: str) -> str:
     """Who works an op (ui-behaviour 5.1; clan-store's attribution.crewFor)."""
     return {"shot_list": "dex", "frame_edit": "dex", "bridge": "dex", "write": "skye", "cutout": "rhea",
-            "upscale": "rhea", "region_edit": "rhea", "clip_patch": "edie", "stitch": "edie", "read": "ellis",
+            "upscale": "rhea", "region_edit": "rhea", "clip_patch": "edie", "stitch": "edie", "cutdown": "edie", "read": "ellis",
             "transcribe": "ellis", "check": "jude"}.get(op, "wren")
 TERMINAL = {"completed", "failed", "cancelled", "uncertain"}
 # The provider every job falls back to, once, when the op routes to it (features/runway-fallback.clan).
@@ -303,7 +309,7 @@ def public(job: dict) -> dict:
 class Relay:
     def __init__(self, *, store, blobs, registry: Registry, director: Director, config,
                  contracts: Contracts | None = None, clock=time.time, stitch=None, cards=None,
-                 who=identity.who, writer=None):
+                 who=identity.who, writer=None, cutter=None):
         """config: () -> config.json dict (cached by the caller).
         stitch: (payload dict) -> None, starts the stitch Lambda asynchronously.
         cards: cards.Cards, what each ref picture shows, for the director (None: no model, no cards).
@@ -313,6 +319,8 @@ class Relay:
         self.store, self.blobs, self.registry, self.director = store, blobs, registry, director
         # Skye (write): on the director's model port, or the passthrough without one (writer.py).
         self.writer = writer if writer is not None else writers.make(director)
+        # Dex's cutdown plans (cutdowns.py): on the director's model port, or the passthrough without one.
+        self.cutter = cutter if cutter is not None else cutdowns.make(director)
         self.config, self.who = config, who
         self.contracts = contracts or Contracts()
         self.clock = clock
@@ -880,6 +888,11 @@ class Relay:
             if ratio:
                 settings["ratio"] = ratio
             return settings
+        if op == "cutdown":  # an outpaint: Aleph 2 bills the seconds of the clip it reads (minimum on the sheet)
+            clip = ((inp.get("cutdown") or {}).get("clips") or [{}])[0]
+            if clip.get("outS") is not None:
+                settings["inputS"] = max(spec.get("minS", 0), math.ceil(float(clip["outS"]) - float(clip.get("inS") or 0) - 1e-9))
+            return settings
         if op == "upscale":  # Magnific's price turns on the output's longest side (providers.md fact 7)
             settings["scaleFactor"] = inp.get("scale") or 2
             a = inp.get("aspect") or {}
@@ -1221,6 +1234,9 @@ class Relay:
             return self._run_shot_list(job, cfg)
         if op == "write":
             return self._run_write(job)
+        if job.get("_free") and op == "cutdown":
+            step = (job["_req"]["input"].get("cutdown") or {}).get("step", "render")
+            return self._run_cutdown_plan(job) if step == "plan" else self._run_cutdown_render(job, cfg)
         if job.get("_free"):
             return self._run_resize_free(job)
         if op == "stitch":
@@ -1660,6 +1676,90 @@ class Relay:
         result = {"method": rz["method"], "crop": crop, "previewPx": {"width": out_w, "height": out_h}, "layers": drawn,
                   "plate": self._keep_png(saved, plate, out_w, out_h)}
         return self._finish(saved, "completed", outputs=[out], kind="generated", paid=False, resize=result)
+
+    def _run_cutdown_plan(self, job: dict) -> dict:
+        """Dex's plan of a film's cutdowns and shapes (cutdowns.py; features/campaign-formats.clan): the beats
+        of each length and the crop of each shot at each shape, from Claude looking at stills of the shots
+        (or the passthrough: no model, or an agency with Claude off). No provider, no spend, nothing counted."""
+        saved = self._save(job, state="submitting", _queue="r")
+        if saved is None:
+            return self._reload(job)
+        claude = self._policy(saved.get("_tenant"))["allow"]["claude"]
+        cutter = self.cutter if claude else cutdowns.PassthroughCutter()
+        start = self.clock()
+
+        def fetch(url: str) -> bytes:
+            if self.blobs.key_for_url(url) is None:
+                raise ValueError("not one of ours")
+            return self.blobs.fetch(url)
+        try:
+            out = dict(cutter.plan({**saved["_req"], "jobId": saved["jobId"]}, fetch))
+        except Exception as e:
+            log.exception("cutdown plan of %s failed", saved["jobId"])
+            if cutter is self.cutter and not isinstance(cutter, cutdowns.PassthroughCutter):
+                # Dex could not answer: the passthrough's plan, said so, rather than no plan at all.
+                out = dict(cutdowns.PassthroughCutter().plan(saved["_req"]))
+                out["rationale"] = f"Dex could not plan this ({type(e).__name__}), so the plan keeps the opening and the payoff."
+                cutter = cutdowns.PassthroughCutter()
+            else:
+                return self._fail(saved, "internal", f"Dex could not plan the cutdowns ({type(e).__name__}).",
+                                  retryable=True, paid=False, refund=True)
+        latency = out.pop("_latencyMs", int((self.clock() - start) * 1000))
+        rationale = out.pop("rationale", "") or ""
+        plan = {"lengths": out["lengths"], "crops": out["crops"]}
+        errors = self.contracts.errors("relay-api.schema.json#/$defs/Job/properties/cutdownPlan", plan)
+        if errors:
+            return self._fail(saved, "internal", f"The plan did not match its schema: {errors[0]}", paid=False, refund=True)
+        block = {"model": getattr(cutter, "model", "unknown"), "promptVersion": getattr(cutter, "prompt_version", cutdowns.PROMPT_VERSION),
+                 "output": {"lengths": len(plan["lengths"]), "crops": len(plan["crops"])}, "rationale": rationale[:2000], "latencyMs": latency}
+        return self._finish(saved, "completed", cutdownPlan=plan, director=block, outputs=[], kind="generated", paid=False)
+
+    def _run_cutdown_render(self, job: dict, cfg: dict) -> dict:
+        """One length of the film at one shape (cutdowns.py, stitch cutdown.py): the windows of the same takes,
+        cropped per clip, the type layers drawn here into PNGs at the film's size, the end card and the mix
+        trimmed with a fade, rendered by stitch. Free, like the ad's render."""
+        if self.stitch is None:
+            return self._fail(job, "provider_unavailable", "Stitching is not available here.", paid=False, refund=True)
+        inp = job["_req"]["input"]
+        cut = inp["cutdown"]
+        size = cutdowns.cut_size(inp["delivery"])
+        clips = []
+        for c in cut["clips"]:
+            key = self.blobs.key_for_url(c["asset"]["url"])
+            if not key:
+                return self._fail(job, "invalid_input", "A clip is not one of ours; upload it first.", paid=False, refund=True)
+            clip = {"key": key, "inS": c.get("inS") or 0, "outS": c["outS"]}
+            if c.get("takeSize"):
+                clip["takeSize"] = [c["takeSize"]["w"], c["takeSize"]["h"]]
+            for k in ("crop", "cropKeys"):
+                if c.get(k):
+                    clip[k] = c[k]
+            clips.append(clip)
+        layers = []
+        try:
+            for i, (png, a, b) in enumerate(cutdowns.layer_pngs(cut.get("layers") or [], size, self.blobs.fetch)):
+                key = f"ads/cuts/{job['jobId']}/layer{i}.png"
+                self.blobs.put(key, png, "image/png")
+                layers.append({"key": key, **({"fromS": a} if a is not None else {}), **({"toS": b} if b is not None else {})})
+        except Exception as e:
+            log.exception("cutdown layers of %s failed", job["jobId"])
+            return self._fail(job, "internal", f"Edie could not draw this film's words ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        now = self.clock()
+        saved = self._save(job, state="submitted", model="ffmpeg", requestId=job["jobId"], _queue="r",
+                           _submittedAt=now, _nextCheckAt=now + 3)
+        if saved is None:
+            return self._reload(job)
+        event = {"jobId": job["jobId"], "mode": "cutdown", "size": list(size), "clips": clips, "layers": layers,
+                 "endCard": cut.get("endCard", True), "fadeOutS": cut.get("fadeOutS", 0.5),
+                 "outKey": f"ads/cuts/{job['jobId']}.mp4", "resultKey": f"ads/cuts/{job['jobId']}.json"}
+        try:
+            self.stitch(event)
+        except Exception as e:
+            log.exception("cutdown invoke failed")
+            return self._fail(saved, "provider_unavailable", f"Stitching could not start ({type(e).__name__}).",
+                              retryable=True, paid=False, refund=True)
+        return self._with_poll(saved)
 
     def _keep_png(self, job: dict, png: bytes, w: int, h: int) -> dict:
         """A PNG the relay made, kept under out/<sha> for the job's agency; its assetRef."""
@@ -2263,7 +2363,7 @@ class Relay:
         if state == "fetching" and job.get("_leaseUntil", 0) > now:
             return self._with_poll(job)
         # submitted, or fetching with an expired lease
-        if job["op"] == "stitch":
+        if job["op"] == "stitch" or (job["op"] == "cutdown" and job.get("_free")):
             return self._advance_stitch(job, cfg, now)
         if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
             return self._advance_patch(job, cfg, now)
@@ -2390,7 +2490,9 @@ class Relay:
                 "w": w, "h": h, "croppedFrom": {"w": ow, "h": oh}}
 
     def _advance_stitch(self, job: dict, cfg: dict, now: float) -> dict:
-        result = self.blobs.get_json(f"ads/{job['jobId']}.json")
+        # A cutdown's render sits under ads/ like the ad's and a patch's (served at /ads/ and by the CDN as they are).
+        base = f"ads/cuts/{job['jobId']}" if job["op"] == "cutdown" else f"ads/{job['jobId']}"
+        result = self.blobs.get_json(f"{base}.json")
         # A render that failed, timed out or was cancelled made no ad: the day's render comes back (refund).
         if result is None:
             if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
@@ -2403,7 +2505,7 @@ class Relay:
                                   paid=False, refund=True)
             return self._fail(job, "provider_failed", result.get("error", "Stitching failed.")[:300],
                               retryable=True, paid=False, refund=True)
-        out = {"sha256": result["sha256"], "url": self.blobs.public_url(f"ads/{job['jobId']}.mp4"),
+        out = {"sha256": result["sha256"], "url": self.blobs.public_url(f"{base}.mp4"),
                "mime": "video/mp4", "bytes": result["bytes"]}
         for k in ("w", "h", "durationS"):
             if result.get(k) is not None:

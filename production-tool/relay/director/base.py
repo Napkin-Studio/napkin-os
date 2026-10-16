@@ -133,6 +133,8 @@ class PassthroughDirector:
             return self._upscale(job_request, sheet)
         if op == "resize":
             return self._resize(job_request, sheet)
+        if op == "cutdown":
+            return self._cutdown(job_request, sheet)
         provider = (sheet or {}).get("provider", "mock")
         model = ((sheet or {}).get("ops", {}).get(op) or {}).get("model", "unknown")
         refs = []
@@ -216,6 +218,23 @@ class PassthroughDirector:
         job = {"provider": provider, "model": model, "prompt": method, "refs": [], "outputs": 1}
         return {"op": "resize", "providerJob": job, "question": None, "confidence": 0.1,
                 "rationale": f"passthrough: {method}, nothing to write"}
+
+    def _cutdown(self, job_request: dict, sheet: dict | None) -> dict:
+        """A film shot's new edges for a shape (features/campaign-formats.clan, phase 6): the take as it is, the
+        shape Aleph 2 makes (targetRatio) and fixed words that ask for continuation only, never the scene."""
+        from cutdowns import OUTPAINT_PROMPT
+
+        cut = (job_request.get("input") or {}).get("cutdown") or {}
+        clip = (cut.get("clips") or [{}])[0]
+        provider = (sheet or {}).get("provider", "mock")
+        model = ((sheet or {}).get("ops", {}).get("cutdown") or {}).get("model", "unknown")
+        asset = clip.get("asset")
+        refs = [{"sha256": asset["sha256"], "name": "current", "role": "current"}] if asset else []
+        job = {"provider": provider, "model": model, "prompt": OUTPAINT_PROMPT, "refs": refs, "outputs": 1}
+        if cut.get("targetRatio"):
+            job["ratio"] = cut["targetRatio"]
+        return {"op": "cutdown", "providerJob": job, "question": None, "confidence": 0.1,
+                "rationale": f"passthrough: new edges at {cut.get('targetRatio', '?')}, nothing to write"}
 
     def _clip_patch(self, job_request: dict, sheet: dict | None) -> dict:
         """Fix this moment with no model (features/clip-moment-edit.clan): the note's words, as they are,

@@ -129,6 +129,14 @@ def test_a_clip_from_words_alone_is_a_blank_still_with_its_duration(mock, clock)
     assert load_sheet("mock")["ops"]["clip"]["textEndpoint"]
 
 
+def test_a_clip_from_words_alone_has_the_videos_shape(mock, clock):
+    mock._ffmpeg = None
+    rid = mock.submit(job("clip", refs=[], duration_s=4, ratio="16:9"))
+    clock.t = 3
+    out = mock.status(rid).outputs[0]
+    assert (out.w, out.h) == (1280, 720)
+
+
 def test_cancel(mock, clock):
     rid = mock.submit(job())
     mock.cancel(rid)
