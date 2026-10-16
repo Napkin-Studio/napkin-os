@@ -1,11 +1,12 @@
-// The boards on our own canvas (features/art-boards.clan; ui-behaviour 3.2): seeds
-// the Ad template's seven boards once (document boards and board frames, with the
-// nodes in theirs), takes the rail's ⌥1…⌥9 and ⌥0 jumps onto the real frames, keeps
+// The boards on our own canvas (features/art-boards.clan; ui-behaviour 3.2): a new
+// project starts on an empty canvas with no boards (board-autolayout, BA2 = c); an
+// existing project's boards get their frames once, with the nodes in theirs. It takes
+// the rail's ⌥1…⌥9 (nodes, then boards) and ⌥0 jumps onto the canvas, keeps
 // the document's boards in step with the frames (a deleted board leaves the rail;
 // undo brings it back), makes boards ("+ New board", the Board tool B and a drag)
 // with their title open in place and a purpose picker, renames a board on a
 // double-click of its title, and asks before deleting a board with things on it.
-// Board sizing (owner decision, Shrey 2026-10-15): a selected board's bar has Fit to contents; a
+// Board sizing (owner decision, Shrey 2026-10-15): a selected board's bar has Tidy (board-autolayout) and Fit to contents; a
 // board that could not grow to take what came to it says "Board is full · Resize" for a while; things
 // a resize let go of are said, with Undo. The engine draws the handles and does the sizing.
 // The engine draws the frames; the rail is the chrome's.
@@ -19,6 +20,7 @@ import { canvasActions, toolLetter } from '../chrome/actions'
 import { boardIdOf, boardKey, contentsOf, deleteBoards, isBoard, jumpTo, newBoard, NEW_BOARD, PURPOSES, reconcileBoards, seedBoards } from './boards'
 import { UndoChip } from '../../ui/Undo'
 import { boardNotices } from './fitting'
+import { tidyBoard } from './gather'
 import { boardTitleRect, TITLE_REACH_PX } from '../../../../canvas-engine/src'
 import './boards.css'
 
@@ -26,7 +28,7 @@ type Local = { x: number; y: number }
 /** What our engine adds for sized boards (adapter/own): Fit to contents and what boards did. */
 type Sized = CanvasAdapter & {
   fitBoard?: (frameId: string) => boolean
-  onBoardEvent?: (cb: (e: { kind: 'full' | 'left'; board: string; ids: string[] }) => void) => () => void
+  onBoardEvent?: (cb: (e: { kind: 'full' | 'left' | 'held'; board: string; ids: string[] }) => void) => () => void
   undoScene?: (dir: 'undo' | 'redo') => boolean
 }
 /** The board bar never goes higher than this (screen pixels in the canvas): the top bar is above it. */
@@ -36,6 +38,8 @@ const SAY_MS = 7000
 type FrameEl = CanvasElement & { name?: string; purpose?: string }
 /** A board frame's title chip in scene units: the engine's (boards/grab), so the rename field, the bar and the press agree. */
 const chipOf = (f: FrameEl, zoom: number) => boardTitleRect({ x: f.x, y: f.y, w: f.width, h: f.height, props: { name: f.name ?? '' } }, zoom)
+/** Browser storage key of the one-time "next free spot" note (per viewer). */
+const NOTE_KEY = 'pt.boards.nextSlotNote'
 /** A drag smaller than this (screen pixels) makes a board of the default size where it started. */
 const MIN_DRAG = 24
 const typing = (t: EventTarget | null) => !!(t as { closest?: (s: string) => unknown } | null)?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
@@ -58,13 +62,15 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
   // A board that was full (frame id), and what a resize let go of.
   const [full, setFull] = useState<string | null>(null)
   const [left, setLeft] = useState<{ frameId: string; ids: string[] } | null>(null)
+  // A handle's drag held short by neighbours (owner BM7): said, so the handle never looks dead.
+  const [held, setHeld] = useState<{ frameId: string; ids: string[] } | null>(null)
   void tick
 
   useEffect(() => {
     const sized = canvas as Sized
     const offs = [
       boardNotices.subscribe((n) => setFull(n.frameId)),
-      sized.onBoardEvent?.((e) => (e.kind === 'full' ? setFull(e.board) : setLeft({ frameId: e.board, ids: e.ids }))) ?? (() => {}),
+      sized.onBoardEvent?.((e) => (e.kind === 'full' ? setFull(e.board) : e.kind === 'held' ? setHeld({ frameId: e.board, ids: e.ids }) : setLeft({ frameId: e.board, ids: e.ids }))) ?? (() => {}),
     ]
     return () => offs.forEach((off) => off())
   }, [canvas])
@@ -78,16 +84,20 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
     const t = setTimeout(() => setLeft(null), SAY_MS)
     return () => clearTimeout(t)
   }, [left])
+  useEffect(() => {
+    if (!held) return
+    const t = setTimeout(() => setHeld(null), SAY_MS)
+    return () => clearTimeout(t)
+  }, [held])
 
   useEffect(() => {
     const seeded = seedBoards(canvas, services.doc.get())
-    if (!seeded) return
-    canvas.transact((els) => seeded.apply(els), { undoable: false })
-    if (seeded.boards.length) {
-      void systemUpdate(services.doc, (d) => {
-        for (const b of seeded.boards) d.boards[b.id] = b
-      }, 'create the Ad template boards').catch((e) => console.warn('could not write the boards', e))
+    if (!seeded) {
+      // A canvas with no boards (a new project): open on its nodes, clear of the rail, never above 100%.
+      if (!canvas.elements().some(isBoard)) jumpTo(canvas, services.doc.get(), 'fit', false, keep.current)
+      return
     }
+    canvas.transact((els) => seeded.apply(els), { undoable: false })
     jumpTo(canvas, services.doc.get(), 'fit', false, keep.current)
   }, [canvas, services])
 
@@ -260,6 +270,24 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
     ;(canvas as Sized).fitBoard?.(frameId)
     refocus()
   }
+  // The one-time note (BA7): the first board this viewer selects says how boards place things now.
+  const [noteSeen] = useState(() => {
+    try {
+      return localStorage.getItem(NOTE_KEY) === '1'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    if (!sel || noteSeen) return
+    try {
+      localStorage.setItem(NOTE_KEY, '1')
+    } catch { /* private window: it shows again next time */ }
+  }, [sel, noteSeen])
+  const tidyNow = (frameId: string) => {
+    tidyBoard(canvas, doc, frameId)
+    refocus()
+  }
   const resizeFull = () => {
     if (full) canvas.select([full])
     setFull(null)
@@ -307,6 +335,8 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
         const at = beside ? { left: right.x + 8, top: Math.max(right.y, BAR_TOP - 16) } : { left: Math.min(Math.max(p.x, 120), viewW - 120), top: p.y - 6 }
         return (
           <div className={`toolbar selbar bd-bar ${beside ? 'beside' : ''}`} role="toolbar" aria-label="Board actions" style={at} onPointerDown={(e) => e.stopPropagation()}>
+            {!noteSeen && <span className="bd-tip" role="note">New pictures take the next free spot. Tidy lines up the rest.</span>}
+            <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Line what is on it up by what the board is for (one undo step)'} data-frame={sel.id} onClick={(e) => tidyNow(e.currentTarget.dataset.frame!)}>Tidy</button>
             <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Shrink or grow the board to what is on it'} data-frame={sel.id} onClick={(e) => fit(e.currentTarget.dataset.frame!)}>Fit to contents</button>
           </div>
         )
@@ -318,6 +348,22 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
             <span>Board is full</span>
             <span className="dot">·</span>
             <button type="button" className="btn xs ghost" onClick={resizeFull}>Resize</button>
+          </div>
+        )
+      })()}
+      {held && !resizing && (() => {
+        const f = frameById(held.frameId)
+        if (!f) return null
+        const by = held.ids.map((id) => canvas.elements().find((e) => e.id === id)).filter((e): e is CanvasElement => !!e)
+        const names = by.map((e) => (isBoard(e) ? (e as FrameEl).name || 'A board' : null))
+        if (!by.length) return null
+        const who = by.length === 1 ? names[0] ?? 'Something' : names.every((n) => n) ? names.join(' and ') : 'Things'
+        const p = toLocal({ x: f.x + f.width, y: f.y + f.height })
+        return (
+          <div className="bd-full bd-held" role="status" style={{ left: Math.max(p.x - 260, 220), top: Math.min(Math.max(p.y + 12, BAR_TOP), viewH - 110) }} onPointerDown={(e) => e.stopPropagation()}>
+            <span>{who} {by.length === 1 ? 'is' : 'are'} in the way</span>
+            <span className="dot">·</span>
+            <span>move {by.length > 1 ? 'them' : 'it'} to make room</span>
           </div>
         )
       })()}

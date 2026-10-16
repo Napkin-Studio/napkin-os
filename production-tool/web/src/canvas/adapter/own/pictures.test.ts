@@ -16,6 +16,8 @@ import { BOARD_GAP, BOARD_PAD } from '../../../../../canvas-engine/src'
 import { newId } from '../../../lib/ulid'
 import { boardNotices } from '../../boards/fitting'
 import { imageFiles, pictureRow, placePictures, PICTURE_W } from '../../nodes/pictures'
+import { cardOf, seedNodes } from '../../nodes/nodes'
+import type { ProductionDocument } from '../../../contracts/types'
 import { snapshotDoc } from '../../../test/jobFixtures'
 import { OwnAdapter } from './adapter'
 import { ownChrome } from './chrome'
@@ -73,13 +75,15 @@ describe('pictures on the own engine', () => {
     expect(frame(a, f.id).height).toBe(300)
   })
 
-  it('a board hemmed in below and to the right does not grow over its neighbours: what does not fit lands just outside, on no board, and it says so', async () => {
+  it('a board hemmed in on every side does not grow over its neighbours: what does not fit lands just outside, on no board, and it says so', async () => {
     const a = new OwnAdapter()
     a.resize(1200, 800, 0, 0)
     const f = characters(a, 700, 300)
     const below = a.board({ x: 0, y: 324, width: 1400, height: 300, title: 'Storyboard', boardId: newId('board'), purpose: 'storyboard' })
     const right = a.board({ x: 724, y: 0, width: 400, height: 300, title: 'Locations', boardId: newId('board'), purpose: 'location' })
-    a.transact((all) => [below, right, ...all], { undoable: false })
+    const above = a.board({ x: -400, y: -324, width: 1600, height: 300, title: 'Above', boardId: newId('board'), purpose: 'none' })
+    const left = a.board({ x: -424, y: 0, width: 400, height: 300, title: 'Left', boardId: newId('board'), purpose: 'none' })
+    a.transact((all) => [below, right, above, left, ...all], { undoable: false })
     const heard: string[] = []
     const off = boardNotices.subscribe((n) => heard.push(n.frameId))
     const els = await placePictures(a, snapshotDoc(), ['a', 'b', 'c'].map(png), { x: 100, y: 100 })
@@ -87,11 +91,47 @@ describe('pictures on the own engine', () => {
     expect(els.map((e) => e.frameId ?? null)).toEqual([f.id, f.id, null])
     expect([frame(a, f.id).width, frame(a, f.id).height]).toEqual([700, 300])
     const out = els[2]
-    for (const b of [f, below, right]) {
+    for (const b of [f, below, right, above, left]) {
       const r = frame(a, b.id)
       expect(out.x < r.x + r.width && r.x < out.x + out.width && out.y < r.y + r.height && r.y < out.y + out.height).toBe(false)
     }
     expect(heard).toEqual([f.id])
+  })
+
+  it('three pastes with no board under the middle of the view give three disjoint pictures, none over a board edge', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const v = a.visibleBounds()
+    const mid = { x: (v.minX + v.maxX) / 2, y: (v.minY + v.maxY) / 2 }
+    // A board just right of the middle: a centred paste would straddle its left edge.
+    const side = a.board({ x: mid.x + 60, y: mid.y - 200, width: 420, height: 400, title: 'Characters', boardId: newId('board'), purpose: 'character' })
+    a.transact((all) => [side, ...all], { undoable: false })
+    const doc = snapshotDoc()
+    const got = [
+      ...(await placePictures(a, doc, [png('p1')])),
+      ...(await placePictures(a, doc, [png('p2')])),
+      ...(await placePictures(a, doc, [png('p3')])),
+    ]
+    const ov = (p: { x: number; y: number; width: number; height: number }, q: typeof p) => p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height
+    for (let i = 0; i < 3; i++) {
+      expect(got[i].frameId ?? null).toBeNull()
+      expect(ov(got[i], side)).toBe(false)
+      for (let j = i + 1; j < 3; j++) expect(ov(got[i], got[j])).toBe(false)
+    }
+  })
+
+  it('a drop over a node moves clear of it; a drop on empty canvas stays where it was let go (2026-10-16)', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const doc = snapshotDoc()
+    a.transact((els) => [...els, ...seedNodes(a, doc.get() as unknown as ProductionDocument)], { undoable: false })
+    const cards = a.elements().filter((e) => cardOf(e))
+    const script = cards[0]
+    const onCard = await placePictures(a, doc, [png('on')], { x: script.x + script.width / 2, y: script.y + script.height / 2 })
+    const box = onCard[0]
+    for (const c of cards) expect(box.x < c.x + c.width && c.x < box.x + box.width && box.y < c.y + c.height && c.y < box.y + box.height).toBe(false)
+    const far = await placePictures(a, doc, [png('far')], { x: 5000, y: 5000 })
+    expect(Math.abs(far[0].x + far[0].width / 2 - 5000)).toBeLessThan(2)
   })
 
   it('keeps only image files, and lays a row out centred', () => {

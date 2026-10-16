@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useRouter, useServices, useShowMock, useUi } from '../app/context'
 import { scriptRoute } from '../app/route'
 import { BoardRail, CanvasToolbar, ZoomPill, type NewNode } from '../canvas/chrome/CanvasChrome'
-import { boardFrames, boardRows, type BoardRow } from '../canvas/chrome/boards'
+import { boardFrames, boardRows, type BoardRow, type RailNode } from '../canvas/chrome/boards'
 import { BoardsLayer } from '../canvas/chrome/BoardsLayer'
 import { PRODUCTION_CARD_CHROME } from '../canvas/chrome/cardChrome'
 import { cardOf, linkIdOf } from '../canvas/nodes/nodes'
@@ -23,7 +23,9 @@ import { setStacked } from '../canvas/nodes/stack'
 import { busyQuestion, type CardKind, type SelInfo } from '../canvas/selbar/selbar'
 import { runningOn } from '../canvas/sync'
 import { CardChromeContext } from '../canvas/nodes/cardChrome'
-import { boardKey, boardsByRank, isBoard, jumpTo } from '../canvas/boards/boards'
+import { boardIdOf, boardKey, bringIntoView, isBoard, jumpTo, railNodes, railTargets } from '../canvas/boards/boards'
+import { gatherOffer, type GatherOffer } from '../canvas/boards/arrange'
+import { gatherIntoBoard, moveIntoBoard } from '../canvas/boards/gather'
 import type { CanvasChrome } from '../canvas/chrome/controls'
 import { canvasActions } from '../canvas/chrome/actions'
 import { drivers, type MakeVideoFrom } from '../canvas/nodes/make'
@@ -446,6 +448,27 @@ export function Character({ initial, active, onPictureEditor }: {
   const own = canvas?.engine === 'own'
   // The rail's left edge: what a jump keeps clear (the rail covers the left 240px; none when narrow).
   const railInset = narrow || panels.assets ? 0 : 240
+  // New results land in view right of the rail (board-autolayout).
+  useEffect(() => { ctrl?.setInset(railInset) }, [ctrl, railInset])
+  // A picture named on no board goes to its role's board: "Moved to Characters · Undo" (board-autolayout).
+  useEffect(() => ctrl?.onRouted((r) => {
+    const e = canvas?.elements().find((x) => x.id === r.ids[0])
+    offerUndo({ label: `Moved to ${r.title}`, at: e ? { x: e.x, y: e.y } : undefined, undo: () => ctrl.unroute(r) })
+  }), [ctrl, canvas, offerUndo])
+  // The Gather nudge and Move to <Board> on the pictures' bar (board-autolayout; BA2 = c, BA3).
+  const gather = useMemo(() => (own && canvas && selected.length ? gatherOffer(els, doc, selected.map((e) => e.id)) : null), [own, canvas, selected, els, doc])
+  const onGather = useCallback(async (o: GatherOffer) => {
+    if (!canvas) return
+    try {
+      const frameId = o.existing && moveIntoBoard(canvas, docStore.get(), o) ? o.existing : await gatherIntoBoard(canvas, docStore, o)
+      // The board and the pictures in view, right of the rail; the next ⌘Z is the canvas's (it takes this back).
+      const f = canvas.elements().find((e) => e.id === frameId)
+      if (f) bringIntoView(canvas, { minX: f.x, minY: f.y, maxX: f.x + f.width, maxY: f.y + f.height }, railInset, !matchMedia('(prefers-reduced-motion: reduce)').matches)
+      ;(canvas as unknown as { focusCanvas?: (() => void) | null }).focusCanvas?.()
+    } catch (e) {
+      console.warn('the board was not made', e)
+    }
+  }, [canvas, docStore, railInset])
   // The board rail and + Node (ui-behaviour 3.2, 3.3): a reference board fits the canvas to its
   // pictures; Script, Storyboard and Video open their editors over the canvas.
   const counts = useMemo(() => {
@@ -458,7 +481,9 @@ export function Character({ initial, active, onPictureEditor }: {
     }
     return n
   }, [els, own])
-  const rows = useMemo(() => boardRows(doc, own, counts), [doc, own, counts])
+  // The rail lists the loose nodes first (Script, Storyboard, Video), then the boards (board-autolayout).
+  const rail = useMemo((): RailNode[] => (own ? railNodes(els, doc).map((n) => ({ card: n.card, elId: n.el.id })) : []), [els, doc, own])
+  const rows = useMemo(() => boardRows(doc, own, counts, rail), [doc, own, counts, rail])
   const open = useCallback((editor: 'script' | 'storyboard' | 'video', id?: string) => {
     if (editor === 'script') {
       const sc = id ?? mainScript(docStore.get())?.id
@@ -474,10 +499,11 @@ export function Character({ initial, active, onPictureEditor }: {
     setBoard(row.id)
     if (row.target.kind === 'open') return open(row.target.editor)
     if (!canvas) return
-    if (own && row.target.kind === 'board') {
-      const id = row.target.id
-      jumpTo(canvas, docStore.get(), boardsByRank(docStore.get()).findIndex((b) => b.id === id), !matchMedia('(prefers-reduced-motion: reduce)').matches, railInset)
-      canvas.setCurrentBoard?.(id)
+    if (own && (row.target.kind === 'board' || row.target.kind === 'node')) {
+      const t = row.target
+      const el = t.kind === 'node' ? t.id : canvas.elements().find((e) => boardIdOf(e) === t.id)?.id
+      if (el) jumpTo(canvas, docStore.get(), { el }, !matchMedia('(prefers-reduced-motion: reduce)').matches, railInset)
+      canvas.setCurrentBoard?.(t.kind === 'board' ? t.id : null)
       return
     }
     const want = row.target.kind === 'refs' ? new Set(row.target.nodes) : new Set<string>()
@@ -493,9 +519,9 @@ export function Character({ initial, active, onPictureEditor }: {
     const onKey = (e: KeyboardEvent) => {
       const k = boardKey(e)
       if (k === null) return
-      const b = k === 'fit' ? null : boardsByRank(docStore.get())[k]
-      setBoard(b?.id ?? null)
-      canvas.setCurrentBoard?.(b?.id ?? null)
+      const t = k === 'fit' ? null : railTargets(canvas.elements(), docStore.get())[k]
+      setBoard(t ? (t.kind === 'board' ? t.board.id : t.el.id) : null)
+      canvas.setCurrentBoard?.(t?.kind === 'board' ? t.board.id : null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -592,7 +618,7 @@ export function Character({ initial, active, onPictureEditor }: {
             )
           })()}
           {ctrl && selected.length > 0 && !ownSel && !confirming && !placing && (
-            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing}
+            <FloatingToolbar ctrl={ctrl} selected={selected} toView={toView} onDelete={requestDelete} limits={limits} onEdit={setEditing} gather={gather} onGather={onGather}
               onGroup={ownEdit?.group && selected.length > 1 ? () => { ownEdit.group?.() } : undefined}
               onPlace={(ids, text, more, modelChoice) => { setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
           )}
@@ -779,10 +805,13 @@ function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
 
 type Popover = null | 'generate' | 'name'
 
-export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit }: {
+export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, onGroup, onEdit, gather, onGather }: {
   ctrl: CanvasController
   /** Open the one selected picture in the Image editor (edit-canvas-pictures). */
   onEdit: (nodeId: string) => void
+  /** Gather into a <Role> board, or Move to <Board> (board-autolayout), when the selection fits one. */
+  gather?: GatherOffer | null
+  onGather?: (o: GatherOffer) => void | Promise<void>
   selected: El[]
   toView: (p: Pt) => Pt
   onDelete: (sel: El[]) => void
@@ -890,6 +919,10 @@ export function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, lim
     const views = viewsOnCanvas(doc, ctrl.liveElements())
     const items = pictures.map((a) => mediaItem(doc, project, a, undefined, views)).filter((m): m is MediaItem => !!m)
     if (items.length) groups.push(<DownloadButton key="dl" items={items} className="btn sm ghost" iconOnly={items.length === 1} />)
+  }
+  if (gather && onGather) {
+    groups.push(<button key="gather" className="btn sm" title={gather.existing ? `Put ${gather.ids.length === 1 ? 'it' : 'them'} on the ${gather.title} board` : `Make a ${gather.title} board round these and put them in it`}
+      onClick={() => void onGather(gather)}>{gather.existing ? `Move to ${gather.title}` : `Gather into a ${gather.title} board`}</button>)
   }
   if (onGroup) groups.push(<button key="group" className="btn sm ghost" title="Group (Ctrl+G)" onClick={onGroup}>Group</button>)
   if (ctrl.deletable(meaningful).length) {

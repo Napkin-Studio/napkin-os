@@ -21,6 +21,8 @@ import { assetRef } from '../jobs/assets'
 import { namedInput } from '../jobs/select'
 import { landingWhy } from '../jobs/landing'
 import { boardFrame, fitInto, holdFields, tellFull, withFields } from './boards/fitting'
+import { bringIntoView } from './boards/boards'
+import { boardForRole, placeOnBoard, roleOfElement } from './boards/arrange'
 import { applySketchFrame } from '../jobs/handlers'
 import { LOCAL_PERSON } from '../jobs/runner'
 import { purposeOf } from '../model/purpose'
@@ -60,6 +62,14 @@ export interface GeneratePreview {
 export type GenerateResult = { jobId: string } | { ask: Ask }
 
 const ONE_AREA = 'Pick one sketch area for one Generate.'
+
+/** A named picture moved to its role's board: what moved, where, and how to put it back. */
+export interface Routed {
+  ids: string[]
+  frameId: string
+  title: string
+  before: Map<string, Partial<El>>
+}
 
 export class CanvasController {
   private readonly canvas: CanvasAdapter
@@ -606,7 +616,7 @@ export class CanvasController {
     if (!img?.asset) throw new Error('Name a picture once it is finished.')
     const asset = img.asset
     const name = `${key}_${variant}`
-    systemUpdate(this.s.doc, (d) => {
+    const write = (d: ProductionDocument) => {
       const now = new Date().toISOString()
       const refs = Object.values(d.refs)
       const mine = refs.find((r) => r.node === nodeId)
@@ -629,7 +639,58 @@ export class CanvasController {
         d.refs[id] = { id, v: 1, field_v: {}, key, variant, role: k.role, asset, node: nodeId, named_at: now }
       }
       dropUnusedKeys(d)
-    }, 'name')
+    }
+    // To its role's board first, with the document as the name will leave it, so the key-group reaction
+    // finds the view already in its row (and the move is this person's own undo step).
+    const after = structuredClone(this.doc())
+    write(after)
+    this.routeNamed([nodeId], after)
+    void systemUpdate(this.s.doc, (d) => write(d as unknown as ProductionDocument), 'name')
+  }
+
+  private readonly routedCbs = new Set<(r: Routed) => void>()
+
+  /** Hear when a named picture went to its role's board (the stage says "Moved to Characters · Undo"). */
+  onRouted(cb: (r: Routed) => void): () => void {
+    this.routedCbs.add(cb)
+    return () => void this.routedCbs.delete(cb)
+  }
+
+  /**
+   * After naming or a role (board-autolayout): each of these pictures (node ids) that sits on no board
+   * goes to the first board (by rank) for its role, in its key's row, as its own undoable canvas step
+   * (the name stays). With no such board it stays loose; one already on a board stays (BA3). Only the
+   * client that named it moves it (this runs from the local action, never from a remote change).
+   */
+  routeNamed(nodeIds: readonly string[], doc: ProductionDocument = this.doc()): Routed | null {
+    if (this.canvas.engine !== 'own') return null
+    const els = this.els()
+    const loose = nodeIds.map((n) => this.nodeEl(n)).filter((e): e is El => !!e && !e.isDeleted && !(e.frameId && boardFrame(els, e.frameId)))
+    if (!loose.length) return null
+    const role = roleOfElement(doc, loose[0])
+    const board = boardForRole(els, doc, role)
+    if (!board) return null
+    const ids = loose.filter((e) => boardForRole(els, doc, roleOfElement(doc, e))?.id === board.id).map((e) => e.id)
+    const before = new Map<string, Partial<El>>()
+    let fit: ReturnType<typeof placeOnBoard> | null = null
+    this.canvas.transact((all) => {
+      fit = placeOnBoard(all, doc, board.id, ids)
+      for (const id of fit.fields.keys()) {
+        const e = all.find((x) => x.id === id)
+        if (e) before.set(id, id === board.id ? { x: e.x, y: e.y, width: e.width, height: e.height } : { x: e.x, y: e.y, frameId: e.frameId ?? null })
+      }
+      return withFields(this.canvas, all, fit.fields)
+    }, { undoable: true })
+    if (fit) tellFull(board.id, fit)
+    const title = (board as El & { name?: string }).name || 'the board'
+    const r: Routed = { ids, frameId: board.id, title, before }
+    for (const cb of this.routedCbs) cb(r)
+    return r
+  }
+
+  /** Take a routing back (its Undo chip): the pictures and the board where they were. */
+  unroute(r: Routed) {
+    this.canvas.transact((all) => withFields(this.canvas, all, r.before), { undoable: true })
   }
 
   /** Take the name off a node. The key goes too when nothing else uses it and it was never published. */
@@ -642,11 +703,15 @@ export class CanvasController {
 
   /** A key's role, and its refs' with it. */
   setRole(key: Key, role: RefRole) {
-    systemUpdate(this.s.doc, (d) => {
+    const write = (d: ProductionDocument) => {
       const k = keyNamed(d, key)
       if (k) k.role = role
       for (const r of Object.values(d.refs)) if (r.key === key) r.role = role
-    }, 'name')
+    }
+    const after = structuredClone(this.doc())
+    write(after)
+    this.routeNamed(Object.values(after.refs).filter((r) => r.key === key && r.node).map((r) => r.node!), after)
+    void systemUpdate(this.s.doc, (d) => write(d as unknown as ProductionDocument), 'name')
   }
 
   // ── views: any named image is a key's front; the others are generated from it ──
@@ -671,19 +736,21 @@ export class CanvasController {
     // A row to the right of the front, clear of anything already there.
     const slot = nextSlot(els, anchor, { w: size.w * views.length + 40 * (views.length - 1), h: size.h })
     const placed: { jobId: string; view: View }[] = []
+    let prev: El | undefined
     let x = slot.x
     for (const view of views) {
       const jobId = newId('job')
       const parents = front.node ? [front.node] : []
       let gen = makeGenPlaceholder(this.canvas, jobId, 'view', parents, { x, y: slot.y }, size, view)
       x += size.w + 40
-      let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, { x: gen.x, y: gen.y })
+      let all = this.onSourceBoard([...this.els(), gen], gen, frontEl, prev)
       gen = all.find((e) => e.id === gen.id) ?? gen
       if (frontEl && front.node) {
         const arrow = makeArrow(this.canvas, frontEl, gen, front.node, jobId, 0, true)
         all = this.canvas.bindArrow([...all, arrow], arrow)
       }
       this.setEls(all)
+      prev = all.find((e) => e.id === gen.id)
       placed.push({ jobId, view })
     }
     this.reveal([...placed.map((p) => p.jobId), ...(frontEl ? [frontEl.id] : [])])
@@ -771,7 +838,7 @@ export class CanvasController {
 
   private placeGen(jobId: string, op: 'generate' | 'view', parentIds: string[], sources: { el: El; id: string }[], at: { x: number; y: number; w: number; h: number }, view?: View) {
     let gen = makeGenPlaceholder(this.canvas, jobId, op, parentIds, at, { w: at.w, h: at.h }, view)
-    let els = this.onSourceBoard([...this.els(), gen], gen, sources[0]?.el, at)
+    let els = this.onSourceBoard([...this.els(), gen], gen, sources[0]?.el)
     gen = els.find((e) => e.id === gen.id) ?? gen
     sources.forEach((s, i) => {
       const arrow = makeArrow(this.canvas, s.el, gen, s.id, jobId, i)
@@ -786,20 +853,37 @@ export class CanvasController {
    * beside the source when that is clear (the board growing toward it), else the board's next free slot,
    * or just outside a board that cannot grow. `els` already holds `gen`; returns them with it placed.
    */
-  private onSourceBoard(els: El[], gen: El, source: El | undefined, at: { x: number; y: number }): El[] {
+  private onSourceBoard(els: El[], gen: El, source: El | undefined, after?: El): El[] {
     const frameId = source?.frameId
     if (!frameId || !boardFrame(els, frameId)) return els
-    const fit = fitInto(els, frameId, [[gen.id]], () => at)
+    // The next free slot after what it follows (the source, or the view made before it), in that row;
+    // wrapping below the row from the source's left (owner BA1, BA4). Nothing already there moves.
+    const box = (e: El) => ({ x: e.x, y: e.y, w: e.width, h: e.height })
+    const fit = fitInto(els, frameId, [[gen.id]], undefined, () => ({ after: box(after ?? source), rowStart: source.x }))
     tellFull(frameId, fit)
     return withFields(this.canvas, els, fit.fields)
   }
 
-  /** Make sure new results land in view: zoom out to them and their inputs when any part is off-screen. */
+  /** Screen pixels on the left the chrome covers (the board rail): reveal keeps new results right of it. */
+  private inset = 0
+
+  setInset(px: number) {
+    this.inset = px
+  }
+
+  /**
+   * Make sure new results land in view with their inputs. On our own engine: the smallest pan (a zoom out
+   * only when they don't fit), right of the rail. Elsewhere: zoom out to them when any part is off-screen.
+   */
   reveal(ids: string[]) {
     const els = alive(this.els()).filter((e) => ids.includes(e.id))
     if (!els.length) return
-    const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     const b = bounds(els)
+    if (this.canvas.engine === 'own') {
+      bringIntoView(this.canvas, b, this.inset, !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches))
+      return
+    }
+    const { minX: vx0, minY: vy0, maxX: vx1, maxY: vy1 } = this.canvas.visibleBounds()
     if (b.minX >= vx0 && b.minY >= vy0 && b.maxX <= vx1 && b.maxY <= vy1) return
     this.canvas.fit(els, { zoomFactor: 0.85, animate: true })
   }

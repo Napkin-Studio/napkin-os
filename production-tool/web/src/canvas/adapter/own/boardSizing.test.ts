@@ -38,13 +38,72 @@ describe('board sizing on the own engine', () => {
     ;(ctrl as unknown as { placeGen: (...args: unknown[]) => void }).placeGen('job_1', 'generate', [(src.customData as { id: string }).id], [{ el: src, id: (src.customData as { id: string }).id }], at)
     const gen = a.elements().find((e) => e.id === 'job_1')!
     expect(gen.frameId).toBe(board.id)
-    expect([gen.x, gen.y]).toEqual([at.x, at.y])
+    // Right after its source in its row, a gap apart (the next free slot: BA1).
+    expect([gen.x, gen.y]).toEqual([16 + 200 + 40, 22])
     const f = frame()
-    expect(f.x + f.width).toBe(at.x + at.w + 16)
+    expect(f.x + f.width).toBe(gen.x + at.w + 16)
     expect(f.height).toBe(300)
     // The provenance arrow stays bound to both ends.
     const arrow = a.elements().find((e) => (e.customData as { kind?: string } | undefined)?.kind === 'provenance') as Box & { startBinding?: { elementId: string }; endBinding?: { elementId: string } }
     expect([arrow.startBinding?.elementId, arrow.endBinding?.elementId]).toEqual([src.id, gen.id])
+  })
+
+  it('a generated picture whose source fills a hemmed-in board (Ad template Characters) lands on that board, growing it up; never above it, outside', () => {
+    const { a, board, pic, frame } = setup()
+    // The source fills the board; Script to the left, Locations to the right, Storyboard below, each 48 away.
+    const src = pic(16, 22, { width: 368, height: 244 })
+    const script = a.board({ x: -388, y: 0, width: 340, height: 440, title: 'Script', boardId: newId('board'), purpose: 'script' })
+    const locs = a.board({ x: 448, y: 0, width: 420, height: 300, title: 'Locations', boardId: newId('board'), purpose: 'location' })
+    const story = a.board({ x: -388, y: 488, width: 1300, height: 236, title: 'Storyboard', boardId: newId('board'), purpose: 'storyboard' })
+    a.transact(() => [board, script, locs, story, src], { undoable: false })
+    const services = { doc: snapshotDoc(), runner: {}, relay: {}, project: { canvasKey: 'k' }, ui: { get: () => ({ me: { participantId: 'p_1' } }) } } as unknown as Services
+    const ctrl = new CanvasController(a, services)
+    const id = (src.customData as { id: string }).id
+    const at = { x: 16 + 368 + 80, y: 22, w: 200, h: 250 }
+    ;(ctrl as unknown as { placeGen: (...args: unknown[]) => void }).placeGen('job_1', 'generate', [id], [{ el: src, id }], at)
+    const gen = a.elements().find((e) => e.id === 'job_1')!
+    const f = frame()
+    expect(gen.frameId).toBe(board.id)
+    expect(gen.x >= f.x && gen.y >= f.y && gen.x + gen.width <= f.x + f.width && gen.y + gen.height <= f.y + f.height).toBe(true)
+    // Up: the bottom, left and width stay; the source does not move; no neighbour is covered.
+    expect([f.x, f.width, f.y + f.height]).toEqual([0, 400, 300])
+    expect(f.y).toBeLessThan(0)
+    expect(gen.y + gen.height).toBeLessThanOrEqual(22)
+    expect([a.elements().find((e) => e.id === src.id)!.x, a.elements().find((e) => e.id === src.id)!.y]).toEqual([16, 22])
+    for (const n of [script, locs, story]) expect(overlap(f, n)).toBe(false)
+  })
+
+  it('a key\'s other views land in its row after the front, wrapping below it before the board gets too wide; nothing there moves', () => {
+    const { a, board, pic, frame } = setup()
+    const src = pic(16, 22, { width: 300, height: 375 })
+    const loc = a.board({ x: 0, y: 1400, width: 2400, height: 300, title: 'Locations', boardId: newId('board'), purpose: 'location' })
+    a.transact(() => [board, src, loc], { undoable: false })
+    const services = { doc: snapshotDoc(), runner: {}, relay: {}, project: { canvasKey: 'k' }, ui: { get: () => ({ me: { participantId: 'p_1' } }) } } as unknown as Services
+    const ctrl = new CanvasController(a, services) as unknown as { onSourceBoard: (els: unknown[], gen: unknown, source: unknown, after?: unknown) => typeof els }
+    let prev: ReturnType<OwnAdapter['elements']>[number] | undefined
+    const views: string[] = []
+    for (let i = 0; i < 6; i++) {
+      const gen = a.patch(a.imageNode({ x: 0, y: 0, width: 300, height: 375, assetSha: null, status: 'saved', customData: { kind: 'gen', id: `job_${i}` } }), {})
+      const all = ctrl.onSourceBoard([...a.elements(), gen], gen, src, prev) as ReturnType<OwnAdapter['elements']>
+      a.transact(() => all, { undoable: false })
+      prev = a.elements().find((e) => e.id === gen.id)
+      views.push(gen.id)
+    }
+    const f = frame()
+    const placed = views.map((id) => a.elements().find((e) => e.id === id)!)
+    expect(f.width).toBeLessThanOrEqual(1400)
+    for (const v of placed) {
+      expect(v.frameId).toBe(board.id)
+      expect(overlap(v, a.elements().find((e) => e.id === src.id)!)).toBe(false)
+    }
+    // The first goes right after the front; the row wraps back to the front's left.
+    expect([placed[0].x, placed[0].y]).toEqual([16 + 300 + 40, 22])
+    const rows = [...new Set(placed.map((v) => v.y))]
+    expect(rows.length).toBeGreaterThan(1)
+    expect(Math.min(...placed.filter((v) => v.y === rows[1]).map((v) => v.x))).toBe(16)
+    const s = a.elements().find((e) => e.id === src.id)!
+    expect([s.x, s.y]).toEqual([16, 22])
+    for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) expect(overlap(placed[i], placed[j])).toBe(false)
   })
 
   it('a selected board resizes from its handle as one step; what the edge passed leaves, is said, and Undo brings it back', () => {

@@ -9,6 +9,8 @@ import { keysList, refsList, shotsOf } from '../../model/selectors'
 
 export type BoardTarget =
   | { kind: 'board'; id: string }
+  /** A node on the canvas that no board holds (own engine): its element id. */
+  | { kind: 'node'; id: string }
   | { kind: 'refs'; nodes: string[] }
   | { kind: 'open'; editor: 'script' | 'storyboard' | 'video' }
 
@@ -35,19 +37,31 @@ const TEMPLATE: { id: string; title: string; purpose: BoardPurpose; roles?: RefR
 const OWN: RefRole[] = ['character', 'location', 'product']
 const PICTURE_BOARDS: BoardPurpose[] = ['character', 'location', 'reference', 'product']
 
+/** A node the rail lists (own engine): its kind and its element; see boards/boards.ts railNodes. */
+export interface RailNode {
+  card: 'script' | 'storyboard' | 'video'
+  elId: string
+}
+const NODE_TITLE: Record<RailNode['card'], string> = { script: 'Script', storyboard: 'Storyboard', video: 'Video' }
+
 /**
  * The rail's rows. `frames`: the canvas has the boards as real frames (our own engine, art-boards),
- * so the rows are doc.boards by rank, each counting what sits in its frame (`counts`, by board id).
- * Otherwise (Excalidraw) the Ad template's rows, whatever doc.boards holds.
+ * so the rows are the loose nodes (`nodes`: Script, Storyboard, Video, those no board holds) and
+ * then doc.boards by rank, each board counting what sits in its frame (`counts`, by board id). A new
+ * project has no boards: its rows are its nodes. Otherwise (Excalidraw) the Ad template's rows,
+ * whatever doc.boards holds.
  */
-export function boardRows(doc: ProductionDocument, frames = false, counts: Record<string, number> = {}): BoardRow[] {
+export function boardRows(doc: ProductionDocument, frames = false, counts: Record<string, number> = {}, nodes: readonly RailNode[] = []): BoardRow[] {
   const boards = Object.values(doc.boards ?? {}).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
-  if (frames && boards.length) {
+  if (frames) {
     const shots = shotsOf(doc).length
-    return boards.map((b) => {
-      const count = b.purpose === 'storyboard' ? shots : PICTURE_BOARDS.includes(b.purpose) ? counts[b.id] ?? 0 : 0
-      return { id: b.id, title: b.title, purpose: b.purpose, count: count || undefined, target: { kind: 'board', id: b.id } }
-    })
+    return [
+      ...nodes.map((n): BoardRow => ({ id: n.elId, title: NODE_TITLE[n.card], purpose: n.card, count: (n.card === 'storyboard' && shots) || undefined, target: { kind: 'node', id: n.elId } })),
+      ...boards.map((b): BoardRow => {
+        const count = b.purpose === 'storyboard' ? shots : PICTURE_BOARDS.includes(b.purpose) ? counts[b.id] ?? 0 : 0
+        return { id: b.id, title: b.title, purpose: b.purpose, count: count || undefined, target: { kind: 'board', id: b.id } }
+      }),
+    ]
   }
   const roleOf = new Map(keysList(doc).map((k) => [k.key, k.role]))
   const refs = refsList(doc)
