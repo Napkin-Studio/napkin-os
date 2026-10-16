@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  boundEnds, elementFromRecord, hitNodeOrLink, hitTitle, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, TextTool, TEXT_FONT, approxMeasure, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame, type Measure, type TextLook, type TextSession, boardGrabAt,
+  boundEnds, elementFromRecord, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, TextTool, TEXT_FONT, approxMeasure, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame, type Measure, type TextLook, type TextSession, boardGrabAt,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
