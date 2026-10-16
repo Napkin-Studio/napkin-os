@@ -15,7 +15,7 @@ describe('barFor (3.9)', () => {
     expect(ids({ cards: ['script'] })).toEqual(['open', 'plan-shots', 'make-video'])
     expect(ids({ cards: ['storyboard'] })).toEqual(['open', 'make-clips', 'make-video'])
     expect(ids({ cards: ['video'] })).toEqual(['open', 'render-ad', 'make-sizes'])
-    expect(ids({ group: { ink: true } })).toEqual(['convert', 'ungroup', 'move-to-board', 'delete'])
+    expect(ids({ group: { ink: true } })).toEqual(['generate', 'convert', 'ungroup', 'move-to-board', 'delete'])
     expect(ids({ group: { ink: false } })).toEqual(['ungroup', 'move-to-board', 'delete'])
     expect(ids({ cards: ['video'], units: 3 })).toEqual(['group', 'move-to-board', 'delete'])
     expect(ids({ links: 1 })).toEqual(['delete'])
@@ -33,7 +33,10 @@ describe('barFor (3.9)', () => {
     const rows: Partial<SelInfo>[] = [{ cards: ['script', 'storyboard'], units: 2 }, { cards: ['video'] }, { group: { ink: true } }, { units: 3 }]
     for (const r of rows) expect(barFor(sel(r)).filter((a) => a.primary).length).toBeLessThanOrEqual(1)
     expect(barFor(sel({ cards: ['script', 'storyboard'], units: 2 }))[0]).toMatchObject({ id: 'make-video', primary: true })
-    expect(barFor(sel({ group: { ink: true } }))[0].off).toMatch(/Ellis/)
+    expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'convert')!.off).toMatch(/Ellis/)
+    // An ink group generates without Ungroup first (container-select owner answer).
+    expect(barFor(sel({ group: { ink: true } }))[0]).toMatchObject({ id: 'generate', primary: true })
+    expect(barFor(sel({ group: { ink: true } }))[0].off).toBeUndefined()
     expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'ungroup')!.off).toBeUndefined()
   })
 

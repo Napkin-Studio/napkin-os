@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  boundEnds, elementFromRecord, hitBoardTitle, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
+  boundEnds, elementFromRecord, hitNodeOrLink, hitTitle, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -59,6 +59,9 @@ export interface OwnOptions {
 type OwnEl = CanvasElement & { assetSha?: string | null; startBinding?: { elementId: string }; endBinding?: { elementId: string } }
 
 const CAPS_NONE: InputCapabilities = { coalesced: false, predicted: false, tilt: false, pressure: false }
+/** The entered container's inside outline (container-select): the selection blue, lightened on the dark canvas. */
+const SCOPE_LIGHT = '#2F64F5'
+const SCOPE_DARK = '#8EA6FF'
 
 function defaultRaster(w: number, h: number): Raster {
   if (typeof OffscreenCanvas !== 'undefined') {
@@ -620,6 +623,17 @@ export class OwnAdapter implements CanvasAdapter {
     return done
   }
 
+  /** The container a click would take whole, outlined faintly under the pointer (container-select). */
+  private hover: { x: number; y: number; w: number; h: number } | null = null
+
+  /** Point the hover outline at a scene point (null: the pointer left). True when it changed, so the caller redraws. */
+  hoverAt(p: Pt | null): boolean {
+    const next = p && !this.sketching() && !this.pointersDown ? this.selector.hoverBox(p) : null
+    const same = next === this.hover || (!!next && !!this.hover && next.x === this.hover.x && next.y === this.hover.y && next.w === this.hover.w && next.h === this.hover.h)
+    this.hover = next
+    return !same
+  }
+
   /** The selected board's handle under a scene point (the cursor shows it), or null. */
   boardHandleAt(p: Pt): Edge | null {
     return this.sketching() ? null : this.selector.boardHandleAt(p, this.vp.zoom)
@@ -628,9 +642,11 @@ export class OwnAdapter implements CanvasAdapter {
   /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
     // Node cards sit above the canvas, and a link is hit along its line (canvas-nodes).
-    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitBoardTitle(this.scene, { x, y }, this.vp.zoom)
+    // A board's title, or a Drawing's label, takes it (container-select).
+    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitTitle(this.scene, { x, y }, this.vp.zoom)
     if (top) return top
-    if (this.renderer) return this.renderer.hit(x, y)
+    // Lines (strokes, unfilled shapes) count only near their line, with a reach in screen pixels.
+    if (this.renderer) return this.renderer.hit(x, y, this.vp.zoom)
     return this.scene.all()
       .filter((r) => r.kind !== 'board' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
@@ -746,6 +762,10 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.scaling = this.selector.scaling
       this.renderer.resizing = this.selector.resizing
       this.renderer.frame = this.selectionFrame()
+      // The entered Drawing, sketch area or group: a dashed inside outline, readable on either theme.
+      this.renderer.scope = this.selector.scopeBox()
+      this.renderer.hover = this.hover
+      this.renderer.scopeColour = this.theme === 'dark' ? SCOPE_DARK : SCOPE_LIGHT
       this.surfaceNow()
       this.renderer.inkPalette = this.surface?.s.ink ?? LIGHT_INK
       this.renderer.boardLook = this.surface?.s.board ?? null
