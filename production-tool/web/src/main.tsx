@@ -90,6 +90,8 @@ async function boot() {
   if (import.meta.env.DEV) {
     (window as unknown as { __shell: Shell }).__shell = shell
     Object.defineProperty(window, '__pt', { get: () => shell.get().session?.services, configurable: true })
+    // The e2e harness's seed helpers (production-tool/web/e2e/README.md).
+    void import('./dev/seed').then((m) => m.installSeed(shell))
   }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

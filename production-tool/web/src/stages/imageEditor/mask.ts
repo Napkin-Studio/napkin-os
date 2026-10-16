@@ -10,6 +10,9 @@ export type AlphaOf = (cutoutId: string, w: number, h: number) => Uint8Array | u
 function brush(m: Uint8Array, w: number, h: number, op: Extract<MaskOp, { t: 'brush' }>) {
   const r = Math.max(0.5, op.r * w)
   const inner = r * (1 - Math.min(1, Math.max(0, op.soft)))
+  // Squared distances: the square root only for the pixels in the soft band.
+  const r2 = r * r, inner2 = inner * inner, band = r - inner
+  const add = op.mode === 'add'
   const pts = op.pts.map((p) => ({ x: p.x * w, y: p.y * h }))
   if (pts.length === 1) pts.push(pts[0])
   for (let i = 1; i < pts.length; i++) {
@@ -19,14 +22,17 @@ function brush(m: Uint8Array, w: number, h: number, op: Extract<MaskOp, { t: 'br
     const dx = b.x - a.x, dy = b.y - a.y
     const len2 = dx * dx + dy * dy
     for (let y = y0; y <= y1; y++) {
+      const py = y + 0.5
+      const row = y * w
       for (let x = x0; x <= x1; x++) {
-        const px = x + 0.5, py = y + 0.5
+        const px = x + 0.5
         const t = len2 ? Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2)) : 0
-        const d = Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy))
-        if (d >= r) continue
-        const v = d <= inner ? 1 : (r - d) / (r - inner)
-        const i = y * w + x
-        m[i] = op.mode === 'add' ? Math.max(m[i], Math.round(v * 255)) : Math.min(m[i], Math.round((1 - v) * 255))
+        const ex = px - (a.x + t * dx), ey = py - (a.y + t * dy)
+        const d2 = ex * ex + ey * ey
+        if (d2 >= r2) continue
+        const v = d2 <= inner2 ? 255 : Math.round(((r - Math.sqrt(d2)) / band) * 255)
+        const i = row + x
+        if (add) { if (v > m[i]) m[i] = v } else if (255 - v < m[i]) m[i] = 255 - v
       }
     }
   }
@@ -89,24 +95,119 @@ export function shrink(bits: Uint8Array, w: number, h: number, side = 256): { w:
   return { w: sw, h: sh, data }
 }
 
-/** The mask's steps drawn at w x h. */
-export function rasterize(ops: readonly MaskOp[], w: number, h: number, alphaOf?: AlphaOf): Uint8Array {
-  const m = new Uint8Array(w * h)
-  for (const op of ops) {
-    if (op.t === 'brush') brush(m, w, h, op)
-    else if (op.t === 'lasso') lasso(m, w, h, op.mode, op.pts)
-    else if (op.t === 'pick') {
+/** One step drawn into `m` (w x h), in place. rasterize is the fold of these over a mask's steps. */
+export function applyOp(m: Uint8Array, w: number, h: number, op: MaskOp, alphaOf?: AlphaOf): void {
+  switch (op.t) {
+    case 'brush': brush(m, w, h, op); return
+    case 'lasso': lasso(m, w, h, op.mode, op.pts); return
+    case 'pick': {
       const src = unrle(op.rle, op.w * op.h)
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         if (!src[Math.min(op.h - 1, Math.floor(((y + 0.5) * op.h) / h)) * op.w + Math.min(op.w - 1, Math.floor(((x + 0.5) * op.w) / w))]) continue
         m[y * w + x] = op.mode === 'add' ? 255 : 0
       }
-    } else if (op.t === 'snap') {
+      return
+    }
+    case 'snap': {
       const a = alphaOf?.(op.cutout, w, h)
       if (a) for (let i = 0; i < m.length; i++) m[i] = Math.min(m[i], a[i])
+      return
+    }
+    default: {
+      const never: never = op
+      throw new Error(`unknown mask step ${JSON.stringify(never)}`)
     }
   }
+}
+
+/** The mask's steps drawn at w x h. */
+export function rasterize(ops: readonly MaskOp[], w: number, h: number, alphaOf?: AlphaOf): Uint8Array {
+  const m = new Uint8Array(w * h)
+  for (const op of ops) applyOp(m, w, h, op, alphaOf)
   return m
+}
+
+/** A short hash of numbers (FNV-1a over their 1e-6 steps): a step's content, not its object identity. */
+function hashNums(h: number, xs: Iterable<number>): number {
+  for (const v of xs) {
+    let n = Math.round(v * 1e6) | 0
+    for (let k = 0; k < 4; k++) {
+      h ^= n & 0xff
+      h = Math.imul(h, 0x01000193)
+      n >>>= 8
+    }
+  }
+  return h >>> 0
+}
+
+function* coords(pts: readonly Pt[]) {
+  for (const p of pts) { yield p.x; yield p.y }
+}
+
+/**
+ * A step's signature: equal for equal content (a structuredClone keeps it), different when anything
+ * that changes its pixels changes. A snap depends on its cut-out's pixels too, so `alphaKey` names
+ * them (the cut-out's picture, or '' while it loads). A new MaskOp variant must be added here and in
+ * applyOp, or the switch does not compile.
+ */
+export function opSig(op: MaskOp, alphaKey?: (cutoutId: string) => string): string {
+  switch (op.t) {
+    case 'brush': return `b${op.mode}${op.r}/${op.soft}/${op.pts.length}/${hashNums(0x811c9dc5, coords(op.pts))}`
+    case 'lasso': return `l${op.mode}${op.pts.length}/${hashNums(0x811c9dc5, coords(op.pts))}`
+    case 'pick': return `p${op.mode}${op.w}x${op.h}/${op.rle.length}/${hashNums(0x811c9dc5, op.rle)}`
+    case 'snap': return `s${op.cutout}/${alphaKey?.(op.cutout) ?? ''}`
+    default: {
+      const never: never = op
+      throw new Error(`unknown mask step ${JSON.stringify(never)}`)
+    }
+  }
+}
+
+interface Cached { sigs: string[]; at: Map<number, Uint8Array> }
+
+/**
+ * Masks drawn incrementally (features/image-editor-masks-layers.clan): each mask keeps its drawing after
+ * its recent steps, keyed on the steps' content (opSig), so a new stroke draws only itself and ⌘Z goes
+ * back to a kept drawing. Results are shared: never write into one.
+ */
+export class RasterCache {
+  private readonly masks = new Map<string, Cached>()
+  private readonly keep: number
+  constructor(keep = 8) {
+    this.keep = keep
+  }
+
+  get(id: string, ops: readonly MaskOp[], w: number, h: number, alphaOf?: AlphaOf, alphaKey?: (cutoutId: string) => string): Uint8Array {
+    const key = `${id}@${w}x${h}`
+    const sigs = ops.map((op) => opSig(op, alphaKey))
+    let c = this.masks.get(key)
+    if (!c) {
+      c = { sigs: [], at: new Map([[0, new Uint8Array(w * h)]]) }
+      this.masks.set(key, c)
+    }
+    let same = 0
+    while (same < sigs.length && same < c.sigs.length && sigs[same] === c.sigs[same]) same++
+    // Drawings after a step that changed are gone; the newest kept one at or before `same` starts the rest.
+    for (const n of [...c.at.keys()]) if (n > same) c.at.delete(n)
+    const from = Math.max(...c.at.keys())
+    if (from === sigs.length) {
+      c.sigs = sigs
+      return c.at.get(from)!
+    }
+    const m = c.at.get(from)!.slice()
+    for (let i = from; i < ops.length; i++) applyOp(m, w, h, ops[i], alphaOf)
+    c.sigs = sigs
+    c.at.set(ops.length, m)
+    // Keep the empty start and the last `keep` drawings.
+    const ns = [...c.at.keys()].sort((a, b) => a - b)
+    for (const n of ns.slice(1, Math.max(1, ns.length - this.keep))) c.at.delete(n)
+    return m
+  }
+
+  /** Forget masks that are gone. */
+  retain(ids: ReadonlySet<string>) {
+    for (const k of [...this.masks.keys()]) if (!ids.has(k.slice(0, k.lastIndexOf('@')))) this.masks.delete(k)
+  }
 }
 
 /** Whether a mask has any paint. */
