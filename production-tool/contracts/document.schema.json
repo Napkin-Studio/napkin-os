@@ -1061,7 +1061,7 @@
     },
     "frame": {
       "type": "object",
-      "description": "A still version: a storyboard frame (shot_id), a frame made from a sketch area (sketch_id), or a size of a format set (size_id).",
+      "description": "A still version: a storyboard frame (shot_id), a frame made from a sketch area (sketch_id), a size of a format set (size_id), or a version of a picture on the canvas (node; features/edit-canvas-pictures.clan).",
       "properties": {
         "id": {
           "type": "string",
@@ -1085,6 +1085,15 @@
           "type": "string",
           "pattern": "^size_[0-9A-HJKMNP-TV-Z]{26}$"
         },
+        "node": {
+          "$ref": "common.schema.json#/$defs/sceneId",
+          "description": "The canvas picture (its pic or gen node id) this is a version of. v1 is kind original: the picture as it was before its first edit."
+        },
+        "picked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "A canvas picture's version: when it was made or picked. The picture shows its version with the latest picked_at (ties: the higher version)."
+        },
         "version": {
           "type": "integer",
           "minimum": 1
@@ -1097,8 +1106,10 @@
           "enum": [
             "generated",
             "mock",
-            "edited"
-          ]
+            "edited",
+            "original"
+          ],
+          "description": "original: v1 of a canvas picture (node), the picture as it was on the canvas; no crew made it."
         },
         "asset": {
           "$ref": "common.schema.json#/$defs/sha256"
@@ -1163,8 +1174,7 @@
         "field_v",
         "version",
         "kind",
-        "asset",
-        "crew"
+        "asset"
       ],
       "additionalProperties": false,
       "not": {
@@ -1186,9 +1196,68 @@
               "sketch_id",
               "size_id"
             ]
+          },
+          {
+            "required": [
+              "node",
+              "shot_id"
+            ]
+          },
+          {
+            "required": [
+              "node",
+              "sketch_id"
+            ]
+          },
+          {
+            "required": [
+              "node",
+              "size_id"
+            ]
           }
         ]
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "original"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "node"
+            ],
+            "not": {
+              "required": [
+                "crew"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "crew"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "picked_at"
+            ]
+          },
+          "then": {
+            "required": [
+              "node"
+            ]
+          }
+        }
+      ]
     },
     "take": {
       "type": "object",

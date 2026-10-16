@@ -87,6 +87,11 @@ export async function seedFrame(shell: Shell, opts: SeedFrameOpts = {}): Promise
 export function installSeed(shell: Shell) {
   ;(window as unknown as { __seed: unknown }).__seed = {
     frame: (opts?: SeedFrameOpts) => seedFrame(shell, opts),
+    /** A project open on the canvas (a new one unless one is open), for specs that drop pictures there. */
+    canvas: async () => {
+      if (!shell.get().session) await shell.newProject()
+      shell.get().session?.services.ui.update((u) => { u.stage = 'character' }, 'e2e seed')
+    },
     /** Opens the storyboard stage (the Image editor opens from a shot there). */
     storyboard: () => shell.get().session?.services.ui.update((u) => { u.stage = 'storyboard' }, 'e2e seed'),
   }

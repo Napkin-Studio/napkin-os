@@ -149,7 +149,7 @@ export function Storyboard() {
     return <div className="panel"><div className="empty-state"><b>Storyboards are off right now.</b></div></div>
   }
   if (editing && shots.some((s) => s.id === editing)) {
-    return <ImageEditor shotId={editing} onBack={() => setEditing(null)} onShot={setEditing} />
+    return <ImageEditor target={{ kind: 'shot', shotId: editing }} onBack={() => setEditing(null)} onTarget={(t) => setEditing(t.kind === 'shot' ? t.shotId : null)} />
   }
 
   const total = storyboardSeconds(doc, sb?.id)

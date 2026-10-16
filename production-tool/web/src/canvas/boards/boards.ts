@@ -9,6 +9,7 @@
 // - boardKey and jumpTo: ⌥1…⌥9 fit the board at that rank, ⌥0 fits everything.
 
 import { rankBetween, ranksBetween } from '../../../../clan-store/src'
+import { editorOver } from '../chrome/actions'
 import type { Board, BoardPurpose, ProductionDocument } from '../../contracts/types'
 import { newId } from '../../lib/ulid'
 import type { CanvasAdapter, CanvasElement } from '../core/canvasAdapter'
@@ -104,7 +105,7 @@ export function seedBoards(canvas: CanvasAdapter, doc: ProductionDocument): Seed
 
 /** ⌥1…⌥9 (the board at that rank) or ⌥0 (everything), read from event.code; never while typing. */
 export function boardKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'code' | 'target'>): number | 'fit' | null {
-  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return null
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || editorOver()) return null
   const m = /^Digit([0-9])$/.exec(e.code)
   if (!m) return null
   const t = e.target as { closest?: (s: string) => unknown } | null

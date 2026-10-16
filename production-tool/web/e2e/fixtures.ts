@@ -19,7 +19,7 @@ type P = [number, number]
 /** The app's dev hooks, as the specs see them. */
 declare global {
   interface Window {
-    __seed: { frame: (o?: object) => Promise<Seeded>; storyboard: () => void }
+    __seed: { frame: (o?: object) => Promise<Seeded>; storyboard: () => void; canvas: () => Promise<void> }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     __pt: any
     __longTasks?: number[]

@@ -8,7 +8,8 @@
 // Pictures that share a key are one group (keyGroups.ts; owner 2026-10-15): kept in step with the
 // document, labelled "Samurai · 3 views", linked as the whole key (⌥ links one view), stacked or
 // spread (stack.ts); a click on a stack opens it, a click on empty canvas folds back what a click
-// opened, and a double-click picks one view out of its group.
+// opened, and a double-click picks one view out of its group; on the one picture selected, it opens the
+// picture in the Image editor (dblclick.ts).
 
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { RouterContext, useDoc, useServices } from '../../app/context'
@@ -30,6 +31,7 @@ import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import { makeVideo, storyboardFor, storyboardFromShots } from './make'
 import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
+import { pictureToOpen } from './dblclick'
 import './nodes.css'
 
 type Local = { x: number; y: number }
@@ -281,23 +283,43 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     return c ? WORD[c.kind] : e.type === 'image' ? 'picture' : e.type === 'text' ? 'text' : 'sketch area'
   }
 
+  const selectedAtPress = useRef<readonly string[]>([])
   // Double-click a node to open it (ui-behaviour 3.3, plan 2.5).
   useEffect(() => {
     const host = root.current?.parentElement
     if (!host) return
+    // The selection as the double-click began (its first press), before the engine's double press changes it.
+    // The engine acts on pointerdown, which carries no click count, so a press within 500 ms of the last is the second.
+    let lastPress = -Infinity
+    const onDown = (e: PointerEvent) => {
+      if (e.timeStamp - lastPress > 500) selectedAtPress.current = [...canvas.view().selectedIds]
+      lastPress = e.timeStamp
+    }
+    host.addEventListener('pointerdown', onDown, true)
     const onDbl = (e: MouseEvent) => {
       const p = fromClient(e.clientX, e.clientY)
       const el = cardAt(p)
       const c = el && cardOf(el)
-      // A double press on a member of a group or a Drawing enters it and picks that one: the own engine's
-      // select tool detects it for mouse, pen and touch (container-select); Excalidraw does it itself.
+      // A double-click on a picture opens it in the Image editor (edit-canvas-pictures). In a group, the
+      // engine's double press (container-select) picks the picture out first; it opens only when it was
+      // already the one selected before this double-click (owner: the first picks out, the next opens).
+      const picture = c ? null : pictureToOpen(canvas.elements(), selectedAtPress.current, p)
+      if (picture && canvasActions.editPicture(picture.node)) {
+        e.preventDefault()
+        e.stopPropagation()
+        canvas.select([picture.el])
+        return
+      }
       if (!c) return
       e.preventDefault()
       e.stopPropagation()
       open(c.kind, c.id)
     }
     host.addEventListener('dblclick', onDbl, true)
-    return () => host.removeEventListener('dblclick', onDbl, true)
+    return () => {
+      host.removeEventListener('pointerdown', onDown, true)
+      host.removeEventListener('dblclick', onDbl, true)
+    }
   })
 
   useEffect(() => {

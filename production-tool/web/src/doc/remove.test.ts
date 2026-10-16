@@ -312,10 +312,10 @@ describe('canvas delete ↔ document', () => {
   it('a name that moves to another image marks what was made from the old one out of date, once', async () => {
     const { s, ref, f1, f2, f3 } = await seeded(fixture)
     const d = structuredClone(s.get())
-    const added = markStale(d, ref.asset!, ref.id, '@hero_front now shows another image.', T)
+    const added = markStale(d, ref.asset!, { kind: 'ref', id: ref.id }, '@hero_front now shows another image.', T)
     expect(added.map((m) => m.target.id)).toEqual(expect.arrayContaining([f1.id, f2.id, f3.id]))
     expect(added.every((m) => m.caused_by.kind === 'ref' && m.caused_by.id === ref.id && d.stale[m.id] === m)).toBe(true)
-    expect(markStale(d, ref.asset!, ref.id, 'again', T)).toEqual([])
+    expect(markStale(d, ref.asset!, { kind: 'ref', id: ref.id }, 'again', T)).toEqual([])
     expect(validate(d), JSON.stringify(validate.errors)).toBe(true)
   })
 })
