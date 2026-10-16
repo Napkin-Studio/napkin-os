@@ -451,7 +451,12 @@ def seam_scores(ffmpeg: str, ffprobe: str, path: str, seams: list[dict], tmp: st
 def run(event: dict, *, get, put, put_json, ffmpeg: str, ffprobe: str) -> dict:
     """get(key, dest_path); put(key, src_path, mime); put_json(key, dict).
     An event with `mode` "cut" or "splice" is Fix this moment's (splice.py, features/clip-moment-edit.clan);
-    one with no mode is the ad, as it always was."""
+    "cutdown" is a length or a shape of the ad (cutdown.py, features/campaign-formats.clan); one with no
+    mode is the ad, as it always was."""
+    if event.get("mode") == "cutdown":  # a length or a shape of the ad (cutdown.py, features/campaign-formats.clan)
+        import cutdown  # beside this file, in the Lambda zip too
+
+        return cutdown.run(event, get=get, put=put, put_json=put_json, ffmpeg=ffmpeg, ffprobe=ffprobe)
     if event.get("mode"):
         import splice  # beside this file, in the Lambda zip too
 

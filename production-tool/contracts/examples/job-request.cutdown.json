@@ -27,6 +27,7 @@
       "unit": "%"
     },
     "cutdown": {
+      "step": "render",
       "lengthS": 15,
       "fadeOutS": 0.5,
       "endCard": true,
@@ -43,12 +44,26 @@
             "w": 1920,
             "h": 1080
           },
-          "crop": {
-            "x": 656,
-            "y": 0,
-            "w": 607.5,
-            "h": 1080
-          }
+          "cropKeys": [
+            {
+              "at": 0,
+              "box": {
+                "x": 400,
+                "y": 0,
+                "w": 607.5,
+                "h": 1080
+              }
+            },
+            {
+              "at": 1,
+              "box": {
+                "x": 900,
+                "y": 0,
+                "w": 607.5,
+                "h": 1080
+              }
+            }
+          ]
         },
         {
           "asset": {
@@ -59,10 +74,9 @@
           "inS": 0,
           "outS": 6,
           "takeSize": {
-            "w": 1920,
-            "h": 1080
-          },
-          "outpaint": true
+            "w": 612,
+            "h": 1088
+          }
         }
       ],
       "layers": [
@@ -75,6 +89,19 @@
             "h": 0.1
           },
           "text": "Every morning starts somewhere.",
+          "plate": "#000000"
+        },
+        {
+          "kind": "captions",
+          "box": {
+            "x": 0.08,
+            "y": 0.56,
+            "w": 0.84,
+            "h": 0.07
+          },
+          "text": "I never miss the first light.",
+          "fromS": 3.5,
+          "toS": 6.5,
           "plate": "#000000"
         }
       ]

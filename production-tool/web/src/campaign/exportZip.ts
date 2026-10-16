@@ -20,6 +20,8 @@ const previewOfSize = (s: Size) => previewOfSize0(s.delivery)
 const safe = (s: string) => s.trim().toLowerCase().replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 48) || 'project'
 
 export function fileName(project: string, size: Size, w: number, h: number): string {
+  // A film is named by its length too (a 15 s and a 6 s of one shape), and is an MP4 at its delivery size.
+  if (size.media === 'video') return `${safe(project)}_${size.format.format_id}_${size.length_s ?? 0}s_${w}x${h}.mp4`
   return `${safe(project)}_${size.format.format_id}_${w}x${h}.png`
 }
 

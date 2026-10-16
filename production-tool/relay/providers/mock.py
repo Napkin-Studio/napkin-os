@@ -118,6 +118,35 @@ def striped(png: bytes, mask: Optional[bytes], region: Optional[dict]) -> bytes:
     return out.getvalue()
 
 
+def outpaint_mp4(mp4: bytes, ratio: Optional[str], ffmpeg: str) -> tuple[bytes, int, int]:
+    """Aleph 2's outpaint, mocked (features/campaign-formats.clan, phase 6): the clip at its own pixels in
+    the middle of a canvas of `ratio`, the new edges a blurred stretch of it, a red mark at the top left."""
+    import json as _json
+    with tempfile.TemporaryDirectory() as tmp:
+        src, out = os.path.join(tmp, "in.mp4"), os.path.join(tmp, "out.mp4")
+        with open(src, "wb") as f:
+            f.write(mp4)
+        probe = subprocess.run([ffmpeg.replace("ffmpeg", "ffprobe"), "-v", "error", "-select_streams", "v:0",
+                                "-show_entries", "stream=width,height", "-of", "json", src],
+                               capture_output=True, text=True, timeout=30, check=True)
+        st = _json.loads(probe.stdout)["streams"][0]
+        w0, h0 = int(st["width"]), int(st["height"])
+        a, b = (int(x) for x in (ratio or "9:16").split(":"))
+        if w0 / h0 > a / b:
+            w, h = w0, round(w0 * b / a)
+        else:
+            w, h = round(h0 * a / b), h0
+        w, h = max(2, w // 2 * 2), max(2, h // 2 * 2)
+        graph = (f"[0:v]split[a][b];[a]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},boxblur=20[bg];"
+                 f"[bg][b]overlay=(W-w)/2:(H-h)/2,drawbox=x=0:y=0:w={max(8, w // 8)}:h={max(8, h // 24)}:color=red@1:t=fill,"
+                 f"format=yuv420p[v]")
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-filter_complex", graph,
+                        "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                        "-movflags", "+faststart", out], check=True, capture_output=True, timeout=120)
+        with open(out, "rb") as f:
+            return f.read(), w, h
+
+
 def runway_size(job: ProviderJob) -> Optional[tuple[int, int]]:
     """The size Runway would render an image job at: its table's snap of the job's shape
     (frame-aspect), so the relay's crop after it runs locally and in tests as it does live.
@@ -246,8 +275,24 @@ class MockProvider:
             # real stitch): labelled mock, like every mock output.
             return Status("done", queue_position=0, kind="mock", cost_usd=0.0,
                           outputs=[ProviderOutput(url=f"mock://{request_id}/0", mime="video/mp4", data=source)])
+        if job.op == "cutdown" and source and source[4:8] == b"ftyp" and self._ffmpeg:
+            # An outpaint: the clip on a canvas of the shape, its new edges a blurred stretch (outpaint_mp4).
+            try:
+                mp4, w, h = outpaint_mp4(source, job.ratio, self._ffmpeg)
+                return Status("done", queue_position=0, kind="mock", cost_usd=0.0,
+                              outputs=[ProviderOutput(url=f"mock://{request_id}/0", mime="video/mp4", w=w, h=h, data=mp4)])
+            except (subprocess.SubprocessError, OSError, ValueError, KeyError) as exc:
+                return Status("failed", kind="mock", error=ProviderError("provider_failed", f"mock outpaint failed: {exc}", True))
         n = max(1, job.outputs or 1)
         size = runway_size(job)
+        if size is None and job.op in VIDEO_OPS and not source and job.ratio:
+            # A clip from words alone, at the video's shape (a blank square made every mock film 1:1, so a
+            # 16:9 cutdown of it needed new edges: features/campaign-formats.clan, 2026-10-16).
+            from aspect import parse_ratio
+            shape = parse_ratio(job.ratio)
+            if shape:
+                k = 1280 / max(shape)
+                size = (max(2, round(shape[0] * k)), max(2, round(shape[1] * k)))
         if job.op == "upscale" and source:  # each side grows by the scale, as Magnific's does
             w0, h0 = Image.open(io.BytesIO(source)).size
             size = (w0 * (job.scale or 2), h0 * (job.scale or 2))

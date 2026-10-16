@@ -14,6 +14,7 @@ import type { DocumentStore } from '../doc/types'
 import type { Job } from '../contracts/types'
 import { landWrites } from '../script/skye'
 import { landSize } from '../campaign/make'
+import { landFilmPlan, landReframe } from '../campaign/filmJobs'
 
 const warn = (what: string) => (e: unknown) => console.warn(`${what} stopped`, e)
 
@@ -43,6 +44,11 @@ export function wireJobs(deps: FrameDeps) {
   // Make all sizes: a crop lands as its size's picture (features/campaign-formats.clan).
   runner.onComplete('size', (job, ctx) => {
     if (ctx.for === 'size') void landSize(doc, job, ctx, deps.relay).catch(warn('the size'))
+  })
+  // A film's plan lands nowhere (the sheet shows it); a shot made again for a shape renders its sizes again.
+  runner.onComplete('film_plan', (job) => landFilmPlan(job))
+  runner.onComplete('reframe', (job, ctx) => {
+    if (ctx.for === 'reframe') void landReframe(deps, job, ctx).catch(warn('the reframe'))
   })
   runner.onComplete('stitch', (job, ctx) => void landRender(doc, job, ctx.for === 'stitch' ? ctx : undefined)
     .then(() => continueFollow(deps)).catch(warn('update what follows')))

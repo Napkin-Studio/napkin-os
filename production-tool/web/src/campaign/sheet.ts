@@ -3,7 +3,9 @@
 
 import type { MasterInfo } from './master'
 
-export interface SheetOpen { master: MasterInfo; nearId?: string }
+/** nearId: the canvas element to place the board beside; node: the node card's entity, when the sheet is
+ *  opened from its editor (the Video editor) and the element is found on the canvas. */
+export interface SheetOpen { master: MasterInfo; nearId?: string; node?: { kind: string; id: string } }
 
 let open: SheetOpen | null = null
 let safeAreas = true
