@@ -77,6 +77,7 @@ const union = (a: Box, b: Box): Box => {
   const y = Math.min(a.y, b.y)
   return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }
 }
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 const near = (a: Box, b: Box, d: number) => a.x < b.x + b.w + d && b.x < a.x + a.w + d && a.y < b.y + b.h + d && b.y < a.y + a.h + d
 
 const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i])
@@ -124,7 +125,14 @@ export function keyGroupFields(els: readonly CanvasElement[], doc: ProductionDoc
         box = union(box, own)
         continue
       }
+      // Right of the group, past anything already there: a sibling view still being drawn (views land
+      // out of order, so the side view landed on the 3/4's place, owner 2026-10-15) or anything else.
       const at = { x: box.x + box.w + GAP, y: box.y }
+      const taken = els.filter((e) => !e.isDeleted && e.id !== f.id && e.type !== 'arrow' && e.type !== 'frame' && !placed.has(e.id))
+      for (let hit = taken.find((e) => overlaps({ ...own, ...at }, boxOf(e))); hit; hit = taken.find((e) => overlaps({ ...own, ...at }, boxOf(e)))) {
+        at.x = Math.max(at.x, boxOf(hit).x + hit.width + GAP)
+      }
+      for (const [id, q] of placed) if (overlaps({ ...own, ...at }, { ...boxOf(els.find((e) => e.id === id)!), ...q })) at.x = q.x + els.find((e) => e.id === id)!.width + GAP
       placed.set(f.id, at)
       box = union(box, { ...own, ...at })
     }
