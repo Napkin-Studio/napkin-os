@@ -80,7 +80,7 @@ describe('the bar entry and a mixed selection', () => {
     expect(barFor(sel({ cards: ['script'], units: 3 })).map((x) => x.id)).toEqual(['group', 'move-to-board', 'delete'])
     expect(barFor(sel({ group: { ink: false, key: { label: 'Samurai · 3 views', stacked: false } }, pictures: 3 })).map((x) => x.id)).toEqual(['stack', 'resize', 'move-to-board', 'delete'])
     expect(barFor(sel({ cards: ['script'], units: 3, pictures: 2 }))[0]).toMatchObject({ label: 'Resize…' })
-    expect(barFor(sel({ group: { ink: true }, pictures: 1 })).map((x) => x.id)).toEqual(['convert', 'resize', 'ungroup', 'move-to-board', 'delete'])
+    expect(barFor(sel({ group: { ink: true }, pictures: 1 })).map((x) => x.id)).toEqual(['generate', 'convert', 'resize', 'ungroup', 'move-to-board', 'delete'])
   })
 })
 
