@@ -96,6 +96,32 @@ def test_fill_area_sends_the_mask_and_is_priced_as_a_reference_edit():
     assert sent["mask"] == mask["sha256"] and job["cost"]["reserved"] == 0.08
 
 
+def test_remove_sends_the_mask_with_the_relays_own_removal_words():
+    """The Image editor's Remove (features/image-editor-masks-layers.clan, 2026-10-16): no words from the
+    person; the relay writes the removal, and the job is a masked region edit like Fill area."""
+    from service import REMOVE_WORDS
+    h = editor_harness()
+    token = h.as_person()
+    mask = stored(h, 9)
+    _, job = h.post_job(token, op="region_edit", expect=200, image=stored(h), mask=mask, remove=True,
+                        region={"x": 0.4, "y": 0.2, "w": 0.2, "h": 0.6})
+    (sent,) = h.providers["runway"].submits
+    assert sent["mask"] == mask["sha256"] and job["model"] == "ideogram_4_5" and job["cost"]["reserved"] == 0.08
+    assert REMOVE_WORDS in sent["prompt"]
+
+
+def test_remove_with_words_or_without_a_mask_is_refused():
+    h = editor_harness()
+    token = h.as_person()
+    region = {"x": 0.4, "y": 0.2, "w": 0.2, "h": 0.6}
+    _, out = h.post_job(token, op="region_edit", expect=400, image=stored(h), mask=stored(h, 9), remove=True,
+                        region=region, text="take the bottle out")
+    assert out["error"]["code"] == "invalid_input"
+    _, out = h.post_job(token, op="region_edit", expect=400, image=stored(h), remove=True, region=region)
+    assert out["error"]["code"] == "invalid_input"
+    assert not h.providers["runway"].submits
+
+
 # ── Remove background on our server ────────────────────────────────────────
 
 def test_cutout_runs_inside_the_relay_free_and_returns_a_transparent_png():

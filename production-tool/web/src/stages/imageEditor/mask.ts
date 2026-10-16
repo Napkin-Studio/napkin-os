@@ -4,9 +4,6 @@
 
 import type { MaskOp, Pt } from './edits'
 
-/** The alpha of a cut-out at w x h (255 = the subject), for Snap to cut-out. */
-export type AlphaOf = (cutoutId: string, w: number, h: number) => Uint8Array | undefined
-
 function brush(m: Uint8Array, w: number, h: number, op: Extract<MaskOp, { t: 'brush' }>) {
   const r = Math.max(0.5, op.r * w)
   const inner = r * (1 - Math.min(1, Math.max(0, op.soft)))
@@ -56,74 +53,24 @@ function lasso(m: Uint8Array, w: number, h: number, mode: 'add' | 'sub', poly: P
   }
 }
 
-/** A 0/255 mask as run lengths, starting with a run of 0s. */
-export function rle(bits: ArrayLike<number>): number[] {
-  const out: number[] = []
-  let on = false, run = 0
-  for (let i = 0; i < bits.length; i++) {
-    const b = bits[i] >= 128
-    if (b !== on) {
-      out.push(run)
-      run = 0
-      on = b
-    }
-    run++
-  }
-  out.push(run)
-  return out
-}
-
-export function unrle(runs: number[], n: number): Uint8Array {
-  const out = new Uint8Array(n)
-  let i = 0, on = false
-  for (const r of runs) {
-    if (on) out.fill(255, i, Math.min(n, i + r))
-    i += r
-    on = !on
-  }
-  return out
-}
-
-/** A w x h mask shrunk to at most `side` on its longest side (nearest), for keeping a click's mask. */
-export function shrink(bits: Uint8Array, w: number, h: number, side = 256): { w: number; h: number; data: Uint8Array } {
-  const k = Math.min(1, side / Math.max(w, h))
-  const sw = Math.max(1, Math.round(w * k)), sh = Math.max(1, Math.round(h * k))
-  const data = new Uint8Array(sw * sh)
-  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
-    data[y * sw + x] = bits[Math.min(h - 1, Math.floor(((y + 0.5) * h) / sh)) * w + Math.min(w - 1, Math.floor(((x + 0.5) * w) / sw))]
-  }
-  return { w: sw, h: sh, data }
-}
-
 /** One step drawn into `m` (w x h), in place. rasterize is the fold of these over a mask's steps. */
-export function applyOp(m: Uint8Array, w: number, h: number, op: MaskOp, alphaOf?: AlphaOf): void {
+export function applyOp(m: Uint8Array, w: number, h: number, op: MaskOp): void {
   switch (op.t) {
     case 'brush': brush(m, w, h, op); return
     case 'lasso': lasso(m, w, h, op.mode, op.pts); return
-    case 'pick': {
-      const src = unrle(op.rle, op.w * op.h)
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        if (!src[Math.min(op.h - 1, Math.floor(((y + 0.5) * op.h) / h)) * op.w + Math.min(op.w - 1, Math.floor(((x + 0.5) * op.w) / w))]) continue
-        m[y * w + x] = op.mode === 'add' ? 255 : 0
-      }
-      return
-    }
-    case 'snap': {
-      const a = alphaOf?.(op.cutout, w, h)
-      if (a) for (let i = 0; i < m.length; i++) m[i] = Math.min(m[i], a[i])
-      return
-    }
     default: {
+      // A step this editor does not make (a click-select pick or a snap kept in this browser before
+      // they were removed, 2026-10-16) draws nothing, so the edits kept for later still open.
       const never: never = op
-      throw new Error(`unknown mask step ${JSON.stringify(never)}`)
+      void never
     }
   }
 }
 
 /** The mask's steps drawn at w x h. */
-export function rasterize(ops: readonly MaskOp[], w: number, h: number, alphaOf?: AlphaOf): Uint8Array {
+export function rasterize(ops: readonly MaskOp[], w: number, h: number): Uint8Array {
   const m = new Uint8Array(w * h)
-  for (const op of ops) applyOp(m, w, h, op, alphaOf)
+  for (const op of ops) applyOp(m, w, h, op)
   return m
 }
 
@@ -146,19 +93,16 @@ function* coords(pts: readonly Pt[]) {
 
 /**
  * A step's signature: equal for equal content (a structuredClone keeps it), different when anything
- * that changes its pixels changes. A snap depends on its cut-out's pixels too, so `alphaKey` names
- * them (the cut-out's picture, or '' while it loads). A new MaskOp variant must be added here and in
- * applyOp, or the switch does not compile.
+ * that changes its pixels changes. A new MaskOp variant must be added here and in applyOp, or the
+ * switch does not compile.
  */
-export function opSig(op: MaskOp, alphaKey?: (cutoutId: string) => string): string {
+export function opSig(op: MaskOp): string {
   switch (op.t) {
     case 'brush': return `b${op.mode}${op.r}/${op.soft}/${op.pts.length}/${hashNums(0x811c9dc5, coords(op.pts))}`
     case 'lasso': return `l${op.mode}${op.pts.length}/${hashNums(0x811c9dc5, coords(op.pts))}`
-    case 'pick': return `p${op.mode}${op.w}x${op.h}/${op.rle.length}/${hashNums(0x811c9dc5, op.rle)}`
-    case 'snap': return `s${op.cutout}/${alphaKey?.(op.cutout) ?? ''}`
     default: {
       const never: never = op
-      throw new Error(`unknown mask step ${JSON.stringify(never)}`)
+      return `?${JSON.stringify(never)}` // draws nothing (applyOp)
     }
   }
 }
@@ -177,9 +121,9 @@ export class RasterCache {
     this.keep = keep
   }
 
-  get(id: string, ops: readonly MaskOp[], w: number, h: number, alphaOf?: AlphaOf, alphaKey?: (cutoutId: string) => string): Uint8Array {
+  get(id: string, ops: readonly MaskOp[], w: number, h: number): Uint8Array {
     const key = `${id}@${w}x${h}`
-    const sigs = ops.map((op) => opSig(op, alphaKey))
+    const sigs = ops.map((op) => opSig(op))
     let c = this.masks.get(key)
     if (!c) {
       c = { sigs: [], at: new Map([[0, new Uint8Array(w * h)]]) }
@@ -195,7 +139,7 @@ export class RasterCache {
       return c.at.get(from)!
     }
     const m = c.at.get(from)!.slice()
-    for (let i = from; i < ops.length; i++) applyOp(m, w, h, ops[i], alphaOf)
+    for (let i = from; i < ops.length; i++) applyOp(m, w, h, ops[i])
     c.sigs = sigs
     c.at.set(ops.length, m)
     // Keep the empty start and the last `keep` drawings.

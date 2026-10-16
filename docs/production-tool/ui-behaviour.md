@@ -624,7 +624,8 @@ on a shot), or a picture on the canvas.
 **The stage:**
 - Locked to the frame's ratio. Zoom and pan; the crop keeps the ratio (review item 10).
 - At Fit the whole frame shows: as wide as the column, never taller than the room under the strip (a 9:16 frame fits too).
-- A stroke belongs to the pointer that started it: a second finger or pen is ignored, hover adds nothing, and a cancelled pointer drops the stroke. Brush, Lasso, Hand and Crop can start on the margin when zoomed out; Click-select and Text need a point on the picture.
+- A stroke belongs to the pointer that started it: a second finger or pen is ignored, hover adds nothing, and a cancelled pointer drops the stroke. Brush, Lasso, Hand and Crop can start on the margin when zoomed out; Text needs a point on the picture.
+- A press on the stage starts no text selection and never drags one, so a selection left on the page cannot cancel a stroke (Firefox and Chromium both cancelled it before, 2026-10-16). It works the same in Firefox (Gecko, no WebGPU) as in Chromium.
 - When the picture cannot be drawn, the last good one stays and Rhea's line says why.
 - Prev and next frame links sit below ("← Frame 2 · Medium", "Frame 4 · Close →"). If edits are not applied, moving between frames asks first: "Keep the 3 edits for later, or discard them?"
 
@@ -633,27 +634,27 @@ on a shot), or a picture on the canvas.
 | Tool | Key |
 |---|---|
 | Select | V |
-| Click-select, AI finds the object | A |
 | Brush mask | B |
 | Lasso | L |
-| Eraser | E |
 | Text | T |
 | Crop | C |
 | Hand | H, or Space-drag |
 
 - Brackets `[ ]` change the brush size.
-- **The brush strip** holds: mask name, Size, Soft, Add/Subtract, **Snap to cut-out** (fits the mask to Rhea's cut-out edge) and **Clear mask**.
+- **The region tools are Brush mask and Lasso** (owner, 2026-10-16). There is no click-select (it ran a model in the browser that never finished on Firefox) and no Eraser (Subtract does that job).
+- **The brush strip** holds: mask name, Size, Soft, **Add/Subtract** and **Clear mask**.
   The name reads "New mask" until the first paint.
-- **What a stroke paints into:** the active mask. Painting a hidden mask shows it first. Subtract, the Eraser or a Subtract lasso with no mask makes no edit and says "Nothing to take away yet: paint an area first". Painting while a Fill runs on the active mask starts a new mask, so the sent mask stays as it was sent.
+- **Add/Subtract is the mode of both Brush and Lasso:** Add paints or encloses into the mask, Subtract takes paint out of it. The pressed half shows the mode; in Subtract the brush cursor is a red dashed ring and the lasso is drawn red. **X** swaps the mode, and **Alt** held while pressing paints the other way for that stroke (some Linux desktops take Alt-drag for moving windows; X always works). The legend says "X or Alt: Subtract".
+- **What a stroke paints into:** the active mask. Painting a hidden mask shows it first. A Subtract stroke or a Subtract lasso with no mask makes no edit and says "Nothing to take away yet: paint an area first". Painting while a Fill runs on the active mask starts a new mask, so the sent mask stays as it was sent.
 - **Ctrl/⌘Z in the editor takes back the last stroke** (or the last edit when no mask has strokes); ⇧⌘Z or Ctrl+Y puts it back. The document's undo is not touched; the legend under the stage says "⌘Z takes back your last stroke here".
 - **Mask paint** is translucent tool blue with marching ants: "Mask: blue paint marks what changes".
 
 **Edits are a non-destructive list:**
 - The panel is titled "Edits · not applied yet" and says "Nothing is sent until you run an action. v3 is never changed."
-- Each edit is numbered and has its own undo. "Next: Fill Mask 1" names the next Runway step.
+- Each edit is numbered and has its own undo. "Next: Fill or remove Mask 1" names the next Runway step.
 
 **Layers (front first):** Text, masks, cut-outs and Frame (the locked input version).
-- Each layer can be hidden. A mask's row picks it (the brush paints it next), as its Edits row does.
+- Each layer can be hidden. **Every row picks its layer**, and the picked row is highlighted. A mask's row makes it the mask the Brush, the Lasso, Fill and Remove act on ("editing"), as its Edits row does. Any other layer (Frame, a result, a cut-out, text) cannot be painted: its row says why ("Locked: the version you opened. Brush or lasso makes a new mask over it."), and the next stroke starts a new mask.
 - **What you see is what is sent and applied** (owner, 2026-10-15): hidden layers are left out of Fill, Change, Upscale and Apply, and the pill, the Apply line and the send tray say so: "1 hidden layer is left out". A frame's edits list only what was applied.
 - Hiding **Frame** hides only the original picture: Fill results and Change or Upscale results stay unless their own eye is off.
 - **Remove background** never hides Frame by itself; Rhea's line says "hide Frame to see the cut-out alone".
@@ -667,7 +668,7 @@ on a shot), or a picture on the canvas.
 | Action | Who | Runs | Notes |
 |---|---|---|---|
 | Remove background | Rhea | free, on your device | Uses the relay automatically when WebGPU is missing or memory is low, and then says "ran on our server". |
-| Fill area | Rhea (Runway generates) | `ideogram_4_5` with a mask on Runway | Runs on the selected mask only: "Only the blue area changes". Runway edits the mask's black and keeps its white (`png_black_edit`, providers.md fact 2). "Keep the label exactly as it is" keeps the label by leaving it white in the mask; it is not `preciseEdit`, which keeps the whole composition (fact 3; the image editor feature settles the copy). The run button is dark, not primary. |
+| Fill area: **Fill** and **Remove** | Rhea (Runway generates) | `ideogram_4_5` with a mask on Runway | Runs on the selected mask only: "Only the blue area changes". **Fill** fills it with your words. **Remove** needs no words: what the mask covers is taken out and the background continues over it (the relay writes the removal, relay-api `input.remove`); it is one result layer like a fill, cut by the mask. Both are on once the mask has paint; Fill also needs words. Runway edits the mask's black and keeps its white (`png_black_edit`, providers.md fact 2). "Keep the label exactly as it is" keeps the label by leaving it white in the mask; it is not `preciseEdit`, which keeps the whole composition (fact 3; the image editor feature settles the copy). The run button is dark, not primary. |
 | Change whole frame | Rhea | `ideogram_4_5` `preciseEdit` on Runway (recommended; the image editor feature decides) | A prompt redraws the whole frame, keeping its composition and size. |
 | Upscale | Rhea | `magnific_precision_upscaler_v2` on Runway | 2× or 4×, showing the output size ("→ 2688 × 1536" at 2×, "→ 5376 × 3072" at 4×, from our 1344 × 768 frames; providers.md fact 7). |
 
@@ -680,7 +681,7 @@ on a shot), or a picture on the canvas.
 - It marks that shot's clip stale.
 - The versions menu says beforehand what Apply will make: "Apply saves your 3 edits as v4. v3 stays."
 
-**Before / After** toggles the view. Before hides masks, cut-out outlines and text, and labels the frame "Before · v3 as saved".
+**Before / After** toggles the view, every press: either half flips it, so pressing Before again goes back to After. Before hides masks, cut-out outlines and text, and labels the frame "Before · v3 as saved". Picking a tool, or pressing on the stage to paint, goes back to After.
 
 **Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes; a whole-frame job shows a thin progress edge along the top of the stage. Nothing covers the picture: the job's status, elapsed time and Cancel (with its confirm) sit in its Edits row, and a question the job asks shows there too. You can keep painting while it runs. A job with no answer in time reads "did not work" in its row, with Stop waiting and Try again, and holds nothing else.
 
@@ -1540,7 +1541,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 - **Assets on iPad:** the drawer opens as a sheet over the Boards pill. Drag from it with a finger or the Pencil onto a board.
 - **Ask cards and the send tray:** option buttons, checkboxes and Generate are at least 44px tall.
 - **Editors on iPad:** the mask brush, timeline handles and drag handles work with Pencil and finger. Side panels become sheets below 1180px wide.
-- **ML on iPad:** when WebGPU is missing or memory is low, cut-out and click-select run on the relay automatically, and the result says "ran on our server".
+- **ML on iPad (and Firefox):** when WebGPU is missing or memory is low, Remove background runs on the relay automatically, and the result says "ran on our server".
 
 ---
 

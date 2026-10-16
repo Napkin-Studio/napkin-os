@@ -74,11 +74,10 @@ const byText = (el: HTMLElement, text: string) => buttons(el).find((b) => b.text
 const stroke = { t: 'brush' as const, mode: 'add' as const, r: 0.03, soft: 0.2, pts: [{ x: 0.5, y: 0.5 }] }
 
 describe('the tools (3.12)', () => {
-  it('shows the eight tools with their keys, the crop kept at the ratio', async () => {
+  it('shows the six tools with their keys, the crop kept at the ratio (no click-select, no eraser)', async () => {
     const { el } = await open()
     const tools = [...el.querySelectorAll('[role="toolbar"][aria-label="Image tools"] button')].map((b) => b.getAttribute('aria-label'))
-    expect(tools).toEqual(['Select (V)', 'Click-select, AI finds the object (A)', 'Brush mask (B)', 'Lasso (L)', 'Eraser (E)', 'Text (T)',
-      'Crop, kept at 16:9 (C)', 'Hand, pan the frame (H)'])
+    expect(tools).toEqual(['Select (V)', 'Brush mask (B)', 'Lasso (L)', 'Text (T)', 'Crop, kept at 16:9 (C)', 'Hand, pan the frame (H)'])
     expect(el.querySelector('[role="tooltip"]')?.textContent).toBe('Brush mask B')
   })
   it('a key chooses its tool, Space holds the Hand, and [ ] change the brush size', async () => {
@@ -98,18 +97,24 @@ describe('the tools (3.12)', () => {
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: '[' })) })
     expect(size()).toBe('42')
   })
-  it('the brush strip has the mask name, Size, Soft, Add/Subtract, Snap to cut-out and Clear mask', async () => {
+  it('the brush strip has the mask name, Size, Soft, Add/Subtract and Clear mask; X swaps Add and Subtract', async () => {
     const { el } = await open()
     const strip = el.querySelector('[aria-label="Brush mask options"]')!
     expect(strip.querySelector('b')?.textContent).toBe('New mask') // until the first paint (features/image-editor-masks-layers.clan)
     for (const l of ['Brush size', 'Brush softness']) expect(strip.querySelector(`input[aria-label="${l}"]`)).not.toBeNull()
-    expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Snap to cut-out', 'Clear mask'])
+    expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Clear mask'])
+    const mode = () => strip.querySelector('[aria-label="Brush mode"] [aria-pressed="true"]')?.textContent
+    expect(mode()).toBe('Add')
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' })) })
+    expect(mode()).toBe('Subtract')
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' })) })
+    expect(mode()).toBe('Add')
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' })) })
     expect(el.querySelector('[aria-label="Brush mask options"]')).toBeNull()
   })
   it('says the mask legend under the stage', async () => {
     const { el } = await open()
-    expect(el.textContent).toContain('Mask: blue paint marks what changes')
+    expect(el.textContent).toContain('Mask: blue paint marks what changes · X or Alt: Subtract')
   })
 })
 
@@ -121,7 +126,7 @@ describe('the edits and layers', () => {
   it('lists each edit numbered with its own undo, names the next step and counts what is not applied', async () => {
     const { el } = await open(painted)
     const items = [...el.querySelectorAll('.ie-elist li')].map((li) => li.textContent?.replace('↶', '').trim())
-    expect(items).toEqual(['1 Mask 1 · painting', '2 Text "Drink the morning."', 'Next: Fill Mask 1'])
+    expect(items).toEqual(['1 Mask 1 · painting', '2 Text "Drink the morning."', 'Next: Fill or remove Mask 1'])
     expect(el.textContent).toContain('2 edits not applied')
     expect(el.textContent).toContain('Nothing is sent until you run an action. v1 is never changed.')
     expect(byText(el, 'Apply as new version')?.disabled).toBe(false)
@@ -143,6 +148,36 @@ describe('the edits and layers', () => {
     expect(el.querySelector('.ie-text')).toBeNull()
     act(() => byText(el, 'After')!.click())
     expect(el.querySelector('.ie-text')?.textContent).toBe('Drink the morning.')
+  })
+  it('Before toggles on every press, five times over, and picking a tool goes back to After', async () => {
+    const { el } = await open(painted)
+    for (let i = 0; i < 5; i++) {
+      act(() => byText(el, 'Before')!.click())
+      expect(el.querySelector('.ie-before'), `press ${i * 2 + 1}`).not.toBeNull()
+      act(() => byText(el, 'Before')!.click()) // the pressed half again: back to After (owner, 2026-10-16)
+      expect(el.querySelector('.ie-before'), `press ${i * 2 + 2}`).toBeNull()
+    }
+    act(() => byText(el, 'Before')!.click())
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' })) })
+    expect(el.querySelector('.ie-before')).toBeNull()
+  })
+  it('every layer row picks its layer: a mask is painted next, any other says why it cannot be', async () => {
+    const two = (): EditSession => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }, { id: 'm2', kind: 'mask', name: 'Mask 2', ops: [stroke] }], hidden: [], active: 'm2' })
+    const { el, services, ids } = await open(two)
+    const picked = () => el.querySelector('.ie-layer.on .ie-lname > span:first-child')?.textContent
+    expect(picked()).toBe('Mask 2')
+    act(() => byLabel(el, 'Paint Mask 1')!.click())
+    expect(picked()).toBe('Mask 1')
+    expect(services.ui.get().imageEdits?.[ids.frame]?.active).toBe('m1')
+    expect(el.querySelector('.ie-action.on .ie-mtag')?.textContent).toBe('Mask 1') // Fill and Remove act on it
+    act(() => byLabel(el, 'Pick Frame')!.click())
+    expect(picked()).toBe('Frame')
+    expect(el.querySelector('.ie-layer.on [role="note"]')?.textContent).toContain('Locked: the version you opened. Brush or lasso makes a new mask over it.')
+    expect(services.ui.get().imageEdits?.[ids.frame]?.active).toBeUndefined()
+    expect(el.querySelector('[aria-label="Brush mask options"] b')?.textContent).toBe('New mask')
+    act(() => byLabel(el, 'Paint Mask 2')!.click())
+    expect(picked()).toBe('Mask 2')
+    expect(el.querySelector('.ie-layer [role="note"]')).toBeNull()
   })
   it('asks before moving to another frame with edits not applied, and keeps them for later', async () => {
     const { el, onShot, services, ids } = await open(painted)
@@ -208,12 +243,27 @@ describe('the actions (3.12), none with a price', () => {
     const box = el.querySelector('#ie-fill') as HTMLTextAreaElement
     const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
     act(() => { set.call(box, 'drops'); box.dispatchEvent(new Event('input', { bubbles: true })) })
-    act(() => byText(el, 'Fill area')!.click())
+    act(() => byText(el, 'Fill')!.click())
     expect(document.querySelector('.ie-tray')?.textContent).toContain('Gemini 3 Pro on Runway')
   })
-  it('Fill area waits for a painted mask and words', async () => {
+  it('Fill waits for a painted mask and words; Remove for a painted mask only', async () => {
     const { el } = await open()
-    expect(byText(el, 'Fill area')?.disabled).toBe(true)
+    expect(byText(el, 'Fill')?.disabled).toBe(true)
+    expect(byLabel(el, 'Remove what the mask covers')?.disabled).toBe(true)
+    const { el: el2 } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    expect(byText(el2, 'Fill')?.disabled).toBe(true) // no words yet
+    expect(byLabel(el2, 'Remove what the mask covers')?.disabled).toBe(false)
+  })
+  it('Remove needs no words: its tray names the mask and the model, with no words and no price', async () => {
+    const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    act(() => byLabel(el, 'Remove what the mask covers')!.click())
+    const tray = document.querySelector('.ie-tray')!
+    expect(tray.textContent).toContain('What Rhea will send to remove what is in the area')
+    expect(tray.textContent).toContain('Mask 1')
+    expect(tray.textContent).toContain('the background continues over it')
+    expect(tray.textContent).not.toContain('"')
+    expect(tray.textContent).toContain('Ideogram 4.5 on Runway')
+    expect(tray.textContent).not.toMatch(/\$|credit|cost|price/i)
   })
   it('a painted mask turns Fill area on, and its send tray names the model on Runway with no price', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
@@ -221,7 +271,7 @@ describe('the actions (3.12), none with a price', () => {
     expect(box.disabled).toBe(false)
     const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
     act(() => { set.call(box, 'add condensation drops'); box.dispatchEvent(new Event('input', { bubbles: true })) })
-    act(() => byText(el, 'Fill area')!.click())
+    act(() => byText(el, 'Fill')!.click())
     const tray = document.querySelector('.ie-tray')!
     expect(tray.textContent).toContain('What Rhea will send to fill the area')
     expect(tray.textContent).toContain('Mask 1')

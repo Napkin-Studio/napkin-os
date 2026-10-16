@@ -2,22 +2,27 @@
 // nothing to take changes nothing and says so; painting a hidden mask shows it; a mask's Layers row picks it.
 import { editRows, expect, lasso, openEditor, overlay, session, stroke, test } from '../fixtures'
 
-test('Subtract, the Eraser and a Subtract lasso with no mask make no edit and say why', async ({ page }) => {
+test('Subtract, an Alt-held stroke and a Subtract lasso with no mask make no edit and say why', async ({ page }) => {
   const seeded = await openEditor(page)
   const strip = page.getByRole('group', { name: 'Brush mask options' })
   await expect(strip.locator('b').first()).toHaveText('New mask')
   await strip.getByRole('button', { name: 'Subtract' }).click()
   await stroke(page, [0.2, 0.3], [0.4, 0.3])
   await expect(page.locator('.ie-hint')).toHaveText('Nothing to take away yet: paint an area first')
-  await page.keyboard.press('e')
+  // Add, with Alt held: the stroke subtracts (no Eraser any more; owner, 2026-10-16).
+  await strip.getByRole('button', { name: 'Add' }).click()
+  await page.keyboard.down('Alt')
   await stroke(page, [0.2, 0.5], [0.4, 0.5])
+  await page.keyboard.up('Alt')
+  await strip.getByRole('button', { name: 'Subtract' }).click()
   await page.keyboard.press('l')
   await lasso(page, [[0.5, 0.5], [0.7, 0.5], [0.7, 0.7]])
   await expect(page.locator('.ie-hint')).toBeVisible()
   expect((await session(page, seeded.frameId)).edits).toHaveLength(0)
   expect(await editRows(page)).toEqual(['No edits yet. Pick a tool on the left.'])
   expect((await overlay(page)).painted).toBe(0)
-  await expect(page.locator('.ie-action').getByRole('button', { name: 'Fill area' })).toBeDisabled()
+  await expect(page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true })).toBeDisabled()
+  await expect(page.locator('.ie-action').getByRole('button', { name: 'Remove what the mask covers' })).toBeDisabled()
 })
 
 test('painting a hidden mask shows it, and a mask’s Layers row picks it', async ({ page }) => {

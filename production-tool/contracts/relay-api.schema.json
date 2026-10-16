@@ -322,6 +322,39 @@
               ]
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "input": {
+                "required": [
+                  "remove"
+                ]
+              }
+            },
+            "required": [
+              "input"
+            ]
+          },
+          "then": {
+            "properties": {
+              "op": {
+                "const": "region_edit"
+              },
+              "input": {
+                "required": [
+                  "image",
+                  "mask",
+                  "region"
+                ],
+                "not": {
+                  "required": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          }
         }
       ]
     },
@@ -351,6 +384,10 @@
           "type": "string",
           "maxLength": 1000,
           "description": "The user's words: the Generate instruction (with the text of any selected notes), the text box under a frame or clip, the region note, the feel change, the Change this frame words."
+        },
+        "remove": {
+          "const": true,
+          "description": "region_edit only: the Image editor's Remove (features/image-editor-masks-layers.clan, 2026-10-16). What the mask covers is taken out and the background continues over it. It carries no words: the relay writes the removal itself (service.REMOVE_WORDS), and the director reads them as words that remove. Needs image, mask and region; never with text."
         },
         "chips": {
           "type": "array",

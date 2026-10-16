@@ -1,8 +1,7 @@
-// Masks as pixels (features/image-editor.clan): brush, eraser, lasso, soft edge, click-select's mask
-// and Snap to cut-out, at any size.
+// Masks as pixels (features/image-editor.clan): brush, eraser, lasso and soft edge, at any size.
 import { describe, expect, it } from 'vitest'
 import type { MaskOp } from './edits'
-import { applyOp, bounds, edges, opSig, painted, rasterize, RasterCache, rle, shrink, unrle } from './mask'
+import { applyOp, bounds, edges, opSig, painted, rasterize, RasterCache } from './mask'
 
 const at = (m: Uint8Array, w: number, x: number, y: number) => m[y * w + x]
 
@@ -41,34 +40,15 @@ describe('rasterize', () => {
     expect(at(m, 100, 50, 50)).toBe(0)
     expect(at(m, 100, 10, 10)).toBe(0)
   })
-  it('a click-select mask lands at any size', () => {
-    const small = new Uint8Array(16)
-    small[5] = small[6] = small[9] = small[10] = 255 // the 2 x 2 middle of 4 x 4
-    const m = rasterize([{ t: 'pick', mode: 'add', w: 4, h: 4, rle: rle(small) }], 40, 40)
-    expect(at(m, 40, 20, 20)).toBe(255)
-    expect(at(m, 40, 2, 2)).toBe(0)
-  })
-  it('Snap to cut-out keeps the mask only where the cut-out is', () => {
-    const alpha = new Uint8Array(100 * 100)
-    for (let y = 0; y < 100; y++) for (let x = 0; x < 50; x++) alpha[y * 100 + x] = 255
-    const m = rasterize([{ t: 'brush', mode: 'add', r: 0.3, soft: 0, pts: [{ x: 0.5, y: 0.5 }] }, { t: 'snap', cutout: 'c' }], 100, 100,
-      (id) => (id === 'c' ? alpha : undefined))
-    expect(at(m, 100, 40, 50)).toBe(255)
-    expect(at(m, 100, 60, 50)).toBe(0)
+  it('a step this editor no longer makes (a click-select pick, a snap) draws nothing', () => {
+    const kept = [{ t: 'brush', mode: 'add', r: 0.1, soft: 0, pts: [{ x: 0.25, y: 0.25 }] },
+      { t: 'snap', cutout: 'c' }, { t: 'pick', mode: 'add', w: 2, h: 2, rle: [0, 4] }] as unknown as MaskOp[]
+    expect(rasterize(kept, 100, 100)).toEqual(rasterize(kept.slice(0, 1), 100, 100))
+    expect(new RasterCache().get('m', kept, 100, 100)).toEqual(rasterize(kept.slice(0, 1), 100, 100))
   })
 })
 
 describe('the helpers', () => {
-  it('codes runs both ways', () => {
-    const bits = new Uint8Array([0, 0, 255, 255, 255, 0, 255])
-    expect(rle(bits)).toEqual([2, 3, 1, 1])
-    expect([...unrle(rle(bits), bits.length)]).toEqual([...bits])
-  })
-  it('shrinks a mask to at most 256 on a side', () => {
-    const s = shrink(new Uint8Array(1344 * 768).fill(255), 1344, 768)
-    expect([s.w, s.h]).toEqual([256, 146])
-    expect(s.data.every((v) => v === 255)).toBe(true)
-  })
   it('finds the bounds, the paint and the edge', () => {
     const m = rasterize([{ t: 'lasso', mode: 'add', pts: [{ x: 0.2, y: 0.2 }, { x: 0.6, y: 0.2 }, { x: 0.6, y: 0.6 }, { x: 0.2, y: 0.6 }] }], 10, 10)
     expect(painted(m)).toBe(true)
@@ -88,25 +68,18 @@ describe('incremental drawing', () => {
     const k = r()
     const pts = Array.from({ length: 2 + Math.floor(r() * 8) }, () => ({ x: r(), y: r() }))
     if (k < 0.55) return { t: 'brush', mode: r() < 0.75 ? 'add' : 'sub', r: 0.01 + r() * 0.08, soft: r(), pts }
-    if (k < 0.8) return { t: 'lasso', mode: r() < 0.75 ? 'add' : 'sub', pts }
-    if (k < 0.92) return { t: 'pick', mode: r() < 0.8 ? 'add' : 'sub', w: 4, h: 3, rle: [3, 4, 5] }
-    return { t: 'snap', cutout: 'c1' }
-  }
-  const alpha = (_id: string, w: number, h: number) => {
-    const a = new Uint8Array(w * h)
-    for (let i = 0; i < a.length; i++) a[i] = i % w < w / 2 ? 255 : 0
-    return a
+    return { t: 'lasso', mode: r() < 0.75 ? 'add' : 'sub', pts }
   }
 
   it('rasterize is the fold of applyOp', () => {
     const r = rand(7)
     const ops = Array.from({ length: 12 }, () => randomOp(r))
     const m = new Uint8Array(64 * 36)
-    for (const op of ops) applyOp(m, 64, 36, op, alpha)
-    expect(m).toEqual(rasterize(ops, 64, 36, alpha))
+    for (const op of ops) applyOp(m, 64, 36, op)
+    expect(m).toEqual(rasterize(ops, 64, 36))
   })
 
-  it('the cache equals a full drawing after appends, undo, clear and snap, for random sequences', () => {
+  it('the cache equals a full drawing after appends, undo and clear, for random sequences', () => {
     for (let seed = 1; seed <= 12; seed++) {
       const r = rand(seed)
       const cache = new RasterCache(3)
@@ -115,30 +88,19 @@ describe('incremental drawing', () => {
         const k = r()
         if (k < 0.6 || !ops.length) ops = [...ops, randomOp(r)]
         else if (k < 0.8) ops = ops.slice(0, -1) // ⌘Z
-        else if (k < 0.85) ops = [] // Clear mask
-        else if (k < 0.92) ops = [...ops, { t: 'snap', cutout: 'c1' }]
+        else if (k < 0.88) ops = [] // Clear mask
         else ops = structuredClone(ops) // a store write: same content, new objects
-        const got = cache.get('m1', ops, 64, 36, alpha, () => 'sha:c1')
-        expect(got, `seed ${seed} step ${step}`).toEqual(rasterize(ops, 64, 36, alpha))
+        const got = cache.get('m1', ops, 64, 36)
+        expect(got, `seed ${seed} step ${step}`).toEqual(rasterize(ops, 64, 36))
       }
     }
   }, 30_000) // many random sequences: slow when the machine is busy (timed out at 5 s under load, 2026-10-16)
 
-  it('a snap is drawn again when its cut-out loads', () => {
-    const cache = new RasterCache()
-    const ops: MaskOp[] = [{ t: 'brush', mode: 'add', r: 0.2, soft: 0, pts: [{ x: 0.5, y: 0.5 }] }, { t: 'snap', cutout: 'c1' }]
-    const before = cache.get('m1', ops, 64, 36, () => undefined, () => '')
-    expect(painted(before)).toBe(true)
-    expect(cache.get('m1', ops, 64, 36, alpha, () => 'sha:c1')).toEqual(rasterize(ops, 64, 36, alpha))
-  })
-
-  it('a step’s signature survives a structuredClone and changes with its content or its cut-out', () => {
+  it('a step’s signature survives a structuredClone and changes with its content', () => {
     const op: MaskOp = { t: 'brush', mode: 'add', r: 0.05, soft: 0.2, pts: [{ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.4 }] }
     expect(opSig(structuredClone(op))).toBe(opSig(op))
     expect(opSig({ ...op, pts: [{ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.41 }] })).not.toBe(opSig(op))
     expect(opSig({ ...op, mode: 'sub' })).not.toBe(opSig(op))
-    const snap: MaskOp = { t: 'snap', cutout: 'c1' }
-    expect(opSig(snap, () => '')).not.toBe(opSig(snap, () => 'sha:abc'))
   })
 
   // The brush before the squared-distance kernel, for comparison.

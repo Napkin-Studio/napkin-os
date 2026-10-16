@@ -1,10 +1,10 @@
 // The Image editor (ui-behaviour 3.12; mock ImageEditor; features/image-editor.clan): one frame full
 // screen over the storyboard, or one picture over the canvas (features/edit-canvas-pictures.clan; what
-// differs between the two is in imageEditor/subject.ts). Eight tools (Select V, Click-select A, Brush mask B, Lasso L, Eraser E,
+// differs between the two is in imageEditor/subject.ts). Six tools (Select V, Brush mask B, Lasso L,
 // Text T, Crop C, Hand H or Space), the brush strip, a numbered list of edits that changes nothing
 // until Apply as new version, layers, and Rhea's actions: Remove background (on the device, or our
-// server), Fill area and Change whole frame (Ideogram 4.5 on Runway), Upscale (Magnific on Runway).
-// No price anywhere; each job's cost is in History.
+// server), Fill area with its Fill and Remove, and Change whole frame (Ideogram 4.5 on Runway), Upscale
+// (Magnific on Runway). No price anywhere; each job's cost is in History.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
@@ -38,7 +38,7 @@ import {
   notApplied, nothingToTake, redoUndone, toggleHidden, undoEdit, undoLast, updateEdit, upscaleSize, withMaskOp,
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
-import { bounds, painted, rasterize, rle, shrink } from './imageEditor/mask'
+import { bounds, rasterize } from './imageEditor/mask'
 import { compose, maskToPng, sendPlan, toPng, untouched, type Pic } from './imageEditor/compose'
 import { applyEditedStep, applyPictureEditedStep, pickPictureVersionStep } from './imageEditor/apply'
 import { subjectOf, type PictureNow } from './imageEditor/subject'
@@ -48,14 +48,20 @@ import { EditTray } from './imageEditor/EditTray'
 import { Eye, Lock, ToolIcon } from './imageEditor/icons'
 import './image-editor.css'
 
-/** The on-device runtime, loaded only when a tool first needs it (onnxruntime-web is large). */
+/** The on-device runtime, loaded only when Remove background first needs it (onnxruntime-web is large). */
 const ml = () => import('../ml/runtime')
 
 const CUT_ON_DEVICE = 'cut-out ready, ran on your device'
 const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘Z' : 'Ctrl+Z'
 const capital = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
-type Action = 'fill' | 'whole' | 'upscale'
+type Action = 'fill' | 'remove' | 'whole' | 'upscale'
+const SENDING: Record<Action, string> = { fill: 'sending the fill', remove: 'sending the removal', whole: 'sending the change', upscale: 'sending the upscale' }
+const TRAY_TITLE: Record<Action, string> = {
+  fill: 'What Rhea will send to fill the area', remove: 'What Rhea will send to remove what is in the area',
+  whole: 'What Rhea will send to change the frame', upscale: 'What Rhea will send to upscale',
+}
+const TRAY_SEND: Record<Action, string> = { fill: 'Fill', remove: 'Remove', whole: 'Change', upscale: 'Upscale' }
 type CutoutEdit = Extract<Edit, { kind: 'cutout' }>
 type MaskEdit = Extract<Edit, { kind: 'mask' }>
 
@@ -107,6 +113,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<Pt>({ x: 0, y: 0 })
   const [view, setView] = useState<'after' | 'before'>('after')
+  /** A layer picked in Layers that is not a mask (Frame, a result, a cut-out, text): shown picked, with why
+   *  it cannot be painted; the next stroke starts a new mask. A mask's pick is the session's active mask. */
+  const [picked, setPicked] = useState<string | null>(null)
   const [fill, setFill] = useState('')
   const [keepOutside, setKeepOutside] = useState(true)
   const [whole, setWhole] = useState('')
@@ -127,6 +136,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [redoAt, setRedoAt] = useState<{ frame?: string; steps: Undone[] }>({ steps: [] })
   const versionsBtn = useRef<HTMLButtonElement>(null)
   const fillBtn = useRef<HTMLButtonElement>(null)
+  const removeBtn = useRef<HTMLButtonElement>(null)
   const wholeBtn = useRef<HTMLButtonElement>(null)
   const upBtn = useRef<HTMLButtonElement>(null)
   const nameAnchor = useRef<HTMLButtonElement>(null)
@@ -190,31 +200,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     void image(sha).then((b) => { if (alive) setNatural({ sha, w: b.width, h: b.height }) }).catch(() => undefined)
     return () => { alive = false }
   }, [sha, asset?.w, asset?.h, image])
-  // Cut-outs' alpha, for Snap to cut-out: loaded once, read at any size.
-  const [cutPics, setCutPics] = useState<Record<string, ImageBitmap>>({})
-  useEffect(() => {
-    for (const e of session.edits) {
-      const pic = e.kind === 'cutout' ? resultOf(e) : undefined
-      if (pic && !cutPics[e.id]) void image(pic.sha).then((b) => setCutPics((m) => ({ ...m, [e.id]: b }))).catch(() => undefined)
-    }
-  }, [session.edits, resultOf, image, cutPics])
-  const alphaOf = useCallback((id: string, w: number, h: number) => {
-    const b = cutPics[id]
-    if (!b) return undefined
-    const c = document.createElement('canvas')
-    c.width = w
-    c.height = h
-    const ctx = c.getContext('2d', { willReadFrequently: true })!
-    ctx.drawImage(b, 0, 0, w, h)
-    const d = ctx.getImageData(0, 0, w, h).data
-    const a = new Uint8Array(w * h)
-    for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3]
-    return a
-  }, [cutPics])
-  /** What a cut-out's alpha is drawn from: its picture once loaded, '' before (a snap's cache key). */
-  const cutKey = session.edits.filter((e) => e.kind === 'cutout' && cutPics[e.id]).map((e) => `${e.id}=${resultOf(e)?.sha ?? ''}`).join(',')
-  const alphaKey = useCallback((id: string) => cutKey.split(',').find((x) => x.startsWith(`${id}=`))?.slice(id.length + 1) ?? '', [cutKey])
-
   const n = editCount(session)
   // Hidden layers are left out of every send and of Apply, and the pill, the Apply line and the tray say so (IM1).
   const hiddenEdits = hiddenCount(session) - (session.hidden.includes('frame') ? 1 : 0)
@@ -223,7 +208,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const maskHidden = !!activeMask && session.hidden.includes(activeMask.id)
   // A hidden mask cannot be filled: it is left out like any hidden layer, so there would be nothing to fill.
   const masked = !!activeMask && activeMask.ops.length > 0 && !maskHidden
-  const cutouts = session.edits.filter((e) => e.kind === 'cutout' && resultOf(e))
   const lastCutout = [...session.edits].reverse().find((e): e is CutoutEdit => e.kind === 'cutout')
   const sent = framePic ? sendPlan(session, framePic, resultOf, 'action') : undefined
   const shownPlan = sent?.plan
@@ -250,8 +234,16 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         setBrush((b) => ({ ...b, size: brushStep(b.size, k) }))
         return
       }
+      if (e.key === 'x' || e.key === 'X') {
+        if (e.metaKey || e.ctrlKey || e.altKey) return
+        setBrush((b) => ({ ...b, mode: b.mode === 'add' ? 'sub' : 'add' })) // X swaps Add and Subtract
+        return
+      }
       const t = toolForKey(e)
-      if (t) setTool(t)
+      if (t) {
+        setTool(t)
+        setView('after') // a tool is for the edits: Before stays only while looked at
+      }
     }
     const up = (e: KeyboardEvent) => { if (e.key === ' ') setSpace(false) }
     // ⌘Z / Ctrl+Z takes back the last stroke here, ⇧⌘Z or Ctrl+Y puts it back. Caught before the
@@ -316,7 +308,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   }
   const maskOf = (id: string, w: number, h: number) => {
     const m = session.edits.find((e) => e.id === id)
-    return m && m.kind === 'mask' ? rasterize(m.ops, w, h, alphaOf) : new Uint8Array(w * h)
+    return m && m.kind === 'mask' ? rasterize(m.ops, w, h) : new Uint8Array(w * h)
   }
   const registerAsset = (sha: string, blob: Blob, w: number, h: number) => systemUpdate(docStore, (d) => {
     if (!d.assets[sha]) d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, w, h, origin: 'edited', locations: [idbLocation(sha)] }
@@ -344,26 +336,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     }
     setHintAt(null)
     setRedoAt({ steps: [] })
+    setPicked(null)
     setSession((s) => withMaskOp(target(s), op))
   }
 
-  const onClick = (p: Pt) => void attempt('finding the object', async () => {
-    if (!framePic || !shownPlan) return
-    const base = shownPlan.steps.find((s) => s.kind === 'base')
-    const pic = base && base.kind === 'base' ? base.pic : framePic
-    let bits: Uint8Array
-    try {
-      const m = await ml()
-      bits = await within(m.clickSelect(await image(pic.sha), pic.w, pic.h, pic.sha, p, env ?? { webgpu: false }), 90_000, 'click-select took too long')
-    } catch (e) {
-      console.warn('Click-select could not run on this device.', e)
-      throw new Error('Click-select could not run on this device. Paint the area with the brush instead.', { cause: e })
-    }
-    if (!painted(bits)) throw new Error('Rhea found nothing there. Click on the thing itself, or paint it.')
-    const small = shrink(bits, pic.w, pic.h)
-    onMaskOp({ t: 'pick', mode: brush.mode, w: small.w, h: small.h, rle: rle(small.data) })
-    setSaid('found it, on your device')
-  })
   const onAddText = (p: Pt) => setSession((s) => addEdit(s, { id: editId(), kind: 'text', text: 'Your words', x: p.x, y: p.y, size: 0.06 }))
   const onText = (id: string, patch: { text?: string; x?: number; y?: number }) => {
     if (patch.text !== undefined && !patch.text.trim()) setSession((s) => undoEdit(s, id))
@@ -373,10 +349,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     const old = s.edits.find((e) => e.kind === 'crop')
     return old ? updateEdit(s, old.id, r) : addEdit(s, { id: editId(), kind: 'crop', ...r })
   })
-  const snap = () => {
-    const c = [...session.edits].reverse().find((e) => e.kind === 'cutout' && resultOf(e))
-    if (c && activeMask) onMaskOp({ t: 'snap', cutout: c.id })
-  }
 
   // ── the actions ──
   const removeBackground = () => void attempt('removing the background', async () => {
@@ -404,21 +376,27 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     // Frame stays as it is (owner answer IM2): Rhea's line suggests hiding it to see the cut-out alone.
     setSession((s) => addEdit(s, e))
   })
-  const send = (a: Action) => void attempt(a === 'fill' ? 'sending the fill' : a === 'whole' ? 'sending the change' : 'sending the upscale', async () => {
+  const send = (a: Action) => void attempt(SENDING[a], async () => {
     setTray(null)
     const input = await inputPic()
     const picture = await assetRef(relay, input.sha, doc)
     const shape = { w: input.w, h: input.h }
-    if (a === 'fill') {
-      if (!activeMask || !masked) throw new Error(maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint the area first.')
-      const bits = rasterize(activeMask.ops, input.w, input.h, alphaOf)
+    if (a === 'fill' || a === 'remove') {
+      if (!activeMask || !masked) throw new Error(maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to ${a}.` : 'Paint the area first.')
+      const bits = rasterize(activeMask.ops, input.w, input.h)
       const region = bounds(bits, input.w, input.h)
       if (!region) throw new Error('The mask is empty. Paint the area first.')
       const mask = await assetRef(relay, await putBlob(await maskToPng(bits, input.w, input.h)), doc)
-      const words = fill.trim()
-      const jobId = await runner.submit('region_edit', { image: picture, mask, region, text: words, aspect: shape }, parents, purpose)
-      setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, words, keepOutside, jobId }))
-      setFill('')
+      if (a === 'remove') {
+        // No words: the relay writes the removal (relay-api input.remove), and the area is always the only change.
+        const jobId = await runner.submit('region_edit', { image: picture, mask, region, remove: true, aspect: shape }, parents, purpose)
+        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, words: '', keepOutside: true, remove: true, jobId }))
+      } else {
+        const words = fill.trim()
+        const jobId = await runner.submit('region_edit', { image: picture, mask, region, text: words, aspect: shape }, parents, purpose)
+        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, words, keepOutside, jobId }))
+        setFill('')
+      }
     } else if (a === 'whole') {
       const words = whole.trim()
       const jobId = await runner.submit('region_edit', { image: picture, text: words, aspect: shape }, parents, purpose)
@@ -471,7 +449,8 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const trayItems = (a: Action) => [
     { what: subject.label, detail: `v${version}${n ? ', with your edits' : ''}` },
     ...(a === 'fill' && activeMask ? [{ what: activeMask.name, detail: keepOutside ? 'only the blue area changes' : 'the whole result is kept' }] : []),
-    ...(a === 'fill' ? [{ what: `"${fill.trim()}"` }] : a === 'whole' ? [{ what: `"${whole.trim()}"`, detail: 'the composition and size stay' }] : [{ what: `${scale}× larger`, detail: upscaleSize(W, H, scale) }]),
+    ...(a === 'remove' && activeMask ? [{ what: activeMask.name, detail: 'what it covers goes; the background continues over it' }] : []),
+    ...(a === 'remove' ? [] : a === 'fill' ? [{ what: `"${fill.trim()}"` }] : a === 'whole' ? [{ what: `"${whole.trim()}"`, detail: 'the composition and size stay' }] : [{ what: `${scale}× larger`, detail: upscaleSize(W, H, scale) }]),
     ...(sent?.leftOut ? [{ what: capital(leftOutLine(sent.leftOut)), detail: 'Rhea sends what you see' }] : []),
   ]
   const step = nextStep(session)
@@ -517,7 +496,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             <span key={t.id} className="ie-toolslot">
               {i === TOOLS.length - 1 && <span className="ie-tsep" aria-hidden="true" />}
               <button type="button" className={activeTool === t.id ? 'on' : ''} aria-pressed={activeTool === t.id}
-                aria-label={`${t.id === 'crop' ? (ratio ? `Crop, kept at ${ratio}` : 'Crop, kept at its shape') : t.label} (${t.key})`} onClick={() => setTool(t.id)}><ToolIcon id={t.id} /></button>
+                aria-label={`${t.id === 'crop' ? (ratio ? `Crop, kept at ${ratio}` : 'Crop, kept at its shape') : t.label} (${t.key})`} onClick={() => { setTool(t.id); setView('after') }}><ToolIcon id={t.id} /></button>
               {activeTool === t.id && <span role="tooltip" className="ie-tip">{t.label.split(',')[0]} <span className="pt-mono">{t.key}</span></span>}
             </span>
           ))}
@@ -536,12 +515,12 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                   <input type="range" min={0} max={100} value={brush.soft} aria-label="Brush softness" className="ie-soft" onChange={(e) => setBrush({ ...brush, soft: Number(e.target.value) })} />
                   <span className="pt-mono ie-num">{brush.soft}%</span>
                 </label>
-                <div className="pt-seg ie-mode" role="group" aria-label="Brush mode">
-                  <button type="button" aria-pressed={brush.mode === 'add'} onClick={() => setBrush({ ...brush, mode: 'add' })}>Add</button>
-                  <button type="button" aria-pressed={brush.mode === 'sub'} onClick={() => setBrush({ ...brush, mode: 'sub' })}>Subtract</button>
+                <div className={`pt-seg ie-mode ${brush.mode === 'sub' ? 'sub' : ''}`} role="group" aria-label="Brush mode">
+                  <button type="button" aria-pressed={brush.mode === 'add'} onClick={() => setBrush({ ...brush, mode: 'add' })}
+                    title="Add: the brush and the lasso paint into the mask (X swaps; Alt held paints the other way)">Add</button>
+                  <button type="button" aria-pressed={brush.mode === 'sub'} onClick={() => setBrush({ ...brush, mode: 'sub' })}
+                    title="Subtract: the brush and the lasso take paint out of the mask (X swaps; Alt held paints the other way)">Subtract</button>
                 </div>
-                <button type="button" className="btn sm" disabled={!masked || !cutouts.length} onClick={snap}
-                  title={cutouts.length ? "Fit the mask to Rhea's cut-out edge" : 'Remove the background first: the mask snaps to the cut-out'}>Snap to cut-out</button>
                 <button type="button" className="btn sm ghost" disabled={!masked} onClick={() => setSession(clearMask)}>Clear mask</button>
               </>
             ) : activeTool === 'text' ? (
@@ -560,7 +539,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
           {framePic && shownPlan ? (
             <div className="ie-stagewrap">
             <Stage src={url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
-              before={view === 'before'} motion={motion} alphaOf={alphaOf} alphaKey={alphaKey} onDrawn={setDrawError} onMaskOp={onMaskOp} onClick={onClick} onAddText={onAddText} onText={onText} onCrop={onCrop}
+              before={view === 'before'} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
               pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
               {view === 'before' && <span className="pt-mono ie-before">Before · v{version} as saved</span>}
             </Stage>
@@ -579,9 +558,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
           )}
 
           <div className="ie-under">
+            {/* Either half toggles, pressed or not, so a second press on Before goes back (owner, 2026-10-16). */}
             <div className="pt-seg ie-compare" role="group" aria-label="Compare">
-              <button type="button" aria-pressed={view === 'before'} onClick={() => setView('before')}>Before</button>
-              <button type="button" aria-pressed={view === 'after'} onClick={() => setView('after')}>After</button>
+              <button type="button" aria-pressed={view === 'before'} onClick={() => setView((v) => (v === 'before' ? 'after' : 'before'))}>Before</button>
+              <button type="button" aria-pressed={view === 'after'} onClick={() => setView((v) => (v === 'after' ? 'before' : 'after'))}>After</button>
             </div>
             {hint && <span className="ie-hint" role="status">{hint}</span>}
             <RheaLine busy={busy} said={said} cutout={lastCutout} state={lastCutout ? stateOf(lastCutout) : undefined}
@@ -589,7 +569,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               error={lastCutout?.jobId ? doc.jobs[lastCutout.jobId]?.error?.message : undefined} />
             {current?.cropped_to && asset?.w && asset?.h && <span className="pt-mono faint">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
             <span className="pt-grow" />
-            <span className="pt-mono ie-legend">Mask: blue paint marks what changes · {UNDO_KEY} takes back your last stroke here</span>
+            <span className="pt-mono ie-legend">Mask: blue paint marks what changes · X or Alt: Subtract · {UNDO_KEY} takes back your last stroke here</span>
           </div>
 
           <section className="ie-edits" aria-label="Edits not applied yet">
@@ -608,7 +588,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 const live = jobId && isActive(jobState(jobId) ?? 'completed') ? jobId : undefined
                 return (
                   <li key={e.id} className={`${session.active === e.id ? 'on' : ''} ${live ? 'ie-hasjob' : ''}`}>
-                    <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') setSession((s) => ({ ...s, active: e.id })) }}>
+                    <button type="button" className="ie-ebody" onClick={() => { if (e.kind === 'mask') { setPicked(null); setSession((s) => ({ ...s, active: e.id })) } }}>
                       <span className="pt-mono ie-n">{i + 1}</span> {label}
                       {st === 'ready' && <span className="ie-ok">ready</span>}
                       {st === 'running' && !live && <span className="ie-run">working</span>}
@@ -647,18 +627,25 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
             {layersOf(session, version).map((l) => {
               const e = session.edits.find((x) => x.id === l.id)
               const pic = e ? resultOf(e) : undefined
+              const on = l.kind === 'mask' ? !!l.active && !picked : picked === l.id
               return (
-                <div key={l.id} className={`ie-layer ${l.active ? 'on' : ''} ${l.hidden ? 'off' : ''}`} aria-current={l.active || undefined}>
-                  {/* A mask's row picks it: the brush paints it next (the Edits list does the same). */}
-                  {l.kind === 'mask' && !l.active && <button type="button" className="ie-lpick" aria-label={`Paint ${l.label}`} onClick={() => setSession((s) => ({ ...s, active: l.id }))} />}
+                <div key={l.id} className={`ie-layer ${on ? 'on' : ''} ${l.hidden ? 'off' : ''}`} aria-current={on || undefined}>
+                  {/* Every row picks its layer. A mask: the brush, the lasso, Fill and Remove act on it next (its
+                      Edits row does the same). Any other layer cannot be painted: its row says why, and the next
+                      stroke starts a new mask. */}
+                  {!on && <button type="button" className="ie-lpick" aria-label={l.kind === 'mask' ? `Paint ${l.label}` : `Pick ${l.label}`}
+                    onClick={() => {
+                      if (l.kind === 'mask') { setPicked(null); setSession((s) => ({ ...s, active: l.id })) } else { setPicked(l.id); setSession((s) => ({ ...s, active: undefined })) }
+                    }} />}
                   <LayerThumb kind={l.kind} sha={l.kind === 'frame' ? current?.asset : pic?.sha} />
                   <span className="ie-lname">
                     <span>{l.label}</span>
                     {l.kind === 'frame' && <span className="pt-mono ie-lsub">v{version} · locked</span>}
                     {l.kind === 'cutout' && pic && <span className="ie-lsub">by Rhea · <button ref={naming === l.id ? nameAnchor : undefined} type="button" className="btn link" onClick={() => setNaming(l.id)}>Save as reference</button></span>}
                     {l.kind === 'cutout' && !pic && <span className="ie-lsub">Rhea is cutting it out…</span>}
+                    {on && l.kind !== 'mask' && <span className="ie-lsub ie-lwhy" role="note">{whyNotPainted(l.kind)}</span>}
                   </span>
-                  {l.active && <span className="pt-mono ie-editing">editing</span>}
+                  {l.kind === 'mask' && on && <span className="pt-mono ie-editing">editing</span>}
                   {l.locked && <span className="ie-lock" role="img" aria-label="Locked"><Lock /></span>}
                   <button type="button" className="ie-eye" aria-label={`${l.hidden ? 'Show' : 'Hide'} ${l.label}`} aria-pressed={l.hidden} onClick={() => setSession((s) => toggleHidden(s, l.id))}><Eye hidden={l.hidden} /></button>
                 </div>
@@ -688,11 +675,14 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
               <div className={`ie-action ${masked ? 'on' : ''}`}>
                 <div className="row"><b>Fill area</b>{activeMask && <span className="ie-mtag">{activeMask.name}</span>}</div>
                 <label className="faint" htmlFor="ie-fill">Fill with...</label>
-                <textarea id="ie-fill" className="textarea" rows={2} placeholder={masked ? 'add condensation drops' : maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint, lasso or click an area first'} value={fill} maxLength={1000}
+                <textarea id="ie-fill" className="textarea" rows={2} placeholder={masked ? 'add condensation drops' : maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Paint or lasso an area first'} value={fill} maxLength={1000}
                   disabled={!masked || running} onChange={(e) => setFill(e.target.value)} />
                 <label className="ie-check"><input type="checkbox" checked={keepOutside} onChange={(e) => setKeepOutside(e.target.checked)} /> Keep everything outside the blue exactly as it is</label>
                 <div className="row"><span className="faint">{maskHidden && activeMask ? `${activeMask.name} is hidden. Show it to fill.` : 'Only the blue area changes'}</span><span className="spacer" />
-                  <button ref={fillBtn} type="button" className="btn sm dark" disabled={!masked || !fill.trim() || running} onClick={() => setTray('fill')}>Fill area</button></div>
+                  <button ref={removeBtn} type="button" className="btn sm" aria-label="Remove what the mask covers" disabled={!masked || running} onClick={() => setTray('remove')}
+                    title={masked ? 'Take out what the blue covers; the background continues over it. No words needed.' : 'Paint or lasso an area first'}>Remove</button>
+                  <button ref={fillBtn} type="button" className="btn sm dark" disabled={!masked || !fill.trim() || running} onClick={() => setTray('fill')}
+                    title={masked ? (fill.trim() ? 'Fill the blue area with your words' : 'Say what fills the area first') : 'Paint or lasso an area first'}>Fill</button></div>
               </div>
             )}
 
@@ -726,13 +716,21 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
         </aside>
       </div>
       {tray && (
-        <EditTray anchor={tray === 'fill' ? fillBtn : tray === 'whole' ? wholeBtn : upBtn} open onClose={() => setTray(null)}
-          title={tray === 'fill' ? 'What Rhea will send to fill the area' : tray === 'whole' ? 'What Rhea will send to change the frame' : 'What Rhea will send to upscale'}
-          items={trayItems(tray)} model={tray === 'upscale' ? upModel : regionModel} send={tray === 'fill' ? 'Fill area' : tray === 'whole' ? 'Change' : 'Upscale'}
+        <EditTray anchor={tray === 'fill' ? fillBtn : tray === 'remove' ? removeBtn : tray === 'whole' ? wholeBtn : upBtn} open onClose={() => setTray(null)}
+          title={TRAY_TITLE[tray]}
+          items={trayItems(tray)} model={tray === 'upscale' ? upModel : regionModel} send={TRAY_SEND[tray]}
           onSend={() => send(tray)} />
       )}
     </div>
   )
+}
+
+/** Why a picked layer that is not a mask cannot be painted, and what a stroke does instead. */
+function whyNotPainted(kind: string): string {
+  if (kind === 'frame') return 'Locked: the version you opened. Brush or lasso makes a new mask over it.'
+  if (kind === 'text') return 'Words: move them with Select (V), retype with Text (T). Brush or lasso makes a new mask.'
+  if (kind === 'cutout') return "Rhea's cut-out. Brush or lasso makes a new mask over it."
+  return "Rhea's result. Brush or lasso makes a new mask over it."
 }
 
 /** What Rhea says under the stage: at work, a cut-out ready (on the device or our server), or nothing. */

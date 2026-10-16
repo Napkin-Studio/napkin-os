@@ -1,6 +1,6 @@
 // e2e 5 (features/image-editor-masks-layers.clan): the stroke belongs to its pointer. pointercancel
 // drops it, hover moves add nothing, a second pointer during a stroke adds nothing, a brush can start on
-// the margin when zoomed out, and a Click-select press on the margin runs nothing.
+// the margin when zoomed out, and a Text press on the margin adds nothing.
 import type { Page } from '@playwright/test'
 import { at, expect, openEditor, overlay, session, stroke, test, editRows } from '../fixtures'
 
@@ -14,7 +14,8 @@ async function touch(page: Page) {
   return { send }
 }
 
-test('pointercancel drops the stroke and hover moves add nothing', async ({ page }) => {
+test('pointercancel drops the stroke and hover moves add nothing', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'touches go through CDP, which only Chromium has')
   const seeded = await openEditor(page)
   await page.keyboard.press('b')
   const t = await touch(page)
@@ -31,7 +32,8 @@ test('pointercancel drops the stroke and hover moves add nothing', async ({ page
   expect((await session(page, seeded.frameId)).edits).toHaveLength(0)
 })
 
-test('a second pointer during a stroke adds nothing', async ({ page }) => {
+test('a second pointer during a stroke adds nothing', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'touches go through CDP, which only Chromium has')
   const seeded = await openEditor(page)
   await page.keyboard.press('b')
   const [x, y] = await at(page, 0.2, 0.25)
@@ -54,7 +56,7 @@ test('a second pointer during a stroke adds nothing', async ({ page }) => {
   expect(masks[0].ops).toHaveLength(1)
 })
 
-test('zoomed out, a brush starts on the margin, and a Click-select press there runs nothing', async ({ page }) => {
+test('zoomed out, a brush starts on the margin, and a Text press there adds nothing', async ({ page }) => {
   await openEditor(page)
   await page.getByRole('button', { name: 'Zoom out' }).click()
   await page.getByRole('button', { name: 'Zoom out' }).click()
@@ -63,10 +65,10 @@ test('zoomed out, a brush starts on the margin, and a Click-select press there r
   const f = (await page.locator('.ie-frame').boundingBox())!
   expect(f.x).toBeGreaterThan(v.x + 20)
 
-  await page.keyboard.press('a')
+  await page.keyboard.press('t')
   await page.mouse.click(v.x + 8, v.y + v.height / 2)
   await page.waitForTimeout(300)
-  await expect(page.locator('.ie-said')).toHaveCount(0)
+  await expect(page.locator('.ie-text')).toHaveCount(0)
   await expect(page.locator('.ie-error')).toHaveCount(0)
 
   await page.keyboard.press('b')
