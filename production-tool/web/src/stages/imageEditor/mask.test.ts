@@ -122,7 +122,7 @@ describe('incremental drawing', () => {
         expect(got, `seed ${seed} step ${step}`).toEqual(rasterize(ops, 64, 36, alpha))
       }
     }
-  })
+  }, 30_000) // many random sequences: slow when the machine is busy (timed out at 5 s under load, 2026-10-16)
 
   it('a snap is drawn again when its cut-out loads', () => {
     const cache = new RasterCache()
