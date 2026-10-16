@@ -304,6 +304,36 @@ describe('the shape of a Generate without an area, and of the views', () => {
   })
 })
 
+describe('a view made again takes back its name (owner, 2026-10-15: no Stack, no link to the Script)', () => {
+  const KID = 'key_01K7A00000000000000000KEY1'
+  const view = (id: string, v: string, asset?: string) => ({ id, type: 'image', x: 400, y: 0, width: 300, height: 375, isDeleted: false, frameId: null,
+    customData: { kind: 'gen', id, op: 'view', parentIds: ['node_f'], state: asset ? 'completed' : 'running', view: v, ...(asset ? { asset } : {}) } }) as unknown as El
+  async function named(sideNode: string) {
+    await systemUpdate(t.doc, (d: ProductionDocument) => {
+      d.keys[KID] = { id: KID, v: 1, field_v: {}, key: 'maya', role: 'character' }
+      d.refs.ref_01K7A00000000000000000REF1 = { id: 'ref_01K7A00000000000000000REF1', v: 1, field_v: {}, key: 'maya', variant: 'front', role: 'character', asset: SHA('f'), node: 'node_f' }
+      d.refs.ref_01K7A00000000000000000REF2 = { id: 'ref_01K7A00000000000000000REF2', v: 1, field_v: {}, key: 'maya', variant: 'side', role: 'character', asset: SHA('o'), node: sideNode }
+    }, 'sync')
+    t.canvas.els = [{ id: 'Fr', type: 'image', x: 0, y: 0, width: 300, height: 375, isDeleted: false, frameId: null, customData: { kind: 'pic', id: 'node_f', asset: SHA('f') } } as unknown as El]
+  }
+  const sideRef = () => Object.values(t.doc.get().refs).filter((r) => r.key === 'maya' && r.variant === 'side')
+
+  it('the name of a deleted view moves to the new one, on open as on landing', async () => {
+    await named('job_old')
+    t.canvas.els.push(view('job_new', 'side', SHA('n')))
+    expect(t.ctrl.claimViewNames()).toBe(1)
+    await vi.waitFor(() => expect(sideRef().map((r) => r.node)).toEqual(['job_new']))
+    expect(sideRef()[0].asset).toBe(SHA('n'))
+  })
+
+  it('a name a picture on the canvas still holds stays; an unfinished view takes none', async () => {
+    await named('job_old')
+    t.canvas.els.push(view('job_old', 'side', SHA('o')), view('job_new', 'side', SHA('n')), view('job_back', 'back'))
+    expect(t.ctrl.claimViewNames()).toBe(0)
+    expect(sideRef().map((r) => r.node)).toEqual(['job_old'])
+  })
+})
+
 describe('an area’s lifecycle', () => {
   it('deleting it removes sketches[id]; the frames made from it stay without their sketch_id', async () => {
     withFrame(t)

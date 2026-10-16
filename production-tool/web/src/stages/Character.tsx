@@ -103,6 +103,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
   useEffect(() => {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
+    // Views made again after the first ones were deleted take back their names (their key group).
+    if (ctrl) { try { ctrl.claimViewNames() } catch (e) { console.warn('could not name the views', e) } }
   }, [ctrl])
 
   // Switching project or going Home: the canvas is saved first (features/project-home.clan).
