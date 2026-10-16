@@ -13,17 +13,34 @@ function randomBytes(n: number): Uint8Array {
   return out
 }
 
+// Ids made in one millisecond sort in the order they were made (monotonic ULIDs): "the first created"
+// (selectors' first(), mainScript) sorts ids, so a random tail let a fresh empty node win (2026-10-16,
+// cards.test.tsx failed about 1 run in 3). A clock that steps back keeps the last time.
+let lastTime = -1
+let lastRand: number[] = []
+
 export function ulid(now = Date.now()): string {
+  let rand: number[]
+  if (now <= lastTime) {
+    now = lastTime
+    rand = [...lastRand]
+    let i = rand.length - 1
+    while (i >= 0 && rand[i] === 31) rand[i--] = 0
+    if (i >= 0) rand[i]++
+  } else {
+    const rnd = randomBytes(16)
+    rand = Array.from(rnd, (x) => x % 32)
+    rand[0] &= 15 // headroom: increments within a millisecond never overflow the tail
+  }
+  lastTime = now
+  lastRand = rand
   let time = ''
   let t = now
   for (let i = 0; i < 10; i++) {
     time = ALPHABET[t % 32] + time
     t = Math.floor(t / 32)
   }
-  const rnd = randomBytes(16)
-  let rand = ''
-  for (let i = 0; i < 16; i++) rand += ALPHABET[rnd[i] % 32]
-  return time + rand
+  return time + rand.map((x) => ALPHABET[x]).join('')
 }
 
 export function newId(prefix: IdPrefix): string {

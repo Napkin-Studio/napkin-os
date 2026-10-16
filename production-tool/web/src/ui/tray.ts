@@ -61,3 +61,24 @@ export function whereIs(job: Pick<DocJob, 'op'>, ctx: JobCtx | undefined): { sta
   }
   return { stage: job.op === 'clip' || job.op === 'clip_edit' || job.op === 'stitch' ? 'video' : job.op === 'frame' || job.op === 'shot_list' ? 'storyboard' : 'character' }
 }
+
+/** What the job button says, in words (its tooltip, its screen-reader label, the popover's first row):
+ *  the lead job's line, then the counts ("Wren is making frame 3 · 3 running · 1 queued"), then failures. */
+export function jobLine(g: TrayGroups, leadLine: string | undefined): string {
+  const counts = g.working.length + g.waiting.length > 1 || !leadLine ? trayLabel(g) : ''
+  const failed = g.needsYou.length ? `${g.needsYou.length} failed` : ''
+  const parts = [leadLine, counts === 'Nothing running' && failed ? '' : counts, failed].filter(Boolean)
+  return parts.join(' · ')
+}
+
+/** The job button's look (owner 2026-10-15: "just the icon rotating"; ui-behaviour 6.5): no words and
+ *  no count in the bar. Running: the turning logo, led by the lead job's department (still when it is
+ *  queued). A question waiting for you or a failure, with nothing running: the still logo. Either way
+ *  a needs-you mark on its corner: brand orange for a question (the figure's "!" colour, 5.2), red for
+ *  a failure. Nothing running, waiting or failed: no button at all. */
+export function jobLook(g: TrayGroups): { spin: 'run' | 'queued' | 'still'; mark?: 'ask' | 'failed' } | null {
+  const first = g.working[0]
+  const mark = g.waiting.length ? 'ask' as const : g.needsYou.length ? 'failed' as const : undefined
+  if (!first && !mark) return null
+  return { spin: !first ? 'still' : first.state === 'queued' ? 'queued' : 'run', mark }
+}

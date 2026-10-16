@@ -49,6 +49,20 @@ async function setup(names: [string, string][] = [['samurai', 'front'], ['samura
   return { s, a, doc, name, follow, el, pics, node, write }
 }
 
+describe('a view that lands first never lands on a sibling still being drawn (owner, 2026-10-15)', () => {
+  it('the side view, named before the 3/4 has landed, goes past the 3/4 placeholder, not onto it', async () => {
+    const { a, name, follow, el, pics } = await setup([['maya', 'front'], ['maya', 'x'], ['maya', 'side']])
+    // As Make the other views lays them: front, the 3/4 placeholder, then side, in one row.
+    a.transact((all) => all.map((e) => e.id === pics[0].id ? a.patch(e, { x: 0, y: 0 }) : e.id === pics[1].id ? a.patch(e, { x: 340, y: 0, customData: { kind: 'gen', id: 'job_3q', op: 'view', parentIds: [], state: 'running', view: 'three-quarter' } }) : e.id === pics[2].id ? a.patch(e, { x: 680, y: 0 }) : e), { undoable: false })
+    await name(0, 'maya', 'front')
+    await name(2, 'maya', 'side')
+    follow()
+    const side = el(2), threeQ = el(1)
+    const overlap = side.x < threeQ.x + threeQ.width && threeQ.x < side.x + side.width && side.y < threeQ.y + threeQ.height && threeQ.y < side.y + side.height
+    expect(overlap).toBe(false)
+  })
+})
+
 describe('key groups follow the names', () => {
   it('views of one key group as "Samurai · 3 views", each newly named one placed beside the others; the next pass changes nothing', async () => {
     const { s, a, doc, name, follow, el } = await setup()

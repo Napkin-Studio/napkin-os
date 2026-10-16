@@ -1,7 +1,8 @@
 """The job ledger, the counters and the blocked list.
 
-Two implementations with one interface: MemoryStore (tests, local dev) and
-DynamoStore (Lambda). Every job write is optimistic: `save_job(job)` succeeds
+Three implementations with one interface: MemoryStore (tests), FileStore (the
+local relay: MemoryStore kept under its --data dir, so a restart loses nothing)
+and DynamoStore (Lambda). Every job write is optimistic: `save_job(job)` succeeds
 only if nobody saved a newer version (`_ver`) meanwhile, and `create_job` is a
 conditional put on the jobId, which is what makes POST /jobs idempotent.
 
@@ -27,18 +28,30 @@ Tables (infra/envs/hackathon):
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
+import logging
+import re
 import threading
 from decimal import Decimal
+from pathlib import Path
+
+log = logging.getLogger("relay.store")
 
 
 class MemoryStore:
-    def __init__(self):
+    def __init__(self, held_file: Path | None = None):
         self._jobs: dict[str, dict] = {}
         self._counters: dict[str, dict] = {}
         self.blocked: set[str] = set()
         self.tenants: dict[str, dict] = {}
         self.held: set[str] = set()
+        # Which agency holds which bytes outlives a restart when the bytes do (local.py keeps them on
+        # disk): kept only in memory, every picture of every saved project read as missing after a
+        # restart, so no other browser could open them (features/picture-storage.clan).
+        self._held_file = Path(held_file) if held_file else None
+        if self._held_file and self._held_file.exists():
+            self.held.update(line.strip() for line in self._held_file.read_text().splitlines() if line.strip())
         self._claims: dict[str, dict] = {}
         self._lock = threading.Lock()
 
@@ -87,8 +100,14 @@ class MemoryStore:
 
     # ── which agency holds which bytes (features/tenant-limits.clan) ──
     def hold(self, tenant: str, sha: str) -> None:
+        key = f"has#{tenant}#{sha}"
         with self._lock:
-            self.held.add(f"has#{tenant}#{sha}")
+            if key in self.held:
+                return
+            self.held.add(key)
+            if self._held_file:
+                with self._held_file.open("a") as f:
+                    f.write(key + "\n")
 
     def holds(self, tenant: str, sha: str) -> bool:
         with self._lock:
@@ -147,6 +166,136 @@ class MemoryStore:
     def delete_counter(self, key: str) -> None:
         with self._lock:
             self._counters.pop(key, None)
+
+
+class FileStore(MemoryStore):
+    """MemoryStore kept under a directory, for the local relay (features/relay-durable-jobs.clan):
+    a restart reloads every job, counter (quotas, in-flight, slots, spend), hold and claim, so a job
+    at a provider is polled again and lands. One file per job (state/jobs/<jobId>.json) and one for
+    the rest (state/ledger.json); every write is a temp file, fsync, then rename, so a crash leaves
+    the old file whole. Tenants and the blocked list are not kept: local.py sets them at each start.
+
+    Each write takes the disk lock, then copies the current in-memory value under the store lock, so
+    two threads saving the same job can never leave an older version on disk."""
+
+    def __init__(self, root):
+        super().__init__()
+        from pathlib import Path
+
+        self.root = Path(root) / "state"
+        self.jobs_dir = self.root / "jobs"
+        self.jobs_dir.mkdir(parents=True, exist_ok=True)
+        self._disk = threading.Lock()
+        self._load()
+
+    # ── load ──
+    def _read(self, path):
+        try:
+            return json.loads(path.read_text())
+        except (OSError, ValueError):
+            log.exception("%s is unreadable: set aside as %s.bad", path, path.name)
+            try:
+                path.replace(path.with_name(path.name + ".bad"))
+            except OSError:
+                pass
+            return None
+
+    def _load(self) -> None:
+        for path in sorted(self.jobs_dir.glob("*.json")):
+            job = self._read(path)
+            if isinstance(job, dict) and job.get("jobId"):
+                self._jobs[job["jobId"]] = job
+        ledger = self.root / "ledger.json"
+        row = self._read(ledger) if ledger.exists() else None
+        if isinstance(row, dict):
+            self._counters = row.get("counters") or {}
+            self.held = set(row.get("held") or [])
+            self._claims = row.get("claims") or {}
+        # Holds an earlier local relay kept in held.txt (MemoryStore(held_file=...), features/picture-storage.clan)
+        # join the ledger, so pictures saved under that build stay openable.
+        legacy = self.root.parent / "held.txt"
+        if legacy.exists():
+            extra = {line.strip() for line in legacy.read_text().splitlines() if line.strip()} - self.held
+            if extra:
+                self.held |= extra
+                self._keep_ledger()
+
+    # ── write ──
+    @staticmethod
+    def _write(path, data) -> None:
+        import os
+
+        tmp = path.with_name(f".{path.name}.{threading.get_ident()}.tmp")
+        with open(tmp, "w") as f:
+            json.dump(data, f, separators=(",", ":"), default=str)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+
+    @staticmethod
+    def _file_of(job_id: str) -> str:
+        """The job's file name: its id when that is a plain name, else the id's hash."""
+        if re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,199}", job_id):
+            return f"{job_id}.json"
+        return hashlib.sha256(job_id.encode()).hexdigest() + ".json"
+
+    def _keep_job(self, job_id: str) -> None:
+        path = self.jobs_dir / self._file_of(job_id)
+        with self._disk:
+            with self._lock:
+                job = copy.deepcopy(self._jobs.get(job_id))
+            if job is None:
+                path.unlink(missing_ok=True)
+            else:
+                self._write(path, job)
+
+    def _keep_ledger(self) -> None:
+        with self._disk:
+            with self._lock:
+                row = {"counters": copy.deepcopy(self._counters), "held": sorted(self.held),
+                       "claims": copy.deepcopy(self._claims)}
+            self._write(self.root / "ledger.json", row)
+
+    # ── every MemoryStore write, then its file ──
+    def create_job(self, job: dict) -> bool:
+        ok = super().create_job(job)
+        if ok:
+            self._keep_job(job["jobId"])
+        return ok
+
+    def save_job(self, job: dict) -> bool:
+        ok = super().save_job(job)
+        if ok:
+            self._keep_job(job["jobId"])
+        return ok
+
+    def delete_job(self, job_id: str) -> None:
+        super().delete_job(job_id)
+        self._keep_job(job_id)
+
+    def incr(self, key: str, attr: str, delta: float, limit: float | None = None) -> bool:
+        ok = super().incr(key, attr, delta, limit)
+        if ok:
+            self._keep_ledger()
+        return ok
+
+    def delete_counter(self, key: str) -> None:
+        super().delete_counter(key)
+        self._keep_ledger()
+
+    def hold(self, tenant: str, sha: str) -> None:
+        super().hold(tenant, sha)
+        self._keep_ledger()
+
+    def claim(self, key: str, owner: str, until: float, now: float) -> bool:
+        ok = super().claim(key, owner, until, now)
+        if ok:
+            self._keep_ledger()
+        return ok
+
+    def release(self, key: str, owner: str) -> None:
+        super().release(key, owner)
+        self._keep_ledger()
 
 
 class DynamoStore:

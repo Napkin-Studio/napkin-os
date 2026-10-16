@@ -868,6 +868,16 @@ class Relay:
             settings["refs"] = 1
             if not inp.get("region") and not inp.get("mask") and spec.get("preciseEdit"):
                 settings["preciseEdit"] = True
+        if op in ("clip", "clip_edit") and price.get("perRef"):
+            # Hailuo 3 and Omni Flash 1.1 bill each picture the call carries (features/runway-video-models.clan):
+            # reserved for every ref the request offers, up to what the model takes, and the frame.
+            refs = len(inp.get("refs") or [])
+            if op == "clip":
+                video = sheet.get("video") or {}
+                goes = video.get("firstFrameWithRefs") if inp.get("image") else video.get("refsWithoutFrame")
+                settings["refs"] = bool(inp.get("image")) + (min(refs, sheet["refs"]["max"]) if goes else 0)
+            else:
+                settings["refs"] = min(refs, max(0, sheet["refs"]["max"] - 1))  # the clip itself is a ref too
         seconds = (inp.get("shot") or {}).get("duration_s")
         if seconds:
             if op == "clip":
@@ -2151,7 +2161,9 @@ class Relay:
             if not key:
                 return self._fail(job, "invalid_input", "A clip is not one of ours; upload it first.",
                                   paid=False, refund=True)
-            clips.append({"key": key, **({"trimS": c["trimS"]} if "trimS" in c else {})})
+            # In and out points and the join into the clip (features/connected-video.clan) go as they came;
+            # a clip without them is sent exactly as before.
+            clips.append({"key": key, **{k: c[k] for k in ("trimS", "inS", "outS", "transition") if k in c}})
         if not clips:
             return self._fail(job, "invalid_input", "Stitch needs at least one clip.", paid=False, refund=True)
         now = self.clock()
@@ -2197,6 +2209,11 @@ class Relay:
         if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
             return self._advance_patch(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
+            # Past its time, but the provider may have finished it while nobody polled (the local relay
+            # was down: features/relay-durable-jobs.clan). Ask once: a finished task lands, paid for.
+            late = self._late_result(job)
+            if late is not None:
+                return self._fetch(job, late, now)
             try:
                 self._adapter(job).cancel(job["requestId"])
             except Exception:
@@ -2238,6 +2255,19 @@ class Relay:
             return self._fall_back(job, cfg, code, st.error_message or "The provider could not make this.",
                                    retryable=retryable, provider_code=st.provider_code, refund=theirs)
         return self._fetch(job, st, now)
+
+    def _late_result(self, job: dict):
+        """The provider's finished task for a job past its time, else None (still running, failed, or
+        the provider could not say)."""
+        adapter = self._adapter(job) if job.get("requestId") else None
+        if adapter is None:
+            return None
+        try:
+            st = adapter.status(job["requestId"])
+        except Exception:
+            log.exception("status from %s raised", job["provider"])
+            return None
+        return st if st.state == "succeeded" and st.outputs else None
 
     def _fetch(self, job: dict, st, now: float) -> dict:
         claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S)
@@ -2319,6 +2349,8 @@ class Relay:
         for k in ("w", "h", "durationS"):
             if result.get(k) is not None:
                 out[k] = result[k]
+        if result.get("seams"):  # Jude's seam scores (connected-video phase 1): logged only, until tuned
+            log.info(json.dumps({"kind": "stitch_seams", "jobId": job["jobId"], "seams": result["seams"]}))
         return self._finish(job, "completed", outputs=[out], kind="generated", paid=False)
 
     def _cancel_waiting(self, job: dict, **changes) -> dict:

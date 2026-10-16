@@ -128,6 +128,8 @@
   --r-board: 16px;
   --topbar-h: 48px;
 }
+/* Touch: a 56px top bar for 44px targets (ui-behaviour 8; features/topbar-declutter.clan). */
+@media (pointer: coarse) { :root { --topbar-h: 56px; } }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -236,9 +238,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .followchip.failed { background: var(--danger-bg); color: var(--danger); }
 /* On a narrow bar the studio's name gives way; the tool's name stays. */
 @media (max-width: 1100px) { .brand .brand-studio { display: none; } }
-.jobchip { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--soft); font-size: 12.5px; font-weight: 600; color: var(--ink2); }
-.jobchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-green); }
-.jobchip.busy .dot { background: var(--create); animation: pulse 1.2s var(--ease) infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
 .handle { font-size: 12.5px; color: var(--ink3); font-family: var(--f-mono); }
 .banner { background: var(--plan); color: var(--paper); text-align: center; padding: 7px 16px; font-size: 13px; font-weight: 600; flex-shrink: 0; }
@@ -538,13 +537,6 @@ button:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:fo
 .arrowcard .ac-foot { margin-top: 8px; font-size: 11.5px; color: var(--ink3); }
 
 /* ── The job tray (ui/JobTray.tsx) ── */
-.jobchip.tray { border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; padding: 0 12px 0 8px; }
-.jobchip.tray:hover, .jobchip.tray.open { background: var(--card); border-color: var(--line); box-shadow: var(--shadow-pill); }
-.jobchip .faces { display: inline-flex; align-items: flex-end; height: 24px; }
-.jobchip .faces .agent-figure { margin-right: -5px; }
-.jobchip .faces .agent-figure:last-child { margin-right: 0; }
-.jobchip .sep { color: var(--ink3); font-weight: 400; }
-.jobchip .bad { color: var(--danger); }
 .traypop { width: 380px; padding: 6px; max-height: min(70vh, 560px); overflow: auto; }
 .tray-empty { padding: 12px 10px; font-size: 12.5px; line-height: 1.45; }
 .trayrow { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; }

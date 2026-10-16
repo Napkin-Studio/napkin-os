@@ -8,6 +8,9 @@
 // ── common.schema.json ──────────────────────────────────────────────────────
 
 export type ContractVersion = '3'
+
+/** The join into a stitch clip (relay-api clips[].transition): a dissolve or dip overlaps s seconds. */
+export interface StitchTransition { kind: 'cut' | 'dissolve' | 'dip'; s?: number }
 export const CONTRACT_VERSION: ContractVersion = '3'
 /** `sha256:<64 hex>` */
 export type Sha256 = string
@@ -305,6 +308,13 @@ export interface ModelSheet {
   audioDefault?: boolean
   scaleFactors?: number[]
   resolutions?: string[]
+  /** features/runway-video-models.clan: the request's audio switch, Veo's negativePrompt, the pictures one
+   *  clip carries with its frames (Kling O3: 7), WAN's auto ratio with a frame, and how the model edits a clip. */
+  audioParam?: boolean
+  negativePrompt?: boolean
+  imagesMax?: number
+  keyframeRatio?: 'auto_tier'
+  v2v?: { videoField: 'videoUri' | 'promptVideo'; mode?: 'edit'; durationAuto?: boolean; keepOriginalSound?: boolean; audioParam?: boolean; refsMax: number; inputMaxS?: number }
   pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
 }
 
@@ -331,6 +341,9 @@ export interface CapabilitySheet {
     regionEdit: 'none' | 'temporal_keyframe' | 'mask'
     feelEdit: 'none' | 'prompt' | 'strength'
     audioDefault: boolean
+    audioControl?: boolean
+    /** A clip with no first frame can carry reference pictures (features/runway-video-models.clan). */
+    refsWithoutFrame?: boolean
   }
   inputs: { headRequired: boolean; followsRedirects: boolean; maxImageMb?: number; maxVideoMb?: number }
   results: { mode: 'poll' | 'webhook' | 'poll_or_webhook'; minPollS: number; idempotencyKey: boolean; outputUrlTtlH?: number | null; cancel?: boolean }
@@ -874,7 +887,9 @@ export interface JobInput {
   delivery?: DeliveryPx
   safeArea?: SafeArea
   context?: JobContext[]
-  clips?: { asset: AssetRef; trimS?: number; endCard?: boolean }[]
+  /** stitch: the takes in cut order. inS/outS: the edl item's in and out points; transition: the join into this
+   *  clip (features/connected-video.clan; absent: a cut). */
+  clips?: { asset: AssetRef; trimS?: number; inS?: number; outS?: number; transition?: StitchTransition; endCard?: boolean }[]
   /** write: what Skye drafts or rewrites (features/script-editor.clan). */
   write?: WriteInput
   /** Change: the new answer to the parent job's question. */

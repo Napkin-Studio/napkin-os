@@ -3,6 +3,8 @@
 // 3 views"; a ⌥ link made after grouping stays); a key link leaves from the group (it attaches at the
 // pile's bounds); generation arrows are bound to their ends and follow them; the pen owns the pointer.
 
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { Link, ProductionDocument } from '../../../contracts/types'
 import { updateDoc } from '../../../doc/store'
@@ -189,6 +191,16 @@ describe('the pen owns the pointer', () => {
     // The node layer's cards are z 3 (nodes.css): above them.
     expect(INK_OVER_Z).toBeGreaterThan(3)
     expect(liveZ('select')).toBeLessThan(3)
+  })
+
+  it('the rail, tool bar and zoom stay above the pen, so its ink and Select can be clicked (2026-10-15)', () => {
+    const css = readFileSync(fileURLToPath(new URL('../../chrome/canvas.css', import.meta.url)), 'utf8')
+    for (const sel of ['.board-rail {', '.br-pill {', '.canvas-toolbar {', '.zoom-pill {']) {
+      // A selector can have several rules (a theme's colours); the one that places it has the z-index.
+      const zs = css.split(sel).slice(1).map((r) => /z-index:\s*(\d+)/.exec(r.slice(0, r.indexOf('}')))?.[1]).filter(Boolean).map(Number)
+      expect(zs.length, sel).toBeGreaterThan(0)
+      for (const z of zs) expect(z, sel).toBeGreaterThan(INK_OVER_Z)
+    }
   })
 })
 

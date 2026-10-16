@@ -29,10 +29,18 @@ INPUTS = {
 }
 
 
-def test_the_defaults_are_claude_runway_and_google():
+def every_maker() -> list[str]:
+    """Every maker the catalogue lists, in its order."""
+    import json
+    from contracts_dir import contracts_dir
+    return [e["id"] for e in json.loads((contracts_dir() / "subprocessors.json").read_text())["entries"] if e.get("control") == "maker"]
+
+
+def test_the_defaults_allow_claude_and_every_maker():
+    """Owner, 2026-10-15: every maker is on by default; a client narrows its own list later."""
     h = runway_routed()
     _, me = h.call("GET", "/me", None, h.as_person(), expect=200)
-    assert me["allow"] == {"claude": True, "makers": ["runway", "google"]}
+    assert me["allow"] == {"claude": True, "makers": every_maker()}
 
 
 @pytest.mark.parametrize("op", sorted(INPUTS))
@@ -132,4 +140,4 @@ def test_a_tenant_item_without_allow_takes_the_policy():
     h = runway_routed()
     tid = h.limits("blue", capUsdMonthly=None)
     assert h.relay._policy(tid) == {"cap": None, "dailyQuotas": False,
-                                   "allow": {"claude": True, "makers": ["runway", "google"]}}
+                                   "allow": {"claude": True, "makers": every_maker()}}

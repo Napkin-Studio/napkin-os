@@ -30,7 +30,7 @@ import { useBlobUrl } from '../hooks'
 import {
   DESCRIBE, insertMention, LINK_SCRIPT, LINK_STORYBOARD, makeItLabel, mentionAt, PLAN_NOW, PROMPT_COPY, promptState, SCRIPT_FIRST,
   storyboardNudge, videoBlock, type PromptKind,
-} from './promptStart'
+} from './promptFlow'
 import '../askcard.css'
 import './prompt.css'
 

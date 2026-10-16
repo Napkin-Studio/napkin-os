@@ -232,6 +232,16 @@ suite_production-tool() {
   [[ $rc -eq 0 ]] || return 1
   # The PR bench on the seed-1 G3 scene (byte, memory and draw-time checks; features/engine-ci.clan), alone.
   ( cd production-tool/canvas-engine && npm run -s bench ) || return 1
+  # The e2e specs (production-tool/web/e2e/README.md), alone after the rest: real pointer events on the
+  # dev server and its in-browser mock. A system Chromium stands in for Playwright's download when there is one.
+  if [[ -f production-tool/web/package.json ]]; then
+    if [[ -z "${E2E_CHROMIUM:-}" ]]; then
+      for b in chromium chromium-browser google-chrome-stable; do
+        command -v "$b" >/dev/null && { export E2E_CHROMIUM="$(command -v "$b")"; break; }
+      done
+    fi
+    ( cd production-tool/web && npm run -s e2e ) || return 1
+  fi
   # Quarantined perf budget (web vite.config.ts): reported, never failing the check.
   if [[ -f production-tool/web/package.json ]] && ! ( cd production-tool/web && npm run -s test:perf >"$d/perf.log" 2>&1 ); then
     echo "   web perf budget (quarantined): over budget this run; not failing the check. Log: $d/perf.log"

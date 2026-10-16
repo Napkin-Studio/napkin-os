@@ -1,6 +1,6 @@
 {
   "contractVersion": "3",
-  "updated": "2026-10-14",
+  "updated": "2026-10-15",
   "entries": [
     {
       "id": "aws",
@@ -46,12 +46,51 @@
       "control": "maker"
     },
     {
+      "id": "kuaishou",
+      "name": "Kuaishou (Kling)",
+      "does": "Makes the Kling video models.",
+      "receives": "What a job sends to a Kling model: words, frames, reference pictures and clips to edit.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax (Hailuo)",
+      "does": "Makes the Hailuo video model.",
+      "receives": "What a job sends to a Hailuo model: words, frames and reference pictures.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "alibaba",
+      "name": "Alibaba (WAN)",
+      "does": "Makes the WAN video model.",
+      "receives": "What a job sends to a WAN model: words, frames and reference pictures.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
+      "id": "bytedance",
+      "name": "ByteDance (Seedance)",
+      "does": "Makes the Seedance video models.",
+      "receives": "What a job sends to a Seedance model: words, frames, reference pictures and clips to edit.",
+      "via": "runway",
+      "region": null,
+      "control": "maker"
+    },
+    {
       "id": "anthropic",
       "name": "Anthropic (Claude on Amazon Bedrock)",
       "does": "Directs each job and reads reference pictures for the director.",
       "receives": "The words, the script and the reference pictures of a job.",
       "via": "aws",
-      "region": { "where": "Amazon Bedrock EU cross-region inference", "source": "production-tool/relay/director/claude.py, whose model ids start eu." },
+      "region": {
+        "where": "Amazon Bedrock EU cross-region inference",
+        "source": "production-tool/relay/director/claude.py, whose model ids start eu."
+      },
       "control": "claude"
     }
   ]

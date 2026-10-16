@@ -48,6 +48,8 @@ export class StoreServer {
   private readonlyScene: string | null = null
   private sceneQueue: Promise<void> = Promise.resolve()
   private mirrorSeq = 0
+  /** Saves asked for and not yet done: dispose waits for them, so a close's save is never dropped. */
+  private readonly saving = new Set<Promise<unknown>>()
   private readonly mirrorWaits = new Map<number, { resolve: () => void; reject: (e: Error) => void }>()
   private readonly onMessage = (e: MessageEvent) => void this.handle(e.data as ToWorker)
   /** How many checkpoints were written (tests read it). */
@@ -109,11 +111,20 @@ export class StoreServer {
         return null
       }
       case 'stopMirror': return this.need().stopMirror()
-      case 'mirrorNow': return await this.need().mirrorNow(args[0] as Parameters<ClanDocumentStore['mirrorNow']>[0])
+      case 'mirrorNow': {
+        const run = this.need().mirrorNow(args[0] as Parameters<ClanDocumentStore['mirrorNow']>[0])
+        const held = run.catch(() => {})
+        this.saving.add(held)
+        void held.finally(() => this.saving.delete(held))
+        return await run
+      }
       case 'writeAsset': return await this.need().writeAsset(args[0] as string, args[1] as Uint8Array)
       case 'readAsset': return await this.need().readAsset(args[0] as string)
       case 'sceneOpen': return await this.sceneOpen()
       case 'dispose': {
+        // A save asked for just before (the project's close) finishes first: disposing under it
+        // dropped it while the checkpoint was being written (features/picture-storage.clan).
+        await Promise.all([...this.saving])
         await this.sceneQueue
         this.store?.dispose()
         this.store = null

@@ -19,7 +19,7 @@ import type { MakeClan } from '../projects/session'
 import { Shell } from '../projects/shell'
 import { memoryStorage } from '../projects/storage'
 import { MockRelay } from '../relay/mock'
-import { addFrame, addShots, MAYA, SHA, wasm } from '../test/model'
+import { addFrame, addShots, job, MAYA, SHA, wasm } from '../test/model'
 import type { EditSession } from './imageEditor/edits'
 import { ImageEditor } from './ImageEditor'
 
@@ -100,7 +100,7 @@ describe('the tools (3.12)', () => {
   it('the brush strip has the mask name, Size, Soft, Add/Subtract, Snap to cut-out and Clear mask', async () => {
     const { el } = await open()
     const strip = el.querySelector('[aria-label="Brush mask options"]')!
-    expect(strip.querySelector('b')?.textContent).toBe('Mask 1')
+    expect(strip.querySelector('b')?.textContent).toBe('New mask') // until the first paint (features/image-editor-masks-layers.clan)
     for (const l of ['Brush size', 'Brush softness']) expect(strip.querySelector(`input[aria-label="${l}"]`)).not.toBeNull()
     expect([...strip.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Add', 'Subtract', 'Snap to cut-out', 'Clear mask'])
     act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' })) })
@@ -227,5 +227,43 @@ describe('the actions (3.12), none with a price', () => {
     expect(tray.textContent).toContain('"add condensation drops"')
     expect(tray.textContent).toContain('Ideogram 4.5 on Runway')
     expect(tray.textContent).not.toMatch(/\$|credit|cost|price/i)
+  })
+})
+
+describe('a job in its Edits row (features/image-editor-masks-layers.clan)', () => {
+  it("an 'uncertain' job reads as did not work and holds nothing: no stripes, the actions on, Try again in its row", async () => {
+    const { el, services, ids } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: [], active: 'm1' }))
+    let jobId = ''
+    await act(async () => {
+      await systemUpdate(services.doc, (d) => {
+        const j = job(d, 'region_edit', [], null, { state: 'uncertain', crew: 'rhea' })
+        d.jobs[j.id] = j
+        jobId = j.id
+      })
+      services.ui.update((u) => {
+        const s = u.imageEdits![ids.frame]
+        u.imageEdits = { [ids.frame]: { ...s, edits: [...s.edits, { id: 'f1', kind: 'fill', maskId: 'm1', words: 'drops', keepOutside: true, jobId }] } }
+      })
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const row = [...el.querySelectorAll('.ie-elist li')].find((li) => li.textContent?.includes('Fill Mask 1'))!
+    expect(row.textContent).toContain('did not work')
+    expect(row.textContent).toContain('Try again')
+    expect(el.querySelector('.ie-pending')).toBeNull()
+    expect(el.querySelector('.ie-job')).toBeNull()
+    expect(byText(el, 'Apply as new version')?.disabled).toBe(false)
+    expect(byText(el, 'Remove')?.disabled).toBe(false)
+  })
+})
+
+describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
+  it('a hidden mask cannot be filled and says why', async () => {
+    const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }], hidden: ['m1'], active: 'm1' }))
+    expect((el.querySelector('#ie-fill') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(el.textContent).toContain('Mask 1 is hidden. Show it to fill.')
+  })
+  it('the pill counts hidden layers apart', async () => {
+    const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }, { id: 't1', kind: 'text', text: 'Hi', x: 0.1, y: 0.1, size: 0.06 }], hidden: ['t1'], active: 'm1' }))
+    expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 edit not applied · 1 hidden layer is left out')
   })
 })

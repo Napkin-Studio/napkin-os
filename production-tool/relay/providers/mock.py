@@ -4,23 +4,37 @@ Returns the input stamped "MOCK" after a delay, with a fake queue position, so t
 whole UI can be built and load-tested before any real key exists. Its outputs are
 labelled kind "mock" and can never count as final.
 
-Video ops have no encoder here, so they return the stamped first frame as a still
-(image/png) with the requested duration attached.
+Video ops return the stamped first frame drifting sideways for 1 s as an MP4 when ffmpeg
+is on PATH (features/connected-video.clan: a take with motion and a last frame, so joins can
+be tried locally); without ffmpeg (the relay Lambda), the stamped still (image/png) with the
+requested duration attached.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
+from pathlib import Path
 from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .types import (
     VIDEO_OPS, AssetResolver, ProviderError, ProviderJob,
-    ProviderOutput, Status, check_capabilities, effective_sheet, load_sheet, video_audio,
+    ProviderOutput, Ref, Status, check_capabilities, effective_sheet, load_sheet, video_audio,
 )
+
+DRIFT_S = 1.0  # the mock clip's length when it is encoded
+DRIFT_FPS = 24
+_WHICH = object()  # MockProvider's ffmpeg default: whatever is on PATH
 
 # The alternates in capabilities/mock.json, so local dev can exercise the regenerate menu.
 ALTERNATES = {"frame": {"mock-hq"}, "clip": {"mock-hq"}, "resize": {"mock-hq"}}
@@ -52,6 +66,25 @@ def stamp(png_or_jpeg: Optional[bytes], label: str, size: Optional[tuple[int, in
     return out.getvalue(), w, h
 
 
+def drift_mp4(png: bytes, ffmpeg: str) -> tuple[bytes, int, int]:
+    """A DRIFT_S MP4 of the picture drifting sideways (8 % across), so a mock take has motion and a last
+    frame unlike its first. Even sides, as H.264 wants."""
+    w0, h0 = Image.open(io.BytesIO(png)).size
+    w, h = max(2, w0 // 2 * 2), max(2, h0 // 2 * 2)
+    with tempfile.TemporaryDirectory() as tmp:
+        src, out = os.path.join(tmp, "in.png"), os.path.join(tmp, "out.mp4")
+        with open(src, "wb") as f:
+            f.write(png)
+        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-loop", "1", "-framerate", str(DRIFT_FPS),
+                        "-i", src, "-frames:v", str(round(DRIFT_S * DRIFT_FPS)),
+                        "-vf", f"scale=trunc(iw*1.08/2)*2:trunc(ih*1.08/2)*2,"
+                               f"crop={w}:{h}:x='(in_w-out_w)*t/{DRIFT_S:g}':y='(in_h-out_h)/2',format=yuv420p",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-movflags", "+faststart", out],
+                       check=True, capture_output=True, timeout=60)
+        with open(out, "rb") as f:
+            return f.read(), w, h
+
+
 def runway_size(job: ProviderJob) -> Optional[tuple[int, int]]:
     """The size Runway would render an image job at: its table's snap of the job's shape
     (frame-aspect), so the relay's crop after it runs locally and in tests as it does live.
@@ -77,11 +110,50 @@ class MockProvider:
     name = "mock"
 
     def __init__(self, assets: AssetResolver, fetch: Fetch, delay_s: float = 2.0,
-                 clock: Callable[[], float] = time.monotonic, sheet: Optional[dict] = None):
+                 clock: Callable[[], float] = time.monotonic, sheet: Optional[dict] = None,
+                 ffmpeg: Optional[str] | object = _WHICH):
         self._assets, self._fetch, self._delay = assets, fetch, delay_s
+        # Video ops come back as a drifting MP4 with ffmpeg, else as a still (None: always the still).
+        self._ffmpeg = shutil.which("ffmpeg") if ffmpeg is _WHICH else ffmpeg
         self._clock, self._sheet = clock, sheet or load_sheet("mock")
         self._jobs: dict[str, dict] = {}
+        self._dir: Optional[Path] = None
         self.requests: list[dict] = []  # the request each submit would have sent
+
+    def keep_in(self, root) -> None:
+        """Keep each task under `root` and read it back there, as a real provider keeps its tasks
+        while the relay restarts (features/relay-durable-jobs.clan). Times are then wall-clock, since
+        a monotonic clock means nothing to the next process."""
+        self._dir = Path(root)
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._clock = time.time
+
+    def _task_file(self, request_id: str) -> Optional[Path]:
+        if self._dir is None or not re.fullmatch(r"mock_[0-9a-f]{12}", request_id):
+            return None
+        return self._dir / f"{request_id}.json"
+
+    def _keep(self, request_id: str) -> None:
+        path = self._task_file(request_id)
+        if path is None:
+            return
+        entry = self._jobs[request_id]
+        tmp = path.with_name(f".{path.name}.tmp")
+        tmp.write_text(json.dumps({**entry, "job": dataclasses.asdict(entry["job"])}))
+        os.replace(tmp, path)
+
+    def _recall(self, request_id: str) -> Optional[dict]:
+        path = self._task_file(request_id)
+        if path is None or not path.exists():
+            return None
+        try:
+            entry = json.loads(path.read_text())
+            raw = entry["job"]
+            entry["job"] = ProviderJob(**{**raw, "refs": [Ref(**r) for r in raw.get("refs") or []]})
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        self._jobs[request_id] = entry
+        return entry
 
     def capabilities(self) -> dict:
         return self._sheet
@@ -99,6 +171,7 @@ class MockProvider:
         sha = self._source_sha(job)
         self._jobs[request_id] = {"job": job, "at": self._clock(), "cancelled": False,
                                   "source": self._assets(sha).url if sha else None}
+        self._keep(request_id)
         return request_id
 
     @staticmethod
@@ -118,7 +191,7 @@ class MockProvider:
         return sha
 
     def status(self, request_id: str) -> Status:
-        entry = self._jobs.get(request_id)
+        entry = self._jobs.get(request_id) or self._recall(request_id)
         if entry is None:
             return Status("failed", error=ProviderError("provider_failed", "unknown mock request", False), kind="mock")
         if entry["cancelled"]:
@@ -147,14 +220,23 @@ class MockProvider:
         outputs = []
         for i in range(n):
             data, w, h = stamp(source, "MOCK" if n == 1 else f"MOCK {i + 1}/{n}", size)
+            if job.op in VIDEO_OPS and self._ffmpeg:
+                try:
+                    mp4, w2, h2 = drift_mp4(data, self._ffmpeg)
+                    outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="video/mp4", w=w2, h=h2,
+                                                  duration_s=DRIFT_S, data=mp4))
+                    continue
+                except (subprocess.SubprocessError, OSError):  # an ffmpeg that cannot: the still, as before
+                    pass
             outputs.append(ProviderOutput(url=f"mock://{request_id}/{i}", mime="image/png", w=w, h=h,
                                           duration_s=job.duration_s if job.op in VIDEO_OPS else None,
                                           data=data))
         return Status("done", queue_position=0, outputs=outputs, kind="mock", cost_usd=0.0)
 
     def cancel(self, request_id: str) -> None:
-        if request_id in self._jobs:
+        if request_id in self._jobs or self._recall(request_id):
             self._jobs[request_id]["cancelled"] = True
+            self._keep(request_id)
 
 
 def make():

@@ -111,6 +111,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   // A canvas opened from the server comes without its pictures' files: put them back from the blobs.
   useEffect(() => {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
+    // Views made again after the first ones were deleted take back their names (their key group).
+    if (ctrl) { try { ctrl.claimViewNames() } catch (e) { console.warn('could not name the views', e) } }
   }, [ctrl])
 
   // Switching project or going Home: the canvas is saved first (features/project-home.clan).
@@ -131,6 +133,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   /** Resize… from the node bar (a selection with nodes and pictures): the pictures it resizes. */
   const [resizeOn, setResizeOn] = useState<{ els: El[]; key: string } | null>(null)
   /** Dex's question when Make video has two scripts or two storyboards (3.5): which one drives. */
+  // Generate opened from an ink group's bar (container-select): the popover over the group's strokes.
+  const [genFor, setGenFor] = useState<string[] | null>(null)
   const [which, setWhich] = useState<{ scripts: string[]; storyboards: string[]; at: Pt } | null>(null)
   /** Wren's ask from a placed Generate on a sketch with no words: answered here, then it goes. */
   const [asking, setAsking] = useState<{ ask: Ask; job: { ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice }; at: { x: number; y: number } } | null>(null)
@@ -241,9 +245,10 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
       if (!why && other.length) off['plan-shots'] = 'That storyboard follows another script'
     }
     if (!canvasActions.canMake()) off['make-video'] = 'Make video needs the canvas'
+    if (!controls.generate) off.generate = 'Generate is turned off here'
     const pictures = resizableIn(all).count
     return { info: { cards, links, group, units, locked: all.every((e) => (e as El & { locked?: boolean }).locked), off, ...(pictures ? { pictures } : {}) }, els: all }
-  }, [ownEdit, vs, els, doc])
+  }, [ownEdit, vs, els, doc, controls.generate])
   const zoom = vs?.view.zoom ?? 1
   const limits = useMemo(() => ({ max: controls.generateMax, characters: controls.generateCharacters }), [controls.generateMax, controls.generateCharacters])
 
@@ -307,6 +312,8 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     if (!el || !ctrl || !canvas) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && placing) {
+        // Handled: the canvas's own Esc (leave a Drawing, clear the selection) then stands aside.
+        e.preventDefault()
         setPlacing(null)
         return
       }
@@ -552,6 +559,11 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
           {ctrl && canvas && ownSel && !resizing && !confirming && !placing && !which && (() => {
             const b = bounds(ownSel.els)
             const top = toView({ x: b.minX + b.w / 2, y: b.minY })
+            const ids = ownSel.els.map((e) => e.id)
+            if (genFor && genFor.join() === ids.join()) {
+              return <GeneratePopover ctrl={ctrl} ids={ids} at={{ x: top.x, top: top.y, bottom: toView({ x: b.minX, y: b.maxY }).y }} limits={limits}
+                onClose={() => setGenFor(null)} onPlace={(ids, text, more, modelChoice) => { setGenFor(null); setPlaceError(null); setPlacing({ ids, text, more, modelChoice }) }} />
+            }
             return (
               <SelectionBar info={ownSel.info} anchor={{ x: top.x, top: top.y - (ownSel.info.group?.ink ? 30 : 0), bottom: toView({ x: b.minX, y: b.maxY }).y }} actions={{
                 open: () => { const c = ownSel.els.map(cardOf).find(Boolean); if (c) open(c.kind, c.id) },
@@ -572,6 +584,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
                   campaignSheet.open({ master: m, nearId: ownSel.els[0]?.id })
                 },
                 resize: () => setResizing(ownSel.els),
+                generate: () => setGenFor(ids),
                 stack: (on) => {
                   const kg = keyGroupsOn(canvas.elements(), docStore.get()).find((g) => g.members.some((m) => ownSel.els.some((e) => e.id === m.id)))
                   if (kg) setStacked(canvas, kg.members, on, { animate: !matchMedia('(prefers-reduced-motion: reduce)').matches })

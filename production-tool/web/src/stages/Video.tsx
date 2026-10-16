@@ -11,7 +11,7 @@ import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from 
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
-import { makeClip as submitClip, renderAd } from '../jobs/clips'
+import { changeFeel, makeClip as submitClip, renderAd } from '../jobs/clips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, takeStale } from '../jobs/stale'
@@ -39,6 +39,7 @@ import { ctxReader } from '../jobs/runner'
 import { personOf } from '../projects/session'
 import { currentRender, currentTake, isImplicit, mainVideo, openVideo, reviewsList, shotFrameAsset, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { EditorBar } from '../ui/chrome/TopBars'
+import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import './video.css'
 import { SoundView } from './SoundView'
@@ -167,7 +168,8 @@ export function Video() {
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
       title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
       meta={<span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>}
-      middle={<span className="pt-seg" role="group" aria-label="View"><button aria-pressed={view === 'picture'} onClick={() => setView('picture')}>Picture</button><button aria-pressed={view === 'sound'} onClick={() => setView('sound')}>Sound</button></span>}
+      view={{ label: 'View', value: view, onPick: (v) => setView(v as typeof view), options: [{ id: 'picture', label: 'Picture' }, { id: 'sound', label: 'Sound' }] }}
+      more={() => <CopyLinkLater />}
       right={<>
         <button ref={trayRef} className="btn" aria-haspopup="dialog" aria-expanded={tray} disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => setTray(!tray)}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
         {tray && <ClipTray anchor={trayRef} open={tray} onClose={() => setTray(false)} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'} onMake={(ids, m) => void makeAll(ids, m)} />}
@@ -750,11 +752,14 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
 }
 
 function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
-  const { runner, relay } = useServices()
+  const { runner, relay, doc: docStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   const [text, setText] = useState('')
+  // Which model makes the change (features/runway-video-models.clan): Aleph 2 by default, or one that
+  // edits with the pictures the words name.
+  const [pick, setPick] = useState<ModelChoice | undefined>(undefined)
   const [strength, setStrength] = useState<Strength>('flex')
   const [error, setError] = useState<string | null>(null)
   const running = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id))
@@ -762,8 +767,8 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
   const apply = () => send(async () => {
     setError(null)
     try {
-      const video = await assetRef(relay, take.asset, doc)
-      await runner.submit('clip_edit', { video, text: text.trim(), ...(controls.feelStrength ? { feel: { strength } } : { feel: {} }) }, [take.job_id], { for: 'clip', shotId: shot.id, parentTakeId: take.id })
+      await changeFeel({ relay, doc: docStore, runner }, shot.id, take, text.trim(), controls.feelStrength ? { strength } : {},
+        choiceToSend('clip_edit', config, pick))
       setText('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -782,6 +787,7 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
         </div>
       )}
       <div className="row">
+        <ModelPick op="clip_edit" value={pick} onChange={setPick} />
         <span className="spacer" />
         <button className="btn sm primary" disabled={!text.trim() || running || sending} onClick={() => void apply()}>{sending ? 'Sending…' : running ? 'Working…' : 'Apply'}</button>
       </div>

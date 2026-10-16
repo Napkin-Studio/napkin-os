@@ -152,7 +152,8 @@
                 },
                 "note": {
                   "type": "string",
-                  "maxLength": 80
+                  "maxLength": 80,
+                  "description": "One line on what the model is good for, shown beside it in the menu. Never a price."
                 },
                 "maxS": {
                   "type": "number"
@@ -342,6 +343,10 @@
         "audioControl": {
           "type": "boolean",
           "description": "The clip model has an audio switch we can turn off. false: it always or never makes sound; the director adds 'no music, no dialogue'. Added 2026-10-06 (additive)."
+        },
+        "refsWithoutFrame": {
+          "type": "boolean",
+          "description": "A clip with no first frame can carry reference pictures (text_to_video `references`): the character goes to the model as pictures, not words. Absent or false: a clip from words alone takes no pictures. Added 2026-10-15 (additive, features/runway-video-models.clan)."
         }
       },
       "required": [
@@ -467,7 +472,7 @@
         },
         "ratio": {
           "type": "string",
-          "pattern": "^([0-9]+:[0-9]+|auto)$",
+          "pattern": "^([0-9]+:[0-9]+|auto|adaptive|auto_[0-9]+p)$",
           "description": "The output ratio; its resolution tier prices tiered models."
         },
         "resolution": {
@@ -542,11 +547,11 @@
             "properties": {
               "ratio": {
                 "type": "string",
-                "pattern": "^([0-9]+:[0-9]+|auto)$"
+                "pattern": "^([0-9]+:[0-9]+|auto|adaptive|auto_[0-9]+p)$"
               },
               "tier": {
                 "type": "string",
-                "description": "The resolution tier the ratio's pixel count falls in (512, 1K, 2K, 4K)."
+                "description": "The resolution tier the ratio's pixel count falls in: images 512, 1K, 2K, 4K; video 360p, 480p, 720p, 1080p, 4K (and an auto_<n>p ratio's own)."
               }
             },
             "required": [
@@ -648,6 +653,70 @@
         },
         "pricing": {
           "$ref": "#/$defs/pricing"
+        },
+        "audioParam": {
+          "type": "boolean",
+          "description": "The model's request has an `audio` switch (the adapter sends it, always false today). false: no such field; the model makes sound or not on its own. Added 2026-10-15 (additive, features/runway-video-models.clan)."
+        },
+        "negativePrompt": {
+          "type": "boolean",
+          "description": "The model's request takes `negativePrompt` (Veo). Added 2026-10-15 (additive, features/runway-video-models.clan)."
+        },
+        "imagesMax": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The most pictures one clip request carries, keyframes and references together (Kling O3: 7). Added 2026-10-15 (additive, features/runway-video-models.clan)."
+        },
+        "keyframeRatio": {
+          "enum": [
+            "auto_tier"
+          ],
+          "description": "With a first frame the request's ratio is auto_<tier> (WAN 3: the shape follows the frame), the tier of the ratio the job asked for. Added 2026-10-15 (additive, features/runway-video-models.clan)."
+        },
+        "v2v": {
+          "type": "object",
+          "description": "How the model edits a clip on POST /v1/video_to_video, when it is offered for clip_edit. Added 2026-10-15 (additive, features/runway-video-models.clan).",
+          "properties": {
+            "videoField": {
+              "enum": [
+                "videoUri",
+                "promptVideo"
+              ],
+              "description": "The field that carries the clip."
+            },
+            "mode": {
+              "enum": [
+                "edit"
+              ],
+              "description": "The `mode` sent (Omni Flash 1.1, Seedance 2.5: edit changes the clip in place)."
+            },
+            "durationAuto": {
+              "type": "boolean",
+              "description": "Send duration \"auto\" (Seedance 2.5 edit keeps the clip's length)."
+            },
+            "keepOriginalSound": {
+              "type": "boolean",
+              "description": "Send providerSettings.keepOriginalSound true (Kling O3)."
+            },
+            "refsMax": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Reference pictures one edit may carry, besides the clip."
+            },
+            "inputMaxS": {
+              "type": "number",
+              "description": "The longest clip the edit takes."
+            },
+            "audioParam": {
+              "type": "boolean",
+              "description": "The edit's request has an `audio` switch (Seedance 2.5); sent explicitly, false today."
+            }
+          },
+          "required": [
+            "videoField",
+            "refsMax"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -726,7 +795,8 @@
           "additionalProperties": {
             "type": "number",
             "minimum": 0
-          }
+          },
+          "description": "Per unit by resolution tier: an image's tier (512, 1K, 2K, 4K), a video upscaler's output (720p, 1k, 2k, 4k), or a clip's tier per second (360p, 480p, 720p, 1080p, 4K; Hailuo 3's 768p, 2k), from settings.resolution or the tier of settings.ratio."
         },
         "overPx": {
           "type": "integer",
@@ -748,6 +818,24 @@
             "type": "string"
           },
           "description": "The provider's published price rows this was entered from, verbatim (relay/tests/fixtures/pricing)."
+        },
+        "perRef": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Added per reference picture or keyframe the call carries (settings.refs), on top of the per-unit price (Hailuo 3: 2; Omni Flash 1.1: 1, an image-to-video start frame included). Added 2026-10-15 (additive, features/runway-video-models.clan)."
+        },
+        "perInputSecond": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Added per second of input video (settings.inputS), on top of the output's price (Omni Flash 1.1 edit: 1). Added 2026-10-15 (additive, features/runway-video-models.clan)."
+        },
+        "perInputSecondByResolution": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "As perInputSecond, by the output's resolution tier (Seedance 2.5). Added 2026-10-15 (additive, features/runway-video-models.clan)."
         }
       },
       "required": [

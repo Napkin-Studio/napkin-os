@@ -10,6 +10,7 @@ import { RemakeBar } from './ui/Follow'
 import { CanvasBar } from './ui/chrome/TopBars'
 import { BusyPointer } from './ui/loader/BusyPointer'
 import { UndoKeys } from './ui/UndoButtons'
+import { SaveKeys } from './ui/SaveButton'
 import { PhoneReview } from './stages/PhoneReview'
 import { PHONE, useMedia } from './ui/hooks'
 import { PanelsContext } from './ui/chrome/panels'
@@ -72,6 +73,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       <FallbackNotices />
       <BusyPointer />
       <UndoKeys />
+      <SaveKeys />
       {!import.meta.env.PROD && <DevSwitch />}
     </PanelsContext.Provider>
   )

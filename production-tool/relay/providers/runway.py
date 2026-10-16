@@ -1,7 +1,11 @@
 """Runway adapter, over raw httpx (docs/production-tool/providers.md, capabilities/runway.json).
 
 Images go to text_to_image (gemini_image3_pro, gemini_image3.1_flash), clips to image_to_video
-(veo3.1) and clip edits to video_to_video (aleph2), upscales to image_upscale (magnific).
+(veo3.1 and the alternates: Kling, Hailuo, Omni Flash, WAN, Seedance) or text_to_video, and clip edits to
+video_to_video (aleph2, Kling O3, Omni Flash 1.1, Seedance 2.5), upscales to image_upscale (magnific).
+Each clip model's request is built from its catalogue facts (models[m]: audioParam, negativePrompt,
+imagesMax, keyframeRatio, resolutions, v2v) and its effective sheet (refs, video.firstFrameWithRefs,
+video.refsWithoutFrame), checked against Runway's OpenAPI in tests (features/runway-video-models.clan).
 Make all sizes (features/campaign-formats.clan, op resize) runs extend as an ideogram_4_5 mask edit of
 the relay's padded canvas at the sheet's quality (high), and regenerate on gemini_image3_pro with the
 master as @master at the ratio the relay picked.
@@ -53,7 +57,9 @@ def min_poll_s() -> int:
 def failure(code: Optional[str], message: str) -> tuple[ProviderError, bool]:
     """Map a task failureCode onto our error. The flag says the task was moderated."""
     code = code or ""
-    if code.startswith("SAFETY.") or code == "INPUT_PREPROCESSING.SAFETY.TEXT":
+    # Every safety family: SAFETY.*, and INPUT_PREPROCESSING.SAFETY.* (the text filter, and the upstream
+    # model's own, e.g. Seedance refusing a photoreal face): a clear moderated failure, never retried.
+    if code.startswith(("SAFETY.", "INPUT_PREPROCESSING.SAFETY")):
         return ProviderError("moderated", message, False, provider_code=code), True
     if code == "ASSET.INVALID":
         return ProviderError("invalid_input", message, False, provider_code=code), False
@@ -95,7 +101,11 @@ def _http_error(resp: httpx.Response) -> ProviderError:
 # The previous defaults, kept as alternates (features/default-models.clan). Runway is the floor of
 # every job and its models are always offered (features/runway-fallback.clan).
 ALTERNATES = {"generate": {"gemini_image3.1_flash"}, "view": {"gemini_image3.1_flash"},
-              "frame": {"gemini_image3.1_flash"}, "clip": {"veo3.1_fast"},
+              "frame": {"gemini_image3.1_flash"},
+              # features/runway-video-models.clan: clips that carry characters, and edits with pictures
+              "clip": {"veo3.1_fast", "klingO3_pro", "klingO3_standard", "kling3.0_pro", "kling3.0_standard",
+                       "hailuo3", "gemini_omni_flash_1.1", "wan3", "seedance2_5", "seedance2_fast"},
+              "clip_edit": {"klingO3_pro", "klingO3_standard", "gemini_omni_flash_1.1", "seedance2_5"},
               "region_edit": {"gemini_image3_pro"},  # the box-drawn edit, before ideogram_4_5 took masks
               "resize": {"gemini_image3_pro"}}  # Make all sizes' regenerate (features/campaign-formats.clan)
 
@@ -137,9 +147,10 @@ class RunwayProvider:
         """The model the job names when the sheet lists it for the op, else the op's own."""
         return effective_sheet(self._sheet, job.op, job.model)["ops"][job.op]["model"]
 
-    def _tagged(self, names: list[str], prompt: str) -> str:
+    def _tagged(self, names: list[str], prompt: str, syntax: Optional[str] = None) -> str:
+        """The prompt in the model's own reference syntax (`syntax`: its effective sheet's tagSyntax)."""
         try:
-            return rewrite_tags(unsent_in_words(prompt, names), names, self._sheet["tagSyntax"])
+            return rewrite_tags(unsent_in_words(prompt, names), names, syntax or self._sheet["tagSyntax"])
         except UnknownTag as exc:
             raise ProviderError("invalid_input", str(exc), False) from exc
 
@@ -312,47 +323,92 @@ class RunwayProvider:
                  "subject": "human" if r.role == "character" else "object"} for r in refs]
         return "/v1/text_to_image", body
 
+    def _catalogue(self, model: str) -> dict:
+        return (self._sheet.get("models") or {}).get(model) or {}
+
+    @staticmethod
+    def _auto_ratio(ratio: str, m: dict) -> str:
+        """WAN 3 with keyframes: auto_<tier>, the tier of the size the job asked for (720p when unknown)."""
+        tier = next((r.get("tier") for r in m.get("ratios") or [] if r["ratio"] == ratio), None)
+        return f"auto_{tier or '720p'}"
+
     def _clip(self, job: ProviderJob) -> tuple[str, dict]:
         self._check(job, job.prompt)
-        # A clip with no first frame is made from words alone (a clip straight from the script,
-        # ui-behaviour 3.5), where the model's sheet names a text endpoint; it takes no pictures.
+        sheet = effective_sheet(self._sheet, job.op, job.model)
+        spec, video = sheet["ops"][job.op], sheet["video"]
+        model = spec["model"]
+        m = self._catalogue(model)
+        # A clip with no first frame goes to the model's text endpoint (a clip straight from the script,
+        # ui-behaviour 3.5). It carries pictures only where the model takes references there
+        # (video.refsWithoutFrame: Hailuo 3, Omni Flash 1.1, WAN 3, Seedance); Veo and Kling take none.
         text_only = not job.first_frame
-        endpoint = effective_sheet(self._sheet, job.op, job.model)["ops"][job.op].get("textEndpoint")
+        endpoint = spec.get("textEndpoint")
         if text_only and not endpoint:
             raise CapabilityMissing("clip needs a first frame")
-        if text_only and (job.refs or job.last_frame):
-            raise CapabilityMissing("a clip from words alone takes no pictures")
+        if text_only and job.last_frame:
+            raise CapabilityMissing("a clip from words alone takes no last frame")
+        if text_only and job.refs and not video.get("refsWithoutFrame"):
+            raise CapabilityMissing(f"{m.get('label', model)} takes no pictures for a clip from words alone")
+        images = len(job.refs) + bool(job.first_frame) + bool(job.last_frame)
+        if m.get("imagesMax") and images > m["imagesMax"]:
+            raise CapabilityMissing(f"{m.get('label', model)} takes at most {m['imagesMax']} pictures, frames included")
         if not job.ratio:
             raise ProviderError("invalid_input", "clip needs a ratio", False)
-        body = {"model": self._model(job)}
+        body = {"model": model}
         if not text_only:
             frames = [{"uri": self._assets(job.first_frame).url, "position": "first"}]
             if job.last_frame:
                 frames.append({"uri": self._assets(job.last_frame).url, "position": "last"})
             body["promptImage"] = frames
-        body.update({
-            "promptText": self._tagged([r.name for r in job.refs], job.prompt),
-            "ratio": job.ratio,
-            "audio": video_audio(job),  # Veo defaults to sound on
-        })
+        if job.refs:  # objects, never bare strings (a string array is a 400: paid test 2026-10-15)
+            body["references"] = [{"uri": self._assets(r.sha256).url} for r in job.refs]
+        body["promptText"] = self._tagged([r.name for r in job.refs], job.prompt, sheet["tagSyntax"])
+        keyframed = not text_only and m.get("keyframeRatio") == "auto_tier"
+        body["ratio"] = self._auto_ratio(job.ratio, m) if keyframed else job.ratio
+        if m.get("resolutions"):  # Hailuo 3: the size is a resolution beside an aspect ratio
+            body["resolution"] = (spec.get("defaults") or {}).get("resolution") or m["resolutions"][0]
+        if m.get("audioParam", True):
+            body["audio"] = video_audio(job)  # explicit wherever the model has the switch; Veo defaults to sound on
         if job.duration_s is not None:
             body["duration"] = int(job.duration_s)
-        if job.negative:
+        if job.negative and m.get("negativePrompt"):
             body["negativePrompt"] = job.negative
-        if job.seed is not None:
+        if job.seed is not None and spec.get("seed", sheet.get("seed")):  # Veo and Seedance take one
             body["seed"] = job.seed
         return (endpoint.split(" ", 1)[-1] if text_only else "/v1/image_to_video"), body
 
     def _clip_edit(self, job: ProviderJob) -> tuple[str, dict]:
         self._check(job, job.prompt)
-        videos = [a for a in (self._assets(r.sha256) for r in job.refs) if a.mime == "video/mp4"]
+        sheet = effective_sheet(self._sheet, job.op, job.model)
+        model = sheet["ops"][job.op]["model"]
+        m = self._catalogue(model)
+        v2v = m.get("v2v") or {"videoField": "videoUri", "refsMax": 0}
+        assets = [(r, self._assets(r.sha256)) for r in job.refs]
+        videos = [a for _, a in assets if a.mime == "video/mp4"]
         if not videos:
             raise CapabilityMissing("clip_edit needs the source video (video/mp4) among its refs")
+        # Pictures go only to a model that edits with them (Kling O3, Omni Flash 1.1, Seedance 2.5); on
+        # aleph2 their @tags are said in words.
+        pictures = [(r, a) for r, a in assets if a.mime != "video/mp4"] if v2v.get("refsMax") else []
+        if len(pictures) > v2v.get("refsMax", 0):
+            raise CapabilityMissing(f"{m.get('label', model)} edits with at most {v2v['refsMax']} pictures")
+        if job.keyframe and sheet["video"]["regionEdit"] != "temporal_keyframe":
+            raise CapabilityMissing(f"{m.get('label', model)} takes no keyframe")
         body = {
-            "model": self._model(job),
-            "videoUri": videos[0].url,
-            "promptText": self._tagged([r.name for r in job.refs], job.prompt),
+            "model": model,
+            v2v["videoField"]: videos[0].url,
+            "promptText": self._tagged([r.name for r, _ in pictures], job.prompt, sheet["tagSyntax"]),
         }  # aleph2 has no audio parameter, so unlike clip this body cannot set it
+        if pictures:
+            body["references"] = [{"uri": a.url} for _, a in pictures]
+        if v2v.get("mode"):
+            body["mode"] = v2v["mode"]
+        if v2v.get("durationAuto"):
+            body["duration"] = "auto"  # Seedance 2.5 edit keeps the clip's length
+        if v2v.get("keepOriginalSound"):
+            body["providerSettings"] = {"keepOriginalSound": True}  # Kling O3: the clip's own sound stays
+        if v2v.get("audioParam"):  # Seedance 2.5's edit has the switch; Kling O3 keeps the clip's sound instead
+            body["audio"] = video_audio(job)
         if job.keyframe:
             kf = job.keyframe
             frame = {"uri": self._assets(kf["sha256"]).url, "seconds": kf["atS"]}
@@ -361,7 +417,7 @@ class RunwayProvider:
             elif kf.get("startS") is not None or kf.get("endS") is not None:
                 raise ProviderError("invalid_input", "a keyframe range needs both startS and endS", False)
             body["keyframes"] = [frame]
-        if job.seed is not None:
+        if job.seed is not None and sheet["ops"][job.op].get("seed", sheet.get("seed")):
             body["seed"] = job.seed
         return "/v1/video_to_video", body
 

@@ -35,8 +35,8 @@ def unsent_in_words(prompt: str, names: Sequence[str]) -> str:
 def _render(syntax: str, name: str) -> str:
     if syntax == "at_tag":
         return f"@{name}"
-    if syntax == "none":
-        return name
+    if syntax == "none":  # a model that names no picture by tag: the name as words ("baby front")
+        return name.replace("_", " ")
     raise ValueError(f"unknown tagSyntax {syntax!r}")
 
 

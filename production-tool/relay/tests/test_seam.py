@@ -120,7 +120,7 @@ def test_relay_job_reaches_runway_in_its_own_request_shape(seam):
     (out,) = done["outputs"]
     assert out["url"].startswith(f"{CDN}/out/sha256:") and out["mime"] == "image/png"
     assert done["director"]["model"] == base_config()["director"]["perClickModel"]
-    assert done["director"]["promptVersion"] == base_config()["director"]["promptVersion"] == "director.v8"
+    assert done["director"]["promptVersion"] == base_config()["director"]["promptVersion"] == "director.v9"
 
 
 def test_director_wrapper_output_validates_against_the_contract():
@@ -165,11 +165,11 @@ def test_a_shot_list_the_director_cannot_make_still_fails():
 def test_director_takes_model_ids_from_config():
     wire = FakeWire(REPLY)
     d = make_director(wire=wire)
-    d.use_config({"perClickModel": "eu.anthropic.claude-test", "promptVersion": "director.v9"})
+    d.use_config({"perClickModel": "eu.anthropic.claude-test", "promptVersion": "director.v99"})
     d.direct({"jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "input": generate_input()},
              types.load_sheet("runway"))
     assert wire.calls[0]["model"] == "eu.anthropic.claude-test"
-    assert d.director.prompt_version == "director.v6"  # v9 is not bundled
+    assert d.director.prompt_version == "director.v6"  # v99 is not bundled
 
 
 def test_load_director_is_passthrough_without_a_model(monkeypatch):

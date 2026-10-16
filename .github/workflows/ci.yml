@@ -384,6 +384,12 @@ jobs:
           npm run lint
           npm test
           npm run build:web
+      - name: Web — e2e (Playwright, real pointer events, in-browser mock)
+        if: hashFiles('production-tool/web/package.json') != ''
+        working-directory: production-tool/web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
 
   # napkin-web's image, built (never pushed) when what it bundles changes:
   # the Dockerfile, .dockerignore, and the Production Tool's web app, CLAN

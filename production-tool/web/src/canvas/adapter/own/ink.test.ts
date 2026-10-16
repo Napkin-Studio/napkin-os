@@ -43,7 +43,7 @@ describe('the pen draws in the theme\'s ink', () => {
     a.setActiveTool({ type: 'native', id: 'freedraw' })
     a.setPen({ ...DEFAULT_PEN, pen: { color: 'blue', width: 8 } })
     expect(stroke(a).style).toEqual({ stroke: 'blue', width: 8 })
-    a.setPen({ mode: 'highlighter', pen: { color: 'blue', width: 8 }, highlighter: { color: 'green', width: 28 } })
+    a.setPen({ mode: 'highlighter', pen: { color: 'blue', width: 8 }, highlighter: { color: 'green', width: 28 }, recent: [] })
     expect(a.inkTool).toBe('highlighter')
     const h = stroke(a)
     expect(h.style).toEqual({ stroke: 'green', width: 28 })

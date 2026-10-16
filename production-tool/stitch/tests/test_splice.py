@@ -133,13 +133,14 @@ def test_cut_is_frame_accurate_and_grabs_the_still(media, tmp_path):
     cut, parent = media.root / "cut.mp4", media.root / "parent.mp4"
     assert len(decoded(cut)) == 2 * FPS
     # The cut's first and last frames are the take's 48 and 95 (the testsrc counter moves every frame).
+    # The probes are .mkv: ffmpeg 7.1 muxes a one-frame .mp4 with a zero-length edit list, so it reads back empty.
     ff("-i", str(parent), "-vf", "trim=start_frame=47:end_frame=50,setpts=PTS-STARTPTS", "-c:v", "libx264", "-crf", "0",
-       str(tmp_path / "around.mp4"))
-    first = [psnr(cut, tmp_path / "around.mp4", 0, 1, tmp_path)[0]]
+       str(tmp_path / "around.mkv"))
+    first = [psnr(cut, tmp_path / "around.mkv", 0, 1, tmp_path)[0]]
     for shift in (1, 2):  # the cut's frame 0 against the take's 48 (around[1]) and its neighbours
-        ff("-i", str(tmp_path / "around.mp4"), "-vf", f"trim=start_frame={shift}:end_frame={shift + 1},setpts=PTS-STARTPTS",
-           "-c:v", "libx264", "-crf", "0", str(tmp_path / f"n{shift}.mp4"))
-        first.append(psnr(cut, tmp_path / f"n{shift}.mp4", 0, 1, tmp_path)[0])
+        ff("-i", str(tmp_path / "around.mkv"), "-vf", f"trim=start_frame={shift}:end_frame={shift + 1},setpts=PTS-STARTPTS",
+           "-c:v", "libx264", "-crf", "0", str(tmp_path / f"n{shift}.mkv"))
+        first.append(psnr(cut, tmp_path / f"n{shift}.mkv", 0, 1, tmp_path)[0])
     assert first.index(max(first)) == 1, first
     # The still is a lossless PNG of the frame at 3.2 s (the take's frame 77, the first at or after it).
     still = media.root / "still0.png"

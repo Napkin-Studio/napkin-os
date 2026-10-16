@@ -8,6 +8,8 @@ The relay invokes stitch.py's handler with `mode` set (an event with no mode is 
          Reads the take (its length decides what is sent). With clip: the take's [fromS, toS)
          re-encoded with an accurate seek (never a stream copy, which starts at a keyframe), no audio.
          Each still: a lossless PNG of the frame at atS (the keyframe; a and b for a first/last model).
+         A take that is a picture (the mock's, with no ffmpeg at hand) is read too: every still is the
+         picture, the clip is it held for toS - fromS, takeS is 0 and still is true.
 
   splice {jobId, mode: "splice", parentKey, patchKey, cutFromS, windowFromS, windowToS, crossfadeS,
           seamMin?, outKey, resultKey}
@@ -114,6 +116,13 @@ def cut(event: dict, *, get, put, ffmpeg: str, ffprobe: str, tmp: str) -> dict:
     first/last-frame model)."""
     src = os.path.join(tmp, "take.mp4")
     get(event["key"], src)
+    from stitch import still_ext  # beside this file
+
+    ext = still_ext(src)
+    if ext:  # the mock's take when no ffmpeg was at hand: a picture
+        named = os.path.join(tmp, f"take{ext}")
+        os.rename(src, named)
+        return _cut_picture(event, named, put=put, ffmpeg=ffmpeg, ffprobe=ffprobe, tmp=tmp)
     p = probe(ffprobe, src)
     result: dict = {"ok": True, "takeS": round(p["frames"] / p["fps"], 3), "w": p["w"], "h": p["h"],
                     "fps": round(p["fps"], 3), "stills": []}
@@ -140,6 +149,37 @@ def cut(event: dict, *, get, put, ffmpeg: str, ffprobe: str, tmp: str) -> dict:
         sha, size = _sha(still)
         put(s["key"], still, "image/png")
         result["stills"].append({"sha256": sha, "bytes": size})
+    return result
+
+
+def _cut_picture(event: dict, src: str, *, put, ffmpeg: str, ffprobe: str, tmp: str) -> dict:
+    """cut on a take that is a picture (the mock's PNG, features/connected-video.clan): every still is the
+    picture itself, as a PNG, whatever its atS; a clip is the picture held for toS - fromS. takeS is 0 and
+    `still` says why."""
+    from stitch import FPS, probe as probe_size  # beside this file
+
+    size = probe_size(ffprobe, src)
+    result: dict = {"ok": True, "takeS": 0.0, "still": True, "w": size["w"], "h": size["h"], "fps": float(FPS),
+                    "stills": []}
+    clip = event.get("clip")
+    if clip:
+        frm, to = float(clip["fromS"]), float(clip["toS"])
+        if not 0 <= frm < to:
+            raise SpliceError(f"the cut {frm}-{to} s is empty")
+        out = os.path.join(tmp, "cut.mp4")
+        _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-loop", "1", "-framerate", str(FPS), "-i", src,
+              "-frames:v", str(max(1, round((to - frm) * FPS))), "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+              "-c:v", "libx264", "-preset", "veryfast", "-crf", str(CUT_CRF), "-pix_fmt", "yuv420p",
+              "-movflags", "+faststart", out])
+        sha, n = _sha(out)
+        put(clip["outKey"], out, "video/mp4")
+        result["clip"] = {"sha256": sha, "bytes": n, "durationS": round(max(1, round((to - frm) * FPS)) / FPS, 3)}
+    for i, s in enumerate(event.get("stills") or []):
+        still = os.path.join(tmp, f"still{i}.png")
+        _run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-frames:v", "1", still])
+        sha, n = _sha(still)
+        put(s["key"], still, "image/png")
+        result["stills"].append({"sha256": sha, "bytes": n})
     return result
 
 

@@ -154,8 +154,17 @@ export function jobRationale(job: JobEntry, cards?: DirectorCard[]): string {
   if (t) parts.push(t)
   for (const o of job.outputs ?? []) parts.push(`out ${o}`)
   if (job.error) parts.push(`${job.error.code}${job.error.providerCode ? ` (${job.error.providerCode})` : ''}: ${clip(job.error.message, 200)}`)
-  return parts.join(' · ') + (cards?.length ? sawPart(cards) : '')
+  // patch.schema.json caps a rationale at 2000 characters, and a longer one refuses the whole landing:
+  // keep the cards whole (cardsFromRationale reads them back) and shorten what comes before them.
+  const head = parts.join(' · ')
+  const tail = cards?.length ? sawPart(cards) : ''
+  if (head.length + tail.length <= RATIONALE_MAX) return head + tail
+  const room = RATIONALE_MAX - tail.length
+  return room >= 200 ? clip(head, room) + tail : clip(head + tail, RATIONALE_MAX)
 }
+
+/** patch.schema.json Why.rationale maxLength. */
+const RATIONALE_MAX = 2000
 
 /** The why of a job's landing: the verb of its op, agent its crew, citing the job. */
 export function landingWhy(docId: string, job: JobEntry, what: string, cards?: DirectorCard[]): { action: string; agent: string; rationale: string; cites: string[] } {

@@ -33,7 +33,10 @@ const STATE_LABEL: Record<string, string> = {
   uncertain: 'Checking with the provider…',
 }
 
-export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; compact?: boolean; onRetried?: (newId: string) => void }) {
+/** `row`: one line in a list (the Image editor's Edits row): status, elapsed time and Cancel with its confirm,
+ *  never a loader over the work. Its other states are the compact ones. */
+export function JobNode({ jobId, compact: small = false, row = false, onRetried }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void }) {
+  const compact = small || row
   const { runner } = useServices()
   const doc = useDoc()
   useJobsTick()
@@ -135,6 +138,17 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
 
   const q = live?.queuePosition
   const model = job.model ? modelLabel(job.provider, job.model) : undefined
+  const cancel = state !== 'fetching' && (confirming
+    ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
+    : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)
+  if (row) {
+    return (
+      <span className="jobrow" aria-live="polite" title={who.line}>
+        <span className="meta">{STATE_LABEL[state] ?? 'Working…'}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}</span>
+        {cancel}
+      </span>
+    )
+  }
   return (
     <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
@@ -147,9 +161,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
       </div>
       {!compact && live?.note && <div className="meta" role="status">{live.note}</div>}
       {/* Downloading the result: it lands as it is, so there is nothing to cancel. */}
-      {!compact && state !== 'fetching' && (confirming
-        ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
-        : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)}
+      {!compact && cancel}
     </div>
     {/* Answered and back at work: who chose what, with Change. */}
     {!compact && ask && <AskCard ask={ask} />}

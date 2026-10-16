@@ -23,16 +23,16 @@ import { framesOf, openAsks, scriptText, shotsOf, staleList, takesOf } from '../
 import { answerShotAsk } from '../stages/storyboardEdits'
 import { AgentAvatar } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
-import { Float, MenuItem } from '../ui/Float'
+import { MenuItem } from '../ui/Float'
 import { HistoryPanel, type HistoryFocus } from '../ui/History'
 import { AskCard, AskOptions } from '../ui/AskCard'
 import { showAsk } from '../ui/askPlaces'
-import { UndoButtons } from '../ui/UndoButtons'
-import { Account, BackButton, BarSep, NodeIcon } from '../ui/chrome/Bar'
+import { BackButton } from '../ui/chrome/Bar'
+import { EditorBar } from '../ui/chrome/TopBars'
+import { LinkIcon } from '../ui/chrome/MoreMenu'
 import { nodeTitle } from '../ui/chrome/panels'
 import { useProjectName } from '../ui/useDownload'
 import { AgentFigure } from '../ui/agents/AgentFigure'
-import { JobTray } from '../ui/JobTray'
 import { useBlobUrl } from '../ui/hooks'
 import { CAST, type CastKey } from '../ui/agents/cast'
 import { CaretChain, caretKey } from './caret'
@@ -44,7 +44,7 @@ import { parseFountain } from './fountain'
 import { useEditorTick } from './hooks'
 import { Outline } from './Outline'
 import { SkyeBar, SuggestionCard } from './SkyeUI'
-import { draftFromLine, fitSeconds, handsOff, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
+import { draftFromLine, fitSeconds, handsOff, NEW_SCENE_LINE, NOT_HERE, SKYE, skyeAsks, skyeState, startWrite, waitingLine } from './skye'
 import { answerLocalAsk, nameAsks, settleNameAsks } from './nameAsks'
 import { linkForMention, linkWords } from '../text/mention/source'
 import { scopeOf, scopeRefs, type ScopeItem } from '../model/scope'
@@ -57,6 +57,8 @@ import { ShotEditor } from './ShotEditor'
 import './script.css'
 import './look.css'
 import { PromptStart } from '../ui/prompt/PromptStart'
+import { LengthPicker } from './LengthPicker'
+import { setScriptTarget } from './length'
 import { canvasActions } from '../canvas/chrome/actions'
 import { planFromScript, planShotsBlocked } from '../jobs/scriptVideo'
 import { nextStep, videoOfScript as nextVideo, type NextAction } from './nextStep'
@@ -140,8 +142,6 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
   const [notice, setNotice] = useState<{ text: string; undo?: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ text: string; yes: string; go: () => void } | null>(null)
-  const [menu, setMenu] = useState(false)
-  const menuRef = useRef<HTMLButtonElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [chain] = useState(() => new CaretChain())
   const person = ui.me ? `human:${ui.me.participantId}` : LOCAL_PERSON
@@ -351,13 +351,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 
   const hooksFor = (key: string, extra: Partial<KeyHooks> = {}): KeyHooks => ({
     out: (dir) => chain.move(key, dir),
-    escape: () => {
-      if (menu) {
-        setMenu(false)
-        return true
-      }
-      return false
-    },
+    escape: () => false,
     ...extra,
   })
   const focusOn = (key: string) => (e: Editor | null) => {
@@ -411,59 +405,58 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
 
   return (
     <div className={`se ${sheet ? `sheet-${sheet}` : ''}`} data-script-page="" data-view={view}>
-      <header className="ptbar se-top">
-        <BackButton label={backTo} onClick={onBack} />
-        <BarSep />
-        <NodeIcon kind="script" />
-        <h1 className="pt-title">Script · {title}</h1>
-        <span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>
-        {!phone && (
-          <span className="pt-seg se-switch" role="group" aria-label="Script view">
-            <button aria-pressed={view === 'screenplay'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'screenplay' } } })}>Screenplay</button>
-            <button aria-pressed={view === 'av'} onClick={() => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: 'av' } } })}>Video · Audio</button>
-          </span>
-        )}
-        {/* What is running, as on every editor bar: the one place besides the pointer the logo turns (ui-behaviour 6.5). */}
-        <JobTray />
-        <span className="pt-grow" />
-        {storyboardsOf(doc, scriptId).length > 1 && (
+      {/* The shared editor bar (features/topbar-declutter.clan): the view switch, Undo, History, More
+          (Import Fountain, Copy link to this, Shots from) and Plan shots, fitted like every editor's. */}
+      <EditorBar className="se-top" back={backTo} onBack={onBack} icon="script" title={`Script · ${title}`}
+        meta={<span className={`pt-mono se-saved ${saved === 'Saved' ? '' : 'busy'}`} role="status">{saved}</span>}
+        view={phone ? undefined : {
+          label: 'Script view', value: view,
+          onPick: (v) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { ...u.script?.[scriptId], view: v as typeof view } } }),
+          options: [{ id: 'screenplay', label: 'Screenplay' }, { id: 'av', label: 'Video · Audio' }],
+        }}
+        undo={!phone}
+        history={{ on: history, toggle: () => { setHistoryFocus(undefined); setHistory((h) => !h) } }}
+        moreTip={phone ? 'More: copy link' : 'More: import Fountain, copy link'}
+        moreHead={storyboardsOf(doc, scriptId).length > 1 && (
           <label className="se-from">Shots from
             <select className="select xs" value={sb?.id ?? ''} onChange={(e) => uiStore.update((u) => { u.script = { ...u.script, [scriptId]: { view, ...u.script?.[scriptId], storyboard: e.target.value } } })}>
               {storyboardsOf(doc, scriptId).map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
             </select>
           </label>
         )}
-        {!phone && <UndoButtons />}
-        <button className={`btn ${history ? 'on' : ''}`} aria-pressed={history} onClick={() => { setHistoryFocus(undefined); setHistory((h) => !h) }} title="Every decision, who made it and why">History</button>
-        <button ref={menuRef} className={`btn icon ${menu ? 'on' : ''}`} aria-label="More" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-        <Float anchor={menuRef} open={menu} onClose={() => setMenu(false)} align="end" label="More">
-          {!phone && <MenuItem icon="⇪" onSelect={() => { setMenu(false); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
-          <MenuItem icon="🔗" onSelect={() => {
-            setMenu(false)
-            const url = new URL(formatRoute(route), location.origin).href
-            void navigator.clipboard?.writeText(url).then(() => say('Link copied.'), () => say(url))
-          }}>Copy link to this</MenuItem>
-        </Float>
-        {!phone && blocked && !planning && <span className="se-why" id="se-plan-why">{blocked}</span>}
-        {!phone && (
-          <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked ? 'se-plan-why' : undefined} onClick={() => void plan()}>
-            {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
-          </button>
+        more={(close) => (
+          <>
+            {!phone && <MenuItem icon="⇪" onSelect={() => { close(); fileRef.current?.click() }}>Import Fountain…</MenuItem>}
+            <MenuItem icon={<LinkIcon />} onSelect={() => {
+              close()
+              const url = new URL(formatRoute(route), location.origin).href
+              void navigator.clipboard?.writeText(url).then(() => say('Link copied.'), () => say(url))
+            }}>Copy link to this</MenuItem>
+          </>
         )}
-        <Account />
-        <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
-          const f = e.target.files?.[0]
-          e.target.value = ''
-          if (f) void doImport(f)
-        }} />
-      </header>
+        primary={!phone && (
+          <>
+            {/* Why Plan shots is off: its tooltip, and read with it (a disabled button never says why). */}
+            {blocked && !planning && <span className="pt-sr se-why" id="se-plan-why">{blocked}</span>}
+            <button className="btn primary" disabled={!!blocked || !!planning} aria-describedby={blocked && !planning ? 'se-plan-why' : undefined}
+              data-tip={blocked && !planning ? blocked : undefined} onClick={() => void plan()}>
+              {planning ? 'Planning…' : behind ? 'Update storyboard' : 'Plan shots'}
+            </button>
+          </>
+        )} />
+      <input ref={fileRef} type="file" accept=".fountain,.spmd,.txt,text/plain" hidden onChange={(e) => {
+        const f = e.target.files?.[0]
+        e.target.value = ''
+        if (f) void doImport(f)
+      }} />
       {phone && <div className="banner" role="status">You can watch and leave notes here. Open on a laptop or iPad to edit.</div>}
       {!phone && next && (
         <div className="se-next" role="status" aria-label="What comes next" data-next={next.step}>
           <AgentFigure agent="dex" size={22} decorative />
           <span><span className="who">{sayer('dex')}:</span> {next.line}</span>
           <span className="pt-grow" />
-          {next.actions.map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
+          {/* Plan shots and Update storyboard are the bar's primary: the line does not repeat them. */}
+          {next.actions.filter((a) => a !== 'plan' && a !== 'update').map((a) => <button key={a} type="button" className="btn sm" onClick={() => onNext(a)}>{NEXT_LABEL[a]}</button>)}
         </div>
       )}
       {confirm && (
@@ -496,7 +489,7 @@ function ScriptPage({ store, scriptId, onBack, backTo }: { store: ModelStore; sc
           <>
             <button className="se-handle right" aria-expanded={sheet === 'facts'} onClick={() => setSheet(sheet === 'facts' ? null : 'facts')}>Facts</button>
             <Facts composed={composed} doc={doc} current={current} planning={planning} person={person} onError={setError}
-              skyeWorking={skye.working} skyeWaiting={skye.waiting} skyeOff={skye.off}
+              skyeWorking={skye.working} skyeWaiting={skye.waiting} skyeNewScene={!!skye.newScene} skyeOff={skye.off}
               onLink={(refId, kind = 'ref') => {
                 const link = linkForMention(doc, { id: refId, kind }, { kind: 'script', id: scriptId }, () => newUlidId('link'))
                 if (link) void attempt(() => store.change((x) => { x.links[link.id] = link }, { action: `link ${link.from.kind}s[${link.from.id}] to scripts[${scriptId}]` }).then(() => say(`Linked ${linkWords(doc, link)} to this script.`, true)))
@@ -853,9 +846,9 @@ function WriterMark({ writer, person, onWhy }: { writer?: string; person: string
 }
 
 /** The right-hand area: only facts about the script. */
-function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeWaiting, skyeOff, onNameAnswer, onLink }: {
+function Facts({ composed, doc, current, planning, person, onError, skyeWorking, skyeWaiting, skyeNewScene, skyeOff, onNameAnswer, onLink }: {
   composed: ComposedScript; doc: Doc; current?: string; planning?: string; person: string; onError: (m: string | null) => void
-  skyeWorking?: string; skyeWaiting?: { jobId: string; ask?: Ask }; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
+  skyeWorking?: string; skyeWaiting?: { jobId: string; ask?: Ask }; skyeNewScene?: boolean; skyeOff: boolean; onNameAnswer: (askId: string, option: 'character' | 'extra' | 'cut') => void
   /** Link a reference (or a whole key) named in the script but not linked to it. */
   onLink: (id: string, kind?: 'ref' | 'key') => void
 }) {
@@ -870,6 +863,12 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
   // The longest shot is named only when one shot is longer than every other.
   const longest = shots.filter((s) => s.duration_s === maxS).length === 1 ? shots.find((s) => s.duration_s === maxS) ?? null : null
   const diff = Math.round((target - est) * 10) / 10
+  // The target: the script's, its storyboard's and that storyboard's video's, one undo step (script/length.ts).
+  const setLength = (seconds: number) => {
+    onError(null)
+    void updateDoc(docStore, (d) => setScriptTarget(d, composed.script.id, sb?.id, seconds), `set the script length to ${seconds} s`)
+      .catch((e) => onError(e instanceof Error ? e.message : 'That length did not save.'))
+  }
   const asks = openAsks(doc).filter((a) => !!askedShot(a) && shots.some((s) => s.id === askedShot(a)))
   const answer = (a: Ask, shotId: string, option: 'keep' | 'remove') => {
     onError(null)
@@ -893,7 +892,7 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
         <span className="pt-mono">{shots.length} {shots.length === 1 ? 'shot' : 'shots'} · {sb?.ratio ?? '16:9'}</span>
       </section>
       <section aria-label="Length" className="se-lengthcard">
-        <div className="se-meterline"><span className="pt-label">Length</span><span>{target} s target · {secs(est)} estimated</span></div>
+        <div className="se-meterline"><span className="pt-label">Length</span><span><LengthPicker value={target} onPick={setLength} /> target · {secs(est)} estimated</span></div>
         <div className="se-meter" role="img" aria-label={`${secs(est)} of ${target} s`}>
           {shots.map((s) => (
             <span key={s.id} className={`seg ${s.id === current ? 'cur' : ''} ${longest && s.id === longest.id && shots.length > 2 ? 'long' : ''}`} style={{ flexGrow: s.duration_s }} title={`${secs(s.duration_s)}`} />
@@ -922,6 +921,12 @@ function Facts({ composed, doc, current, planning, person, onError, skyeWorking,
           <AgentFigure agent="skye" state="needs-you" size={20} decorative />
           <span><span className="who">{SKYE}:</span> {waitingLine(skyeWaiting.ask)}</span>
           {skyeWaiting.ask && <button type="button" className="btn xs" onClick={() => void showAsk(skyeWaiting.ask!.id)}>Show</button>}
+        </section>
+      )}
+      {skyeNewScene && !skyeWorking && !skyeWaiting && (
+        <section aria-label="Where Skye's draft went" className="se-atwork" role="status">
+          <AgentFigure agent="skye" state="idle" size={20} decorative />
+          <span><span className="who">{SKYE}:</span> {NEW_SCENE_LINE}</span>
         </section>
       )}
       {skyeOff && <section className="faint" role="status">{NOT_HERE}</section>}

@@ -101,7 +101,9 @@ def sheet_rules(sheet: dict) -> list[str]:
             if m is None:
                 problems.append(f"ops.{op}: {name} is not in models")
                 continue
-            if m.get("endpoint") and m["endpoint"] != s["endpoint"]:
+            # A clip model edits clips on video_to_video when the catalogue says how (models[m].v2v).
+            v2v = s["endpoint"] == "POST /v1/video_to_video" and "v2v" in m
+            if m.get("endpoint") and m["endpoint"] != s["endpoint"] and not v2v:
                 problems.append(f"ops.{op}: {name} is at {m['endpoint']}, not {s['endpoint']}")
             durations = s.get("durationsS", spec.get("durationsS") if s is not spec else None)
             if durations and m.get("durationsS") and not set(durations) <= set(m["durationsS"]):
@@ -247,8 +249,9 @@ for f in sorted(HERE.glob("examples/config.*.json")):
     # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; director.v7
     # (features/frame-change-edit.clan) adds Change this frame; director.v8 (features/canvas-nodes.clan)
     # holds a shot's required references and lists Dex's additions. v6, v6.1 and v7 stay bundled for a rollback.
-    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8"):
-        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7 or v8")
+    # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries.
+    if cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9"):
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8 or v9")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.

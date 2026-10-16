@@ -9,6 +9,9 @@ import { landFrameEditIn } from './frameEdit'
 import { continueDrawing, type FrameDeps } from './frames'
 import { landFrame, landRender, landTake } from './handlers'
 import { landShotList } from './plan'
+import { purposeOf } from '../model/purpose'
+import type { DocumentStore } from '../doc/types'
+import type { Job } from '../contracts/types'
 import { landWrites } from '../script/skye'
 import { landSize } from '../campaign/make'
 
@@ -45,8 +48,37 @@ export function wireJobs(deps: FrameDeps) {
     .then(() => continueFollow(deps)).catch(warn('update what follows')))
 }
 
+/**
+ * Finished clips that never became a take: the job is completed with its file, but its landing was
+ * refused (a rationale over the .clan's limit, 2026-10-15: three paid clips missing) or the page went
+ * first. Each lands now, as it would have. A clip whose landing was ever recorded (the take was
+ * deleted since) is left alone. How many landed.
+ */
+export async function landMissedClips(doc: DocumentStore): Promise<number> {
+  const d = doc.get()
+  const missed = Object.values(d.jobs).filter((j) => j.op === 'clip' && j.state === 'completed' && j.outputs?.length
+    && !Object.values(d.takes).some((t) => t.job_id === j.id))
+  const chainOf = (doc as { chain?: () => Promise<{ action: string; cites?: string[] }[]> }).chain
+  if (!missed.length || !chainOf) return 0
+  const chain = await chainOf.call(doc)
+  let n = 0
+  for (const j of missed) {
+    if (chain.some((e) => e.action.startsWith('render take') && e.cites?.some((c) => c.endsWith(`#jobs[${j.id}]`)))) continue
+    const ctx = purposeOf(j)
+    if (ctx?.for !== 'clip') continue
+    const job = {
+      jobId: j.id, op: 'clip', crew: j.crew, provider: j.provider, model: j.model, kind: j.provider === 'mock' ? 'mock' : 'generated',
+      outputs: (j.outputs ?? []).map((sha256) => ({ sha256 })),
+    } as unknown as Job
+    await landTake(doc, job, ctx)
+    if (Object.values(doc.get().takes).some((t) => t.job_id === j.id)) n++
+  }
+  return n
+}
+
 /** At boot, after runner.resume(): pick up every chain that was under way. */
 export async function resumeChains(deps: FrameDeps) {
+  await landMissedClips(deps.doc).catch(warn('land the finished clips'))
   await continueDrawing(deps).catch(warn('draw the rest'))
   await resumeFixes(deps).catch(warn('fix it in the shot'))
   await continueFollow(deps).catch(warn('update what follows'))

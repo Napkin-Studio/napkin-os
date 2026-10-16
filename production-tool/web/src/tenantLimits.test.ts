@@ -13,10 +13,17 @@ const RUNWAY_ONLY: Allow = { claude: true, makers: ['runway'] }
 const live = (): Config => effectiveConfig('live', 'config', SHEETS)
 
 describe('the allowlist in the menus and controls', () => {
-  it('lists every model by default, as the relay allows them', () => {
+  it("lists every maker's models by default, as the relay allows them", () => {
+    // Owner, 2026-10-15 (features/runway-video-models.clan): every maker is on by default; a client
+    // narrows its own list later. Google only still gives Veo and Omni Flash.
     const all = modelChoicesFor('clip', live())
     expect(modelChoicesFor('clip', withAllow(live(), SPEND_POLICY.allow))).toEqual(all)
-    expect(all.map((o) => o.model)).toEqual(['veo3.1', 'veo3.1_fast'])
+    expect(modelChoicesFor('clip', withAllow(live(), { claude: true, makers: ['runway', 'google'] })).map((o) => o.model)).toEqual(
+      ['veo3.1', 'veo3.1_fast', 'gemini_omni_flash_1.1'])
+    expect(all.map((o) => o.model)).toEqual(['veo3.1', 'veo3.1_fast', 'klingO3_pro', 'klingO3_standard', 'kling3.0_pro',
+      'kling3.0_standard', 'hailuo3', 'gemini_omni_flash_1.1', 'wan3', 'seedance2_5', 'seedance2_fast'])
+    const every: Allow = { claude: true, makers: ['runway', 'google', 'kuaishou', 'minimax', 'alibaba', 'bytedance'] }
+    expect(modelChoicesFor('clip', withAllow(live(), every))).toEqual(all)
   })
 
   it('with Google off, hides every image and clip step and keeps the Runway-made edit', () => {
@@ -92,7 +99,8 @@ describe('the Data sharing sheet', () => {
     const rows = sharingRows(RUNWAY_ONLY)
     expect(rows.map((r) => r.id)).toEqual(SUBPROCESSORS.map((e) => e.id))
     const on = Object.fromEntries(rows.map((r) => [r.id, r.on]))
-    expect(on).toEqual({ aws: true, runway: true, google: false, ideogram: false, magnific: false, anthropic: true })
+    expect(on).toEqual({ aws: true, runway: true, google: false, ideogram: false, magnific: false, kuaishou: false, minimax: false,
+      alibaba: false, bytedance: false, anthropic: true })
     expect(rows.find((r) => r.id === 'google')!.through).toBe('Through Runway')
     expect(rows.find((r) => r.id === 'google')!.where).toBe('Where it is processed is not yet confirmed')
   })

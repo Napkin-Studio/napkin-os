@@ -25,8 +25,10 @@
 # default ${XDG_STATE_HOME:-~/.local/state}/napkin-production). Projects, sign-ins, secrets,
 # logs and pids live in the state dir, outside the repo.
 #
-# Why stop refuses: the local relay keeps jobs in memory. Stopping it while a paid job runs
-# loses the job; Runway still finishes it and charges for it.
+# Jobs outlive a restart: the relay keeps them under $state/relay-data/state and, when it
+# starts again, polls each unfinished one at once, so a clip Runway finished meanwhile still
+# lands (features/relay-durable-jobs.clan). stop still names unfinished jobs and wants
+# --force: nothing lands while the relay is down.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -40,6 +42,10 @@ die() { echo "run-production-local: $*" >&2; exit 1; }
 say() { echo "run-production-local: $*"; }
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 pid_of() { [[ -f "$state/$1.pid" ]] && kill -0 "$(cat "$state/$1.pid")" 2>/dev/null && cat "$state/$1.pid"; }
+# Each server leads its own session, so stop can kill its whole group. macOS has no setsid(1);
+# perl's POSIX::setsid does the same there.
+if command -v setsid >/dev/null; then new_session=(setsid)
+else new_session=(perl -e 'use POSIX; POSIX::setsid(); exec @ARGV or die "exec $ARGV[0]: $!\n"'); fi
 
 secret() { # one random secret per name, kept in the state dir
   local f="$state/secrets/$1"
@@ -89,23 +95,17 @@ json.dump(c, open(out, "w"), indent=2)
 EOF
 }
 
-unfinished_jobs() { # job ids the relay's log shows as started but not finished
-  [[ -f "$state/relay.log" ]] || return 0
-  python3 - "$state/relay.log" <<'EOF'
-import json, sys
-last = {}
-for line in open(sys.argv[1], errors="replace"):
-    if not line.startswith("{"):
-        continue
+unfinished_jobs() { # the jobs the relay keeps (store.FileStore) that have not finished
+  [[ -d "$state/relay-data/state/jobs" ]] || return 0
+  python3 - "$state/relay-data/state/jobs" <<'EOF'
+import json, pathlib, sys
+for p in sorted(pathlib.Path(sys.argv[1]).glob("*.json")):
     try:
-        d = json.loads(line)
+        d = json.loads(p.read_text())
     except ValueError:
         continue
-    if d.get("jobId") and d.get("state"):
-        last[d["jobId"]] = (d["state"], d.get("op", ""))
-for j, (s, op) in last.items():
-    if s not in ("completed", "failed", "cancelled", "refused"):
-        print(f"{j} {op} {s}")
+    if d.get("state") not in ("completed", "failed", "cancelled", "uncertain"):
+        print(f"{d.get('jobId')} {d.get('op', '')} {d.get('state')}")
 EOF
 }
 
@@ -151,7 +151,7 @@ start() {
   # cd, then exec: no shell is left behind waiting on the server (and holding the caller's stdout)
   (cd "$root/production-tool/relay" || exit 1; exec env -u RUNWAY_API_KEY -u RUNWAYML_API_SECRET -u ANTHROPIC_API_KEY \
       -u NAPKIN_MODEL_API -u NAPKIN_MODEL_BASE_URL -u ANTHROPIC_BASE_URL -u AWS_PROFILE "${relay_env[@]}" \
-      setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
+      "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/relay.pid" \
       uv run -q --python 3.12 python -m local --port "$relay_port" --data "$state/relay-data" \
       >>"$state/relay.log" 2>&1 </dev/null) &
 
@@ -161,7 +161,7 @@ start() {
       NAPKIN_PRODUCTION_RELAY_SECRET="$token" \
       NAPKIN_PRODUCTION_STATIC="$dist" NAPKIN_WEB_STATIC="$root/app/dist" \
       NAPKIN_WEB_DATA="$state/webdata" NAPKIN_WEB_ADDR="127.0.0.1:$web_port" \
-      setsid bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
+      "${new_session[@]}" bash -c 'echo $$ >"$1"; shift; exec "$@"' _ "$state/web.pid" \
       "$root/target/debug/napkin-web" >>"$state/web.log" 2>&1 </dev/null) &
 
   for _ in $(seq 1 90); do
@@ -180,7 +180,7 @@ stop() {
   [[ "${1:-}" == --force ]] && force=1
   local busy; busy="$(unfinished_jobs)"
   if [[ -n "$busy" && "$force" == 0 ]]; then
-    echo "run-production-local: jobs still running (stopping loses them; a paid one is still charged):" >&2
+    echo "run-production-local: jobs still running (they resume when the relay starts again; nothing lands meanwhile):" >&2
     echo "$busy" | sed 's/^/  /' >&2
     die "wait for them, or stop with --force"
   fi

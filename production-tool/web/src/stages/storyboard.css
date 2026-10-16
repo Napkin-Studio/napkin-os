@@ -25,6 +25,8 @@
 .sb-card.on .sb-num { background: var(--tool); }
 .sb-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
 .sb-dur { color: var(--ink2); }
+/* The canvas selection bar's menu is also .sb-more (selbar.css: min-width 220px); not here. */
+.sb-cardhead .sb-more { min-width: 0; flex: none; }
 .sb-more { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; color: var(--ink2); font-size: 15px; }
 .sb-more:hover { background: var(--soft); }
 .sb-frame { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: var(--soft); }
@@ -83,3 +85,23 @@
 .sb-deleted { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
 @media (hover: none) { .sb-del { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sb-del { transition: none; } }
+
+/* Drag reorder (ui-behaviour 3.11): the handle is the grip; the card lifts tilted with a blue
+   outline and a shadow; its old spot stays dashed; a 4px blue drop line says where it lands. */
+button.sb-handle { border: 0; background: transparent; padding: 0 4px; min-width: 24px; min-height: 26px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; touch-action: none; user-select: none; font-family: inherit; }
+button.sb-handle:hover:not(:disabled) { background: var(--soft); color: var(--ink); }
+button.sb-handle:active:not(:disabled) { cursor: grabbing; }
+button.sb-handle:focus-visible { outline: 2px solid var(--tool); outline-offset: 1px; }
+button.sb-handle:disabled { cursor: default; opacity: 0.5; }
+.sb-card.slot { border: 1.5px dashed var(--line); box-shadow: none; background: transparent; }
+.sb-card.slot > * { opacity: 0.35; }
+.sb-card.sorting .sb-gap { visibility: hidden; }
+.sb-lifted { border: 2px solid var(--tool); padding: 11px; box-shadow: var(--shadow-pop), 0 18px 40px rgba(0, 0, 0, 0.18); transform: rotate(-2deg); cursor: grabbing; height: auto !important; max-height: 100%; overflow: hidden; }
+.sb-lifted .sb-handle { color: var(--tool-ink); }
+.sb-liftwords { font-size: 12.5px; color: var(--ink2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sb-dropline { position: absolute; top: 0; bottom: 0; width: 4px; border-radius: 2px; background: var(--tool); z-index: 3; pointer-events: none; }
+.sb-dropline.before { left: -20px; }
+.sb-dropline.after { right: -20px; }
+.sb-dropline > span { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--paper); background: var(--tool); padding: 2px 8px; border-radius: var(--r-pill); }
+.sb-dragnote { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 12px; background: var(--card); color: var(--ink); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 13px; line-height: 1.4; }
+.sb-dragnote .pt-mono { color: var(--ink2); margin-right: 4px; }

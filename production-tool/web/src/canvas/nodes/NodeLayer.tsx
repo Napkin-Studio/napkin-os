@@ -289,12 +289,9 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       const p = fromClient(e.clientX, e.clientY)
       const el = cardAt(p)
       const c = el && cardOf(el)
-      // A double-click on a picture in a group picks that one view (our own engine; Excalidraw does it itself).
-      if (!c) {
-        const own = canvas as CanvasAdapter & { pickOne?: (p: Pt) => string | null }
-        if (own.pickOne && canvas.elements().some((x) => !x.isDeleted && (x.groupIds ?? []).length > 0 && inside(x, p))) own.pickOne(p)
-        return
-      }
+      // A double press on a member of a group or a Drawing enters it and picks that one: the own engine's
+      // select tool detects it for mouse, pen and touch (container-select); Excalidraw does it itself.
+      if (!c) return
       e.preventDefault()
       e.stopPropagation()
       open(c.kind, c.id)

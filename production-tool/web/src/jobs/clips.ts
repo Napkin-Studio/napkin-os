@@ -5,12 +5,12 @@
 
 import type { JobInput, ModelChoice, ProductionDocument, Shot, Take } from '../contracts/types'
 import type { JobPurpose } from '../model/purpose'
-import { currentTake, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
+import { currentTake, edlItemFor, mainVideo, shotsOf, storyboardOfVideo, videoOfShot } from '../model/selectors'
 import { clipText } from '../lib/guard'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
-import { jobShot, refsFor } from './select'
+import { jobShot, mentionedPictures, namedInput, refsFor } from './select'
 import { shotFromWords } from './clipMode'
 
 export { jobShot }
@@ -83,8 +83,32 @@ export async function makeClip(
   return deps.runner.submit('clip', input, parents, purpose, undefined, extra.modelChoice, extra.followRun ? { local: { followRun: extra.followRun } } : {})
 }
 
-/** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length. An end
- *  card shot's clip is marked endCard (the stitch adds its own card instead); one with no clip is left out. */
+/**
+ * Change the feel of a whole clip (clip_edit), on `modelChoice` when the participant picked one. The pictures
+ * its words name go too (features/runway-video-models.clan): a model that edits with pictures (Kling O3,
+ * Omni Flash 1.1, Seedance 2.5) puts them into the clip; Aleph 2 takes none and reads their names as words.
+ */
+export async function changeFeel(
+  deps: Pick<FrameDeps, 'relay' | 'doc' | 'runner'>,
+  shotId: string,
+  take: Take,
+  text: string,
+  feel: JobInput['feel'],
+  modelChoice?: ModelChoice,
+): Promise<string> {
+  const d = deps.doc.get()
+  const video = await assetRef(deps.relay, take.asset, d)
+  const pictures = mentionedPictures(d, text).filter((r) => r.asset).slice(0, 14)
+  const refs = await Promise.all(pictures.map((r) => namedInput(deps.relay, d, r)))
+  const input: JobInput = { video, text, ...(feel ? { feel } : {}), ...(refs.length ? { refs } : {}) }
+  return deps.runner.submit('clip_edit', input, [take.job_id], { for: 'clip', shotId, parentTakeId: take.id }, undefined, modelChoice)
+}
+
+/** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length, from its edl
+ *  item's in point (in_s; absent or 0: the clip's start, sent as nothing) up to its out point (out_s). An end
+ *  card shot's clip is marked endCard (the stitch adds its own card instead); one with no clip is left out.
+ *  (features/connected-video.clan: the walk stays in shot order for now, because edl ranks follow the order
+ *  clips landed in, not the storyboard's; see the record's open question.) */
 export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoId?: string): Promise<{ input: JobInput; parents: string[] }> {
   const d = deps.doc.get()
   const video = (videoId && d.videos[videoId]) || mainVideo(d)
@@ -95,9 +119,16 @@ export async function stitchInput(deps: Pick<FrameDeps, 'relay' | 'doc'>, videoI
     const t = selectedTake(d, s.id, video?.id)
     if (!t && s.kind === 'end_card') continue
     if (!t) throw new Error(`Shot ${i + 1} has no clip yet.`)
+    const item = video ? edlItemFor(d, s.id, video.id) : undefined
     // Clips come back at the model's lengths (4, 6 or 8 s on veo3.1_fast), so each is
     // trimmed to its shot: the ad is the sum of the shots plus the end card (END_CARD_S).
-    clips.push({ asset: await assetRef(deps.relay, t.asset, d), trimS: s.duration_s, ...(s.kind === 'end_card' ? { endCard: true } : {}) })
+    clips.push({
+      asset: await assetRef(deps.relay, t.asset, d),
+      trimS: s.duration_s,
+      ...(item?.in_s ? { inS: item.in_s } : {}),
+      ...(item?.out_s !== undefined && item.out_s > (item.in_s ?? 0) ? { outS: item.out_s } : {}),
+      ...(s.kind === 'end_card' ? { endCard: true } : {}),
+    })
     parents.push(t.job_id)
   }
   const ratio = ratioOf(d, video?.id)

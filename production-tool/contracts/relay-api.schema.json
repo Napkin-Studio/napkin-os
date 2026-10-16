@@ -542,6 +542,38 @@
                 "type": "number",
                 "minimum": 0
               },
+              "inS": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Where the clip starts in its take (the edl item's in_s). Absent: 0."
+              },
+              "outS": {
+                "type": "number",
+                "minimum": 0,
+                "description": "The take's last usable second (the edl item's out_s): no frame after it is shown, and a clip that ends before its trimS is held on its last frame."
+              },
+              "transition": {
+                "type": "object",
+                "description": "The join into this clip from the one before (features/connected-video.clan). Absent: a cut. A dissolve or dip overlaps the clips by s seconds, taken from the outgoing clip's out-handle, so the ad keeps its length. Ignored on the first clip.",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "cut",
+                      "dissolve",
+                      "dip"
+                    ]
+                  },
+                  "s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 2
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
               "endCard": {
                 "type": "boolean"
               }

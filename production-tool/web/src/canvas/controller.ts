@@ -72,6 +72,8 @@ export class CanvasController {
   private syncTimer: ReturnType<typeof setTimeout> | null = null
   /** Deletes and their undo (ours or Excalidraw's Ctrl+Z) kept in step with the document. */
   readonly sync: CanvasDocSync
+  /** Each Drawing's members as last seen (ids, and boxes from the frame's corner), so a change re-exports its picture. */
+  private readonly drawnSeen = new Map<string, string>()
 
   constructor(canvas: CanvasAdapter, services: Services) {
     this.canvas = canvas
@@ -80,6 +82,7 @@ export class CanvasController {
     this.sync.gens(this.els())
     this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
+    void this.refreshDrawings()
   }
 
   /** The canvas this controller works on (Resize… places its results on it). */
@@ -162,6 +165,7 @@ export class CanvasController {
     void this.sync.gens(this.els())
     void this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
+    void this.refreshDrawings().catch((e) => console.warn('Could not update a drawing’s picture', e))
   }
 
   // ── delete and undo ──
@@ -217,7 +221,18 @@ export class CanvasController {
 
   /** The selected elements that the Delete key and 🗑 act on: everything but the tool's arrows. */
   deletable(selected: El[]): El[] {
-    return selected.filter((e) => cd(e)?.kind !== 'provenance')
+    const out = selected.filter((e) => cd(e)?.kind !== 'provenance')
+    // A sketch area takes the ink drawn in it (the rule its move uses, boards/fitting): left behind,
+    // the drawing lay loose where the white area had been (owner, 2026-10-15).
+    const areas = out.filter((e) => cd(e)?.kind === 'sketch')
+    if (!areas.length) return out
+    const live = alive(this.els())
+    const loose = live.filter((e) => !e.frameId || boardFrame(live, e.frameId))
+    const ids = new Set(out.map((e) => e.id))
+    for (const a of areas) for (const m of membersOf(loose as unknown as Boxed[], boxOf(a as unknown as Boxed)) as unknown as El[]) {
+      if (!ids.has(m.id)) { ids.add(m.id); out.push(m) }
+    }
+    return out
   }
 
   // ── pictures: downscale ≤1536 px, hash, keep as a node ──
@@ -287,6 +302,24 @@ export class CanvasController {
     }
   }
 
+  /**
+   * Re-export the Drawings whose strokes changed since they were last seen: a stroke joined,
+   * left, moved, was scaled or erased (features/container-select.clan). Moving a whole Drawing
+   * changes nothing here. The first sight of a Drawing only records it.
+   */
+  async refreshDrawings() {
+    const els = alive(this.els())
+    const changed: string[] = []
+    for (const f of els.filter((e) => cd(e)?.kind === 'drawn')) {
+      const kids = childrenOf(els, f.id).filter((k) => k.type !== 'text')
+      const seen = kids.map((k) => `${k.id}:${k.x - f.x},${k.y - f.y},${k.width},${k.height}`).sort().join(' ')
+      const was = this.drawnSeen.get(f.id)
+      this.drawnSeen.set(f.id, seen)
+      if (was !== undefined && was !== seen) changed.push(f.id)
+    }
+    if (changed.length) await this.refreshDrawn(changed)
+  }
+
   /** Give a text element a node id, so arrows can name it. */
   private noteId(elId: string): string {
     const el = this.els().find((e) => e.id === elId)
@@ -353,7 +386,12 @@ export class CanvasController {
     // Loose strokes become one drawing node first.
     if (plan.strokes.length) {
       const frame = await this.wrapDrawing(plan.strokes)
-      if (frame) plan = planSelection(this.els(), [...elIds.filter((id) => !plan.strokes.includes(id)), frame.id])
+      if (frame) {
+        const kept = elIds.filter((id) => !plan.strokes.includes(id))
+        // The Drawing is selected, not its strokes, so the next drag moves it whole.
+        this.canvas.select([...kept, frame.id])
+        plan = planSelection(this.els(), [...kept, frame.id])
+      }
     }
     await this.refreshDrawn(plan.images.filter((i) => i.kind === 'drawn').map((i) => i.elId))
     plan = planSelection(this.els(), plan.images.map((i) => i.elId).concat(plan.notes.map((n) => n.elId)))
@@ -919,11 +957,32 @@ export class CanvasController {
     // A Generate on a sketch area lands as a frame made from it, with its crop (frame-aspect).
     const p = this.doc().jobs[job.jobId] ? purposeOf(this.doc().jobs[job.jobId]) : null
     if (p?.for === 'sketch') await systemUpdate(this.s.doc, (d) => { applySketchFrame(d, job, p.sketchId) }, 'frame')
-    if (c.op === 'view' && c.view) {
-      const source = this.nameOn(c.parentIds[0])
-      const key = source?.key
-      if (key && !refByName(this.doc(), `${key}_${c.view}`)) this.name(job.jobId, key, c.view)
-    }
+    if (c.op === 'view' && c.view) this.claimViewName(job.jobId)
+  }
+
+  /**
+   * A finished view takes its name (key_view, the key of the front it was made from) when the name
+   * is free, or when the picture holding it is gone from the canvas: views made again after the
+   * first ones were deleted stayed unnamed, so they formed no key group (no Stack, no link to the
+   * Script as one character; owner, 2026-10-15). A name a picture on the canvas still holds stays.
+   */
+  claimViewName(nodeId: string): boolean {
+    const el = this.nodeEl(nodeId)
+    const c = el ? cd(el) : undefined
+    if (c?.kind !== 'gen' || c.op !== 'view' || !c.view || !imageOf(el)?.asset || this.nameOn(nodeId)) return false
+    const key = c.parentIds[0] ? this.nameOn(c.parentIds[0])?.key : undefined
+    if (!key) return false
+    const held = refByName(this.doc(), `${key}_${c.view}`)
+    if (held?.node && this.nodeEl(held.node)) return false
+    this.name(nodeId, key, c.view)
+    return true
+  }
+
+  /** On open: every finished, unnamed view takes its free name (claimViewName). How many did. */
+  claimViewNames(): number {
+    let n = 0
+    for (const e of alive(this.els())) if (this.claimViewName(e.id)) n++
+    return n
   }
 
   scrollTo(nodeId: string) {

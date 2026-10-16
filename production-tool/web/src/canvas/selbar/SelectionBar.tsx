@@ -27,6 +27,8 @@ export interface SelectionBarActions {
   resize?(): void
   /** A key group: pile its views up (true) or lay them out (false), one undo step. */
   stack?(on: boolean): void
+  /** An ink group: open Generate on its strokes (they become a Drawing). */
+  generate?(): void
 }
 
 const TRASH = (
@@ -52,6 +54,7 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
     else if (id === 'stack' || id === 'spread') actions.stack?.(id === 'stack')
     else if (id === 'make-sizes') actions.makeSizes?.()
     else if (id === 'resize') actions.resize?.()
+    else if (id === 'generate') actions.generate?.()
   }
   const label = info.group?.key ? `${info.group.key.label} actions` : info.group?.ink ? 'Ink group actions' : info.cards.length ? 'Node actions' : 'Selection actions'
   return (
@@ -68,7 +71,7 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
         <>
           <span aria-hidden="true" className="sep" />
           <button ref={moreRef} type="button" className="sb-icon" aria-label="More actions" aria-haspopup="menu" aria-expanded={more} onClick={() => setMore(!more)}>⋯</button>
-          <Float anchor={moreRef} open={more} onClose={() => setMore(false)} side="below" align="end" label="More" className="pt-menu sb-more">
+          <Float anchor={moreRef} open={more} onClose={() => setMore(false)} side="below" align="end" label="More" className="pt-menu selbar-more">
             {moreFor(info).map((m) => (
               <button key={m.id} type="button" role="menuitem" className={`pt-menurow ${m.id === 'delete' ? 'danger' : ''}`} disabled={!!m.off} title={m.off}
                 onClick={() => {

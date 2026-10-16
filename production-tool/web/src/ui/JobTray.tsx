@@ -1,11 +1,11 @@
-// The job tray (features/production-tool-look.clan): the top bar's "N running · N queued"
-// as a button with the working agents' faces and a red count for failures. It opens a
+// The job tray (features/production-tool-look.clan; features/topbar-declutter.clan): the top bar's job
+// button, the Napkin logo alone (turning while something runs), with a needs-you mark. It opens a
 // floating list, Working now, Waiting for you (a job asking a question) and Needs you; Show on a row
 // goes to its stage and card, and on a waiting row to its question, with the focus on its first answer
 // (the Script editor for Skye's; the ask dock when no card shows it). The ask dock rides here, so every
 // bar has one (ui/AskDock.tsx).
 
-import { useCallback, useContext, useRef, useState } from 'react'
+import { useCallback, useContext, useRef, useState, type Ref } from 'react'
 import { RouterContext, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { scriptRoute, type Router } from '../app/route'
 import { modelLabel } from '../capabilities'
@@ -16,13 +16,16 @@ import { jobsList, shotNumber } from '../model/selectors'
 import { AgentFigure } from './agents/AgentFigure'
 import { AskDock } from './AskDock'
 import { hereOf, homeOf, sameHome, showAsk } from './askPlaces'
-import { whoIsWorking, workOf } from './agents/cast'
+import { whoIsWorking, workOf, type Work } from './agents/cast'
 import { NapkinLoader } from './loader/NapkinLoader'
 import { Float } from './Float'
 import { fmtElapsed, useElapsed } from './hooks'
-import { trayGroups, trayLabel, WAITING, whereIs, type TrayRow } from './tray'
+import { jobLine, jobLook, trayGroups, WAITING, whereIs, type TrayRow } from './tray'
 
-export function JobTray() {
+export function JobTray({ phone = false }: {
+  /** The phone bar: watch only, so no ask dock and no Show (asks are answered on a laptop or iPad, 2.5). */
+  phone?: boolean
+} = {}) {
   const { runner } = useServices()
   const doc = useDoc()
   const ui = useUi()
@@ -32,39 +35,30 @@ export function JobTray() {
   const close = useCallback(() => setOpen(false), [])
   const g = trayGroups(jobsList(doc), ctxReader(doc, ui), (id) => runner.liveInfo(id))
   const busy = g.working.length > 0
-  const waitingFaces = new Set(g.waiting.map((r) => who(r).agent))
-  const faces = [...new Set([...g.working.map((r) => who(r).agent), ...waitingFaces, ...(g.needsYou.length ? ['jude' as const] : [])])]
-  const needsYou = (a: string) => (a === 'jude' && g.needsYou.length > 0) || (waitingFaces.has(a as never) && !g.working.some((r) => who(r).agent === a))
   const empty = !busy && !g.needsYou.length && !g.waiting.length
-  // The bar's status pill (mock Loader): the first running job in words, only while something
-  // runs, waits or failed; nothing at all when nothing is being made. With the busy pointer, the one
-  // place the Napkin logo turns (owner, 2026-10-15; ui-behaviour 6.5).
-  const lead = g.working[0] ?? g.waiting[0]
-  const leadLine = lead ? who(lead).line : undefined
+  // The bar's job button: the Napkin logo alone (owner, 2026-10-15). With the busy pointer, the one
+  // place the logo turns (ui-behaviour 6.5). Its words live in the tooltip, the label, a separate
+  // live region and the popover's first row, never in the bar.
+  const lead = g.working[0] ?? g.waiting[0] ?? g.needsYou[0]
+  const line = jobLine(g, lead && lead.state !== 'failed' ? who(lead).line : undefined)
+  const look = jobLook(g)
   return (
     <>
-      {!empty && (
-        <button ref={ref} className={`pt-status tray ${busy ? 'busy' : ''} ${!busy && !g.waiting.length ? 'bad' : ''} ${open ? 'open' : ''}`} aria-live="polite" aria-haspopup="dialog" aria-expanded={open}
-          title="What is being made, and what needs you" onClick={() => setOpen(!open)}>
-          {g.working[0] && <NapkinLoader work={workOf(g.working[0].job.op, g.working[0].state)} state={g.working[0].state === 'queued' ? 'queued' : 'run'} size={20} />}
-          {!g.working[0] && faces.length > 0 && (
-            <span className="faces" aria-hidden="true">
-              {faces.slice(0, 3).map((a) => <AgentFigure key={a} agent={a} size={20} state={needsYou(a) ? 'needs-you' : 'working'} decorative />)}
-            </span>
-          )}
-          <span className="pt-status-line">{leadLine ?? trayLabel(g)}{g.working.length + g.waiting.length > 1 ? ` · ${trayLabel(g)}` : ''}</span>
-          {g.needsYou.length > 0 && <><span className="sep">·</span><span className="bad">{g.needsYou.length} failed</span></>}
-        </button>
+      {look && (
+        <JobButton ref={ref} look={look} line={line} open={open} work={g.working[0] ? workOf(g.working[0].job.op, g.working[0].state) : undefined}
+          onClick={() => setOpen(!open)} />
       )}
-      <AskDock />
+      <span className="pt-sr" role="status" aria-live="polite">{empty ? '' : line}</span>
+      {!phone && <AskDock />}
       <Float anchor={ref} open={open} onClose={close} align="end" role="dialog" label="Jobs" className="traypop">
         {empty && <div className="tray-empty faint">Nothing is being made right now. Jobs show here while they run, and stay here if one fails.</div>}
+        {!empty && <div className="tray-lead">{line}</div>}
         {busy && <div className="fhead">Working now</div>}
-        {g.working.map((r) => <Row key={r.job.id} row={r} onShow={close} />)}
+        {g.working.map((r) => <Row key={r.job.id} row={r} onShow={close} phone={phone} />)}
         {g.waiting.length > 0 && <div className="fhead">{WAITING}</div>}
-        {g.waiting.map((r) => <Row key={r.job.id} row={r} onShow={close} />)}
+        {g.waiting.map((r) => <Row key={r.job.id} row={r} onShow={close} phone={phone} />)}
         {g.needsYou.length > 0 && <div className="fhead">Needs you</div>}
-        {g.needsYou.map((r) => <Row key={r.job.id} row={r} onShow={close} />)}
+        {g.needsYou.map((r) => <Row key={r.job.id} row={r} onShow={close} phone={phone} />)}
       </Float>
     </>
   )
@@ -75,7 +69,27 @@ export function JobTray() {
   }
 }
 
-function Row({ row, onShow }: { row: TrayRow; onShow: () => void }) {
+/** The button itself, pure for the tests: 32px (44 on touch), the logo and its mark, no words. */
+export function JobButton({ ref, look, line, open, work, onClick }: {
+  ref?: Ref<HTMLButtonElement>
+  look: NonNullable<ReturnType<typeof jobLook>>
+  line: string
+  open: boolean
+  work?: Work
+  onClick: () => void
+}) {
+  return (
+    <button ref={ref} type="button" className={`pt-job ${open ? 'open' : ''}`} data-spin={look.spin} data-mark={look.mark}
+      aria-label={line} data-tip={line} aria-haspopup="dialog" aria-expanded={open} onClick={onClick}>
+      {look.spin === 'still'
+        ? <NapkinLoader state="queued" flat size={20} />
+        : <NapkinLoader work={work} state={look.spin} size={20} />}
+      {look.mark && <span className="jb-mark" aria-hidden="true" />}
+    </button>
+  )
+}
+
+function Row({ row, onShow, phone }: { row: TrayRow; onShow: () => void; phone: boolean }) {
   const { ui: uiStore, project } = useServices()
   const router = useContext(RouterContext)
   const doc = useDoc()
@@ -105,7 +119,8 @@ function Row({ row, onShow }: { row: TrayRow; onShow: () => void }) {
         <b>{w.line}</b>
         {sub && <small>{sub}</small>}
       </div>
-      {failed || waiting
+      {phone ? (failed || waiting ? null : <span className="trayrow-t">{fmtElapsed(elapsed)}</span>)
+        : failed || waiting
         ? <button className="btn xs" onClick={show}>Show</button>
         : <span className="trayrow-t">{fmtElapsed(elapsed)}<button className="btn xs ghost" onClick={show} aria-label={`Show ${w.line}`}>Show</button></span>}
     </div>

@@ -126,4 +126,15 @@ describe('z keys', () => {
     expect(zTop(['a000005', 'a000009']) > 'a000009').toBe(true)
     expect(zBetween('a000005', 'a000009') > 'a000005' && zBetween('a000005', 'a000009') < 'a000009').toBe(true)
   })
+
+  it('the eraser hits a sparse stroke mid-segment, far from its points (container-select phase 1)', () => {
+    const { scene, ink } = setup()
+    // Two points 300 px apart: the eraser crosses the middle, nowhere near either.
+    draw(ink, line(0, 100, 300, 100, 1))
+    expect(scene.all().filter((r) => r.kind === 'stroke')).toHaveLength(1)
+    ink.begin('eraser', { x: 150, y: 90, pressure: 0.5 }, { color: '#000', width: 1 })
+    ink.add([{ x: 150, y: 104, pressure: 0.5 }])
+    ink.end()
+    expect(scene.all().filter((r) => r.kind === 'stroke')).toHaveLength(0)
+  })
 })

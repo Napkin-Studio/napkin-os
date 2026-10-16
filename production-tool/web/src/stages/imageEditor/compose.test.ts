@@ -1,7 +1,7 @@
 // What Apply saves, Before / After shows and an action is sent (features/image-editor.clan).
 import { describe, expect, it } from 'vitest'
 import { EMPTY, addEdit, toggleHidden, type Edit } from './edits'
-import { plan, untouched, type Pic } from './compose'
+import { plan, sendPlan, untouched, type Pic } from './compose'
 
 const FRAME: Pic = { sha: 'sha256:frame', w: 1344, h: 768 }
 const results: Record<string, Pic> = {
@@ -52,5 +52,40 @@ describe('plan', () => {
   it('Before shows the frame as saved', () => {
     const s = addEdit(EMPTY, { id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, size: 0.1 })
     expect(kinds(plan(s, FRAME, resultOf, { before: true }))).toEqual(['base:sha256:frame'])
+  })
+})
+
+describe('what is sent and applied: what is visible (features/image-editor-masks-layers.clan, IM1)', () => {
+  const fillThenCut = () => {
+    let s = addEdit(EMPTY, { id: 'm', kind: 'mask', name: 'Mask 1', ops: [] })
+    s = addEdit(s, { id: 'f', kind: 'fill', maskId: 'm', words: 'drops', keepOutside: true, jobId: 'job_fill' })
+    s = addEdit(s, { id: 'c', kind: 'cutout', where: 'device', sha: 'sha256:cut' })
+    return addEdit(s, { id: 't', kind: 'text', text: 'Hi', x: 0, y: 0, size: 0.1 })
+  }
+  it('hiding Frame drops only the original picture: a fill stays', () => {
+    const s = toggleHidden(fillThenCut(), 'frame')
+    expect(kinds(plan(s, FRAME, resultOf))).toEqual(['fill', 'cutout', 'text'])
+  })
+  it('hiding Frame keeps a Change or Upscale result that replaced it', () => {
+    let s = addEdit(EMPTY, { id: 'w', kind: 'whole', words: 'warmer', jobId: 'job_whole' })
+    s = toggleHidden(s, 'frame')
+    expect(kinds(plan(s, FRAME, resultOf))).toEqual(['base:sha256:whole'])
+    s = addEdit(s, { id: 'u', kind: 'upscale', scale: 2, jobId: 'job_up' })
+    expect(kinds(plan(s, FRAME, resultOf))).toEqual(['base:sha256:up'])
+  })
+  it('with nothing hidden, an action gets the plan without text or crop and Apply the whole plan', () => {
+    const s = fillThenCut()
+    const action = sendPlan(s, FRAME, resultOf, 'action')
+    expect(action.plan).toEqual(plan(s, FRAME, resultOf, { text: false, crop: false }))
+    expect(action.leftOut).toBe(0)
+    expect(sendPlan(s, FRAME, resultOf, 'apply').plan).toEqual(plan(s, FRAME, resultOf))
+  })
+  it('counts the hidden layers each one leaves out', () => {
+    let s = toggleHidden(fillThenCut(), 't')
+    expect(sendPlan(s, FRAME, resultOf, 'apply')).toMatchObject({ leftOut: 1 })
+    expect(sendPlan(s, FRAME, resultOf, 'action')).toMatchObject({ leftOut: 0 }) // a send has no text anyway
+    s = toggleHidden(toggleHidden(s, 'c'), 'frame')
+    expect(sendPlan(s, FRAME, resultOf, 'action')).toMatchObject({ leftOut: 2 })
+    expect(kinds(sendPlan(s, FRAME, resultOf, 'action').plan)).toEqual(['fill'])
   })
 })
