@@ -257,6 +257,47 @@ The whole feature is XL, about 18 to 22 days for one engineer working with agent
 - audio-mix, for a mix rebuilt to length (phase 5 works without it, using a fade);
 - model-swap, for phase 7 only.
 
+### Phases 5 and 6 as built (2026-10-16)
+
+Films come from a Video node (owner, 2026-10-16: "video versions from video nodes; from pictures and
+scamps, picture variants"). Its **Make all sizes…** (the node's bar, or the Video editor's top bar)
+opens the film sheet (`web/src/campaign/FilmSizesSheet.tsx`):
+
+1. **Options.** Lengths (15 s and 6 s by default, CF5; 30, 20, 10 or any typed length) × shapes (16:9,
+   9:16, 4:5, 1:1). The ad's own length at its own shape is the ad itself and is not made again.
+2. **Dex's plan, before anything renders.** One free `cutdown` job, step `plan` (`relay/cutdowns.py`):
+   Claude looks at three stills of each shot (in, middle, out; taken in the browser) and answers which
+   shots each length keeps, with a reason, and where the subject is in each still. The relay settles
+   the rest so the plan has one shape whoever made it: each length's windows are fitted to it less the
+   2.5 s end card (trimmed from their tails, grown into their handles, none under 1 s); each shot's crop
+   at each shape is the largest box of the shape centred on the subject, with a slow pan (keys at in,
+   middle, out) when the subject moves more than 10% of the frame, and `cuts` when the crop would cut
+   the subject. With no model (the local relay, an agency with Claude off) the passthrough keeps the
+   opening and the payoff and the middle 30% of each frame. The web refits windows with the same maths
+   (`web/src/campaign/film.ts`; both tested on `contracts/examples/cutdown-cases.json`), so keeping or
+   dropping a beat asks nothing again. Each shape lists its shots: Crop (free), New edges (Aleph 2) where
+   the crop cuts the subject, or Remake for the shape.
+3. **The tray** lists every version (Re-edit · free; Reframe · crop, N shots new edges) and every shot ×
+   method × model that spends, each its own job; no prices (History has the costs).
+4. **The Film lane.** Each length × shape is a tile with its player. A version renders as a free
+   `cutdown` job, step `render`: stitch (`stitch/cutdown.py`) cuts the windows of the same takes, crops
+   each (a still box or a pan), fills a reframed shot's own clip from its middle and scales to the
+   delivery size with lanczos (so Aleph's 612×1088 is upscaled to 1080×1920), lays the type over the
+   clips in their times (the logo over the first 3 s, the line and legal over the last 3, captions of
+   the spoken lines on 9:16, 4:5 and 1:1 by default, CF9), adds the end card at its size and keeps each
+   window's sound with a 0.5 s fade. The relay draws the type into transparent PNGs (`typeset.py`), so
+   no word reaches a model and stitch needs no font. Renders sit under `ads/cuts/`.
+5. **Per tile:** Beats (keep or drop; free), Adjust crop (a still box per shot over its frame; free),
+   Remake for vertical (the shots made again at the shape from their frame, cropped, with their
+   characters, on Kling O3, Hailuo 3 or WAN 3 as the agency allows: paid, through the send tray),
+   Captions on or off, Lock.
+
+**Paid parts.** New edges is a `cutdown` job, step `outpaint`: Aleph 2 `video_to_video` with
+`targetAspectRatio` (4:5 made at 3:4 and cropped), the take whole, fixed words asking for continuation
+only; reserved at 28 credits a second of the take (56 minimum). Remake is a `clip` job on the picked
+model at the shape. Both are kept on the set as `reframes` (`<take>@<w>x<h>`), shared by every version of
+that shape, and the versions render again as they land.
+
 ### Paid tests (approval needed; never run in CI or on the owner's local live relay)
 
 | Test | What | Cost |
