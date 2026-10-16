@@ -60,12 +60,13 @@ async function runOnMask(page: Page, kind: 'fill' | 'remove') {
 }
 
 for (const kind of ['fill', 'remove'] as const) {
-  test(`${kind}, clear the mask, Apply: v2 has the result, Before shows v1 and After v2, five times over`, async ({ page }) => {
+  test(`${kind}, clear the mask, Apply: v2 has the result, Before shows v1 and After v2, five times over`, async ({ page }, info) => {
+    const shotAs = (n: string) => page.screenshot({ path: `test-results/editor-apply-${info.project.name}-${kind}-${n}.png` })
     const seeded = await openEditor(page, { mockDelay: 300 })
     const v1 = await picPixel(page, 0.7, 0.45)
     expect(striped(v1, kind)).toBe(false)
     await runOnMask(page, kind)
-    await page.screenshot({ path: `test-results/editor-apply-${kind}-1-result.png` })
+    await shotAs('1-result')
 
     // The owner's step: the blue taken away once the result came (Clear mask), then Apply.
     await page.getByRole('button', { name: 'Clear mask' }).click()
@@ -80,7 +81,7 @@ for (const kind of ['fill', 'remove'] as const) {
     expect(striped(saved.px, kind), `v2 at the mask: ${saved.px}`).toBe(true)
     expect((await session(page, (await page.evaluate((id) => window.__pt.doc.get().shots[id].pick.current, seeded.shotId)))).edits).toEqual([])
     await expect.poll(async () => striped(await shownPixel(page, 0.7, 0.45), kind)).toBe(true)
-    await page.screenshot({ path: `test-results/editor-apply-${kind}-2-v2.png` })
+    await shotAs('2-v2')
 
     const before = page.getByRole('button', { name: 'Before', exact: true })
     const after = page.getByRole('button', { name: 'After', exact: true })
@@ -89,13 +90,13 @@ for (const kind of ['fill', 'remove'] as const) {
       await expect(before).toHaveAttribute('aria-pressed', 'true')
       await expect(page.locator('.ie-before')).toHaveText('Before · v1 as saved')
       await expect.poll(async () => near(await shownPixel(page, 0.7, 0.45), v1), `Before ${i + 1} shows v1`).toBe(true)
-      if (i === 0) await page.screenshot({ path: `test-results/editor-apply-${kind}-3-before.png` })
+      if (i === 0) await shotAs('3-before')
       await after.click()
       await expect(after).toHaveAttribute('aria-pressed', 'true')
       await expect(page.locator('.ie-before')).toHaveCount(0)
       await expect.poll(async () => striped(await shownPixel(page, 0.7, 0.45), kind), `After ${i + 1} shows v2`).toBe(true)
     }
-    await page.screenshot({ path: `test-results/editor-apply-${kind}-4-after.png` })
+    await shotAs('4-after')
   })
 }
 
