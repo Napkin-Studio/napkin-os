@@ -131,6 +131,8 @@ class PassthroughDirector:
             return self._clip_patch(job_request, sheet)
         if op == "upscale":
             return self._upscale(job_request, sheet)
+        if op == "resize":
+            return self._resize(job_request, sheet)
         provider = (sheet or {}).get("provider", "mock")
         model = ((sheet or {}).get("ops", {}).get(op) or {}).get("model", "unknown")
         refs = []
@@ -203,6 +205,17 @@ class PassthroughDirector:
                "scale": inp.get("scale") or 2}
         return {"op": "upscale", "providerJob": job, "question": None, "confidence": 0.1,
                 "rationale": f"passthrough: upscaled {job['scale']}x, nothing to write"}
+
+    def _resize(self, job_request: dict, sheet: dict | None) -> dict:
+        """Make all sizes' paid methods (features/campaign-formats.clan): nothing to write. The relay builds
+        the job from the master (the padded canvas and mask for extend, @master for regenerate) with fixed
+        words that ask for continuation or recomposition only, never the scene and never the size's type."""
+        method = ((job_request.get("input") or {}).get("resize") or {}).get("method", "extend")
+        provider = (sheet or {}).get("provider", "mock")
+        model = ((sheet or {}).get("ops", {}).get("resize") or {}).get("model", "unknown")
+        job = {"provider": provider, "model": model, "prompt": method, "refs": [], "outputs": 1}
+        return {"op": "resize", "providerJob": job, "question": None, "confidence": 0.1,
+                "rationale": f"passthrough: {method}, nothing to write"}
 
     def _clip_patch(self, job_request: dict, sheet: dict | None) -> dict:
         """Fix this moment with no model (features/clip-moment-edit.clan): the note's words, as they are,

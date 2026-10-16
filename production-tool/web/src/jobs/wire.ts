@@ -13,6 +13,7 @@ import { purposeOf } from '../model/purpose'
 import type { DocumentStore } from '../doc/types'
 import type { Job } from '../contracts/types'
 import { landWrites } from '../script/skye'
+import { landSize } from '../campaign/make'
 
 const warn = (what: string) => (e: unknown) => console.warn(`${what} stopped`, e)
 
@@ -39,6 +40,10 @@ export function wireJobs(deps: FrameDeps) {
   // The Image editor's actions land nowhere: the editor shows each result as a layer until Apply.
   runner.onComplete('image_edit', () => {})
   runner.onComplete('write', (job) => void landWrites(doc, job).catch(warn("Skye's draft")))
+  // Make all sizes: a crop lands as its size's picture (features/campaign-formats.clan).
+  runner.onComplete('size', (job, ctx) => {
+    if (ctx.for === 'size') void landSize(doc, job, ctx, deps.relay).catch(warn('the size'))
+  })
   runner.onComplete('stitch', (job, ctx) => void landRender(doc, job, ctx.for === 'stitch' ? ctx : undefined)
     .then(() => continueFollow(deps)).catch(warn('update what follows')))
 }

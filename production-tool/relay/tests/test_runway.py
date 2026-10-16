@@ -579,3 +579,46 @@ def test_change_whole_frame_on_the_gemini_alternate_sends_the_frame_and_the_word
     assert body["model"] == "gemini_image3_pro" and [r["tag"] for r in body["referenceImages"]] == ["current"]
     assert body["promptText"].endswith("warmer light") and "box" not in body["promptText"]
     assert body["ratio"] == "2752:1536"  # the Pro size nearest a 40 x 20 frame
+
+
+# ── Make all sizes (features/campaign-formats.clan, phase 4) ─────────────────
+
+def test_extend_is_an_ideogram_mask_edit_of_the_padded_canvas_at_high(editor, server):
+    """extend: the relay's padded canvas as the picture to edit, our white = fill mask turned black =
+    edit, quality high (medium left the padding unfilled in the paid tests), no ratio, no tag."""
+    import formats
+    editor.submit(job("resize", model="ideogram_4_5", prompt=formats.EXTEND_PROMPT, ratio=None,
+                      refs=[Ref(FRAME, "current", "current")], mask=MASK, outputs=1))
+    body = server.body
+    assert server.requests[-1].url.path == "/v1/text_to_image"
+    assert body["model"] == "ideogram_4_5" and body["quality"] == "high" and body["outputCount"] == 1
+    assert body["promptText"] == formats.EXTEND_PROMPT and "ratio" not in body and "preciseEdit" not in body
+    assert len(body["referenceImages"]) == 1 and set(body["referenceImages"][0]) == {"uri"}
+    m = _mask_of(body)
+    assert m.getpixel((5, 10)) == 0 and m.getpixel((35, 10)) == 255
+
+
+def test_regenerate_is_gemini_3_pro_with_the_master_tagged_at_the_nearest_ratio(runway, server):
+    import formats
+    prompt = formats.REGENERATE_PROMPT.format(shape="tall 9:16")
+    runway.submit(job("resize", model="gemini_image3_pro", prompt=prompt, ratio="1536:2752",
+                      refs=[Ref(SHA, "master", "object")], outputs=1))
+    body = server.body
+    assert body == {"model": "gemini_image3_pro", "promptText": prompt, "ratio": "1536:2752", "outputCount": 1,
+                    "referenceImages": [{"uri": URL[SHA], "tag": "master", "subject": "object"}]}
+
+
+def test_the_make_all_sizes_bodies_match_runways_own_schemas(editor, runway, server):
+    """Each phase 4 body validates against the snapshot of Runway's OpenAPI (2024-11-06) request schemas."""
+    import formats
+    from provider_schemas import errors
+    editor.submit(job("resize", model="ideogram_4_5", prompt=formats.EXTEND_PROMPT, ratio=None,
+                      refs=[Ref(FRAME, "current", "current")], mask=MASK, outputs=1))
+    runway.submit(job("resize", model="gemini_image3_pro", prompt=formats.REGENERATE_PROMPT.format(shape="wide 4:1"),
+                      ratio="3168:1344", refs=[Ref(SHA, "master", "object")], outputs=1))
+    for scale in (4, 8):
+        runway.submit(job("upscale", model="magnific_precision_upscaler_v2", prompt="upscale", ratio=None,
+                          refs=[Ref(SHA, "current", "current")], scale=scale))
+    assert server.body["scaleFactor"] == 8
+    for req in server.requests:
+        assert not errors("runway", f"POST {req.url.path}", json.loads(req.content)), req.url.path

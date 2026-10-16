@@ -407,6 +407,34 @@ packs = json.loads((HERE / "format-packs.json").read_text())
 ids = [fmt["id"] for pack in packs["packs"] for fmt in pack["formats"]]
 if len(set(ids)) != len(ids):
     fail("✗ format-packs.json: a format id is used twice")
+# A campaign plan picks formats that exist, by pack (features/campaign-formats.clan); only a film is cut to
+# lengths; every format in our file names its Campaign board lane.
+by_pack = {pack["id"]: {fmt["id"]: fmt for fmt in pack["formats"]} for pack in packs["packs"]}
+for pack in packs["packs"]:
+    for fmt in pack["formats"]:
+        if "channel" not in fmt:
+            fail(f"✗ format-packs.json: {fmt['id']} has no channel (its Campaign board lane)")
+for plan in packs.get("plans", []):
+    if plan["id"] in by_pack:
+        fail(f"✗ format-packs.json: plan {plan['id']} has a pack's id")
+    seen = set()
+    for item in plan["items"]:
+        fmt = by_pack.get(item["pack_id"], {}).get(item["format_id"])
+        if fmt is None:
+            fail(f"✗ format-packs.json: plan {plan['id']} names {item['pack_id']}/{item['format_id']}, which is not a format of that pack")
+            continue
+        if item.get("lengths_s") and fmt["kind"] != "video":
+            fail(f"✗ format-packs.json: plan {plan['id']} gives {item['format_id']} lengths, but it is not a film")
+        if item["format_id"] in seen:
+            fail(f"✗ format-packs.json: plan {plan['id']} names {item['format_id']} twice")
+        seen.add(item["format_id"])
+# Make all sizes reads the method each resize and cutdown model serves from the sheet (the method table).
+for provider, sheet in sheets.items():
+    for op in ("resize", "cutdown"):
+        spec = sheet["ops"].get(op)
+        for s in ([spec, *spec.get("alternates", [])] if spec else []):
+            if "method" not in s:
+                fail(f"✗ capabilities/{provider}.json: {op} model {s['model']} names no method")
 
 # The X-Napkin-Identity v1 vector (docs/contracts/production-tool-identity.md): the claims, key and body
 # give exactly the assertion, which napkin-web's cargo test and the relay's pytest also check.

@@ -1,0 +1,316 @@
+{
+  "contract_version": "3",
+  "app": "production-tool",
+  "project": {
+    "id": "proj_01K7A000000000000000000001",
+    "tenant_id": "5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f",
+    "title": "First Light",
+    "created_by": "human:p_shrey01",
+    "created_at": "2026-10-13T10:00:00Z"
+  },
+  "assets": {
+    "sha256:5555555555555555555555555555555555555555555555555555555555555555": {
+      "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "kind": "image",
+      "mime": "image/png",
+      "w": 1536,
+      "h": 864,
+      "origin": "uploaded",
+      "locations": [
+        "idb://sha256/5555555555555555555555555555555555555555555555555555555555555555"
+      ]
+    },
+    "sha256:6666666666666666666666666666666666666666666666666666666666666666": {
+      "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "kind": "image",
+      "mime": "image/png",
+      "w": 1440,
+      "h": 1800,
+      "origin": "generated",
+      "job_id": "job_01K7C00000000000000000CJ01",
+      "locations": [
+        "https://studio.napkin.ie/out/sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      ]
+    }
+  },
+  "boards": {
+    "board_01K7C00000000000000000CB01": {
+      "id": "board_01K7C00000000000000000CB01",
+      "v": 1,
+      "field_v": {},
+      "title": "Campaign · First Light",
+      "purpose": "formats",
+      "rank": "a0"
+    }
+  },
+  "sketches": {},
+  "scripts": {
+    "script_01K7A000000000000000000002": {
+      "id": "script_01K7A000000000000000000002",
+      "v": 1,
+      "field_v": {},
+      "title": "Script",
+      "target_s": 15
+    }
+  },
+  "scenes": {},
+  "storyboards": {
+    "storyboard_01K7A000000000000000000003": {
+      "id": "storyboard_01K7A000000000000000000003",
+      "v": 1,
+      "field_v": {},
+      "title": "Storyboard",
+      "ratio": "16:9",
+      "target_s": 15
+    }
+  },
+  "shots": {},
+  "beats": {},
+  "frames": {},
+  "videos": {
+    "video_01K7A000000000000000000004": {
+      "id": "video_01K7A000000000000000000004",
+      "v": 1,
+      "field_v": {},
+      "title": "Video",
+      "ratio": "16:9",
+      "target_s": 15,
+      "edl": {}
+    }
+  },
+  "takes": {},
+  "renders": {},
+  "reviews": {},
+  "links": {
+    "link_01K7A000000000000000000005": {
+      "id": "link_01K7A000000000000000000005",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "script",
+        "id": "script_01K7A000000000000000000002"
+      },
+      "to": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000003"
+      },
+      "role": "drives"
+    },
+    "link_01K7A000000000000000000006": {
+      "id": "link_01K7A000000000000000000006",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "storyboard",
+        "id": "storyboard_01K7A000000000000000000003"
+      },
+      "to": {
+        "kind": "video",
+        "id": "video_01K7A000000000000000000004"
+      },
+      "role": "renders"
+    }
+  },
+  "keys": {},
+  "refs": {},
+  "documents": {},
+  "format_sets": {
+    "fset_01K7C00000000000000000CF01": {
+      "id": "fset_01K7C00000000000000000CF01",
+      "v": 3,
+      "field_v": {
+        "protect/boxes": 2,
+        "copy/line": 3
+      },
+      "master": {
+        "kind": "picture",
+        "id": "pic_kv_0001",
+        "asset": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "w": 1536,
+        "h": 864
+      },
+      "pack": {
+        "pack_id": "campaign-launch",
+        "pack_version": "2026-10-13"
+      },
+      "plan": {
+        "kind": "plan",
+        "id": "campaign-launch",
+        "lengths_s": [
+          30,
+          15,
+          6
+        ]
+      },
+      "protect": {
+        "boxes": [
+          {
+            "role": "subject",
+            "label": "Maya",
+            "x": 610,
+            "y": 120,
+            "w": 300,
+            "h": 640
+          },
+          {
+            "role": "product",
+            "label": "the bottle",
+            "x": 980,
+            "y": 430,
+            "w": 120,
+            "h": 300
+          }
+        ]
+      },
+      "copy": {
+        "line": "First light. First sip.",
+        "legal": "Enjoy responsibly."
+      }
+    }
+  },
+  "sizes": {
+    "size_01K7C00000000000000000CS01": {
+      "id": "size_01K7C00000000000000000CS01",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7C00000000000000000CF01",
+      "rank": "a1",
+      "format": {
+        "pack_id": "social",
+        "pack_version": "2026-10-13",
+        "format_id": "meta-feed-image-4x5"
+      },
+      "aspect": {
+        "w": 4,
+        "h": 5
+      },
+      "delivery": {
+        "width": 1440,
+        "height": 1800
+      },
+      "method": "crop",
+      "media": "image",
+      "asset": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "job_id": "job_01K7C00000000000000000CJ01",
+      "status": "look",
+      "locked": true,
+      "from_asset": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "crop": {
+        "x": 514,
+        "y": 0,
+        "w": 691.2,
+        "h": 864
+      },
+      "crop_by": "person",
+      "layers": {
+        "line": {
+          "text": "First light.",
+          "scale": 1.2
+        },
+        "legal": {
+          "hidden": true
+        }
+      },
+      "checks": {
+        "subject_safe": {
+          "result": "pass",
+          "note": "Maya and the bottle are inside the safe area."
+        },
+        "line_present": {
+          "result": "flag",
+          "note": "The brand line is hidden on this size.",
+          "ignored": {
+            "by": "human:p_shrey01",
+            "at": "2026-10-16T09:00:00Z"
+          }
+        }
+      }
+    },
+    "size_01K7C00000000000000000CS02": {
+      "id": "size_01K7C00000000000000000CS02",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7C00000000000000000CF01",
+      "rank": "a2",
+      "format": {
+        "pack_id": "ooh-uk-ie",
+        "pack_version": "2026-10-13",
+        "format_id": "uk-6-sheet"
+      },
+      "aspect": {
+        "w": 3543,
+        "h": 5315
+      },
+      "delivery": {
+        "width": 3543,
+        "height": 5315
+      },
+      "bleed_mm": 3,
+      "safe_area": {
+        "type": "box",
+        "width": 1160,
+        "height": 1750,
+        "unit": "mm",
+        "basis": "full_size",
+        "anchor": "centre"
+      },
+      "method": "regenerate",
+      "media": "image"
+    },
+    "size_01K7C00000000000000000CS03": {
+      "id": "size_01K7C00000000000000000CS03",
+      "v": 1,
+      "field_v": {},
+      "set_id": "fset_01K7C00000000000000000CF01",
+      "rank": "a3",
+      "format": {
+        "pack_id": "film",
+        "pack_version": "2026-10-13",
+        "format_id": "film-16x9"
+      },
+      "aspect": {
+        "w": 16,
+        "h": 9
+      },
+      "delivery": {
+        "width": 1920,
+        "height": 1080
+      },
+      "method": "reedit",
+      "media": "video",
+      "length_s": 15,
+      "edl": [
+        {
+          "shot_id": "shot_01K7C00000000000000000CH01",
+          "take_id": "take_01K7C00000000000000000CT01",
+          "in_s": 0.5,
+          "out_s": 4
+        },
+        {
+          "shot_id": "shot_01K7C00000000000000000CH04",
+          "in_s": 0,
+          "out_s": 6,
+          "crop": {
+            "x": 0,
+            "y": 0,
+            "w": 1920,
+            "h": 1080
+          }
+        },
+        {
+          "shot_id": "shot_01K7C00000000000000000CH09",
+          "in_s": 0,
+          "out_s": 5,
+          "end_card": true
+        }
+      ]
+    }
+  },
+  "checks": {},
+  "asks": {},
+  "suggestions": {},
+  "spin_ins": {},
+  "jobs": {},
+  "stale": {},
+  "exports": {}
+}

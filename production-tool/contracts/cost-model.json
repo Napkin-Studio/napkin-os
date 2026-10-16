@@ -13,7 +13,6 @@
         {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "clips, 6 s, audio off", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": false}, "count": 6},
         {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
-        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
       ]
     },
@@ -27,7 +26,6 @@
         {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "clips, 6 s, audio off, 3 takes", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": false}, "count": 18},
         {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
-        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
       ]
     },
@@ -41,7 +39,6 @@
         {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "clips, 6 s, audio on", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": true}, "count": 6},
         {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
-        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
       ]
     },
@@ -55,7 +52,6 @@
         {"what": "Fill area at medium", "op": "frame_edit", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "clips, 6 s, audio on, 3 takes", "op": "clip", "model": "veo3.1", "settings": {"durationS": 6, "audio": true}, "count": 18},
         {"what": "moment fix, 4 s cut", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 1},
-        {"what": "Make all sizes: still extends", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "refs": 1}, "count": 2},
         {"what": "upscale at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 1}
       ]
     },
@@ -72,15 +68,25 @@
         {"what": "bridge, 8 s", "op": "bridge", "model": "veo3.1", "settings": {"durationS": 8, "audio": true}, "count": 1},
         {"what": "moment fixes, 4 s cuts", "op": "clip_patch", "model": "aleph2", "settings": {"inputS": 4}, "count": 4},
         {"what": "upscales at 2x", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 1344, "scaleFactor": 2}, "count": 6},
-        {"what": "Make all sizes: still extends at high", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "high", "refs": 1}, "count": 6},
-        {"what": "cut-downs: aleph2 expand of the 15 s ad (upper bound; method not decided)", "op": "cutdown", "model": "aleph2", "settings": {"inputS": 15}, "count": 2},
         {"what": "4K video upscale of the 15 s ad at 24 fps", "op": "upscale", "model": "magnific_video_upscaler_creative", "settings": {"resolution": "4k", "inputS": 15, "fps": 24}, "count": 1}
+      ]
+    },
+    {
+      "id": "campaign",
+      "label": "Campaign: make all sizes of a 16:9 key visual and a 30 s film (17 stills, 7 films; features/campaign-formats.clan)",
+      "lines": [
+        {"what": "Make all sizes: extend at high (6 formats; medium left padding unfilled in CF-T1)", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "high", "outputs": 1}, "count": 6},
+        {"what": "Make all sizes: regenerate at 2K (4 formats)", "op": "resize", "model": "gemini_image3_pro", "settings": {"ratio": "768:1344", "outputs": 1}, "count": 4},
+        {"what": "Make all sizes: regenerate at 4K (the 6-sheet)", "op": "resize", "model": "gemini_image3_pro", "settings": {"ratio": "3392:5056", "outputs": 1}, "count": 1},
+        {"what": "film re-aspect: Aleph 2 on about 2 shots of 3 s for each of 9:16, 4:5 and 1:1", "op": "cutdown", "model": "aleph2", "settings": {"inputS": 3}, "count": 6},
+        {"what": "delivery upscales over 4096 px at Export (48-, 96-, 6-sheet, A4, DPS)", "op": "upscale", "model": "magnific_precision_upscaler_v2", "settings": {"inputPx": 2048, "scaleFactor": 4}, "count": 5}
       ]
     }
   ],
-  "expected": {"typical": 1089, "typical_takes": 2769, "typical_audio": 1809, "typical_audio_takes": 4929, "heavy": 8863},
+  "expected": {"typical": 1073, "typical_takes": 2753, "typical_audio": 1793, "typical_audio_takes": 4913, "heavy": 7873, "campaign": 1524},
   "placeholders": [
     {"what": "Claude on Bedrock (the director), per ad", "usd": 0.5, "measured": false, "note": "Replaced from dogfood-telemetry once it records tokens per job."},
+    {"what": "Claude on Bedrock for a campaign (the protect ask, crop boxes per shot, beat plans)", "usd": 0.5, "measured": false, "note": "From the design (features/campaign-formats.clan); measured by paid test CF-T5."},
     {"what": "billedFailureRate: failed and moderated tasks Runway bills, as a share of spend", "rate": 0, "measured": false, "note": "Measured by runway-spend-truth. Billed failures are charged to the agency silently (Shrey, 2026-10-13)."}
   ],
   "fixedMonthly": [

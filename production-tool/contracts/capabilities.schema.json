@@ -227,6 +227,9 @@
                 "keepsSize": {
                   "type": "boolean",
                   "description": "clip_edit: the edit keeps the clip's own size and takes no size (Seedance 2.5 edit mode refuses ratio); quality only prices it, at the source take's level. Added 2026-10-15 (additive, features/clip-quality.clan)."
+                },
+                "method": {
+                  "$ref": "#/properties/ops/additionalProperties/properties/method"
                 }
               },
               "required": [
@@ -262,6 +265,14 @@
           "keepsSize": {
             "type": "boolean",
             "description": "clip_edit: the edit keeps the clip's own size and takes no size (Seedance 2.5 edit mode refuses ratio); quality only prices it, at the source take's level. Added 2026-10-15 (additive, features/clip-quality.clan)."
+          },
+          "method": {
+            "enum": [
+              "extend",
+              "regenerate",
+              "reframe"
+            ],
+            "description": "resize and cutdown only (features/campaign-formats.clan): the Make all sizes method this model serves; the method table reads it, so a model change is data. crop, layout and reedit need no model. Added 2026-10-16 (additive)."
           }
         },
         "required": [

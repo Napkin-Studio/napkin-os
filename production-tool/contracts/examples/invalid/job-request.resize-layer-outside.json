@@ -1,0 +1,83 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000RS01",
+  "op": "resize",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_resize01a",
+  "node": {
+    "kind": "format_set",
+    "id": "fset_01K7B00000000000000000FS01"
+  },
+  "parentIds": [],
+  "input": {
+    "image": {
+      "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "url": "https://studio.napkin.ie/in/sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "mime": "image/png"
+    },
+    "aspect": {
+      "w": 9,
+      "h": 16
+    },
+    "delivery": {
+      "width": 1440,
+      "height": 2560
+    },
+    "safeArea": {
+      "type": "insets",
+      "top": 14,
+      "right": 6,
+      "bottom": 35,
+      "left": 6,
+      "unit": "%"
+    },
+    "resize": {
+      "method": "crop",
+      "masterSize": {
+        "w": 1536,
+        "h": 864
+      },
+      "protect": [
+        {
+          "role": "subject",
+          "label": "Maya",
+          "x": 610,
+          "y": 120,
+          "w": 300,
+          "h": 640
+        }
+      ],
+      "previewMaxPx": 2048,
+      "layers": [
+        {
+          "kind": "line",
+          "box": {
+            "x": 0.08,
+            "y": 0.66,
+            "w": 1.5,
+            "h": 0.12
+          },
+          "text": "First light. First sip.",
+          "sizeFrac": 0.05,
+          "colour": "#FFFFFF",
+          "align": "centre",
+          "weight": "bold"
+        },
+        {
+          "kind": "logo",
+          "box": {
+            "x": 0.38,
+            "y": 0.86,
+            "w": 0.24,
+            "h": 0.06
+          },
+          "image": {
+            "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+            "url": "https://studio.napkin.ie/in/sha256:7777777777777777777777777777777777777777777777777777777777777777",
+            "mime": "image/png"
+          }
+        }
+      ]
+    }
+  }
+}
