@@ -82,6 +82,7 @@ export class CanvasController {
     this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
     void this.refreshDrawings()
+    void this.sync.texts(this.els())
   }
 
   private els(): El[] {
@@ -160,6 +161,7 @@ export class CanvasController {
     void this.sync.sketches(this.els())
     void this.sync.nodes(this.els())
     void this.refreshDrawings().catch((e) => console.warn('Could not update a drawing’s picture', e))
+    void this.sync.texts(this.els())
   }
 
   // ── delete and undo ──

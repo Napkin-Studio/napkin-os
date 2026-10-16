@@ -1,7 +1,6 @@
 // CanvasChrome on our own engine (features/production-ui.clan): the bar's tools
-// map onto the engine's (select, hand, pen and eraser, and the sketch area tool,
-// canvas-edit-tools; the Picture tool is the node layer's; text is not on the own
-// engine yet), zoom
+// map onto the engine's (select, hand, pen and eraser, the sketch area tool,
+// canvas-edit-tools, and text, canvas-text; the Picture tool is the node layer's), zoom
 // keeps the middle of the view still, and fit uses the adapter's own fit.
 
 import { fitView, nextZoom, scrollForZoom, type CanvasChrome, type ChromeTool } from '../../chrome/controls'
@@ -9,9 +8,9 @@ import type { OwnAdapter } from './adapter'
 import { canvasActions } from '../../chrome/actions'
 import { areaRatio } from '../../core/sketchCopy'
 
-const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser', sketch: 'sketch' }
+const TO_ENGINE: Partial<Record<ChromeTool, string>> = { select: 'selection', hand: 'hand', pen: 'freedraw', eraser: 'eraser', sketch: 'sketch', text: 'text' }
 // The highlighter is the pen's other mode (the pen's options), so the pen stays lit.
-const FROM_ENGINE: Record<string, ChromeTool> = { selection: 'select', hand: 'hand', freedraw: 'pen', pen: 'pen', highlighter: 'pen', eraser: 'eraser', sketch: 'sketch' }
+const FROM_ENGINE: Record<string, ChromeTool> = { selection: 'select', hand: 'hand', freedraw: 'pen', pen: 'pen', highlighter: 'pen', eraser: 'eraser', sketch: 'sketch', text: 'text' }
 
 export function ownChrome(a: OwnAdapter): CanvasChrome {
   const size = () => {
@@ -37,6 +36,9 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       if (id) a.setActiveTool({ type: 'native', id })
     },
     setPen: (p) => a.setPen(p),
+    setText: (look) => a.setTextLook(look),
+    selectedText: () => a.selectedText(),
+    styleText: (change) => a.styleText(change),
     selectedSketch: () => {
       const e = a.selectedSketchArea()
       return e ? { id: e.id, ratio: areaRatio(e) } : null
@@ -61,7 +63,8 @@ export function ownChrome(a: OwnAdapter): CanvasChrome {
       let last = ''
       return a.onChange(() => {
         const t = a.activeTool()
-        const sig = `${t.type}:${t.id}|${a.view().zoom}|${a.selectedSketchArea()?.id ?? ''}`
+        const txt = a.selectedText()
+        const sig = `${t.type}:${t.id}|${a.view().zoom}|${a.selectedSketchArea()?.id ?? ''}|${txt ? `${txt.size}:${txt.color}` : ''}`
         if (sig !== last) {
           last = sig
           cb()

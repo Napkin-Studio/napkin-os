@@ -104,7 +104,7 @@ function styleOf(e: ExcalidrawLike): Style {
 }
 
 /** A Tiptap doc of plain lines: the text's checkpoint until it is edited (engine-text-edit). */
-function tiptapDoc(plain: string): Plain {
+export function tiptapDoc(plain: string): Plain {
   return {
     type: 'doc',
     content: plain.split('\n').map((line): Plain => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' })),

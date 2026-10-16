@@ -94,7 +94,8 @@ export class LocalPatchBus implements PatchBus {
         if (p.id !== next.project.id) return refused.push({ index, reason: 'not_found', message: `the project is ${next.project.id}` })
         if (p.op !== 'set') return refused.push({ index, reason: 'read_only', message: 'the project is set leaf by leaf, never created or deleted' })
       }
-      const bag = table(next, p.entity)
+      // An optional map (texts: README item 20) a document made before it lacks: its first create makes it.
+      const bag = table(next, p.entity) ?? (p.op === 'create' && p.entity !== 'project' ? ((next as unknown as Record<string, Bag>)[p.entity] = {}) : null)
       const current = p.entity === 'project' ? (next.project as unknown as Record<string, unknown>) : bag?.[p.id]
       if (p.op === 'create') {
         if (current !== undefined) return refused.push({ index, reason: 'exists', message: `${key} exists` })

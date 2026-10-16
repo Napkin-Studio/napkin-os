@@ -22,6 +22,7 @@ import { jobState, record } from '../dogfood/recorder'
 import { idbLocation, putBlobAs } from '../lib/blobs'
 import { newId, ulid } from '../lib/ulid'
 import { purposeInputs, purposeNode, purposeOf, purposeWords } from '../model/purpose'
+import { withLinkedText } from './linkedText'
 import { jobsList } from '../model/selectors'
 import type { UiStore } from '../projects/uiStore'
 import { asContractError, RelayError, type Relay } from '../relay'
@@ -192,6 +193,9 @@ export class JobRunner {
     if (this.stopped) throw new Error('the project was closed')
     const d = this.doc.get()
     const node = extras.node ?? purposeNode(d, purpose, jobId)
+    // The texts linked into the node are its input words (features/canvas-text.clan).
+    const linked = withLinkedText(d, op, node, input)
+    input = linked.input
     const words = purposeWords(purpose)
     // A fresh nonce for every job: another take is never deduped with the one running (ui-behaviour 4.3).
     const nonce = ulid()
@@ -218,7 +222,7 @@ export class JobRunner {
       input_hashes: [...hashes],
       created_at: new Date().toISOString(),
     }
-    const rows = [...purposeInputs(purpose), ...inputRows(input)].slice(0, 32)
+    const rows = [...purposeInputs(purpose), ...inputRows(input), ...linked.rows].slice(0, 32)
     if (rows.length) entry.inputs = rows
     if (input.text) entry.text = input.text
     if (input.chips?.length) entry.chips = input.chips

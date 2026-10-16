@@ -12,7 +12,7 @@ export interface Entity {
 }
 
 export const MAP_NAMES = ['boards', 'sketches', 'scripts', 'scenes', 'storyboards', 'shots', 'beats', 'frames', 'videos', 'takes', 'renders', 'reviews',
-  'links', 'keys', 'refs', 'documents', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports'] as const
+  'links', 'keys', 'refs', 'documents', 'texts', 'format_sets', 'sizes', 'checks', 'asks', 'suggestions', 'spin_ins', 'jobs', 'stale', 'exports'] as const
 export type MapName = (typeof MAP_NAMES)[number]
 
 export interface Project {

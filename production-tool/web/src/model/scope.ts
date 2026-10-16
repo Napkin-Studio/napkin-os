@@ -58,6 +58,22 @@ export interface ScopeItem {
   held?: boolean
   /** The board or group item this one came in through (via 'board'), or the upstream node (via 'upstream'). */
   through?: Id
+  /** A linked text's words (features/canvas-text.clan): the node's input words. */
+  words?: string
+}
+
+/** A chip's few words of a text: its first line, cut at a word near 28 characters. */
+export function firstWords(words: string, max = 28): string {
+  const line = words.trim().split('\n')[0].trim()
+  if (line.length <= max) return line
+  const cut = line.slice(0, max + 1)
+  const at = cut.lastIndexOf(' ')
+  return `${(at > 8 ? cut.slice(0, at) : line.slice(0, max)).trimEnd()}…`
+}
+
+/** The words of the texts linked into a node (its own links, and up its chain), for its job's input words. */
+export function linkedWords(items: readonly ScopeItem[]): { id: Id; linkId?: Id; words: string }[] {
+  return items.filter((it) => it.kind === 'text' && it.via !== 'mention' && it.words?.trim()).map((it) => ({ id: it.id, ...(it.linkId ? { linkId: it.linkId } : {}), words: it.words!.trim() }))
 }
 
 export interface ScopeOptions {
@@ -70,7 +86,7 @@ const titled = (kind: string, title: string | undefined) => (title && title.trim
 const values = <T>(m: Record<string, T> | undefined): T[] => Object.values(m ?? {})
 const MENTION = /(?<![\w@])@([a-z][a-z0-9]{1,23}(?:_[a-z0-9][a-z0-9-]{0,31})?)/g
 const UPSTREAM: LinkRole[] = ['drives', 'renders']
-const ORDER: ScopeKind[] = ['script', 'storyboard', 'video', 'board', 'group', 'ref', 'key', 'sketch', 'ink', 'frame', 'render', 'shot', 'note', 'document', 'format_set', 'unknown']
+const ORDER: ScopeKind[] = ['script', 'storyboard', 'video', 'board', 'group', 'ref', 'key', 'sketch', 'ink', 'frame', 'render', 'shot', 'note', 'text', 'document', 'format_set', 'unknown']
 const PURPOSE_ROLES: Partial<Record<BoardPurpose, RefRole[]>> = {
   character: ['character'], location: ['location'], product: ['product'],
   reference: ['lighting', 'composition', 'style', 'wardrobe', 'pose', 'prop', 'texture', 'colour', 'layout', 'other'],
@@ -214,6 +230,11 @@ function linkItems(d: Doc, l: Link, via: ScopeVia, opts: ScopeOptions, through?:
       return [{ ...base, kind: 'ink', id: e.id, label: l.label || 'Ink', drawn: true }]
     case 'note':
       return [{ ...base, kind: 'note', id: e.id, label: l.label || 'Note' }]
+    case 'text': {
+      // A text on the canvas (features/canvas-text.clan): its words are the node's input words.
+      const t = d.texts?.[e.id]
+      return t ? [{ ...base, kind: 'text', id: e.id, label: `Text: ${firstWords(t.words)}`, words: t.words }] : []
+    }
     default:
       return [{ ...base, kind: e.kind, id: e.id, label: l.label || e.kind }]
   }

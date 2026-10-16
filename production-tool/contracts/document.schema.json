@@ -216,6 +216,17 @@
       },
       "maxProperties": 64
     },
+    "texts": {
+      "type": "object",
+      "description": "Texts written on the canvas (features/canvas-text.clan, 2026-10-16): each holds its words and the canvas element it is, so a node a text is linked into reads its words without the canvas. Optional: a document made before it has none.",
+      "propertyNames": {
+        "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/text"
+      },
+      "maxProperties": 1000
+    },
     "format_sets": {
       "type": "object",
       "propertyNames": {
@@ -1793,6 +1804,39 @@
         "asset",
         "pages",
         "read"
+      ],
+      "additionalProperties": false
+    },
+    "text": {
+      "type": "object",
+      "description": "A text on the canvas (the Text tool's). Its words follow the canvas: an edit there rewrites them; a delete takes it out with its links. Linked into a node (role note), its words are that node's input words.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^text_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "v": {
+          "$ref": "#/$defs/v"
+        },
+        "field_v": {
+          "$ref": "#/$defs/field_v"
+        },
+        "node": {
+          "$ref": "common.schema.json#/$defs/sceneId",
+          "description": "The canvas element that is this text."
+        },
+        "words": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "What it says, as typed (lines joined by newlines)."
+        }
+      },
+      "required": [
+        "id",
+        "v",
+        "field_v",
+        "node",
+        "words"
       ],
       "additionalProperties": false
     },

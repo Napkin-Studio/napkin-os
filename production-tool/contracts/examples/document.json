@@ -76,11 +76,34 @@
         "id": "video_01K7A000000000000000000004"
       },
       "role": "renders"
+    },
+    "link_01K7A0000000000000000000T2": {
+      "id": "link_01K7A0000000000000000000T2",
+      "v": 1,
+      "field_v": {},
+      "from": {
+        "kind": "text",
+        "id": "text_01K7A0000000000000000000T1"
+      },
+      "to": {
+        "kind": "script",
+        "id": "script_01K7A000000000000000000002"
+      },
+      "role": "note"
     }
   },
   "keys": {},
   "refs": {},
   "documents": {},
+  "texts": {
+    "text_01K7A0000000000000000000T1": {
+      "id": "text_01K7A0000000000000000000T1",
+      "v": 1,
+      "field_v": {},
+      "node": "own_text_note1",
+      "words": "Rain on the window.\nShe does not look up."
+    }
+  },
   "format_sets": {},
   "sizes": {},
   "checks": {},
