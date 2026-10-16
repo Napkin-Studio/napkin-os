@@ -112,4 +112,15 @@ describe('groups', () => {
     tool.set([])
     expect(tool.selectionKind()).toEqual({ kind: 'none' })
   })
+
+  it('part of a group picked alone is itself, not the group (owner 2026-10-15: one view out of a stack)', () => {
+    const view = (id: string, x: number) => element({ id, kind: 'image', z: `c${x}`, x, y: 0, w: 40, h: 50, groupIds: ['key:maya'], props: {} })
+    const { tool } = setup([view('front', 0), view('side', 60), view('back', 120)])
+    expect(tool.pickOne({ x: 10, y: 10 })).toBe('front')
+    expect(tool.selectionKind()).toEqual({ kind: 'one' })
+    tool.set(['front', 'side'])
+    expect(tool.selectionKind()).toEqual({ kind: 'several', count: 2 })
+    tool.set(['front', 'side', 'back'])
+    expect(tool.selectionKind()).toEqual({ kind: 'group', group: 'key:maya', ink: false, count: 3 })
+  })
 })
