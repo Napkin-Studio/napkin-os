@@ -50,6 +50,8 @@ import { ImageEditor } from './ImageEditor'
 import { ScopeLine } from './InputsStrip'
 import './storyboard.css'
 import { PromptStart } from '../ui/prompt/PromptStart'
+import { moveOnStoryboard, useShotSort } from './shotDrag'
+import { ShotSort } from './ShotSort'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
 
@@ -62,7 +64,7 @@ export function Storyboard() {
   useJobsTick()
   const [error, setError] = useState<string | null>(null)
   const [confirmShot, setConfirmShot] = useState<string | null>(null)
-  /** "Deleted shot 3." with Undo, after a delete (ui-behaviour 3.3 Delete). */
+  /** "Deleted shot 3." or "Shot 5 is now shot 3." with Undo, after a delete or a move (ui-behaviour 3.3 Delete, 3.11). */
   const [deleted, setDeleted] = useState<string | null>(null)
   /** The shot whose frame is open in the Image editor (ui-behaviour 3.12). */
   const [editing, setEditing] = useState<string | null>(null)
@@ -123,6 +125,14 @@ export function Storyboard() {
     if (shotNeedsConfirm(docStore.get(), shotId)) setConfirmShot(shotId)
     else void removeNow(shotId)
   }
+  // Drag reorder (ui-behaviour 3.11): one rank write with the drift marks, one undo step.
+  const moveShot = (shotId: string, place: { beforeId: string | null; afterId: string | null }) => attempt(async () => {
+    if (!clan) return
+    const was = shotNumber(clan.get(), shotId)
+    setDeleted(null)
+    await moveOnStoryboard(clan, shotId, place)
+    setDeleted(`Shot ${was} is now shot ${shotNumber(clan.get(), shotId)}.`)
+  })
   const drawFirst = () => attempt(() => drawFrame(deps, 0, 'first', { storyboardId: sb?.id }))
   const drawNext = (index: number) => attempt(() => drawFrame(deps, index, 'next', { storyboardId: sb?.id }))
   const drawRest = () => attempt(() => drawTheRest(deps))
@@ -192,6 +202,14 @@ export function Storyboard() {
             </div>
           </div>
         )}
+        <ShotSort ids={shots.map((s) => s.id)} doc={doc} onMove={(id, place) => void moveShot(id, place)}
+          overlay={(id) => { const i = shots.findIndex((s) => s.id === id); return i < 0 ? null : <LiftedCard shot={shots[i]} index={i} /> }}
+          note={(w) => w && (
+            <div className="sb-dragnote" role="status">
+              <AgentFigure agent="dex" size={24} decorative />
+              <span><span className="pt-mono">{sayer('dex')}</span> {w}</span>
+            </div>
+          )}>
         <div className="sb-grid">
           {shots.map((s, i) => (
             <ShotCard key={s.id} shot={s} index={i} prev={shots[i - 1]} store={clan} mentions={mentionHooks}
@@ -207,6 +225,7 @@ export function Storyboard() {
             <button className="sb-addtile" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
           )}
         </div>
+        </ShotSort>
         {shots.length > 0 && <Thumbs compact target={{ kind: 'shot-list', jobId: lastPlan?.id, model: lastPlan?.director?.model, promptVersion: lastPlan?.director?.promptVersion, shots: shots.length }} />}
       </div>
     </div>
@@ -250,6 +269,30 @@ function titleOf(s: Shot): string {
   return words ? cap(words.length > 26 ? `${words.slice(0, 25).replace(/\s+\S*$/, '')}…` : words) : cap(cameraLabel('size', s.camera.size))
 }
 
+/** The card under the pointer while it is dragged (3.11): tilted, blue outline, shadow. */
+function LiftedCard({ shot, index }: { shot: Shot; index: number }) {
+  const doc = useDoc()
+  const current = currentFrame(doc, shot) ?? framesOf(doc, shot.id).at(-1)
+  const url = useBlobUrl(current?.asset)
+  const asset = current ? doc.assets[current.asset] : undefined
+  const ratio = doc.storyboards[shot.storyboard_id]?.ratio ?? '16:9'
+  const aspect = asset?.w && asset?.h ? asset.w / asset.h : ratioAspect(ratio)
+  return (
+    <div className="sb-card sb-lifted" aria-hidden="true">
+      <header className="sb-cardhead">
+        <span className="sb-handle">⋮⋮</span>
+        <span className="sb-num">{index + 1}</span>
+        <b className="sb-title">{titleOf(shot)}</b>
+        <span className="pt-mono sb-dur">{shot.duration_s.toFixed(1)} s</span>
+      </header>
+      <div className="sb-frame" style={{ aspectRatio: String(aspect) }}>
+        {url ? <img src={url} alt="" /> : <div className="sb-noframe"><span>No frame yet</span></div>}
+      </div>
+      {shot.action && <div className="sb-liftwords">{shot.action}</div>}
+    </div>
+  )
+}
+
 /** The latest Change this frame on a shot, and what it proposed. */
 function frameChangeOf(doc: ProductionDocument, ui: Pick<UiState, 'jobs'>, shotId: string): { job: DocJob; proposal?: Frame } | undefined {
   const jobs = jobsList(doc)
@@ -272,6 +315,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const doc = useDoc()
   const ui = useUi()
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, lifted, line, dragging, moving } = useShotSort(shot.id, !store || confirming)
   const frames = framesOf(doc, shot.id)
   const current = currentFrame(doc, shot) ?? frames.at(-1)
   const idx = current ? frames.indexOf(current) : -1
@@ -319,13 +363,14 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
     : null
   if (confirming) {
     return (
-      <article className="sb-card confirming" data-shot-card={shot.id}>
+      <article ref={setNodeRef} className="sb-card confirming" data-shot-card={shot.id}>
         <InlineConfirm text={shotDeleteText(index + 1, frames.length, takesOf(doc, shot.id).length)} yes="Delete shot" onNo={() => onConfirm(false)} onYes={() => onConfirm(true)} />
       </article>
     )
   }
   return (
-    <article className={`sb-card ${showChange || changing ? 'on' : ''}`} data-shot-card={shot.id} aria-label={`Shot ${index + 1}`} tabIndex={0}
+    <article ref={setNodeRef} className={`sb-card ${showChange || changing ? 'on' : ''} ${lifted ? 'slot' : ''} ${line ? `drop-${line}` : ''} ${dragging ? 'sorting' : ''}`}
+      data-shot-card={shot.id} aria-label={`Shot ${index + 1}`} tabIndex={0}
       onKeyDown={(e) => {
         // Delete or Backspace on the focused card (not in its fields) deletes the shot.
         if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === e.currentTarget) {
@@ -333,6 +378,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
           onDelete()
         }
       }}>
+      {line && <span className={`sb-dropline ${line}`} aria-hidden="true"><span>Shot {moving} moves here</span></span>}
       {index > 0 && (
         <>
           <button ref={gapRef} type="button" className="sb-gap" aria-label={`Insert between ${index} and ${index + 1}`} aria-haspopup="menu" aria-expanded={gap} onClick={() => setGap(!gap)}>+</button>
@@ -348,7 +394,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         </>
       )}
       <header className="sb-cardhead">
-        <span className="sb-handle" aria-hidden="true">⋮⋮</span>
+        <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} className="sb-handle" aria-label={`Move shot ${index + 1}`} title="Drag to move this shot (or Space, then the arrow keys)" disabled={!store}>⋮⋮</button>
         <span className="sb-num">{index + 1}</span>
         <b className="sb-title">{titleOf(shot)}</b>
         <span className="pt-mono sb-dur">{shot.duration_s.toFixed(1)} s</span>
