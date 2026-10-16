@@ -96,13 +96,26 @@ export const FORMAT_CHANNELS = ['film', 'social', 'ooh', 'print', 'display'] as 
 export type FormatChannel = (typeof FORMAT_CHANNELS)[number]
 export const SIZE_METHODS = ['crop', 'extend', 'nearest', 'reframe', 'regenerate', 'layout', 'reedit'] as const
 export type SizeMethod = (typeof SIZE_METHODS)[number]
-export const TYPE_LAYER_KINDS = ['line', 'logo', 'supers', 'legal'] as const
+export const TYPE_LAYER_KINDS = ['line', 'logo', 'supers', 'legal', 'captions'] as const
 export type TypeLayerKind = (typeof TYPE_LAYER_KINDS)[number]
 export interface TypeLayerOverride { hidden?: boolean; text?: string; box?: Region; scale?: number }
 export const FORMAT_CHECK_CODES = ['subject_safe', 'logo_safe', 'clear_space', 'type_size', 'ooh_words', 'line_present', 'end_card', 'sound_off', 'brand_first_3s'] as const
 export type FormatCheckCode = (typeof FORMAT_CHECK_CODES)[number]
 export interface FormatCheck { result: 'pass' | 'flag'; note: string; ignored?: { by: PersonRef; at: string } }
-export interface SizeEdlWindow { shot_id: Id; take_id?: Id; in_s: number; out_s: number; crop?: PxBox; end_card?: boolean }
+/** A crop at a point through a window (0: its in, 1: its out): a slow pan moves between them. */
+export interface CropKey { at: number; box: PxBox }
+export interface SizeEdlWindow {
+  shot_id: Id; take_id?: Id; in_s: number; out_s: number; crop?: PxBox; end_card?: boolean
+  /** A slow pan (phase 6), in the take's pixels; wins over crop. */
+  crop_keys?: CropKey[]
+  crop_by?: 'rule' | 'person'
+  /** The take's pixels, which crop and crop_keys are in. */
+  take_size?: Aspect
+}
+/** A cutdown's beat (Dex's plan, phase 5): a shot of the master kept or dropped, with his reason. */
+export interface SizeBeat { shot_id: Id; keep: boolean; why?: string; by?: 'dex' | 'person' }
+/** A film's shot made again for a shape (phase 6): Aleph 2's new edges, or Remake for vertical. */
+export interface Reframe { take_id: Id; shot_id: Id; aspect: Aspect; method: 'outpaint' | 'remake'; job_id: Id; model?: string; asset?: Sha256; size?: Aspect }
 /** relay-api TypeLayer: one type layer laid out for one size; the relay or stitch draws it. */
 export interface TypeLayer {
   kind: TypeLayerKind
@@ -114,6 +127,9 @@ export interface TypeLayer {
   align?: 'left' | 'centre' | 'right'
   weight?: 'regular' | 'bold'
   plate?: string
+  /** A film's layer: when it shows and goes, in seconds from the film's start (captions, supers). */
+  fromS?: number
+  toS?: number
 }
 
 export const REF_ROLES = ['character', 'location', 'lighting', 'composition', 'product', 'style', 'wardrobe', 'pose', 'prop', 'texture', 'colour', 'layout', 'logo', 'palette', 'typography', 'brand_rule', 'document', 'other'] as const
@@ -624,6 +640,8 @@ export interface FormatSet extends EntityBase {
   plan?: { kind: 'pack' | 'plan'; id: string; lengths_s?: number[] }
   protect?: { boxes?: ProtectBox[]; takes?: Record<Id, ProtectBox[]>; keep_middle?: boolean }
   copy?: { line?: string; legal?: string; supers?: string[] }
+  /** A film's shots made again for a shape, keyed `<take id>@<w>x<h>`. */
+  reframes?: Record<string, Reframe>
 }
 export interface Size extends EntityBase {
   set_id: Id
@@ -648,6 +666,8 @@ export interface Size extends EntityBase {
   layers?: Partial<Record<TypeLayerKind, TypeLayerOverride>>
   length_s?: number
   edl?: SizeEdlWindow[]
+  /** A cutdown's beat plan: every shot of the master, kept or dropped. */
+  beats?: SizeBeat[]
   checks?: Partial<Record<FormatCheckCode, FormatCheck>>
   /** The picture before its type layers: Edit type draws on it again for free; Export at full size upscales it. */
   plate?: Sha256
@@ -917,12 +937,30 @@ export interface ResizeInput {
   /** regenerate: what the picture is; a sketch (a scamp) is drawn as a finished picture. */
   source?: 'picture' | 'sketch'
 }
+/** A shot of the master as Dex's plan reads it (cutdown step plan). */
+export interface CutdownShot {
+  shotId: Id; takeId?: Id; words?: string; spoken?: string; inS: number; outS: number; takeS?: number
+  takeSize?: Aspect; endCard?: boolean; stills?: AssetRef[]
+}
+export type AlephRatio = '16:9' | '4:3' | '3:2' | '1:1' | '2:3' | '3:4' | '9:16' | '21:9'
+export interface CutdownClip { asset: AssetRef; inS: number; outS: number; takeSize?: Aspect; crop?: PxBox; cropKeys?: CropKey[]; outpaint?: boolean; endCard?: boolean }
+/** relay-api cutdown: plan (Dex's beats and crops, free), render (stitch, free; the default), outpaint (Aleph 2, paid). */
 export interface CutdownInput {
-  lengthS: number
-  clips: { asset: AssetRef; inS: number; outS: number; takeSize?: Aspect; crop?: PxBox; outpaint?: boolean; endCard?: boolean }[]
+  step?: 'plan' | 'render' | 'outpaint'
+  lengthS?: number
+  shots?: CutdownShot[]
+  lengths?: number[]
+  aspects?: Aspect[]
+  targetRatio?: AlephRatio
+  clips?: CutdownClip[]
   endCard?: boolean
   fadeOutS?: number
   layers?: TypeLayer[]
+}
+/** relay-api Job.cutdownPlan: each length's beats (windows fitted to it) and each shot's crop at each shape. */
+export interface CutdownPlan {
+  lengths: { lengthS: number; why?: string; beats: { shotId: Id; keep: boolean; why: string; inS: number; outS: number }[] }[]
+  crops: { shotId: Id; aspect: Aspect; keys: CropKey[]; subject?: PxBox; cuts: boolean; why?: string }[]
 }
 
 export type WriteIntent = 'draft' | 'tighten' | 'fit_seconds' | 'add_beat' | 'write_vo' | 'rephrase' | 'cut_name'
@@ -1015,6 +1053,8 @@ export interface Job {
   patch?: JobPatch
   /** resize only: how the size was made. */
   resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
+  /** cutdown step plan only. */
+  cutdownPlan?: CutdownPlan
   /** A clip_patch answered "Remake the whole clip": the client makes this op through the send tray. */
   handoff?: { op: 'clip' }
   createdAt: string

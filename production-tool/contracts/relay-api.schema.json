@@ -377,6 +377,18 @@
           "type": "string",
           "pattern": "^#[0-9A-Fa-f]{6}$",
           "description": "A colour band behind the words (supers on a busy picture)."
+        },
+        "fromS": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 600,
+          "description": "A film's layer: when it shows, in seconds from the film's start (a caption, a super). Absent: from the start. Added 2026-10-16 (additive, features/campaign-formats.clan phase 5)."
+        },
+        "toS": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "description": "A film's layer: when it goes. Absent: to the end of the clips (the end card carries no layers)."
         }
       },
       "required": [
@@ -738,12 +750,96 @@
         },
         "cutdown": {
           "type": "object",
-          "description": "cutdown (features/campaign-formats.clan, phases 5 and 6): a length or a shape of the film as windows of the same takes, rendered by stitch. A re-edit spends nothing on a provider; a reframe crops each clip and outpaints only the clips marked outpaint (Aleph 2).",
+          "description": "cutdown (features/campaign-formats.clan, phases 5 and 6): a length or a shape of the film from the same takes, in three steps (step). plan: Dex's beat plan for each length (which shots stay, with reasons, as windows of their takes) and, for each shape, a crop box per shot from Claude looking at three stills of it (in, middle, out), with a slow pan when they differ and outpaint where the crop would cut the subject; free on the provider (Claude, or the passthrough), nothing counted. render: one length at one shape, windows of the same takes cropped per clip and drawn by stitch with its end card, type layers and the mix trimmed with a fade; free. outpaint: one clip (the take, whole) given new edges at targetRatio by Aleph 2: paid, its own job and reservation. Steps plan and outpaint added 2026-10-16 (additive; absent step: render).",
           "properties": {
+            "step": {
+              "enum": ["plan", "render", "outpaint"]
+            },
             "lengthS": {
               "type": "number",
               "exclusiveMinimum": 0,
               "maximum": 600
+            },
+            "shots": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "description": "plan: the master's shots in cut order, each with the window of its take the master shows and up to three stills of it (in, middle, out) for Claude to look at.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "shotId": {
+                    "$ref": "common.schema.json#/$defs/id"
+                  },
+                  "takeId": {
+                    "$ref": "common.schema.json#/$defs/id"
+                  },
+                  "words": {
+                    "type": "string",
+                    "maxLength": 600,
+                    "description": "What happens in the shot (its action)."
+                  },
+                  "spoken": {
+                    "type": "string",
+                    "maxLength": 600,
+                    "description": "Its spoken lines, if any."
+                  },
+                  "inS": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "outS": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "takeS": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "description": "The take's whole length: a window may grow into its handles."
+                  },
+                  "takeSize": {
+                    "$ref": "common.schema.json#/$defs/aspect"
+                  },
+                  "endCard": {
+                    "type": "boolean"
+                  },
+                  "stills": {
+                    "type": "array",
+                    "maxItems": 3,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/assetRef"
+                    }
+                  }
+                },
+                "required": [
+                  "shotId",
+                  "inS",
+                  "outS"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "lengths": {
+              "type": "array",
+              "maxItems": 8,
+              "description": "plan: the lengths to cut to, in seconds (the end card included).",
+              "items": {
+                "type": "number",
+                "minimum": 3,
+                "maximum": 600
+              }
+            },
+            "aspects": {
+              "type": "array",
+              "maxItems": 6,
+              "description": "plan: the shapes to crop each shot to (a shape the master already has needs no crop).",
+              "items": {
+                "$ref": "common.schema.json#/$defs/aspect"
+              }
+            },
+            "targetRatio": {
+              "enum": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"],
+              "description": "outpaint: the shape Aleph 2 makes (4:5 is made at 3:4 and cropped)."
             },
             "clips": {
               "type": "array",
@@ -768,11 +864,35 @@
                   },
                   "crop": {
                     "$ref": "common.schema.json#/$defs/pxBox",
-                    "description": "In takeSize pixels; absent: the whole frame."
+                    "description": "In takeSize pixels; absent: the largest centred box of the size's shape (render)."
+                  },
+                  "cropKeys": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 3,
+                    "description": "A slow pan: the crop at points through the window (at 0: its in, 1: its out), in takeSize pixels, moved linearly between them. Wins over crop. Added 2026-10-16 (additive).",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "box": {
+                          "$ref": "common.schema.json#/$defs/pxBox"
+                        }
+                      },
+                      "required": [
+                        "at",
+                        "box"
+                      ],
+                      "additionalProperties": false
+                    }
                   },
                   "outpaint": {
                     "type": "boolean",
-                    "description": "The crop would cut a protected box: Aleph 2 makes the new edges of this clip."
+                    "description": "outpaint: the clip Aleph 2 gives new edges (the crop would cut a protected box)."
                   },
                   "endCard": {
                     "type": "boolean"
@@ -797,15 +917,60 @@
             },
             "layers": {
               "type": "array",
-              "maxItems": 12,
+              "maxItems": 40,
               "items": {
                 "$ref": "#/$defs/TypeLayer"
-              }
+              },
+              "description": "The film's type layers, captions one per line (fromS, toS). maxItems 40 since 2026-10-16 (was 12)."
             }
           },
-          "required": [
-            "lengthS",
-            "clips"
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "step": {
+                    "const": "plan"
+                  }
+                },
+                "required": [
+                  "step"
+                ]
+              },
+              "then": {
+                "required": [
+                  "shots",
+                  "lengths"
+                ]
+              },
+              "else": {
+                "required": [
+                  "lengthS",
+                  "clips"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "step": {
+                    "const": "outpaint"
+                  }
+                },
+                "required": [
+                  "step"
+                ]
+              },
+              "then": {
+                "required": [
+                  "targetRatio"
+                ],
+                "properties": {
+                  "clips": {
+                    "maxItems": 1
+                  }
+                }
+              }
+            }
           ],
           "additionalProperties": false
         }
@@ -946,6 +1111,132 @@
             "$ref": "#/$defs/Write"
           },
           "description": "write only: Skye's drafts, each landing as a suggestion on its target (one job may draft several)."
+        },
+        "cutdownPlan": {
+          "type": "object",
+          "description": "cutdown step plan only (features/campaign-formats.clan, phases 5 and 6): Dex's beat plan for each length and the crop of each shot at each shape. The relay settles it (windows fitted to the length, crops of the exact shape inside the take), so the web shows it as it is before anything renders. Added 2026-10-16 (additive).",
+          "properties": {
+            "lengths": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "lengthS": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "why": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "beats": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "shotId": {
+                          "$ref": "common.schema.json#/$defs/id"
+                        },
+                        "keep": {
+                          "type": "boolean"
+                        },
+                        "why": {
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "inS": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "outS": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "shotId",
+                        "keep",
+                        "why",
+                        "inS",
+                        "outS"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "lengthS",
+                  "beats"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "crops": {
+              "type": "array",
+              "maxItems": 600,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "shotId": {
+                    "$ref": "common.schema.json#/$defs/id"
+                  },
+                  "aspect": {
+                    "$ref": "common.schema.json#/$defs/aspect"
+                  },
+                  "keys": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "description": "One box (a still crop), or two or three (a slow pan through the window), in the take's pixels.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "box": {
+                          "$ref": "common.schema.json#/$defs/pxBox"
+                        }
+                      },
+                      "required": [
+                        "at",
+                        "box"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "subject": {
+                    "$ref": "common.schema.json#/$defs/pxBox",
+                    "description": "What must stay, as Claude saw it (the union over the stills), in the take's pixels."
+                  },
+                  "cuts": {
+                    "type": "boolean",
+                    "description": "The crop cuts the subject: Aleph 2 should make the shot's new edges (outpaint)."
+                  },
+                  "why": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "shotId",
+                  "aspect",
+                  "keys",
+                  "cuts"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "lengths",
+            "crops"
+          ],
+          "additionalProperties": false
         },
         "resize": {
           "type": "object",

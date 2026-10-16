@@ -1952,6 +1952,60 @@
             }
           },
           "additionalProperties": false
+        },
+        "reframes": {
+          "type": "object",
+          "description": "A film's shots made again for a shape (phase 6), keyed <take id>@<w>x<h> (the size's shape): Aleph 2's outpaint of the take (new edges, at the nearest of its ratios; 4:5 at 3:4), or Remake for vertical (the shot made again at the shape on a model that carries its characters). Each is its own paid job; every size of that shape that keeps the shot uses it. Added 2026-10-16 (additive).",
+          "propertyNames": {
+            "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}@[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$"
+          },
+          "maxProperties": 200,
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "take_id": {
+                "type": "string",
+                "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "shot_id": {
+                "type": "string",
+                "pattern": "^shot_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "aspect": {
+                "$ref": "common.schema.json#/$defs/aspect"
+              },
+              "method": {
+                "enum": [
+                  "outpaint",
+                  "remake"
+                ]
+              },
+              "job_id": {
+                "type": "string",
+                "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "model": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "asset": {
+                "$ref": "common.schema.json#/$defs/sha256",
+                "description": "The clip it made, once landed."
+              },
+              "size": {
+                "$ref": "common.schema.json#/$defs/aspect",
+                "description": "The clip's pixels."
+              }
+            },
+            "required": [
+              "take_id",
+              "shot_id",
+              "aspect",
+              "method",
+              "job_id"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -2117,6 +2171,41 @@
               "crop": {
                 "$ref": "common.schema.json#/$defs/pxBox"
               },
+              "crop_keys": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 3,
+                "description": "A slow pan (phase 6): the crop at points through the window (at 0: in, 1: out), in the take's pixels. Wins over crop. Added 2026-10-16 (additive).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "box": {
+                      "$ref": "common.schema.json#/$defs/pxBox"
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "box"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "crop_by": {
+                "enum": [
+                  "rule",
+                  "person"
+                ],
+                "description": "person: Adjust crop on the clip tile set it (a still box). Added 2026-10-16 (additive)."
+              },
+              "take_size": {
+                "$ref": "common.schema.json#/$defs/aspect",
+                "description": "The take's pixels, which crop and crop_keys are in. Added 2026-10-16 (additive)."
+              },
               "end_card": {
                 "type": "boolean"
               }
@@ -2125,6 +2214,38 @@
               "shot_id",
               "in_s",
               "out_s"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "beats": {
+          "type": "array",
+          "maxItems": 100,
+          "description": "A cutdown's beat plan (Dex, phase 5), shown before it renders: every shot of the master in cut order, kept or dropped, with his reason. Keep or drop on the plan changes the edl. Added 2026-10-16 (additive).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "shot_id": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "keep": {
+                "type": "boolean"
+              },
+              "why": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "by": {
+                "enum": [
+                  "dex",
+                  "person"
+                ],
+                "description": "person: kept or dropped by a person against Dex's plan."
+              }
+            },
+            "required": [
+              "shot_id",
+              "keep"
             ],
             "additionalProperties": false
           }

@@ -338,7 +338,8 @@
         },
         "promptVersion": {
           "type": "string",
-          "pattern": "^(director|skye)\\.v[0-9]+(\\.[0-9]+)?$"
+          "pattern": "^(director|skye|cutter)\\.v[0-9]+(\\.[0-9]+)?$",
+          "description": "director.vN (Dex's frames and clips), skye.vN (Skye's words) or cutter.vN (Dex's cutdown plans, features/campaign-formats.clan; added 2026-10-16, additive)."
         },
         "output": {
           "type": "object"
