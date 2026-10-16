@@ -34,12 +34,12 @@ export async function sendAnswer(runner: Pick<JobRunner, 'answer' | 'change'>, a
 
 // ── asks with no job (features/frame-aspect.clan) ──
 
-/** The store action that writes Wren's sketch ask (doc/describe.ts names it). */
+/** The store action that writes Fin's sketch ask (doc/describe.ts names it). */
 export const SKETCH_ASK = 'ask sketch'
 export const LAYOUT_ONLY = 'layout_only'
 
 /**
- * Wren's ask on a sketch area with no words and nothing linked (ui-behaviour 3.7, 3.17): "Use it as
+ * Fin's ask on a sketch area with no words and nothing linked (ui-behaviour 3.7, 3.17): "Use it as
  * a layout only" goes ahead; "Describe it" opens the text box, and the words go with the sketch.
  */
 export function sketchAsk(sketchId: Id): Ask {

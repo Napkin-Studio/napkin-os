@@ -1821,7 +1821,7 @@
     },
     "document": {
       "type": "object",
-      "description": "A Document node: a file Ellis reads, used as context once linked (ui-behaviour 3.18).",
+      "description": "A Document node: a file Nell reads, used as context once linked (ui-behaviour 3.18).",
       "properties": {
         "id": {
           "type": "string",

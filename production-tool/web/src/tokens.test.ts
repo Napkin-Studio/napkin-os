@@ -53,6 +53,9 @@ describe('the tokens are the shell\'s', () => {
     expect(light.get('ink3')).toBe('#6b7180')
     expect(light.get('tool-ink')).toBe('#1e4ed8')
     expect(light.get('success')).toBe('#166534')
+    // The primary button keeps white text at AA in dark too (ui-behaviour 9: #D63B1F on every surface).
+    const dark = block(OURS, ":root[data-theme='dark']")
+    expect(dark.get('action')).toBe('#d63b1f')
   })
   it('the crew colours are the shell figures\'', () => {
     const shell = block(read('../../../app/src/studio/AgentFigure.css'), '.agent-figure,')

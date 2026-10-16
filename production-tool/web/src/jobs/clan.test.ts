@@ -1,5 +1,5 @@
 // The crew's landings on the CLAN store (the real napkin-wasm behind clan-store's buses):
-// Dex's plan is ONE undo step and ONE decision by dex citing the job; Wren's take is the
+// Dex's plan is ONE undo step and ONE decision by dex citing the job; Fin's take is the
 // shot's pick in the cut, landed by wren; a person's shot edit and the mark it makes are one
 // undo step (typing folds into it).
 
@@ -114,7 +114,7 @@ describe('the crew\'s landings on the CLAN store', () => {
     expect(d.shots[second].last_writer).toBe('dex')
   })
 
-  it('Wren\'s take is the shot\'s pick in the cut, landed by wren citing the job', async () => {
+  it('Fin\'s take is the shot\'s pick in the cut, landed by wren citing the job', async () => {
     const s = await setup()
     await s.plan()
     await drawFrame(s.deps, 0, 'first')

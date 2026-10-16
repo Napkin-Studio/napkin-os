@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Copied from app/src/studio/AgentFigure.tsx (the apps don't import across each
-// other, as ui/Mark.tsx copies StudioMark); agents.test.ts checks Ellis and Jude
+// other, as ui/Mark.tsx copies StudioMark); agents.test.ts checks Nell and Jude
 // still draw as the house sheet does. Changes here: the cast comes from cast.ts,
 // and one more mark, 'frame' (Dex's viewfinder).
 

@@ -19,7 +19,7 @@ const DOES: Record<CastKey, string> = {
   rhea: 'Cuts out, fills and upscales in a frame.',
   edie: 'Splices moments and renders the ad.',
   ellis: 'Turns notes and handwriting into text.',
-  jude: 'Checks each result against its shot.',
+  jude: 'Judges each result against its shot.',
 }
 const WHERE: Record<CastKey, string> = {
   dex: 'Storyboard node and editor, a shot\'s camera fields, "Insert a shot here"',
@@ -40,7 +40,7 @@ export function CrewSheet({ onClose }: { onClose: () => void }) {
             <div className="pt-label">Crew sheet</div>
             <h2>Who works on your ad</h2>
           </div>
-          <span className="crew-lede">Five make the ad. Two house agents read and check. Every line they say is signed.</span>
+          <span className="crew-lede">Five make the ad. Two house agents note and judge. Every line they say is signed.</span>
           <button type="button" className="btn" onClick={onClose}>Close</button>
         </div>
         <div className="crew-heads">

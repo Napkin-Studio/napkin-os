@@ -6,7 +6,7 @@
 //   Storyboard  "Describe the ad in a line"; Dex's nudge "Write a script first?" (script Recommended).
 //   Video       Dex's hard block "What should this video be?": Describe it / Link a script / Link a
 //               storyboard, primary "15 s · Make it".
-//   Image       "Describe the picture"; Wren makes it, then the role picker names it (3.6).
+//   Image       "Describe the picture"; Fin makes it, then the role picker names it (3.6).
 //
 // No chat and no cost anywhere: each start is one box or one ask, and the job it starts is today's.
 
@@ -404,7 +404,7 @@ function DescribeBox({ value, onChange, disabled, onSubmit }: { value: string; o
 
 // ── image ───────────────────────────────────────────────────────────────────
 
-/** A shot with no frame yet (its Image editor): Wren draws the shot's frame from the words. */
+/** A shot with no frame yet (its Image editor): Fin draws the shot's frame from the words. */
 function FrameStart({ shotId }: { shotId: Id }) {
   const services = useServices()
   const [busy, setBusy] = useState(false)
@@ -423,13 +423,13 @@ function FrameStart({ shotId }: { shotId: Id }) {
   return (
     <section className="pstart-card" aria-label="Start the picture">
       <Signed agent="wren" />
-      <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint="Wren draws this shot's frame from it" label="Describe the picture" submit={submit} busy={busy} />
+      <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint="Fin draws this shot's frame from it" label="Describe the picture" submit={submit} busy={busy} />
       {error && <div className="pstart-error" role="alert">{error}</div>}
     </section>
   )
 }
 
-/** A picture node: Wren makes it from the words, then the role picker says what it is (3.6). */
+/** A picture node: Fin makes it from the words, then the role picker says what it is (3.6). */
 function PictureStart({ nodeId }: { nodeId: Id }) {
   const services = useServices()
   const doc = useDoc()
@@ -456,7 +456,7 @@ function PictureStart({ nodeId }: { nodeId: Id }) {
     <section className="pstart-card" aria-label="Start the picture">
       <Signed agent="wren" />
       <PromptBox placeholder={PROMPT_COPY.image.placeholder} hint={PROMPT_COPY.image.hint} label="Describe the picture" submit={submit} busy={busy} />
-      {job?.state === 'failed' && !error && <div className="pstart-error" role="alert">{job.error?.message ?? 'Wren could not make it. Try again.'}</div>}
+      {job?.state === 'failed' && !error && <div className="pstart-error" role="alert">{job.error?.message ?? 'Fin could not make it. Try again.'}</div>}
       {error && <div className="pstart-error" role="alert">{error}</div>}
     </section>
   )
@@ -492,7 +492,7 @@ function RolePicker({ jobId, nodeId, asset, words }: { jobId: Id; nodeId: Id; as
   return (
     <section className="pstart-card pstart-roles" aria-label="Name this picture">
       <Signed agent="wren"><span className="faint">· made it</span></Signed>
-      {url && <img className="pstart-pic" src={url} alt={words || 'The picture Wren made'} />}
+      {url && <img className="pstart-pic" src={url} alt={words || 'The picture Fin made'} />}
       <div className="pstart-q">What is it for?</div>
       <div className="pstart-pills" role="radiogroup" aria-label="What it is for">
         {roles.map((r) => (

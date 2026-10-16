@@ -22,7 +22,7 @@ export interface ProjectSummary {
   adSeconds: number | null
   /** Jobs still being made when the project was last open. */
   active: number
-  /** What the newest of them is, in words ("Wren is making the clip for shot 3"). */
+  /** What the newest of them is, in words ("Fin is making the clip for shot 3"). */
   making?: string
   /** The picture on its card: the first shot's frame, else a picture from the canvas. */
   thumb?: Sha256
