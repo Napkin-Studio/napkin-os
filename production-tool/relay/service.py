@@ -1661,8 +1661,20 @@ class Relay:
             made = [plate, ours]
         else:  # regenerate
             ratio = self._resize_ratio(sheet, model, inp)
-            pjob.update(prompt=formats.REGENERATE_PROMPT.format(shape=formats.shape_words(aw, ah)),
-                        refs=[{"sha256": inp["image"]["sha256"], "name": "master", "role": "object"}], ratio=ratio)
+            prompt = formats.REGENERATE_PROMPT.format(shape=formats.shape_words(aw, ah))
+            refs = [{"sha256": inp["image"]["sha256"], "name": "master", "role": "object"}]
+            # A named picture's other views as tagged references, so a character stays itself
+            # (features/resize-selection.clan); extend and crop send the picture only.
+            views = [r for r in inp.get("refs") or [] if (r.get("asset") or {}).get("sha256") != inp["image"]["sha256"]]
+            views = views[:formats.REGENERATE_REFS_MAX]
+            if views:
+                tags = names.wire_tags([{"id": "master", "name": "master"}, *views])
+                human = any(r.get("role") == "character" for r in views)
+                refs += [{"sha256": r["asset"]["sha256"], "name": tags[r["id"]],
+                          "role": "character" if r.get("role") == "character" else "object"} for r in views]
+                prompt += formats.REGENERATE_REFS.format(tags=", ".join(f"@{tags[r['id']]}" for r in views),
+                                                         what="character" if human else "subject")
+            pjob.update(prompt=prompt, refs=refs, ratio=ratio)
         try:
             check_capabilities(sheet, ProviderJob.from_director("resize", pjob))
         except CapabilityMissing as e:
