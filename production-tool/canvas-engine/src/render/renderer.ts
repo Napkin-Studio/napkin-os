@@ -13,7 +13,7 @@
 
 import { getStroke } from 'perfect-freehand'
 import RBush from 'rbush'
-import { localPoints } from '../model/points'
+import { localPoints, strokeScale } from '../model/points'
 import { BLOCKS, linkRoute, midway, routeKey, type LinkEnv, type LinkRoute } from './links'
 import { photoEdge, recordBounds } from '../model/bounds'
 import { LIGHT_INK, resolveInk, type InkPalette } from '../ink/palette'
@@ -21,6 +21,18 @@ import type { ElementRecord } from '../model/records'
 import type { SceneStore } from '../model/store'
 import type { Bitmap, Level } from './bitmaps'
 import { FULL_RES_MIN_ZOOM } from './caps'
+import { hitsLine, HIT_SLOP_PX, isLineDrawn, lineReach } from '../select/hitStroke'
+
+/** How far around a click the index is searched, in screen pixels (the line slop, with room). */
+const HIT_SEARCH_PX = HIT_SLOP_PX + 2
+/** The widest half-width a line is drawn with (a highlighter is 18), in scene units. */
+const MAX_HALF_WIDTH = 16
+
+/** Is a scene point inside a record's box (either sign of w and h)? */
+const inBox = (r: ElementRecord, p: { x: number; y: number }) => {
+  const x0 = Math.min(r.x, r.x + r.w), y0 = Math.min(r.y, r.y + r.h)
+  return p.x >= x0 && p.y >= y0 && p.x <= x0 + Math.abs(r.w) && p.y <= y0 + Math.abs(r.h)
+}
 
 export interface Camera {
   scrollX: number
@@ -98,29 +110,8 @@ export interface SelectionFrame {
 export const FRAME_COLOUR = '#2F64F5'
 const LABEL_COLOUR = '#1E4ED8'
 
-const naturalSizes = new WeakMap<Uint8Array, { w: number; h: number }>()
-
-/** The extent of a stroke's own points: its record's w/h over this is the scale it is drawn at. */
-export function naturalSize(pts: Uint8Array): { w: number; h: number } {
-  let n = naturalSizes.get(pts)
-  if (!n) {
-    let w = 0
-    let h = 0
-    for (const p of localPoints(pts)) {
-      w = Math.max(w, p.x)
-      h = Math.max(h, p.y)
-    }
-    n = { w, h }
-    naturalSizes.set(pts, n)
-  }
-  return n
-}
-
-/** The scale a stroke record is drawn at (1 on an axis its points do not span). */
-export function strokeScale(r: { w: number; h: number }, pts: Uint8Array): { sx: number; sy: number } {
-  const n = naturalSize(pts)
-  return { sx: n.w > 1e-6 ? r.w / n.w : 1, sy: n.h > 1e-6 ? r.h / n.h : 1 }
-}
+// A stroke's drawn scale lives with its points (model/points.ts), so the hit test can use it without importing the renderer.
+export { naturalSize, strokeScale } from '../model/points'
 
 /** A stroke's filled outline, from its points relative to its origin. */
 export function strokeOutline(pts: Uint8Array, size: number): number[][] {
@@ -194,6 +185,11 @@ export class Renderer {
   resizing: { id: string; rect: { x: number; y: number; w: number; h: number } } | null = null
   /** The selection's frame, drawn on top; a dashed group box replaces the members' own outlines. */
   frame: SelectionFrame | null = null
+  /** The entered container (container-select): a dashed outline just inside its box, in `scopeColour`. */
+  scope: { x: number; y: number; w: number; h: number } | null = null
+  scopeColour = FRAME_COLOUR
+  /** The container a click would take whole (container-select): a faint outline round it, in `scopeColour`. */
+  hover: { x: number; y: number; w: number; h: number } | null = null
   boardLook: BoardLook | null = null
   linkLook: LinkLook | null = null
   currentBoard: string | null = null
@@ -268,13 +264,21 @@ export class Renderer {
     return { minX: -cam.scrollX, minY: -cam.scrollY, maxX: -cam.scrollX + viewport.width / cam.zoom, maxY: -cam.scrollY + viewport.height / cam.zoom }
   }
 
-  /** The topmost element (not a node or board) under a scene point. */
-  hit(x: number, y: number): ElementRecord | undefined {
-    return this.tree.search({ minX: x, minY: y, maxX: x, maxY: y })
+  /**
+   * The topmost element (not a node or board) under a scene point. A stroke or an unfilled
+   * shape counts only near its line (select/hitStroke.ts), so a click in the gaps of a
+   * drawing falls through to what lies below it; the reach is in screen pixels at this zoom.
+   */
+  hit(x: number, y: number, zoom = 1): ElementRecord | undefined {
+    const p = { x, y }
+    // Grown by the widest reach: a thin line's box can be a pixel tall.
+    const grow = HIT_SEARCH_PX / (zoom > 0 ? zoom : 1) + MAX_HALF_WIDTH
+    return this.tree.search({ minX: x - grow, minY: y - grow, maxX: x + grow, maxY: y + grow })
       .map((b) => this.scene.get(b.id))
       // A bound link or arrow is drawn from its ends, not its stored box: it is hit along its route
       // (links.ts hitNodeOrLink), never at a box it no longer has (the "ghost" of a pile's arrow).
       .filter((r): r is ElementRecord => !!r && r.kind !== 'board' && !(r.kind === 'link' || (r.kind === 'arrow' && isBound(r))))
+      .filter((r) => isLineDrawn(r) ? hitsLine(r, this.scene.points(r.id), p, lineReach(r, zoom)) : inBox(r, p))
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
   }
 
@@ -444,9 +448,34 @@ export class Renderer {
     // A link or bound arrow whose end is gone is not drawn at all (never a line to nowhere).
     for (const rec of this.passes.rest) paint(rec)
     ctx.globalAlpha = 1
+    if (this.hover) this.drawHover(ctx, this.hover, cam)
+    if (this.scope) this.drawScope(ctx, this.scope, cam)
     if (this.frame) this.drawFrame(ctx, this.frame, cam)
     stats.ms = performance.now() - t0
     return stats
+  }
+
+  /** The container under the pointer: a faint 1 px outline on its box, quieter than the selection frame. */
+  private drawHover(ctx: DrawContext, b: { x: number; y: number; w: number; h: number }, cam: Camera) {
+    ctx.save()
+    ctx.globalAlpha = 0.45
+    ctx.strokeStyle = this.scopeColour
+    ctx.lineWidth = 1 / cam.zoom
+    ctx.strokeRect(b.x, b.y, b.w, b.h)
+    ctx.restore()
+  }
+
+  /** The entered container: a dashed outline 4 screen px inside its box (container-select), so it reads as "inside". */
+  private drawScope(ctx: DrawContext, b: { x: number; y: number; w: number; h: number }, cam: Camera) {
+    const k = 1 / cam.zoom
+    const inset = Math.min(4 * k, Math.abs(b.w) / 4, Math.abs(b.h) / 4)
+    ctx.save()
+    ctx.strokeStyle = this.scopeColour
+    ctx.lineWidth = 1.5 * k
+    ctx.setLineDash?.([6 * k, 4 * k])
+    ctx.strokeRect(b.x + inset, b.y + inset, b.w - 2 * inset, b.h - 2 * inset)
+    ctx.setLineDash?.([])
+    ctx.restore()
   }
 
   /**

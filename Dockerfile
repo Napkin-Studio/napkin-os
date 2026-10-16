@@ -64,14 +64,16 @@ RUN npm run build
 # bindings, so there is no second Rust build. It also bundles our own canvas
 # engine (production-tool/canvas-engine, features/canvas-engine.clan), which
 # the app's src/canvas/adapter/own imports. Each package resolves its own
-# node_modules, and the app imports ../contracts.
+# node_modules, and the app imports ../contracts. canvas-engine installs its dev
+# dependencies too: the app's `tsc -b` type-checks the engine's sources, which
+# need its @types (rbush). Only web/dist leaves this stage.
 FROM node:20-bookworm-slim AS production
 WORKDIR /src/production-tool
 COPY production-tool/clan-store/package.json production-tool/clan-store/package-lock.json ./clan-store/
 COPY production-tool/canvas-engine/package.json production-tool/canvas-engine/package-lock.json ./canvas-engine/
 COPY production-tool/web/package.json production-tool/web/package-lock.json ./web/
 RUN cd clan-store && npm ci --no-audit --no-fund \
- && cd ../canvas-engine && npm ci --no-audit --no-fund --omit=dev \
+ && cd ../canvas-engine && npm ci --no-audit --no-fund \
  && cd ../web && npm ci --no-audit --no-fund
 COPY production-tool/contracts/ ./contracts/
 COPY production-tool/clan-store/ ./clan-store/

@@ -121,17 +121,34 @@ function recordKey(agent: string, action: string): string {
 }
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
-/** A prefixed ULID (common id): 48 bits of time, 80 of randomness. */
+/** The last id's time and random digits, so ids made in one millisecond still sort in the order
+ * they were made (a monotonic ULID). "The first created" (selectors' first(), mainScript) relies
+ * on it; without it two ids from the same millisecond sorted at random. */
+let lastMs = -1
+const lastRand: number[] = []
+
+/** A prefixed ULID (common id): 48 bits of time, 80 of randomness. Within one millisecond (or when
+ * the clock steps back) the random part counts up by one from the previous id. */
 export function newUlidId(prefix: string, now = Date.now()): string {
+  let ms = now
+  if (ms <= lastMs) {
+    ms = lastMs
+    let i = lastRand.length - 1
+    while (i >= 0 && lastRand[i] === 31) lastRand[i--] = 0
+    if (i >= 0) lastRand[i]++
+  } else {
+    const r = new Uint8Array(16)
+    crypto.getRandomValues(r)
+    lastRand.splice(0, lastRand.length, ...Array.from(r, (b) => b % 32))
+    lastMs = ms
+  }
   let t = ''
-  let x = now
+  let x = ms
   for (let i = 0; i < 10; i++) {
     t = CROCKFORD[x % 32] + t
     x = Math.floor(x / 32)
   }
-  const r = new Uint8Array(16)
-  crypto.getRandomValues(r)
-  return `${prefix}_${t}${Array.from(r, (b) => CROCKFORD[b % 32]).join('')}`
+  return `${prefix}_${t}${lastRand.map((d) => CROCKFORD[d]).join('')}`
 }
 
 /** A new project's data: one script, storyboard and video, the script driving

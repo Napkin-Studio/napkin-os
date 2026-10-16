@@ -205,32 +205,46 @@ suite_image() {
   docker run --rm --entrypoint test napkin-web:check -f /srv/napkin/production/index.html
 }
 suite_production-tool() {
-  # relay and stitch (offline), the locked contracts, and the web app once the UI lane adds it
-  ( cd production-tool/relay && uv run -q --python 3.12 pytest -q ) &&
-  ( cd production-tool/stitch && uv run -q --python 3.12 pytest -q ) &&
-  uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py &&
-  # The CLAN store: napkin-wasm (cargo + wasm-bindgen) into clan-store/src/wasm, its tests
-  # (against the real `clan` CLI), then the web app on top of it.
-  ( cd production-tool/clan-store &&
-    { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-    npm run -s build && npm run -s lint && npm test ) &&
-  # The canvas engine (features/canvas-engine.clan): lint, tests, and the PR bench on the
-  # seed-1 G3 scene (byte, memory and draw-time checks; features/engine-ci.clan).
-  ( cd production-tool/canvas-engine &&
-    { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-    npm run -s lint && npm test && npm run -s bench ) &&
+  # Installs and the CLAN store build first (the web app builds on clan-store/src/wasm and the canvas
+  # engine's sources), then every independent part at once: relay, stitch, contracts, clan-store, the
+  # canvas engine and the web app (owner, 2026-10-16: one full check, as fast as the slowest part).
+  # The timing benches run after, alone, so the parallel load never fails them.
+  local d rc=0 p name
+  d="$(mktemp -d "${TMPDIR:-/tmp}/napkin-pt.XXXXXX")"
+  local install='{ [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; }'
+  ( cd production-tool/clan-store && eval "$install" && npm run -s build ) &&
+  ( cd production-tool/canvas-engine && eval "$install" ) &&
+  { [[ ! -f production-tool/web/package.json ]] || ( cd production-tool/web && eval "$install" ); } || return 1
+  declare -A pids=()
+  ( cd production-tool/relay && uv run -q --python 3.12 pytest -q ) >"$d/relay.log" 2>&1 & pids[relay]=$!
+  ( cd production-tool/stitch && uv run -q --python 3.12 pytest -q ) >"$d/stitch.log" 2>&1 & pids[stitch]=$!
+  uv run -q --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py >"$d/contracts.log" 2>&1 & pids[contracts]=$!
+  # The CLAN store's tests run against the real `clan` CLI; the canvas engine's are features/canvas-engine.clan's.
+  ( cd production-tool/clan-store && npm run -s lint && npm test ) >"$d/clan-store.log" 2>&1 & pids[clan-store]=$!
+  ( cd production-tool/canvas-engine && npm run -s lint && npm test ) >"$d/canvas-engine.log" 2>&1 & pids[canvas-engine]=$!
   if [[ -f production-tool/web/package.json ]]; then
-    ( cd production-tool/web &&
-      { [[ -d node_modules && node_modules/.package-lock.json -nt package-lock.json ]] || npm ci --no-audit --no-fund; } &&
-      npm run -s lint && npm test && npm run -s build:web &&
-      # The e2e specs (production-tool/web/e2e/README.md): real pointer events on the dev server and
-      # its in-browser mock. A system Chromium stands in for Playwright's download when there is one.
-      if [[ -z "${E2E_CHROMIUM:-}" ]]; then
-        for b in chromium chromium-browser google-chrome-stable; do
-          command -v "$b" >/dev/null && { export E2E_CHROMIUM="$(command -v "$b")"; break; }
-        done
-      fi &&
-      npm run -s e2e )
+    ( cd production-tool/web && npm run -s lint && npm test && npm run -s build:web ) >"$d/web.log" 2>&1 & pids[web]=$!
+  fi
+  for name in "${!pids[@]}"; do
+    p=${pids[$name]}
+    if wait "$p"; then echo "   $name: pass"; else echo "   $name: FAIL"; tail -n 30 "$d/$name.log"; rc=1; fi
+  done
+  [[ $rc -eq 0 ]] || return 1
+  # The PR bench on the seed-1 G3 scene (byte, memory and draw-time checks; features/engine-ci.clan), alone.
+  ( cd production-tool/canvas-engine && npm run -s bench ) || return 1
+  # The e2e specs (production-tool/web/e2e/README.md), alone after the rest: real pointer events on the
+  # dev server and its in-browser mock. A system Chromium stands in for Playwright's download when there is one.
+  if [[ -f production-tool/web/package.json ]]; then
+    if [[ -z "${E2E_CHROMIUM:-}" ]]; then
+      for b in chromium chromium-browser google-chrome-stable; do
+        command -v "$b" >/dev/null && { export E2E_CHROMIUM="$(command -v "$b")"; break; }
+      done
+    fi
+    ( cd production-tool/web && npm run -s e2e ) || return 1
+  fi
+  # Quarantined perf budget (web vite.config.ts): reported, never failing the check.
+  if [[ -f production-tool/web/package.json ]] && ! ( cd production-tool/web && npm run -s test:perf >"$d/perf.log" 2>&1 ); then
+    echo "   web perf budget (quarantined): over budget this run; not failing the check. Log: $d/perf.log"
   fi
 }
 

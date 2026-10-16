@@ -78,3 +78,27 @@ export function localPoints(bytes: Uint8Array): InkPoint[] {
 }
 
 export const pointCount = (bytes: Uint8Array) => bytes.length / BYTES_PER_POINT
+
+const naturalSizes = new WeakMap<Uint8Array, { w: number; h: number }>()
+
+/** The extent of a stroke's own points: its record's w/h over this is the scale it is drawn at. */
+export function naturalSize(pts: Uint8Array): { w: number; h: number } {
+  let n = naturalSizes.get(pts)
+  if (!n) {
+    let w = 0
+    let h = 0
+    for (const p of localPoints(pts)) {
+      w = Math.max(w, p.x)
+      h = Math.max(h, p.y)
+    }
+    n = { w, h }
+    naturalSizes.set(pts, n)
+  }
+  return n
+}
+
+/** The scale a stroke record is drawn at (1 on an axis its points do not span). */
+export function strokeScale(r: { w: number; h: number }, pts: Uint8Array): { sx: number; sy: number } {
+  const n = naturalSize(pts)
+  return { sx: n.w > 1e-6 ? r.w / n.w : 1, sy: n.h > 1e-6 ? r.h / n.h : 1 }
+}

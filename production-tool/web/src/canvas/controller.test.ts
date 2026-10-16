@@ -7,7 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // No FileReader in node: a picture's data URL is not read here.
 vi.mock('./scene', async (importOriginal) => {
   const real = await importOriginal<typeof import('./scene')>()
-  return { ...real, assetData: async (sha: string) => ({ sha256: sha, dataURL: 'data:image/png;base64,', mimeType: 'image/png' }) }
+  return {
+    ...real,
+    assetData: async (sha: string) => ({ sha256: sha, dataURL: 'data:image/png;base64,', mimeType: 'image/png' }),
+    // No createImageBitmap in node: a drawing's picture is kept as exported.
+    downscale: async (blob: Blob) => ({ blob, w: 512, h: 512, changed: false }),
+  }
 })
 vi.mock('../jobs/assets', () => ({
   assetRef: async (_relay: unknown, sha: string) => ({ sha256: sha, url: `https://cdn.test/${sha}`, mime: 'image/png' }),
@@ -83,7 +88,8 @@ class FakeCanvas implements CanvasAdapter {
     return this.make({ type: 'rectangle', x: i.x, y: i.y, width: i.w, height: i.h, backgroundColor: '#ffffff', customData: { kind: 'sketch', id: i.sketchId } })
   }
   view() { return { scrollX: 0, scrollY: 0, zoom: 1, offsetLeft: 0, offsetTop: 0, selectedIds: [] } }
-  select() {}
+  selected: string[] = []
+  select(ids: readonly string[]) { this.selected = [...ids] }
   visibleBounds() { return { minX: 0, minY: 0, maxX: 2000, maxY: 2000 } }
   sceneToViewport(p: { x: number; y: number }) { return p }
   viewportToScene(p: { x: number; y: number }) { return p }
@@ -96,7 +102,7 @@ class FakeCanvas implements CanvasAdapter {
   onViewport() { return () => {} }
   isBusy() { return false }
   setActiveTool() {}
-  async exportPng() { return new Blob(['png']) }
+  async exportPng(_els?: readonly El[]) { return new Blob(['png']) }
   async exportRegion(req: RegionExport) { this.exports.push(req); return new Blob([`region ${this.exports.length}`], { type: 'image/png' }) }
 }
 
@@ -417,5 +423,35 @@ describe('a resized area keeps its shape', () => {
     expect({ x: now.x, y: now.y, w: now.width, h: now.height }).toEqual({ x: 0, y: 0, w: 640, h: 360 })
     expect(t.canvas.commits.slice(commits)).toEqual([{ undoable: false, n: t.canvas.els.length }])
     expect(t.ctrl.lockAreas()).toBe(0)
+  })
+})
+
+describe('loose strokes become a Drawing', () => {
+  it('Generate leaves the new Drawing selected, not its strokes (features/container-select.clan)', async () => {
+    t.canvas.els = [stroke('a', 100, 100), stroke('b', 140, 120)]
+    await t.ctrl.generate(['a', 'b'], 'a jogger')
+    const drawn = t.canvas.els.find((e) => (e.customData as Rec | undefined)?.kind === 'drawn')!
+    expect(t.canvas.selected).toEqual([drawn.id])
+    expect(t.canvas.els.filter((e) => e.frameId === drawn.id).map((e) => e.id).sort()).toEqual(['a', 'b'])
+    expect(t.sent).toHaveLength(1)
+  })
+
+  it('a Drawing whose strokes changed gets a new picture; moving it whole does not', async () => {
+    t.canvas.exportPng = async (els: readonly El[]) => new Blob([els.map((e) => `${e.id}@${e.x - Math.min(...els.map((x) => x.x))}`).join(' ')], { type: 'image/png' })
+    t.canvas.els = [stroke('a', 100, 100), stroke('b', 140, 120)]
+    await t.ctrl.generate(['a', 'b'], 'a jogger')
+    const id = t.canvas.els.find((e) => (e.customData as Rec | undefined)?.kind === 'drawn')!.id
+    const asset = () => (t.canvas.els.find((e) => e.id === id)!.customData as { asset: string }).asset
+    await t.ctrl.refreshDrawings()
+    const first = asset()
+    // The whole Drawing moved: the same picture.
+    t.canvas.els = t.canvas.els.map((e) => (e.id === id || e.frameId === id ? ({ ...e, x: e.x + 50 } as El) : e))
+    await t.ctrl.refreshDrawings()
+    expect(asset()).toBe(first)
+    // One stroke left it: a new picture, made of the stroke that stayed.
+    t.canvas.els = t.canvas.els.map((e) => (e.id === 'b' ? ({ ...e, frameId: null, x: 900 } as El) : e))
+    await t.ctrl.refreshDrawings()
+    expect(asset()).not.toBe(first)
+    expect(t.canvas.commits.at(-1)).toMatchObject({ undoable: false })
   })
 })

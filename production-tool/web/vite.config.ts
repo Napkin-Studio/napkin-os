@@ -35,5 +35,9 @@ export default defineConfig({
     environment: 'node',
     // DOM tests say '// @vitest-environment happy-dom' at their top; the default stays node.
     include: ['src/**/*.test.{ts,tsx}'],
+    // Quarantined (owner, 2026-10-16; testing policy: flaky -> quarantine, fix within 7 days): the
+    // script perf budget fails whenever the machine is busy. It runs in `npm run test:perf`, which
+    // scripts/check.sh runs after the suites and reports without failing the check.
+    exclude: process.env.NAPKIN_PERF === '1' ? [] : ['src/script/perf.test.ts'],
   },
 })
