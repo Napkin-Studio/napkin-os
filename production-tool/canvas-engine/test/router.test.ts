@@ -132,4 +132,72 @@ describe('InputRouter', () => {
     expect(r.handle(P({ phase: 'down', id: 1, type: 'mouse', t: 50, buttons: 4 }))).toEqual([])
     expect(r.handle(P({ phase: 'move', id: 1, type: 'mouse', t: 60, x: 12, y: -3, buttons: 4 }))).toEqual([{ kind: 'pan', dx: 12, dy: -3 }])
   })
+
+  describe('a finger grabs by a long press (board-move)', () => {
+    const grabber = (can = true) => {
+      const r = new InputRouter({ canGrab: () => can })
+      r.tool = 'select'
+      r.penMode = true
+      return r
+    }
+
+    it('a long press on something grabbable presses, then the finger drags and releases it, by touch', () => {
+      const r = grabber()
+      expect(r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 0, x: 100, y: 100 }))).toEqual([])
+      expect(r.tick(LONG_PRESS_MS - 1)).toEqual([])
+      expect(r.tick(LONG_PRESS_MS)).toEqual([{ kind: 'long-press', x: 100, y: 100 }, { kind: 'press', id: 9, x: 100, y: 100, by: 'touch' }])
+      expect(r.handle(P({ phase: 'move', id: 9, type: 'touch', t: 600, x: 150, y: 120 }))).toEqual([{ kind: 'drag', id: 9, x: 150, y: 120 }])
+      expect(r.handle(P({ phase: 'up', id: 9, type: 'touch', t: 700, x: 150, y: 120 }))).toEqual([{ kind: 'release', id: 9, x: 150, y: 120 }])
+    })
+
+    it('on something not grabbable, the long press is only reported, and a drag after it pans', () => {
+      const r = grabber(false)
+      r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 0, x: 100, y: 100 }))
+      expect(kinds(r.tick(LONG_PRESS_MS))).toEqual(['long-press'])
+      expect(kinds(r.handle(P({ phase: 'move', id: 9, type: 'touch', t: 600, x: 150, y: 120 })))).toEqual(['pan'])
+    })
+
+    it('a plain one-finger drag still pans, and never grabs', () => {
+      const r = grabber()
+      r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 0, x: 100, y: 100 }))
+      expect(kinds(r.handle(P({ phase: 'move', id: 9, type: 'touch', t: 50, x: 140, y: 100 })))).toEqual(['pan'])
+      expect(r.tick(LONG_PRESS_MS + 10)).toEqual([])
+      expect(kinds(r.handle(P({ phase: 'move', id: 9, type: 'touch', t: 600, x: 160, y: 100 })))).toEqual(['pan'])
+    })
+
+    it('a palm within PALM_MS of the pen never grabs; the pen during a grab cancels it', () => {
+      const r = grabber()
+      r.tool = 'ink'
+      r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 0, x: 100, y: 100 }))
+      r.handle(P({ phase: 'down', id: 1, type: 'pen', t: PALM_MS - 10 }))
+      expect(r.tick(LONG_PRESS_MS)).toEqual([])
+      r.handle(P({ phase: 'up', id: 1, type: 'pen', t: 700 }))
+      r.handle(P({ phase: 'up', id: 9, type: 'touch', t: 710 }))
+      // A grab already running: the pen landing calls it off.
+      r.handle(P({ phase: 'down', id: 8, type: 'touch', t: 1000, x: 10, y: 10 }))
+      expect(kinds(r.tick(1000 + LONG_PRESS_MS))).toEqual(['long-press', 'press'])
+      const out = r.handle(P({ phase: 'down', id: 2, type: 'pen', t: 1600 }))
+      expect(out[0]).toEqual({ kind: 'press-cancel', id: 8 })
+      expect(kinds(r.handle(P({ phase: 'move', id: 8, type: 'touch', t: 1610, x: 50, y: 50 })))).toEqual([])
+    })
+
+    it('a second finger during a grab cancels the move and pinches', () => {
+      const r = grabber()
+      r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 0, x: 100, y: 100 }))
+      r.tick(LONG_PRESS_MS)
+      expect(r.handle(P({ phase: 'down', id: 10, type: 'touch', t: 600, x: 300, y: 100 }))).toEqual([{ kind: 'press-cancel', id: 9 }])
+      expect(kinds(r.handle(P({ phase: 'move', id: 10, type: 'touch', t: 610, x: 400, y: 100 })))).toEqual(['pinch'])
+    })
+
+    it('the hand tool never grabs; a quick tap is still a tap', () => {
+      const r = grabber()
+      r.tool = 'hand'
+      r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 0 }))
+      expect(kinds(r.tick(LONG_PRESS_MS))).toEqual(['long-press'])
+      r.handle(P({ phase: 'up', id: 9, type: 'touch', t: 600 }))
+      r.tool = 'select'
+      r.handle(P({ phase: 'down', id: 9, type: 'touch', t: 1000, x: 5, y: 5 }))
+      expect(r.handle(P({ phase: 'up', id: 9, type: 'touch', t: 1100, x: 5, y: 5 }))).toEqual([{ kind: 'tap', x: 5, y: 5, by: 'touch' }])
+    })
+  })
 })

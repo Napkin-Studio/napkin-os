@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import { isSketchArea, sketchCopy } from '../../core/sketchCopy'
 import { newId } from '../../../lib/ulid'
 import {
-  boundEnds, elementFromRecord, hitNodeOrLink, hitTitle, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, TextTool, TEXT_FONT, approxMeasure, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame, type Measure, type TextLook, type TextSession,
+  boundEnds, elementFromRecord, hitNodeOrLink, linkRoute, sceneLinkEnv, Ink, InputRouter, LIGHT_INK, recordsFromElements, SceneStore, SceneUndo, SelectTool, SketchTool, TextTool, TEXT_FONT, approxMeasure, type BoardEvent, type BoardLook, type Edge, type InkPalette, type InkTool, type LinkLook, type Intent, type Renderer, type SelectionFrame, type Measure, type TextLook, type TextSession, boardGrabAt,
 } from '../../../../../canvas-engine/src'
 import {
   MAX_EXPORT_PIXELS,
@@ -76,6 +76,11 @@ function browserMeasure(): Measure {
 }
 
 type OwnEl = CanvasElement & { assetSha?: string | null; startBinding?: { elementId: string }; endBinding?: { elementId: string } }
+
+/** The cursor over each of a selected board's handles. */
+const RESIZE_CURSOR: Record<string, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }
+/** A run of arrow nudges is written this long after the last key (one undo step). */
+export const NUDGE_IDLE_MS = 400
 
 const CAPS_NONE: InputCapabilities = { coalesced: false, predicted: false, tilt: false, pressure: false }
 /** The entered container's inside outline (container-select): the selection blue, lightened on the dark canvas. */
@@ -160,12 +165,22 @@ export class OwnAdapter implements CanvasAdapter {
     this.scene = new SceneStore(this.doc)
     this.ink = new Ink(this.scene)
     this.undo = new SceneUndo(this.scene)
-    this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y))
+    // Node cards and links sit above the canvas: they come before boards and elements (grabOrder).
+    this.selector = new SelectTool(this.scene, (x, y) => this.hitAt(x, y), { above: (x, y) => hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) })
     this.selector.onChange(() => this.changed())
+    // A finger's long press grabs what a press would pick up (board-move; ui-behaviour 8).
+    this.router.canGrab = (x, y) => this.canGrab(x, y)
     // A drawn area's sketch id is a document id (sketch_ + a ULID): links into it are checked against the contract.
     this.sketch = new SketchTool(this.scene, { newId: (p) => (p === 'sketch' ? newId('sketch') : this.opts.newId()) })
     this.text = new TextTool(this.scene, { newId: () => this.opts.newId(), measure: rest.measure ?? browserMeasure() })
-    this.scene.onChange((ids) => {
+    this.scene.onChange((ids, remote) => {
+      // Someone else changed what this person is nudging or dragging: a nudge is written now (on top
+      // of their change), a drag's preview is dropped rather than written over it.
+      if (remote) {
+        const touched = (set: ReadonlySet<string>) => ids.some((id) => set.has(id))
+        if (this.selector.nudgePending && touched(this.selector.nudgeIds())) queueMicrotask(() => this.flushNudge())
+        else if (this.selector.preview && touched(this.selector.preview.ids)) this.selector.cancel()
+      }
       this.cache = null
       for (const id of ids) this.rev.set(id, (this.rev.get(id) ?? 0) + 1)
       this.changed()
@@ -501,6 +516,7 @@ export class OwnAdapter implements CanvasAdapter {
   private surface: { theme: string; s: Surface } | null = null
 
   setActiveTool(tool: ActiveToolSpec) {
+    this.flushNudge()
     this.tool = tool
     const id = tool.type === 'native' ? tool.id : ''
     if (id !== 'sketch') this.sketch.cancel()
@@ -710,7 +726,12 @@ export class OwnAdapter implements CanvasAdapter {
     if (this.text.session) return null
     // A selected board: its edge and corner handles (it resizes; owner decision 2026-10-15).
     const board = this.selector.soleBoard()
-    if (board) return { box: this.selector.resizing?.rect ?? { x: board.x, y: board.y, w: board.w, h: board.h }, dashed: false, handles: false, edges: true }
+    if (board) {
+      // Moving (a drag or a run of nudges): the handles go with the board.
+      const mv = this.selector.preview?.ids.has(board.id) ? this.selector.preview : null
+      const box = this.selector.resizing?.rect ?? { x: board.x + (mv?.dx ?? 0), y: board.y + (mv?.dy ?? 0), w: board.w, h: board.h }
+      return { box, dashed: false, handles: false, edges: true }
+    }
     const f = this.selector.frame()
     if (!f) return null
     const k = this.selector.selectionKind()
@@ -745,21 +766,85 @@ export class OwnAdapter implements CanvasAdapter {
     return !same
   }
 
-  /** The selected board's handle under a scene point (the cursor shows it), or null. */
+  /** The selected board's square handle under a scene point (the cursor shows it), or null. */
   boardHandleAt(p: Pt): Edge | null {
     return this.sketching() ? null : this.selector.boardHandleAt(p, this.vp.zoom)
   }
 
-  /** The topmost element at a scene point: the renderer's index when mounted, else the boxes. */
+  /**
+   * The cursor over a scene point (board-move): a selected board's handles resize, a board's title
+   * chip and edge (and a selected board's inside) grab, and 'grabbing' while something moves.
+   */
+  cursorAt(p: Pt): string {
+    if (this.sketching() || this.router.tool !== 'select') return ''
+    if (this.selector.preview && !this.selector.nudgePending) return 'grabbing'
+    const edge = this.boardHandleAt(p)
+    if (edge) return RESIZE_CURSOR[edge]
+    // The board rows of grabOrder, read cheaply on every hover (node cards are DOM above the canvas).
+    const g = boardGrabAt(this.scene, p, this.vp.zoom)
+    if (!g) return ''
+    if (g.part === 'title') return 'grab'
+    if (this.hitAt(p.x, p.y)) return ''
+    return g.part === 'edge' || this.selector.selected.has(g.board.id) ? 'grab' : ''
+  }
+
+  /** Would a press at this viewport point pick something up? (The router asks when a finger's long press fires.) */
+  canGrab(x: number, y: number): boolean {
+    if (this.sketching() || this.router.tool === 'hand') return false
+    return this.selector.grabbableAt(this.viewportToScene({ x, y }, this.view()), this.vp.zoom)
+  }
+
+  /** A one-finger tap selects what is under it, as a click does (ui-behaviour 8). */
+  tap(p: Pt) {
+    if (this.sketching()) return
+    this.selector.press(p, { by: 'touch', zoom: this.vp.zoom })
+    this.selector.release(p)
+    this.changed()
+  }
+
+  /** A press called off (a palm or a second finger during a finger's grab): nothing it previewed is written. */
+  cancelPress() {
+    this.selector.cancel()
+    this.sketch.cancel()
+    this.changed()
+  }
+
+  private nudgeTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Arrow keys: nudge the selection by (dx, dy) screen pixels. A run of nudges is one step, written
+   * NUDGE_IDLE_MS after the last key, or at once on undo or redo, a press, a tool change, blur or a
+   * remote change to what is nudged. False when nothing is selected that can move.
+   */
+  nudge(dx: number, dy: number): boolean {
+    const z = this.vp.zoom
+    if (!this.selector.nudgePending && !this.selector.selected.size) return false
+    const moved = this.selector.nudge(dx / z, dy / z)
+    if (!this.selector.nudgePending) return false
+    if (this.nudgeTimer) clearTimeout(this.nudgeTimer)
+    this.nudgeTimer = setTimeout(() => this.flushNudge(), NUDGE_IDLE_MS)
+    this.changed()
+    return moved
+  }
+
+  /** Write a waiting run of nudges now (one step). */
+  flushNudge(): boolean {
+    if (this.nudgeTimer) clearTimeout(this.nudgeTimer)
+    this.nudgeTimer = null
+    if (!this.selector.nudgePending) return false
+    const done = this.selector.flushNudge()
+    this.changed()
+    return done
+  }
+
+  /** The topmost element at a scene point (never a board: boards are grabbed by boards/grab): the renderer's index when mounted, else the boxes. */
   private hitAt(x: number, y: number) {
-    // Node cards sit above the canvas, and a link is hit along its line (canvas-nodes).
-    // A board's title, or a Drawing's label, takes it (container-select).
-    const top = hitNodeOrLink(this.scene, { x, y }, this.vp.zoom) ?? hitTitle(this.scene, { x, y }, this.vp.zoom)
-    if (top) return top
-    // Lines (strokes, unfilled shapes) count only near their line, with a reach in screen pixels.
+    // Lines (strokes, unfilled shapes) count only near their line, with a reach in screen pixels
+    // (container-select). Node cards and links (above), board titles and Drawing labels are the select
+    // tool's own grabOrder rows.
     if (this.renderer) return this.renderer.hit(x, y, this.vp.zoom)
     return this.scene.all()
-      .filter((r) => r.kind !== 'board' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)
+      .filter((r) => r.kind !== 'board' && r.kind !== 'node' && x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h)
       .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
   }
 
@@ -773,6 +858,8 @@ export class OwnAdapter implements CanvasAdapter {
 
   /** Undo or redo this person's last scene step; says so when part of it was skipped (ui-behaviour 4.5). */
   undoScene(dir: 'undo' | 'redo'): boolean {
+    // A run of arrow nudges is a step of its own: written first, so undo takes it back.
+    this.flushNudge()
     const r = dir === 'undo' ? this.undo.undo() : this.undo.redo()
     if (!r) return false
     if (r.skipped) {
@@ -872,6 +959,7 @@ export class OwnAdapter implements CanvasAdapter {
       this.renderer.moving = this.selector.preview
       this.renderer.scaling = this.selector.scaling
       this.renderer.resizing = this.selector.resizing
+      this.renderer.landing = this.selector.landing
       this.renderer.frame = this.selectionFrame()
       // The entered Drawing, sketch area or group: a dashed inside outline, readable on either theme.
       this.renderer.scope = this.selector.scopeBox()

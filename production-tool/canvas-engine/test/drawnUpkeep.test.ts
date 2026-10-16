@@ -213,4 +213,22 @@ describe('a pen stroke drawn inside a Drawing', () => {
     expect(inside.groupIds).toEqual([])
     expect(scene.get(loose.id)!.groupIds).toEqual([])
   })
+
+  it('on a board: a stroke inside the Drawing joins the Drawing; one that leaves it joins the board under its centre (board-move)', () => {
+    const { scene } = drawing()
+    scene.change((tx) => {
+      tx.put([element({ id: 'B', kind: 'board', z: 'a0', x: 0, y: 0, w: 800, h: 600, props: { name: 'B', purpose: 'reference' } })])
+      tx.put([{ ...scene.get('D')!, parentId: 'B' }])
+    })
+    const ink = new Ink(scene, { now: () => 0 })
+    ink.begin('pen', { x: 120, y: 60, pressure: 0.5 }, { color: '#000', width: 3 })
+    ink.add([{ x: 150, y: 100, pressure: 0.5 }])
+    expect(ink.end()!.parentId).toBe('D')
+    ink.begin('pen', { x: 120, y: 60, pressure: 0.5 }, { color: '#000', width: 3 })
+    ink.add([{ x: 500, y: 400, pressure: 0.5 }])
+    const out = ink.end()!
+    expect(out.parentId).toBe('B')
+    // Strokes group only within one container: the board's stroke is not in the Drawing stroke's group.
+    expect(out.groupIds).toEqual([])
+  })
 })

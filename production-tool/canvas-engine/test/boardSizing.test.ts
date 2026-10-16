@@ -5,13 +5,12 @@
 
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
-import { BOARD_GAP, BOARD_PAD, fitRect, growToHold, innerRect, outsideSpot, overlaps, placeAllInBoard, placeInBoard, resizeRect, rowSlot } from '../src/boards/sizing'
+import { BlockerIndex, BOARD_CLEAR, BOARD_GAP, BOARD_PAD, clampGrowth, clampMove, fitRect, freeOffset, growToHold, innerRect, nearestFree, outsideSpot, overlaps, placeAllInBoard, placeInBoard, resizeRect, rowSlot } from '../src/boards/sizing'
 import type { Rect } from '../src/model/bounds'
 import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore, type Step } from '../src/model/store'
 import { SceneUndo } from '../src/undo/sceneUndo'
 import { Renderer } from '../src/render/renderer'
-import { hitBoardTitle } from '../src/render/links'
 import { SelectTool, type BoardEvent } from '../src/select/select'
 
 const PIC = { w: 100, h: 80 }
@@ -151,7 +150,7 @@ function setup(records: ElementRecord[]) {
   const scene = new SceneStore(doc)
   scene.seed(records)
   const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
-  const tool = new SelectTool(scene, (x, y) => hitBoardTitle(scene, { x, y }, 1) ?? r.hit(x, y))
+  const tool = new SelectTool(scene, (x, y) => r.hit(x, y))
   const undo = new SceneUndo(scene)
   const steps: Step[] = []
   scene.onStep((s) => steps.push(s))
@@ -299,5 +298,50 @@ describe('growing to hold what sticks out', () => {
     expect(g.y).toBe(-40 - BOARD_PAD.top)
     expect(g.x + g.w).toBe(400)
     expect(growToHold(board, [{ x: 20, y: 30, w: 50, h: 50 }], [])).toBeNull()
+  })
+})
+
+describe('nearestFree: where a moved board lands (board-move)', () => {
+  const B = { x: 0, y: 0, w: 400, h: 300 }
+
+  it('a clear drop is left where it is', () => {
+    expect(nearestFree({ x: 0, y: 0, w: 100, h: 100 }, [{ x: 500, y: 0, w: 100, h: 100 }])).toEqual({ x: 0, y: 0 })
+  })
+
+  it('an overlap goes to the closest clear box, exactly the margin away', () => {
+    // Overlapping B's right part by 50: back left by 50 + the margin is the nearest.
+    const at = nearestFree({ x: 350, y: 100, w: 200, h: 100 }, [B])
+    expect(at).toEqual({ x: 400 + BOARD_CLEAR, y: 100 })
+    expect(nearestFree({ x: 350, y: 100, w: 200, h: 100 }, [B], { margin: 0 })).toEqual({ x: 400, y: 100 })
+  })
+
+  it('hemmed in, it goes further out, never onto another blocker', () => {
+    const avoid = [B, { x: 424, y: 0, w: 400, h: 300 }, { x: 0, y: 324, w: 824, h: 300 }]
+    const r = { x: 300, y: 100, w: 200, h: 100 }
+    const at = nearestFree(r, avoid)
+    const moved = { ...r, ...at }
+    for (const a of avoid) expect(overlaps(moved, a, BOARD_CLEAR)).toBe(false)
+    expect(at.y).toBe(-100 - BOARD_CLEAR)
+  })
+
+  it('several boxes move by one offset, and do not block each other', () => {
+    const idx = new BlockerIndex([B])
+    const d = freeOffset([{ x: 300, y: 0, w: 200, h: 100 }, { x: 300, y: 120, w: 200, h: 100 }], idx, BOARD_CLEAR)
+    expect(d).toEqual({ dx: 124, dy: 0 })
+  })
+
+  it('a nudge stops short of a blocker and never jumps it; one already too close does not stop it', () => {
+    const idx = new BlockerIndex([{ x: 500, y: 0, w: 100, h: 100 }])
+    expect(clampMove([{ x: 0, y: 0, w: 400, h: 100 }], idx, BOARD_CLEAR, 200, 0)).toEqual({ dx: 76, dy: 0 })
+    expect(clampMove([{ x: 0, y: 0, w: 400, h: 100 }], idx, BOARD_CLEAR, -50, 0)).toEqual({ dx: -50, dy: 0 })
+    expect(clampMove([{ x: 0, y: 0, w: 490, h: 100 }], idx, BOARD_CLEAR, 5, 0)).toEqual({ dx: 5, dy: 0 })
+    expect(clampMove([{ x: 0, y: 200, w: 400, h: 100 }], idx, BOARD_CLEAR, 200, 0)).toEqual({ dx: 200, dy: 0 })
+  })
+
+  it('clampGrowth holds a growing side short of a neighbour and lets a shrinking one go', () => {
+    const n = [{ x: 500, y: 0, w: 100, h: 300 }]
+    expect(clampGrowth(B, { x: 0, y: 0, w: 900, h: 300 }, n)).toEqual({ x: 0, y: 0, w: 476, h: 300 })
+    expect(clampGrowth(B, { x: 0, y: 0, w: 200, h: 300 }, n)).toEqual({ x: 0, y: 0, w: 200, h: 300 })
+    expect(clampGrowth(B, { x: 0, y: 0, w: 900, h: 300 }, [{ x: 500, y: 600, w: 100, h: 100 }])).toEqual({ x: 0, y: 0, w: 900, h: 300 })
   })
 })
