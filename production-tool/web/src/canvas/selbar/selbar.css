@@ -13,5 +13,5 @@
 .selbar .sb-btn.ink:disabled { opacity: 0.6; }
 .selbar .sb-icon { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: var(--ink2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; }
 .selbar .sb-icon:hover { background: var(--soft); color: var(--ink); }
-.sb-more { min-width: 220px; }
-.sb-more .pt-menurow.danger { color: var(--danger); }
+.selbar-more { min-width: 220px; } /* not .sb-more: the Storyboard card's More button has that name, and took this width (2026-10-15) */
+.selbar-more .pt-menurow.danger { color: var(--danger); }
