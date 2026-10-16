@@ -72,7 +72,7 @@ for (const kind of ['fill', 'remove'] as const) {
     await page.getByRole('button', { name: 'Clear mask' }).click()
     await expect.poll(async () => striped(await picPixel(page, 0.7, 0.45), kind)).toBe(true)
     await page.getByRole('button', { name: 'Apply as new version' }).click()
-    await expect(page.getByRole('button', { name: /v2 of 2/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /(v|Version )2 of 2/ })).toBeVisible()
     await expect(page.locator('[role="alert"]')).toHaveCount(0)
 
     const saved = await savedPixel(page, seeded.shotId, 0.7, 0.45)
