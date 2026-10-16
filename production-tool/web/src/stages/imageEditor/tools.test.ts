@@ -4,15 +4,19 @@ import { describe, expect, it } from 'vitest'
 import { BRUSH_MAX, BRUSH_MIN, TOOLS, brushStep, cropRect, toolForKey, zoomStep } from './tools'
 
 const SPEC = readFileSync(new URL('../../../../../docs/production-tool/ui-behaviour.md', import.meta.url), 'utf8')
+const IE_SPEC = SPEC.slice(SPEC.indexOf('### 3.12'), SPEC.indexOf('\n### ', SPEC.indexOf('### 3.12') + 1))
 
 describe('the tools', () => {
-  it('are the eight of the spec, with their keys', () => {
-    expect(TOOLS.map((t) => `${t.id}:${t.key}`)).toEqual(['select:V', 'click:A', 'brush:B', 'lasso:L', 'eraser:E', 'text:T', 'crop:C', 'hand:H'])
+  it('are the six of the spec, with their keys (no click-select, no eraser)', () => {
+    expect(TOOLS.map((t) => `${t.id}:${t.key}`)).toEqual(['select:V', 'brush:B', 'lasso:L', 'text:T', 'crop:C', 'hand:H'])
     for (const t of TOOLS) expect(SPEC).toMatch(new RegExp(`\\| ${t.label.split(',')[0]}[^|]*\\| ${t.key}`))
   })
   it('a key chooses its tool; a key with a modifier chooses none', () => {
     expect(toolForKey({ key: 'b' })).toBe('brush')
-    expect(toolForKey({ key: 'A' })).toBe('click')
+    expect(toolForKey({ key: 'A' })).toBeUndefined()
+    expect(toolForKey({ key: 'e' })).toBeUndefined()
+    expect(IE_SPEC).not.toMatch(/^\| (Click-select|Eraser)[^|]*\|/m) // no rows for them in the keys table
+    expect(IE_SPEC).not.toMatch(/Snap to cut-out/)
     expect(toolForKey({ key: 'c', metaKey: true })).toBeUndefined()
     expect(toolForKey({ key: 'z' })).toBeUndefined()
   })

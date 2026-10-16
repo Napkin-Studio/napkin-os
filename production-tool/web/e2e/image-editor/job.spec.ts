@@ -8,8 +8,8 @@ async function startFill(page: Page, words: string) {
   await page.keyboard.press('b')
   await stroke(page, [0.55, 0.2], [0.8, 0.3], 16)
   await page.locator('#ie-fill').fill(words)
-  await page.locator('.ie-action').getByRole('button', { name: 'Fill area' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Fill area' }).click()
+  await page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Fill', exact: true }).click()
   await expect(page.locator('.ie-elist')).toContainText('Fill Mask 1: "')
 }
 

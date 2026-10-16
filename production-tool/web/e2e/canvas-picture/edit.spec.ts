@@ -73,8 +73,8 @@ test('Edit opens the picture; Apply puts v2 in place with v1 in its versions; Un
   await page.keyboard.press('b')
   await stroke(page, [0.3, 0.3], [0.6, 0.3], 12)
   await page.locator('#ie-fill').fill('add drops')
-  await page.locator('.ie-action').getByRole('button', { name: 'Fill area' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Fill area' }).click()
+  await page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Fill', exact: true }).click()
   await expect(page.locator('.ie-elist li', { hasText: 'Fill Mask 1: "' })).toContainText('ready', { timeout: 20_000 })
   await page.getByRole('button', { name: 'Apply as new version' }).click()
   await expect(page.locator('.ie-vbtn')).toContainText('v2 of 2')
@@ -122,4 +122,66 @@ test('a double-click opens a picture on its own; in a group the first picks it o
   await expect(page.locator('.image-editor')).toHaveCount(0)
   await page.mouse.dblclick(...centre(b))
   await expect(page.locator('.image-editor')).toHaveCount(1)
+})
+
+test('on a canvas picture the region tools work: Brush, Subtract, Lasso, Clear, then Remove with no words', async ({ page }) => {
+  const [p] = await oneDropped(page)
+  await page.mouse.click(...centre(p))
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.locator('canvas.ie-pic:not([hidden])').waitFor()
+  const painted = () => page.evaluate(() => {
+    const c = document.querySelector<HTMLCanvasElement>('canvas.ie-mask')!
+    const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data
+    let n = 0
+    for (let i = 3; i < d.length; i += 4) if (d[i]) n++
+    return n
+  })
+  const strip = page.getByRole('group', { name: 'Brush mask options' })
+  await page.keyboard.press('b')
+  await stroke(page, [0.2, 0.4], [0.8, 0.4], 16)
+  await expect.poll(painted).toBeGreaterThan(0)
+  const full = await painted()
+  await strip.getByRole('button', { name: 'Subtract' }).click()
+  await stroke(page, [0.5, 0.3], [0.5, 0.5], 8)
+  await expect.poll(painted).toBeLessThan(full)
+  await strip.getByRole('button', { name: 'Clear mask' }).click()
+  await expect.poll(painted).toBe(0)
+  await strip.getByRole('button', { name: 'Add' }).click()
+  await page.keyboard.press('l')
+  const box = (await page.locator('.ie-frame').boundingBox())!
+  const pt = (fx: number, fy: number): [number, number] => [box.x + fx * box.width, box.y + fy * box.height]
+  await page.mouse.move(...pt(0.3, 0.3))
+  await page.mouse.down()
+  for (const q of [pt(0.6, 0.3), pt(0.6, 0.6), pt(0.3, 0.6)]) await page.mouse.move(...q, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(painted).toBeGreaterThan(0)
+  await page.locator('.ie-action').getByRole('button', { name: 'Remove what the mask covers' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click()
+  await expect(page.locator('.ie-elist li', { hasText: 'Remove Mask' })).toContainText('ready', { timeout: 20_000 })
+  await expect(page.locator('.ie-layer', { hasText: 'Remove' })).toHaveCount(1)
+})
+
+test('while a picture is open in the Image editor its bar is the only one; Canvas brings the canvas bar back', async ({ page }) => {
+  const [p] = await oneDropped(page)
+  const bars = () => page.locator('.ptbar').count()
+  const accounts = () => page.getByRole('button', { name: 'Your account' }).count()
+  const history = () => page.getByRole('button', { name: /^History/ }).count()
+  expect(await bars()).toBe(1)
+  await page.mouse.click(...centre(p))
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.locator('canvas.ie-pic:not([hidden])').waitFor()
+  // One bar, one account button, one History (owner, 2026-10-16: "Double buttons?").
+  await expect.poll(bars).toBe(1)
+  expect(await accounts()).toBe(1)
+  expect(await history()).toBe(1)
+  await expect(page.locator('.image-editor .ptbar')).toHaveCount(1)
+  await expect(page.locator('.image-editor .ptbar').getByRole('button', { name: 'Canvas' })).toBeVisible()
+  // The canvas keys stand down: B is the editor's Brush, not the canvas's Board tool.
+  await page.keyboard.press('b')
+  await expect(page.locator('.ie-tools button[aria-pressed="true"]')).toHaveAttribute('aria-label', 'Brush mask (B)')
+  await page.getByRole('button', { name: 'Canvas' }).click()
+  await expect(page.locator('.image-editor')).toHaveCount(0)
+  await expect.poll(bars).toBe(1)
+  expect(await accounts()).toBe(1)
+  await expect(page.getByRole('button', { name: 'Share' })).toBeVisible()
 })

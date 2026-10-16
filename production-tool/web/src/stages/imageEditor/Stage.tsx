@@ -4,15 +4,19 @@
 // pointer does what the tool says; Space held is the Hand.
 //
 // Input (features/image-editor-masks-layers.clan): the viewport takes the pointer, so a stroke can start
-// on the margin when zoomed out (Click and Text need a point on the picture). A stroke belongs to the
+// on the margin when zoomed out (Text needs a point on the picture). A stroke belongs to the
 // pointer that started it: another finger or pen is ignored, hover moves add nothing, and pointercancel
-// drops the stroke. The live stroke is drawn on its own canvas once per animation frame, so a move
+// drops the stroke. A press on the stage starts no text selection and no drag of one (the browser would
+// cancel the pointer and drop the stroke: Firefox and Chromium both do when the page has a selection).
+// Add or Subtract is the brush strip's; Alt held while pressing flips it for that stroke, and the cursor
+// and the live stroke say which (Subtract: a red dashed ring, a red lasso). A press while Before shows
+// goes back to After and paints (owner, 2026-10-16: in Before nothing painted, and Before stuck). The live stroke is drawn on its own canvas once per animation frame, so a move
 // never redraws the committed masks. A running job never covers the stage: its area shows the pending
 // stripes (a fill) or a progress edge (a whole-frame job), and its status and Cancel sit in its Edits row.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EditSession, MaskOp, Pt } from './edits'
-import { edges, rasterize, RasterCache, type AlphaOf } from './mask'
+import { edges, rasterize, RasterCache } from './mask'
 import { compose, type Plan } from './compose'
 import { cropRect, type ToolId } from './tools'
 
@@ -37,8 +41,8 @@ function antsOn(ctx: CanvasRenderingContext2D, s: { img: ImageData; rim: Int32Ar
 
 type Live = { id: number; op: Extract<MaskOp, { t: 'brush' | 'lasso' }>; drawn: number }
 
-export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, motion, alphaOf, alphaKey, onDrawn,
-  onMaskOp, onClick, onAddText, onText, onCrop, pending, progress, children }: {
+export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, onAfter, motion, onDrawn,
+  onMaskOp, onAddText, onText, onCrop, pending, progress, children }: {
   /** The frame as saved, for Before and while the preview draws. */
   src?: string
   plan: Plan
@@ -52,14 +56,12 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   pan: Pt
   onPan: (p: Pt) => void
   before: boolean
+  /** A press on the stage while Before shows: show After again (the press then acts as usual). */
+  onAfter?: () => void
   motion: boolean
-  alphaOf: AlphaOf
-  /** What a cut-out's alpha is drawn from ('' while it loads): part of a snap step's cache key. */
-  alphaKey?: (cutoutId: string) => string
   /** The picture drew (null) or could not (why): a failure keeps the last good picture on the stage. */
   onDrawn?: (error: string | null) => void
   onMaskOp: (op: MaskOp) => void
-  onClick: (p: Pt) => void
   onAddText: (p: Pt) => void
   onText: (id: string, patch: { text?: string; x?: number; y?: number }) => void
   onCrop: (r: { x: number; y: number; w: number; h: number }) => void
@@ -74,6 +76,17 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   const overlay = useRef<HTMLCanvasElement>(null)
   const liveCanvas = useRef<HTMLCanvasElement>(null)
   const cursorEl = useRef<HTMLDivElement>(null)
+  // Alt held flips Add and Subtract while it is down (the cursor shows it before the press).
+  const [alt, setAlt] = useState(false)
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === 'Alt') { setAlt(e.type === 'keydown'); e.preventDefault() } }
+    const blur = () => setAlt(false)
+    window.addEventListener('keydown', key)
+    window.addEventListener('keyup', key)
+    window.addEventListener('blur', blur)
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('keyup', key); window.removeEventListener('blur', blur) }
+  }, [])
+  const modeFor = (altKey: boolean): Brush['mode'] => (altKey ? (brush.mode === 'add' ? 'sub' : 'add') : brush.mode)
   const [drawn, setDrawn] = useState(false)
   const live = useRef<Live | null>(null)
   const raf = useRef(0)
@@ -93,7 +106,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
     if (!c || before) return
     void compose(plan, image, (id, mw, mh) => {
       const m = session.edits.find((e) => e.id === id)
-      return m && m.kind === 'mask' ? cache.get(m.id, m.ops, mw, mh, alphaOf, alphaKey) : new Uint8Array(mw * mh)
+      return m && m.kind === 'mask' ? cache.get(m.id, m.ops, mw, mh) : new Uint8Array(mw * mh)
     }).then((out) => {
       if (!alive) return
       c.width = out.width
@@ -116,12 +129,12 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   const masks = useMemo(() => session.edits.filter((e) => e.kind === 'mask' && !session.hidden.includes(e.id)), [session])
   const raster = useMemo(() => {
     cache.retain(new Set(session.edits.filter((e) => e.kind === 'mask').map((e) => e.id)))
-    const drawn = masks.flatMap((m) => (m.kind === 'mask' ? [cache.get(m.id, m.ops, ow, oh, alphaOf, alphaKey)] : []))
+    const drawn = masks.flatMap((m) => (m.kind === 'mask' ? [cache.get(m.id, m.ops, ow, oh)] : []))
     if (drawn.length === 1) return drawn[0]
     const out = new Uint8Array(ow * oh)
     for (const r of drawn) for (let i = 0; i < out.length; i++) if (r[i] > out[i]) out[i] = r[i]
     return out
-  }, [cache, session.edits, masks, ow, oh, alphaOf, alphaKey])
+  }, [cache, session.edits, masks, ow, oh])
   const rim = useMemo(() => edges(raster, ow, oh), [raster, ow, oh])
 
   // Marching ants: the edge's dashes move, unless motion is reduced (and they wait while a stroke is drawn).
@@ -188,11 +201,11 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
       ctx.beginPath()
       op.pts.forEach((p, i) => (i ? ctx.lineTo(p.x * ow, p.y * oh) : ctx.moveTo(p.x * ow, p.y * oh)))
       ctx.closePath()
-      ctx.fillStyle = `rgba(${BLUE.join(',')},${op.mode === 'add' ? 0.3 : 0.12})`
+      ctx.fillStyle = op.mode === 'add' ? `rgba(${BLUE.join(',')},0.3)` : 'rgba(229,72,77,0.22)'
       ctx.fill()
       ctx.setLineDash([5, 4])
       ctx.lineWidth = 1.4
-      ctx.strokeStyle = '#FFFFFF'
+      ctx.strokeStyle = op.mode === 'add' ? '#FFFFFF' : '#E5484D'
       ctx.stroke()
       return
     }
@@ -245,27 +258,34 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   }
 
   const onDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 || before || live.current) return // a second pointer during a stroke adds nothing
+    if (e.button !== 0 || live.current) return // a second pointer during a stroke adds nothing
     if ((e.target as Element).closest?.(UI)) return
+    if (before) onAfter?.()
     const raw = rel(e)
     const inside = raw.x >= 0 && raw.x <= 1 && raw.y >= 0 && raw.y <= 1
-    if ((tool === 'click' || tool === 'text') && !inside) return
+    if (tool === 'text' && !inside) return
     const p = clamp(raw)
+    if (tool !== 'text') {
+      // No text selection starts here, and one already on the page is let go: pressed inside a selection,
+      // the browser drags it instead, cancels this pointer and the stroke is lost.
+      e.preventDefault()
+      window.getSelection()?.removeAllRanges()
+    }
     ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
     if (tool === 'hand') drag.current = { kind: 'pan', from: { x: e.clientX, y: e.clientY }, start: pan }
-    else if (tool === 'brush' || tool === 'eraser') {
-      live.current = { id: e.pointerId, drawn: 0, op: { t: 'brush', mode: tool === 'eraser' ? 'sub' : brush.mode, r, soft: brush.soft / 100, pts: [p] } }
+    else if (tool === 'brush') {
+      live.current = { id: e.pointerId, drawn: 0, op: { t: 'brush', mode: modeFor(e.altKey), r, soft: brush.soft / 100, pts: [p] } }
       liveCanvas.current?.setAttribute('data-mode', 'brush')
       schedule()
     } else if (tool === 'lasso') {
-      live.current = { id: e.pointerId, drawn: 0, op: { t: 'lasso', mode: brush.mode, pts: [p] } }
+      live.current = { id: e.pointerId, drawn: 0, op: { t: 'lasso', mode: modeFor(e.altKey), pts: [p] } }
       liveCanvas.current?.setAttribute('data-mode', 'lasso')
       schedule()
-    } else if (tool === 'click') onClick(p)
-    else if (tool === 'text') onAddText(p)
+    } else if (tool === 'text') onAddText(p)
     else if (tool === 'crop') setCropDrag({ a: p, b: p })
   }
   const onMove = (e: React.PointerEvent) => {
+    if (e.altKey !== alt) setAlt(e.altKey) // Alt went down or up while another window had the keys
     const raw = rel(e)
     const cur = cursorEl.current
     if (cur) {
@@ -317,11 +337,12 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
     for (let y = 0; y < mh; y++) for (let x = 0; x < 64; x++) if (m[y * 64 + x] >= 128) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y) }
     return x1 < 0 ? null : { left: `${(x0 / 64) * 100}%`, top: `${(y0 / mh) * 100}%`, width: `${((x1 - x0 + 1) / 64) * 100}%`, height: `${((y1 - y0 + 1) / mh) * 100}%` }
   }, [pendingMask, w, h])
-  const brushy = !before && (tool === 'brush' || tool === 'eraser')
+  const brushy = !before && tool === 'brush'
 
   return (
     <div className="ie-viewport" style={{ aspectRatio: `${w} / ${h}`, '--ie-ratio': w / h } as React.CSSProperties} data-tool={tool}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onLostPointerCapture={onLost}
+      onDragStart={(e) => e.preventDefault()}
       onPointerLeave={() => { if (cursorEl.current) cursorEl.current.style.display = 'none' }}>
       <div ref={frame} className={`ie-frame tool-${tool}`} style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}>
         {src && (before || !drawn) && <img className="ie-pic" src={src} alt="" draggable={false} />}
@@ -344,7 +365,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
         {!before && crop && (
           <div className="ie-crop" style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.w * 100}%`, height: `${crop.h * 100}%` }} aria-label="The crop, kept at the frame's ratio" />
         )}
-        {brushy && <div ref={cursorEl} className="ie-cursor" style={{ display: 'none', width: `${r * 200}%`, aspectRatio: '1' }} aria-hidden="true" />}
+        {brushy && <div ref={cursorEl} className="ie-cursor" data-mode={modeFor(alt)} style={{ display: 'none', width: `${r * 200}%`, aspectRatio: '1' }} aria-hidden="true" />}
       </div>
       {progress && <div className="ie-progress" aria-hidden="true" />}
       {children}

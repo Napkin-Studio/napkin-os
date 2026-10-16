@@ -4,12 +4,6 @@ import type { ToolId } from './tools'
 
 const TOOL_ICON: Record<ToolId, ReactNode> = {
   select: <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L13 8 L8 9 L6 14 Z" fill="currentColor" /></svg>,
-  click: (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path d="M3 4 L12 9.5 L8 10.3 L6.3 14.5 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M14 1.5 L14.7 3.3 L16.5 4 L14.7 4.7 L14 6.5 L13.3 4.7 L11.5 4 L13.3 3.3 Z" fill="var(--tool)" />
-    </svg>
-  ),
   brush: (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
       <path d="M15.5 2.5 L8 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -20,13 +14,6 @@ const TOOL_ICON: Record<ToolId, ReactNode> = {
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
       <ellipse cx="9.5" cy="7" rx="6.5" ry="4.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2.4 1.8" />
       <path d="M5 10.5 C4 12.5 6 13.5 5 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  ),
-  eraser: (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path d="M10.5 2.8 L15.2 7.5 L8.5 14.2 L5.5 14.2 L2.8 11.5 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M6.6 6.7 L11.3 11.4" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M8.5 15.5 H15.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   ),
   text: <span aria-hidden="true" className="ie-t">T</span>,

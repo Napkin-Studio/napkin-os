@@ -12,6 +12,7 @@ here instead of a harness of its own.
 cd production-tool/web
 npm run e2e                                  # starts vite on :5199 and runs every spec
 E2E_CHROMIUM=/usr/bin/chromium npm run e2e   # a local Chromium instead of Playwright's download
+E2E_FIREFOX=1 npm run e2e                     # every spec in Firefox (Gecko) too: the owner's browser
 npx playwright test image-editor/job -g Cancel   # one file, one test
 ```
 
