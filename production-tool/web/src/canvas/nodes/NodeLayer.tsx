@@ -289,8 +289,13 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     const host = root.current?.parentElement
     if (!host) return
     // The selection as the double-click began (its first press), before the engine's double press changes it.
-    const onDown = (e: MouseEvent) => { if (e.detail <= 1) selectedAtPress.current = [...canvas.view().selectedIds] }
-    host.addEventListener('mousedown', onDown, true)
+    // The engine acts on pointerdown, which carries no click count, so a press within 500 ms of the last is the second.
+    let lastPress = -Infinity
+    const onDown = (e: PointerEvent) => {
+      if (e.timeStamp - lastPress > 500) selectedAtPress.current = [...canvas.view().selectedIds]
+      lastPress = e.timeStamp
+    }
+    host.addEventListener('pointerdown', onDown, true)
     const onDbl = (e: MouseEvent) => {
       const p = fromClient(e.clientX, e.clientY)
       const el = cardAt(p)
@@ -312,7 +317,7 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
     }
     host.addEventListener('dblclick', onDbl, true)
     return () => {
-      host.removeEventListener('mousedown', onDown, true)
+      host.removeEventListener('pointerdown', onDown, true)
       host.removeEventListener('dblclick', onDbl, true)
     }
   })

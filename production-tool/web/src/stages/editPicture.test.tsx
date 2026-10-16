@@ -105,7 +105,8 @@ describe('the Image editor on a canvas picture', () => {
     const el = render(w, createElement(ImageEditor, { target: { kind: 'picture', nodeId: NODE }, picture: { sha: SHA('a'), w: 800, h: 1000 }, onBack }))
     await settle()
     expect(el.querySelector('.ptbar')?.textContent).toContain('@baby_front')
-    expect(el.querySelector('.ie-meta')?.textContent).toBe('Picture · 800 × 1000')
+    // The decluttered bar (topbar-declutter) may fold the meta away at this width; never a ratio lock for a picture.
+    expect(el.querySelector('.ptbar')?.textContent ?? '').not.toContain('locked')
     expect(el.querySelector('[aria-label="Crop, kept at its shape (C)"]')).not.toBeNull()
     expect(el.textContent).toContain('Applying makes v2 and puts it in place on the canvas')
     expect(el.textContent).not.toContain('Delete v1')
