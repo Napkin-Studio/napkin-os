@@ -9,7 +9,6 @@ import * as Y from 'yjs'
 import { element, type ElementRecord } from '../src/model/records'
 import { SceneStore } from '../src/model/store'
 import { Renderer, type DrawContext } from '../src/render/renderer'
-import { hitBoardTitle } from '../src/render/links'
 import { SelectTool } from '../src/select/select'
 import { SceneUndo } from '../src/undo/sceneUndo'
 
@@ -20,7 +19,7 @@ function setup(records: ElementRecord[]) {
   const scene = new SceneStore(new Y.Doc())
   scene.seed(records)
   const r = new Renderer(scene, { newPath: () => ({ moveTo() {}, lineTo() {}, closePath() {} }), bitmap: () => undefined })
-  const tool = new SelectTool(scene, (x, y) => hitBoardTitle(scene, { x, y }, 1) ?? r.hit(x, y))
+  const tool = new SelectTool(scene, (x, y) => r.hit(x, y))
   const undo = new SceneUndo(scene)
   return { scene, r, tool, undo, at: (id: string) => { const e = scene.get(id)!; return [e.x, e.y] } }
 }

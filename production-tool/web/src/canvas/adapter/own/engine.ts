@@ -16,9 +16,6 @@ import { OwnAdapter, type Surface } from './adapter'
 import type { Ctx2D } from './draw'
 import { mountTextEditor } from './textEditor'
 
-/** The cursor over each of a selected board's handles. */
-const RESIZE_CURSOR: Record<string, string> = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }
-
 /** What this browser's pointer events can carry (ui-behaviour 8; fallbacks are raw events and pressure only). */
 export function probeCapabilities(): InputCapabilities {
   const pe = typeof PointerEvent !== 'undefined' ? PointerEvent.prototype : undefined
@@ -29,6 +26,9 @@ export function probeCapabilities(): InputCapabilities {
     pressure: !!pe && 'pressure' in pe,
   }
 }
+
+/** The arrow keys' directions (a nudge). */
+const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
 
 /** Single-key tools on the canvas until the toolbar offers them (ui-behaviour 7). */
 const TOOL_KEYS: Record<string, string> = { v: 'selection', p: 'freedraw', e: 'eraser', h: 'hand', m: 'highlighter', s: 'sketch', t: 'text' }
@@ -277,6 +277,14 @@ export const ownEngine: CanvasEngine = {
             console.warn('the move was not kept', e)
           }
           break
+        case 'press-cancel':
+          adapter.cancelPress()
+          break
+        case 'tap':
+          // A one-finger tap selects what is under it (ui-behaviour 8); the chrome hears it too.
+          if (adapter.router.tool === 'select') adapter.tap(toScene(i.x, i.y))
+          adapter.emitIntent(i)
+          break
         case 'undo':
         case 'redo':
           adapter.undoScene(i.kind)
@@ -313,13 +321,15 @@ export const ownEngine: CanvasEngine = {
       if (phase === 'down' || phase === 'up') sample(phase, e)
       else if (phase === 'move' && e.buttons) sample('move', e)
       for (const i of adapter.router.handle(raw(phase, e))) act(i)
-      // A selected board's handles show their resize cursor; the Text tool, the text cursor.
-      if (phase === 'move' && !e.buttons) {
-        const edge = adapter.boardHandleAt(toScene(e.clientX, e.clientY))
+      // The cursor says what a press would do: resize on a selected board's handles, grab on a board's
+      // chip and edge (and a selected board's inside), grabbing while something moves; the Text tool, text.
+      if (phase === 'move' || phase === 'down' || phase === 'up') {
         const t = adapter.activeTool()
-        const want = edge ? RESIZE_CURSOR[edge] : t.type === 'native' && t.id === 'text' ? 'text' : ''
+        const want = e.pointerType === 'touch' ? '' : t.type === 'native' && t.id === 'text' ? 'text' : adapter.cursorAt(toScene(e.clientX, e.clientY))
         if (live.style.cursor !== want) live.style.cursor = want
-        // The container a click would take: a faint outline (container-select). Select tool only.
+      }
+      // The container a click would take: a faint outline while hovering (container-select). Select tool only.
+      if (phase === 'move' && !e.buttons) {
         if (adapter.hoverAt(adapter.router.tool === 'select' && e.pointerType !== 'touch' ? toScene(e.clientX, e.clientY) : null)) draw()
       } else if (phase === 'leave' || phase === 'down') {
         if (adapter.hoverAt(null)) draw()
@@ -368,6 +378,12 @@ export const ownEngine: CanvasEngine = {
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && adapter.selector.selected.size) {
         e.preventDefault()
         adapter.selector.deleteSelected()
+      } else if (!mod && !e.altKey && ARROWS[e.key] && adapter.selector.selected.size) {
+        // Arrows nudge the selection 1 px, Shift+arrow 10 px (screen pixels); a run is one step.
+        e.preventDefault()
+        const [dx, dy] = ARROWS[e.key]
+        const step = e.shiftKey ? 10 : 1
+        adapter.nudge(dx * step, dy * step)
       } else if (e.key === 'Escape') {
         // In order (container-select; ui-behaviour 7): another handler's Esc (a popover, placing, the
         // link tool) wins; a running gesture is cancelled; an entered container is left, selected whole;
@@ -398,8 +414,13 @@ export const ownEngine: CanvasEngine = {
       adapter.editText(id)
     }
     host.addEventListener('dblclick', onDbl)
+    // The canvas loses the keyboard: a run of nudges is written now.
+    const onBlur = () => adapter.flushNudge()
+    host.addEventListener('blur', onBlur)
     adapter.attach(() => {
       host.removeEventListener('dblclick', onDbl)
+      host.removeEventListener('blur', onBlur)
+      adapter.flushNudge()
       editor.destroy()
       offChange()
       ro?.disconnect()

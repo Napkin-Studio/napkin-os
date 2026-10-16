@@ -19,6 +19,7 @@ import { canvasActions, toolLetter } from '../chrome/actions'
 import { boardIdOf, boardKey, contentsOf, deleteBoards, isBoard, jumpTo, newBoard, NEW_BOARD, PURPOSES, reconcileBoards, seedBoards } from './boards'
 import { UndoChip } from '../../ui/Undo'
 import { boardNotices } from './fitting'
+import { boardTitleRect, TITLE_REACH_PX } from '../../../../canvas-engine/src'
 import './boards.css'
 
 type Local = { x: number; y: number }
@@ -33,6 +34,8 @@ const BAR_TOP = 104
 /** How long "Board is full · Resize" and "… left the board · Undo" stay. */
 const SAY_MS = 7000
 type FrameEl = CanvasElement & { name?: string; purpose?: string }
+/** A board frame's title chip in scene units: the engine's (boards/grab), so the rename field, the bar and the press agree. */
+const chipOf = (f: FrameEl, zoom: number) => boardTitleRect({ x: f.x, y: f.y, w: f.width, h: f.height, props: { name: f.name ?? '' } }, zoom)
 /** A drag smaller than this (screen pixels) makes a board of the default size where it started. */
 const MIN_DRAG = 24
 const typing = (t: EventTarget | null) => !!(t as { closest?: (s: string) => unknown } | null)?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
@@ -138,7 +141,12 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
   const frameById = (id: string) => canvas.elements().find((e) => e.id === id && isBoard(e)) as FrameEl | undefined
   const titleAt = (p: Pt) => {
     const z = canvas.view().zoom
-    return canvas.elements().filter((e) => isBoard(e) && p.x >= e.x && p.x <= e.x + e.width && p.y >= e.y - 28 / z && p.y <= e.y + 4 / z).at(-1)
+    const reach = TITLE_REACH_PX / z
+    return canvas.elements().filter((e) => {
+      if (!isBoard(e)) return false
+      const c = chipOf(e as FrameEl, z)
+      return p.x >= c.x - reach && p.x <= c.x + c.w + reach && p.y >= c.y - reach && p.y <= c.y + c.h + reach
+    }).at(-1)
   }
 
   // Keys: B the Board tool; Delete on a selected board asks first when things sit on it; Esc closes.
@@ -277,17 +285,28 @@ export function BoardLayer({ canvas, inset = 0, tick = 0 }: { canvas: CanvasAdap
         return <div className="bd-draft" style={{ left: a.x, top: a.y, width: Math.abs(draw.b.x - draw.a.x) * view.zoom, height: Math.abs(draw.b.y - draw.a.y) * view.zoom }} />
       })()}
       {editFrame && (
-        <TitleEditor key={editFrame.id} at={toLocal({ x: editFrame.x, y: editFrame.y })} width={editFrame.width * view.zoom}
+        <TitleEditor key={editFrame.id} at={(() => {
+          const c = chipOf(editFrame, view.zoom)
+          return toLocal({ x: c.x, y: c.y + c.h / 2 })
+        })()} width={editFrame.width * view.zoom}
           room={(canvas.visibleBounds().maxY - editFrame.y) * view.zoom}
           title={editFrame.name || editBoard?.title || 'New board'} purpose={(editFrame.purpose as BoardPurpose | undefined) ?? editBoard?.purpose ?? 'none'} fresh={editing!.fresh}
           onTitle={(t) => rename(editFrame.id, t)} onPurpose={(p) => setPurpose(editFrame.id, p)} onDone={() => { setEditing(null); refocus() }} />
       )}
       {sel && !editing && !draw && !resizing && mode !== 'board' && (() => {
-        const p = toLocal({ x: sel.x + sel.width / 2, y: sel.y })
+        // Above the title chip (boards/grab), never over it: when the top bar leaves no room above, beside it.
+        // While the board moves (a drag or a run of nudges), the bar goes with it.
+        const mv = canvas.dragOffset?.()
+        const at0 = mv?.ids.has(sel.id) ? { ...sel, x: sel.x + mv.dx, y: sel.y + mv.dy } : sel
+        const chip = chipOf(at0 as FrameEl, view.zoom)
+        const p = toLocal({ x: at0.x + at0.width / 2, y: chip.y })
+        const right = toLocal({ x: chip.x + chip.w, y: chip.y + chip.h / 2 })
         const viewW = (canvas.visibleBounds().maxX - canvas.visibleBounds().minX) * view.zoom
         const empty = !contentsOf(canvas.elements(), sel.id).length
+        const beside = p.y - 6 < BAR_TOP
+        const at = beside ? { left: right.x + 8, top: Math.max(right.y, BAR_TOP - 16) } : { left: Math.min(Math.max(p.x, 120), viewW - 120), top: p.y - 6 }
         return (
-          <div className="toolbar selbar bd-bar" role="toolbar" aria-label="Board actions" style={{ left: Math.min(Math.max(p.x, 120), viewW - 120), top: Math.max(p.y - 22, BAR_TOP) }} onPointerDown={(e) => e.stopPropagation()}>
+          <div className={`toolbar selbar bd-bar ${beside ? 'beside' : ''}`} role="toolbar" aria-label="Board actions" style={at} onPointerDown={(e) => e.stopPropagation()}>
             <button type="button" className="sb-btn" disabled={empty} title={empty ? 'Nothing on this board yet' : 'Shrink or grow the board to what is on it'} data-frame={sel.id} onClick={(e) => fit(e.currentTarget.dataset.frame!)}>Fit to contents</button>
           </div>
         )

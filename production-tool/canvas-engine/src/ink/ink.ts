@@ -4,7 +4,9 @@
 // and written once at pointer-up as one undoable step: a record and its
 // immutable points. The eraser marks the strokes its path touches and removes
 // them in one step at pointer-up. Strokes drawn close in time and space share an
-// ink group (groupIds), so a word or a doodle moves as one.
+// ink group (groupIds), so a word or a doodle moves as one. A stroke that starts and ends inside a
+// Drawing joins it (container-select); otherwise one whose centre lies on a board joins the board
+// (parentId, as a picture dropped there does), so it moves with the board (board-move).
 
 import { encodePoints, type InkPoint } from '../model/points'
 import { element, type ElementRecord } from '../model/records'
@@ -124,13 +126,22 @@ export class Ink {
     const id = this.newId('stroke')
     const at = this.now()
     const prev = this.last && this.scene.get(this.last.id)
-    // A stroke that starts and ends inside a Drawing joins it (features/container-select.clan).
+    const all = this.scene.all()
+    const cx = (box.minX + box.maxX) / 2
+    const cy = (box.minY + box.maxY) / 2
+    // A stroke that starts and ends inside a Drawing joins it (features/container-select.clan); otherwise
+    // the topmost board under its centre (board-move: the centre rule a move uses, select.ts containerAt).
     const into = drawnAt(this.scene, c.points[0], c.points[c.points.length - 1])?.id ?? null
-    const joins = !!prev && at - this.last!.at <= GROUP_MS && gap(box, boxOf(prev)) <= GROUP_PX && (prev.parentId ?? null) === into
+    const board = into ? undefined : all
+      .filter((r) => r.kind === 'board' && cx >= Math.min(r.x, r.x + r.w) && cx <= Math.max(r.x, r.x + r.w) && cy >= Math.min(r.y, r.y + r.h) && cy <= Math.max(r.y, r.y + r.h))
+      .sort((a, b) => (a.z < b.z ? 1 : a.z > b.z ? -1 : 0))[0]
+    const parentId = into ?? board?.id ?? null
+    // Strokes group only within the same container (a Drawing's strokes never group with the board's).
+    const joins = !!prev && at - this.last!.at <= GROUP_MS && gap(box, boxOf(prev)) <= GROUP_PX && (prev.parentId ?? null) === parentId
     const group = joins ? (prev!.groupIds[0] ?? this.newId('ink')) : null
     const rec = element({
-      id, kind: 'stroke', z: zTop(this.scene.all().map((r) => r.z)),
-      x: box.minX, y: box.minY, w: box.maxX - box.minX, h: box.maxY - box.minY, parentId: into,
+      id, kind: 'stroke', z: zTop(all.map((r) => r.z)), parentId,
+      x: box.minX, y: box.minY, w: box.maxX - box.minX, h: box.maxY - box.minY,
       groupIds: group ? [group] : [],
       opacity: c.tool === 'highlighter' ? HIGHLIGHTER.opacity : 1,
       style: { stroke: c.style.color, width: c.style.width },
