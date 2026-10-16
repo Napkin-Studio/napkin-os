@@ -71,14 +71,14 @@ test('Apply leaves hidden layers out, says so, and keeps them for the new versio
   await page.mouse.click(tx, ty)
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Hide Text' }).click()
-  await expect(page.locator('.ie-pill')).toHaveText('1 edit not applied · 1 hidden layer is left out')
-  await page.getByRole('button', { name: /v1 of 1/ }).click()
+  await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 edit not applied · 1 hidden layer is left out')
+  await page.getByRole('button', { name: 'Version 1 of 1' }).click()
   await expect(page.locator('.ie-vfoot')).toContainText('Apply saves your 1 edit as v2. v1 stays. 1 hidden layer is left out.')
   await page.keyboard.press('Escape')
 
   const v1 = await picPixel(page, 0.32, 0.62)
   await page.getByRole('button', { name: 'Apply as new version' }).click()
-  await expect(page.getByRole('button', { name: /v2 of 2/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Version 2 of 2' })).toBeVisible()
   // v2 as saved: no text where the hidden text was, and its edits leave the text out.
   const saved = await page.evaluate(async ([shotId, x, y]) => {
     const d = window.__pt.doc.get()
@@ -99,7 +99,7 @@ test('Apply leaves hidden layers out, says so, and keeps them for the new versio
   expect(kept.edits.map((e: { kind: string }) => e.kind)).toEqual(['text'])
   expect(kept.hidden).toEqual([kept.edits[0].id])
   await expect(page.getByRole('button', { name: 'Show Text' })).toBeVisible()
-  await expect(page.locator('.ie-pill')).toHaveText('1 hidden layer is left out')
+  await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 hidden layer is left out')
 })
 
 test('when the picture cannot be drawn, the last good one stays and Rhea says why', async ({ page }) => {

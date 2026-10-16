@@ -264,6 +264,6 @@ describe('hidden layers (features/image-editor-masks-layers.clan)', () => {
   })
   it('the pill counts hidden layers apart', async () => {
     const { el } = await open(() => ({ edits: [{ id: 'm1', kind: 'mask', name: 'Mask 1', ops: [stroke] }, { id: 't1', kind: 'text', text: 'Hi', x: 0.1, y: 0.1, size: 0.06 }], hidden: ['t1'], active: 'm1' }))
-    expect(el.querySelector('.ie-pill')?.textContent).toBe('1 edit not applied · 1 hidden layer is left out')
+    expect(el.querySelector('.ie-pill .ie-n-long')?.textContent).toBe('1 edit not applied · 1 hidden layer is left out')
   })
 })

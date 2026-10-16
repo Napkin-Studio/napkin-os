@@ -176,7 +176,7 @@ export function CanvasBar({ presence }: { presence?: string }) {
   const name = shell.index.get(project.id)?.name
   const tight = level === 'tight'
   return (
-    <header className="ptbar" data-fit={level} data-bar="canvas">
+    <header className="ptbar" data-float-avoid="" data-fit={level} data-bar="canvas">
       <HomeMark onClick={() => void shell.goHome()} />
       <Brand project={name} wordmark={!tight} />
       <BetaTag screen={{ stage: 'canvas', project: project.id }} />
@@ -226,7 +226,7 @@ export function EditorBar({ className = '', back, onBack, icon, title, meta, vie
   const tight = level === 'tight'
   const undoMore = undo && undoInMore(level, coarse)
   return (
-    <header className={`ptbar ${className}`} data-fit={level} data-bar={icon}>
+    <header className={`ptbar ${className}`} data-float-avoid="" data-fit={level} data-bar={icon}>
       <BackButton label={back} onClick={onBack} short={tight} />
       <BarSep />
       <NodeIcon kind={icon} />
