@@ -8,7 +8,7 @@
 import type { AssetRef, DeliveryPx, JobInput, JobInputRef, NamedRef, ProductionDocument, SizeMethod } from '../contracts/types'
 import type { CanvasAdapter, CanvasElement } from '../canvas/core/canvasAdapter'
 import { boardFrame, fitInto, withFields } from '../canvas/boards/fitting'
-import { alive, bounds, cd, makeArrow, makeGenPlaceholder } from '../canvas/scene'
+import { alive, bounds, cd, isUserDrawing, makeArrow, makeGenPlaceholder } from '../canvas/scene'
 import { newId } from '../lib/ulid'
 import type { JobRunner } from '../jobs/runner'
 import { autoMethod, availableMethods, methodWords, PAID, type MethodModel } from './rules'
@@ -83,25 +83,23 @@ export function resizableKind(e: El): SourceKind | null {
   return null
 }
 
-/** The selection as Resize… reads it: the things it resizes, and how many things are selected in all
- *  (a group of strokes counts once; arrows the tool drew never count). */
-export function resizableIn(selected: readonly El[]): { items: El[]; total: number } {
+/** The selection as Resize… reads it: the things it resizes, the loose pen strokes among it (one drawing,
+ *  wrapped as a Drawing when sent, as Generate does), and how many things are selected in all (the strokes
+ *  count once; a sketch area's strokes are its own; arrows the tool drew never count). */
+export function resizableIn(selected: readonly El[]): { items: El[]; strokes: El[]; total: number; count: number } {
   const units = selected.filter((e) => !e.isDeleted && cd(e)?.kind !== 'provenance' && cd(e)?.kind !== 'format_set')
   const items = units.filter((e) => resizableKind(e))
-  // A Drawing frame's strokes and a group's members are one thing.
   const inside = new Set(items.map((e) => e.id))
-  const groups = new Set<string>()
-  let total = 0
+  const areas = items.filter((e) => cd(e)?.kind === 'sketch').map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
+  const inArea = (e: El) => areas.some((r) => e.x < r.x + r.w && e.x + e.width > r.x && e.y < r.y + r.h && e.y + e.height > r.y)
+  const strokes = units.filter((e) => isUserDrawing(e) && !(e.frameId && inside.has(e.frameId)) && !inArea(e))
+  const loose = new Set(strokes.map((e) => e.id))
+  let total = strokes.length ? 1 : 0
   for (const e of units) {
-    if (e.frameId && inside.has(e.frameId)) continue
-    const g = !resizableKind(e) ? e.groupIds?.at(-1) : undefined
-    if (g) {
-      if (groups.has(g)) continue
-      groups.add(g)
-    }
+    if (loose.has(e.id) || (e.frameId && inside.has(e.frameId)) || (isUserDrawing(e) && inArea(e))) continue
     total++
   }
-  return { items, total }
+  return { items, strokes, total, count: items.length + (strokes.length ? 1 : 0) }
 }
 
 /** "3 of 5 selected are pictures", when not everything selected is one. */
@@ -121,6 +119,8 @@ export interface Source {
   kind: SourceKind
   /** A named picture (a ref with a key): Redraw also sends the key's other views. */
   named?: NamedRef
+  /** Loose pen strokes, not yet a Drawing: wrapped as one when the results are sent (`elId` is the first). */
+  strokes?: string[]
 }
 
 // ── how ──
@@ -362,7 +362,8 @@ export function placeResults(canvas: CanvasAdapter, planned: readonly Planned[])
   const placed = new Map(els.map((e) => [e.id, e]))
   gens.forEach((g, i) => {
     const gen = placed.get(g.gen.id)!
-    const arrow = makeArrow(canvas, g.src, gen, g.srcId, gen.id, i % 3)
+    // A row level with its original arcs over the top, as a key's views do; a column leaves from the side.
+    const arrow = makeArrow(canvas, g.src, gen, g.srcId, gen.id, i % 3, Math.abs(gen.y - g.src.y) < 1)
     els = canvas.bindArrow([...els, arrow], arrow)
   })
   canvas.transact(() => els, { undoable: true })
@@ -403,6 +404,8 @@ export interface ResizeDeps {
   /** A named ref as a job input (jobs/select.namedInput). */
   named(r: NamedRef): Promise<JobInputRef>
   doc(): Pick<ProductionDocument, 'refs'>
+  /** Loose strokes become a Drawing frame first (canvas controller): the source as it is then. */
+  wrap?(s: Source): Promise<Source>
 }
 
 /**
@@ -410,8 +413,12 @@ export interface ResizeDeps {
  * its own, so one refused (the spend stop, a model's refusal) fails on its own card and the others carry
  * on. Returns the job ids.
  */
-export async function resizePictures(deps: ResizeDeps, planned: readonly Planned[]): Promise<string[]> {
+export async function resizePictures(deps: ResizeDeps, asked: readonly Planned[]): Promise<string[]> {
+  let planned = asked
   if (!planned.length) throw new Error('Pick a shape first.')
+  const wrapped = new Map<Source, Source>()
+  for (const s of new Set(planned.map((p) => p.source))) if (s.strokes?.length && deps.wrap) wrapped.set(s, await deps.wrap(s))
+  if (wrapped.size) planned = planned.map((p) => (wrapped.has(p.source) ? { ...p, source: wrapped.get(p.source)! } : p))
   const ids = placeResults(deps.canvas, planned)
   const images = new Map<string, Promise<AssetRef>>()
   const views = new Map<string, Promise<JobInputRef[]>>()

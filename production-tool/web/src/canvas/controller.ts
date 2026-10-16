@@ -413,8 +413,16 @@ export class CanvasController {
    * or result as it is, a Drawing frame's strokes rendered again, a sketch area's region exported (the
    * scamp's picture). Things that are not one are left out.
    */
-  async resizeSources(elIds: readonly string[]): Promise<ResizeSource[]> {
+  async resizeSources(elIds: readonly string[], strokeIds: readonly string[] = []): Promise<ResizeSource[]> {
     const out: ResizeSource[] = []
+    // Loose strokes: one drawing, its picture rendered now (for the preview); wrapped as a Drawing when sent.
+    const strokes = alive(this.els()).filter((e) => strokeIds.includes(e.id))
+    if (strokes.length) {
+      const blob = (await downscale(await exportElements(this.canvas, strokes))).blob
+      const sha = await putBlob(blob)
+      const dims = await this.pixelsOf(sha, { ...strokes[0], ...this.boxOf(strokes) } as El)
+      out.push({ elId: strokes[0].id, nodeId: '', asset: sha, ...dims, kind: 'drawing', strokes: strokes.map((e) => e.id) })
+    }
     const drawn = alive(this.els()).filter((e) => elIds.includes(e.id) && cd(e)?.kind === 'drawn').map((e) => e.id)
     if (drawn.length) await this.refreshDrawn(drawn)
     for (const id of elIds) {
@@ -435,6 +443,21 @@ export class CanvasController {
       out.push({ elId: e.id, nodeId, asset, ...dims, kind, ...(named ? { named } : {}) })
     }
     return out
+  }
+
+  /** Loose strokes Resize… sends: wrapped as one Drawing frame (as Generate does), the source as it is then. */
+  async wrapForResize(src: ResizeSource): Promise<ResizeSource> {
+    if (!src.strokes?.length) return src
+    const frame = await this.wrapDrawing(src.strokes)
+    if (!frame) throw new Error('Those strokes are gone.')
+    const c = cd(frame) as { id: string; asset: string }
+    const dims = await this.pixelsOf(c.asset, frame)
+    return { elId: frame.id, nodeId: c.id, asset: c.asset, ...dims, kind: 'drawing' }
+  }
+
+  private boxOf(els: readonly El[]): { x: number; y: number; width: number; height: number } {
+    const b = bounds(els)
+    return { x: b.minX, y: b.minY, width: b.w, height: b.h }
   }
 
   /** A picture's pixels: as the document has them, else measured from this browser's copy, else its node's shape. */
