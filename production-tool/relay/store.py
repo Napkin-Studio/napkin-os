@@ -211,6 +211,14 @@ class FileStore(MemoryStore):
             self._counters = row.get("counters") or {}
             self.held = set(row.get("held") or [])
             self._claims = row.get("claims") or {}
+        # Holds an earlier local relay kept in held.txt (MemoryStore(held_file=...), features/picture-storage.clan)
+        # join the ledger, so pictures saved under that build stay openable.
+        legacy = self.root.parent / "held.txt"
+        if legacy.exists():
+            extra = {line.strip() for line in legacy.read_text().splitlines() if line.strip()} - self.held
+            if extra:
+                self.held |= extra
+                self._keep_ledger()
 
     # ── write ──
     @staticmethod
