@@ -1798,7 +1798,7 @@
     },
     "format_set": {
       "type": "object",
-      "description": "A Format set: a master adapted to every format of a pack (ui-behaviour 3.19). Its sizes are their own entities.",
+      "description": "A Format set: a master adapted to every format of a pack or a campaign plan (ui-behaviour 3.19; features/campaign-formats.clan). It shows on the canvas as a Campaign board. Its sizes are their own entities.",
       "properties": {
         "id": {
           "type": "string",
@@ -1818,18 +1818,33 @@
                 "frame",
                 "ref",
                 "render",
-                "video"
+                "video",
+                "picture"
               ]
             },
             "id": {
-              "$ref": "common.schema.json#/$defs/id"
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{6,64}$",
+              "description": "The entity's id, or for a picture the canvas node's id (common id or sceneId)."
+            },
+            "asset": {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            "w": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "h": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "required": [
             "kind",
             "id"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "What every size is made from. picture: a picture on the canvas (its id is the canvas node's id). asset, w and h: the master's picture when the set was made (a video's: its render); protect and crop boxes are in these pixels, and a size made from another asset is out of date."
         },
         "pack": {
           "type": "object",
@@ -1853,6 +1868,90 @@
             "pack_version"
           ],
           "additionalProperties": false
+        },
+        "plan": {
+          "type": "object",
+          "description": "What was asked for in Make all sizes: one pack (kind pack, its pack id) or a campaign plan (kind plan, format-packs.json plans), with the film lengths asked for (30 → 15 and 6 by default).",
+          "properties": {
+            "kind": {
+              "enum": [
+                "pack",
+                "plan"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "lengths_s": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "protect": {
+          "type": "object",
+          "description": "What must stay in every size, asked once per master (Wren: 'What must stay in every size?'). boxes: a still master's, in its pixels. takes: a film's, per take (keyed by take id), in the take's pixels. keep_middle: the person chose no box; crops keep the middle. Changing it puts the crop sizes out of date, nothing else.",
+          "properties": {
+            "boxes": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "$ref": "common.schema.json#/$defs/protectBox"
+              }
+            },
+            "takes": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^take_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "$ref": "common.schema.json#/$defs/protectBox"
+                }
+              }
+            },
+            "keep_middle": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "copy": {
+          "type": "object",
+          "description": "The words every size lays out as type layers (Edit type): the brand line, legal and the supers. Drawn by the relay and stitch, never sent to a model. A size's own words are in its layers.",
+          "properties": {
+            "line": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "legal": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "supers": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1866,7 +1965,7 @@
     },
     "size": {
       "type": "object",
-      "description": "One size of a format set: the format's values copied at creation.",
+      "description": "One size of a format set: the format's values copied at creation, how it is made and where it stands (features/campaign-formats.clan). A tile on the Campaign board.",
       "properties": {
         "id": {
           "type": "string",
@@ -1903,12 +2002,7 @@
           "$ref": "common.schema.json#/$defs/safeArea"
         },
         "method": {
-          "enum": [
-            "crop",
-            "extend",
-            "nearest",
-            "reframe"
-          ]
+          "$ref": "common.schema.json#/$defs/sizeMethod"
         },
         "media": {
           "enum": [
@@ -1922,6 +2016,131 @@
         "job_id": {
           "type": "string",
           "pattern": "^job_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "status": {
+          "enum": [
+            "making",
+            "ready",
+            "look",
+            "stale"
+          ],
+          "description": "making: its job runs. ready. look: Jude flagged it (needs a look). stale: what it was made from changed (Update sizes). Absent: not made yet (its method waits for a later build)."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "Locked: Update sizes, Redo and a new master never change it."
+        },
+        "from_asset": {
+          "$ref": "common.schema.json#/$defs/sha256",
+          "description": "The master's asset it was made from: when the master's is another, the size is out of date ('Master changed · N out of date')."
+        },
+        "crop": {
+          "$ref": "common.schema.json#/$defs/pxBox",
+          "description": "The part of the master it shows, in the master's pixels: the subject-aware crop, or the person's (Adjust crop)."
+        },
+        "crop_by": {
+          "enum": [
+            "rule",
+            "person"
+          ],
+          "description": "person: Adjust crop set it, so Update sizes keeps it."
+        },
+        "layers": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/typeLayerKind"
+          },
+          "additionalProperties": {
+            "$ref": "common.schema.json#/$defs/typeLayerOverride"
+          },
+          "description": "This size's changes to the type layers (Edit type), by layer."
+        },
+        "length_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "description": "A film size's length (a cutdown: 15, 6)."
+        },
+        "edl": {
+          "type": "array",
+          "maxItems": 100,
+          "description": "A cutdown's edit: windows of the same takes in cut order (connected-video's in/out shape), each with its crop for a re-aspect.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "shot_id": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "take_id": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "in_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "out_s": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "crop": {
+                "$ref": "common.schema.json#/$defs/pxBox"
+              },
+              "end_card": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "shot_id",
+              "in_s",
+              "out_s"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "checks": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "common.schema.json#/$defs/formatCheckCode"
+          },
+          "description": "Jude's per-format checks, by check; they never block. Ignore is recorded on the check.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "result": {
+                "enum": [
+                  "pass",
+                  "flag"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "ignored": {
+                "type": "object",
+                "properties": {
+                  "by": {
+                    "$ref": "common.schema.json#/$defs/personRef"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "by",
+                  "at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "result",
+              "note"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [

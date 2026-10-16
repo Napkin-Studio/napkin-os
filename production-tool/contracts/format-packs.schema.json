@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/format-packs.schema.json",
   "title": "Format packs (format-packs.json)",
-  "description": "The industry format packs Make all sizes and scamp sheets read (ui-behaviour 3.19; docs/production-tool/format-packs.md). It validates the file as it stands: the values stay the owner's draft. A client's own packs (their library shelf, kind format_pack) use $defs/pack. A format id is lowercase with digits, dots and hyphens, never '/', and never a map key: sizes copy it as a value (common formatRef). ratio is free text for people ('1:√2', '~2.7:1'), never an enum; the exact shape is delivery_px.",
+  "description": "The industry format packs Make all sizes and scamp sheets read (ui-behaviour 3.19; docs/production-tool/format-packs.md). It validates the file as it stands: the values stay the owner's draft. A client's own packs (their library shelf, kind format_pack) use $defs/pack. A format id is lowercase with digits, dots and hyphens, never '/', and never a map key: sizes copy it as a value (common formatRef). ratio is free text for people ('1:√2', '~2.7:1'), never an enum; the exact shape is delivery_px. A campaign plan (plans) picks formats from the packs by pack and format id, with film lengths, so a format is never copied between packs (features/campaign-formats.clan).",
   "type": "object",
   "properties": {
     "version": { "type": "string", "minLength": 1, "maxLength": 40 },
@@ -14,7 +14,8 @@
       "required": ["insets", "box"],
       "additionalProperties": false
     },
-    "packs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pack" } }
+    "packs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pack" } },
+    "plans": { "type": "array", "items": { "$ref": "#/$defs/plan" } }
   },
   "required": ["version", "status", "safe_area_schema", "packs"],
   "additionalProperties": false,
@@ -29,12 +30,70 @@
       "required": ["id", "name", "formats"],
       "additionalProperties": false
     },
+    "plan": {
+      "type": "object",
+      "description": "A mixed plan for Make all sizes (the Campaign launch plan): formats from several packs, in board order, and the film lengths each film format is cut to.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "properties": {
+              "pack_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+              },
+              "format_id": {
+                "$ref": "common.schema.json#/$defs/formatId"
+              },
+              "lengths_s": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 600
+                }
+              }
+            },
+            "required": [
+              "pack_id",
+              "format_id"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "items"
+      ],
+      "additionalProperties": false
+    },
     "format": {
       "type": "object",
       "properties": {
         "id": { "$ref": "common.schema.json#/$defs/formatId" },
         "name": { "type": "string", "minLength": 1, "maxLength": 120 },
         "kind": { "enum": ["image", "video", "display", "ooh", "print"] },
+        "channel": { "$ref": "common.schema.json#/$defs/formatChannel" },
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "height": { "type": "number", "exclusiveMinimum": 0 },
         "unit": { "enum": ["px", "mm"] },

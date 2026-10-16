@@ -122,6 +122,9 @@ NO_DIRECTOR_OPS = {"upscale"}
 # What the editor says when Remove background cannot run here (features/image-editor.clan).
 NO_CUTOUT = "Rhea can't remove backgrounds on our server yet. Open this on a device with WebGPU to do it there."
 UNBUILT_OPS = set(QUOTA_CLASS) - BUILT_OPS
+# Ops whose models the capability sheets list for the Make all sizes method table (features/campaign-formats.clan)
+# but no adapter builds yet: extend and regenerate (phase 4), Aleph 2 reframes (phase 6).
+NO_ADAPTER_YET = {"resize", "cutdown"}
 QUESTION_ID = re.compile(r"^q_[0-9A-HJKMNP-TV-Z]{26}$")
 
 

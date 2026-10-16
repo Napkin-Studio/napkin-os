@@ -14,6 +14,7 @@ from director import new_id
 from providers import load_sheet
 from providers.base import ProviderError
 from providers.types import effective_sheet, op_models
+from service import NO_ADAPTER_YET
 
 HQ = {"provider": "mock", "model": "mock-hq"}
 
@@ -127,5 +128,7 @@ def test_every_alternate_on_a_sheet_is_one_its_adapter_builds():
     for provider, sheet in sheets().items():
         built = importlib.import_module(f"providers.{provider}").ALTERNATES
         for op in sheet["ops"]:
+            if op in NO_ADAPTER_YET:  # the method table reads them; no adapter is asked yet
+                continue
             alternates = set(op_models(sheet, op)[1:])
             assert alternates <= built.get(op, set()), (provider, op, alternates)

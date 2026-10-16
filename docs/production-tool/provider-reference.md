@@ -78,14 +78,16 @@ planning only: the tool shows no price to people; each job's cost is recorded an
 
 | Scenario | Credits | USD |
 |---|---:|---:|
-| Typical ad, first pass (15 s, 6 shots, 1 character) | 1,089 | $10.89 |
-| Typical, 3 takes of every frame and clip | 2,769 | $27.69 |
-| Typical, Veo audio on, first pass | 1,809 | $18.09 |
-| Typical, audio on with 3 takes | 4,929 | $49.29 |
-| Heavy ad (2 characters, audio on, 8 s clips, 3 takes) | 8,863 | $88.63 |
+| Typical ad, first pass (15 s, 6 shots, 1 character) | 1,073 | $10.73 |
+| Typical, 3 takes of every frame and clip | 2,753 | $27.53 |
+| Typical, Veo audio on, first pass | 1,793 | $17.93 |
+| Typical, audio on with 3 takes | 4,913 | $49.13 |
+| Heavy ad (2 characters, audio on, 8 s clips, 3 takes) | 7,873 | $78.73 |
+| Campaign: make all sizes of a 16:9 key visual and a 30 s film (17 stills, 7 films; features/campaign-formats.clan) | 1,422 | $14.22 |
 
 Not in the totals:
 - Claude on Bedrock (the director), per ad: $0.50 (placeholder, not measured)
+- Claude on Bedrock for a campaign (the protect ask, crop boxes per shot, beat plans): $0.50 (placeholder, not measured)
 - billedFailureRate: failed and moderated tasks Runway bills, as a share of spend: 0% (placeholder, not measured)
 
 Fixed monthly infrastructure:

@@ -1,0 +1,83 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CD01",
+  "op": "cutdown",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_cutdown01a",
+  "node": {
+    "kind": "format_set",
+    "id": "fset_01K7B00000000000000000FS01"
+  },
+  "parentIds": [],
+  "input": {
+    "aspect": {
+      "w": 9,
+      "h": 16
+    },
+    "delivery": {
+      "width": 1080,
+      "height": 1920
+    },
+    "safeArea": {
+      "type": "insets",
+      "top": 14,
+      "right": 6,
+      "bottom": 35,
+      "left": 6,
+      "unit": "%"
+    },
+    "cutdown": {
+      "lengthS": 15,
+      "fadeOutS": 0.5,
+      "endCard": true,
+      "clips": [
+        {
+          "asset": {
+            "sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+            "url": "https://studio.napkin.ie/out/sha256:8888888888888888888888888888888888888888888888888888888888888888",
+            "mime": "video/mp4"
+          },
+          "inS": 0.5,
+          "outS": 4,
+          "takeSize": {
+            "w": 1920,
+            "h": 1080
+          },
+          "crop": {
+            "x": 656,
+            "y": 0,
+            "w": 607.5,
+            "h": 1080
+          }
+        },
+        {
+          "asset": {
+            "sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+            "url": "https://studio.napkin.ie/out/sha256:9999999999999999999999999999999999999999999999999999999999999999",
+            "mime": "video/mp4"
+          },
+          "inS": 0,
+          "outS": 6,
+          "takeSize": {
+            "w": 1920,
+            "h": 1080
+          },
+          "outpaint": true
+        }
+      ],
+      "layers": [
+        {
+          "kind": "supers",
+          "box": {
+            "x": 0.08,
+            "y": 0.5,
+            "w": 0.84,
+            "h": 0.1
+          },
+          "text": "Every morning starts somewhere.",
+          "plate": "#000000"
+        }
+      ]
+    }
+  }
+}

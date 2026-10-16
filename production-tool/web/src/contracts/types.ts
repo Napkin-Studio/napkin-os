@@ -84,6 +84,35 @@ export type SafeArea =
   | { type: 'box'; width: number; height: number; unit: '%' | 'px' | 'mm'; basis: 'full_size'; anchor: 'centre' }
 export interface DeliveryPx { width: number; height: number }
 
+// ── Make all sizes (features/campaign-formats.clan; common.schema.json) ──
+/** A box in a picture's own pixels, origin top-left. */
+export interface PxBox { x: number; y: number; w: number; h: number }
+/** What must stay in every size: a subject or a product, in the master's pixels. */
+export interface ProtectBox extends PxBox { role: 'subject' | 'product' | 'other'; label?: string }
+export const FORMAT_CHANNELS = ['film', 'social', 'ooh', 'print', 'display'] as const
+export type FormatChannel = (typeof FORMAT_CHANNELS)[number]
+export const SIZE_METHODS = ['crop', 'extend', 'nearest', 'reframe', 'regenerate', 'layout', 'reedit'] as const
+export type SizeMethod = (typeof SIZE_METHODS)[number]
+export const TYPE_LAYER_KINDS = ['line', 'logo', 'supers', 'legal'] as const
+export type TypeLayerKind = (typeof TYPE_LAYER_KINDS)[number]
+export interface TypeLayerOverride { hidden?: boolean; text?: string; box?: Region; scale?: number }
+export const FORMAT_CHECK_CODES = ['subject_safe', 'logo_safe', 'clear_space', 'type_size', 'ooh_words', 'line_present', 'end_card', 'sound_off', 'brand_first_3s'] as const
+export type FormatCheckCode = (typeof FORMAT_CHECK_CODES)[number]
+export interface FormatCheck { result: 'pass' | 'flag'; note: string; ignored?: { by: PersonRef; at: string } }
+export interface SizeEdlWindow { shot_id: Id; take_id?: Id; in_s: number; out_s: number; crop?: PxBox; end_card?: boolean }
+/** relay-api TypeLayer: one type layer laid out for one size; the relay or stitch draws it. */
+export interface TypeLayer {
+  kind: TypeLayerKind
+  box: Region
+  text?: string
+  image?: AssetRef
+  sizeFrac?: number
+  colour?: string
+  align?: 'left' | 'centre' | 'right'
+  weight?: 'regular' | 'bold'
+  plate?: string
+}
+
 export const REF_ROLES = ['character', 'location', 'lighting', 'composition', 'product', 'style', 'wardrobe', 'pose', 'prop', 'texture', 'colour', 'layout', 'logo', 'palette', 'typography', 'brand_rule', 'document', 'other'] as const
 export type RefRole = (typeof REF_ROLES)[number]
 export interface RefRoleLine {
@@ -576,8 +605,12 @@ export interface DocDocument extends EntityBase {
   read: { state: 'unread' | 'reading' | 'read' | 'failed'; pages_read: number }
 }
 export interface FormatSet extends EntityBase {
-  master: { kind: 'frame' | 'ref' | 'render' | 'video'; id: Id }
+  /** picture: a canvas picture node (its id is the node's). asset, w, h: the master's picture when the set was made. */
+  master: { kind: 'frame' | 'ref' | 'render' | 'video' | 'picture'; id: string; asset?: Sha256; w?: number; h?: number }
   pack: { pack_id: string; pack_version: string; client_id?: string }
+  plan?: { kind: 'pack' | 'plan'; id: string; lengths_s?: number[] }
+  protect?: { boxes?: ProtectBox[]; takes?: Record<Id, ProtectBox[]>; keep_middle?: boolean }
+  copy?: { line?: string; legal?: string; supers?: string[] }
 }
 export interface Size extends EntityBase {
   set_id: Id
@@ -587,10 +620,22 @@ export interface Size extends EntityBase {
   delivery: DeliveryPx
   bleed_mm?: number
   safe_area?: SafeArea
-  method: 'crop' | 'extend' | 'nearest' | 'reframe'
+  method: SizeMethod
   media: 'image' | 'video'
   asset?: Sha256
   job_id?: Id
+  /** Absent: not made yet. */
+  status?: 'making' | 'ready' | 'look' | 'stale'
+  locked?: boolean
+  /** The master's asset it was made from. */
+  from_asset?: Sha256
+  /** The part of the master it shows, in the master's pixels. */
+  crop?: PxBox
+  crop_by?: 'rule' | 'person'
+  layers?: Partial<Record<TypeLayerKind, TypeLayerOverride>>
+  length_s?: number
+  edl?: SizeEdlWindow[]
+  checks?: Partial<Record<FormatCheckCode, FormatCheck>>
 }
 export interface Check extends EntityBase {
   target: Target
@@ -832,6 +877,27 @@ export interface JobInput {
   answer?: JobAnswer
   /** upscale: how many times each side grows (features/image-editor.clan). */
   scale?: 2 | 4
+  /** resize: one size of a format set (features/campaign-formats.clan). */
+  resize?: ResizeInput
+  /** cutdown: a length or shape of the film from the same takes (phases 5 and 6). */
+  cutdown?: CutdownInput
+}
+
+export interface ResizeInput {
+  method: SizeMethod
+  masterSize: Aspect
+  protect?: ProtectBox[]
+  crop?: PxBox
+  previewMaxPx?: number
+  background?: string
+  layers?: TypeLayer[]
+}
+export interface CutdownInput {
+  lengthS: number
+  clips: { asset: AssetRef; inS: number; outS: number; takeSize?: Aspect; crop?: PxBox; outpaint?: boolean; endCard?: boolean }[]
+  endCard?: boolean
+  fadeOutS?: number
+  layers?: TypeLayer[]
 }
 
 export type WriteIntent = 'draft' | 'tighten' | 'fit_seconds' | 'add_beat' | 'write_vo' | 'rephrase' | 'cut_name'
@@ -922,6 +988,8 @@ export interface Job {
   cost: Cost
   /** clip_patch only: what was patched and how (relay-api Job.patch). */
   patch?: JobPatch
+  /** resize only: how the size was made. */
+  resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number }
   /** A clip_patch answered "Remake the whole clip": the client makes this op through the send tray. */
   handoff?: { op: 'clip' }
   createdAt: string

@@ -62,7 +62,9 @@
       "maxS": 15,
       "label": "Mock"
     },
-    "upscale": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}, "label": "Mock"}
+    "upscale": {"model": "mock", "endpoint": "mock://image", "defaults": {"outputs": 1}, "label": "Mock"},
+    "resize": {"model": "mock", "endpoint": "mock://image", "method": "extend", "defaults": {"outputs": 1}, "label": "Mock"},
+    "cutdown": {"model": "mock", "endpoint": "mock://video", "method": "reframe", "defaults": {"durationS": 3}, "label": "Mock"}
   },
   "models": {
     "mock": {"maker": "napkin", "label": "Mock", "pricing": {"unit": "image", "credits": 0, "source": []}},
