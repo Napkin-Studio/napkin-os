@@ -29,6 +29,9 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const [choice, setChoice] = useState(choices[0])
   const [lengths, setLengths] = useState<number[]>(DEFAULT_LENGTHS)
   const [extra, setExtra] = useState('')
+  const earlierCopy = setsOf(doc, master).find((s) => s.copy)?.copy
+  const [line, setLine] = useState(earlierCopy?.line ?? '')
+  const [legal, setLegal] = useState(earlierCopy?.legal ?? '')
   // Asked once per master: an earlier set's answer is used again.
   const earlier = setsOf(doc, master).find((s) => s.protect)?.protect
   const [boxes, setBoxes] = useState<ProtectBox[]>(earlier?.boxes ?? [])
@@ -51,7 +54,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
     setError(null)
     try {
       const plan = { kind: choice.kind, id: choice.id, lengths_s: rows.some((r) => r.media === 'video') ? lengths : undefined }
-      const { el } = await makeAllSizes(deps, { master, plan, protect: { boxes: keepMiddle ? [] : boxes, keep_middle: keepMiddle }, rows, near }, by)
+      const { el } = await makeAllSizes(deps, { master, plan, protect: { boxes: keepMiddle ? [] : boxes, keep_middle: keepMiddle }, copy: { line, legal }, rows, near }, by)
       onMade(el)
       onClose()
     } catch (e) {
@@ -98,6 +101,12 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
                   }
                 }} />
             </div>
+            <div className="cf-label">Words on every size</div>
+            <div className="cf-words">
+              <input className="cf-input" value={line} maxLength={200} placeholder="The brand line (optional)" aria-label="The brand line" onChange={(e) => setLine(e.target.value)} />
+              <input className="cf-input" value={legal} maxLength={600} placeholder="Legal (optional)" aria-label="Legal" onChange={(e) => setLegal(e.target.value)} />
+            </div>
+            <p className="cf-note">The line, the logo from the Brand board and legal are laid out on each size as layers, drawn on our server; never sent to a model. Edit them on any tile.</p>
             <p className="cf-note">{rows.length} formats. Films are cut from the ad's own takes; stills are made from {master.media === 'video' ? 'a key visual' : 'this picture'}.</p>
             <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" onClick={next}>Next</button></footer>
           </div>

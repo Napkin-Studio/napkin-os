@@ -42,6 +42,8 @@ export interface MakeRequest {
   master: MasterInfo
   plan: { kind: 'plan' | 'pack'; id: string; lengths_s?: number[] }
   protect: { boxes: ProtectBox[]; keep_middle?: boolean }
+  /** The words every size lays out (type layers). */
+  copy?: { line?: string; legal?: string }
   rows: TrayRow[]
   /** The canvas element of the master, to place the board beside it. */
   near?: CanvasElement
@@ -119,6 +121,7 @@ export async function makeAllSizes(deps: CampaignDeps, req: MakeRequest, by: Per
     pack: { pack_id: req.plan.id, pack_version: PACKS_VERSION },
     plan: { kind: req.plan.kind, id: req.plan.id, ...(req.plan.lengths_s?.length ? { lengths_s: req.plan.lengths_s } : {}) },
     protect: { boxes: req.protect.boxes, ...(req.protect.keep_middle ? { keep_middle: true } : {}) },
+    ...(req.copy?.line?.trim() || req.copy?.legal?.trim() ? { copy: { ...(req.copy.line?.trim() ? { line: req.copy.line.trim() } : {}), ...(req.copy.legal?.trim() ? { legal: req.copy.legal.trim() } : {}) } } : {}),
   }
   const ranks = ranksBetween(null, null, rows.length)
   const sizes = rows.map((r, i) => sizeFromRow(r, setId, ranks[i], req.master, req.protect.boxes))

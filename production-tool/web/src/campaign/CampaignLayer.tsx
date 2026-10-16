@@ -230,7 +230,7 @@ function Tile({ size, set, box, masterUrl, safe, stale, zoom, picked, adjusting,
           ? <img className="cb-master" src={masterUrl} alt="" draggable={false} style={{ width: master.w * s, height: master.h * s, left: -crop.x * s, top: -crop.y * s }} />
           : url ? <img className="cb-made" src={url} alt={`${f ? shortName(f.format) : size.format.format_id}`} draggable={false} />
             : <div className="cb-empty">{size.media === 'video' ? 'Film' : 'Not made yet'}</div>}
-        {typing && crop && <TypeOverlay size={size} set={set} box={box} />}
+        {(typing || showMaster) && crop && <TypeOverlay size={size} set={set} box={box} />}
         {safe && (fr[0] || fr[1] || fr[2] || fr[3]) ? (
           <div className="cb-safe" aria-hidden="true">
             <span style={{ left: 0, top: 0, right: 0, height: `${fr[1] * 100}%` }} />
