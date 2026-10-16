@@ -115,6 +115,20 @@ QUOTA_CLASS = dict(_COMMON["opQuotaClass"]["const"])
 # No provider: the director, the stitch Lambda, Skye (writer.py), or Rhea's cut-out (cutout.py).
 INTERNAL_OPS = {"shot_list", "stitch", "write", "cutout"}
 # Ops contract 3 names that this relay does not build yet: 422 capability_missing before quota or spend.
+# The Image editor's Remove (relay-api input.remove; features/image-editor-masks-layers.clan, 2026-10-16):
+# the person writes nothing, so the relay writes the removal. The director reads them as words that
+# remove (director prompt, region_edit), and the passthrough sends them as they are.
+REMOVE_WORDS = ("Remove what is inside the masked area completely and fill it with the surrounding background, "
+                "continuing its light, texture and perspective, so nothing is left there and nothing new appears.")
+
+
+def words_for_remove(inp: dict) -> dict:
+    """A Remove's input as the director reads it: the removal in words, without the flag."""
+    if not inp.get("remove"):
+        return inp
+    return {**{k: v for k, v in inp.items() if k != "remove"}, "text": REMOVE_WORDS}
+
+
 BUILT_OPS = {"generate", "view", "shot_list", "frame", "region_edit", "frame_edit", "clip", "clip_edit", "clip_patch",
              "stitch", "write", "upscale", "cutout"}
 # Ops whose job is the picture itself: no words for the director to write (features/image-editor.clan).
@@ -1373,7 +1387,7 @@ class Relay:
             if use_config:  # config.json's director block: the model ids and prompt version
                 use_config(self.config().get("director") or {})
             req = job["_req"]
-            raw = req.get("input") or {}
+            raw = words_for_remove(req.get("input") or {})
             if req["op"] == "clip_patch":
                 # Dex writes for the cut, never the whole take: the window the relay cut out, and the frame
                 # at the note's moment (the edited still when the person made one).
