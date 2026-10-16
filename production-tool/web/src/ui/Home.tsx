@@ -116,7 +116,7 @@ export function Home() {
                   <span className="eyebrow">New project</span>
                   <h2>Make a new ad</h2>
                   <p>Draw or drop your characters on the canvas, write the script, and the crew plans the shots, draws the frames and makes the clips.</p>
-                  <button className="hm-go" tabIndex={-1} disabled={!!state.busy}>＋ New project</button>
+                  <button className="btn primary hm-go" tabIndex={-1} disabled={!!state.busy}>＋ New project</button>
                   <div className="hm-say"><b>{sayer('dex')}</b>Bring a picture or a line of script. I'll take it from there.</div>
                   <CrewLine />
                 </div>

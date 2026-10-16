@@ -51,7 +51,7 @@ job), `documentId()`, `flush()`, `startMirror()`/`mirrorNow()`, `dispose()`.
 ## Who did what: people and the crew
 
 A person's write is claimed as `human:<personId>`; the crew's as their id
-(`dex`, `skye`, `wren`, `rhea`, `edie`, `ellis`, `jude`). A job's result lands
+(`dex`, `skye`, `wren` (Fin), `rhea`, `edie`, `ellis` (Nell), `jude`). A job's result lands
 as one batch: one decision, agent the crew member, citing
 `<doc>#jobs[<jobId>]`, with `landingWhy()`'s rationale (what the director
 decided, the model, cost, time and outputs). A job that ends with no result is

@@ -63,4 +63,4 @@ export function menuName(me: { handle?: string; name?: string } | null | undefin
 }
 
 /** Dex's first-visit line on Home: what to bring, and who does what with it (the crew row above names each). */
-export const FIRST_AD = 'Draw or drop your characters and write a few lines of script. Skye drafts the rest, I plan the shots, Wren renders the frames and clips, Rhea retouches them and Edie edits the ad. Ellis reads your notes back; Jude checks each result.'
+export const FIRST_AD = 'Draw or drop your characters and write a few lines of script. Skye drafts the rest, I plan the shots, Fin films the frames and clips, Rhea retouches them and Edie edits the ad. Nell notes what you ask for and reads it back; Jude judges each result.'

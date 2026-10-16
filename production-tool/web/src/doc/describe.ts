@@ -129,7 +129,7 @@ export function describeWrite(action: string, before: ProductionDocument, after:
   if (action.startsWith('complete ')) return null
   if (QUIET.has(action)) return null
   switch (action) {
-    // Sketch areas (features/frame-aspect.clan): a person's frame made into one, Wren's ask on one, its answer.
+    // Sketch areas (features/frame-aspect.clan): a person's frame made into one, Fin's ask on one, its answer.
     case 'sketch area': {
       const s = Object.values(after.sketches).find((x) => !before.sketches[x.id])
       return s ? { action: `create sketch area ${s.ratio ?? `${s.aspect.w}:${s.aspect.h}`}`, rationale: words(`${s.aspect.w}×${s.aspect.h} from a frame`, s.id) } : null

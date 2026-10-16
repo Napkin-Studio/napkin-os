@@ -1,6 +1,6 @@
 // Spec 3.20's sequence (artboard 15), written through LocalPatchBus on the real
 // napkin-wasm, then read back as a tree from /chain: Skye's draft kept, Dex's
-// plan, Wren's v1, Jude's flag, the ask answered, v2, Rhea's v3, Jude passes,
+// plan, Fin's v1, Jude's flag, the ask answered, v2, Rhea's v3, Jude passes,
 // Keep both (pinned), then restore v2.
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -75,7 +75,7 @@ describe('the decision tree from /chain (spec 3.20)', () => {
       prose: proseFromLines('action', ['The bottle opens; the fizz rises.']) }],
     }, { action: 'plan shots[shot 3]', agent: 'dex', cites: [`${docId}#jobs[${plan.id}]`], rationale: 'An insert on the bottle: the fizz is the product moment.' })
 
-    // 3. Wren renders v1.
+    // 3. Fin films v1.
     const frame = async (version: number, crew: string, kind: string, c: string, parent?: string) => {
       const j = job(kind === 'edited' ? 'cutout' : 'frame', crew, { kind: 'shot', id: shot })
       const fid = id('frame')
@@ -109,7 +109,7 @@ describe('the decision tree from /chain (spec 3.20)', () => {
       { op: 'set', entity: 'asks', id: q, path: 'state', value: 'answered', base_version: 1 },
     ], why: { action: 'answer Bigger how?: Move the camera in' } }, { undo: false })
 
-    // 6-8. Wren's v2, Rhea's v3 (patched), and Jude passes v3.
+    // 6-8. Fin's v2, Rhea's v3 (patched), and Jude passes v3.
     const v2 = await frame(2, 'wren', 'generated', '2', v1)
     const v3 = await frame(3, 'rhea', 'edited', '3', v2)
     await check(v3, 'pass', 'logo_clear_space')

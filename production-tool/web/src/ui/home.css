@@ -37,15 +37,17 @@
 /* ── New project, Open a file ── */
 .hm-starts { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 34px; }
 .hm-new {
-  position: relative; overflow: hidden; border-radius: var(--r-panel); padding: 24px 26px; color: #fff; display: flex; flex-direction: column; gap: 10px; min-height: 176px; cursor: pointer;
-  background: linear-gradient(135deg, var(--tool) 0%, color-mix(in oklab, var(--tool) 70%, #7c3aed) 100%); box-shadow: var(--shadow-soft);
+  /* The page's surface and a 1px line, like Open a file beside it (owner, 2026-10-15): every crew
+     colour reads on it, Dex's cobalt too. The button is the first-run Home's brand-orange primary. */
+  position: relative; overflow: hidden; border-radius: var(--r-panel); padding: 24px 26px; color: var(--ink); display: flex; flex-direction: column; gap: 10px; min-height: 176px; cursor: pointer;
+  background: var(--card); border: 1px solid var(--line);
 }
-.hm-new .eyebrow { color: rgba(255, 255, 255, 0.75); }
+.hm-new:hover { border-color: var(--tool); }
 .hm-new h2 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
-.hm-new p { margin: 0; opacity: 0.88; max-width: 440px; line-height: 1.45; }
-.hm-go { margin-top: auto; display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; background: #fff; color: var(--tool); border: 0; height: 34px; padding: 0 16px; border-radius: var(--r-pill); font: 700 13px var(--f-display); cursor: pointer; }
-.hm-say { position: absolute; right: 22px; top: 20px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 12px; padding: 8px 11px; font-size: 12px; max-width: 230px; line-height: 1.4; }
-.hm-say b { display: block; font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; margin-bottom: 2px; }
+.hm-new p { margin: 0; color: var(--ink2); max-width: 440px; line-height: 1.45; }
+.hm-go { margin-top: auto; align-self: flex-start; height: 34px; }
+.hm-say { position: absolute; right: 22px; top: 20px; background: var(--soft); border: 1px solid var(--line-soft); color: var(--ink2); border-radius: 12px; padding: 8px 11px; font-size: 12px; max-width: 230px; line-height: 1.4; }
+.hm-say b { display: block; font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink2); margin-bottom: 2px; }
 .hm-crewline { position: absolute; right: 22px; bottom: 18px; display: flex; align-items: flex-end; gap: 6px; }
 .hm-crewline svg { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18)); }
 .hm-new:focus-visible, .hm-open:focus-visible, .hm-card:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
@@ -107,12 +109,12 @@
 .hm-mate svg { margin-bottom: 4px; }
 .hm-mate b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .hm-mate span { font: 500 10.5px var(--f-mono); letter-spacing: 0.04em; color: var(--ink3); }
-.hm-mate.lead b { color: var(--tool-ink); }
 .hm-mate.house:not(.house ~ .house) { margin-left: 14px; padding-left: 22px; border-left: 1px dashed var(--line); }
 .hm-empty b { font-size: 16px; }
 .hm-empty p { margin: 0; color: var(--ink2); max-width: 520px; line-height: 1.5; }
 .hm-empty .row { display: flex; gap: 8px; }
-.hm-sayer { font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--tool-ink); }
+/* Every crew name in one colour, none highlighted (owner, 2026-10-15). */
+.hm-sayer { font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink2); }
 
 /* ── footer ── */
 .hm-foot { margin-top: 26px; display: flex; align-items: center; gap: 10px; color: var(--ink3); font-size: 12.5px; flex-wrap: wrap; }

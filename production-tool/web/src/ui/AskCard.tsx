@@ -33,7 +33,7 @@ export function AskOptions({ q, disabled, onPick }: { q: Question; disabled: boo
   )
 }
 
-/** `onLocalAnswer`: for an ask with no job (Wren's on a sketch area, features/frame-aspect.clan), the answer is
+/** `onLocalAnswer`: for an ask with no job (Fin's on a sketch area, features/frame-aspect.clan), the answer is
  *  written to the document here and handed back, and the caller goes ahead with it. `docked`: shown by the ask
  *  dock (ui/AskDock.tsx), which shows what no card in its place does; any other card places the ask (askPlaces). */
 export function AskCard({ ask, onLocalAnswer, docked = false }: { ask: Ask; onLocalAnswer?: (answer: AnswerChoice) => Promise<void> | void; docked?: boolean }) {

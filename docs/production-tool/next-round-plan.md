@@ -540,7 +540,7 @@ Record: [`features/campaign-formats.clan`](../../features/campaign-formats.clan)
 
 **The approach (D, a method per format)**
 
-- Wren asks once what must stay. Each format is then a free crop when that holds, an Ideogram extend
+- Fin asks once what must stay. Each format is then a free crop when that holds, an Ideogram extend
   for moderate gaps, or a Gemini regeneration for extreme shapes. Banners are a layout.
 - Type, logo, supers and the end card are layers laid out per format, never painted into pictures.
 - Cutdowns re-edit the same takes. Dex picks the beats and Edie cuts.

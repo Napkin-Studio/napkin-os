@@ -152,7 +152,7 @@
     },
     "crewId": {
       "enum": ["dex", "skye", "wren", "rhea", "edie", "ellis", "jude"],
-      "description": "The crew (ui-behaviour 5.1): Dex directs, Skye scripts, Wren renders, Rhea retouches, Edie edits; Ellis reads and Jude checks are the house agents. Stable ids: the names on screen may change, these do not."
+      "description": "The crew (ui-behaviour 5.1): Dex directs, Skye scripts, Fin films, Rhea retouches, Edie edits; Nell notes and Jude judges are the house agents. Stable ids: the names on screen may change, these do not (wren is Fin, ellis is Nell)."
     },
     "tenantId": {
       "type": "string",
@@ -391,7 +391,7 @@
     "madeBy": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$", "description": "The provider that made an output, as recorded at the time. Free, not the routing enum." },
     "op": {
       "enum": ["generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch", "frame_edit", "clip_patch", "bridge", "cutout", "transcribe", "write", "read", "check", "resize", "cutdown", "upscale"],
-      "description": "generate: a new image from 1-14 inputs. view: a turnaround view. shot_list: Dex plans shots from a script (no provider). frame: a storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: change a clip. stitch: render the ad. frame_edit: change this frame. clip_patch: fix a moment's window and splice it. bridge: a clip between two shots. cutout: Rhea's cut-out. transcribe: Ellis reads ink. write: Skye drafts or rewrites. read: Ellis reads a document. check: Jude checks a result. resize: Make all sizes on a still. cutdown: a video cut-down. upscale: Rhea upscales. Ops with no builder yet answer 422 capability_missing."
+      "description": "generate: a new image from 1-14 inputs. view: a turnaround view. shot_list: Dex plans shots from a script (no provider). frame: a storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: change a clip. stitch: render the ad. frame_edit: change this frame. clip_patch: fix a moment's window and splice it. bridge: a clip between two shots. cutout: Rhea's cut-out. transcribe: Nell reads ink. write: Skye drafts or rewrites. read: Nell reads a document. check: Jude judges a result. resize: Make all sizes on a still. cutdown: a video cut-down. upscale: Rhea upscales. Ops with no builder yet answer 422 capability_missing."
     },
     "quotaClass": {
       "enum": ["image", "video", "render", "text"],

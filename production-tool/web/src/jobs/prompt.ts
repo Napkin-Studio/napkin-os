@@ -6,7 +6,7 @@
 //               Skye's `write` (intent draft) lands as a suggestion on it, Keep / Keep mine / Why.
 //   Storyboard  Dex's `shot_list` plans from the line, sent as the script when the script is empty.
 //   Video       the same plan, on the storyboard the video renders from (linked first when none is).
-//   Image       a shot's: Wren's `frame` from the words; a picture node's: Wren's `generate`, then
+//   Image       a shot's: Fin's `frame` from the words; a picture node's: Fin's `generate`, then
 //               the person names it with a role (3.6) and it becomes a reference.
 //
 // Every start sends the node's scope (model/scope.ts scopeOf: what is linked into it) and the
@@ -223,7 +223,7 @@ export function videoSeconds(d: Doc, videoId: Id): number {
 
 // ── image ───────────────────────────────────────────────────────────────────
 
-/** A shot's first frame from words (its Image editor while it has none): Wren's frame job. */
+/** A shot's first frame from words (its Image editor while it has none): Fin's frame job. */
 export async function frameFromWords(deps: FrameDeps, shotId: Id, words: string): Promise<string> {
   const d = deps.doc.get()
   const index = shotsOf(d).findIndex((s) => s.id === shotId)
@@ -241,7 +241,7 @@ export function pictureJob(d: Doc, nodeId: Id) {
 }
 
 /**
- * A picture node from words (decision 1): Wren's generate, the existing image path, words only plus
+ * A picture node from words (decision 1): Fin's generate, the existing image path, words only plus
  * the node's scope. Its outputs land in the document's assets (jobs/runner); naming it is the next step.
  */
 export async function pictureFromWords(deps: FrameDeps, nodeId: Id, words: string, ratio?: Ratio): Promise<string> {

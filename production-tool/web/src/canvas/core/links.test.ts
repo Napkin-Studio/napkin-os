@@ -160,8 +160,8 @@ describe('checkLink: the limits', () => {
 
   it('a target with a running job refuses with the job’s line', () => {
     const g = graph([['p', 'picture'], ['v', 'video']])
-    const busy = (id: string) => (id === 'v' ? 'Wren is still making clip 4.' : undefined)
-    expect(checkLink(g, 'p', 'v', 'reference', { busy })).toEqual({ ok: false, reason: 'Wren is still making clip 4. Link it when that\'s done.' })
+    const busy = (id: string) => (id === 'v' ? 'Fin is still making clip 4.' : undefined)
+    expect(checkLink(g, 'p', 'v', 'reference', { busy })).toEqual({ ok: false, reason: 'Fin is still making clip 4. Link it when that\'s done.' })
     expect(checkLink(g, 'p', 'v', 'reference')).toEqual({ ok: true })
   })
 

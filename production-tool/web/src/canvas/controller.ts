@@ -365,7 +365,7 @@ export class CanvasController {
    * clicked (top-left of the new node); without it the node goes beside the selection.
    */
   /** `modelChoice`: the model picked on the Generate popover (absent: the routed default). `layoutOnly`: the
-   *  answer to Wren's ask on a sketch with no words ("Use it as a layout only"). */
+   *  answer to Fin's ask on a sketch with no words ("Use it as a layout only"). */
   async generate(elIds: string[], typed: string, opts: { at?: { x: number; y: number }; more?: boolean; limits?: { max: number; characters: number }; modelChoice?: ModelChoice; layoutOnly?: boolean } = {}): Promise<GenerateResult> {
     let plan = planSelection(this.els(), elIds)
     if (plan.pending.length) throw new Error('One of these is still being made. Wait for it, or leave it out.')
@@ -516,7 +516,7 @@ export class CanvasController {
     const text = instruction(typed, [...notes, ...written.map((w) => ({ text: w }))])
     const said = mentions(doc, text)
     if (said.unknown.length) throw new Error(`@${said.unknown[0]} is not a name in this project. Name an image first, or check the spelling.`)
-    // Nothing says what it is: Wren asks first, and nothing is sent (or spent) until someone answers.
+    // Nothing says what it is: Fin asks first, and nothing is sent (or spent) until someone answers.
     if (!text && !plan.images.length && !said.found.length && !opts.layoutOnly) return { ask: await this.askAboutSketch(s.sketchId) }
 
     const limits = opts.limits ?? { max: 14, characters: 14 }
@@ -574,7 +574,7 @@ export class CanvasController {
     return moved
   }
 
-  /** Wren's ask on a sketch with no words and nothing linked: an asks[id] row on the sketch, with no job. */
+  /** Fin's ask on a sketch with no words and nothing linked: an asks[id] row on the sketch, with no job. */
   private async askAboutSketch(sketchId: string): Promise<Ask> {
     const open = Object.values(this.doc().asks).find((a) => a.node.kind === 'sketch' && a.node.id === sketchId && a.state === 'open' && !a.job_id)
     if (open) return open

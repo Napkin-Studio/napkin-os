@@ -1,8 +1,8 @@
 // The Production Tool's cast (features/production-tool-look.clan): three of the house
 // agents, as the app's figures draw them (app/src/studio/model.ts), and who is shown
 // for which job. Dex is the Production Tool's own: the director (historyItems.ts
-// AgentKind 'director'), in the tool's cobalt. Ellis and Jude are the house sheet's,
-// with the same names and looks as in every app.
+// AgentKind 'director'), in the tool's cobalt. Nell (id 'ellis') and Jude are the house sheet's
+// looks; the names follow the job (owner, 2026-10-15). Ids stay as stored: wren is Fin, ellis is Nell.
 
 import type { CrewId, DocJob, JobState, ModelChoice } from '../../contracts/types'
 import type { JobPurpose } from '../../doc/ui'
@@ -22,15 +22,15 @@ export const CAST: Readonly<Record<CastKey, CastMember>> = {
   // New here: a cobalt hex with a viewfinder for a mark.
   dex: { given: 'Dex', job: 'directs', role: 'Plans the shots, draws the frames and makes the clips.', look: { shape: 'hex', emblem: 'frame', tone: 'cobalt' } },
   // The house sheet's Extract and Judge (LOOK_OF.extract, LOOK_OF.judge).
-  ellis: { given: 'Ellis', job: 'reads', role: 'Reads your notes back before anything is made again.', look: { shape: 'triangle', emblem: 'page', tone: 'ink' } },
+  ellis: { given: 'Nell', job: 'notes', role: 'Notes what you asked for and reads it back before anything is made again.', look: { shape: 'triangle', emblem: 'page', tone: 'ink' } },
   // The crew of the approved UI (BRIEF-2 A, docs/production-tool/ui-mocks/crew-figures.json):
-  // Skye a coral column with a page, Wren a marigold star with a spark, Rhea a mint dome with
+  // Skye a coral column with a page, Fin a marigold star with a spark, Rhea a mint dome with
   // dots, Edie an iris stack with bars. agents.test.ts checks every one against the sheet.
   skye: { given: 'Skye', job: 'scripts', role: 'Drafts and rewrites the script.', look: { shape: 'column', emblem: 'page', tone: 'coral' }, phase: 0.924 },
-  wren: { given: 'Wren', job: 'renders', role: 'Makes frames and clips on Runway.', look: { shape: 'star', emblem: 'spark', tone: 'marigold' }, phase: 0.939 },
+  wren: { given: 'Fin', job: 'films', role: 'Films the frames and clips on Runway.', look: { shape: 'star', emblem: 'spark', tone: 'marigold' }, phase: 0.939 },
   rhea: { given: 'Rhea', job: 'retouches', role: 'Cut-outs, fills and upscales.', look: { shape: 'dome', emblem: 'dots', tone: 'mint' }, phase: 0.497 },
   edie: { given: 'Edie', job: 'edits', role: 'Splices moments and renders the ad.', look: { shape: 'stack', emblem: 'bars', tone: 'iris' }, phase: 0.347 },
-  jude: { given: 'Jude', job: 'checks', role: 'Checks each result as it lands, and says when one needs you.', look: { shape: 'card', emblem: 'tick', tone: 'ink' } },
+  jude: { given: 'Jude', job: 'judges', role: 'Judges each result as it lands, and says when one needs you.', look: { shape: 'card', emblem: 'tick', tone: 'ink' } },
 }
 
 /** The whole crew in the crew sheet's order (5.1): five who make the ad, then the two house agents. */
@@ -56,7 +56,7 @@ export function castOf(crew: CrewId | undefined): CastKey {
 }
 
 /** Who makes each op when the job names no crew member (ui-behaviour 5.1): Dex plans and directs,
- *  Skye writes, Wren renders on Runway, Rhea retouches, Edie edits, Ellis reads, Jude checks. */
+ *  Skye writes, Fin films on Runway, Rhea retouches, Edie edits, Nell notes, Jude judges. */
 export const MAKER_OF: Readonly<Record<DocJob['op'], CastKey>> = {
   shot_list: 'dex', frame_edit: 'dex',
   write: 'skye',
@@ -115,7 +115,7 @@ export function whoIsWorking(job: Pick<DocJob, 'op'> & Partial<Pick<DocJob, 'pro
   if (state === 'needs_input') return { agent: maker, state: 'needs-you', line: `Waiting for you: ${name} has a question about ${what}` }
   const moved = fellBack(ctx?.fallbackFrom, job.provider)
   const note = moved ? ` · ${moved}` : ''
-  if (state === 'validating' || state === 'uncertain') return { agent: 'jude', state: 'working', line: `Jude is checking ${what}${note}` }
+  if (state === 'validating' || state === 'uncertain') return { agent: 'jude', state: 'working', line: `Jude is judging ${what}${note}` }
   if (state === 'completed') return { agent: maker, state: 'idle', line: `${name} made ${what}${note}` }
   const verb = VERB[job.op] ?? 'making'
   return { agent: maker, state: 'working', line: (state === 'queued' ? `${name} is waiting to start ${what}` : `${name} is ${verb} ${what}`) + note }

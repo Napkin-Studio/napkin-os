@@ -19,7 +19,7 @@ export const PROMPT_COPY = {
   script: { placeholder: 'Paste a script, or write the idea in a line.', hint: 'Enter: Skye drafts it here · Shift+Enter: new line', busy: 'Skye is drafting from your line' },
   storyboard: { placeholder: 'Describe the ad in a line', hint: 'Dex plans the shots from it', fromScript: 'Dex plans the shots from the script.', busy: 'Dex is planning the shots' },
   video: { placeholder: 'Describe it in a line or two. Type @ to pull in a character, place or product.', busy: 'Dex is planning the shots' },
-  image: { placeholder: 'Describe the picture', hint: 'Wren makes it, then you say what it is', busy: 'Wren is making the picture' },
+  image: { placeholder: 'Describe the picture', hint: 'Fin makes it, then you say what it is', busy: 'Fin is making the picture' },
   later: 'You can always switch later.',
 } as const
 
