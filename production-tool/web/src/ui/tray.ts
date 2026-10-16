@@ -63,7 +63,7 @@ export function whereIs(job: Pick<DocJob, 'op'>, ctx: JobCtx | undefined): { sta
 }
 
 /** What the job button says, in words (its tooltip, its screen-reader label, the popover's first row):
- *  the lead job's line, then the counts ("Wren is making frame 3 · 3 running · 1 queued"), then failures. */
+ *  the lead job's line, then the counts ("Fin is making frame 3 · 3 running · 1 queued"), then failures. */
 export function jobLine(g: TrayGroups, leadLine: string | undefined): string {
   const counts = g.working.length + g.waiting.length > 1 || !leadLine ? trayLabel(g) : ''
   const failed = g.needsYou.length ? `${g.needsYou.length} failed` : ''

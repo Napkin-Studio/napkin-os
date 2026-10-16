@@ -1,7 +1,7 @@
 // Texts linked into a node are its input words (features/canvas-text.clan; owner 2026-10-16: "yes,
 // text should link to nodes too"). A job the node sends carries them in JobInput.text after the
 // person's own words, as the words written in a sketch area are (canvas/selection.ts instruction), so
-// Dex, Skye and Wren read them the same way; the job's inputs keep a 'text' row for each.
+// Dex, Skye and Fin read them the same way; the job's inputs keep a 'text' row for each.
 // A shot reads the texts linked into its storyboard and into the videos that storyboard renders.
 
 import type { Id, JobInput, JobInputRow, LinkEndpoint, Op, ProductionDocument } from '../contracts/types'
