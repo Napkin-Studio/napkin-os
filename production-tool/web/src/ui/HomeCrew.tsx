@@ -10,7 +10,7 @@ export function CrewRow({ size = 44 }: { size?: number }) {
   return (
     <ul className="hm-crew" aria-label="The crew">
       {CREW_ORDER.map((k) => (
-        <li key={k} className={`hm-mate${HOUSE_AGENTS.includes(k) ? ' house' : ''}${k === 'dex' ? ' lead' : ''}`} title={CAST[k].role}>
+        <li key={k} className={`hm-mate${HOUSE_AGENTS.includes(k) ? ' house' : ''}`} title={CAST[k].role}>
           <AgentFigure agent={k} size={size} decorative />
           <b>{CAST[k].given}</b>
           <span>{CAST[k].job}</span>

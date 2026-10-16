@@ -144,7 +144,7 @@ The reference campaign has a 16:9 key visual at 2K and a 30 s film of 10 shots. 
 
 ### The rules D follows
 
-1. **Ask once what must stay.** Wren asks "What must stay in every size?" and you tap the subject and
+1. **Ask once what must stay.** Fin asks "What must stay in every size?" and you tap the subject and
    the product. The answer is stored on the set as protected boxes: one per still master, one per
    shot for video. The logo and type come from the Brand board as layers.
 2. **Pick a method for each format** (the thresholds are set by the paid tests):
@@ -190,9 +190,9 @@ The reference campaign has a 16:9 key visual at 2K and a 30 s film of 10 shots. 
  │       ( ) Print ( ) Display ( ) Film ( ) Mine  │
  │ Film lengths: [30] → [15] [6]   + length      │
  └───────────────────────────────────────────────┘
-        │ (first time) Wren: "What must stay in every size?"  → tap Maya, the bottle
+        │ (first time) Fin: "What must stay in every size?"  → tap Maya, the bottle
         ▼
- Send tray · "What Wren will make" (no prices)
+ Send tray · "What Fin will make" (no prices)
    ☑ Reels 9:16 · 1440×2560 ........ Extend
    ☑ Feed 4:5 · 1440×1800 .......... Crop
    ☑ 48-sheet · 6.1×3.0 m .......... Crop

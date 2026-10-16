@@ -1,6 +1,6 @@
 // The canvas controller on a sketch area (features/frame-aspect.clan), over a fake
 // CanvasAdapter, a fake runner and the snapshot document store: what Generate sends,
-// Wren's ask, the landing, the views' shape, and a person's frame becoming an area.
+// Fin's ask, the landing, the views' shape, and a person's frame becoming an area.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -211,7 +211,7 @@ describe('Generate on a sketch area', () => {
   })
 })
 
-describe('Wren’s ask on a sketch with no words and nothing linked', () => {
+describe('Fin’s ask on a sketch with no words and nothing linked', () => {
   it('asks first and sends nothing until it is answered', async () => {
     withFrame(t)
     const r = await t.ctrl.generate(['F'], '')

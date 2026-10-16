@@ -20,7 +20,7 @@ What every screen in the overhauled Production Tool does. The owner approves thi
 2. **Meaning lives in the `.clan`; the canvas holds only where things are.** Boards, shots, references, links, jobs, notes and versions are document entities, and each is written by one server as a validated patch. Excalidraw holds geometry and ids only. If the screen and the document ever disagree, the document is right and the screen redraws.
 3. **Nothing is silent.** Every running job is visible, along with who started it. Every fallback, passthrough, splice, condensation, crop and failure is said in words where it happened. A tool never quietly drops an `@name`, truncates text, changes a ratio or switches model.
 4. **Costs live in the decision tree, and you see what is sent.** No price, cost or credit count appears anywhere in the UI: not on buttons, menus, model picks, the send tray, toasts, job cards, asks or admin views. Every job records what it cost, and the decision tree (History, 3.20) is the one place that shows it. Every paid generation, on Runway or on ElevenLabs (sound, 3.21), opens the send tray, "What Dex will send" (3.16), which lists each input and the model. Nothing goes to a provider until you press the tray's **Generate**. Batches open the tray expanded (section 5.4). Work that runs on your device says "on your device".
-5. **Nothing changes until you choose.** Agent proposals arrive as previews with a diff: Skye's rewrites, Dex's camera changes, Ellis's reading of your ink, fuzzy `@` matches, Rhea's crops of a character sheet, a spin-in from Brief Maker. The canvas or the document changes only on Apply, Keep, Link it, Confirm or Bring in, and one undo reverses that step.
+5. **Nothing changes until you choose.** Agent proposals arrive as previews with a diff: Skye's rewrites, Dex's camera changes, Nell's reading of your ink, fuzzy `@` matches, Rhea's crops of a character sheet, a spin-in from Brief Maker. The canvas or the document changes only on Apply, Keep, Link it, Confirm or Bring in, and one undo reverses that step.
 6. **Each tool works on its own; agents ask when the input is thin.** This is an owner decision from 2026-10-13. The flow (references → script → storyboard → video) gives the best results, but any node can run alone. When an input is ambiguous or missing, the agent asks a question with options instead of guessing (section 3.17, artboard 4c). The job waits in `needs_input`. An ask blocks only when no option can proceed; otherwise at least one option proceeds. Asks never time out into a guess. Asks are shared: anyone in the project can answer, and History records who did.
 7. **Scope is what you link.** A generating node uses only what is linked to it: boards, groups, single references, notes and documents (3.16). Nothing nearby is used because it is nearby.
 8. **Plain words.** Use short sentences from your side of the screen ("Make video", "Insert a shot here"). Name the agent doing the work. Name a model as "<model> on Runway". No jargon, no percentages for certainty. Rationale text stays off the working surfaces; it lives in the decision tree, one **Why** away (3.20). Section 10 has the rules.
@@ -173,7 +173,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 | Frame (made from a sketch) | Picture, version, ratio badge, the model that made it ("Gemini 3 Pro on Runway") | Open, Use in shot N, Make all sizes |
 | Sketch area | White, ratio-locked rectangle, "16:9 locked", "drawn by Shrey", inputs strip | Generate |
 | Ink group | Strokes inside a dashed group box | Convert to text |
-| Document | File name, pages, an excerpt Ellis read ("client_notes.docx · 2 pages") | Link to use as context |
+| Document | File name, pages, an excerpt Nell read ("client_notes.docx · 2 pages") | Link to use as context |
 | Format set | The master's thumbnail, then one tile per size labelled with format and size, Jude's flags | Open, Export zip |
 
 **Generating nodes** are the nodes that send work to an agent: Script, Storyboard, Video, Sketch area and Format set. Each has an **inputs strip** and a send tray (3.16).
@@ -193,7 +193,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 
 **Delete.** The Delete or Backspace key on a selected node:
 - If nothing is running, it deletes at once with an undo toast.
-- If a job is still running on it, it first asks "Wren is still making clip 4. Stop it and delete?". This is today's Character stage behaviour (`stages/Character.tsx:157`).
+- If a job is still running on it, it first asks "Fin is still making clip 4. Stop it and delete?". This is today's Character stage behaviour (`stages/Character.tsx:157`).
 
 ### 3.4 Ports and the linking rules
 
@@ -210,7 +210,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 | Reference → any generating node, or a Shot | its role (`character`, `location`, `lighting`, …) | Many | The reference joins that node's `@` vocabulary and gets its own link with a "<name> · <role>" chip in the inputs strip. Dex words its role ("lighting reference: match its light only"). |
 | Board or group → any generating node | `input` | One link per board or group | Everything on the board or in the group joins the node's scope. The strip shows "Loc1 · Coast · 3". |
 | Note, ink group or Document → any generating node | `note` or `context` | Many | The text joins the node's instructions (a note) or its background (a document). A document is used only once linked. |
-| Brand board → any generating node | `brand` | One | Dex writes the brand rules into every prompt; Jude checks results against them (3.18). |
+| Brand board → any generating node | `brand` | One | Dex writes the brand rules into every prompt; Jude judges results against them (3.18). |
 | Frame, key visual or Video → Format set | `master` | One master per set | Make all sizes adapts the master (3.19). Created by Make all sizes. |
 | Image, frame or generated picture → Shot | `frame` or `layout` (asks which on drop) | One `frame`, one `layout` per shot | Used as the shot's frame, or as a layout guide. |
 | Sketch area → Frame | `made from` | Created by the system only | Records where a frame came from. |
@@ -231,7 +231,7 @@ A node is a typed Excalidraw element plus an image-element preview plus React ov
 - **Pointer:** a dashed blue line follows it, and the Link tool shows as pressed (`aria-pressed`).
 - **Compatible input ports glow blue.** Over one, a tooltip at the pointer reads "Drop to link · drives".
 - **Incompatible nodes dim to 40%** and refuse the drop. Only the nearest dimmed node shows its reason, for example "A script cannot feed a product" or "Not a target for a script".
-- **A node with a running job is never dimmed during a link drag** (decided 2026-10-13), so its status stays readable. It still refuses the drop while the job runs ("Wren is still making clip 4. Link it when that's done."). Other people's selections, cursors and name tags are never dimmed.
+- **A node with a running job is never dimmed during a link drag** (decided 2026-10-13), so its status stays readable. It still refuses the drop while the job runs ("Fin is still making clip 4. Link it when that's done."). Other people's selections, cursors and name tags are never dimmed.
 - **The selection bar hides during the drag** and comes back on drop (decided 2026-10-13; artboard 2 keeps it up only to fit one frame).
 
 **Dropping a link:**
@@ -343,9 +343,9 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 - **The picker sets the ratio of the next area only.** An existing area's ratio never changes. Its resize handles keep the ratio.
 - **A sketch area is not an Excalidraw frame**, because frames don't nest. Strokes that intersect it belong to it for export (plan 2.2).
 - **On today's canvas** (until canvas-nodes brings the tool): a person's own frame used in Generate becomes a sketch area in one undo step, keeping its exact bounds and shape (its ratio when it is one of the four), with its strokes left where they are. Frames never used in Generate stay frames. Deleting an area keeps the frames made from it; the confirm says "The 2 frames made from it stay".
-- **Generate** (the area's button, as on artboards 4b and 4c) opens the send tray (3.16) with the sketch, its linked inputs and any handwriting Ellis read. The tray's **Generate** sends a ratio-true export to Runway and returns a frame at that ratio:
-  - Wren renders. No price is shown (owner decision 2026-10-13: costs are recorded per job and shown only in History).
-  - A sketch with no words and no linked references gets Wren's ask, "What is this sketch of?", with **Use it as a layout only** (proceeds) and **Describe it** (3.17).
+- **Generate** (the area's button, as on artboards 4b and 4c) opens the send tray (3.16) with the sketch, its linked inputs and any handwriting Nell read. The tray's **Generate** sends a ratio-true export to Runway and returns a frame at that ratio:
+  - Fin films. No price is shown (owner decision 2026-10-13: costs are recorded per job and shown only in History).
+  - A sketch with no words and no linked references gets Fin's ask, "What is this sketch of?", with **Use it as a layout only** (proceeds) and **Describe it** (3.17).
   - When the model's output size isn't exactly the ratio, it is centre-cropped.
   - The frame says so: "1344×756 · cropped to 16:9".
 - **The new frame:** it appears to the right of the area with a `made from` link, and offers **Use in shot N**, which sets it as that shot's frame (one step). "Make another frame" makes a new version beside it.
@@ -362,20 +362,20 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 
 **Selection bar for an ink group:** **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
 
-**Idle suggestion** (decision D13): 2 s after you stop writing, Ellis may show a quiet chip, "Ellis can read this", that opens the same preview. Nothing converts on its own.
+**Idle suggestion** (decision D13): 2 s after you stop writing, Nell may show a quiet chip, "Nell can read this", that opens the same preview. Nothing converts on its own.
 
-**Ink inside a sketch area or linked as a note** is read by Ellis when you press Generate. The tray lists the reading ticked but marked **confirm**, with **Edit** (3.16). Untick it to leave it out, or Edit to correct it. The ink itself is never changed by this.
+**Ink inside a sketch area or linked as a note** is read by Nell when you press Generate. The tray lists the reading ticked but marked **confirm**, with **Edit** (3.16). Untick it to leave it out, or Edit to correct it. The ink itself is never changed by this.
 
 **Convert to text:**
-1. A preview card opens: "Ellis read: 'more golden light, she should laugh'".
+1. A preview card opens: "Nell read: 'more golden light, she should laugh'".
    - The reading is in an editable text field.
    - Certainty is said in words ("sure of it", "not sure about one word"), never as a percentage.
    - Fuzzy `@` matches come as chips ("laugh → @maya_laughing?") with **Link it** and **No**. An unmatched word gets the wavy warn underline.
 2. **Keep** (primary) replaces the ink with a text element in one undo step. The text shows "Text from your ink · the ink is kept", with **Back to ink**. The strokes are kept in `customData`. Accepted links carry into the text as mentions.
 3. **Undo** (secondary, in the card) closes the preview. The ink was never touched.
-4. **States while Ellis reads:**
-   - **Working:** Ellis's figure working, with "Ellis is reading your note".
-   - **Error:** "Ellis couldn't read this. Try again, or type it." The ink is unchanged.
+4. **States while Nell reads:**
+   - **Working:** Nell's figure working, with "Nell is reading your note".
+   - **Error:** "Nell couldn't read this. Try again, or type it." The ink is unchanged.
    - **Offline:** Convert is disabled with "Needs a connection".
 
 ### 3.9 The selection bar
@@ -515,7 +515,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 **Sub bar:**
 - "6 shots · 15.0 s of 15 s", with a length chip. It is ok when the total matches the ad length, and warn otherwise ("0.6 s over · Rebalance").
-- Crew status lines, each with the agent's figure working, a mono tag (PLANNING, RENDERING), the line, and "started by" ("Wren is rendering clip 1 · about 0:40 left · started by Shrey").
+- Crew status lines, each with the agent's figure working, a mono tag (PLANNING, RENDERING), the line, and "started by" ("Fin is filming clip 1 · about 0:40 left · started by Shrey").
 - A stale count chip ("1 clip out of date"), then **+ Add shot**.
 
 **Shot cards:**
@@ -526,7 +526,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
   - four camera chips (size, angle, movement, lens);
   - two lines of action with blue `@refs`;
   - Direction.
-- **Clip badges:** "Clip ready" (ok), "Clip out of date · frame changed" (warn) with **Remake clip**, "Rendering clip" (Wren's figure working), "No clip yet" (grey).
+- **Clip badges:** "Clip ready" (ok), "Clip out of date · frame changed" (warn) with **Remake clip**, "Rendering clip" (Fin's figure working), "No clip yet" (grey).
 - **Hovering a frame** dims it and shows "Open in image editor". A click opens the Image editor (review item 4). Badges stay readable above the dimming.
 
 **Insert between shots** (review item 3):
@@ -638,7 +638,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 **Top bar:**
 - "← Canvas", "Video · First Light" and "16:9 · 15 s".
 - The **Picture | Sound** switch.
-- The running-job pill ("Wren · renders: shot 5, take 2 · about 0:40 left · started by Sai"; in the Sound view while the mix rebuilds, "Edie · edits: mixing your changes into mix v4 · started by you").
+- The running-job pill ("Fin · films: shot 5, take 2 · about 0:40 left · started by Sai"; in the Sound view while the mix rebuilds, "Edie · edits: mixing your changes into mix v4 · started by you").
 - Presence.
 - Ad versions (v1, v2), with **Compare**.
 - **History** (3.20).
@@ -668,7 +668,7 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 - **Main track:** drag a clip to reorder, and the track closes gaps itself. Same rank write and drift marks as the storyboard.
   - A clip shows its take ("4 · Close · v3").
   - A spliced range is marked with a crossfade edge and a label ("patched 0:02-0:04").
-  - A clip being rendered shows Wren's figure working ("take 2 rendering").
+  - A clip being rendered shows Fin's figure working ("take 2 rendering").
 - **Beats:** diamonds at exact times, with labels. Beats move with their shot.
 - **End card:** the last clip, edited like any shot. A shot that is mostly text (an end card, a tagline card) is never sent to a video model, because the words would garble: it is a still with sound layers, "end card + layers" (3.21).
 
@@ -685,9 +685,9 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 5. **Fix this moment** (primary in the panel) shows "Edie · edits: regenerates only 0:02-0:04 on Aleph 2 on Runway and splices it back".
    - The result is a **new take** (v3, parent v2) that replaces its parent in the cut.
    - The seams get short crossfades.
-   - Jude checks both seams ("v3's seams at 0:02 and 0:04 match the take around them").
+   - Jude judges both seams ("v3's seams at 0:02 and 0:04 match the take around them").
 6. **The note stays open** after a fix. Running Fix again makes v4. **Resolve** closes the note.
-   - **Sound on a patched take.** Aleph 2 keeps the clip's own sound, so a Path 1 line inside the window still plays as it was. When the change alters what should be heard (heavier rain, a door that now slams), Jude flags the layers in that window: "Jude · checks: the picture changed at shot 4, 0:02–0:04. The rain effect may not match now", with **Redo this cue** and **It's fine**.
+   - **Sound on a patched take.** Aleph 2 keeps the clip's own sound, so a Path 1 line inside the window still plays as it was. When the change alters what should be heard (heavier rain, a door that now slams), Jude flags the layers in that window: "Jude · judges: the picture changed at shot 4, 0:02–0:04. The rain effect may not match now", with **Redo this cue** and **It's fine**.
    - **A note about the sound** ("the music is too loud here") is the same note. In the Sound view its window shades every lane, and the fixes are the sound ones (redo a line, cue or section, or a level; 3.21). Fix this moment stays the picture fix.
 7. **Fallback** when Aleph 2 isn't available: Veo 3.1 first/last frame over the window, generated at 4 s and trimmed. The panel says so before you run it ("Aleph 2 on Runway isn't available. Veo 3.1 on Runway will make 4 s and we'll keep the 2 s you need"). On a Path 1 shot the fallback makes new sound for the window, so the panel adds "Her line in this window will be said again. Check it after." An extend (Gemini Omni Flash on Runway) remakes the sound of the whole clip, and says the same for the whole shot.
 
@@ -776,7 +776,7 @@ From top to bottom:
   - "Text · instruction: she runs toward the sea";
   - "@maya_side · character, placed as drawn";
   - "@loc1_beach with your marks · markup (clean + marked copy)";
-  - "Handwriting read by Ellis: 'brighter sky' · instruction", ticked but marked **confirm**, with **Edit**;
+  - "Handwriting read by Nell: 'brighter sky' · instruction", ticked but marked **confirm**, with **Edit**;
   - "@ref_golden_hour · lighting (linked)";
   - "Brand rules · Lumen Water" when the Brand board is linked (3.18);
   - a document, as "context".
@@ -784,7 +784,7 @@ From top to bottom:
 - **Nearby notes that aren't linked** are listed last, unticked: "2 notes nearby aren't included", with **Include**. Include links the note to the node (one undo step) and ticks it, so the scope stays what you linked.
 - **Unknown names** show as a row: "1 name isn't a reference: @jogger", with **Fix it**. Generate still works; the name goes as plain text.
 - **Footer:** the model and ratio ("Gemini 3 Pro on Runway · 16:9"), **Cancel** and **Generate** (primary). No price.
-- **Collapsed by default.** It opens as one line: "Sketch, 4 inputs, 1 note", with **Generate** and an expand control. ("Note" counts handwriting or notes Ellis read.) Expanding shows the rows above, where you can untick any input. If you expand it, that choice is remembered per person. Batches always open expanded (5.4).
+- **Collapsed by default.** It opens as one line: "Sketch, 4 inputs, 1 note", with **Generate** and an expand control. ("Note" counts handwriting or notes Nell read.) Expanding shows the rows above, where you can untick any input. If you expand it, that choice is remembered per person. Batches always open expanded (5.4).
 - **Nothing is sent until the tray's Generate.** Cancel or Esc closes it; nothing is sent and nothing on the canvas changes. Generate starts a job, which Stop ends (undo never cancels a job, 4.5).
 - **States:** offline, Generate is disabled with "Needs a connection". While the inputs are still loading, rows show the pending stripes and Generate waits.
 
@@ -802,7 +802,7 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 **The ask card:**
 - Anchored to its node, not modal. The node shows "Waiting for you · Make video".
 - Orange needs-you border, the Research tool's rule.
-- Signed by the agent who owns the step, with its figure in the needs-you state: Dex for planning and direction, Skye for the script, Wren for renders.
+- Signed by the agent who owns the step, with its figure in the needs-you state: Dex for planning and direction, Skye for the script, Fin for frames and clips.
 - The question, one line of why, the options as buttons with their detail, and the text box when `allow_text` is true. `@` works in the text box.
 - **Later** hides the card. The job keeps waiting and the node keeps "Waiting for you". Asks never time out into a guess.
 
@@ -839,16 +839,16 @@ An ask is how an agent gets an answer instead of guessing (principle 6).
 
 **Dropped files:**
 - **Images** become references, by the rules of 3.6.
-- **A brand book (PDF)** creates a **Brand board** at once ("Brand board · Rules here guide every frame"), which fills in as Ellis reads: "Ellis · reads: page 14 of 32", with a page strip and "Pages 15 to 32 still to read".
+- **A brand book (PDF)** creates a **Brand board** at once ("Brand board · Rules here guide every frame"), which fills in as Nell reads: "Nell · notes: page 14 of 32", with a page strip and "Pages 15 to 32 still to read".
   - It holds Logo variants, Palette, Fonts, Tone of voice, and Do / Don't. Each item is a reference with the role `logo`, `palette`, `typography` or `brand_rule`, and can be edited.
   - **Font files are never taken from a PDF.** Fonts show their name and use with "no file", and the line "Font files are not taken from the PDF. Upload the fonts you are licensed to use.", with **Upload fonts**.
 - **A character sheet** (one image with several views, such as `maya_sheet.png`): Rhea proposes view crops ("@maya_front, @maya_side, @maya_back") and asks "Are these crops right?", with **Adjust** (move the crop boxes) and **Confirm**. The references are created only on Confirm, as one undo step.
-- **A DOCX** becomes a Document node ("client_notes.docx · 2 pages"). Ellis reads the text. It is used as context only once linked ("Link to use as context").
+- **A DOCX** becomes a Document node ("client_notes.docx · 2 pages"). Nell reads the text. It is used as context only once linked ("Link to use as context").
 - **Fonts** go to the linked Brand board's Fonts.
 
 **Brand rules.**
 - When the Brand board is linked to a generating node, Dex writes its rules into the prompts. The send tray lists them (3.16).
-- Jude checks each result against them and flags a break on the result, naming the rule: "Jude · checks: the logo sits too close to the edge (clear space rule, Brand board)", with **Fix in image editor** (3.12) and **Ignore**.
+- Jude judges each result against them and flags a break on the result, naming the rule: "Jude · judges: the logo sits too close to the edge (clear space rule, Brand board)", with **Fix in image editor** (3.12) and **Ignore**.
 - Brand rules never block. Ignore is recorded on the result, with who ignored it.
 
 **Spin-in from Brief Maker or Research.** A card arrives on the canvas: "From Brief Maker: Lumen 'First Light' brief", listing what it will create ("Script: Skye drafts from the proposition and tone", "References: 4 from the research").
@@ -881,17 +881,17 @@ Exports are free. A large export shows its progress in a toast and lands as a do
 
 **Make all sizes** works on a selected key visual (a frame or picture) or on the film (a Video). It is one button in the selection bar (3.9).
 1. You pick a pack, or keep the last one used for this client.
-2. Wren adapts the master to every format in the pack:
+2. Fin adapts the master to every format in the pack:
    - crops where the picture has room;
    - extends on Runway where it doesn't;
    - for extreme ratios, generates at the nearest ratio Runway supports, then crops or extends;
    - keeps the logo and copy inside each format's safe area, by the Brand board's rules when it is linked.
-3. When the subject is unclear, Wren asks first: "What must stay in every size?" (3.17).
+3. When the subject is unclear, Fin asks first: "What must stay in every size?" (3.17).
 4. The send tray lists every size with its method (crop, extend or generate; a plain crop runs on your device). You can untick sizes. No prices and no total.
 5. The results land as a **Format set** node linked to the master (`master`), one tile per size. Jude flags brand-rule breaks per size, with Fix in image editor and Ignore.
 6. **Export zip** downloads one zip with every file named by format and size.
 
-- **Video cut-downs** are part of the first release: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. Wren makes them the same way, and they land as a Format set of the film.
+- **Video cut-downs** are part of the first release: 9:16, 1:1 and 4:5 from the 16:9 film, reframed with subject tracking. Fin makes them the same way, and they land as a Format set of the film.
 - **When the master changes,** the set goes out of date ("Master changed · 3 sizes out of date"), with **Update sizes**.
 - **Undo:** Make all sizes is a job, so undo never cancels it (4.5); Stop does. Deleting the set is one undo step, as for any node.
 
@@ -935,7 +935,7 @@ The decision tree is how you read that chain. It replaces today's flat History p
 
 **The tree branches with versions.** Each version is a node with its tag (v1, v2, v3). A **Keep both** pick forks the tree: the kept versions sit side by side, one marked "In the cut" and the other "alternate" ("You picked Keep both: v3 goes in the cut", with `frames[3].current: v3` and `frames[3].alternates: [v2]`). A re-plan from a changed script forks the same way.
 
-Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya keeps it → Dex plans shot 3 (Why expanded) → Wren renders v1 → Jude's check fails it (logo clear space) → you answer Dex's ask "Bigger how?" with Camera → Wren renders v2, camera moved in → Rhea retouches v2 (cuts out the bottle, clears the logo) → v3 patched, Jude passes it → you pick Keep both, v3 in the cut (pinned). On the Storyboard card, frame 3 shows "v3 + v2 kept", Rhea's mark and **why?**.
+Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya keeps it → Dex plans shot 3 (Why expanded) → Fin films v1 → Jude's check fails it (logo clear space) → you answer Dex's ask "Bigger how?" with Camera → Fin films v2, camera moved in → Rhea retouches v2 (cuts out the bottle, clears the logo) → v3 patched, Jude passes it → you pick Keep both, v3 in the cut (pinned). On the Storyboard card, frame 3 shows "v3 + v2 kept", Rhea's mark and **why?**.
 
 **Restore this version** sits on every version node.
 - Restoring makes that version current again. It is **itself a new decision**, added at the end of the chain with you as the actor. History is never rewritten or deleted.
@@ -947,7 +947,7 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 
 **States:**
 - **Empty** (a new project): "Nothing decided yet. Every choice you and the crew make lands here."
-- **Loading:** Ellis's figure working, 64px, with "Ellis is reading the history".
+- **Loading:** Nell's figure working, 64px, with "Nell is reading the history".
 - **Live:** new decisions arrive at the end while the panel is open. A filtered panel shows only those that match.
 - **Offline:** the panel shows what was loaded, with "Reconnecting…". Restore is disabled with "Needs a connection".
 
@@ -955,7 +955,7 @@ Artboard 15's example is frame 3, oldest first: Skye drafts the line and Maya ke
 
 Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.md` and the three documents it draws on). **Sound is chosen per shot, on one shared sound system.** Every shot takes a path; every path feeds the same layers, the same mix and the same checks.
 - **No costs anywhere in sound** (principle 4). No path, model pick, take, Redo button, voice, preview, send-tray row, loudness card or export shows a price, credit count or estimate, and choosing a path never mentions what it costs. Every sound job's cost is recorded and shown only in the decision tree (3.20), with the path picks, takes used, voice changes and Jude's checks.
-- **No chat** (principle 10). Agents act on the items: Dex's signed line on the shot list, Wren's and Edie's lines on the items they work, Jude's checks with fix buttons, Skye's asks and inline suggestions. The only text boxes belong to an item (a line's words, how to say a take, a cue's description, a voice description).
+- **No chat** (principle 10). Agents act on the items: Dex's signed line on the shot list, Fin's and Edie's lines on the items they work, Jude's checks with fix buttons, Skye's asks and inline suggestions. The only text boxes belong to an item (a line's words, how to say a take, a cue's description, a voice description).
 
 **The paths:**
 
@@ -1012,14 +1012,14 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 - **Re-voice to Maya's voice** (on-screen lines from a Path 1 shot) turns the clip model's voice into the character's own voice, speech to speech. It keeps the timing to the hundredth of a second: "Both keep the timing, so her lips still match."
 - **Redo this cue** remakes an effect or ambience from its description, which you can edit first. A hit keeps its place on the motion.
 - **Redo this section** remakes one music section and blends it into the sections on either side. The rest of the music stays.
-- Each goes through the send tray (3.16), collapsed to one line by default. **Wren · renders** makes the take (her figure working on the item); then **Edie · edits** rebuilds the mix (her figure working on the Mix card; the top-bar pill reads "Edie · edits: mixing your changes into mix v4").
+- Each goes through the send tray (3.16), collapsed to one line by default. **Fin · films** makes the take (her figure working on the item); then **Edie · edits** rebuilds the mix (her figure working on the Mix card; the top-bar pill reads "Edie · edits: mixing your changes into mix v4").
 - **Words changed in the script** mark the line out of date ("Words changed · redo this line"). It keeps playing the old take until you redo it.
 
 **Character voices.** Every character has one voice, used for every line it says, in every shot and in the radio cut (3.22). A voice-over by nobody on screen uses the project's **Narrator** voice. A line's speaker is set in the script (3.10) or in the line's panel. Changing who says a line marks it out of date.
 
-**Jude's checks: the coherence rules R1–R6.** They come from the hackathon remakes, where they took lines heard from 0.06–0.43 to 0.73–1.00 with no voice overlap. Edie builds every mix by them. Jude checks the mix after each change and lists what breaks in the **Jude · checks** card ("2 to look at"). Each check is a quiet line with the fix as a button, plus **Show** (seeks and selects). When everything passes, the card says so in one line: "Hits on the motion. No stray words."
+**Jude's checks: the coherence rules R1–R6.** They come from the hackathon remakes, where they took lines heard from 0.06–0.43 to 0.73–1.00 with no voice overlap. Edie builds every mix by them. Jude judges the mix after each change and lists what breaks in the **Jude · judges** card ("2 to look at"). Each check is a quiet line with the fix as a button, plus **Show** (seeks and selects). When everything passes, the card says so in one line: "Hits on the motion. No stray words."
 
-| Rule | Jude checks | Says when it breaks | Fix (one undo step, then the mix rebuilds) |
+| Rule | Jude judges | Says when it breaks | Fix (one undo step, then the mix rebuilds) |
 |---|---|---|---|
 | **R1 Dialogue sets the shot length** | A shot with a line runs at least to the end of the speech plus 0.25 s. The last spoken shot also leaves room for the tagline. | "Line runs past the shot: shot 4 grows 0.6 s" | **Grow it, shot 1 gives 0.6 s**: the dialogue shot grows and the time comes from a neighbouring action shot, so the ad keeps its length. It never shortens the line. If the clip has no spare frames, the fix says "Shot 4 needs a longer take" and goes through the send tray. |
 | **R2 Every on-screen line is lip-synced** | Each on-screen line is on a Path 1 shot, or has a lip-sync step. | "Maya speaks in shot 2, but nobody's lips move" | **Make it Path 1**, **Lip-sync it**, or **Make it a voice-over**. |
@@ -1075,7 +1075,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
   - an audition text box, 100 to 400 characters ("158 · 100 to 400"), pre-filled with the character's own lines;
   - **Make 3 previews**, the screen's only primary button. It goes through the send tray. Rounds are numbered ("round 2"), and earlier rounds stay listed;
   - three previews, each with Play and **Use**; the one in use says "In use";
-  - Jude listens to each round and says which previews say the brand names right: "Jude · checks: I listened to all three. Only 2 keeps the accent on 'Lumen'."
+  - Jude listens to each round and says which previews say the brand names right: "Jude · judges: I listened to all three. Only 2 keeps the accent on 'Lumen'."
 - **Clone from a sample:**
   - a sample file ("maya_read_take3.wav · 1:24 · 1 to 2 minutes works best");
   - **Whose voice is this?**, the speaker's name, required;
@@ -1096,7 +1096,7 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 
 **Who it belongs to** (a radio group): **This project only**, **Lumen Water shelf** (the default), or **All of Napkin Studio**. Below: "Designed by Shrey · 13 Oct · v2". A voice on a shelf is shared like any library item (3.18, 4.8): a new version replaces the old one for everyone, and projects keep their copy until Update.
 
-**States:** making previews shows Wren working on the previews column; a voice that can't be made says why in plain words ("ElevenLabs couldn't make a voice from this description. Say more about the voice."); offline, Use, Make 3 previews and Clone voice are disabled with "Needs a connection".
+**States:** making previews shows Fin working on the previews column; a voice that can't be made says why in plain words ("ElevenLabs couldn't make a voice from this description. Say more about the voice."); offline, Use, Make 3 previews and Clone voice are disabled with "Needs a connection".
 
 ---
 
@@ -1174,26 +1174,26 @@ Added 2026-10-14 from the research (`docs/production-tool/audio-and-models-plan.
 
 ### 5.1 The crew, and who appears for which work
 
-Five make the ad; two house agents, who work in every Napkin tool, read and check. **Names echo the work**, as the house agents' names do (Ellis reads, Jude checks). The renames of 2026-10-13: Wren · renders was Kai, Skye · scripts was Wren, Rhea · retouches was Tess, and Edie's sign-off is "edits" (was "cuts"). Older artboards or notes that use the old names are wrong.
+Five make the ad; two house agents, who work in every Napkin tool, note and judge. **The name matches the job** (owner, 2026-10-15): Dex directs, Skye scripts, Fin films, Rhea retouches, Edie edits, Nell notes, Jude judges. The renames of 2026-10-15: Fin · films was Wren · renders, Nell · notes was Ellis · reads, and Jude's sign-off is "judges" (was "checks"); each keeps their figure and colour, and the stored crew ids stay `wren` and `ellis`. The renames of 2026-10-13: Wren · renders was Kai, Skye · scripts was Wren, Rhea · retouches was Tess, and Edie's sign-off is "edits" (was "cuts"). Older artboards or notes that use the old names are wrong.
 
 | Agent | Sign-off | Figure | Appears for | Where |
 |---|---|---|---|---|
 | Dex | Dex · directs | cobalt hex, viewfinder mark | planning shots, writing prompts (with brand rules), the send tray, camera changes, Bridge, condensing direction, asks about planning and direction; each shot's sound path and the sound plan | Storyboard node and editor, camera fields, the insert menu, the send tray, the Sound view's shot list |
 | Skye | Skye · scripts | coral column, page mark | script drafts (including from a spin-in), rewrites, length fixes, asks about unknown names; looking up looks and references; lines and voice-over, the radio cut's words | Script node and editor (drafts in place, the VO column), References board, the radio cut |
-| Wren | Wren · renders | marigold star, spark mark | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders; voicing lines and making every sound take and voice preview | empty frames and clips, Video board, Format sets, jobs, the Sound view's lanes, the Voice tab |
+| Fin | Fin · films | marigold star, spark mark | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders; voicing lines and making every sound take and voice preview | empty frames and clips, Video board, Format sets, jobs, the Sound view's lanes, the Voice tab |
 | Rhea | Rhea · retouches | mint dome, dots mark | cut-out, fill, change whole frame, upscale, character-sheet crops | Image editor, character sheets |
 | Edie | Edie · edits | iris stack, bars mark | splicing moments, rendering the ad; **mixing**: building the mix from the takes in it, the dips under speech, hits snapped to motion, muting stray words, loudness to target, stems, cue sheet and the radio cut | Video editor timeline, patch windows, the Sound view's Mix card and job pill, phone player |
-| Ellis (house) | Ellis · reads | ink triangle, page mark | reading notes and handwriting, extracting text from files, briefs, brand books and documents; **writing down what a shot's own sound says**, which Jude's word checks use | ink, notes, Convert to text, Brand board, Document nodes, the send tray's "confirm" rows |
-| Jude (house) | Jude · checks | ink card, tick mark | checking each result, seams, retries, brand-rule breaks (per size in a Format set); **the sound checks R1–R6**, lips on dialogue shots, brand names said right in voice previews | check marks and brand flags on frames, clips and sizes; the Sound view's checks card; voice previews |
+| Nell (house) | Nell · notes | ink triangle, page mark | reading notes and handwriting, extracting text from files, briefs, brand books and documents; **writing down what a shot's own sound says**, which Jude's word checks use | ink, notes, Convert to text, Brand board, Document nodes, the send tray's "confirm" rows |
+| Jude (house) | Jude · judges | ink card, tick mark | checking each result, seams, retries, brand-rule breaks (per size in a Format set); **the sound checks R1–R6**, lips on dialogue shots, brand names said right in voice previews | check marks and brand flags on frames, clips and sizes; the Sound view's checks card; voice previews |
 
 **Who does the sound** (3.21, 3.22). No new crew member is added; the sound work is spread over the crew by what each already does:
 - **Dex · directs** picks each shot's path and model and plans the sound: the lines with their speakers, the cues, a music brief per scene.
 - **Skye · scripts** writes the lines and the voice-over, and the radio cut's extra or replacement words, in place.
-- **Wren · renders voices the lines** and makes every sound take: lines, re-voicing, effects, ambience, music sections, voice previews. In the Sound view her signed line names the line ("Wren · renders: saying 'It's perfect!' softer").
+- **Fin · films voices the lines** and makes every sound take: lines, re-voicing, effects, ambience, music sections, voice previews. In the Sound view her signed line names the line ("Fin · films: saying 'It's perfect!' softer").
 - **Edie · edits mixes.** She never makes a take; she builds and measures the mix.
-- **Ellis · reads** writes down the words in a shot's own sound; **Jude · checks** runs R1–R6 on them and on the mix.
+- **Nell · notes** writes down the words in a shot's own sound; **Jude · judges** runs R1–R6 on them and on the mix.
 
-**Open question for the owner:** should sound get its own crew member, for example a "voices" agent who voices the lines, designs the character voices and keeps the pronunciation list, in place of Wren for sound? It would need a name that echoes the work, a shape and colour that fit the crew, and a loader department (sound would most likely lead with create). Until the owner decides, Wren voices and Edie mixes.
+**Open question for the owner:** should sound get its own crew member, for example a "voices" agent who voices the lines, designs the character voices and keeps the pronunciation list, in place of Fin for sound? It would need a name that echoes the work, a shape and colour that fit the crew, and a loader department (sound would most likely lead with create). Until the owner decides, Fin voices and Edie mixes.
 
 **The figures are the house figures** (artboard 13), the same design language as the agents in every other Napkin tool:
 - A flat, bold body in the agent's shape and colour, thin ink legs with feet, a ground shadow, two pill eyes and one mark.
@@ -1206,7 +1206,7 @@ Five make the ad; two house agents, who work in every Napkin tool, read and chec
 - **Signed lines** follow the house pattern: a small speech bubble, the signature in mono ("Skye · scripts"), first person, short ("I tightened scene 3 so the ad fits 15 s.").
 - **The crew's colours belong to the figures only.** The loader never uses them (section 6).
 - **Where work runs, the figure working is the signal** (owner, 2026-10-15): on the node, card, tile, line or panel doing the work. The loader, which says the department of the work, turns only on the busy pointer and in the top bar's job pill (6.5).
-- **This crew replaces today's three-member `ui/agents/cast.ts`.** Today Dex is shown for every make. In the new crew, Wren is shown while Runway renders.
+- **This crew replaces today's three-member `ui/agents/cast.ts`.** Today Dex is shown for every make. In the new crew, Fin is shown while Runway renders.
 
 ### 5.2 Asking (needs_input)
 
@@ -1224,8 +1224,8 @@ Job states extend `JOB_STATES` in `contracts/types.ts` with `needs_input`. "Refu
 |---|---|---|---|---|
 | queued | In the queue | "In the queue, 2 ahead · about 1:30" | Cancel | no |
 | submitting | Sending | "Sending to Runway…" | Cancel | no |
-| submitted / fetching | Rendering | "Wren · renders · about 0:40 left" (progress bar when Runway reports it) | Stop | yes, when it completes |
-| validating | Checking | "Jude · checks @maya matches" | — | — |
+| submitted / fetching | Rendering | "Fin · films · about 0:40 left" (progress bar when Runway reports it) | Stop | yes, when it completes |
+| validating | Checking | "Jude · judges @maya matches" | — | — |
 | needs_input | Waiting for you | the agent's question | the options · Later | no |
 | completed | Done | "Checked by Jude · 1 min ago" | Download · Open | Runway's cost.credits, recorded |
 | failed | Failed | "Runway is busy. Try again." (the reason in plain words) | Retry | what Runway bills, recorded silently (no wording) |
@@ -1267,7 +1267,7 @@ Owner decision 2026-10-13 (fourth round). It supersedes the earlier prices on bu
 ### 5.5 Fallbacks
 
 - **Fallback for pictures stays inside Runway's models.** Runway makes every frame and clip in this overhaul. Sound adds ElevenLabs (3.21), and Runway is its floor: a sound job never fails because ElevenLabs is down.
-- **When ElevenLabs can't make a sound take,** Wren makes it on Runway's ElevenLabs models and says so:
+- **When ElevenLabs can't make a sound take,** Fin makes it on Runway's ElevenLabs models and says so:
   - Lines: "ElevenLabs didn't answer, so I voiced shot 1's line on Eleven v4 on Runway in a stand-in voice. Redo it when ElevenLabs is back." The take is marked "stand-in voice", because a character's designed or cloned voice lives on ElevenLabs.
   - Effects and music: made on Runway's sound models, with the same kind of line and a "Made on <model> on Runway" chip.
 - **When the chosen model can't make something,** the relay makes it on another Runway model and says so:
@@ -1308,12 +1308,12 @@ The leading card says what kind of work is running. The trailing cards are alway
 
 | Leading card | Department | Kinds of work | Usually |
 |---|---|---|---|
-| Orange #FF4F2E | create | generating, rendering frames and clips, retouching, voicing lines and making sound takes and voice previews | Wren · renders, Rhea · retouches |
+| Orange #FF4F2E | create | generating, rendering frames and clips, retouching, voicing lines and making sound takes and voice previews | Fin · films, Rhea · retouches |
 | Ink #14161B | plan | planning, directing, scripting, planning the sound and paths | Dex · directs, Skye · scripts |
-| Light grey #DADDE3 | learn | reading, researching, checking, writing down a shot's own sound, the sound checks | Ellis · reads, Jude · checks, Skye when she looks things up |
+| Light grey #DADDE3 | learn | reading, researching, checking, writing down a shot's own sound, the sound checks | Nell · notes, Jude · judges, Skye when she looks things up |
 | Grey #8B919E | produce | editing, rendering the ad, mixing, loudness, the radio cut, all sizes, exporting | Edie · edits; Make all sizes and cut-downs; exports |
 
-- **The department follows the work, not the agent.** Skye scripting leads with plan; Skye researching leads with learn. Make all sizes leads with produce even though Wren makes the sizes.
+- **The department follows the work, not the agent.** Skye scripting leads with plan; Skye researching leads with learn. Make all sizes leads with produce even though Fin makes the sizes.
 - **Colour is never the only signal.** The loader shows only at 14px (the pointer) and 20px (the top bar's pill); its words come from the pill's line beside it and the pointer's hover-hold label. The light grey learn card is faint on white, and ink is faint on the dark theme. The words beside the loader carry the meaning; the pin keeps the shape readable.
 - **The loader is the brand mark, not a button.** Its create card stays brand orange #FF4F2E. Primary buttons use #D63B1F (section 9).
 
@@ -1335,9 +1335,9 @@ The loader turns in two places only (owner, 2026-10-15):
 | Size | Where | Next to it |
 |---|---|---|
 | 14px | the busy pointer's badge (6.7); presence cursors | hover-hold label |
-| 20px | the top bar's job pill, on the canvas bar, every editor bar (and the phone bar, once it has a job pill) | the lead job's line ("Wren is making the clip for shot 1") |
+| 20px | the top bar's job pill, on the canvas bar, every editor bar (and the phone bar, once it has a job pill) | the lead job's line ("Fin is making the clip for shot 1") |
 
-**Everywhere else a job runs, the crew member doing it shows, working** (5.1): leaning in, stepping, with motion lines, and the signed line beside them ("Wren · renders"). Who appears follows 5.1 (`whoIsWorking` in `ui/agents/cast.ts`): Wren renders frames, clips and images; Dex plans; Skye scripts; Rhea retouches; Edie edits and renders the ad; Ellis reads; Jude checks. Sizes follow 5.1:
+**Everywhere else a job runs, the crew member doing it shows, working** (5.1): leaning in, stepping, with motion lines, and the signed line beside them ("Fin · films"). Who appears follows 5.1 (`whoIsWorking` in `ui/agents/cast.ts`): Fin films frames, clips and images; Dex plans; Skye scripts; Rhea retouches; Edie edits and renders the ad; Nell notes; Jude judges. Sizes follow 5.1:
 
 | Figure size | Where |
 |---|---|
@@ -1348,7 +1348,7 @@ The loader turns in two places only (owner, 2026-10-15):
 
 - **Queued** shows the figure with "is waiting to start"; **checking** (validating, uncertain) shows Jude working; **needs you** shows the figure's "!" bubble (5.2).
 - **Reduced motion:** the figure's static working pose (`AgentFigure.css`), no motion lines moving.
-- **Accessibility.** Loader SVGs and figures at work are `aria-hidden`. The words beside them live in a `role="status"` `aria-live="polite"` region ("Wren is making frame 3"). On iPad, a figure on a node has `role="img"` and a label such as "Wren is making frame 3".
+- **Accessibility.** Loader SVGs and figures at work are `aria-hidden`. The words beside them live in a `role="status"` `aria-live="polite"` region ("Fin is making frame 3"). On iPad, a figure on a node has `role="img"` and a label such as "Fin is making frame 3".
 
 ### 6.6 Reduced motion
 
@@ -1369,7 +1369,7 @@ Either one switches every loader to the full logo, still, with only the leading 
   - It is a DOM element with `pointer-events: none`, positioned with `transform` on `pointermove` (CSS cursors can't animate).
   - `cursor: progress` is the fallback when the element can't render.
 - **Several jobs at once:** the badge leads with the department of your most recently started job, with a small count when more than one is running ("2").
-- **Label:** after the pointer is still for 0.6 s, or on keyboard focus of the badge's status, a dark pill appears: "Wren is making frame 3 · started by you". It hides on the next move.
+- **Label:** after the pointer is still for 0.6 s, or on keyboard focus of the badge's status, a dark pill appears: "Fin is making frame 3 · started by you". It hides on the next move.
 - **It hides:**
   - during a pen stroke, a drag, a port drag or brush painting, and reappears on release;
   - when the pointer leaves the window;
@@ -1468,7 +1468,7 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
   - stroke width;
   - Undo and Redo;
   - **Sheets** and **+ Node**.
-- **Ink group panel** (lasso around handwriting): Ellis's reading first, then **Convert to text**, **Send to shot N** and Delete, with "Converting keeps your ink. Undo brings the strokes back."
+- **Ink group panel** (lasso around handwriting): Nell's reading first, then **Convert to text**, **Send to shot N** and Delete, with "Converting keeps your ink. Undo brings the strokes back."
   - **Send to shot N** attaches the group as a note on the shot. A "note on shot N" link is drawn, and the frame caption gets a red "1 note" badge.
 - **Targets:** every touch target is at least 44px. The top bar is 56px tall. Node **Open** buttons are 44px tall and at least 112px wide in headers, or full width on narrow nodes.
 - **Assets on iPad:** the drawer opens as a sheet over the Boards pill. Drag from it with a finger or the Pencil onto a board.
@@ -1614,10 +1614,10 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | 5 | "Change this frame" understood | Dex classifies the words. A camera change gives a field diff on the shot's camera chips (dashed until Apply). A local change goes to the mask and fill in the Image editor. Passthrough is said. Words that could be either ("bigger") get Dex's "Bigger how?" ask, with no default. | 3.11, 3.12; artboards 8, 9 | Type "make this an overhead aerial shot" on shot 4: the diff shows angle → overhead and size → wide, and Apply writes both fields and marks clip 4 out of date. Split (features/frame-change-edit.clan): **now**, the relay op frame_edit and the pure helpers (jobs/frameEdit.ts): the overhead-aerial words on shot 4 run as a redraw, Dex's reading carries angle → overhead and size → wide, and applyFrameEdit writes both and marks clip 4; checked by the relay pytest, the director.v7 eval and vitest. **With storyboard-editor and image-editor**: the card's bar, the dashed chips and the result card, mounted in the send tray. |
 | 6 | Long performance direction | Direction up to 4,000 with a live counter from the capability sheet; "Veo 3.1 on Runway uses the first 1,000, Dex condenses"; See Dex's 1,000 | 3.10, 3.11; artboards 6, 7, 8 | Paste 1,240 characters: all are kept, the counter reads 1,240 / 4,000, and the clip prompt carries Dex's ≤1,000 version. |
 | 7 | Timed moments inside a shot | Inline Moment pill (⌥M) in the screenplay; moments track and Line tied to a moment in AV; Beats row in the Video editor | 3.10, 3.13; artboards 6, 7, 10 | Add "at 0:02 her eyes open; she says 'It's perfect!'" in shot 4: a beat at 0:02 and a line at 0:03 appear on the timeline, and the clip prompt carries the timestamps. |
-| 8 | A note patches only ~2 s | A note becomes a whole-second window, shown on the timeline and phone scrubber; Edit still; Fix this moment (Aleph 2 on Runway) makes a patched take spliced with crossfades; Jude checks the seams | 3.13, 3.14; artboards 10, 11, 12 | Leave a note at shot 4, 0:03: the window is 0:02–0:04, and v3's frames outside 0:02–0:04 match v2's exactly. |
+| 8 | A note patches only ~2 s | A note becomes a whole-second window, shown on the timeline and phone scrubber; Edit still; Fix this moment (Aleph 2 on Runway) makes a patched take spliced with crossfades; Jude judges the seams | 3.13, 3.14; artboards 10, 11, 12 | Leave a note at shot 4, 0:03: the window is 0:02–0:04, and v3's frames outside 0:02–0:04 match v2's exactly. |
 | 9 | @ autocomplete with thumbnails by role, unknown names underlined | Shared MentionInput: grouped popover with thumbnails, label matching, `#` shots; each row names its board; picking an unlinked reference links its board or group, with Undo; unknown names get a warn underline, "Did you mean" and "Name a new picture"; nothing is dropped at generation | 3.6, 3.10; artboards 3, 6, 7 | Type "@ma": Characters group first with thumbnails. Type "@maya_runing": underlined, with "Did you mean @maya_laughing?". |
 | 10 | Ratio-locked 16:9 sketch area returns 16:9 | Sketch area tool with a ratio picker; the ghost keeps the ratio; Generate goes through the send tray; the export is the area; the result is cropped to the ratio and says so; the Image editor crop keeps the ratio | 3.7, 3.12; artboards 4, 5, 9 | Draw a 16:9 area, sketch, Generate, then Generate in the tray: the frame is exactly 16:9 and says "cropped to 16:9". Repeat for 9:16. The send tray listed the sketch and its inputs before anything was sent. Split (owner, 2026-10-13; features/frame-aspect.clan): **now**, on today's canvas, draw a 16:9 frame, sketch in it (one stroke crossing its edge), Generate from the popover: the frame becomes a sketch area, the result is exactly 16:9 and says "cropped to 16:9"; repeat for 9:16. **With canvas-nodes**: the Sketch area tool, its picker and ghost. **With send-tray**: the tray listed the sketch and its inputs. **With image-editor**: the crop keeps the ratio. |
-| 11 | Handwriting to editable text; scribbles move as one group | Strokes cluster into an ink group; Convert to text opens Ellis's preview with editable text and @ chips; Keep replaces the ink, which is kept for Back to ink and undo | 3.8, 8; artboards 4, 5 | Write "more golden light, she should laugh", Convert, Link it, Keep: text with @maya_laughing appears, and one undo restores the strokes. |
+| 11 | Handwriting to editable text; scribbles move as one group | Strokes cluster into an ink group; Convert to text opens Nell's preview with editable text and @ chips; Keep replaces the ink, which is kept for Back to ink and undo | 3.8, 8; artboards 4, 5 | Write "more golden light, she should laugh", Convert, Link it, Keep: text with @maya_laughing appears, and one undo restores the strokes. |
 
 
 ### 11.1 Owner additions (2026-10-13), and what solves each
@@ -1625,15 +1625,15 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Decision | The interaction | Where | Acceptance test |
 |---|---|---|---|
 | Inputs and scope | Links set scope (one per board or group, one per single reference); inputs strip; focus on select dims the unlinked; "Used by" card; Show all links | 3.4, 3.16; artboard 4b | Select the Storyboard: Loc1 · Coast glows, @loc1_beach shows "shots 1, 2", Loc2 · City dims. Pick @loc2_rooftop in `@`: Loc2 · City is linked with an Undo toast; Undo unlinks it and underlines the mention. |
-| Send tray | "What Dex will send" on every paid generation, rows with checkboxes, Ellis's reading marked confirm, nearby notes unticked with Include, "<model> on Runway", no price, collapsed by default | 3.16, 5.4; artboard 4b | Generate on a sketch area: the tray opens as one line, "Sketch, 4 inputs, 1 note", with no price; expanded, it lists the sketch, 4 inputs and 1 note; nothing reaches Runway until the tray's Generate. |
+| Send tray | "What Dex will send" on every paid generation, rows with checkboxes, Nell's reading marked confirm, nearby notes unticked with Include, "<model> on Runway", no price, collapsed by default | 3.16, 5.4; artboard 4b | Generate on a sketch area: the tray opens as one line, "Sketch, 4 inputs, 1 note", with no price; expanded, it lists the sketch, 4 inputs and 1 note; nothing reaches Runway until the tray's Generate. |
 | Asks, shared | Anchored ask cards signed by the step's owner; hard block only when nothing can proceed; Recommended on nudges, no default on ambiguity; Later; questions pill; "You chose … · in History" with Change; anyone can answer | 3.17, 4.7, 5.2; artboard 4c | Make video from a script alone: Dex asks "Plan a storyboard first?" with Plan first marked Recommended. Sai answers from her laptop: History shows "Sai chose: plan the storyboard first". |
 | Assets and team library | Assets drawer in the rail's place; shelves per client shared across the agency; items with version and publisher; publish replaces for everyone, projects keep their copy | 3.18, 4.8; artboard 4d | Publish @ext_beach v5: the library shows v5 for everyone; an open project still uses v4 and offers Update. |
-| Brand rules | Brand book becomes a Brand board as Ellis reads; no font files from a PDF; Dex writes rules into prompts; Jude flags with Fix in image editor / Ignore; never blocks | 3.18; artboard 4d | Drop a brand PDF: the Brand board appears at once and fills page by page; fonts show "no file". A frame with the logo at the edge gets Jude's clear-space flag and still lands. |
+| Brand rules | Brand book becomes a Brand board as Nell reads; no font files from a PDF; Dex writes rules into prompts; Jude flags with Fix in image editor / Ignore; never blocks | 3.18; artboard 4d | Drop a brand PDF: the Brand board appears at once and fills page by page; fonts show "no file". A frame with the logo at the edge gets Jude's clear-space flag and still lands. |
 | Character sheets, documents, spin-in, export | Rhea proposes crops (Confirm/Adjust); DOCX becomes a Document node used once linked; spin-in card waits for Bring in; Export menu | 3.18; artboard 4d | Drop maya_sheet.png: no reference exists until Confirm. Not now on a spin-in leaves it under From Napkin. |
 | Scamp sheets | Sheets opens the pack picker; a pack drops a board of labelled, ratio-locked sketch areas | 3.19; artboard 4e | Pick Social: a sheet lands with one area per format, each labelled with format and size. |
-| Make all sizes, cut-downs | Wren adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size, with no prices; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
-| The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; turning only on the pointer and in the top bar's pill; the crew member working everywhere else | 6, 6.5; artboard 14 | Generate a frame: the top bar's pill leads with the orange create card, the pointer badge shows it at (+11, +15), Wren's figure works on the frame and nowhere is the logo drawn on the frame, and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
-| The crew as house figures | Dex, Skye, Wren, Rhea, Edie, Ellis and Jude drawn from `AgentFigure`, with idle, working and needs-you states; signed speech bubbles | 5.1; artboard 13 | Raise an ask: the agent's figure shows the "!" bubble, and no loader uses its colour. |
+| Make all sizes, cut-downs | Fin adapts the master per format (crop, extend, nearest ratio), safe areas per the Brand board, ask when the subject is unclear, tray lists every size, Format set node, Jude per size, one zip; video cut-downs in the first release | 3.19; artboard 4e | Make all sizes on the key visual with Social: the tray lists every size, with no prices; the Format set links to the master; the zip's files are named by format and size. Make all sizes on the film gives 9:16, 1:1 and 4:5 cut-downs. |
+| The loader is the logo | The Napkin logo in its own four colours, a centre pin, the 4 s clockwise loop; the department of the work picks the leading card; 0.6 s still finish; turning only on the pointer and in the top bar's pill; the crew member working everywhere else | 6, 6.5; artboard 14 | Generate a frame: the top bar's pill leads with the orange create card, the pointer badge shows it at (+11, +15), Fin's figure works on the frame and nowhere is the logo drawn on the frame, and on finish the full logo holds still for 0.6 s. Turn on Reduce motion: the logo is still and only the leading card pulses. |
+| The crew as house figures | Dex, Skye, Fin, Rhea, Edie, Nell and Jude drawn from `AgentFigure`, with idle, working and needs-you states; signed speech bubbles | 5.1; artboard 13 | Raise an ask: the agent's figure shows the "!" bubble, and no loader uses its colour. |
 | No chat | Inline suggestions with Keep / Keep mine / Why, floating options on a selection, who-wrote-it marks, anchored asks | principle 10, 3.10; artboards 6, 7 | Select a line and press Tighten: Skye's rewrite appears struck and underlined in place, with a signed bubble; nothing changes until Keep. No chat box exists on any surface. |
 | Decision tree | History panel with List and Tree, filters by item, who and kind; Why on any item; versions branch; Restore adds a new decision; pinned decisions | 3.20; artboard 15 | On frame 3 press "Why does this look like this?": the tree opens filtered to frame 3 and shows v2 and v3 as branches. Restore v2: a new decision by you appears at the end, and the older nodes are unchanged. |
 

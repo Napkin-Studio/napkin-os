@@ -122,7 +122,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   const [placeError, setPlaceError] = useState<string | null>(null)
   /** Dex's question when Make video has two scripts or two storyboards (3.5): which one drives. */
   const [which, setWhich] = useState<{ scripts: string[]; storyboards: string[]; at: Pt } | null>(null)
-  /** Wren's ask from a placed Generate on a sketch with no words: answered here, then it goes. */
+  /** Fin's ask from a placed Generate on a sketch with no words: answered here, then it goes. */
   const [asking, setAsking] = useState<{ ask: Ask; job: { ids: string[]; text: string; more: boolean; modelChoice?: ModelChoice }; at: { x: number; y: number } } | null>(null)
 
   const refresh = useCallback(() => {
@@ -318,7 +318,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
     }
   }, [placing, ctrl, canvas, limits])
 
-  /** The answer to Wren's ask from a placed Generate: layout only goes as it is; described, its words go. */
+  /** The answer to Fin's ask from a placed Generate: layout only goes as it is; described, its words go. */
   const onAskAnswered = useCallback(async (answer: AnswerChoice) => {
     if (!ctrl || !asking) return
     const { job, at } = asking
@@ -751,7 +751,7 @@ function FloatingToolbar({ ctrl, selected, toView, onDelete, onPlace, limits, on
   }
 
   const preview = ctrl.preview(ids)
-  // A sketch area counts on its own: its strokes are the sketch, and words are optional (Wren asks).
+  // A sketch area counts on its own: its strokes are the sketch, and words are optional (Fin asks).
   const usable = preview.inputs.length + preview.drawings + preview.notes.length + (preview.sketch ? 1 : 0) > 0
   const single = meaningful.length === 1 ? imageOf(meaningful[0]) : undefined
   const singleImage = single?.asset ? single : undefined
@@ -853,7 +853,7 @@ function GeneratePopover({ ctrl, ids, at, limits, onClose, onPlace }: {
   const choice = pick ?? lastWorkedModel(doc, 'generate', config)
   const modelChoice = choiceToSend('generate', config, choice)
   const preview = ctrl.preview(ids, choice?.model ?? modelChoicesFor('generate', config)[0]?.model)
-  /** Wren's ask on a sketch with no words, shown here; nothing is sent until it is answered. */
+  /** Fin's ask on a sketch with no words, shown here; nothing is sent until it is answered. */
   const [asked, setAsked] = useState<Ask | null>(null)
   const [text, setText] = useState('')
   const [more, setMore] = useState(false)

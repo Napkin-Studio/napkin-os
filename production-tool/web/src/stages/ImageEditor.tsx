@@ -492,7 +492,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
           </div>
 
           <section className="ie-edits" aria-label="Edits not applied yet">
-            {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Jude · checks:</b> {check.note}</div>}
+            {check && <div className="ie-rule" role="note"><AgentFigure agent="jude" size={16} decorative /> <b>Jude · judges:</b> {check.note}</div>}
             <div className="ie-edithead">
               <h2 className="pt-label">Edits · not applied yet</h2>
               <span className="pt-grow" />
@@ -647,7 +647,7 @@ function RheaLine({ busy, said, cutout, state, error }: { busy: string | null; s
 
 function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPick: () => void }) {
   const url = useBlobUrl(f.asset)
-  const who = f.crew === 'rhea' ? 'Rhea' : f.crew === 'dex' ? 'Dex' : 'Wren'
+  const who = f.crew === 'rhea' ? 'Rhea' : f.crew === 'dex' ? 'Dex' : 'Fin'
   const what = f.kind === 'edited' ? 'edited' : f.version === 1 ? `drawn by ${who}` : `redrawn by ${who}`
   return (
     <button type="button" role="menuitem" className={`ie-vrow ${open ? 'on' : ''}`} aria-current={open || undefined} onClick={onPick}>

@@ -148,8 +148,8 @@ function FrameTile({ shot, n, drawing }: { shot: Shot; n: number; drawing: boole
   const chrome = useContext(CardChromeContext)
   return (
     <figure className="bl-frame">
-      {/* A frame being drawn shows Wren at work, never the loader (ui-behaviour 6.5). */}
-      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}Wren is drawing</> : 'No frame yet'}</span>}
+      {/* A frame being drawn shows Fin at work, never the loader (ui-behaviour 6.5). */}
+      {url && !drawing ? <img src={url} alt="" /> : <span className="bl-noframe" style={drawing ? { gap: 4 } : undefined}>{drawing ? <>{chrome.agent('wren', true)}Fin is drawing</> : 'No frame yet'}</span>}
       <figcaption>{n} · {cap(cameraLabel('size', shot.camera.size))}</figcaption>
     </figure>
   )
@@ -193,7 +193,7 @@ export function VideoCard({ id, onOpen }: { id?: string; onOpen: () => void }) {
           </span>
         </div>
       } />
-      {clipRunning && <AtWork agent="wren" warm line={`Wren is rendering clip ${clipRunning.i + 1}`} />}
+      {clipRunning && <AtWork agent="wren" warm line={`Fin is filming clip ${clipRunning.i + 1}`} />}
     </Card>
   )
 }

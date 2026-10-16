@@ -87,7 +87,7 @@ export const LINK_TABLE: readonly LinkRow[] = [
   },
   {
     fromTo: 'Brand board → any generating node', roleLabel: '`brand`', allowed: 'One',
-    effect: 'Dex writes the brand rules into every prompt; Jude checks results against them (3.18).',
+    effect: 'Dex writes the brand rules into every prompt; Jude judges results against them (3.18).',
     sources: [{ kind: 'board', purpose: 'brand' }], targets: [GENERATING], roles: ['brand'], limit: 'one-per-target',
   },
   {
@@ -223,7 +223,7 @@ function reaches(graph: LinkGraph, start: string, goal: string): boolean {
  * May this link be made on this graph? Applies canLink, then:
  * - a loop is refused ("That would make a loop.");
  * - a target with a running job is refused with the job's line (`busy` gives it,
- *   e.g. "Wren is still making clip 4."), then "Link it when that's done.";
+ *   e.g. "Fin is still making clip 4."), then "Link it when that's done.";
  * - each limit of 3.4: one script per storyboard (and per video), one storyboard per video, one
  *   master per set, one frame and one layout per shot, one brand link, one input
  *   link per board or group, and otherwise one link per role on an input port

@@ -647,7 +647,7 @@
         },
         "crew": {
           "$ref": "common.schema.json#/$defs/crewId",
-          "description": "Who works it: dex for planning, wren for frames and clips, edie for the ad, …"
+          "description": "Who works it: dex for planning, wren (Fin) for frames and clips, edie for the ad, …"
         },
         "node": {
           "$ref": "common.schema.json#/$defs/linkEndpoint"

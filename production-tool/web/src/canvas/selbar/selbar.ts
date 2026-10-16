@@ -3,7 +3,7 @@
 // likely first. Actions that are not built yet are kept in their place, greyed,
 // with the reason; More always holds Copy link to this, Duplicate, Lock and Delete.
 // And the in-page question before deleting a node something is still being made on
-// (3.3 Delete): "Wren is still making clip 4. Stop it and delete?".
+// (3.3 Delete): "Fin is still making clip 4. Stop it and delete?".
 
 import type { DocJob, ProductionDocument } from '../../contracts/types'
 import { CAST, castOf, MAKER_OF } from '../../ui/agents/cast'
@@ -53,7 +53,7 @@ const OFF: Partial<Record<ActionId, string>> = {
   'make-clips': 'Make clips from the Storyboard for now (Open).',
   'render-ad': 'Render the ad from the Video for now (Open).',
   'make-sizes': 'Make all sizes comes with format sheets.',
-  convert: 'Ellis reading your ink comes in a later build.',
+  convert: 'Nell reading your ink comes in a later build.',
   'move-to-board': 'Drag it onto a board for now.',
 }
 

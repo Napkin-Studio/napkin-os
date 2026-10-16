@@ -23,6 +23,14 @@ describe("Home's crew", () => {
     }
   })
 
+  it('draws every name the same way: none is highlighted (owner, 2026-10-15)', () => {
+    const html = renderToStaticMarkup(<CrewRow />)
+    const classes = [...html.matchAll(/<li class="([^"]*)"/g)].map((m) => m[1])
+    expect(classes).toHaveLength(7)
+    for (const c of classes) expect(c).toMatch(/^hm-mate( house)?$/)
+    expect(html.match(/<b>[^<]+<\/b>/g)).toHaveLength(7)
+  })
+
   it('the New project card shows the same seven', () => {
     expect(renderToStaticMarkup(<CrewLine />).match(/<svg/g)?.length).toBe(7)
   })

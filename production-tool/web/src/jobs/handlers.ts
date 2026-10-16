@@ -169,14 +169,14 @@ export function applyStitch(d: ProductionDocument, job: Job, ctx?: { videoId?: s
 
 // ── landings ────────────────────────────────────────────────────────────────
 
-/** Wren's (or, for a region edit, Rhea's) frame: "render frame v2 for shot 3". */
+/** Fin's (or, for a region edit, Rhea's) frame: "render frame v2 for shot 3". */
 export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'frame' }>) {
   const d = store.get()
   const what = `frame v${nextVersion(framesOf(d, ctx.shotId))} for ${shotName(d, ctx.shotId)}`
   return landUpdate(store, (x) => { applyFrame(x, job, ctx) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
 }
 
-/** Wren's clip, picked in the cut: "render take v2 for shot 3". */
+/** Fin's clip, picked in the cut: "render take v2 for shot 3". */
 export function landTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>) {
   const d = store.get()
   const what = `take v${nextVersion(takesOf(d, ctx.shotId))} for ${shotName(d, ctx.shotId)}`

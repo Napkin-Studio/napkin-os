@@ -52,7 +52,7 @@
 .pt-pair button:hover:not(:disabled) { background: var(--soft); }
 .pt-pair button:disabled { color: var(--ink3); cursor: default; }
 
-/* A status pill in the bar: the loader and one line ("Wren is making frame 3"). */
+/* A status pill in the bar: the loader and one line ("Fin is making frame 3"). */
 .pt-status {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 6px; border-radius: var(--r-pill);
   border: 1px solid var(--line-soft); background: var(--card); font-size: 12.5px; color: var(--ink2); cursor: pointer; max-width: 420px;

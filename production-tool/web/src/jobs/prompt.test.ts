@@ -170,7 +170,7 @@ describe('video from words', () => {
 })
 
 describe('a picture from words', () => {
-  it('is Wren\'s generate with the words and the node\'s scope, on the node; naming it makes one reference', async () => {
+  it('is Fin\'s generate with the words and the node\'s scope, on the node; naming it makes one reference', async () => {
     const { store, deps, sent } = await project()
     const node = 'pic_node_1'
     const jobId = await pictureFromWords(deps, node, 'A glass bottle on a wet rock.', '1:1')

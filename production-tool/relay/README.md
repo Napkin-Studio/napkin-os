@@ -9,7 +9,7 @@ Implements `production-tool/contracts/relay-api.schema.json`, contract 3
 - A `JobRequest` or `JobAnswer` whose `contractVersion` is not "3" gets 400 `invalid_input`
   "This build reads contract 3; reload the page." before anything else is read; nothing is written.
 - A job carries `tenantId`, `projectId`, `startedBy` (`human:<participantId>`), `crew` (dex plans,
-  wren renders, edie stitches, …), `node`, `nonce` and `purpose`. Any member of its agency may read
+  wren (Fin) films, edie stitches, …), `node`, `nonce` and `purpose`. Any member of its agency may read
   it, stop it and answer its question; its cost stays on its starter's budget.
 - Ops contract 3 names but the relay does not build yet (frame_edit, clip_patch, bridge, cutout,
   transcribe, write, read, check, resize, cutdown, upscale) answer 422 `capability_missing`.

@@ -816,7 +816,7 @@ function AdResult({ sha }: { sha: string }) {
   )
 }
 
-/** What Ellis says over open notes: built from the notes, never sent anywhere. */
+/** What Nell says over open notes: built from the notes, never sent anywhere. */
 function ellisLine(n: number, boxed: number, inShot: boolean, frameFixed: boolean): string {
   const notes = `${n} note${n > 1 ? 's' : ''} on this take${boxed ? `, ${boxed === n ? (n > 1 ? 'all boxed' : 'boxed') : `${boxed} boxed`}` : ''}.`
   if (frameFixed) return `${notes} The frame is fixed; Dex makes the clip from it next.`

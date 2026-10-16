@@ -33,7 +33,7 @@ describe('barFor (3.9)', () => {
     const rows: Partial<SelInfo>[] = [{ cards: ['script', 'storyboard'], units: 2 }, { cards: ['video'] }, { group: { ink: true } }, { units: 3 }]
     for (const r of rows) expect(barFor(sel(r)).filter((a) => a.primary).length).toBeLessThanOrEqual(1)
     expect(barFor(sel({ cards: ['script', 'storyboard'], units: 2 }))[0]).toMatchObject({ id: 'make-video', primary: true })
-    expect(barFor(sel({ group: { ink: true } }))[0].off).toMatch(/Ellis/)
+    expect(barFor(sel({ group: { ink: true } }))[0].off).toMatch(/Nell/)
     expect(barFor(sel({ group: { ink: true } })).find((a) => a.id === 'ungroup')!.off).toBeUndefined()
   })
 
@@ -61,11 +61,11 @@ describe('barFor (3.9)', () => {
 })
 
 describe('busyQuestion (3.3 Delete)', () => {
-  it('names the agent and the work: "Wren is still making clip 4. Stop it and delete?"', () => {
+  it('names the agent and the work: "Fin is still making clip 4. Stop it and delete?"', () => {
     const d = emptyDocument(MAYA, 'Ad')
     const shots = addShots(d, 4)
     const clip = job(d, 'clip', [], null, { state: 'submitted', node: { kind: 'shot', id: shots[3].id } })
-    expect(busyQuestion(d, clip)).toBe('Wren is still making clip 4. Stop it and delete?')
+    expect(busyQuestion(d, clip)).toBe('Fin is still making clip 4. Stop it and delete?')
     const plan = job(d, 'shot_list', [], null, { state: 'submitted', crew: 'dex', node: { kind: 'storyboard', id: mainStoryboard(d)!.id } })
     expect(busyQuestion(d, plan)).toBe('Dex is still planning the shots. Stop it and delete?')
     const draft = job(d, 'write', [], null, { state: 'submitted', crew: 'skye' })

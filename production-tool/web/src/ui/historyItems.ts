@@ -4,6 +4,7 @@
 
 import type { Cost, ProductionDocument } from '../contracts/types'
 import { entityOf, kindOf as kindOfDecision, type Kind } from '../model/lineage'
+import { CAST } from './agents/cast'
 import { currentRender, framesOf, refName, refsList, rendersOf, shotNumber, shotsOf, takesOf } from '../model/selectors'
 
 export interface ChainLike {
@@ -69,11 +70,10 @@ export function entryKind(entry: ChainLike): Kind {
 
 export type AgentKind = 'person' | 'crew' | 'other'
 
-const CREW: Record<string, string> = { dex: 'directs', skye: 'scripts', wren: 'renders', rhea: 'retouches', edie: 'edits', ellis: 'reads', jude: 'checks' }
 
 export function kindOf(agent: string): AgentKind {
   if (agent.startsWith('human:')) return 'person'
-  if (agent in CREW) return 'crew'
+  if (agent in CAST) return 'crew'
   return 'other'
 }
 
@@ -81,7 +81,7 @@ export function kindOf(agent: string): AgentKind {
 export function who(agent: string, me: string | undefined): { label: string; detail?: string } {
   const kind = kindOf(agent)
   if (kind === 'person') return { label: me && agent === `human:${me}` ? 'You' : agent.slice('human:'.length) }
-  if (kind === 'crew') return { label: agent[0].toUpperCase() + agent.slice(1), detail: CREW[agent] }
+  if (kind === 'crew') { const c = CAST[agent as keyof typeof CAST]; return { label: c.given, detail: c.job } }
   return { label: agent }
 }
 
