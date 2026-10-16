@@ -211,6 +211,15 @@ def test_extend_and_a_picture_with_no_name_send_the_picture_only():
     assert [r["name"] for r in reg["refs"]] == ["master"] and "show the same" not in reg["prompt"]
 
 
+def test_regenerate_of_a_scamp_turns_the_sketch_into_a_picture():
+    h = paid_harness()
+    token = h.as_person()
+    h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate", source="sketch"))
+    (sent,) = h.providers["runway"].submits
+    assert sent["prompt"].startswith("Turn the sketch @master into a finished") and "tall 9:16" in sent["prompt"]
+    assert [r["name"] for r in sent["refs"]] == ["master"]
+
+
 def test_at_most_four_views_go_with_a_regenerate_and_an_object_key_stays_an_object():
     h = paid_harness()
     token = h.as_person()

@@ -1661,7 +1661,8 @@ class Relay:
             made = [plate, ours]
         else:  # regenerate
             ratio = self._resize_ratio(sheet, model, inp)
-            prompt = formats.REGENERATE_PROMPT.format(shape=formats.shape_words(aw, ah))
+            prompt = (formats.REGENERATE_SKETCH_PROMPT if rz.get("source") == "sketch" else formats.REGENERATE_PROMPT).format(
+                shape=formats.shape_words(aw, ah))
             refs = [{"sha256": inp["image"]["sha256"], "name": "master", "role": "object"}]
             # A named picture's other views as tagged references, so a character stays itself
             # (features/resize-selection.clan); extend and crop send the picture only.

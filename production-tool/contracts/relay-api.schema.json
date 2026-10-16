@@ -682,6 +682,10 @@
               "pattern": "^#[0-9A-Fa-f]{6}$",
               "description": "layout: the brand colour the picture sits on."
             },
+            "source": {
+              "enum": ["picture", "sketch"],
+              "description": "regenerate: what input.image is. sketch (a scamp: a Drawing or a sketch area's picture; features/resize-selection.clan) is drawn as a finished picture at the shape, the sketch as its layout. Absent: picture. Added 2026-10-16 (additive)."
+            },
             "panel": {
               "$ref": "common.schema.json#/$defs/region",
               "description": "layout: where the picture sits on the colour field, in 0-1 coordinates of the size; crop is then the part of the master at the panel's shape. Absent: the whole size. Added 2026-10-16 (additive)."

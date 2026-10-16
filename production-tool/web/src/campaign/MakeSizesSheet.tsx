@@ -8,7 +8,7 @@ import { useConfig, useDoc } from '../app/context'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { sayer } from '../ui/agents/cast'
 import { useBlobUrl } from '../ui/hooks'
-import { DEFAULT_LENGTHS, LANES, planChoices, rowsOf, shortName, sizeWords } from './formats'
+import { choicesFor, DEFAULT_LENGTHS, FILMS_FROM_VIDEO, LANES, rowsFor, shortName, sizeWords } from './formats'
 import { makeAllSizes, type CampaignDeps, type TrayRow } from './make'
 import { setsOf, type MasterInfo } from './master'
 import { availableMethods, METHOD_WORD, methodFor, methodModels, methodWords, PAID } from './rules'
@@ -25,7 +25,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
   onMade(el: import('../canvas/core/canvasAdapter').CanvasElement): void
 }) {
   const doc = useDoc()
-  const choices = useMemo(() => planChoices(), [])
+  const choices = useMemo(() => choicesFor(master.media), [master.media])
   const [choice, setChoice] = useState(choices[0])
   const [lengths, setLengths] = useState<number[]>(DEFAULT_LENGTHS)
   const [extra, setExtra] = useState('')
@@ -45,7 +45,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
   const { config } = useConfig()
   const models = useMemo(() => methodModels(config), [config])
   const available = useMemo(() => availableMethods(models), [models])
-  const rows: TrayRow[] = useMemo(() => rowsOf(choice, choice.kind === 'pack' ? lengths : lengths).map((r) => {
+  const rows: TrayRow[] = useMemo(() => rowsFor(choice, master.media, lengths).map((r) => {
     const pick = methodFor(r, master, keepMiddle ? [] : boxes, available, master.length_s)
     return { ...r, pick, on: !pick.unavailable && !off.has(r.key) }
   }), [choice, lengths, master, boxes, keepMiddle, available, off])
@@ -88,6 +88,7 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
                   className={`cf-chip ${choice.id === c.id ? 'on' : ''}`} onClick={() => setChoice(c)}>{c.name}</button>
               ))}
             </div>
+            {master.media === 'video' && <>
             <div className="cf-label">Film lengths</div>
             <div className="cf-chips" aria-label="Film lengths">
               {[...new Set([30, 20, 15, 10, 6, ...lengths])].sort((a, b) => b - a).map((s) => (
@@ -104,13 +105,16 @@ export function MakeSizesSheet({ master, deps, by, near, onClose, onMade }: {
                   }
                 }} />
             </div>
+            </>}
             <div className="cf-label">Words on every size</div>
             <div className="cf-words">
               <input className="cf-input" value={line} maxLength={200} placeholder="The brand line (optional)" aria-label="The brand line" onChange={(e) => setLine(e.target.value)} />
               <input className="cf-input" value={legal} maxLength={600} placeholder="Legal (optional)" aria-label="Legal" onChange={(e) => setLegal(e.target.value)} />
             </div>
             <p className="cf-note">The line, the logo from the Brand board and legal are laid out on each size as layers, drawn on our server; never sent to a model. Edit them on any tile.</p>
-            <p className="cf-note">{rows.length} formats. Films are cut from the ad's own takes; stills are made from {master.media === 'video' ? 'a key visual' : 'this picture'}.</p>
+            <p className="cf-note">{master.media === 'video'
+              ? `${rows.length} formats. Films are cut from the ad's own takes; stills are made from a key visual.`
+              : `${rows.length} still formats from this picture. ${FILMS_FROM_VIDEO}`}</p>
             <footer className="cf-foot"><span className="pt-grow" /><button type="button" className="btn primary" onClick={next}>Next</button></footer>
           </div>
         )}

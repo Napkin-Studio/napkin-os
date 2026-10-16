@@ -50,9 +50,11 @@ export async function exportElements(canvas: Canvas, els: readonly El[]): Promis
   return await canvas.exportPng(drawn, { padding: 24, background: '#ffffff' })
 }
 
-export function makeGenPlaceholder(canvas: Canvas, jobId: string, op: GenOp, parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View): El {
+/** `shape`: a resize's shape chip ("9:16"), shown on the result (features/resize-selection.clan). */
+export function makeGenPlaceholder(canvas: Canvas, jobId: string, op: GenOp, parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View, shape?: string): El {
   const customData: CustomData = { kind: 'gen', id: jobId, op, parentIds, state: 'queued' }
   if (view) customData.view = view
+  if (shape) customData.shape = shape
   return canvas.imageNode({ id: jobId, x: at.x, y: at.y, width: size.w, height: size.h, assetSha: null, customData, status: 'pending', keepIds: true })
 }
 
