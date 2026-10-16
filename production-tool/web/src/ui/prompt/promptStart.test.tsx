@@ -18,7 +18,7 @@ import { addFrame, addShots, asset, id, job, MAYA, modelStore, SHA } from '../..
 import { PromptStart } from './PromptStart'
 import {
   DESCRIBE, insertMention, LINK_SCRIPT, LINK_STORYBOARD, makeItLabel, mentionAt, PLAN_NOW, PROMPT_COPY, promptState, SCRIPT_FIRST, storyboardNudge, videoBlock,
-} from './promptStart'
+} from './promptFlow'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

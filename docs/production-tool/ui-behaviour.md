@@ -360,7 +360,17 @@ Clips are made only from the Video or Storyboard editor's **Make clips**, throug
 - **Re-grouping:** a lasso around strokes groups them again.
 - **Holding the pen** at the end of a stroke snaps it to a shape ($Q).
 
-**Selection bar for an ink group:** **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
+**Selecting containers** (features/container-select.clan). A Drawing (the frame Generate wraps around strokes), a sketch area and a group are each selected as one thing, the same way on mouse, pen and touch:
+- **Click** on a Drawing's label, edge, empty inside or any of its strokes selects the Drawing. A thing that is not a member and lies above it at that point (a picture, a note, a link, loose ink) wins there. A click on ink inside a sketch area selects the area; a click on a member of a group selects the whole group.
+- **Strokes and unfilled shapes** are hit only near their line: within half their width plus 6 screen px, at any zoom. A click in the gaps of a drawing falls through to what lies below it.
+- **Double-click** (mouse) or **double-tap** (pen or touch: two presses within 350 ms and 16 screen px) on a member enters the container and selects that member alone. While entered, single clicks inside pick members alone, a drag on the empty inside draws a marquee over members only, and the container shows a dashed outline just inside its edge.
+- **Esc** leaves the entered container and selects it whole. A click outside it leaves it and acts as a normal click there. It is also left when someone else deletes the container.
+- **Hover** (mouse or pen, Select tool): a faint outline shows round the container a click there would select whole. There is none over a lone element, inside the entered container, or over what is already selected.
+- **Right after Generate** wraps loose strokes, the new Drawing is selected, so the next drag moves it and its strokes together.
+- **A Drawing keeps itself up to date.** A pen stroke that starts and ends inside it joins it. Moving, scaling, erasing or deleting one of its strokes refits the frame round its strokes (16 px pad), in the same undo step. A stroke dropped with its centre outside the frame leaves it. A Drawing whose last stroke leaves stays where it was. Its picture is redrawn shortly after its strokes change. Scaling a Drawing scales its strokes with it.
+- **Boards are unchanged:** the title selects and moves the board, and a click on a member selects that member (or the Drawing it is in).
+
+**Selection bar for an ink group:** **Generate** (primary: the strokes become a Drawing, no Ungroup first), **Convert to text**, **Ungroup**, **Move to board**, Delete (icon). On iPad it adds **Send to shot N** when the group is inside a sketch area tied to a shot.
 
 **Idle suggestion** (decision D13): 2 s after you stop writing, Ellis may show a quiet chip, "Ellis can read this", that opens the same preview. Nothing converts on its own.
 
@@ -391,7 +401,7 @@ A floating frosted bar sits above the current selection. Its contents depend on 
 | Reference picture | Role chip · Rename · Use in shot… · More (adds Publish to team library) |
 | Frame or key visual | Open · Use in shot N · Make all sizes… · Make another · More |
 | Sketch area | Generate · More |
-| Ink group | Convert to text · Ungroup · Move to board · Delete |
+| Ink group | Generate · Convert to text · Ungroup · Move to board · Delete |
 | Document | Link to… · More |
 | Format set | Open · Export zip · More |
 | Several mixed things | Group · Move to board · Delete |
@@ -1409,6 +1419,8 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 | Canvas | Tab / ⇧Tab | Move focus between nodes; with L pressed, between compatible link targets |
 | Canvas | ⌘+ / ⌘− / ⇧1 | Zoom in / out / fit |
 | Canvas | Esc with a generating node selected | Ends the scope focus (3.16) |
+| Canvas | Double-click, or double-tap with pen or touch | Enter a Drawing, sketch area or group and select the member there alone (3.8) |
+| Canvas | Esc | In order: cancels a running drag; leaves an entered Drawing, area or group, selecting it whole; else clears the selection (3.8) |
 | Questions pill | Tab to it; Enter, or ‹ › buttons | Go to the next or previous open ask (3.17) |
 | Ask card | Tab, Enter | Options are buttons; Enter picks the focused one. Later is the last button |
 | Send tray | Tab, Space, Enter, Esc | Move through rows, tick or untick a row, press the focused button (Generate is last), Cancel |
