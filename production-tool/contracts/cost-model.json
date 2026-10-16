@@ -75,7 +75,7 @@
       "id": "campaign",
       "label": "Campaign: make all sizes of a 16:9 key visual and a 30 s film (17 stills, 7 films; features/campaign-formats.clan)",
       "lines": [
-        {"what": "Make all sizes: extend at medium (6 formats)", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "medium", "outputs": 1}, "count": 6},
+        {"what": "Make all sizes: extend at high (6 formats; medium left padding unfilled in CF-T1)", "op": "resize", "model": "ideogram_4_5", "settings": {"quality": "high", "outputs": 1}, "count": 6},
         {"what": "Make all sizes: regenerate at 2K (4 formats)", "op": "resize", "model": "gemini_image3_pro", "settings": {"ratio": "768:1344", "outputs": 1}, "count": 4},
         {"what": "Make all sizes: regenerate at 4K (the 6-sheet)", "op": "resize", "model": "gemini_image3_pro", "settings": {"ratio": "3392:5056", "outputs": 1}, "count": 1},
         {"what": "film re-aspect: Aleph 2 on about 2 shots of 3 s for each of 9:16, 4:5 and 1:1", "op": "cutdown", "model": "aleph2", "settings": {"inputS": 3}, "count": 6},
@@ -83,7 +83,7 @@
       ]
     }
   ],
-  "expected": {"typical": 1073, "typical_takes": 2753, "typical_audio": 1793, "typical_audio_takes": 4913, "heavy": 7873, "campaign": 1422},
+  "expected": {"typical": 1073, "typical_takes": 2753, "typical_audio": 1793, "typical_audio_takes": 4913, "heavy": 7873, "campaign": 1524},
   "placeholders": [
     {"what": "Claude on Bedrock (the director), per ad", "usd": 0.5, "measured": false, "note": "Replaced from dogfood-telemetry once it records tokens per job."},
     {"what": "Claude on Bedrock for a campaign (the protect ask, crop boxes per shot, beat plans)", "usd": 0.5, "measured": false, "note": "From the design (features/campaign-formats.clan); measured by paid test CF-T5."},

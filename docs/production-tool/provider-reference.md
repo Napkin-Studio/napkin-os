@@ -83,7 +83,7 @@ planning only: the tool shows no price to people; each job's cost is recorded an
 | Typical, Veo audio on, first pass | 1,793 | $17.93 |
 | Typical, audio on with 3 takes | 4,913 | $49.13 |
 | Heavy ad (2 characters, audio on, 8 s clips, 3 takes) | 7,873 | $78.73 |
-| Campaign: make all sizes of a 16:9 key visual and a 30 s film (17 stills, 7 films; features/campaign-formats.clan) | 1,422 | $14.22 |
+| Campaign: make all sizes of a 16:9 key visual and a 30 s film (17 stills, 7 films; features/campaign-formats.clan) | 1,524 | $15.24 |
 
 Not in the totals:
 - Claude on Bedrock (the director), per ad: $0.50 (placeholder, not measured)

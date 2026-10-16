@@ -383,7 +383,7 @@ def test_the_cost_of_an_ad_is_pinned():
     (contracts/cost-model.json, features/runway-sheet-sync.clan)."""
     costs = {c["id"]: (c["credits"], c["usd"]) for c in _script("ad_costs").costs()}
     assert costs == {"typical": (1073, 10.73), "typical_takes": (2753, 27.53), "typical_audio": (1793, 17.93),
-                     "typical_audio_takes": (4913, 49.13), "heavy": (7873, 78.73), "campaign": (1422, 14.22)}
+                     "typical_audio_takes": (4913, 49.13), "heavy": (7873, 78.73), "campaign": (1524, 15.24)}
 
 
 def test_a_price_change_in_the_sheet_moves_the_ad_totals():
@@ -392,7 +392,7 @@ def test_a_price_change_in_the_sheet_moves_the_ad_totals():
     sheet["models"]["veo3.1"]["pricing"]["credits"] = 25  # no-audio Veo 3.1 up from 20 to 25 a second
     moved = {c["id"]: c["credits"] for c in ad_costs.costs(the_sheet=sheet)}
     assert moved["typical"] == 1073 + 6 * 6 * 5 and moved["typical_audio"] == 1793  # audio-on lines unchanged
-    assert moved["campaign"] == 1422  # Make all sizes uses no Veo
+    assert moved["campaign"] == 1524  # Make all sizes uses no Veo
     assert ad_costs.main(["--check"]) == 0  # the committed sheet still gives the expected totals
 
 

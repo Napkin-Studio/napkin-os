@@ -155,13 +155,12 @@
       "model": "ideogram_4_5",
       "endpoint": "POST /v1/text_to_image",
       "method": "extend",
-      "defaults": {"outputs": 1, "quality": "medium"},
+      "defaults": {"outputs": 1, "quality": "high"},
       "seed": false,
       "label": "Ideogram 4.5",
-      "note": "Extends the master: fills the padding of the clean plate",
+      "note": "Extends the master at high: fills the padding of the clean plate",
       "alternates": [
-        {"model": "gemini_image3_pro", "endpoint": "POST /v1/text_to_image", "method": "regenerate", "defaults": {"outputs": 1, "ratio": "768:1344"}, "seed": false, "label": "Gemini 3 Pro", "note": "Remakes the master at a new shape, the master and refs as references"},
-        {"model": "gemini_image3.1_flash", "endpoint": "POST /v1/text_to_image", "method": "regenerate", "defaults": {"outputs": 1, "ratio": "4096:1024"}, "seed": false, "label": "Gemini 3.1 Flash", "note": "Remakes the master as a strip (4:1, 8:1)"}
+        {"model": "gemini_image3_pro", "endpoint": "POST /v1/text_to_image", "method": "regenerate", "defaults": {"outputs": 1, "ratio": "768:1344"}, "seed": false, "label": "Gemini 3 Pro", "note": "Remakes the master at a new shape, the master and refs as references"}
       ]
     },
     "cutdown": {
