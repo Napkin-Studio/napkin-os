@@ -36,7 +36,7 @@ export type JobPurpose =
   | { for: 'frame_edit'; shotId: Id; parentFrameId?: Id }
   /** An Image editor action (features/image-editor.clan) on a shot's frame or a canvas picture
    *  (features/edit-canvas-pictures.clan), from its version `parentFrameId` when it has one: Fill area,
-   *  Change whole frame, Upscale or Remove background on our server. Its result lands nowhere: the
+   *  Change whole frame or Upscale. Its result lands nowhere: the
    *  editor shows it as a layer, and only Apply as new version makes a frame. The job's node is the shot,
    *  or the canvas node (a group endpoint, as a canvas Generate's). */
   | { for: 'image_edit'; target: EditTarget; parentFrameId?: Id }

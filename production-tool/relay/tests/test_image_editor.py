@@ -1,16 +1,12 @@
 """The Image editor's ops on the relay (features/image-editor.clan, ui-behaviour 3.12): Upscale on a
-provider (Magnific on Runway, the mock here), Remove background as Rhea's cut-out run inside the relay
-(cutout.py) when the browser cannot, and Change whole frame as a region_edit with no region or mask.
+provider (Magnific on Runway, the mock here) and Change whole frame as a region_edit with no region or mask.
+Remove background is gone (owner, 2026-10-16): the cutout op is not built.
 Nothing here calls Runway."""
 
 import io
-import os
-import time
 
-import pytest
 from PIL import Image, ImageDraw
 
-import cutout
 from conftest import CDN, Harness, asset, base_config
 from providers import load_sheet
 from providers.mock import MockProvider
@@ -26,11 +22,10 @@ def png(w=60, h=40, subject=True) -> bytes:
     return out.getvalue()
 
 
-def editor_harness(segmenter=None) -> Harness:
+def editor_harness() -> Harness:
     cfg = base_config()
-    cfg["routing"].update(upscale=["runway"], cutout=[])
+    cfg["routing"].update(upscale=["runway"])
     h = Harness(cfg)
-    h.relay.segmenter = segmenter
     # Ideogram and Magnific are off unless the agency asks (subprocessors.json): this agency asked.
     h.limits("blue", allow={"claude": True, "makers": ["runway", "google", "ideogram", "magnific"]})
     return h
@@ -73,6 +68,24 @@ def test_the_mock_provider_grows_each_side_by_the_scale():
                                refs=[Ref("sha256:" + "a" * 64, "current", "current")], scale=4))
     (out,) = p.status(rid).outputs
     assert (out.w, out.h) == (120, 80)
+
+
+def test_the_mock_region_edit_stripes_the_masked_area_and_nothing_else():
+    """A lost result is plain to see (fix/editor-apply-keeps-edits): the mask's white comes back striped."""
+    data = png(400, 200, subject=False)
+    m = Image.new("L", (400, 200), 0)
+    ImageDraw.Draw(m).rectangle((200, 0, 399, 199), fill=255)  # ours: white = change
+    buf = io.BytesIO()
+    m.save(buf, format="PNG")
+    blobs = {"mock://in": data, "mock://mask": buf.getvalue()}
+    p = MockProvider(lambda sha: AssetRef(sha, "mock://mask" if sha.endswith("b" * 64) else "mock://in", "image/png"),
+                     lambda url: blobs[url], delay_s=0, clock=lambda: 10.0)
+    rid = p.submit(ProviderJob(op="region_edit", provider="mock", model="mock", prompt="drops",
+                               refs=[Ref("sha256:" + "a" * 64, "current", "current")], mask="sha256:" + "b" * 64))
+    (out,) = p.status(rid).outputs
+    img = Image.open(io.BytesIO(out.data)).convert("RGB")
+    assert img.getpixel((350, 150)) in ((230, 0, 160), (255, 230, 0))  # inside the mask: a stripe
+    assert img.getpixel((100, 150)) == (236, 228, 214)  # outside: the picture as it was (the MOCK banner is top left)
 
 
 # ── Change whole frame ─────────────────────────────────────────────────────
@@ -122,60 +135,11 @@ def test_remove_with_words_or_without_a_mask_is_refused():
     assert not h.providers["runway"].submits
 
 
-# ── Remove background on our server ────────────────────────────────────────
+# ── Remove background is gone (owner, 2026-10-16) ───────────────────────────
 
-def test_cutout_runs_inside_the_relay_free_and_returns_a_transparent_png():
-    h = editor_harness(cutout.MockSegmenter())
+def test_cutout_is_not_built_and_costs_nothing():
+    h = editor_harness()
     token = h.as_person()
-    _, job = h.post_job(token, op="cutout", expect=200, image=stored(h))
-    assert job["state"] == "completed" and job["crew"] == "rhea" and job["kind"] == "mock"
-    assert job["cost"]["reserved"] == 0 and not h.providers["runway"].submits
-    (o,) = job["outputs"]
-    assert o["url"].startswith(CDN) and (o["w"], o["h"]) == (60, 40)
-    img = Image.open(io.BytesIO(h.blobs.fetch(o["url"])))
-    assert img.mode == "RGBA"
-    assert img.getpixel((2, 2))[3] == 0 and img.getpixel((30, 20))[3] == 255  # background gone, subject kept
-
-
-def test_cutout_without_a_server_segmenter_says_so_and_costs_nothing():
-    h = editor_harness(None)
-    token = h.as_person()
-    _, job = h.post_job(token, op="cutout", expect=200, image=stored(h))
-    assert job["state"] == "failed" and job["error"]["code"] == "capability_missing"
-    assert "WebGPU" in job["error"]["message"]
+    _, out = h.post_job(token, op="cutout", expect=422, image=stored(h))
+    assert out["error"]["code"] == "capability_missing"
     assert h.relay.remaining(h.people[token]["pid"]) == h.cfg["quotas"]
-
-
-def test_from_env_picks_the_real_segmenter_the_stand_in_or_none():
-    assert isinstance(cutout.from_env({"CUTOUT_WEIGHTS": "/w/model.onnx"}), cutout.OnnxSegmenter)
-    assert isinstance(cutout.from_env({"NAPKIN_CUTOUT": "mock"}), cutout.MockSegmenter)
-    assert cutout.from_env({}) is None
-
-
-def test_the_onnx_segmenter_refuses_weights_whose_hash_differs(tmp_path):
-    bad = tmp_path / "model.onnx"
-    bad.write_bytes(b"not the model")
-    with pytest.raises(ValueError, match="hash differs"):
-        cutout.OnnxSegmenter(bad).matte(Image.new("RGB", (8, 8)))
-
-
-def test_the_server_names_the_same_weights_as_the_licence_list():
-    import tomllib
-    from pathlib import Path
-    weights = tomllib.loads((Path(__file__).resolve().parents[3] / "licences" / "weights.toml").read_text())
-    (entry,) = [m for m in weights["model"] if m["id"] == cutout.CUTOUT_MODEL_NAME]
-    assert entry["revision"] == cutout.REVISION
-    assert {"path": cutout.WEIGHTS_FILE, "sha256": cutout.WEIGHTS_SHA256} in entry["files"]
-    assert entry["weight_licence"] == "MIT" and entry["code_licence"] == "MIT"
-
-
-@pytest.mark.skipif(not os.environ.get("CUTOUT_WEIGHTS"), reason="CUTOUT_WEIGHTS names the real BiRefNet-lite weights")
-def test_birefnet_lite_cuts_the_bottle_out_of_a_kitchen_frame():
-    """Run by hand with the weights and onnxruntime: uv run --with onnxruntime --with numpy pytest -k birefnet."""
-    from pathlib import Path
-    frame = (Path(__file__).resolve().parents[1] / "eval" / "fixtures" / "frames" / "kitchen_bottle.png").read_bytes()
-    t = time.monotonic()
-    data, w, h = cutout.cut_out(frame, cutout.from_env())
-    img = Image.open(io.BytesIO(data))
-    assert (w, h) == (1344, 756) and img.getpixel((665, 340))[3] > 200 and img.getpixel((100, 100))[3] < 30
-    assert time.monotonic() - t < 60

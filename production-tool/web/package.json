@@ -31,7 +31,6 @@
     "@tiptap/suggestion": "3.32.0",
     "@tiptap/y-tiptap": "3.0.10",
     "fflate": "^0.8.3",
-    "onnxruntime-web": "1.30.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "yjs": "13.6.33"

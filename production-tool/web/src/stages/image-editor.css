@@ -153,9 +153,6 @@
 .ie-lt { font-weight: 600; font-size: 12px; }
 .ie-lm { background: var(--ink-fixed); border-color: var(--ink-fixed); }
 .ie-lm span { width: 12px; height: 18px; border-radius: 3px; background: #FFFFFF; }
-.ie-lcut { background-color: #FFFFFF; background-image: linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%), linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%);
-  background-size: 8px 8px; background-position: 0 0, 4px 4px; }
-.ie-lcut img { object-fit: contain; }
 .ie-lname { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .ie-lsub { font-size: 11px; color: var(--ink2); }
 .ie-lsub .btn.link { height: auto; padding: 0; font-size: 11px; }
@@ -173,9 +170,6 @@
 .ie-action .input { flex: 1; min-width: 0; height: 32px; font-size: 12px; }
 .ie-action .pt-seg { padding: 2px; border: 0; }
 .ie-action .pt-seg button { height: 28px; padding: 0 12px; font-size: 11px; }
-.ie-rowcard { flex-direction: row; align-items: center; gap: 10px; }
-.ie-acol { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.ie-acol .faint { font-size: 11px; }
 .ie-mtag { font-size: 11px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--tool-soft); color: var(--tool-ink); }
 .ie-check { display: flex; align-items: center; gap: 8px; color: var(--ink2); }
 .ie-check input { accent-color: var(--ink); }
@@ -196,12 +190,6 @@
 .ie-vacts { display: flex; gap: 6px; }
 .float.ie-tray { width: 360px; max-width: calc(100vw - 32px); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .ie-tray-rows { margin: 0; padding: 0 0 0 4px; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
-.float.ie-name { width: 320px; padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
-.ie-name .row { gap: 6px; }
-.ie-name .input { min-width: 0; flex: 1; }
-.ie-pills { display: flex; flex-wrap: wrap; gap: 4px; }
-.ie-pills button { height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); color: var(--ink); font-size: 12px; cursor: pointer; }
-.ie-pills button.on { background: var(--plan); border-color: var(--plan); color: var(--plan-fg); }
 
 @media (max-width: 1239px) {
   .ie-body { grid-template-columns: 56px minmax(0, 1fr); }

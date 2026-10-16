@@ -22,7 +22,6 @@ import os
 import boto3
 
 import cards
-import cutout
 import identity
 from blobs import S3Blobs, s3_client
 from contracts import Contracts
@@ -70,7 +69,6 @@ def _build() -> Relay:
         config=CachedConfig(lambda: json.loads(s3.get_object(Bucket=bucket, Key=config_key)["Body"].read()), contracts),
         contracts=contracts,
         stitch=start_stitch if stitch_fn else None,
-        segmenter=cutout.from_env(),  # CUTOUT_WEIGHTS on the Lambda (a layer); absent: the cutout op answers 422
     )
 
 
