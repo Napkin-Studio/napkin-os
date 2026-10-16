@@ -46,7 +46,7 @@
 .hm-go { margin-top: auto; display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; background: #fff; color: var(--tool); border: 0; height: 34px; padding: 0 16px; border-radius: var(--r-pill); font: 700 13px var(--f-display); cursor: pointer; }
 .hm-say { position: absolute; right: 22px; top: 20px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 12px; padding: 8px 11px; font-size: 12px; max-width: 230px; line-height: 1.4; }
 .hm-say b { display: block; font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; margin-bottom: 2px; }
-.hm-crewline { position: absolute; right: 22px; bottom: 18px; display: flex; align-items: flex-end; gap: 10px; }
+.hm-crewline { position: absolute; right: 22px; bottom: 18px; display: flex; align-items: flex-end; gap: 6px; }
 .hm-crewline svg { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18)); }
 .hm-new:focus-visible, .hm-open:focus-visible, .hm-card:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
 .hm-open { border-radius: var(--r-panel); border: 1.5px dashed var(--line); background: var(--card); padding: 22px; display: flex; flex-direction: column; gap: 8px; justify-content: center; cursor: pointer; }
@@ -101,9 +101,16 @@
 
 /* ── first visit ── */
 .hm-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 46px 20px 30px; border: 1.5px dashed var(--line); border-radius: var(--r-panel); background: var(--card); }
-.hm-crew { display: flex; gap: 14px; align-items: flex-end; margin-bottom: 6px; }
+/* The whole crew (ui/HomeCrew.tsx): five who make the ad, a wider gap, then the two house agents. */
+.hm-crew { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 6px 18px; }
+.hm-mate { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 52px; }
+.hm-mate svg { margin-bottom: 4px; }
+.hm-mate b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.hm-mate span { font: 500 10.5px var(--f-mono); letter-spacing: 0.04em; color: var(--ink3); }
+.hm-mate.lead b { color: var(--tool-ink); }
+.hm-mate.house:not(.house ~ .house) { margin-left: 14px; padding-left: 22px; border-left: 1px dashed var(--line); }
 .hm-empty b { font-size: 16px; }
-.hm-empty p { margin: 0; color: var(--ink2); max-width: 440px; line-height: 1.5; }
+.hm-empty p { margin: 0; color: var(--ink2); max-width: 520px; line-height: 1.5; }
 .hm-empty .row { display: flex; gap: 8px; }
 .hm-sayer { font: 600 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--tool-ink); }
 
