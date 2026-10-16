@@ -71,3 +71,29 @@ def test_behind_napkin_web_the_local_server_checks_assertions(tmp_path, monkeypa
     assert status == 200 and (me["handle"], me["tenant"]["agency"]) == ("engineer", "napkin")
     status, out, _ = relay.http("GET", "/api/me", signed("otheragency"), None)
     assert status == 403 and out["error"]["code"] == "flag_off"
+
+
+def test_a_restart_keeps_every_uploaded_picture_openable(tmp_path, monkeypatch):
+    """Which agency holds which bytes is kept beside the bytes (features/picture-storage.clan). Kept in
+    memory only, a restarted local relay answered "not here" for every picture already on its disk, so
+    a project saved before the restart could not be opened in any other browser."""
+    import hashlib
+    import json
+
+    monkeypatch.setenv("NAPKIN_LOCAL_USER", "shrey@acme")
+    monkeypatch.delenv("TOKEN_SECRET", raising=False)
+    monkeypatch.delenv("NAPKIN_LOCAL_TENANTS", raising=False)
+    png = b"\x89PNG\r\n\x1a\n a picture"
+    sha = "sha256:" + hashlib.sha256(png).hexdigest()
+    ask = json.dumps({"sha256": sha, "mime": "image/png", "bytes": len(png)}).encode()
+    try:
+        relay, blobs = local.build(8796, tmp_path)
+        status, first, _ = relay.http("POST", "/uploads", {"Content-Type": "application/json"}, ask)
+        assert status == 200 and first["exists"] is False
+        blobs.put(f"in/{sha}", png, "image/png")  # the browser's PUT
+        assert relay.http("POST", "/uploads", {"Content-Type": "application/json"}, ask)[1]["exists"] is True
+        relay, _ = local.build(8796, tmp_path)  # the relay restarts on the same data
+        status, again, _ = relay.http("POST", "/uploads", {"Content-Type": "application/json"}, ask)
+    finally:
+        identity.use_local(None)
+    assert status == 200 and again["exists"] is True and again["url"].endswith(f"/in/{sha}")

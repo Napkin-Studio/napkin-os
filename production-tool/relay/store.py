@@ -34,17 +34,24 @@ import logging
 import re
 import threading
 from decimal import Decimal
+from pathlib import Path
 
 log = logging.getLogger("relay.store")
 
 
 class MemoryStore:
-    def __init__(self):
+    def __init__(self, held_file: Path | None = None):
         self._jobs: dict[str, dict] = {}
         self._counters: dict[str, dict] = {}
         self.blocked: set[str] = set()
         self.tenants: dict[str, dict] = {}
         self.held: set[str] = set()
+        # Which agency holds which bytes outlives a restart when the bytes do (local.py keeps them on
+        # disk): kept only in memory, every picture of every saved project read as missing after a
+        # restart, so no other browser could open them (features/picture-storage.clan).
+        self._held_file = Path(held_file) if held_file else None
+        if self._held_file and self._held_file.exists():
+            self.held.update(line.strip() for line in self._held_file.read_text().splitlines() if line.strip())
         self._claims: dict[str, dict] = {}
         self._lock = threading.Lock()
 
@@ -93,8 +100,14 @@ class MemoryStore:
 
     # ── which agency holds which bytes (features/tenant-limits.clan) ──
     def hold(self, tenant: str, sha: str) -> None:
+        key = f"has#{tenant}#{sha}"
         with self._lock:
-            self.held.add(f"has#{tenant}#{sha}")
+            if key in self.held:
+                return
+            self.held.add(key)
+            if self._held_file:
+                with self._held_file.open("a") as f:
+                    f.write(key + "\n")
 
     def holds(self, tenant: str, sha: str) -> bool:
         with self._lock:
@@ -198,6 +211,14 @@ class FileStore(MemoryStore):
             self._counters = row.get("counters") or {}
             self.held = set(row.get("held") or [])
             self._claims = row.get("claims") or {}
+        # Holds an earlier local relay kept in held.txt (MemoryStore(held_file=...), features/picture-storage.clan)
+        # join the ledger, so pictures saved under that build stay openable.
+        legacy = self.root.parent / "held.txt"
+        if legacy.exists():
+            extra = {line.strip() for line in legacy.read_text().splitlines() if line.strip()} - self.held
+            if extra:
+                self.held |= extra
+                self._keep_ledger()
 
     # ── write ──
     @staticmethod
