@@ -241,6 +241,7 @@ export function CanvasToolbar({ chrome, ratio, onNode, vertical = false }: {
       {t('select', 'Select', 'V')}
       {t('hand', 'Hand', 'H')}
       {t('pen', 'Pen', 'P')}
+      {t('eraser', 'Eraser', 'E')}
       {t('text', 'Text', 'T', <span className="tb-t">T</span>)}
       <span aria-hidden="true" className="tb-sep" />
       {(() => {
