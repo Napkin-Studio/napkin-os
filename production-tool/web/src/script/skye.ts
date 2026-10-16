@@ -7,7 +7,7 @@
 // relay echoes it on each draft, so a draft lands after a reload and goes stale if the words
 // moved), the rows around it (at most 4,000 characters) and the names of the references.
 
-import { flatText, keepMine, keepSuggestion, newUlidId, proseHash, shapeProblem, type FragmentKind, type Prose } from '../../../clan-store/src'
+import { flatText, keepMine, keepSuggestion, newUlidId, proseHash, rankBetween, shapeProblem, type FragmentKind, type Prose } from '../../../clan-store/src'
 import type { Ask, Id, Job, JobState, ProductionDocument, Suggestion, Write, WriteInput, WriteIntent, WriteLine, WriteTarget } from '../contracts/types'
 import { landUpdate } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
@@ -15,9 +15,9 @@ import type { FrameDeps } from '../jobs/frames'
 import { landingWhy } from '../jobs/landing'
 import { askOf, isActive } from '../jobs/runner'
 import { proseFromText } from '../model/diff'
-import type { ModelStore } from '../model/store'
+import { ModelStore } from '../model/store'
 import { keyViews } from '../lib/names'
-import { keysList } from '../model/selectors'
+import { keysList, scenesOf } from '../model/selectors'
 import { composeScript } from './compose'
 import { refNames } from './extensions'
 
@@ -36,6 +36,8 @@ export const HANDS_OFF_LINE = 'Skye is leaving this alone. Ask her anyway?'
 export const NOT_HERE = "Skye isn't available here yet"
 export const QUOTA_OUT = "Skye has used today's writing allowance"
 export const keptLine = (shotNo?: number, seconds?: number) => `Kept Skye's draft.${shotNo && seconds ? ` Shot ${shotNo} now runs ${seconds} s.` : ''}`
+/** Skye's line when the scene she drafted for was gone and her draft became a new first scene (owner 2026-10-15). */
+export const NEW_SCENE_LINE = 'That scene was gone, so I put my draft in a new first scene. Undo takes it back.'
 export const keptMineLine = (kind: WriteTarget['kind']) => `Kept yours. Skye will leave this ${kind} alone.`
 
 const KIND: Record<WriteTarget['kind'], FragmentKind> = { scene: 'scene', shot: 'shot', beat: 'beat' }
@@ -122,18 +124,21 @@ export async function startWrite(deps: FrameDeps & { doc: ModelStore | DocumentS
 
 /**
  * Skye's write job on a script now: `working` while she writes, `waiting` (its question) while it waits on
- * the person (needs_input: no "I'm writing that now", owner 2026-10-15), and the last one's trouble (off, or
- * out of allowance). `liveState`: the runner's state, ahead of the document's.
+ * the person (needs_input: no "I'm writing that now", owner 2026-10-15), `newScene` when her last draft
+ * became a new first scene, and the last one's trouble (off, or out of allowance). `liveState`: the runner's state, ahead of the document's.
  */
-export function skyeState(d: Doc, scriptId: Id, liveState: (jobId: string) => JobState | undefined = () => undefined): { working?: string; waiting?: { jobId: string; ask?: Ask }; off: boolean; quota: boolean } {
+export function skyeState(d: Doc, scriptId: Id, liveState: (jobId: string) => JobState | undefined = () => undefined): { working?: string; waiting?: { jobId: string; ask?: Ask }; newScene?: Id; off: boolean; quota: boolean } {
   const jobs = Object.values(d.jobs).filter((j) => j.op === 'write' && j.node.kind === 'script' && j.node.id === scriptId).sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
   const state = (id: string) => liveState(id) ?? d.jobs[id].state
   const working = jobs.find((j) => isActive(state(j.id)) && state(j.id) !== 'needs_input')?.id
   const asking = jobs.find((j) => state(j.id) === 'needs_input')
   const ask = asking ? askOf(d, asking.id) : undefined
   const last = jobs.at(-1)
+  // Her last draft had no scene to go to and is a new first scene now (landWrites): she says so until the next press.
+  const newScene = last && last.state === 'completed' && d.scenes[sceneForJob(last.id)] ? sceneForJob(last.id) : undefined
   return {
     ...(working ? { working } : {}),
+    ...(newScene ? { newScene } : {}),
     ...(asking ? { waiting: { jobId: asking.id, ...(ask && ask.state === 'open' ? { ask } : {}) } } : {}),
     off: last?.error?.code === 'capability_missing', quota: last?.error?.code === 'quota_exhausted',
   }
@@ -184,24 +189,68 @@ export function proposedOf(d: Doc, w: Write): Suggestion['proposed'] | null {
   return proposed
 }
 
-/** A write job landed: each draft is a suggestion on its item, for the person who asked (Skye's decision, citing the job). */
+/** The scene a write job's draft becomes when the scene it was for is gone: one per job, named by the job. */
+export const sceneForJob = (jobId: string) => `scene_${jobId.slice(jobId.indexOf('_') + 1)}`
+
+/**
+ * A write job landed: each draft is a suggestion on its item, for the person who asked (Skye's decision,
+ * citing the job). A scene draft whose scene is gone (the person undid it while Skye's question waited)
+ * becomes a new first scene of the script instead, as Skye's words, in one undo step (owner 2026-10-15);
+ * her line says so (skyeState newScene). A shot or beat draft whose item is gone still lands nowhere.
+ */
 export async function landWrites(store: DocumentStore, job: Job): Promise<string[]> {
   const d = store.get()
   const ids: string[] = []
   const made: Suggestion[] = []
+  let orphan: Write | undefined
   for (const w of job.writes ?? []) {
     const map = { scene: d.scenes, shot: d.shots, beat: d.beats }[w.target.kind] as Record<string, unknown>
-    if (!map[w.target.id]) continue
+    if (!map[w.target.id]) {
+      if (w.target.kind === 'scene' && !orphan && proposedOf(d, w)) orphan = w
+      continue
+    }
     const proposed = proposedOf(d, w)
     if (!proposed) continue
     const id = newUlidId('sug')
     ids.push(id)
     made.push({ id, v: 1, field_v: {}, target: w.target, crew: 'skye', job_id: job.jobId, for: job.startedBy, base_hash: w.base_hash, proposed, note: w.note.slice(0, 200), state: 'open' })
   }
-  if (!made.length) return []
-  const n = made.length
-  await landUpdate(store, (x) => { for (const s of made) x.suggestions[s.id] = s }, { ...landingWhy(store, job.jobId, `${n} ${n === 1 ? 'draft' : 'drafts'} in the script`), agent: 'skye' })
+  if (made.length) {
+    const n = made.length
+    await landUpdate(store, (x) => { for (const s of made) x.suggestions[s.id] = s }, { ...landingWhy(store, job.jobId, `${n} ${n === 1 ? 'draft' : 'drafts'} in the script`), agent: 'skye' })
+  }
+  if (orphan && job.node.kind === 'script') {
+    const sceneId = await landAsFirstScene(store, job, job.node.id, orphan)
+    if (sceneId) ids.push(sceneId)
+  }
   return ids
+}
+
+/** A scene draft as a new first scene of the script, Skye's words, one undo step of the person's. Resolves its id,
+ *  or undefined when it is there already (the job landed before) or the script is gone. */
+async function landAsFirstScene(store: DocumentStore, job: Job, scriptId: Id, w: Write): Promise<Id | undefined> {
+  const d = store.get()
+  const id = sceneForJob(job.jobId)
+  if (d.scenes[id] || !d.scripts[scriptId]) return undefined
+  const rank = rankBetween(null, scenesOf(d, scriptId)[0]?.rank ?? null)
+  const why = { ...landingWhy(store, job.jobId, 'a draft as a new first scene'), agent: 'skye', rationale: NEW_SCENE_LINE }
+  const lines = w.lines.map((l) => ({ type: l.type, text: l.type === 'direction' ? l.text.replace(/\n/g, ' ') : l.text }))
+  if (!(store instanceof ModelStore)) {
+    await landUpdate(store, (x) => {
+      x.scenes[id] = { id, v: 1, field_v: {}, script_id: scriptId, rank, heading: '', text: lines.map((l) => l.text).join('\n') }
+    }, { ...why, undo: true })
+    return id
+  }
+  // The scene and its words in one step: the entity through PatchBus, its prose through TextBus (joinStep).
+  await store.flush()
+  const r = await store.bus.apply({
+    patches: [{ op: 'create', entity: 'scenes', id, value: { script_id: scriptId, rank, heading: '' }, base_version: 0 }],
+    why: { action: why.action, agent: 'skye', rationale: why.rationale, ...(why.cites ? { cites: why.cites } : {}) },
+  }, { undo: true })
+  if (!r.applied) throw new Error(r.refused.map((x) => x.message).join('; ') || 'That scene could not be made.')
+  await store.text.replace('scene', id, proseFromText(store.get(), lines), 'skye', { label: why.action, undo: true, joinStep: true })
+  await store.flush()
+  return id
 }
 
 /** An empty script's one line: the draft lands on the first scene (made if there is none). */

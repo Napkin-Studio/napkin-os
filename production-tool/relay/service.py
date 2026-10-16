@@ -1941,6 +1941,11 @@ class Relay:
         if job["op"] == "clip_patch" and job.get("_stage") in ("cut", "splice"):
             return self._advance_patch(job, cfg, now)
         if now - job.get("_submittedAt", now) > self._timeout_s(cfg, job):
+            # Past its time, but the provider may have finished it while nobody polled (the local relay
+            # was down: features/relay-durable-jobs.clan). Ask once: a finished task lands, paid for.
+            late = self._late_result(job)
+            if late is not None:
+                return self._fetch(job, late, now)
             try:
                 self._adapter(job).cancel(job["requestId"])
             except Exception:
@@ -1982,6 +1987,19 @@ class Relay:
             return self._fall_back(job, cfg, code, st.error_message or "The provider could not make this.",
                                    retryable=retryable, provider_code=st.provider_code, refund=theirs)
         return self._fetch(job, st, now)
+
+    def _late_result(self, job: dict):
+        """The provider's finished task for a job past its time, else None (still running, failed, or
+        the provider could not say)."""
+        adapter = self._adapter(job) if job.get("requestId") else None
+        if adapter is None:
+            return None
+        try:
+            st = adapter.status(job["requestId"])
+        except Exception:
+            log.exception("status from %s raised", job["provider"])
+            return None
+        return st if st.state == "succeeded" and st.outputs else None
 
     def _fetch(self, job: dict, st, now: float) -> dict:
         claimed = self._save(job, state="fetching", _leaseUntil=now + FETCH_LEASE_S)

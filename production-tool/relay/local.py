@@ -1,5 +1,7 @@
-"""The relay on http://localhost:8787 with no AWS: in-memory ledger, quotas and
-queue; uploads and outputs in .local-data/ (served at /in/, /out/, /ads/).
+"""The relay on http://localhost:8787 with no AWS: ledger, quotas and queue kept under
+the --data dir (store.FileStore), uploads and outputs there too (served at /in/, /out/, /ads/).
+A restart reloads every job and polls the unfinished ones again at once, so a paid job
+still lands (features/relay-durable-jobs.clan).
 
     cd production-tool/relay && uv run python -m local [--port 8787]
 
@@ -44,7 +46,7 @@ from providers import load_registry
 from providers.base import Status, asset_url
 from runtime import CachedConfig
 from service import Raw, Relay
-from store import MemoryStore
+from store import FileStore, MemoryStore
 
 HERE = Path(__file__).resolve().parent
 # Every header the web app sends. The browser preflights each one; a header missing here drops
@@ -154,8 +156,11 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
         sheet = json.loads((contracts_dir() / "capabilities" / "mock.json").read_text())
         registry.register(StubMock(sheet), sheet)
         log.warning("providers/mock.py not found: using the local stub")
+    mock = getattr(registry.get("mock"), "inner", None)
+    if hasattr(mock, "keep_in"):  # the mock's tasks outlive a restart, as a real provider's do
+        mock.keep_in(data_dir / "mock-provider")
     director = load_director()
-    store = MemoryStore()
+    store = FileStore(data_dir)
     local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
     relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
@@ -233,13 +238,17 @@ def serve(port: int, data_dir: Path) -> None:
         def log_message(self, *args):
             pass
 
+    unfinished = len(relay.store.list_active("r")) + len(relay.store.list_active("q"))
+    if unfinished:
+        print(f"resuming {unfinished} unfinished job(s) from {data_dir}", flush=True)
+
     def sweeper():
-        while True:
-            time.sleep(15)
+        while True:  # at once first: a restart polls what it left at a provider without waiting
             try:
                 relay.sweep()
             except Exception:
                 log.exception("sweep failed")
+            time.sleep(15)
 
     threading.Thread(target=sweeper, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
