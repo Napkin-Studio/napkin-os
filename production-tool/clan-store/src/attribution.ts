@@ -74,7 +74,7 @@ export function crewFor(op: string): (typeof CREW)[number] {
     case 'shot_list': case 'frame_edit': case 'bridge': return 'dex'
     case 'write': return 'skye'
     case 'cutout': case 'upscale': case 'region_edit': return 'rhea'
-    case 'clip_patch': case 'stitch': return 'edie'
+    case 'clip_patch': case 'stitch': case 'cutdown': return 'edie'
     case 'read': case 'transcribe': return 'ellis'
     case 'check': return 'jude'
     default: return 'wren'

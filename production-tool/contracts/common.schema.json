@@ -271,8 +271,8 @@
       "description": "How a size is made from its master (features/campaign-formats.clan, a method per format). crop: a subject-aware crop on the relay, free. extend: an Ideogram 4.5 mask on the padded clean plate. nearest: the model's nearest ratio, then a crop. regenerate: Gemini 3 Pro with the master and the named references at the nearest ratio, then a crop. layout: a crop and the type layers on a brand colour field (banners), free. reedit: a cutdown, windows of the same takes (stitch), free on the provider. reframe: a clip cropped per shot, outpainted by Aleph 2 only where the crop would cut a protected box."
     },
     "typeLayerKind": {
-      "enum": ["line", "logo", "supers", "legal"],
-      "description": "The type laid out on every size from the Brand board and the format's safe area (features/campaign-formats.clan): the brand line, the logo, supers (on-screen words and burnt-in captions on social video) and legal. Rendered by the relay (stills) and stitch (video); never sent to a model."
+      "enum": ["line", "logo", "supers", "legal", "captions"],
+      "description": "The type laid out on every size from the Brand board and the format's safe area (features/campaign-formats.clan): the brand line, the logo, supers (on-screen words) and legal. captions (a film's spoken lines, burnt in for sound off; on by default on the social shapes 9:16, 4:5 and 1:1, CF9; added 2026-10-16, additive): one layer per line, timed by fromS and toS. Rendered by the relay (stills) and stitch (video); never sent to a model."
     },
     "typeLayerOverride": {
       "type": "object",

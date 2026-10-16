@@ -1,0 +1,617 @@
+{
+  "$comment": "Cutdown windows and per-shot crops (features/campaign-formats.clan, phases 5 and 6): relay/cutdowns.py fit_windows and crop_keys, and web/src/campaign/film.ts fitWindows and cropKeys, are both tested against these cases.",
+  "cases": {
+    "fit": [
+      {
+        "name": "a 30 s master to 15 s: five 3 s windows trimmed from their tails",
+        "shots": [
+          {
+            "shotId": "shot_0",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_3",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_4",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_5",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_6",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_7",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_8",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_9",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 4
+          }
+        ],
+        "keep": [
+          "shot_0",
+          "shot_2",
+          "shot_4",
+          "shot_7",
+          "shot_9"
+        ],
+        "lengthS": 15,
+        "windows": [
+          {
+            "shotId": "shot_0",
+            "inS": 0.0,
+            "outS": 2.5
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0.0,
+            "outS": 2.5
+          },
+          {
+            "shotId": "shot_4",
+            "inS": 0.0,
+            "outS": 2.5
+          },
+          {
+            "shotId": "shot_7",
+            "inS": 0.0,
+            "outS": 2.5
+          },
+          {
+            "shotId": "shot_9",
+            "inS": 0.0,
+            "outS": 2.5
+          }
+        ],
+        "over": 0.0
+      },
+      {
+        "name": "a 6 s bumper of one shot grows into its handle",
+        "shots": [
+          {
+            "shotId": "shot_0",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 6
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 6
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 6
+          },
+          {
+            "shotId": "shot_3",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 6
+          }
+        ],
+        "keep": [
+          "shot_3"
+        ],
+        "lengthS": 6,
+        "windows": [
+          {
+            "shotId": "shot_3",
+            "inS": 0.0,
+            "outS": 3.5
+          }
+        ],
+        "over": 0.0
+      },
+      {
+        "name": "a short shot keeps its own length when the others are trimmed",
+        "shots": [
+          {
+            "shotId": "shot_0",
+            "inS": 0,
+            "outS": 0.8,
+            "takeS": 1
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0.5,
+            "outS": 6.5,
+            "takeS": 8
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0,
+            "outS": 5,
+            "takeS": 5
+          }
+        ],
+        "keep": [
+          "shot_0",
+          "shot_1",
+          "shot_2"
+        ],
+        "lengthS": 8,
+        "windows": [
+          {
+            "shotId": "shot_0",
+            "inS": 0.0,
+            "outS": 0.8
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0.5,
+            "outS": 3.064
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0.0,
+            "outS": 2.136
+          }
+        ],
+        "over": 0.0
+      },
+      {
+        "name": "the end card shot is never a window",
+        "shots": [
+          {
+            "shotId": "shot_0",
+            "inS": 0,
+            "outS": 4,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0,
+            "outS": 4,
+            "takeS": 4
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0,
+            "outS": 2.5,
+            "takeS": 2.5,
+            "endCard": true
+          }
+        ],
+        "keep": [
+          "shot_0",
+          "shot_1",
+          "shot_2"
+        ],
+        "lengthS": 6,
+        "windows": [
+          {
+            "shotId": "shot_0",
+            "inS": 0.0,
+            "outS": 1.75
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0.0,
+            "outS": 1.75
+          }
+        ],
+        "over": 0.0
+      },
+      {
+        "name": "too many kept shots stay at one second each and say how far over",
+        "shots": [
+          {
+            "shotId": "shot_0",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_3",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_4",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_5",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_6",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          },
+          {
+            "shotId": "shot_7",
+            "inS": 0,
+            "outS": 3,
+            "takeS": 3
+          }
+        ],
+        "keep": [
+          "shot_0",
+          "shot_1",
+          "shot_2",
+          "shot_3",
+          "shot_4",
+          "shot_5",
+          "shot_6",
+          "shot_7"
+        ],
+        "lengthS": 6,
+        "windows": [
+          {
+            "shotId": "shot_0",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_1",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_2",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_3",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_4",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_5",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_6",
+            "inS": 0.0,
+            "outS": 1.0
+          },
+          {
+            "shotId": "shot_7",
+            "inS": 0.0,
+            "outS": 1.0
+          }
+        ],
+        "over": 4.5
+      },
+      {
+        "name": "a take with no handle cannot grow: the cut is short",
+        "shots": [
+          {
+            "shotId": "shot_0",
+            "inS": 1,
+            "outS": 3,
+            "takeS": 3
+          }
+        ],
+        "keep": [
+          "shot_0"
+        ],
+        "lengthS": 10,
+        "windows": [
+          {
+            "shotId": "shot_0",
+            "inS": 1.0,
+            "outS": 3.0
+          }
+        ],
+        "over": -5.5
+      }
+    ],
+    "crop": [
+      {
+        "name": "a still subject in the middle crops to 9:16 without cutting it",
+        "take": {
+          "w": 1920,
+          "h": 1080
+        },
+        "aspect": {
+          "w": 9,
+          "h": 16
+        },
+        "subjects": [
+          {
+            "x": 800,
+            "y": 200,
+            "w": 300,
+            "h": 800
+          }
+        ],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 646.25,
+              "y": 0.0,
+              "w": 607.5,
+              "h": 1080.0
+            }
+          }
+        ],
+        "cuts": false
+      },
+      {
+        "name": "a wide subject is cut by a 9:16 crop: outpaint",
+        "take": {
+          "w": 1920,
+          "h": 1080
+        },
+        "aspect": {
+          "w": 9,
+          "h": 16
+        },
+        "subjects": [
+          {
+            "x": 500,
+            "y": 200,
+            "w": 900,
+            "h": 800
+          }
+        ],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 646.25,
+              "y": 0.0,
+              "w": 607.5,
+              "h": 1080.0
+            }
+          }
+        ],
+        "cuts": true
+      },
+      {
+        "name": "a subject that walks across gets a slow pan",
+        "take": {
+          "w": 1920,
+          "h": 1080
+        },
+        "aspect": {
+          "w": 9,
+          "h": 16
+        },
+        "subjects": [
+          {
+            "x": 100,
+            "y": 300,
+            "w": 300,
+            "h": 700
+          },
+          {
+            "x": 800,
+            "y": 300,
+            "w": 300,
+            "h": 700
+          },
+          {
+            "x": 1500,
+            "y": 300,
+            "w": 300,
+            "h": 700
+          }
+        ],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 0.0,
+              "y": 0.0,
+              "w": 607.5,
+              "h": 1080.0
+            }
+          },
+          {
+            "at": 0.5,
+            "box": {
+              "x": 646.25,
+              "y": 0.0,
+              "w": 607.5,
+              "h": 1080.0
+            }
+          },
+          {
+            "at": 1.0,
+            "box": {
+              "x": 1312.5,
+              "y": 0.0,
+              "w": 607.5,
+              "h": 1080.0
+            }
+          }
+        ],
+        "cuts": false
+      },
+      {
+        "name": "a subject at the edge keeps the crop inside the take",
+        "take": {
+          "w": 1920,
+          "h": 1080
+        },
+        "aspect": {
+          "w": 4,
+          "h": 5
+        },
+        "subjects": [
+          {
+            "x": 1700,
+            "y": 100,
+            "w": 200,
+            "h": 700
+          }
+        ],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 1056.0,
+              "y": 0.0,
+              "w": 864.0,
+              "h": 1080.0
+            }
+          }
+        ],
+        "cuts": false
+      },
+      {
+        "name": "a square crop of a still subject",
+        "take": {
+          "w": 1920,
+          "h": 1080
+        },
+        "aspect": {
+          "w": 1,
+          "h": 1
+        },
+        "subjects": [
+          {
+            "x": 600,
+            "y": 100,
+            "w": 500,
+            "h": 800
+          },
+          {
+            "x": 640,
+            "y": 100,
+            "w": 500,
+            "h": 800
+          }
+        ],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 330.0,
+              "y": 0.0,
+              "w": 1080.0,
+              "h": 1080.0
+            }
+          }
+        ],
+        "cuts": false
+      },
+      {
+        "name": "the master's own shape needs no crop",
+        "take": {
+          "w": 1920,
+          "h": 1080
+        },
+        "aspect": {
+          "w": 16,
+          "h": 9
+        },
+        "subjects": [
+          {
+            "x": 600,
+            "y": 100,
+            "w": 500,
+            "h": 800
+          }
+        ],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 0.0,
+              "y": 0.0,
+              "w": 1920.0,
+              "h": 1080.0
+            }
+          }
+        ],
+        "cuts": false
+      },
+      {
+        "name": "no subject seen: the middle 30% is kept, and a 9:16 crop holds it",
+        "take": {
+          "w": 1280,
+          "h": 720
+        },
+        "aspect": {
+          "w": 9,
+          "h": 16
+        },
+        "subjects": [],
+        "keys": [
+          {
+            "at": 0.0,
+            "box": {
+              "x": 437.5,
+              "y": 0.0,
+              "w": 405.0,
+              "h": 720.0
+            }
+          }
+        ],
+        "cuts": false
+      }
+    ]
+  }
+}

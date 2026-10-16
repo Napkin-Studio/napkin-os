@@ -22,7 +22,8 @@ export function leafProblem(entity: EntityName, path: string): string | null {
   if (NEVER.includes(s[0])) return `${s[0]} is the bus's, never a patch's`
   if (entity === 'project' || entity === 'assets') return s.length === 1 ? null : `${entity} fields are set whole`
   if (s.length === 1) {
-    if (s[0] === 'camera' || s[0] === 'pick' || s[0] === 'edl') return `${s[0]} has parts: set ${s[0]}/<part>`
+    // A video's edl is a map of items, set by part; a size's edl (a cutdown's windows, an array) is set whole.
+    if (s[0] === 'camera' || s[0] === 'pick' || (s[0] === 'edl' && entity === 'videos')) return `${s[0]} has parts: set ${s[0]}/<part>`
     return null
   }
   if (s[0] === 'camera') return s.length === 2 && CAMERA_PARTS.includes(s[1]) ? null : `camera's parts are ${CAMERA_PARTS.join(', ')}`
