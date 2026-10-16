@@ -8,7 +8,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useDoc, useUi } from '../app/context'
 import { arrowCard, cardLines, type ArrowCard as Card, type NodeKind } from '../canvas/arrowCard'
-import { arrowPath, hitArrow, provenanceOf, type ArrowLike, type Pt } from '../canvas/arrowHit'
+import { arrowPath, arrowShown, hitArrow, provenanceOf, type ArrowLike, type Pt } from '../canvas/arrowHit'
+import { avoidRects } from './hooks'
 import { byOwnId, cd, textOf, type Canvas, type El } from '../canvas/scene'
 
 const DELAY_MS = 250
@@ -54,7 +55,11 @@ export function ArrowCards({ canvas, wrap, selected, toView }: {
       if (e.buttons !== 0 || (e.target as Element | null)?.tagName !== 'CANVAS' || canvas.isBusy()) return hide()
       const view = canvas.view()
       const scene = canvas.viewportToScene({ x: e.clientX, y: e.clientY }, view)
-      const hit = hitArrow(canvas.elements() as unknown as ArrowLike[], scene, view.zoom)
+      const all = canvas.elements()
+      const byEl = new Map(all.map((x) => [x.id, x]))
+      const sel = new Set(view.selectedIds)
+      // A quiet arrow that is not drawn now is not hovered either.
+      const hit = hitArrow((all as unknown as ArrowLike[]).filter((a) => arrowShown(a, (id) => byEl.get(id), sel)), scene, view.zoom)
       if (!hit) return hide()
       if (hit.id === hoverId.current || hit.id === pending.current) return
       clearTimer()
@@ -145,6 +150,14 @@ function CardView({ arrow, at, pinned = false, canvas }: { arrow: El; at: Pt; pi
     let top = at.y + gap
     if (left + w > bw - 8) left = Math.max(8, at.x - gap - w)
     if (top + h > bh - 8) top = Math.max(8, at.y - gap - h)
+    // Clear of the canvas chrome (the boards rail, the bars; ui-behaviour 3.9): beside what it would cover.
+    const avoid = avoidRects(el, box)
+    const covers = (l: number, t: number) => avoid.some((r) => l < r.right && l + w > r.left && t < r.bottom && t + h > r.top)
+    if (covers(left, top)) {
+      const tries = avoid.flatMap((r) => [{ left: r.right + 8, top }, { left: r.left - 8 - w, top }, { left, top: r.bottom + 8 }, { left, top: r.top - 8 - h }])
+        .filter((p) => p.left >= 8 && p.left + w <= bw - 8 && p.top >= 8 && p.top + h <= bh - 8 && !covers(p.left, p.top))
+      if (tries[0]) ({ left, top } = tries[0])
+    }
     setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }))
   }, [at.x, at.y])
   useLayoutEffect(place)

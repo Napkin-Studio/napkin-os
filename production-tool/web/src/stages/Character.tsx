@@ -61,6 +61,7 @@ import { TABLET, useColorScheme, useFloating, useMedia } from '../ui/hooks'
 import type { Anchor } from '../lib/place'
 import { JobNode } from '../ui/JobNode'
 import { ArrowCards } from '../ui/ArrowCard'
+import { arrowShown, type ArrowLike } from '../canvas/arrowHit'
 import { cancelText } from '../ui/cancel'
 import { InlineConfirm, UndoChip } from '../ui/Undo'
 import { backWhenLive, goneWhenDead, offerGone, useUndo } from '../ui/useUndo'
@@ -119,6 +120,8 @@ export function Character({ initial, active, onPictureEditor }: {
     if (ctrl) void ctrl.restoreFiles().catch((e) => console.warn('could not put the canvas pictures back', e))
     // Views made again after the first ones were deleted take back their names (their key group).
     if (ctrl) { try { ctrl.claimViewNames() } catch (e) { console.warn('could not name the views', e) } }
+    // A placeholder whose job was never written down (the page closed first): followed if the relay has it, else "never started".
+    if (ctrl) void ctrl.recoverPlaceholders().catch((e) => console.warn('could not look up the canvas placeholders', e))
   }, [ctrl])
 
   // Switching project or going Home: the canvas is saved first (features/project-home.clan).
@@ -574,7 +577,7 @@ export function Character({ initial, active, onPictureEditor }: {
         <CanvasMount initial={initial} onReady={setCanvas} onChrome={setChrome} onChange={onChange} theme={theme} railInset={railInset} />
         {frames.length > 0 && <BoardsLayer part="cards" frames={frames} toView={toView} zoom={zoom} current={board} onOpen={open} />}
         <div className="overlay-layer">
-          <FlowArrows els={els} toView={toView} />
+          <FlowArrows els={els} selectedIds={vs?.selected ?? []} toView={toView} />
           {els.map((e) => {
             const img = imageOf(e)
             const c = cd(e)
@@ -747,6 +750,23 @@ function GenOverlay({ el, c, toView, zoom, ctrl, named }: { el: El; c: Extract<C
   const own = frame ? doc.assets[frame.asset] : undefined
   const caption = frame?.cropped_to && own?.w && own?.h ? croppedCaption({ w: own.w, h: own.h }, frame.cropped_to.to) : undefined
   const showNode = (isActive(state) || state === 'failed' || state === 'cancelled') && !dismissed && state !== 'completed'
+  // Nothing is making it (runner.adopt): say so, never a blank box (2026-10-15).
+  if (!job && !live && runner.isUnstarted(c.id)) {
+    const what = c.view ? `The ${viewLabel(c.view).toLowerCase()} view` : 'This picture'
+    return (
+      <div className="gennode" style={{ left: tl.x, top: tl.y, width: w, height: h }}>
+        <div className={`errnode ${w < 170 ? 'compact' : ''}`} role="alert">
+          <div className="msg">{what} never started: the page closed before it was sent.</div>
+          <div className="optbar" role="group" aria-label="What to do with it">
+            {c.op === 'view' && c.view && (
+              <button className="btn sm ghost" onClick={() => void ctrl?.remakeView(c.id).catch((e) => console.warn('could not make the view', e))}>Make it</button>
+            )}
+            <button className="btn sm ghost" onClick={() => ctrl?.deleteElements([el.id])}>Remove</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <>
       {showNode && (
@@ -779,13 +799,17 @@ function curvePath(pts: Pt[]): string {
   return `M ${pts.map((p) => `${p.x} ${p.y}`).join(' L ')}`
 }
 
-function FlowArrows({ els, toView }: { els: El[]; toView: (p: Pt) => Pt }) {
+function FlowArrows({ els, selectedIds, toView }: { els: El[]; selectedIds: readonly string[]; toView: (p: Pt) => Pt }) {
   const { runner } = useServices()
   const doc = useDoc()
   const paths: string[] = []
+  const byEl = new Map(els.map((e) => [e.id, e]))
+  const selected = new Set(selectedIds)
   for (const a of els) {
     const c = cd(a)
     if (c?.kind !== 'provenance' || a.type !== 'arrow') continue
+    // A key's views from its front only while one of them is selected, as the canvas draws them.
+    if (!arrowShown(a as unknown as ArrowLike, (id) => byEl.get(id), selected)) continue
     const job = doc.jobs[c.to]
     const state = runner.liveInfo(c.to)?.state ?? job?.state
     if (!state || !isActive(state)) continue

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrowPath, distToPath, distToSegment, hitArrow, provenanceOf, type ArrowLike } from './arrowHit'
+import { arrowPath, arrowShown, distToPath, distToSegment, hitArrow, provenanceOf, type ArrowLike } from './arrowHit'
 import { curvePoints } from './curve'
 
 const prov = { kind: 'provenance', from: 'node_a', to: 'job_b' }
@@ -66,5 +66,23 @@ describe('arrowHit: the provenance arrow under the pointer', () => {
     const a = curved()
     expect(hitArrow([a], { x: a.points[1][0], y: a.points[1][1] + 4 }, 1)?.id).toBe('c1')
     expect(hitArrow([a], { x: 100, y: 0 }, 1)).toBeUndefined()
+  })
+})
+
+describe('a key’s views from its front are quiet (canvas-nodes decision 2026-10-15)', () => {
+  const els = new Map<string, { customData?: unknown }>([
+    ['F', { customData: { kind: 'pic', id: 'node_a', asset: 'x' } }],
+    ['S', { customData: { kind: 'gen', id: 'job_b', op: 'view', parentIds: ['node_a'], state: 'queued', view: 'side' } }],
+    ['G', { customData: { kind: 'gen', id: 'job_c', op: 'generate', parentIds: ['node_a'], state: 'queued' } }],
+  ])
+  const to = (id: string) => ({ ...straight(`a_${id}`), startBinding: { elementId: 'F' }, endBinding: { elementId: id } })
+
+  it('an arrow to a view shows only while the front, the view or the arrow is selected', () => {
+    expect(arrowShown(to('S'), (id) => els.get(id), new Set())).toBe(false)
+    for (const sel of ['F', 'S', 'a_S']) expect(arrowShown(to('S'), (id) => els.get(id), new Set([sel]))).toBe(true)
+  })
+
+  it('an arrow to any other generation always shows', () => {
+    expect(arrowShown(to('G'), (id) => els.get(id), new Set())).toBe(true)
   })
 })

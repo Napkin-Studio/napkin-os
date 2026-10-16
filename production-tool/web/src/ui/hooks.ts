@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { blobUrl, cachedBlobUrl } from '../lib/blobs'
 import { oneAtATime } from '../lib/guard'
 import { getTheme, onThemeChange, type Theme } from '../theme'
-import { placeFloating, type Anchor } from '../lib/place'
+import { placeFloating, type Anchor, type Rect } from '../lib/place'
 
 /** An object URL for a content hash from the local blob store. */
 export function useBlobUrl(sha: string | undefined): string | undefined {
@@ -80,13 +80,30 @@ export function useMedia(q: string): boolean {
 export const PHONE = '(max-width: 599px)'
 export const TABLET = '(max-width: 1179px), (pointer: coarse)'
 
+/** Marks canvas chrome a floating bar, popover or card keeps clear of (the boards rail, the top bar, the tool bar). */
+export const FLOAT_AVOID = 'data-float-avoid'
+
+/** The chrome marked FLOAT_AVOID, in `box`'s coordinates (where `el`'s left and top are measured), but not `el` itself. */
+export function avoidRects(el: HTMLElement, box: HTMLElement | null): Rect[] {
+  if (typeof document === 'undefined') return []
+  const b = box?.getBoundingClientRect() ?? { left: 0, top: 0 }
+  const out: Rect[] = []
+  for (const a of document.querySelectorAll<HTMLElement>(`[${FLOAT_AVOID}]`)) {
+    if (a.contains(el)) continue
+    const r = a.getBoundingClientRect()
+    if (r.width > 0 && r.height > 0) out.push({ left: r.left - b.left, top: r.top - b.top, right: r.right - b.left, bottom: r.bottom - b.top })
+  }
+  return out
+}
+
 /**
  * Position a floating element (toolbar, popover) by its anchor, kept fully inside
- * its positioned parent: measured after layout, so it is placed before it paints.
+ * its positioned parent and clear of the canvas chrome (FLOAT_AVOID; ui-behaviour 3.9):
+ * measured after layout, so it is placed before it paints.
  */
 export function useFloating<T extends HTMLElement>(anchor: Anchor): { ref: React.RefObject<T | null>; style: CSSProperties } {
   const ref = useRef<T>(null)
-  const [dims, setDims] = useState<{ w: number; h: number; bw: number; bh: number } | null>(null)
+  const [dims, setDims] = useState<{ w: number; h: number; bw: number; bh: number; avoid: Rect[]; key: string } | null>(null)
   // Every render on purpose: the content (a busy label, an error) changes the size;
   // the comparison inside stops the loop.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,10 +111,12 @@ export function useFloating<T extends HTMLElement>(anchor: Anchor): { ref: React
     const el = ref.current
     if (!el) return
     const box = el.offsetParent as HTMLElement | null
-    const next = { w: el.offsetWidth, h: el.offsetHeight, bw: box?.clientWidth ?? window.innerWidth, bh: box?.clientHeight ?? window.innerHeight }
-    if (!dims || next.w !== dims.w || next.h !== dims.h || next.bw !== dims.bw || next.bh !== dims.bh) setDims(next)
+    const avoid = avoidRects(el, box)
+    const next = { w: el.offsetWidth, h: el.offsetHeight, bw: box?.clientWidth ?? window.innerWidth, bh: box?.clientHeight ?? window.innerHeight, avoid }
+    const key = JSON.stringify(next)
+    if (!dims || key !== dims.key) setDims({ ...next, key })
   })
   if (!dims) return { ref, style: { left: anchor.x, top: anchor.top, visibility: 'hidden' } }
-  const p = placeFloating(anchor, { w: dims.w, h: dims.h }, { w: dims.bw, h: dims.bh })
+  const p = placeFloating(anchor, { w: dims.w, h: dims.h }, { w: dims.bw, h: dims.bh }, 14, 8, dims.avoid)
   return { ref, style: { left: p.left, top: p.top, transform: 'none' } }
 }
