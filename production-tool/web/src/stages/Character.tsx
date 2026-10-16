@@ -89,7 +89,12 @@ type OwnEdit = Partial<{
   setSketchRatio(ratio: string): void
 }>
 
-export function Character({ initial, active }: { initial: CanvasSnapshot | null; active: boolean }) {
+export function Character({ initial, active, onPictureEditor }: {
+  initial: CanvasSnapshot | null
+  active: boolean
+  /** A canvas picture is open in the Image editor (true) or closed again: the page shows only the editor's bar. */
+  onPictureEditor?: (open: boolean) => void
+}) {
   const services = useServices()
   const { runner, doc: docStore, ui: uiStore, project } = services
   const router = useRouter()
@@ -211,6 +216,21 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
   }, [vs, canvas])
 
   const els = useMemo(() => (vs ? alive(vs.els) : []), [vs])
+  // The picture open in the Image editor, as the canvas shows it now; gone from the canvas, the editor closes.
+  const editingPic = useMemo(() => {
+    if (!editing) return null
+    const el = byOwnId(els, editing)
+    const sha = editablePicture(el) ? imageOf(el)!.asset : undefined
+    if (!el || !sha) return null
+    const a = doc.assets[sha]
+    return { nodeId: editing, picture: { sha, ...(a?.w && a?.h ? { w: a.w, h: a.h } : {}) } }
+  }, [editing, els, doc.assets])
+  // While it is open the editor is the page: its bar is the only one (owner, 2026-10-16: "Double buttons?").
+  const pictureOpen = !!editingPic
+  useEffect(() => {
+    onPictureEditor?.(pictureOpen)
+  }, [pictureOpen, onPictureEditor])
+  useEffect(() => () => onPictureEditor?.(false), [onPictureEditor])
   // Nodes and boards (our own engine) have their own handles: the floating toolbar is for marks and pictures.
   // ⌘Z (or the undo buttons) took the step back: its "· Undo" chip leaves with it.
   useEffect(() => {
@@ -630,14 +650,7 @@ export function Character({ initial, active }: { initial: CanvasSnapshot | null;
         <ZoomPill chrome={chrome} touch={narrow} />
       </div>
       </CardChromeContext.Provider>
-      {editing && (() => {
-        // The picture as the canvas shows it now; gone from the canvas, the editor closes.
-        const el = byOwnId(els, editing)
-        const sha = editablePicture(el) ? imageOf(el)!.asset : undefined
-        if (!el || !sha) return null
-        const a = doc.assets[sha]
-        return <ImageEditor target={{ kind: 'picture', nodeId: editing }} picture={{ sha, ...(a?.w && a?.h ? { w: a.w, h: a.h } : {}) }} onBack={() => setEditing(null)} />
-      })()}
+      {editingPic && <ImageEditor target={{ kind: 'picture', nodeId: editingPic.nodeId }} picture={editingPic.picture} onBack={() => setEditing(null)} />}
     </div>
   )
 }

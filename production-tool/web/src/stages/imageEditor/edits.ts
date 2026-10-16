@@ -9,10 +9,6 @@ export interface Pt { x: number; y: number }
 export type MaskOp =
   | { t: 'brush'; mode: 'add' | 'sub'; r: number; soft: number; pts: Pt[] }
   | { t: 'lasso'; mode: 'add' | 'sub'; pts: Pt[] }
-  /** Click-select's mask, run-length coded at a reduced size (mask.ts rle). */
-  | { t: 'pick'; mode: 'add' | 'sub'; w: number; h: number; rle: number[] }
-  /** Snap to cut-out: keep the mask only where the cut-out is. */
-  | { t: 'snap'; cutout: string }
 
 export type Edit =
   | { id: string; kind: 'mask'; name: string; ops: MaskOp[] }
@@ -22,7 +18,9 @@ export type Edit =
   | { id: string; kind: 'text'; text: string; x: number; y: number; size: number }
   /** The kept area, 0-1, the frame's own shape (so w === h in these units). */
   | { id: string; kind: 'crop'; x: number; y: number; w: number; h: number }
-  | { id: string; kind: 'fill'; maskId: string; words: string; keepOutside: boolean; jobId: string }
+  /** Fill area: the mask filled with the words. Remove (`remove`, no words): what the mask covers taken
+   *  out and the background continued over it. Either is one result layer, cut by the mask. */
+  | { id: string; kind: 'fill'; maskId: string; words: string; keepOutside: boolean; jobId: string; remove?: true }
   | { id: string; kind: 'whole'; words: string; jobId: string }
   | { id: string; kind: 'upscale'; scale: 2 | 4; jobId: string }
 
@@ -52,9 +50,9 @@ export function nextMaskName(s: EditSession): string {
   for (let n = 1; ; n++) if (!used.has(`Mask ${n}`)) return `Mask ${n}`
 }
 
-/** The mask the brush, lasso, eraser and click-select add to: the active one, else a new one.
+/** The mask the brush and lasso add to: the active one, else a new one.
  *  Painting a hidden mask shows it first, so the paint is seen (features/image-editor-masks-layers.clan).
- *  Taking away (any 'sub', and a snap) with no mask to take from changes nothing: see nothingToTake. */
+ *  Taking away (any 'sub') with no mask to take from changes nothing: see nothingToTake. */
 export function withMaskOp(s: EditSession, op: MaskOp): EditSession {
   const active = masks(s).find((m) => m.id === s.active)
   if (active) {
@@ -69,9 +67,9 @@ export function withMaskOp(s: EditSession, op: MaskOp): EditSession {
   return { ...s, edits: [...s.edits, m], active: m.id }
 }
 
-/** A step that takes paint away (or snaps it) with no mask to take it from: it would make an empty mask. */
+/** A step that takes paint away with no mask to take it from: it would make an empty mask. */
 export function nothingToTake(s: EditSession, op: MaskOp): boolean {
-  return !masks(s).some((m) => m.id === s.active) && (op.t === 'snap' || op.mode === 'sub')
+  return !masks(s).some((m) => m.id === s.active) && op.mode === 'sub'
 }
 
 /** What the strip says when there is nothing to take away. */
@@ -130,9 +128,7 @@ export function updateEdit(s: EditSession, id: string, patch: Partial<Edit>): Ed
 export function undoEdit(s: EditSession, id: string): EditSession {
   const gone = new Set([id])
   for (const e of s.edits) if (e.kind === 'fill' && gone.has(e.maskId)) gone.add(e.id)
-  // A snap to a cut-out that goes is dropped from its mask; the mask stays.
-  const edits = s.edits.filter((e) => !gone.has(e.id)).map((e) => (e.kind === 'mask'
-    ? { ...e, ops: e.ops.filter((o) => !(o.t === 'snap' && gone.has(o.cutout))) } : e))
+  const edits = s.edits.filter((e) => !gone.has(e.id))
   return { edits, hidden: s.hidden.filter((h) => !gone.has(h)), ...(s.active && !gone.has(s.active) ? { active: s.active } : {}) }
 }
 
@@ -188,11 +184,11 @@ export function leaveAsk(n: number): string {
   return `Keep the ${plural(n, 'edit')} for later, or discard them?`
 }
 
-/** "Next: Fill Mask 1": the next Runway step, when a painted mask has no fill yet. */
+/** "Next: Fill or remove Mask 1": the next Runway step, when a painted mask has no fill yet. */
 export function nextStep(s: EditSession): string | undefined {
   const filled = new Set(s.edits.filter((e) => e.kind === 'fill').map((e) => (e as { maskId: string }).maskId))
   const m = masks(s).find((x) => x.ops.length && !filled.has(x.id))
-  return m ? `Next: Fill ${m.name}` : undefined
+  return m ? `Next: Fill or remove ${m.name}` : undefined
 }
 
 /** An edit as the list says it. `state` is its job's, when it has one. */
@@ -204,7 +200,8 @@ export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' |
     case 'crop': return 'Crop'
     case 'fill': {
       const m = s.edits.find((x) => x.id === e.maskId)
-      return `Fill ${m && m.kind === 'mask' ? m.name : 'mask'}: "${e.words}"${state === 'running' ? ' · working' : ''}`
+      const name = m && m.kind === 'mask' ? m.name : 'mask'
+      return `${e.remove ? `Remove ${name}` : `Fill ${name}: "${e.words}"`}${state === 'running' ? ' · working' : ''}`
     }
     case 'whole': return `Change whole frame: "${e.words}"`
     case 'upscale': return `Upscale ${e.scale}×`
@@ -223,7 +220,7 @@ export function layersOf(s: EditSession, version: number): Layer[] {
     .map(({ e }): Layer => ({
       id: e.id, kind: e.kind, hidden: s.hidden.includes(e.id), active: s.active === e.id,
       label: e.kind === 'text' ? 'Text' : e.kind === 'mask' ? e.name : e.kind === 'cutout' ? 'Cut-out'
-        : e.kind === 'fill' ? 'Fill' : e.kind === 'whole' ? 'Whole frame' : e.kind === 'upscale' ? `Upscale ${e.scale}×` : 'Crop',
+        : e.kind === 'fill' ? (e.remove ? 'Remove' : 'Fill') : e.kind === 'whole' ? 'Whole frame' : e.kind === 'upscale' ? `Upscale ${e.scale}×` : 'Crop',
     }))
   out.push({ id: 'frame', kind: 'frame', label: 'Frame', hidden: s.hidden.includes('frame'), locked: true })
   void version
@@ -244,7 +241,9 @@ export function editsForFrame(s: EditSession): { op: string; params?: Record<str
       case 'cutout': return { op: 'cutout', params: { where: e.where, ...(e.jobId ? { job: e.jobId } : {}) } }
       case 'text': return { op: 'text', params: { text: e.text } }
       case 'crop': return { op: 'crop', params: { x: e.x, y: e.y, w: e.w, h: e.h } }
-      case 'fill': return { op: 'fill', params: { words: e.words, job: e.jobId, keep_outside: e.keepOutside } }
+      case 'fill': return e.remove
+        ? { op: 'remove', params: { job: e.jobId, keep_outside: e.keepOutside } }
+        : { op: 'fill', params: { words: e.words, job: e.jobId, keep_outside: e.keepOutside } }
       case 'whole': return { op: 'whole', params: { words: e.words, job: e.jobId } }
       case 'upscale': return { op: 'upscale', params: { scale: e.scale, job: e.jobId } }
     }

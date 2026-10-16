@@ -33,6 +33,8 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
   // stays mounted underneath, so its jobs keep landing. Storyboard and Video open the same way.
   const script = route.kind === 'script' && route.projectId === project.id ? route.scriptId : null
   const [panel, setPanel] = useState<'history' | 'assets' | null>(null)
+  // A canvas picture open in the Image editor: the editor's bar is the page's only bar, as for the other editors.
+  const [pictureEditor, setPictureEditor] = useState(false)
   const panels = useMemo(() => ({
     history: panel === 'history',
     assets: panel === 'assets',
@@ -51,7 +53,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
 
   return (
     <PanelsContext.Provider value={panels}>
-      {stage === 'character' && <CanvasBar />}
+      {stage === 'character' && !pictureEditor && <CanvasBar />}
       {config.banner && <div className="banner">{config.banner}</div>}
       {storeNote && <div className="storenote" role="status">{storeNote}</div>}
       {trouble && <div className="storenote" role="alert">That change could not be saved to the .clan and was undone. <button className="btn xs ghost" onClick={() => setTrouble(null)}>OK</button></div>}
@@ -59,7 +61,7 @@ export function App({ initialCanvas }: { initialCanvas: CanvasSnapshot | null })
       <div className="stage">
         {/* The canvas stays mounted so its jobs keep landing while an editor is open over it. */}
         <div className={`stage-pane ${stage === 'character' ? '' : 'hidden'}`} data-dogfood-area="canvas">
-          <Character initial={initialCanvas} active={stage === 'character'} />
+          <Character initial={initialCanvas} active={stage === 'character'} onPictureEditor={setPictureEditor} />
         </div>
         {stage === 'storyboard' && <div className="stage-pane editor-pane" data-dogfood-area="storyboard"><Storyboard /></div>}
         {stage === 'video' && <div className="stage-pane editor-pane" data-dogfood-area="video"><Video /></div>}

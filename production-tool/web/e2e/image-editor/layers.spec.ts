@@ -10,8 +10,8 @@ async function fillTopRight(page: Page) {
   await page.keyboard.press('b')
   await stroke(page, [0.62, 0.2], [0.78, 0.2], 12)
   await page.locator('#ie-fill').fill('add drops')
-  await page.locator('.ie-action').getByRole('button', { name: 'Fill area' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Fill area' }).click()
+  await page.locator('.ie-action').getByRole('button', { name: 'Fill', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Fill', exact: true }).click()
   await expect(page.locator('.ie-elist li', { hasText: 'Fill Mask 1: "' })).toContainText('ready', { timeout: 20_000 })
 }
 

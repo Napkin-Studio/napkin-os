@@ -22,7 +22,7 @@ describe('the words match 3.12', () => {
   })
   it('names the next Runway step for a painted mask with no fill', () => {
     const s = withMaskOp(EMPTY, stroke())
-    expect(nextStep(s)).toBe('Next: Fill Mask 1')
+    expect(nextStep(s)).toBe('Next: Fill or remove Mask 1')
     expect(SPEC).toContain(nextStep(s)!)
     const m = s.edits[0].id
     expect(nextStep(addEdit(s, { id: 'f', kind: 'fill', maskId: m, words: 'drops', keepOutside: true, jobId: 'job_1' }))).toBeUndefined()
@@ -63,9 +63,8 @@ describe('masks', () => {
 
 describe('what a step paints into (features/image-editor-masks-layers.clan)', () => {
   const lassoOp = (mode: 'add' | 'sub'): MaskOp => ({ t: 'lasso', mode, pts: [{ x: 0.1, y: 0.1 }, { x: 0.5, y: 0.1 }, { x: 0.5, y: 0.5 }] })
-  const pick = (mode: 'add' | 'sub'): MaskOp => ({ t: 'pick', mode, w: 2, h: 2, rle: [0, 4] })
-  it('any taking away with no mask (brush, lasso, pick, snap) changes nothing', () => {
-    for (const op of [stroke('sub'), lassoOp('sub'), pick('sub'), { t: 'snap', cutout: 'c' } as MaskOp]) {
+  it('any taking away with no mask (brush, lasso) changes nothing', () => {
+    for (const op of [stroke('sub'), lassoOp('sub')]) {
       expect(nothingToTake(EMPTY, op)).toBe(true)
       expect(withMaskOp(EMPTY, op)).toBe(EMPTY)
     }
@@ -110,7 +109,6 @@ describe('each edit has its own undo', () => {
     let s = withMaskOp(EMPTY, stroke())
     const m = s.edits[0].id
     s = addEdit(s, { id: 'c', kind: 'cutout', where: 'device', sha: 'sha256:x' })
-    s = withMaskOp(s, { t: 'snap', cutout: 'c' })
     s = addEdit(s, { id: 't', kind: 'text', text: 'Drink the morning.', x: 0.05, y: 0.86, size: 0.06 })
     s = addEdit(s, { id: 'f', kind: 'fill', maskId: m, words: 'drops', keepOutside: true, jobId: 'job_1' })
     return s
@@ -121,7 +119,7 @@ describe('each edit has its own undo', () => {
     expect(out.edits.map((e) => e.id)).toEqual(['c', 't'])
     expect(out.active).toBeUndefined()
   })
-  it("undoing a cut-out drops the mask's snap to it, and the mask stays", () => {
+  it('undoing a cut-out leaves the mask', () => {
     const out = undoEdit(base(), 'c')
     expect(out.edits[0]).toMatchObject({ kind: 'mask', ops: [{ t: 'brush' }] })
   })

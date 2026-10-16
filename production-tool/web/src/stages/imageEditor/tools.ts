@@ -1,17 +1,17 @@
-// The Image editor's tools and their keys (ui-behaviour 3.12): Select V, Click-select A, Brush mask
-// B, Lasso L, Eraser E, Text T, Crop C, Hand H (or hold Space). [ and ] change the brush size.
-// Pure, for the tests.
+// The Image editor's tools and their keys (ui-behaviour 3.12): Select V, Brush mask B, Lasso L,
+// Text T, Crop C, Hand H (or hold Space). [ and ] change the brush size. Pure, for the tests.
+// No click-select: it ran a model in the browser that never finished on Firefox, so the region is
+// painted or lassoed. No Eraser: Subtract (or Alt held) on the Brush and the Lasso takes paint away
+// (owner, 2026-10-16; features/image-editor-masks-layers.clan).
 
-export type ToolId = 'select' | 'click' | 'brush' | 'lasso' | 'eraser' | 'text' | 'crop' | 'hand'
+export type ToolId = 'select' | 'brush' | 'lasso' | 'text' | 'crop' | 'hand'
 
 export interface Tool { id: ToolId; label: string; key: string }
 
 export const TOOLS: readonly Tool[] = [
   { id: 'select', label: 'Select', key: 'V' },
-  { id: 'click', label: 'Click-select, AI finds the object', key: 'A' },
   { id: 'brush', label: 'Brush mask', key: 'B' },
   { id: 'lasso', label: 'Lasso', key: 'L' },
-  { id: 'eraser', label: 'Eraser', key: 'E' },
   { id: 'text', label: 'Text', key: 'T' },
   { id: 'crop', label: 'Crop', key: 'C' },
   { id: 'hand', label: 'Hand, pan the frame', key: 'H' },
@@ -24,7 +24,7 @@ export function toolForKey(e: { key: string; metaKey?: boolean; ctrlKey?: boolea
 }
 
 /** The tools that paint a mask, and so show the brush strip. */
-export const MASK_TOOLS: readonly ToolId[] = ['click', 'brush', 'lasso', 'eraser']
+export const MASK_TOOLS: readonly ToolId[] = ['brush', 'lasso']
 
 export const BRUSH_MIN = 4
 export const BRUSH_MAX = 200

@@ -812,6 +812,8 @@ export interface JobContext { kind: 'note' | 'document' | 'brand_rule' | 'palett
 
 export interface JobInput {
   text?: string
+  /** region_edit: the Image editor's Remove. No words: the relay writes the removal (relay-api input.remove). */
+  remove?: true
   chips?: string[]
   refs?: JobInputRef[]
   view?: View
