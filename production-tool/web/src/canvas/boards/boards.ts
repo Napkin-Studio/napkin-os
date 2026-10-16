@@ -11,7 +11,7 @@
 // - railTargets, boardKey and jumpTo: the rail lists the nodes (Script, Storyboard, Video) and then
 //   the boards by rank; ⌥1…⌥9 fit the row at that number, ⌥0 fits everything.
 
-import { rankBetween, ranksBetween } from '../../../../clan-store/src'
+import { rankBetween } from '../../../../clan-store/src'
 import { nearestFree } from '../../../../canvas-engine/src'
 import { editorOver } from '../chrome/actions'
 import type { Board, BoardPurpose, ProductionDocument } from '../../contracts/types'
