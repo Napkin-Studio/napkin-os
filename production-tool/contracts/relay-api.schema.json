@@ -322,6 +322,39 @@
               ]
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "input": {
+                "required": [
+                  "remove"
+                ]
+              }
+            },
+            "required": [
+              "input"
+            ]
+          },
+          "then": {
+            "properties": {
+              "op": {
+                "const": "region_edit"
+              },
+              "input": {
+                "required": [
+                  "image",
+                  "mask",
+                  "region"
+                ],
+                "not": {
+                  "required": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          }
         }
       ]
     },
