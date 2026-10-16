@@ -52,7 +52,6 @@ const LATER = 'Not built yet.'
 const OFF: Partial<Record<ActionId, string>> = {
   'make-clips': 'Make clips from the Storyboard for now (Open).',
   'render-ad': 'Render the ad from the Video for now (Open).',
-  'make-sizes': 'Make all sizes comes with format sheets.',
   convert: 'Nell reading your ink comes in a later build.',
   'move-to-board': 'Drag it onto a board for now.',
 }

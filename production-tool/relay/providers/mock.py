@@ -41,7 +41,7 @@ DRIFT_FPS = 24
 _WHICH = object()  # MockProvider's ffmpeg default: whatever is on PATH
 
 # The alternates in capabilities/mock.json, so local dev can exercise the regenerate menu.
-ALTERNATES = {"frame": {"mock-hq"}, "clip": {"mock-hq"}}
+ALTERNATES = {"frame": {"mock-hq"}, "clip": {"mock-hq"}, "resize": {"mock-hq"}}
 
 Fetch = Callable[[str], bytes]
 
@@ -127,6 +127,12 @@ def runway_size(job: ProviderJob) -> Optional[tuple[int, int]]:
     from aspect import CROP_OPS, parse_ratio
     from director.director import _nearest_ratio, provider_sizes
 
+    if job.op == "resize" and job.ratio:  # regenerate: at the ratio asked (an extend keeps its canvas)
+        shape = parse_ratio(job.ratio)
+        if shape and max(shape) < 512:  # a plain 9:16, as the mock's sheet lists no pixel sizes
+            k = 1344 / max(shape)
+            shape = (round(shape[0] * k), round(shape[1] * k))
+        return shape
     if job.op not in CROP_OPS or job.op == "region_edit" or not job.ratio:
         return None
     snapped = _nearest_ratio(job.ratio, provider_sizes("runway", job.op, None) or ())

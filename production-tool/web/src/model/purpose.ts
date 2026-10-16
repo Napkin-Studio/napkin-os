@@ -42,6 +42,8 @@ export type JobPurpose =
   | { for: 'image_edit'; target: EditTarget; parentFrameId?: Id }
   /** Skye drafts or rewrites one item of a script (features/script-editor.clan). */
   | { for: 'write'; scriptId?: Id }
+  /** One size of a format set (features/campaign-formats.clan): it lands as the size's picture. */
+  | { for: 'size'; setId: Id; sizeId: Id }
 
 export type Purpose = JobPurpose['for']
 
@@ -49,6 +51,7 @@ const HOWS: readonly string[] = ['first', 'next', 'rest', 'chain', 'again', 'upd
 
 /** The words a purpose is kept as. */
 export function purposeWords(p: JobPurpose): string {
+  if (p.for === 'size') return `size ${p.sizeId}`
   return p.for === 'frame' && p.how ? `frame ${p.how}` : p.for
 }
 
@@ -69,6 +72,8 @@ export function purposeNode(d: ProductionDocument, p: JobPurpose, jobId: Id): Li
       return { kind: 'sketch', id: p.sketchId }
     case 'write':
       return { kind: 'script', id: p.scriptId ?? mainScript(d)!.id }
+    case 'size':
+      return { kind: 'format_set', id: p.setId }
     default:
       // A Generate on today's canvas runs for the selection; its result is the canvas node named by the job's id.
       return { kind: 'group', id: jobId }
@@ -100,6 +105,8 @@ export function purposeOf(j: Pick<DocJob, 'purpose' | 'node' | 'inputs'>): JobPu
       return { for: kind }
     case 'write':
       return j.node.kind === 'script' ? { for: 'write', scriptId: j.node.id } : { for: 'write' }
+    case 'size':
+      return j.node?.kind === 'format_set' && how ? { for: 'size', setId: j.node.id, sizeId: how } : null
     case 'frame': {
       if (j.node.kind !== 'shot') return null
       const p: JobPurpose = { for: 'frame', shotId: j.node.id }

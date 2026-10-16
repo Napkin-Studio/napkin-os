@@ -236,6 +236,59 @@
       "required": ["width", "height"],
       "additionalProperties": false
     },
+    "pxBox": {
+      "type": "object",
+      "description": "A box in a picture's own pixels, origin top-left (features/campaign-formats.clan): a protected subject, a size's crop. The pixels of the master as the format set recorded it (format_set.master w and h), or of a take for a clip's crop.",
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "protectBox": {
+      "type": "object",
+      "description": "What must stay in every size (Wren's ask 'What must stay in every size?'): a subject or a product, as a box in the master's pixels. The logo and the words are never boxes: they are type layers from the Brand board.",
+      "properties": {
+        "role": { "enum": ["subject", "product", "other"] },
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["role", "x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "formatChannel": {
+      "enum": ["film", "social", "ooh", "print", "display"],
+      "description": "The Campaign board's lanes (features/campaign-formats.clan): film (TV and online video), social, out of home, print, display. A format without one is placed by its kind: video → film, image → social, and ooh, print and display as themselves."
+    },
+    "sizeMethod": {
+      "enum": ["crop", "extend", "nearest", "reframe", "regenerate", "layout", "reedit"],
+      "description": "How a size is made from its master (features/campaign-formats.clan, a method per format). crop: a subject-aware crop on the relay, free. extend: an Ideogram 4.5 mask on the padded clean plate. nearest: the model's nearest ratio, then a crop. regenerate: Gemini 3 Pro with the master and the named references at the nearest ratio, then a crop. layout: a crop and the type layers on a brand colour field (banners), free. reedit: a cutdown, windows of the same takes (stitch), free on the provider. reframe: a clip cropped per shot, outpainted by Aleph 2 only where the crop would cut a protected box."
+    },
+    "typeLayerKind": {
+      "enum": ["line", "logo", "supers", "legal"],
+      "description": "The type laid out on every size from the Brand board and the format's safe area (features/campaign-formats.clan): the brand line, the logo, supers (on-screen words and burnt-in captions on social video) and legal. Rendered by the relay (stills) and stitch (video); never sent to a model."
+    },
+    "typeLayerOverride": {
+      "type": "object",
+      "description": "One size's change to a type layer (Edit type on its tile). Absent fields keep the layout's own.",
+      "properties": {
+        "hidden": { "type": "boolean" },
+        "text": { "type": "string", "maxLength": 600, "description": "The words for this size only (a shorter OOH line, Skye's suggestion once kept)." },
+        "box": { "$ref": "#/$defs/region", "description": "Where it sits, in 0-1 coordinates of the size." },
+        "scale": { "type": "number", "minimum": 0.25, "maximum": 4, "description": "Times the layout's own type size." }
+      },
+      "additionalProperties": false
+    },
+    "formatCheckCode": {
+      "enum": ["subject_safe", "logo_safe", "clear_space", "type_size", "ooh_words", "line_present", "end_card", "sound_off", "brand_first_3s"],
+      "description": "Jude's per-format checks (features/campaign-formats.clan); they never block. subject_safe: every protected box inside the safe area. logo_safe: the logo inside the safe area. clear_space: the logo's clear space is free of type. type_size: type at least the format's minimum size. ooh_words: an out-of-home line is 7 words or fewer. line_present: the brand line is on the size. end_card: a film ends on its end card. sound_off: social video carries supers or captions. brand_first_3s: social video shows the brand in its first 3 s."
+    },
     "refRole": {
       "enum": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"],
       "description": "What a reference is for (ui-behaviour 3.6). An open set in meaning: a ref may add its own label. What Dex takes from each role is refRoleTable."

@@ -6,6 +6,9 @@ video_to_video (aleph2, Kling O3, Omni Flash 1.1, Seedance 2.5), upscales to ima
 Each clip model's request is built from its catalogue facts (models[m]: audioParam, negativePrompt,
 imagesMax, keyframeRatio, resolutions, v2v) and its effective sheet (refs, video.firstFrameWithRefs,
 video.refsWithoutFrame), checked against Runway's OpenAPI in tests (features/runway-video-models.clan).
+Make all sizes (features/campaign-formats.clan, op resize) runs extend as an ideogram_4_5 mask edit of
+the relay's padded canvas at the sheet's quality (high), and regenerate on gemini_image3_pro with the
+master as @master at the ratio the relay picked.
 A region edit runs on ideogram_4_5 (features/image-editor.clan): the image as the first reference
 and a black-and-white mask the same size (black = edit, providers.md fact 2), made from our
 white = change mask or from the box; with no region and no mask it is a preciseEdit, which
@@ -103,7 +106,8 @@ ALTERNATES = {"generate": {"gemini_image3.1_flash"}, "view": {"gemini_image3.1_f
               "clip": {"veo3.1_fast", "klingO3_pro", "klingO3_standard", "kling3.0_pro", "kling3.0_standard",
                        "hailuo3", "gemini_omni_flash_1.1", "wan3", "seedance2_5", "seedance2_fast"},
               "clip_edit": {"klingO3_pro", "klingO3_standard", "gemini_omni_flash_1.1", "seedance2_5"},
-              "region_edit": {"gemini_image3_pro"}}  # the box-drawn edit, before ideogram_4_5 took masks
+              "region_edit": {"gemini_image3_pro"},  # the box-drawn edit, before ideogram_4_5 took masks
+              "resize": {"gemini_image3_pro"}}  # Make all sizes' regenerate (features/campaign-formats.clan)
 
 
 class RunwayProvider:
@@ -213,6 +217,10 @@ class RunwayProvider:
             body["maskUri"] = "data:image/png;base64," + base64.b64encode(black).decode()
         else:
             body["preciseEdit"] = True
+        quality = ((effective_sheet(self._sheet, job.op, job.model)["ops"][job.op].get("defaults") or {}).get("quality")
+                   if job.op == "resize" else None)
+        if quality:  # extend: medium left the padding unfilled in the paid tests; the sheet says high
+            body["quality"] = quality
         return "/v1/text_to_image", body
 
     def _upscale(self, job: ProviderJob) -> tuple[str, dict]:
@@ -444,7 +452,7 @@ class RunwayProvider:
 
     def submit(self, job: ProviderJob) -> str:
         build = {"clip": self._clip, "clip_edit": self._clip_edit, "upscale": self._upscale}.get(job.op, self._image)
-        if job.op == "region_edit" and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
+        if job.op in ("region_edit", "resize") and effective_sheet(self._sheet, job.op, job.model)["mask"] != "none":
             build = self._ideogram
         path, body = build(job)
         resp = self._call("POST", path, json=body)

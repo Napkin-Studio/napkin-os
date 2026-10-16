@@ -355,8 +355,109 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "resize"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "required": [
+                  "image",
+                  "aspect",
+                  "delivery",
+                  "resize"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "const": "cutdown"
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "input": {
+                "required": [
+                  "aspect",
+                  "delivery",
+                  "cutdown"
+                ]
+              }
+            }
+          }
         }
       ]
+    },
+    "TypeLayer": {
+      "type": "object",
+      "description": "A type layer laid out for one size (features/campaign-formats.clan; web campaign/layout.ts, the one layout function): the relay (stills) or stitch (video) draws it over the picture. Words and the logo are never sent to a model.",
+      "properties": {
+        "kind": {
+          "$ref": "common.schema.json#/$defs/typeLayerKind"
+        },
+        "box": {
+          "$ref": "common.schema.json#/$defs/region",
+          "description": "Where it sits, in 0-1 coordinates of the size."
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "image": {
+          "$ref": "common.schema.json#/$defs/assetRef",
+          "description": "logo: the Brand board's logo."
+        },
+        "sizeFrac": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "The type's cap height as a share of the size's height (the relay shrinks it to fit the box)."
+        },
+        "colour": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "align": {
+          "enum": [
+            "left",
+            "centre",
+            "right"
+          ]
+        },
+        "weight": {
+          "enum": [
+            "regular",
+            "bold"
+          ]
+        },
+        "plate": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "A colour band behind the words (supers on a busy picture)."
+        }
+      },
+      "required": [
+        "kind",
+        "box"
+      ],
+      "additionalProperties": false
     },
     "ModelChoice": {
       "type": "object",
@@ -647,8 +748,140 @@
           "description": "clip_patch: the edited still at atS (the review's still, from Edit still). Absent: no keyframe is sent at the default context 0, so an unedited frame never anchors the edit."
         },
         "scale": {
-          "enum": [2, 4],
-          "description": "upscale: how many times each side grows (the Image editor's 2x or 4x). Absent: 2. Added 2026-10-15 (additive, features/image-editor.clan)."
+          "enum": [2, 4, 8],
+          "description": "upscale: how many times each side grows (the Image editor's 2x or 4x; Export at full size's 4x, or 8x for the largest print sizes). Absent: 2. Added 2026-10-15 (additive, features/image-editor.clan); 8 added 2026-10-16 (features/campaign-formats.clan)."
+        },
+        "layers": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/TypeLayer"
+          },
+          "description": "upscale for delivery (Export at full size; features/campaign-formats.clan, with input.delivery): the size's type layers, drawn by the relay at the delivery size over the upscaled plate. Never sent to the model. Added 2026-10-16 (additive)."
+        },
+        "resize": {
+          "type": "object",
+          "description": "resize (Make all sizes; features/campaign-formats.clan): one size of a format set, made from the master's clean plate (input.image: the picture with no type and no logo). method crop and layout are free: the relay crops (subject-aware: the crop keeps every protected box, as much of the safe area as the shape allows), scales to the preview and draws the type layers itself; no provider, no spend, not counted in a quota. extend and regenerate run on the op's models (phase 4): extend an Ideogram 4.5 mask on the relay's padded canvas of the master, regenerate Gemini 3 Pro with the master as @master at the nearest ratio; both cropped to the exact shape. reedit, reframe and nearest answer capability_missing. Never carries words for a model: layers are drawn by the relay.",
+          "properties": {
+            "method": {
+              "$ref": "common.schema.json#/$defs/sizeMethod"
+            },
+            "masterSize": {
+              "$ref": "common.schema.json#/$defs/aspect",
+              "description": "The pixels protect and crop are in (format_set.master w and h); the relay scales them to the picture it reads."
+            },
+            "protect": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "$ref": "common.schema.json#/$defs/protectBox"
+              }
+            },
+            "crop": {
+              "$ref": "common.schema.json#/$defs/pxBox",
+              "description": "The crop to use (the size's own, or the person's). Absent: the relay works it out from protect and the safe area."
+            },
+            "previewMaxPx": {
+              "type": "integer",
+              "minimum": 64,
+              "maximum": 4096,
+              "description": "The preview's longest side; the result is the delivery shape at most this long (never larger than the delivery). Absent: 2048."
+            },
+            "background": {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "description": "layout: the brand colour the picture sits on."
+            },
+            "panel": {
+              "$ref": "common.schema.json#/$defs/region",
+              "description": "layout: where the picture sits on the colour field, in 0-1 coordinates of the size; crop is then the part of the master at the panel's shape. Absent: the whole size. Added 2026-10-16 (additive)."
+            },
+            "layers": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "$ref": "#/$defs/TypeLayer"
+              }
+            }
+          },
+          "required": [
+            "method",
+            "masterSize"
+          ],
+          "additionalProperties": false
+        },
+        "cutdown": {
+          "type": "object",
+          "description": "cutdown (features/campaign-formats.clan, phases 5 and 6): a length or a shape of the film as windows of the same takes, rendered by stitch. A re-edit spends nothing on a provider; a reframe crops each clip and outpaints only the clips marked outpaint (Aleph 2).",
+          "properties": {
+            "lengthS": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 600
+            },
+            "clips": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "asset": {
+                    "$ref": "common.schema.json#/$defs/assetRef"
+                  },
+                  "inS": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "outS": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "takeSize": {
+                    "$ref": "common.schema.json#/$defs/aspect"
+                  },
+                  "crop": {
+                    "$ref": "common.schema.json#/$defs/pxBox",
+                    "description": "In takeSize pixels; absent: the whole frame."
+                  },
+                  "outpaint": {
+                    "type": "boolean",
+                    "description": "The crop would cut a protected box: Aleph 2 makes the new edges of this clip."
+                  },
+                  "endCard": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "asset",
+                  "inS",
+                  "outS"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "endCard": {
+              "type": "boolean"
+            },
+            "fadeOutS": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3,
+              "description": "The master mix is trimmed with this fade until audio-mix rebuilds it to length."
+            },
+            "layers": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "$ref": "#/$defs/TypeLayer"
+              }
+            }
+          },
+          "required": [
+            "lengthS",
+            "clips"
+          ],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -805,6 +1038,36 @@
             "$ref": "#/$defs/Write"
           },
           "description": "write only: Skye's drafts, each landing as a suggestion on its target (one job may draft several)."
+        },
+        "resize": {
+          "type": "object",
+          "description": "resize only: how the size was made. crop: the part of the master used, in masterSize pixels (the whole master for extend and regenerate). previewPx: the result's size. plate: the picture before type.",
+          "properties": {
+            "method": {
+              "$ref": "common.schema.json#/$defs/sizeMethod"
+            },
+            "crop": {
+              "$ref": "common.schema.json#/$defs/pxBox"
+            },
+            "previewPx": {
+              "$ref": "common.schema.json#/$defs/deliveryPx"
+            },
+            "layers": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many type layers the relay drew."
+            },
+            "plate": {
+              "$ref": "common.schema.json#/$defs/output",
+              "description": "The size's picture before its type layers, at the preview size: Edit type draws on it again for free, and Export at full size upscales it. Added 2026-10-16 (additive)."
+            }
+          },
+          "required": [
+            "method",
+            "crop",
+            "previewPx"
+          ],
+          "additionalProperties": false
         },
         "patch": {
           "type": "object",

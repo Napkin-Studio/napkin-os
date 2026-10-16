@@ -114,6 +114,20 @@ These rows are the four frame ratios for storyboard panels and their default del
 | Film 1:1 (square)<br>`film-1x1` | 1080 x 1080 px | 1:1 | 1080 x 1080 | not published | - |  | [1](https://support.google.com/google-ads/answer/13547298) |
 | Film 4:5 (portrait feed)<br>`film-4x5` | 1080 x 1350 px | 4:5 | 1080 x 1350 | not published | - | LinkedIn max 1080x1350; Meta now recommends 1440x1800 for 4:5. | [1](https://www.linkedin.com/help/lms/answer/a424737)<br>[2](https://www.facebook.com/business/ads-guide/update/video/facebook-feed) |
 
+## Campaign launch plan
+
+Added 2026-10-16 for [Make all sizes](campaign-formats.md) (owner decision CF3). A plan is not a pack: it
+picks formats from the packs above by id, so no format is copied. Every format also names its
+Campaign board lane (`channel`: film, social, ooh, print or display).
+
+| Lane | Formats | Lengths |
+|---|---|---|
+| Film | `film-16x9`, `film-9x16`, `film-4x5`, `film-1x1` | 30, 15 and 6 s at 16:9; 15 and 6 s at 9:16; 15 s at 4:5 and 1:1 |
+| Social | `meta-reels-9x16`, `meta-feed-image-4x5`, `meta-feed-image-1x1`, `linkedin-image-1.91x1` | |
+| Out of home | `uk-48-sheet`, `uk-96-sheet`, `uk-6-sheet`, `uk-d6`, `uk-d48-jcdecaux` | |
+| Print | `mag-a4-full-page`, `mag-a4-dps` | |
+| Display | `iab-300x250`, `iab-728x90`, `iab-160x600`, `iab-300x600`, `iab-320x50`, `iab-970x250` | |
+
 ## Unverified, and why
 
 - **meta-feed-image-1x1**: the 1440 x 1440 size is derived from Meta's 1440-wide recommendation; 1:1 is within Meta's accepted range.

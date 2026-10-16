@@ -11,6 +11,7 @@ import type { CanvasChrome } from './chrome/controls'
 import type { CanvasAdapter, CanvasSnapshot } from './core/canvasAdapter'
 import { BoardLayer } from './boards/BoardLayer'
 import { NodeLayer } from './nodes/NodeLayer'
+import { CampaignLayer } from '../campaign/CampaignLayer'
 
 export function CanvasMount({ initial, onReady, onChrome, onChange, theme, railInset = 0 }: {
   /** The saved scene to open with (read once, on mount). */
@@ -98,6 +99,7 @@ export function CanvasMount({ initial, onReady, onChrome, onChange, theme, railI
 
   return (
     <div ref={host} style={{ position: 'absolute', inset: 0 }}>
+      {own && <CampaignLayer canvas={own} tick={tick} />}
       {own && <NodeLayer canvas={own} tick={tick} />}
       {own && <BoardLayer canvas={own} inset={railInset} tick={tick} />}
     </div>

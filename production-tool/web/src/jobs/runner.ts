@@ -80,6 +80,11 @@ function collectHashes(v: unknown, out: Set<string>) {
   else if (v && typeof v === 'object') Object.values(v).forEach((x) => collectHashes(x, out))
 }
 
+/** A job the relay runs free and outside the in-flight limit (relay service.free_resize; features/campaign-formats.clan). */
+export function isFreeRequest(r: Pick<JobRequest, 'op' | 'input'>): boolean {
+  return r.op === 'resize' && (r.input.resize?.method === 'crop' || r.input.resize?.method === 'layout')
+}
+
 export function isActive(state: JobState): boolean {
   return !TERMINAL_STATES.includes(state)
 }
@@ -257,10 +262,12 @@ export class JobRunner {
   private readonly atRelay = new Set<string>()
   /** Requests waiting in this browser for a place, oldest first: never sent past the limit (it was a 429). */
   private held: JobRequest[] = []
+  /** Free jobs (a Make all sizes crop): they take no place at the relay (relay free_resize). */
+  private readonly free = new Set<string>()
 
   /** Keep the count of places the relay holds for this person, and send what waits when one frees. */
   private track(jobId: string, relayState: JobState | null) {
-    const holds = relayState !== null && ['queued', 'submitting', 'submitted', 'fetching', 'validating'].includes(relayState)
+    const holds = relayState !== null && !this.free.has(jobId) && ['queued', 'submitting', 'submitted', 'fetching', 'validating'].includes(relayState)
     if (holds) this.atRelay.add(jobId)
     else this.atRelay.delete(jobId)
     while (this.held.length && this.atRelay.size < this.inFlightLimit() && !this.stopped) {
@@ -270,14 +277,17 @@ export class JobRunner {
   }
 
   private async send(request: JobRequest) {
-    if (!this.atRelay.has(request.jobId) && this.atRelay.size >= this.inFlightLimit()) {
+    // A free crop (Make all sizes) holds no place at the relay: it is never held back here.
+    const free = isFreeRequest(request)
+    if (free) this.free.add(request.jobId)
+    if (!free && !this.atRelay.has(request.jobId) && this.atRelay.size >= this.inFlightLimit()) {
       // Wait here, "In the queue", until one of this person's jobs at the relay finishes.
       if (!this.held.some((r) => r.jobId === request.jobId)) this.held.push(request)
       this.live.set(request.jobId, { state: 'queued' })
       this.emit()
       return
     }
-    this.atRelay.add(request.jobId)
+    if (!free) this.atRelay.add(request.jobId)
     try {
       const job = await this.relay.createJob(request)
       if (this.stopped) return
