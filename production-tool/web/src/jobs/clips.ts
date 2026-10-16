@@ -10,7 +10,7 @@ import { clipText } from '../lib/guard'
 import { assetRef } from './assets'
 import type { FrameDeps } from './frames'
 import { selectedFrame } from './frames'
-import { jobShot, refsFor } from './select'
+import { jobShot, mentionedPictures, namedInput, refsFor } from './select'
 import { shotFromWords } from './clipMode'
 
 export { jobShot }
@@ -81,6 +81,27 @@ export async function makeClip(
   }
   const parents = [frame?.job_id, extra.parentTake?.job_id].filter(Boolean) as string[]
   return deps.runner.submit('clip', input, parents, purpose, undefined, extra.modelChoice, extra.followRun ? { local: { followRun: extra.followRun } } : {})
+}
+
+/**
+ * Change the feel of a whole clip (clip_edit), on `modelChoice` when the participant picked one. The pictures
+ * its words name go too (features/runway-video-models.clan): a model that edits with pictures (Kling O3,
+ * Omni Flash 1.1, Seedance 2.5) puts them into the clip; Aleph 2 takes none and reads their names as words.
+ */
+export async function changeFeel(
+  deps: Pick<FrameDeps, 'relay' | 'doc' | 'runner'>,
+  shotId: string,
+  take: Take,
+  text: string,
+  feel: JobInput['feel'],
+  modelChoice?: ModelChoice,
+): Promise<string> {
+  const d = deps.doc.get()
+  const video = await assetRef(deps.relay, take.asset, d)
+  const pictures = mentionedPictures(d, text).filter((r) => r.asset).slice(0, 14)
+  const refs = await Promise.all(pictures.map((r) => namedInput(deps.relay, d, r)))
+  const input: JobInput = { video, text, ...(feel ? { feel } : {}), ...(refs.length ? { refs } : {}) }
+  return deps.runner.submit('clip_edit', input, [take.job_id], { for: 'clip', shotId, parentTakeId: take.id }, undefined, modelChoice)
 }
 
 /** The stitch request: every shot's clip in the cut, in shot order, cut to the shot's length, from its edl

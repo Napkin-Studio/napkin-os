@@ -30,7 +30,7 @@ PROVIDERS = ("runway",)
 OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit", "upscale")
 STEP = {"generate": "Character (canvas generate)", "view": "Views (turnaround)", "frame": "Storyboard frame",
         "region_edit": "Region edit", "clip": "Clip", "clip_edit": "Clip edit", "upscale": "Upscale (Image editor)"}
-TAGS = {"at_tag": "`@tag` (its own name)", "none": "not named (by order only)"}
+TAGS = {"at_tag": "`@tag` (its own name)", "none": "in words (no tag; pictures by order)"}
 INTERESTING = ("aspect_ratio", "ratio", "resolution", "duration", "image_size", "num_images", "outputCount",
                "result_type", "edit_strength", "horizontal_angle")
 
@@ -129,6 +129,20 @@ SENDS = {
     ("runway", "veo3.1"): "the storyboard frame (and a last frame) only; characters named in words",
     ("runway", "veo3.1_fast"): "the storyboard frame (and a last frame) only; characters named in words",
     ("runway", "aleph2"): "the clip, the change in words and an optional keyframe",
+    # features/runway-video-models.clan
+    ("runway", "klingO3_pro@clip"): "the frame (and a last frame) plus up to 6 character pictures, 7 in all; with no frame, words alone",
+    ("runway", "klingO3_standard@clip"): "the frame (and a last frame) plus up to 6 character pictures, 7 in all; with no frame, words alone",
+    ("runway", "kling3.0_pro@clip"): "the storyboard frame (and a last frame) only; characters named in words",
+    ("runway", "kling3.0_standard@clip"): "the storyboard frame (and a last frame) only; characters named in words",
+    ("runway", "hailuo3@clip"): "the frame (and a last frame) alone; with no frame, up to 9 character pictures as references",
+    ("runway", "gemini_omni_flash_1.1@clip"): "the frame (and a last frame) alone; with no frame, up to 5 character pictures as references",
+    ("runway", "wan3@clip"): "the frame (and a last frame) alone, ratio auto_<tier>; with no frame, up to 10 character pictures",
+    ("runway", "seedance2_5@clip"): "the frame (and a last frame) alone; with no frame, up to 30 pictures (stylised only)",
+    ("runway", "seedance2_fast@clip"): "the frame (and a last frame) alone; with no frame, up to 9 pictures (stylised only)",
+    ("runway", "klingO3_pro@clip_edit"): "the clip, the change in words and up to 4 pictures; keeps the clip's sound",
+    ("runway", "klingO3_standard@clip_edit"): "the clip, the change in words and up to 4 pictures; keeps the clip's sound",
+    ("runway", "gemini_omni_flash_1.1@clip_edit"): "the clip (mode edit), the change in words and up to 5 pictures",
+    ("runway", "seedance2_5@clip_edit"): "the clip (mode edit, duration auto), the change in words and up to 30 pictures (stylised only)",
 }
 
 
@@ -143,8 +157,12 @@ def _ours(sheet: dict, spec: dict, op: str = "") -> list[str]:
 def _lengths(spec: dict) -> list[str]:
     if "durationsS" in spec:
         return [f"lengths: {', '.join(f'{d:g}' for d in spec['durationsS'])} s"]
-    if "minS" in spec or "maxS" in spec:
-        return [f"lengths: {spec.get('minS', '…'):g}-{spec.get('maxS', '…'):g} s"]
+    if "minS" in spec and "maxS" in spec:
+        return [f"lengths: {spec['minS']:g}-{spec['maxS']:g} s"]
+    if "maxS" in spec:
+        return [f"lengths: up to {spec['maxS']:g} s"]
+    if "minS" in spec:
+        return [f"lengths: from {spec['minS']:g} s"]
     return []
 
 
@@ -175,7 +193,9 @@ def render() -> str:
                 continue
             for i, m in enumerate([spec, *spec.get("alternates", [])]):
                 fetched, accepts = _accepts(provider, m["model"], m["endpoint"])
-                ours = _ours(sheet, {**spec, **m} if i else spec, op)
+                lengths = ("durationsS", "minS", "maxS")  # an alternate's lengths replace the op's (effective_sheet)
+                own = {k: v for k, v in spec.items() if not (any(x in m for x in lengths) and k in lengths)}
+                ours = _ours(sheet, {**own, **m} if i else spec, op)
                 label = f"**{m.get('label', m['model'])}** (`{m['model']}`)" + (" default" if i == 0 else "")
                 price = pricing().op_usd(sheet, op, m["model"] if i else None)
                 parts.append(f"| {STEP[op] if i == 0 else ''} | {label} | {_usd(price)} | "

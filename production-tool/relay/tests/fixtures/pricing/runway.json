@@ -1,6 +1,6 @@
 {
  "credit": "Credits can be purchased for $0.01 per credit in the developer portal for a project.",
- "fetched": "2026-10-13",
+ "fetched": "2026-10-15",
  "rows": {
   "act_two": [
    "`act_two` | 5 credits per second"
@@ -135,6 +135,15 @@
   "kling3.0_standard": [
    "`kling3.0_standard` (no audio) | 9 credits per second",
    "`kling3.0_standard` (audio) | 13 credits per second"
+  ],
+  "klingO3_4k": [
+   "`klingO3_4k` | 43 credits per second"
+  ],
+  "klingO3_pro": [
+   "`klingO3_pro` | 17 credits per second"
+  ],
+  "klingO3_standard": [
+   "`klingO3_standard` | 13 credits per second"
   ],
   "magnific_precision_upscaler_v2": [
    "`magnific_precision_upscaler_v2` | 25 credits per image, or 150 credits when output exceeds 4096px"

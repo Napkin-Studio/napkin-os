@@ -1,5 +1,5 @@
 {
-  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter. clip_patch cases (features/clip-moment-edit.clan, since director.v7): frame names the still at the note's moment that Dex sees; video V1 is the take; expect.route is fix (a job) or ask (the fix/remake nudge).",
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter. clip_patch cases (features/clip-moment-edit.clan, since director.v7): frame names the still at the note's moment that Dex sees; video V1 is the take; expect.route is fix (a job) or ask (the fix/remake nudge). expect_refs (since director.v9, features/runway-video-models.clan): exactly the pictures besides `current` the job sends; frame: whether it sends a firstFrame.",
   "assets": {
     "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
     "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
@@ -9,7 +9,10 @@
     "S2": "sha256:d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6",
     "S3": "sha256:d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8",
     "S4": "sha256:d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9",
-    "S5": "sha256:d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+    "S5": "sha256:d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+    "B1": "sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+    "B2": "sha256:b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "H1": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
   },
   "cards": {
     "handyman_front": "Full-body figure in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, standing front-on with feet together. Wears a short-sleeved royal-blue polo shirt with a small round white emblem on the chest. Carries a grey mop and bucket. Photoreal, plain light background.",
@@ -944,6 +947,275 @@
         "samurai_back"
       ],
       "budget": 500
+    },
+    {
+      "id": "clip_hailuo_refs_no_frame",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "model": "hailuo3",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). A clip straight from the script on Hailuo 3 sends the baby's pictures as references and names her by tag; no frame.",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal"
+        ],
+        [
+          "kitchen"
+        ]
+      ],
+      "forbid": [
+        "pyjamas",
+        "pajamas",
+        "floral"
+      ],
+      "required": [
+        "baby_front",
+        "baby_side"
+      ],
+      "expect_refs": [
+        "baby_front",
+        "baby_side"
+      ],
+      "frame": false,
+      "budget": 500
+    },
+    {
+      "id": "clip_omni_refs_no_frame",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "model": "gemini_omni_flash_1.1",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). The same on Omni Flash 1.1 (up to 5 references).",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal"
+        ]
+      ],
+      "forbid": [
+        "pyjamas",
+        "pajamas",
+        "floral"
+      ],
+      "required": [
+        "baby_front",
+        "baby_side"
+      ],
+      "expect_refs": [
+        "baby_front",
+        "baby_side"
+      ],
+      "frame": false,
+      "budget": 500
+    },
+    {
+      "id": "clip_kling_o3_frame_refs",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "model": "klingO3_standard",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). Kling O3 takes the storyboard frame and the character's pictures together: the frame for composition, the refs for identity.",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "image": "A6",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal",
+          "grab"
+        ]
+      ],
+      "forbid": [
+        "pyjamas",
+        "pajamas",
+        "floral"
+      ],
+      "required": [
+        "baby_front",
+        "baby_side"
+      ],
+      "expect_refs": [
+        "baby_front",
+        "baby_side"
+      ],
+      "frame": true,
+      "budget": 500
+    },
+    {
+      "id": "clip_veo_no_frame_words",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). Veo unchanged: a clip from words alone takes no pictures; the baby is said in words.",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal"
+        ],
+        [
+          "baby"
+        ]
+      ],
+      "forbid": [
+        "@baby"
+      ],
+      "expect_refs": [],
+      "frame": false,
+      "budget": 500
+    },
+    {
+      "id": "clip_edit_kling_adds_hat",
+      "since": "director.v9",
+      "op": "clip_edit",
+      "provider": "runway",
+      "model": "klingO3_standard",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). Editing something into a clip from a picture: Kling O3 takes the clip and the hat's picture.",
+      "input": {
+        "video": "V1",
+        "text": "put the hat from @hat_front on the baby's head",
+        "refs": [
+          {
+            "id": "ref_01M5HAT00000000000000001VW",
+            "name": "hat_front",
+            "role": "prop",
+            "kind": "generated",
+            "asset": "H1"
+          }
+        ]
+      },
+      "must": [
+        [
+          "hat"
+        ]
+      ],
+      "forbid": [],
+      "expect_refs": [
+        "hat_front"
+      ],
+      "budget": 250
     }
   ],
   "frames": {

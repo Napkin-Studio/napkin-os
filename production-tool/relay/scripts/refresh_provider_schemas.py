@@ -58,7 +58,7 @@ def schema_file(path: str) -> Path:
 
 # ── pricing.md as rows by model id ──────────────────────────────────────────
 _TICKED = re.compile(r"`([^`]+)`")
-_MODEL_ID = re.compile(r"^[a-z][a-z0-9_.\-]*[a-z0-9]$")
+_MODEL_ID = re.compile(r"^[a-z][A-Za-z0-9_.\-]*[a-z0-9]$")  # klingO3_standard: an upper-case letter inside
 
 
 def _cells(line: str) -> list[str]:

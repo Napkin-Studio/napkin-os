@@ -222,3 +222,26 @@ def test_a_reply_that_swaps_samurai_for_one_view_fails_the_eval():
     out = answer(case, data, "director.v8", Replay(_json.dumps(reply)))
     assert out == {"error": out.get("error")} and "left out" in out["error"]  # the relay refuses it
     assert score(case, out) == {"valid": False}
+
+
+def test_the_v9_cases_hold_the_passthrough_to_each_models_pictures():
+    """Clips that carry characters (features/runway-video-models.clan): with no model, the passthrough
+    already sends exactly the pictures each case's model carries, so the relay's fallback keeps the baby."""
+    data = load()
+    v9 = {c["id"] for c in data["cases"] if c.get("since") == "director.v9"}
+    assert v9 == {"clip_hailuo_refs_no_frame", "clip_omni_refs_no_frame", "clip_kling_o3_frame_refs",
+                  "clip_veo_no_frame_words", "clip_edit_kling_adds_hat"}
+    rows = table(data, ["passthrough"])["passthrough"]
+    for cid in v9:
+        assert rows[cid]["valid"] and rows[cid]["exact_refs"], (cid, rows[cid])
+        assert rows[cid].get("frame", True), (cid, rows[cid])
+
+
+def test_a_v9_answer_that_sends_the_wrong_pictures_scores_so():
+    from eval.director_eval import score
+    case = next(c for c in load()["cases"] if c["id"] == "clip_hailuo_refs_no_frame")
+    words_only = {"providerJob": {"prompt": "A baby grabs cereal in a kitchen.", "refs": []}}
+    assert score(case, words_only)["exact_refs"] is False
+    kept = {"providerJob": {"prompt": "@baby_front grabs cereal in a kitchen.",
+                            "refs": [{"name": "baby_front", "role": "character"}, {"name": "baby_side", "role": "character"}]}}
+    assert score(case, kept)["exact_refs"] is True and score(case, kept)["frame"] is True

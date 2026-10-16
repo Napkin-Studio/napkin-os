@@ -11,7 +11,7 @@ import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from 
 import type { ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
-import { makeClip as submitClip, renderAd } from '../jobs/clips'
+import { changeFeel, makeClip as submitClip, renderAd } from '../jobs/clips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, takeStale } from '../jobs/stale'
@@ -752,11 +752,14 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
 }
 
 function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
-  const { runner, relay } = useServices()
+  const { runner, relay, doc: docStore } = useServices()
   const doc = useDoc()
   const ui = useUi()
-  const { controls } = useConfig()
+  const { controls, config } = useConfig()
   const [text, setText] = useState('')
+  // Which model makes the change (features/runway-video-models.clan): Aleph 2 by default, or one that
+  // edits with the pictures the words name.
+  const [pick, setPick] = useState<ModelChoice | undefined>(undefined)
   const [strength, setStrength] = useState<Strength>('flex')
   const [error, setError] = useState<string | null>(null)
   const running = isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === shot.id))
@@ -764,8 +767,8 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
   const apply = () => send(async () => {
     setError(null)
     try {
-      const video = await assetRef(relay, take.asset, doc)
-      await runner.submit('clip_edit', { video, text: text.trim(), ...(controls.feelStrength ? { feel: { strength } } : { feel: {} }) }, [take.job_id], { for: 'clip', shotId: shot.id, parentTakeId: take.id })
+      await changeFeel({ relay, doc: docStore, runner }, shot.id, take, text.trim(), controls.feelStrength ? { strength } : {},
+        choiceToSend('clip_edit', config, pick))
       setText('')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
@@ -784,6 +787,7 @@ function FeelBox({ shot, take }: { shot: Shot; take: Take }) {
         </div>
       )}
       <div className="row">
+        <ModelPick op="clip_edit" value={pick} onChange={setPick} />
         <span className="spacer" />
         <button className="btn sm primary" disabled={!text.trim() || running || sending} onClick={() => void apply()}>{sending ? 'Sending…' : running ? 'Working…' : 'Apply'}</button>
       </div>

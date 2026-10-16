@@ -279,6 +279,13 @@ export interface ModelSheet {
   audioDefault?: boolean
   scaleFactors?: number[]
   resolutions?: string[]
+  /** features/runway-video-models.clan: the request's audio switch, Veo's negativePrompt, the pictures one
+   *  clip carries with its frames (Kling O3: 7), WAN's auto ratio with a frame, and how the model edits a clip. */
+  audioParam?: boolean
+  negativePrompt?: boolean
+  imagesMax?: number
+  keyframeRatio?: 'auto_tier'
+  v2v?: { videoField: 'videoUri' | 'promptVideo'; mode?: 'edit'; durationAuto?: boolean; keepOriginalSound?: boolean; audioParam?: boolean; refsMax: number; inputMaxS?: number }
   pricing: { unit: 'image' | 'second' | 'frame'; source: string[]; [k: string]: unknown }
 }
 
@@ -305,6 +312,9 @@ export interface CapabilitySheet {
     regionEdit: 'none' | 'temporal_keyframe' | 'mask'
     feelEdit: 'none' | 'prompt' | 'strength'
     audioDefault: boolean
+    audioControl?: boolean
+    /** A clip with no first frame can carry reference pictures (features/runway-video-models.clan). */
+    refsWithoutFrame?: boolean
   }
   inputs: { headRequired: boolean; followsRedirects: boolean; maxImageMb?: number; maxVideoMb?: number }
   results: { mode: 'poll' | 'webhook' | 'poll_or_webhook'; minPollS: number; idempotencyKey: boolean; outputUrlTtlH?: number | null; cancel?: boolean }

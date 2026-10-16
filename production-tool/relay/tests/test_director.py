@@ -178,9 +178,10 @@ def test_the_role_lines_are_the_contracts_verbatim():
 def test_only_the_v6_and_later_prompts_are_bundled():
     """Contract 3 runs director.v6: the older prompts write fields contract 3 refuses. director.v6.1
     (frame-aspect) is v6 plus the true-shape crop; director.v7 (frame-change-edit) adds Change this
-    frame; director.v8 (canvas-nodes) holds a shot's required refs. v6, v6.1 and v7 stay, so a rollback
-    is a config change."""
-    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == ["director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md"]
+    frame; director.v8 (canvas-nodes) holds a shot's required refs; director.v9 (runway-video-models) says
+    which pictures each clip model carries. The older ones stay, so a rollback is a config change."""
+    assert sorted(p.name for p in PROMPTS.glob("director.v*.md")) == [
+        "director.v6.1.md", "director.v6.md", "director.v7.md", "director.v8.md", "director.v9.md"]
 
 
 def test_v7_is_v6_1_with_the_words_first_no_prices_and_a_frame_edit_section():
