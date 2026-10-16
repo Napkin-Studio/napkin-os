@@ -12,15 +12,16 @@ export type MaskOp =
 
 export type Edit =
   | { id: string; kind: 'mask'; name: string; ops: MaskOp[] }
-  /** Remove background's result: the picture with its background gone, from the device (sha) or the relay (jobId). */
-  | { id: string; kind: 'cutout'; where: 'device' | 'server'; sha?: string; jobId?: string; failed?: string }
   /** x, y: the text's top left, 0-1; size: its height as a fraction of the picture's height. */
   | { id: string; kind: 'text'; text: string; x: number; y: number; size: number }
   /** The kept area, 0-1, the frame's own shape (so w === h in these units). */
   | { id: string; kind: 'crop'; x: number; y: number; w: number; h: number }
   /** Fill area: the mask filled with the words. Remove (`remove`, no words): what the mask covers taken
-   *  out and the background continued over it. Either is one result layer, cut by the mask. */
-  | { id: string; kind: 'fill'; maskId: string; words: string; keepOutside: boolean; jobId: string; remove?: true }
+   *  out and the background continued over it. Either is one result layer, cut by `ops`: the mask exactly
+   *  as it was sent. `maskId` names the mask it came from (its label, its undo), but painting, clearing or
+   *  undoing that mask afterwards never changes the fill (fix/editor-apply-keeps-edits: the owner cleared
+   *  the blue after the result came, and Apply saved v1 unchanged). */
+  | { id: string; kind: 'fill'; maskId: string; ops: MaskOp[]; words: string; keepOutside: boolean; jobId: string; remove?: true }
   | { id: string; kind: 'whole'; words: string; jobId: string }
   | { id: string; kind: 'upscale'; scale: 2 | 4; jobId: string }
 
@@ -137,7 +138,7 @@ export function toggleHidden(s: EditSession, id: string): EditSession {
 }
 
 /** An edit that counts: a mask with paint, a result that arrived or is on the way. */
-const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length) && !(e.kind === 'cutout' && e.failed)
+const counts = (e: Edit) => !(e.kind === 'mask' && !e.ops.length)
 
 /** The edits that count and show: what Apply saves (hidden ones are counted apart, by hiddenCount). */
 export function editCount(s: EditSession): number {
@@ -195,7 +196,6 @@ export function nextStep(s: EditSession): string | undefined {
 export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' | 'failed'): string {
   switch (e.kind) {
     case 'mask': return `${e.name}${s.active === e.id ? ' · painting' : ''}`
-    case 'cutout': return 'Cut-out'
     case 'text': return `Text "${e.text}"`
     case 'crop': return 'Crop'
     case 'fill': {
@@ -210,16 +210,16 @@ export function editLabel(e: Edit, s: EditSession, state?: 'running' | 'ready' |
 
 export interface Layer { id: string; kind: EditKind | 'frame'; label: string; hidden: boolean; locked?: boolean; active?: boolean }
 
-/** The Layers panel, front first: text, masks, cut-outs, results, then the locked Frame (3.12). */
+/** The Layers panel, front first: text, masks, results, then the locked Frame (3.12). */
 export function layersOf(s: EditSession, version: number): Layer[] {
-  const rank: Record<EditKind, number> = { text: 0, mask: 1, cutout: 2, fill: 3, whole: 3, upscale: 3, crop: 4 }
+  const rank: Record<EditKind, number> = { text: 0, mask: 1, fill: 3, whole: 3, upscale: 3, crop: 4 }
   const out = s.edits
-    .filter((e) => e.kind !== 'crop' && !(e.kind === 'cutout' && e.failed))
+    .filter((e) => e.kind !== 'crop')
     .map((e, i) => ({ e, i }))
     .sort((a, b) => rank[a.e.kind] - rank[b.e.kind] || b.i - a.i)
     .map(({ e }): Layer => ({
       id: e.id, kind: e.kind, hidden: s.hidden.includes(e.id), active: s.active === e.id,
-      label: e.kind === 'text' ? 'Text' : e.kind === 'mask' ? e.name : e.kind === 'cutout' ? 'Cut-out'
+      label: e.kind === 'text' ? 'Text' : e.kind === 'mask' ? e.name
         : e.kind === 'fill' ? (e.remove ? 'Remove' : 'Fill') : e.kind === 'whole' ? 'Whole frame' : e.kind === 'upscale' ? `Upscale ${e.scale}×` : 'Crop',
     }))
   out.push({ id: 'frame', kind: 'frame', label: 'Frame', hidden: s.hidden.includes('frame'), locked: true })
@@ -238,7 +238,6 @@ export function editsForFrame(s: EditSession): { op: string; params?: Record<str
   return s.edits.filter((e) => counts(e) && !s.hidden.includes(e.id)).slice(0, 64).map((e) => {
     switch (e.kind) {
       case 'mask': return { op: 'mask', params: { name: e.name, steps: e.ops.length } }
-      case 'cutout': return { op: 'cutout', params: { where: e.where, ...(e.jobId ? { job: e.jobId } : {}) } }
       case 'text': return { op: 'text', params: { text: e.text } }
       case 'crop': return { op: 'crop', params: { x: e.x, y: e.y, w: e.w, h: e.h } }
       case 'fill': return e.remove

@@ -36,7 +36,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import cards
-import cutout
 import identity
 from blobs import LocalBlobs
 from contracts import Contracts
@@ -167,9 +166,7 @@ def build(port: int, data_dir: Path) -> tuple[Relay, LocalBlobs]:
     local_tenants(store, agencies, json.loads(os.environ.get("NAPKIN_LOCAL_LIMITS") or "{}"))
     relay = Relay(store=store, blobs=blobs, registry=registry, director=director,
                   config=CachedConfig(load, contracts), contracts=contracts,
-                  stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True),
-                  # Rhea's server cut-out: the real model when CUTOUT_WEIGHTS names it, else the stand-in.
-                  segmenter=cutout.from_env() or cutout.MockSegmenter())
+                  stitch=local_stitch(blobs), cards=cards.make(director, blobs, background=True))
     return relay, blobs
 
 

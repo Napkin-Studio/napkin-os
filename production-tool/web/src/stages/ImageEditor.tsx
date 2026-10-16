@@ -2,19 +2,22 @@
 // screen over the storyboard, or one picture over the canvas (features/edit-canvas-pictures.clan; what
 // differs between the two is in imageEditor/subject.ts). Six tools (Select V, Brush mask B, Lasso L,
 // Text T, Crop C, Hand H or Space), the brush strip, a numbered list of edits that changes nothing
-// until Apply as new version, layers, and Rhea's actions: Remove background (on the device, or our
-// server), Fill area with its Fill and Remove, and Change whole frame (Ideogram 4.5 on Runway), Upscale
-// (Magnific on Runway). No price anywhere; each job's cost is in History.
+// until Apply as new version, layers, and Rhea's actions: Fill area with its Fill and Remove, Change
+// whole frame (Ideogram 4.5 on Runway) and Upscale (Magnific on Runway). No price anywhere; each job's
+// cost is in History. Remove background is gone (owner, 2026-10-16: "I don't know why you still have the
+// remove the background going on").
+//
+// Apply saves exactly what the stage shows, or says why it cannot (fix/editor-apply-keeps-edits): a fill
+// is cut by its mask as it was sent, never by what that mask became after.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import type { Frame, Mime, RefRole } from '../contracts/types'
+import type { Frame, Mime } from '../contracts/types'
 import { modelChoicesFor, modelWhere } from '../capabilities'
 import { assetRef } from '../jobs/assets'
 import { selectFrame } from '../jobs/frames'
 import type { EditTarget } from '../model/purpose'
 import { isActive } from '../jobs/runner'
-import { nameAsset, ROLE_PILLS, suggestName } from '../jobs/prompt'
 import { getBlob, idbLocation, putBlob } from '../lib/blobs'
 import { deleteFrom, removeFrame } from '../doc/remove'
 import { systemUpdate } from '../doc/store'
@@ -30,8 +33,6 @@ import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
 import { PromptStart } from '../ui/prompt/PromptStart'
-import { cutoutWhere, within, type CutoutWhere } from '../ml/process'
-import type { DeviceEnv } from '../ml/runtime'
 import {
   EMPTY, NOTHING_TO_TAKE, addEdit, applyLine, clearMask, editCount, editId, editLabel, editsForFrame, hiddenCount, keptAfterApply,
   layersOf, leaveAsk, leftOutLine, nextStep,
@@ -39,7 +40,7 @@ import {
   type Edit, type EditSession, type MaskOp, type Pt, type Undone,
 } from './imageEditor/edits'
 import { bounds, rasterize } from './imageEditor/mask'
-import { compose, maskToPng, sendPlan, toPng, untouched, type Pic } from './imageEditor/compose'
+import { applyProblem, compose, maskToPng, sendPlan, toPng, untouched, type Pic } from './imageEditor/compose'
 import { applyEditedStep, applyPictureEditedStep, pickPictureVersionStep } from './imageEditor/apply'
 import { subjectOf, type PictureNow } from './imageEditor/subject'
 import { BRUSH_MAX, BRUSH_MIN, MASK_TOOLS, TOOLS, brushStep, toolForKey, zoomStep, type ToolId } from './imageEditor/tools'
@@ -48,10 +49,6 @@ import { EditTray } from './imageEditor/EditTray'
 import { Eye, Lock, ToolIcon } from './imageEditor/icons'
 import './image-editor.css'
 
-/** The on-device runtime, loaded only when Remove background first needs it (onnxruntime-web is large). */
-const ml = () => import('../ml/runtime')
-
-const CUT_ON_DEVICE = 'cut-out ready, ran on your device'
 const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘Z' : 'Ctrl+Z'
 const capital = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
@@ -62,7 +59,6 @@ const TRAY_TITLE: Record<Action, string> = {
   whole: 'What Rhea will send to change the frame', upscale: 'What Rhea will send to upscale',
 }
 const TRAY_SEND: Record<Action, string> = { fill: 'Fill', remove: 'Remove', whole: 'Change', upscale: 'Upscale' }
-type CutoutEdit = Extract<Edit, { kind: 'cutout' }>
 type MaskEdit = Extract<Edit, { kind: 'mask' }>
 
 export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
@@ -87,6 +83,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const sha = subject?.sha
   const version = subject?.version ?? 0
   const url = useBlobUrl(sha)
+  // The version before this one (its parent, else the one numbered before it): what Before shows once
+  // the edits are applied (owner, 2026-10-16: "I click on show before, the new pic never comes back").
+  const prevVersion = current ? frames.find((f) => f.id === current.parent_id) ?? frames.filter((f) => f.version < version).at(-1) : undefined
+  const prevUrl = useBlobUrl(prevVersion?.asset)
   const asset = sha ? doc.assets[sha] : undefined
   const ratio = subject?.ratio
   const aspect = subject?.aspect ?? 16 / 9
@@ -113,7 +113,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<Pt>({ x: 0, y: 0 })
   const [view, setView] = useState<'after' | 'before'>('after')
-  /** A layer picked in Layers that is not a mask (Frame, a result, a cut-out, text): shown picked, with why
+  /** A layer picked in Layers that is not a mask (Frame, a result, text): shown picked, with why
    *  it cannot be painted; the next stroke starts a new mask. A mask's pick is the session's active mask. */
   const [picked, setPicked] = useState<string | null>(null)
   const [fill, setFill] = useState('')
@@ -123,9 +123,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const [tray, setTray] = useState<Action | null>(null)
   const [versionsOpen, setVersionsOpen] = useState(false)
   const [leaving, setLeaving] = useState<string | null>(null)
-  const [naming, setNaming] = useState<string | null>(null)
-  const [env, setEnv] = useState<DeviceEnv | null>(null)
-  const [said, setSaid] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Why the picture could not be drawn (the stage keeps the last good one), for Rhea's line. */
@@ -139,7 +136,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const removeBtn = useRef<HTMLButtonElement>(null)
   const wholeBtn = useRef<HTMLButtonElement>(null)
   const upBtn = useRef<HTMLButtonElement>(null)
-  const nameAnchor = useRef<HTMLButtonElement>(null)
   const project = useProjectName()
   const motion = ui.motion !== 'still'
   // Jude's brand flag (3.12, 3.18): the one "Fix in image editor" came from, else an open flag on this frame.
@@ -148,18 +144,9 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const shotId = target.kind === 'shot' ? target.shotId : undefined
   useEffect(() => { if (error) errorShown('frame', error, shotId ? { shot: shotId } : {}) }, [error, shotId])
 
-  // What this device offers, once (WebGPU, memory): where Remove background runs.
-  useEffect(() => {
-    let alive = true
-    void ml().then((m) => m.deviceEnv()).then((e) => { if (alive) setEnv(e) }).catch(() => { if (alive) setEnv({ webgpu: false }) })
-    return () => { alive = false }
-  }, [])
-  const where: CutoutWhere = env ? cutoutWhere(env) : 'device'
-
   // Results: a job's first output, once it is done.
   const jobState = (id?: string) => (id ? runner.liveInfo(id)?.state ?? doc.jobs[id]?.state : undefined)
   const resultOf = useCallback((e: Edit): Pic | undefined => {
-    if (e.kind === 'cutout' && e.sha) return { sha: e.sha, w: W, h: H }
     const id = 'jobId' in e ? e.jobId : undefined
     const j = id ? doc.jobs[id] : undefined
     const sha = j?.state === 'completed' ? j.outputs?.[0] : undefined
@@ -167,13 +154,14 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     const a = doc.assets[sha]
     return { sha, w: a?.w ?? W, h: a?.h ?? H }
   }, [doc, W, H])
+  // Ready only once its picture is in the document: the runner can say completed a moment before the
+  // document has the output, and Apply composes from the document.
   const stateOf = (e: Edit): 'running' | 'ready' | 'failed' | undefined => {
-    if (e.kind === 'cutout' && e.failed) return 'failed'
-    if (e.kind === 'cutout' && e.sha) return 'ready'
     const id = 'jobId' in e ? e.jobId : undefined
     if (!id) return undefined
+    if (resultOf(e)) return 'ready'
     const s = jobState(id)
-    return s === 'completed' ? 'ready' : s === 'failed' || s === 'cancelled' || s === 'uncertain' ? 'failed' : 'running'
+    return s === 'failed' || s === 'cancelled' || s === 'uncertain' ? 'failed' : 'running'
   }
   // Running is what the list calls working: an 'uncertain' job reads as did not work, so it no longer holds
   // the actions (features/image-editor-masks-layers.clan); its row still offers Stop waiting and Try again.
@@ -201,6 +189,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
     return () => { alive = false }
   }, [sha, asset?.w, asset?.h, image])
   const n = editCount(session)
+  // Before / After: with edits not applied, Before is this version as saved and After has the edits;
+  // with none, Before is the version before this one and After is this one. Nothing to compare: off.
+  const before = n ? { url, version } : prevVersion ? { url: prevUrl, version: prevVersion.version } : undefined
+  const showBefore = view === 'before' && !!before
   // Hidden layers are left out of every send and of Apply, and the pill, the Apply line and the tray say so (IM1).
   const hiddenEdits = hiddenCount(session) - (session.hidden.includes('frame') ? 1 : 0)
   const applyLeftOut = hiddenCount(session, ['mask'])
@@ -208,7 +200,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const maskHidden = !!activeMask && session.hidden.includes(activeMask.id)
   // A hidden mask cannot be filled: it is left out like any hidden layer, so there would be nothing to fill.
   const masked = !!activeMask && activeMask.ops.length > 0 && !maskHidden
-  const lastCutout = [...session.edits].reverse().find((e): e is CutoutEdit => e.kind === 'cutout')
   const sent = framePic ? sendPlan(session, framePic, resultOf, 'action') : undefined
   const shownPlan = sent?.plan
   // The model each action runs on for this agency: Ideogram 4.5 and Magnific when it has them on, else
@@ -306,10 +297,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       setBusy(null)
     }
   }
-  const maskOf = (id: string, w: number, h: number) => {
-    const m = session.edits.find((e) => e.id === id)
-    return m && m.kind === 'mask' ? rasterize(m.ops, w, h) : new Uint8Array(w * h)
-  }
   const registerAsset = (sha: string, blob: Blob, w: number, h: number) => systemUpdate(docStore, (d) => {
     if (!d.assets[sha]) d.assets[sha] = { sha256: sha, kind: 'image', mime: (blob.type || 'image/png') as Mime, bytes: blob.size, w, h, origin: 'edited', locations: [idbLocation(sha)] }
   }, 'image editor picture')
@@ -317,7 +304,7 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   const inputPic = async (): Promise<Pic> => {
     if (!framePic || !shownPlan) throw new Error('Draw this frame first.')
     if (untouched(shownPlan, framePic)) return framePic
-    const c = await compose(shownPlan, image, maskOf)
+    const c = await compose(shownPlan, image)
     const blob = await toPng(c)
     const sha = await putBlob(blob)
     await registerAsset(sha, blob, c.width, c.height)
@@ -351,31 +338,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   })
 
   // ── the actions ──
-  const removeBackground = () => void attempt('removing the background', async () => {
-    const input = await inputPic()
-    let made: Edit | undefined
-    if (where === 'device') {
-      try {
-        const m = await ml()
-        const blob = await within(m.removeBackground(await image(input.sha), input.w, input.h, env ?? { webgpu: true }), 120_000, 'the device took too long')
-        const sha = await putBlob(blob)
-        await registerAsset(sha, blob, input.w, input.h)
-        made = { id: editId(), kind: 'cutout', where: 'device', sha }
-        setSaid(CUT_ON_DEVICE)
-      } catch (e) {
-        console.warn('Remove background could not run on this device; our server does it.', e)
-        made = undefined // the device could not: our server does it (3.12)
-      }
-    }
-    if (!made) {
-      const jobId = await runner.submit('cutout', { image: await assetRef(relay, input.sha, doc) }, parents, purpose)
-      made = { id: editId(), kind: 'cutout', where: 'server', jobId }
-      setSaid(null)
-    }
-    const e = made
-    // Frame stays as it is (owner answer IM2): Rhea's line suggests hiding it to see the cut-out alone.
-    setSession((s) => addEdit(s, e))
-  })
   const send = (a: Action) => void attempt(SENDING[a], async () => {
     setTray(null)
     const input = await inputPic()
@@ -387,14 +349,16 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       const region = bounds(bits, input.w, input.h)
       if (!region) throw new Error('The mask is empty. Paint the area first.')
       const mask = await assetRef(relay, await putBlob(await maskToPng(bits, input.w, input.h)), doc)
+      // The fill keeps the mask as sent: what the result is cut by on the stage and in Apply.
+      const ops = activeMask.ops
       if (a === 'remove') {
         // No words: the relay writes the removal (relay-api input.remove), and the area is always the only change.
         const jobId = await runner.submit('region_edit', { image: picture, mask, region, remove: true, aspect: shape }, parents, purpose)
-        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, words: '', keepOutside: true, remove: true, jobId }))
+        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, ops, words: '', keepOutside: true, remove: true, jobId }))
       } else {
         const words = fill.trim()
         const jobId = await runner.submit('region_edit', { image: picture, mask, region, text: words, aspect: shape }, parents, purpose)
-        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, words, keepOutside, jobId }))
+        setSession((s) => addEdit(s, { id: editId(), kind: 'fill', maskId: activeMask.id, ops, words, keepOutside, jobId }))
         setFill('')
       }
     } else if (a === 'whole') {
@@ -409,7 +373,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
   })
   const apply = () => void attempt('applying', async () => {
     if (!framePic || !frameId) return
-    const c = await compose(sendPlan(session, framePic, resultOf, 'apply').plan, image, maskOf)
+    // Never a copy silently missing an edit: say why instead (the owner's v2 was v1, unchanged).
+    const problem = applyProblem(session, framePic, resultOf)
+    if (problem) throw new Error(problem)
+    const c = await compose(sendPlan(session, framePic, resultOf, 'apply').plan, image)
     const blob = await toPng(c)
     const out = { sha: await putBlob(blob), bytes: blob.size, w: c.width, h: c.height, edits: editsForFrame(session) }
     // A frame: v(n+1) of the shot. A canvas picture: v(n+1) in place, its name following (one undo step each).
@@ -425,7 +392,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
       if (kept) all[made.id] = kept
       u.imageEdits = all
     }, 'image edits applied')
-    setSaid(null)
   })
   const pickVersion = (f: Frame) => {
     setVersionsOpen(false)
@@ -538,10 +504,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
 
           {framePic && shownPlan ? (
             <div className="ie-stagewrap">
-            <Stage src={url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
-              before={view === 'before'} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
+            <Stage src={url} beforeSrc={before?.url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
+              before={showBefore} onAfter={() => setView('after')} motion={motion} onDrawn={setDrawError} onMaskOp={onMaskOp} onAddText={onAddText} onText={onText} onCrop={onCrop}
               pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
-              {view === 'before' && <span className="pt-mono ie-before">Before · v{version} as saved</span>}
+              {showBefore && <span className="pt-mono ie-before">Before · v{before.version} as saved</span>}
             </Stage>
             {/* Zoom, on the stage at the bottom right like the canvas's zoom pill (owner, 2026-10-15). */}
             <div className="ie-zoom" role="group" aria-label="Zoom">
@@ -560,13 +526,13 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
           <div className="ie-under">
             {/* Either half toggles, pressed or not, so a second press on Before goes back (owner, 2026-10-16). */}
             <div className="pt-seg ie-compare" role="group" aria-label="Compare">
-              <button type="button" aria-pressed={view === 'before'} onClick={() => setView((v) => (v === 'before' ? 'after' : 'before'))}>Before</button>
-              <button type="button" aria-pressed={view === 'after'} onClick={() => setView((v) => (v === 'after' ? 'before' : 'after'))}>After</button>
+              <button type="button" aria-pressed={showBefore} disabled={!before} title={before ? `v${before.version} as saved` : 'Nothing to compare yet'}
+                onClick={() => setView(showBefore ? 'after' : 'before')}>Before</button>
+              <button type="button" aria-pressed={!showBefore} disabled={!before} title={n ? 'With your edits' : `v${version} as saved`}
+                onClick={() => setView(showBefore ? 'after' : 'before')}>After</button>
             </div>
             {hint && <span className="ie-hint" role="status">{hint}</span>}
-            <RheaLine busy={busy} said={said} cutout={lastCutout} state={lastCutout ? stateOf(lastCutout) : undefined}
-              frameShown={!session.hidden.includes('frame')} drawError={drawError}
-              error={lastCutout?.jobId ? doc.jobs[lastCutout.jobId]?.error?.message : undefined} />
+            <RheaLine busy={busy} drawError={drawError} />
             {current?.cropped_to && asset?.w && asset?.h && <span className="pt-mono faint">{croppedCaption({ w: asset.w, h: asset.h }, current.cropped_to.to)}</span>}
             <span className="pt-grow" />
             <span className="pt-mono ie-legend">Mask: blue paint marks what changes · X or Alt: Subtract · {UNDO_KEY} takes back your last stroke here</span>
@@ -641,8 +607,6 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                   <span className="ie-lname">
                     <span>{l.label}</span>
                     {l.kind === 'frame' && <span className="pt-mono ie-lsub">v{version} · locked</span>}
-                    {l.kind === 'cutout' && pic && <span className="ie-lsub">by Rhea · <button ref={naming === l.id ? nameAnchor : undefined} type="button" className="btn link" onClick={() => setNaming(l.id)}>Save as reference</button></span>}
-                    {l.kind === 'cutout' && !pic && <span className="ie-lsub">Rhea is cutting it out…</span>}
                     {on && l.kind !== 'mask' && <span className="ie-lsub ie-lwhy" role="note">{whyNotPainted(l.kind)}</span>}
                   </span>
                   {l.kind === 'mask' && on && <span className="pt-mono ie-editing">editing</span>}
@@ -651,25 +615,10 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
                 </div>
               )
             })}
-            {naming && (() => {
-              const e = session.edits.find((x) => x.id === naming)
-              const pic = e ? resultOf(e) : undefined
-              return pic ? <SaveRef anchor={nameAnchor} sha={pic.sha} onClose={() => setNaming(null)} /> : null
-            })()}
           </section>
 
           <section className="ie-panel ie-actions" aria-label="Actions">
             <div className="ie-panelhead"><h2 className="pt-label">Actions</h2></div>
-
-            <div className="ie-action ie-rowcard">
-              <div className="ie-acol">
-                <b>Remove background</b>
-                <span className="faint">{where === 'device' ? 'On your device' : 'On our server (no WebGPU here)'}</span>
-              </div>
-              {lastCutout && stateOf(lastCutout) === 'ready'
-                ? <span className="ie-ok">Done</span>
-                : <button type="button" className="btn sm" disabled={running || !current} onClick={removeBackground}>{lastCutout && stateOf(lastCutout) === 'running' ? 'Working…' : 'Remove'}</button>}
-            </div>
 
             {controls.regionEditFrames && (
               <div className={`ie-action ${masked ? 'on' : ''}`}>
@@ -729,31 +678,21 @@ export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
 function whyNotPainted(kind: string): string {
   if (kind === 'frame') return 'Locked: the version you opened. Brush or lasso makes a new mask over it.'
   if (kind === 'text') return 'Words: move them with Select (V), retype with Text (T). Brush or lasso makes a new mask.'
-  if (kind === 'cutout') return "Rhea's cut-out. Brush or lasso makes a new mask over it."
   return "Rhea's result. Brush or lasso makes a new mask over it."
 }
 
-/** What Rhea says under the stage: at work, a cut-out ready (on the device or our server), or nothing. */
-function RheaLine({ busy, said, cutout, state, error, frameShown, drawError }: {
-  busy: string | null; said: string | null; cutout?: CutoutEdit; state?: string; error?: string
-  /** Frame is showing: a ready cut-out sits over it, so the line says how to see the cut-out alone. */
-  frameShown: boolean
+/** What Rhea says under the stage: at work, or why the picture could not be drawn. */
+function RheaLine({ busy, drawError }: {
+  busy: string | null
   /** The picture could not be drawn: the last good one stays, and the line says why. */
   drawError: string | null
 }) {
-  let line: string | null = null
-  const alone = frameShown ? ' · hide Frame to see the cut-out alone' : ''
-  if (busy) line = `${busy}…`
-  else if (drawError) line = `the picture could not be drawn: ${drawError}`
-  else if (cutout && state === 'running') line = 'removing the background on our server…'
-  else if (cutout && state === 'failed') line = error ?? 'the cut-out did not work'
-  else if (cutout && state === 'ready' && cutout.where === 'server') line = `cut-out ready, ran on our server${alone}`
-  else if (said) line = said === CUT_ON_DEVICE ? `${said}${alone}` : said
+  const line = busy ? `${busy}…` : drawError ? `the picture could not be drawn: ${drawError}` : null
   if (!line) return null
-  const bad = !busy && (!!drawError || state === 'failed')
+  const bad = !busy && !!drawError
   return (
     <div role="status" className={`ie-said ${bad ? 'bad' : ''}`}>
-      <AgentFigure agent="rhea" size={18} state={busy || state === 'running' ? 'working' : 'idle'} decorative />
+      <AgentFigure agent="rhea" size={18} state={busy ? 'working' : 'idle'} decorative />
       <span><b>Rhea · retouches:</b> {line}</span>
     </div>
   )
@@ -778,37 +717,6 @@ function LayerThumb({ kind, sha }: { kind: string; sha?: string }) {
   const url = useBlobUrl(kind === 'text' || kind === 'mask' ? undefined : sha)
   if (kind === 'text') return <span className="ie-lthumb ie-lt">T</span>
   if (kind === 'mask') return <span className="ie-lthumb ie-lm"><span /></span>
-  return <span className={`ie-lthumb ${kind === 'cutout' ? 'ie-lcut' : ''}`}>{url && <img src={url} alt="" />}</span>
+  return <span className="ie-lthumb">{url && <img src={url} alt="" />}</span>
 }
 
-/** Save as reference: Name this picture, with the role preselected (3.12). */
-function SaveRef({ anchor, sha, onClose }: { anchor: React.RefObject<HTMLElement | null>; sha: string; onClose: () => void }) {
-  const { doc: store } = useServices()
-  const doc = useDoc()
-  const [role, setRole] = useState<RefRole>('product')
-  const [name, setName] = useState(() => suggestName(doc, 'cutout', 'product'))
-  const [error, setError] = useState<string | null>(null)
-  const save = async () => {
-    try {
-      await nameAsset(store, sha, { ...name, role })
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That name did not work.')
-    }
-  }
-  return (
-    <Float anchor={anchor} open onClose={onClose} role="dialog" label="Name this picture" className="ie-name">
-      <b>Name this picture</b>
-      <div className="ie-pills" role="radiogroup" aria-label="What it is for">
-        {ROLE_PILLS.slice(0, 6).map((r) => <button key={r} type="button" role="radio" aria-checked={role === r} className={role === r ? 'on' : ''} onClick={() => setRole(r)}>{r}</button>)}
-      </div>
-      <div className="row"><span className="pt-mono">@</span>
-        <input className="input" aria-label="Who or what" value={name.key} onChange={(e) => setName({ ...name, key: e.target.value.toLowerCase() })} />
-        <span className="pt-mono">_</span>
-        <input className="input" aria-label="This view" value={name.variant} onChange={(e) => setName({ ...name, variant: e.target.value.toLowerCase() })} />
-      </div>
-      <div className="row"><span className="spacer" /><button type="button" className="btn sm" onClick={onClose}>Cancel</button><button type="button" className="btn sm primary" onClick={() => void save()}>Save</button></div>
-      {error && <div role="alert" className="ie-error">{error}</div>}
-    </Float>
-  )
-}

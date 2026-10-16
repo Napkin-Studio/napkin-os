@@ -41,10 +41,12 @@ function antsOn(ctx: CanvasRenderingContext2D, s: { img: ImageData; rim: Int32Ar
 
 type Live = { id: number; op: Extract<MaskOp, { t: 'brush' | 'lasso' }>; drawn: number }
 
-export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, onAfter, motion, onDrawn,
+export function Stage({ src, beforeSrc, plan, image, w, h, session, tool, brush, zoom, pan, onPan, before, onAfter, motion, onDrawn,
   onMaskOp, onAddText, onText, onCrop, pending, progress, children }: {
-  /** The frame as saved, for Before and while the preview draws. */
+  /** The frame as saved, shown while the preview draws. */
   src?: string
+  /** What Before shows: the version as saved while there are edits, else the version before it. */
+  beforeSrc?: string
   plan: Plan
   image: (sha: string) => Promise<CanvasImageSource>
   w: number
@@ -104,10 +106,8 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
     let alive = true
     const c = pic.current
     if (!c || before) return
-    void compose(plan, image, (id, mw, mh) => {
-      const m = session.edits.find((e) => e.id === id)
-      return m && m.kind === 'mask' ? cache.get(m.id, m.ops, mw, mh) : new Uint8Array(mw * mh)
-    }).then((out) => {
+    // A fill is cut by its own mask as sent (in the plan), so the stage and Apply draw the same picture.
+    void compose(plan, image, (key, ops, mw, mh) => cache.get(key, ops, mw, mh)).then((out) => {
       if (!alive) return
       c.width = out.width
       c.height = out.height
@@ -119,7 +119,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
       if (alive) onDrawn?.(e instanceof Error ? e.message : 'something went wrong')
     })
     return () => { alive = false }
-    // planKey stands for plan; the masks change the picture only through a fill's plan step
+    // planKey stands for plan, which carries each fill's mask
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planKey, before])
 
@@ -128,7 +128,7 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
   const oh = Math.max(1, Math.round((ow * h) / w))
   const masks = useMemo(() => session.edits.filter((e) => e.kind === 'mask' && !session.hidden.includes(e.id)), [session])
   const raster = useMemo(() => {
-    cache.retain(new Set(session.edits.filter((e) => e.kind === 'mask').map((e) => e.id)))
+    cache.retain(new Set(session.edits.filter((e) => e.kind === 'mask' || e.kind === 'fill').map((e) => e.id)))
     const drawn = masks.flatMap((m) => (m.kind === 'mask' ? [cache.get(m.id, m.ops, ow, oh)] : []))
     if (drawn.length === 1) return drawn[0]
     const out = new Uint8Array(ow * oh)
@@ -345,7 +345,8 @@ export function Stage({ src, plan, image, w, h, session, tool, brush, zoom, pan,
       onDragStart={(e) => e.preventDefault()}
       onPointerLeave={() => { if (cursorEl.current) cursorEl.current.style.display = 'none' }}>
       <div ref={frame} className={`ie-frame tool-${tool}`} style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}>
-        {src && (before || !drawn) && <img className="ie-pic" src={src} alt="" draggable={false} />}
+        {before ? beforeSrc && <img className="ie-pic" src={beforeSrc} alt="" draggable={false} />
+          : src && !drawn && <img className="ie-pic" src={src} alt="" draggable={false} />}
         <canvas ref={pic} className="ie-pic" hidden={before || !drawn} />
         <canvas ref={overlay} className="ie-mask" aria-hidden="true" />
         <canvas ref={liveCanvas} className="ie-live" aria-hidden="true" />

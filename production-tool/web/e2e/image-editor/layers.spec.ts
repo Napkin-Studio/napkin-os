@@ -1,6 +1,6 @@
 // e2e 7 and 8 (features/image-editor-masks-layers.clan, owner answers IM1-IM3): every eye does what it
-// says on the picture; Remove background never hides Frame; hiding Frame hides only the original picture,
-// so a Fill result stays; hidden layers are left out of Apply, which says so, and stay in the editor.
+// says on the picture; hiding Frame hides only the original picture, so a Fill result stays; hidden
+// layers are left out of Apply, which says so, and stay in the editor.
 import type { Page } from '@playwright/test'
 import { at, expect, openEditor, overlay, picPixel, session, stroke, test } from '../fixtures'
 
@@ -46,31 +46,27 @@ test('each eye shows and hides its layer, Frame stays unless clicked, and hiding
   await page.getByRole('button', { name: 'Show Text' }).click()
   await expect(page.locator('.ie-text')).toHaveCount(1)
 
-  // Remove background: a cut-out layer, and Frame stays shown (IM2); Rhea says how to see it alone.
-  await page.getByRole('button', { name: 'Remove', exact: true }).click()
-  await expect(page.locator('.ie-said')).toContainText('hide Frame to see the cut-out alone', { timeout: 20_000 })
-  await expect(page.getByRole('button', { name: 'Hide Frame' })).toBeVisible()
+  // Frame's eye: with Frame hidden, only the Fill is left.
   expect((await session(page, seeded.frameId)).hidden).not.toContain('frame')
-  // Cut-out's eye: with Frame and the cut-out hidden, only the Fill is left.
-  await page.getByRole('button', { name: 'Hide Cut-out' }).click()
   await page.getByRole('button', { name: 'Hide Frame' }).click()
   await expect.poll(async () => (await picPixel(page, 0.7, 0.2))[3]).toBe(255) // the Fill result, not transparency
   await expect.poll(async () => (await picPixel(page, 0.2, 0.8))[3]).toBe(0) // outside the mask: nothing
-  // The cut-out back: it covers the transparency where its subject is.
-  await page.getByRole('button', { name: 'Show Cut-out' }).click()
   await page.getByRole('button', { name: 'Show Frame' }).click()
   await expect.poll(async () => near(await picPixel(page, 0.7, 0.2), filled, 10)).toBe(true)
 })
 
 test('Apply leaves hidden layers out, says so, and keeps them for the new version', async ({ page }) => {
   const seeded = await openEditor(page)
-  await page.keyboard.press('b')
-  await stroke(page, [0.62, 0.2], [0.78, 0.2], 12)
+  // One text shown and one hidden: Apply saves the shown one (a painted mask alone would change nothing,
+  // and Apply refuses that rather than save a copy of v1: fix/editor-apply-keeps-edits).
   await page.keyboard.press('t')
+  const [sx, sy] = await at(page, 0.3, 0.2)
+  await page.mouse.click(sx, sy)
+  await page.keyboard.press('Escape')
   const [tx, ty] = await at(page, 0.3, 0.6)
   await page.mouse.click(tx, ty)
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Hide Text' }).click()
+  await page.getByRole('button', { name: 'Hide Text' }).first().click() // the newest text is first (front)
   await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 edit not applied · 1 hidden layer is left out')
   await page.getByRole('button', { name: 'Version 1 of 1' }).click()
   await expect(page.locator('.ie-vfoot')).toContainText('Apply saves your 1 edit as v2. v1 stays. 1 hidden layer is left out.')
@@ -92,23 +88,37 @@ test('Apply leaves hidden layers out, says so, and keeps them for the new versio
     return { id: f.id, version: f.version, edits: f.edits.map((e: { op: string }) => e.op), px: [...ctx.getImageData(Math.floor(x * (b.width - 1)), Math.floor(y * (b.height - 1)), 1, 1).data] }
   }, [seeded.shotId, 0.32, 0.62] as const)
   expect(saved.version).toBe(2)
-  expect(saved.edits).toEqual(['mask'])
+  expect(saved.edits).toEqual(['text'])
   expect(near(saved.px, v1)).toBe(true)
   // The hidden text stays in the editor, still hidden, on v2 (IM3).
   const kept = await session(page, saved.id)
   expect(kept.edits.map((e: { kind: string }) => e.kind)).toEqual(['text'])
   expect(kept.hidden).toEqual([kept.edits[0].id])
   await expect(page.getByRole('button', { name: 'Show Text' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hide Text' })).toHaveCount(0)
   await expect(page.locator('.ie-pill .ie-n-long')).toHaveText('1 hidden layer is left out')
 })
 
 test('when the picture cannot be drawn, the last good one stays and Rhea says why', async ({ page }) => {
   const seeded = await openEditor(page)
   const before = await picPixel(page, 0.7, 0.2)
-  // A layer whose picture is not in this browser.
-  await page.evaluate((id) => window.__pt.ui.update((u: { imageEdits?: Record<string, unknown> }) => {
-    u.imageEdits = { ...(u.imageEdits ?? {}), [id]: { edits: [{ id: 'cx', kind: 'cutout', where: 'device', sha: `sha256:${'f'.repeat(64)}` }], hidden: [] } }
-  }), seeded.frameId)
+  // A Change whole frame whose result is not in this browser: a finished job with an output no browser has.
+  await page.evaluate(async (id) => {
+    const lost = `sha256:${'f'.repeat(64)}`
+    const jobId = `job_01K7A${'0'.repeat(17)}ZZZZ`
+    const store = window.__pt.doc
+    const sb = Object.keys(store.get().storyboards)[0]
+    const path = '/src/doc/store.ts'
+    const { systemUpdate } = await import(/* @vite-ignore */ path)
+    await systemUpdate(store, (x: { jobs: Record<string, unknown> }) => {
+      x.jobs[jobId] = { id: jobId, v: 1, field_v: {}, op: 'region_edit', state: 'completed', node: { kind: 'storyboard', id: sb },
+        started_by: 'human:p_maya01', tenant_id: '5b6f3c1e-9d2a-5c4b-8e7f-0a1b2c3d4e5f', nonce: `n_01K7A${'0'.repeat(17)}ZZZZ`, crew: 'rhea',
+        parent_ids: [], input_hashes: [], outputs: [lost], created_at: '2026-10-16T10:00:00Z' }
+    }, 'a lost result')
+    window.__pt.ui.update((u: { imageEdits?: Record<string, unknown> }) => {
+      u.imageEdits = { ...(u.imageEdits ?? {}), [id]: { edits: [{ id: 'cx', kind: 'whole', words: 'warmer', jobId }], hidden: [] } }
+    })
+  }, seeded.frameId)
   await expect(page.locator('.ie-said')).toContainText('the picture could not be drawn: That picture is not in this browser yet.')
   await expect(page.locator('canvas.ie-pic')).toBeVisible()
   expect(near(await picPixel(page, 0.7, 0.2), before)).toBe(true)

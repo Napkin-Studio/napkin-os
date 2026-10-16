@@ -653,22 +653,19 @@ on a shot), or a picture on the canvas.
 - The panel is titled "Edits · not applied yet" and says "Nothing is sent until you run an action. v3 is never changed."
 - Each edit is numbered and has its own undo. "Next: Fill or remove Mask 1" names the next Runway step.
 
-**Layers (front first):** Text, masks, cut-outs and Frame (the locked input version).
-- Each layer can be hidden. **Every row picks its layer**, and the picked row is highlighted. A mask's row makes it the mask the Brush, the Lasso, Fill and Remove act on ("editing"), as its Edits row does. Any other layer (Frame, a result, a cut-out, text) cannot be painted: its row says why ("Locked: the version you opened. Brush or lasso makes a new mask over it."), and the next stroke starts a new mask.
+**Layers (front first):** Text, masks, results and Frame (the locked input version).
+- Each layer can be hidden. **Every row picks its layer**, and the picked row is highlighted. A mask's row makes it the mask the Brush, the Lasso, Fill and Remove act on ("editing"), as its Edits row does. Any other layer (Frame, a result, text) cannot be painted: its row says why ("Locked: the version you opened. Brush or lasso makes a new mask over it."), and the next stroke starts a new mask.
 - **What you see is what is sent and applied** (owner, 2026-10-15): hidden layers are left out of Fill, Change, Upscale and Apply, and the pill, the Apply line and the send tray say so: "1 hidden layer is left out". A frame's edits list only what was applied.
 - Hiding **Frame** hides only the original picture: Fill results and Change or Upscale results stay unless their own eye is off.
-- **Remove background** never hides Frame by itself; Rhea's line says "hide Frame to see the cut-out alone".
 - A hidden mask cannot be filled: "Mask 1 is hidden. Show it to fill."
 - Hidden edits are kept: after Apply they stay, still hidden, on the new version.
-- A cut-out offers **Save as reference**, which opens Name this picture with the role preselected.
 - Upstream inputs arrive as locked layers.
 
 **Actions** (none shows a price; owner, 2026-10-13):
 
 | Action | Who | Runs | Notes |
 |---|---|---|---|
-| Remove background | Rhea | free, on your device | Uses the relay automatically when WebGPU is missing or memory is low, and then says "ran on our server". |
-| Fill area: **Fill** and **Remove** | Rhea (Runway generates) | `ideogram_4_5` with a mask on Runway | Runs on the selected mask only: "Only the blue area changes". **Fill** fills it with your words. **Remove** needs no words: what the mask covers is taken out and the background continues over it (the relay writes the removal, relay-api `input.remove`); it is one result layer like a fill, cut by the mask. Both are on once the mask has paint; Fill also needs words. Runway edits the mask's black and keeps its white (`png_black_edit`, providers.md fact 2). "Keep the label exactly as it is" keeps the label by leaving it white in the mask; it is not `preciseEdit`, which keeps the whole composition (fact 3; the image editor feature settles the copy). The run button is dark, not primary. |
+| Fill area: **Fill** and **Remove** | Rhea (Runway generates) | `ideogram_4_5` with a mask on Runway | Runs on the selected mask only: "Only the blue area changes". **Fill** fills it with your words. **Remove** needs no words: what the mask covers is taken out and the background continues over it (the relay writes the removal, relay-api `input.remove`); it is one result layer like a fill, cut by the mask. A fill keeps the mask as it was sent: painting, clearing or undoing that mask afterwards never changes the result (Clear mask after the result came once made Apply save v1 unchanged, 2026-10-16). Both are on once the mask has paint; Fill also needs words. Runway edits the mask's black and keeps its white (`png_black_edit`, providers.md fact 2). "Keep the label exactly as it is" keeps the label by leaving it white in the mask; it is not `preciseEdit`, which keeps the whole composition (fact 3; the image editor feature settles the copy). The run button is dark, not primary. |
 | Change whole frame | Rhea | `ideogram_4_5` `preciseEdit` on Runway (recommended; the image editor feature decides) | A prompt redraws the whole frame, keeping its composition and size. |
 | Upscale | Rhea | `magnific_precision_upscaler_v2` on Runway | 2× or 4×, showing the output size ("→ 2688 × 1536" at 2×, "→ 5376 × 3072" at 4×, from our 1344 × 768 frames; providers.md fact 7). |
 
@@ -680,8 +677,9 @@ on a shot), or a picture on the canvas.
 - Saves v(n+1) as `kind: edited`, leaves v(n) as it was, and makes v(n+1) the shot's current frame on the storyboard (one undo step).
 - It marks that shot's clip stale.
 - The versions menu says beforehand what Apply will make: "Apply saves your 3 edits as v4. v3 stays."
+- Apply saves exactly what the stage shows, or refuses and says why; it never saves a copy that is silently missing an edit (owner, 2026-10-16: "I save it, the new pic disappears"). A shown result that is not back or did not work: "Fill Mask 1: "drops" has no result yet. Wait for it, or undo or hide it, then Apply." A painted mask with nothing filled: "Nothing would change yet: Mask 1 is painted but not filled or removed. Fill or remove it first."
 
-**Before / After** toggles the view, every press: either half flips it, so pressing Before again goes back to After. Before hides masks, cut-out outlines and text, and labels the frame "Before · v3 as saved". Picking a tool, or pressing on the stage to paint, goes back to After.
+**Before / After** toggles the view, every press: either half flips it, so pressing Before again goes back to After, and the pressed half always names what the stage shows. With edits not applied, Before is the version as saved and After has the edits. With none (just after Apply), Before is the version before this one and After is this one (owner, 2026-10-16: "I click on show before, the new pic never comes back"): "Before · v2 as saved" over v3. With nothing to compare (v1, no edits) both halves are off. Before hides masks and text. Picking a tool, or pressing on the stage to paint, goes back to After.
 
 **Pointer during a running action:** the busy pointer (section 6), with the create card leading (retouching). The masked area shows the pending stripes; a whole-frame job shows a thin progress edge along the top of the stage. Nothing covers the picture: the job's status, elapsed time and Cancel (with its confirm) sit in its Edits row, and a question the job asks shows there too. You can keep painting while it runs. A job with no answer in time reads "did not work" in its row, with Stop waiting and Try again, and holds nothing else.
 
@@ -1234,7 +1232,7 @@ Five make the ad; two house agents, who work in every Napkin tool, note and judg
 | Dex | Dex · directs | cobalt hex, viewfinder mark | planning shots, writing prompts (with brand rules), the send tray, camera changes, Bridge, condensing direction, asks about planning and direction; each shot's sound path and the sound plan | Storyboard node and editor, camera fields, the insert menu, the send tray, the Sound view's shot list |
 | Skye | Skye · scripts | coral column, page mark | script drafts (including from a spin-in), rewrites, length fixes, asks about unknown names; looking up looks and references; lines and voice-over, the radio cut's words | Script node and editor (drafts in place, the VO column), References board, the radio cut |
 | Fin | Fin · films | marigold star, spark mark | Runway making a frame or clip, Make all sizes, video cut-downs, asks about renders; voicing lines and making every sound take and voice preview | empty frames and clips, Video board, Format sets, jobs, the Sound view's lanes, the Voice tab |
-| Rhea | Rhea · retouches | mint dome, dots mark | cut-out, fill, change whole frame, upscale, character-sheet crops | Image editor, character sheets |
+| Rhea | Rhea · retouches | mint dome, dots mark | fill, remove an area, change whole frame, upscale, character-sheet crops | Image editor, character sheets |
 | Edie | Edie · edits | iris stack, bars mark | splicing moments, rendering the ad; **mixing**: building the mix from the takes in it, the dips under speech, hits snapped to motion, muting stray words, loudness to target, stems, cue sheet and the radio cut | Video editor timeline, patch windows, the Sound view's Mix card and job pill, phone player |
 | Nell (house) | Nell · notes | ink triangle, page mark | reading notes and handwriting, extracting text from files, briefs, brand books and documents; **writing down what a shot's own sound says**, which Jude's word checks use | ink, notes, Convert to text, Brand board, Document nodes, the send tray's "confirm" rows |
 | Jude (house) | Jude · judges | ink card, tick mark | checking each result, seams, retries, brand-rule breaks (per size in a Format set); **the sound checks R1–R6**, lips on dialogue shots, brand names said right in voice previews | check marks and brand flags on frames, clips and sizes; the Sound view's checks card; voice previews |
@@ -1541,7 +1539,6 @@ One SVG pattern, `<svg class="napkin-loader">`, copied verbatim from artboard 14
 - **Assets on iPad:** the drawer opens as a sheet over the Boards pill. Drag from it with a finger or the Pencil onto a board.
 - **Ask cards and the send tray:** option buttons, checkboxes and Generate are at least 44px tall.
 - **Editors on iPad:** the mask brush, timeline handles and drag handles work with Pencil and finger. Side panels become sheets below 1180px wide.
-- **ML on iPad (and Firefox):** when WebGPU is missing or memory is low, Remove background runs on the relay automatically, and the result says "ran on our server".
 
 ---
 
