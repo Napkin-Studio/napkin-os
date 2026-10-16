@@ -820,13 +820,13 @@ export interface ProductionDocument extends EntityMaps {
 
 // ── customdata.schema.json ──────────────────────────────────────────────────
 
-export type GenOp = 'generate' | 'view' | 'region_edit'
+export type GenOp = 'generate' | 'view' | 'region_edit' | 'resize'
 
 export type CustomData =
   | { kind: 'pic'; id: Id; asset: Sha256 }
   | { kind: 'drawn'; id: Id; asset: Sha256 }
   | { kind: 'note'; id: Id }
-  | { kind: 'gen'; id: Id; op: GenOp; parentIds: Id[]; state: JobState; asset?: Sha256; view?: View; mock?: boolean }
+  | { kind: 'gen'; id: Id; op: GenOp; parentIds: Id[]; state: JobState; asset?: Sha256; view?: View; shape?: string; mock?: boolean }
   | { kind: 'provenance'; from: Id; to: Id }
   | { kind: 'board' | 'sketch' | 'script' | 'storyboard' | 'video' | 'link' | 'document' | 'format_set' | 'suggestion'; id: Id }
 

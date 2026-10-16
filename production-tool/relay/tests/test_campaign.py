@@ -181,6 +181,47 @@ def test_regenerate_sends_the_master_as_at_master_to_gemini_3_pro_at_the_nearest
     assert out.size == (1152, 2048)
 
 
+def view_ref(h, n, name, role="character"):
+    return {"id": f"ref_{n:026d}"[:30], "name": name, "role": role, "kind": "picture", "asset": stored(h, n)}
+
+
+def test_regenerate_of_a_named_picture_sends_its_other_views_as_tagged_references():
+    """Resize selected pictures (features/resize-selection.clan): a character stays itself."""
+    h = paid_harness()
+    token = h.as_person()
+    inp = size_input(h, "regenerate")
+    inp["refs"] = [view_ref(h, 11, "maya_side"), view_ref(h, 12, "maya_three-quarter"), view_ref(h, 13, "maya_back")]
+    _, job = h.post_job(token, op="resize", expect=200, **inp)
+    (sent,) = h.providers["runway"].submits
+    assert [r["name"] for r in sent["refs"]] == ["master", "maya_side", "maya_three_quart", "maya_back"]
+    assert [r["role"] for r in sent["refs"]] == ["object", "character", "character", "character"]
+    assert sent["refs"][1]["sha256"] == inp["refs"][0]["asset"]["sha256"]
+    assert "@master" in sent["prompt"] and "@maya_side, @maya_three_quart, @maya_back show the same character" in sent["prompt"]
+
+
+def test_extend_and_a_picture_with_no_name_send_the_picture_only():
+    h = paid_harness()
+    token = h.as_person()
+    inp = size_input(h, "extend")
+    inp["refs"] = [view_ref(h, 11, "maya_side")]
+    h.post_job(token, op="resize", expect=200, **inp)
+    h.post_job(token, op="resize", expect=200, **size_input(h, "regenerate"))
+    ext, reg = h.providers["runway"].submits
+    assert [r["role"] for r in ext["refs"]] == ["current"] and "maya" not in json.dumps(ext)
+    assert [r["name"] for r in reg["refs"]] == ["master"] and "show the same" not in reg["prompt"]
+
+
+def test_at_most_four_views_go_with_a_regenerate_and_an_object_key_stays_an_object():
+    h = paid_harness()
+    token = h.as_person()
+    inp = size_input(h, "regenerate")
+    inp["refs"] = [view_ref(h, 20 + i, f"bottle_v{i}", "prop") for i in range(6)]
+    h.post_job(token, op="resize", expect=200, **inp)
+    (sent,) = h.providers["runway"].submits
+    assert len(sent["refs"]) == 1 + formats.REGENERATE_REFS_MAX
+    assert {r["role"] for r in sent["refs"][1:]} == {"object"} and "same subject" in sent["prompt"]
+
+
 def test_each_paid_size_reserves_its_own_price_and_the_spend_stop_refuses_the_one_over():
     h = paid_harness(spend={"capUsd": 0.6, "warnUsd": 0.5})
     token = h.as_person()

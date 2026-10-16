@@ -82,8 +82,10 @@
           "enum": [
             "generate",
             "view",
-            "region_edit"
-          ]
+            "region_edit",
+            "resize"
+          ],
+          "description": "resize (added 2026-10-16, features/resize-selection.clan): a picture made at another shape from the selected picture it was resized from (Resize… on the picture bar)."
         },
         "parentIds": {
           "type": "array",
@@ -101,6 +103,12 @@
         "view": {
           "$ref": "common.schema.json#/$defs/view",
           "description": "op view: the view it was made as."
+        },
+        "shape": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24,
+          "description": "op resize: the shape's chip, shown on the result (\"9:16\", \"1200×628\"). Added 2026-10-16 (additive)."
         },
         "mock": {
           "type": "boolean"
