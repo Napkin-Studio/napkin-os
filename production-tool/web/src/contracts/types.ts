@@ -820,13 +820,13 @@ export interface ProductionDocument extends EntityMaps {
 
 // ── customdata.schema.json ──────────────────────────────────────────────────
 
-export type GenOp = 'generate' | 'view' | 'region_edit'
+export type GenOp = 'generate' | 'view' | 'region_edit' | 'resize'
 
 export type CustomData =
   | { kind: 'pic'; id: Id; asset: Sha256 }
   | { kind: 'drawn'; id: Id; asset: Sha256 }
   | { kind: 'note'; id: Id }
-  | { kind: 'gen'; id: Id; op: GenOp; parentIds: Id[]; state: JobState; asset?: Sha256; view?: View; mock?: boolean }
+  | { kind: 'gen'; id: Id; op: GenOp; parentIds: Id[]; state: JobState; asset?: Sha256; view?: View; shape?: string; mock?: boolean }
   | { kind: 'provenance'; from: Id; to: Id }
   | { kind: 'board' | 'sketch' | 'script' | 'storyboard' | 'video' | 'link' | 'document' | 'format_set' | 'suggestion'; id: Id }
 
@@ -954,6 +954,8 @@ export interface ResizeInput {
   /** layout: where the picture sits on the colour field, 0-1 of the size. */
   panel?: Region
   layers?: TypeLayer[]
+  /** regenerate: what the picture is; a sketch (a scamp) is drawn as a finished picture. */
+  source?: 'picture' | 'sketch'
 }
 export interface CutdownInput {
   lengthS: number

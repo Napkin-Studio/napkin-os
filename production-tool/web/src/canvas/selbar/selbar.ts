@@ -23,13 +23,15 @@ export interface SelInfo {
   units: number
   /** Every selected thing is locked. */
   locked: boolean
+  /** Pictures and scamps among it, which Resize… makes at other shapes (features/resize-selection.clan). */
+  pictures?: number
   /** Actions that cannot run on this selection now, with why ("Write the script first"). */
   off?: Partial<Record<ActionId, string>>
 }
 
 export type ActionId =
   | 'open' | 'make-video' | 'plan-shots' | 'make-clips' | 'render-ad' | 'make-sizes'
-  | 'generate' | 'convert' | 'group' | 'ungroup' | 'move-to-board' | 'delete' | 'stack' | 'spread'
+  | 'generate' | 'convert' | 'group' | 'ungroup' | 'move-to-board' | 'delete' | 'stack' | 'spread' | 'resize'
 
 export interface BarAction {
   id: ActionId
@@ -72,10 +74,11 @@ export function barFor(s: SelInfo): BarAction[] {
   }
   if (s.group && s.units === 1) {
     // A key's views (owner 2026-10-15): derived from their names, so no Ungroup; Stack or Spread instead.
-    if (s.group.key) return [s.group.key.stacked ? act('spread', 'Spread') : act('stack', 'Stack'), act('move-to-board', 'Move to board'), DELETE]
-    // An ink group generates as it is, with no Ungroup first (owner, container-select): the strokes become a Drawing.
+    if (s.group.key) return [s.group.key.stacked ? act('spread', 'Spread') : act('stack', 'Stack'), ...(s.pictures ? [act('resize', 'Resize…')] : []), act('move-to-board', 'Move to board'), DELETE]
+    // An ink group generates as it is, with no Ungroup first (owner, container-select): the strokes become a Drawing;
+    // Resize… makes it a picture at other shapes (features/resize-selection.clan).
     return s.group.ink
-      ? [act('generate', 'Generate', { primary: true }), act('convert', 'Convert to text'), act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
+      ? [act('generate', 'Generate', { primary: true }), act('convert', 'Convert to text'), ...(s.pictures ? [act('resize', 'Resize…')] : []), act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
       : [act('ungroup', 'Ungroup'), act('move-to-board', 'Move to board'), DELETE]
   }
   const only = s.cards.length === s.units && !s.links
@@ -96,7 +99,8 @@ export function barFor(s: SelInfo): BarAction[] {
   if (only && !s.cards.includes('video') && scripts <= 3 && boards <= 3 && (scripts > 1 || boards > 1)) {
     return [act('make-video', 'Make video', { primary: true }), act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
   }
-  return [act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
+  // Nodes with pictures among them: Resize… makes only the pictures at other shapes.
+  return [...(s.pictures ? [act('resize', 'Resize…')] : []), act('group', 'Group'), act('move-to-board', 'Move to board'), DELETE]
 }
 
 /** More (⋯): on every bar with nodes or a single link, as 3.9 says. */

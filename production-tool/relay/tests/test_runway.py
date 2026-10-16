@@ -608,6 +608,20 @@ def test_regenerate_is_gemini_3_pro_with_the_master_tagged_at_the_nearest_ratio(
                     "referenceImages": [{"uri": URL[SHA], "tag": "master", "subject": "object"}]}
 
 
+def test_regenerate_with_a_characters_views_tags_each_as_a_human_subject(runway, server):
+    """Resize selected pictures (features/resize-selection.clan): the views go tagged, the body is Runway's."""
+    import formats
+    from provider_schemas import errors
+    prompt = formats.REGENERATE_PROMPT.format(shape="tall 9:16") + formats.REGENERATE_REFS.format(tags="@maya_side", what="character")
+    runway.submit(job("resize", model="gemini_image3_pro", prompt=prompt, ratio="1536:2752",
+                      refs=[Ref(SHA, "master", "object"), Ref(FRAME, "maya_side", "character")], outputs=1))
+    body = server.body
+    assert body["referenceImages"][1]["tag"] == "maya_side" and body["referenceImages"][1]["subject"] == "human"
+    assert body["referenceImages"][0] == {"uri": URL[SHA], "tag": "master", "subject": "object"}
+    assert "@maya_side" in body["promptText"]
+    assert not errors("runway", "POST /v1/text_to_image", body)
+
+
 def test_the_make_all_sizes_bodies_match_runways_own_schemas(editor, runway, server):
     """Each phase 4 body validates against the snapshot of Runway's OpenAPI (2024-11-06) request schemas."""
     import formats

@@ -36,6 +36,7 @@ import {
 } from './scene'
 import { instruction, planSelection, type CanvasPlan } from './selection'
 import { CanvasDocSync } from './sync'
+import { resizableKind, type Source as ResizeSource } from '../campaign/resizeSelection'
 import { frameText } from './text'
 
 /** The scene as this browser keeps it (engine-owned shape; core/canvasAdapter.ts). */
@@ -93,6 +94,11 @@ export class CanvasController {
     void this.sync.nodes(this.els())
     void this.refreshDrawings()
     void this.sync.texts(this.els())
+  }
+
+  /** The canvas this controller works on (Resize… places its results on it). */
+  get canvasAdapter(): CanvasAdapter {
+    return this.canvas
   }
 
   private els(): El[] {
@@ -452,6 +458,92 @@ export class CanvasController {
     const input = { refs, ratio, ...(text ? { text } : {}), ...(opts.more ? { chips: ['more_options'] } : {}) }
     await this.s.runner.submit('generate', input, plan.images.filter((i) => i.kind === 'gen').map((i) => i.nodeId), { for: 'canvas' }, jobId, opts.modelChoice)
     return { jobId }
+  }
+
+  // ── Resize selected pictures (features/resize-selection.clan) ──
+
+  /**
+   * The selected things Resize… and Make all sizes work from, each with its picture and pixels: a picture
+   * or result as it is, a Drawing frame's strokes rendered again, a sketch area's region exported (the
+   * scamp's picture). Things that are not one are left out.
+   */
+  async resizeSources(elIds: readonly string[], strokeIds: readonly string[] = []): Promise<ResizeSource[]> {
+    const out: ResizeSource[] = []
+    // Loose strokes: one drawing, its picture rendered now (for the preview); wrapped as a Drawing when sent.
+    const strokes = alive(this.els()).filter((e) => strokeIds.includes(e.id))
+    if (strokes.length) {
+      const blob = (await downscale(await exportElements(this.canvas, strokes))).blob
+      const sha = await putBlob(blob)
+      const dims = await this.pixelsOf(sha, { ...strokes[0], ...this.boxOf(strokes) } as El)
+      out.push({ elId: strokes[0].id, nodeId: '', asset: sha, ...dims, kind: 'drawing', strokes: strokes.map((e) => e.id) })
+    }
+    const drawn = alive(this.els()).filter((e) => elIds.includes(e.id) && cd(e)?.kind === 'drawn').map((e) => e.id)
+    if (drawn.length) await this.refreshDrawn(drawn)
+    for (const id of elIds) {
+      const e = alive(this.els()).find((x) => x.id === id)
+      const kind = e ? resizableKind(e) : null
+      if (!e || !kind) continue
+      const c = cd(e)!
+      if (kind === 'sketch') {
+        const area = await this.exportSketch(e)
+        out.push({ elId: e.id, nodeId: (c as { id: string }).id, asset: area.sha, w: area.w, h: area.h, kind })
+        continue
+      }
+      const asset = (c as { asset?: string }).asset
+      if (!asset) continue
+      const dims = await this.pixelsOf(asset, e)
+      const nodeId = (c as { id: string }).id
+      const named = this.nameOn(nodeId)
+      out.push({ elId: e.id, nodeId, asset, ...dims, kind, ...(named ? { named } : {}) })
+    }
+    return out
+  }
+
+  /** Loose strokes Resize… sends: wrapped as one Drawing frame (as Generate does), the source as it is then. */
+  async wrapForResize(src: ResizeSource): Promise<ResizeSource> {
+    if (!src.strokes?.length) return src
+    const frame = await this.wrapDrawing(src.strokes)
+    if (!frame) throw new Error('Those strokes are gone.')
+    const c = cd(frame) as { id: string; asset: string }
+    const dims = await this.pixelsOf(c.asset, frame)
+    return { elId: frame.id, nodeId: c.id, asset: c.asset, ...dims, kind: 'drawing' }
+  }
+
+  private boxOf(els: readonly El[]): { x: number; y: number; width: number; height: number } {
+    const b = bounds(els)
+    return { x: b.minX, y: b.minY, width: b.w, height: b.h }
+  }
+
+  /** A picture's pixels: as the document has them, else measured from this browser's copy, else its node's shape. */
+  private async pixelsOf(sha: string, el: El): Promise<{ w: number; h: number }> {
+    const a = this.doc().assets[sha]
+    if (a?.w && a?.h) return { w: a.w, h: a.h }
+    const blob = await getBlob(sha)
+    if (blob && typeof createImageBitmap !== 'undefined') {
+      try {
+        const bmp = await createImageBitmap(blob)
+        const dims = { w: bmp.width, h: bmp.height }
+        bmp.close?.()
+        return dims
+      } catch {
+        // not a picture this browser can read: the node's shape
+      }
+    }
+    return this.aspectOfEl(el)
+  }
+
+  /** A sketch area's picture: its region with its strokes, at its shape (as Generate sends it). */
+  private async exportSketch(areaEl: El): Promise<{ sha: string; w: number; h: number }> {
+    const els = alive(this.els())
+    const c = cd(areaEl) as { id: string }
+    const aspect = this.doc().sketches[c.id]?.aspect ?? this.aspectOfEl(areaEl)
+    const rect: Rect = { x: areaEl.x, y: areaEl.y, w: areaEl.width, h: areaEl.height }
+    const members = membersOf(els as unknown as Boxed[], rect).filter((e) => e.id !== areaEl.id)
+    const ex = exportPlan(rect, aspect)
+    const blob = await this.canvas.exportRegion({ rect, elementIds: members.map((e) => e.id), outW: ex.outW, outH: ex.outH, background: '#ffffff' })
+    const sha = await putBlob(blob)
+    this.addAsset(sha, blob, 'drawn', { w: ex.outW, h: ex.outH })
+    return { sha, w: ex.outW, h: ex.outH }
   }
 
   // ── sketch areas (features/frame-aspect.clan; ui-behaviour 3.7) ──
@@ -928,7 +1020,7 @@ export class CanvasController {
     if (!old) return
     const c = cd(old) as Extract<CustomData, { kind: 'gen' }>
     this.sync.moved.add(oldId)
-    const gen = makeGenPlaceholder(this.canvas, newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view)
+    const gen = makeGenPlaceholder(this.canvas, newJobId, c.op, c.parentIds, { x: old.x, y: old.y }, { w: old.width, h: old.height }, c.view, c.shape)
     let next: El[] = els.map((e) => (e.id === old.id ? this.canvas.patch(e, { isDeleted: true }) : e))
     next.push(gen)
     const into = els.filter((e) => !e.isDeleted && cd(e)?.kind === 'provenance' && (cd(e) as { to: string }).to === oldId)

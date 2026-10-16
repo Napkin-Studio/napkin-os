@@ -40,6 +40,14 @@ EXTEND_PROMPT = ("Continue the scene beyond its edges; keep everything inside ex
                  "Match its light, colour, grain and perspective. No text, no letters, no logos.")
 REGENERATE_PROMPT = ("Recreate @master for a {shape} format: the same people, objects, place, light and colours. "
                      "Recompose for the shape so nothing important is cut off. No text, no letters, no logos.")
+# A scamp (a Drawing, a sketch area: features/resize-selection.clan) drawn as a finished picture at the shape.
+REGENERATE_SKETCH_PROMPT = ("Turn the sketch @master into a finished, photographic picture for a {shape} format: keep its "
+                            "layout, subjects and their poses. Recompose for the shape so nothing important is cut off. "
+                            "No text, no letters, no logos.")
+# A named picture's other views (features/resize-selection.clan): the same character or object, kept itself.
+REGENERATE_REFS = " {tags} show the same {what} from other sides: keep them exactly themselves."
+# At most this many other views go with a regenerate (Gemini 3 Pro takes 14 refs, 5 of them human).
+REGENERATE_REFS_MAX = 4
 
 # The padded canvas Ideogram edits: at most this long and this many pixels (a data URI is at most 5 MB).
 EXTEND_MAX_SIDE = 3072

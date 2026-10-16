@@ -23,6 +23,8 @@ export interface SelectionBarActions {
   remove(): void
   /** Make all sizes from a Video node (features/campaign-formats.clan). */
   makeSizes?(): void
+  /** Resize… the pictures among the selection (features/resize-selection.clan). */
+  resize?(): void
   /** A key group: pile its views up (true) or lay them out (false), one undo step. */
   stack?(on: boolean): void
   /** An ink group: open Generate on its strokes (they become a Drawing). */
@@ -52,6 +54,7 @@ export function SelectionBar({ info, anchor, actions }: { info: SelInfo; anchor:
     else if (id === 'stack' || id === 'spread') actions.stack?.(id === 'stack')
     else if (id === 'generate') actions.generate?.()
     else if (id === 'make-sizes') actions.makeSizes?.()
+    else if (id === 'resize') actions.resize?.()
   }
   const label = info.group?.key ? `${info.group.key.label} actions` : info.group?.ink ? 'Ink group actions' : info.cards.length ? 'Node actions' : 'Selection actions'
   return (

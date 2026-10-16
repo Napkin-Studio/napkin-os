@@ -63,6 +63,21 @@ export function planChoices(): { kind: 'plan' | 'pack'; id: string; name: string
   return [...PLANS.map((p) => ({ kind: 'plan' as const, id: p.id, name: p.name })), ...PACKS.map((p) => ({ kind: 'pack' as const, id: p.id, name: p.name }))]
 }
 
+/** What a master of this kind can be made into (owner, 2026-10-16): a picture or a scamp gives stills only
+ *  (films come from a Video node); a Video node gives everything. */
+export function rowsFor(choice: { kind: 'plan' | 'pack'; id: string }, media: 'image' | 'video', lengths?: readonly number[]): PlanRow[] {
+  const rows = rowsOf(choice, lengths)
+  return media === 'image' ? rows.filter((r) => r.media === 'image') : rows
+}
+
+/** The plans and packs a master of this kind can use: from a picture, those with at least one still. */
+export function choicesFor(media: 'image' | 'video'): ReturnType<typeof planChoices> {
+  return planChoices().filter((c) => rowsFor(c, media, DEFAULT_LENGTHS).length > 0)
+}
+
+/** Said once on the sheet from a picture or a scamp. */
+export const FILMS_FROM_VIDEO = 'Films come from a Video node.'
+
 export function findFormat(packId: string, formatId: string): { pack: Pack; format: PackFormat } | null {
   for (const pack of PACKS) {
     if (pack.id !== packId) continue
