@@ -24,7 +24,7 @@ import { DownloadButton } from '../ui/Download'
 import { useProjectName } from '../ui/useDownload'
 import { mediaItem } from '../media/names'
 import { EditorBar } from '../ui/chrome/TopBars'
-import { Presence } from '../ui/chrome/Bar'
+import { CopyLinkLater } from '../ui/chrome/MoreMenu'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
@@ -470,27 +470,28 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   return (
     <div className="editor image-editor" data-image-editor="">
       <EditorBar back="Storyboard" onBack={() => go('back')} icon="frame" title={shotTitle(shot, index + 1)}
-        meta={<span className="pt-mono ie-meta">{ratio} locked{own ? ` · ${own.w} × ${own.h}` : ''}</span>}
+        meta={<span className="pt-mono ie-meta">{ratio} locked</span>}
         right={(
           <>
-            <div className="ie-zoom" role="group" aria-label="Zoom">
-              <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => zoomStep(z, -1))}>−</button>
-              <span className="pt-mono">{Math.round(zoom * 100)}%</span>
-              <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => zoomStep(z, 1))}>+</button>
-              <button type="button" className="ie-fit" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>Fit</button>
-            </div>
-            <Presence />
-            {n + applyLeftOut > 0 && <span className="pt-mono ie-pill">{[n ? notApplied(n) : '', applyLeftOut ? leftOutLine(applyLeftOut) : ''].filter(Boolean).join(' · ')}</span>}
+            {/* Zoom sits on the stage and Presence in the bar itself (topbar-declutter); the pill keeps the
+                hidden layers Apply leaves out (masks-layers), with a short form at the tight fit. */}
+            {n + applyLeftOut > 0 && (() => {
+              const long = [n ? notApplied(n) : '', applyLeftOut ? leftOutLine(applyLeftOut) : ''].filter(Boolean).join(' · ')
+              const short = [n ? `${n} ${n === 1 ? 'edit' : 'edits'}` : '', applyLeftOut ? `${applyLeftOut} left out` : ''].filter(Boolean).join(' · ')
+              return <span className="pt-mono ie-pill" title={long}><span className="ie-n-long">{long}</span><span className="ie-n-short">{short}</span></span>
+            })()}
             {frames.length > 0 && (
-              <button ref={versionsBtn} type="button" className="btn ie-vbtn" aria-haspopup="menu" aria-expanded={versionsOpen} onClick={() => setVersionsOpen((o) => !o)}>
-                <span className="pt-mono">v{version}</span> of {frames.length} <span aria-hidden="true" className="ie-caret">▼</span>
+              <button ref={versionsBtn} type="button" className="btn ie-vbtn" aria-haspopup="menu" aria-expanded={versionsOpen} aria-label={`Version ${version} of ${frames.length}`} onClick={() => setVersionsOpen((o) => !o)}>
+                <span className="pt-mono">v{version}</span><span className="ie-vof"> of {frames.length}</span> <span aria-hidden="true" className="ie-caret">▼</span>
               </button>
             )}
           </>
         )}
+        more={() => <CopyLinkLater />}
         primary={<button type="button" className="btn primary" disabled={running || !n || !current} onClick={apply}
           title={n ? applyWords : 'Make an edit first'}>Apply as new version</button>} />
       <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of frame ${index + 1}`} className="ie-versions">
+        <div className="ie-vhead pt-mono">{ratio} locked{own ? ` · ${own.w} × ${own.h}` : ''}</div>
         {frames.map((f) => <VersionRow key={f.id} f={f} open={f.id === current?.id} onPick={() => { setVersionsOpen(false); void selectFrame(docStore, shot.id, f.id) }} />)}
         <div className="ie-vfoot">
           <span>{n ? applyWords : `Apply saves your edits as v${version + 1}. v${version} stays.`}</span>
@@ -548,11 +549,20 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
           </div>
 
           {current && shownPlan ? (
+            <div className="ie-stagewrap">
             <Stage src={url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
               before={view === 'before'} motion={motion} alphaOf={alphaOf} alphaKey={alphaKey} onDrawn={setDrawError} onMaskOp={onMaskOp} onClick={onClick} onAddText={onAddText} onText={onText} onCrop={onCrop}
               pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
               {view === 'before' && <span className="pt-mono ie-before">Before · v{version} as saved</span>}
             </Stage>
+            {/* Zoom, on the stage at the bottom right like the canvas's zoom pill (owner, 2026-10-15). */}
+            <div className="ie-zoom" role="group" aria-label="Zoom">
+              <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => zoomStep(z, -1))}>−</button>
+              <span className="pt-mono">{Math.round(zoom * 100)}%</span>
+              <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => zoomStep(z, 1))}>+</button>
+              <button type="button" className="ie-fit" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}>Fit</button>
+            </div>
+            </div>
           ) : (
             <div className="ie-viewport" style={{ aspectRatio: String(aspect), '--ie-ratio': aspect } as React.CSSProperties}>
               <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shot.id} place="editor" /></div>

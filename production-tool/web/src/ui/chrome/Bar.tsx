@@ -26,19 +26,24 @@ export function MarkTile() {
   return <span className="pt-home static" aria-hidden="true"><StudioMark size={20} /></span>
 }
 
-/** "Napkin Studio", "Production" in tool blue, and the project's name in grey. */
-export function Brand({ project }: { project?: string }) {
+/** "Napkin Studio", "Production" in tool blue, and the project's name in grey (it shrinks first).
+ *  `wordmark` false (a tight bar): "Napkin Studio" hides; the Home mark is the logo already. */
+export function Brand({ project, wordmark = true }: { project?: string; wordmark?: boolean }) {
   return (
     <>
-      <span className="pt-studio">Napkin Studio</span>
+      {wordmark && <span className="pt-studio">Napkin Studio</span>}
       <span className="pt-tool">Production</span>
       {project && <span className="pt-project pt-shrink" title={project}>{project}</span>}
     </>
   )
 }
 
-export function BackButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button type="button" className="pt-back" onClick={onClick} title={`Back to ${label} (Ctrl+[)`}><span aria-hidden="true">←</span>{label}</button>
+/** ← and where it goes; `short` (a tight bar): the arrow alone, its words in the label and tooltip. */
+export function BackButton({ label, onClick, short = false }: { label: string; onClick: () => void; short?: boolean }) {
+  return (
+    <button type="button" className={`pt-back ${short ? 'short' : ''}`} onClick={onClick} aria-label={short ? `Back to ${label}` : undefined}
+      title={`Back to ${label} (Ctrl+[)`}><span aria-hidden="true">←</span>{!short && label}</button>
+  )
 }
 
 export const BarSep = () => <span aria-hidden="true" className="pt-sep" />

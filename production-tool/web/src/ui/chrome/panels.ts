@@ -27,3 +27,6 @@ export function nodeTitle(own: string | undefined, templateWord: string, project
   const ad = project?.split(' · ').at(-1)?.trim()
   return ad && !/^untitled/i.test(ad) ? ad : templateWord
 }
+
+/** What a menu row says where a thing is not built yet (Copy link to this in Storyboard, Video, Image). */
+export const NOT_YET = 'Not in this version yet'

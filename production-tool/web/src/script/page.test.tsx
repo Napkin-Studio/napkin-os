@@ -341,7 +341,7 @@ describe("Skye's question on a draft (owner 2026-10-15: shown nowhere, 'I'm writ
     await act(async () => { askId = (await waitingWrite(services, scriptId, { kind: 'scene', id: id('scene') })).askId })
     render()
     await settle()
-    await act(async () => { (el.querySelector('.pt-status') as HTMLButtonElement).click() })
+    await act(async () => { (el.querySelector('.pt-job') as HTMLButtonElement).click() })
     await settle()
     const show = [...document.querySelectorAll<HTMLButtonElement>('.traypop button')].find((b) => b.textContent === 'Show')!
     await act(async () => { show.click() })

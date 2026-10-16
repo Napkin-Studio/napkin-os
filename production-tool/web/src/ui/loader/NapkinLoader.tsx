@@ -3,7 +3,7 @@
 // produce). One SVG pattern, copied verbatim; only width, height, data-work and data-state change.
 // The words always sit beside it (a status line, a label): the SVG itself is aria-hidden.
 // It turns in two places only (owner, 2026-10-15; ui-behaviour 6.5): the busy pointer's badge
-// and the top bar's job pill. Everywhere else a job runs, the crew member doing it shows working
+// and the top bar's job button. Everywhere else a job runs, the crew member doing it shows working
 // (ui/agents/AgentFigure). places.test.ts holds that.
 
 import type { Work } from '../agents/cast'
@@ -13,14 +13,16 @@ export type LoaderState = 'run' | 'finish' | 'queued'
 
 const CARD = 'M16 16 L4.686 4.686 A16 16 0 0 1 27.314 4.686 Z'
 
-export function NapkinLoader({ work = 'create', state = 'run', size = 20 }: {
+export function NapkinLoader({ work = 'create', state = 'run', size = 20, flat = false }: {
   work?: Work
   state?: LoaderState
-  /** 14 (the busy pointer's badge), 20 (the top bar's job pill). */
+  /** The full logo, still, no pulse even under reduced motion (nl-flat): the job button when nothing runs. */
+  flat?: boolean
+  /** 14 (the busy pointer's badge), 20 (the top bar's job button). */
   size?: 14 | 20
 }) {
   return (
-    <svg className="napkin-loader" data-work={work} data-state={state}
+    <svg className={flat ? 'napkin-loader nl-flat' : 'napkin-loader'} data-work={work} data-state={state}
       width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
       <g className="nl-spin">
         <g className="nl-c nl-c3" transform="rotate(90 16 16)"><path className="nl-s" d={CARD} fill="#8B919E" /></g>

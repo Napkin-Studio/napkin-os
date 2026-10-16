@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useDoc, useServices, useUi } from '../app/context'
 import { redo, stepWords, undo, undoLabels } from '../doc/undo'
 import { keepsItsOwnUndo } from './undoKeys'
+import { MenuItem } from './Float'
 
 // The last undo note, shared by every pair on screen (the pill and an editor's bar say the same).
 let note: string | null = null
@@ -72,4 +73,19 @@ export function UndoButtons({ bare = false }: { bare?: boolean }) {
   )
   if (bare) return buttons
   return <span className="pt-pair undobtns" role="group" aria-label="Undo and redo">{buttons}</span>
+}
+
+/** Undo and Redo as More's rows, where the bar has no room for the pair (tight, on a fine pointer). */
+export function UndoMenuItems({ close }: { close: () => void }) {
+  const { doc } = useServices()
+  useDoc()
+  useUi()
+  const { undo: last, redo: next } = undoLabels(doc)
+  const run = useRun()
+  return (
+    <>
+      <MenuItem icon="↶" hint="Ctrl+Z" disabled={!last} onSelect={() => { close(); void run('undo') }}>{last ? `Undo: ${stepWords(last)}` : 'Nothing to undo'}</MenuItem>
+      <MenuItem icon="↷" hint="Shift+Ctrl+Z" disabled={!next} onSelect={() => { close(); void run('redo') }}>{next ? `Redo: ${stepWords(next)}` : 'Nothing to redo'}</MenuItem>
+    </>
+  )
 }

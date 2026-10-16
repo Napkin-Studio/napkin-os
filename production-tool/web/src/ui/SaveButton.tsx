@@ -1,60 +1,39 @@
-// Save: send the project to the server now (the relay keeps it: S3 on AWS,
-// .local-data/clan locally), on top of the save every 5 minutes and on a lock.
-// Opening a saved project from the server comes with the server work later.
-// Ctrl/Cmd+S does the same.
+// The canvas bar's save status and Ctrl/Cmd+S (features/topbar-declutter.clan): both read and drive
+// ui/useSave.ts, as More's "Save now" does. At tight the status is a dot, unless the save failed.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useServices } from '../app/context'
-import { errorShown, record } from '../dogfood/recorder'
+import { useEffect, useRef } from 'react'
+import { saveTime, useSave } from './useSave'
 
-type State = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved'; at: Date } | { kind: 'failed'; why: string }
+export function SaveStatus({ dot = false }: { dot?: boolean }) {
+  const { can, state, save } = useSave()
+  // Saving online needs the relay and the .clan store (not the in-browser mock, not the plain-data fallback).
+  if (!can) return null
+  const label = state.kind === 'saving' ? 'Saving…' : state.kind === 'saved' ? `Saved · ${saveTime(state.at)}` : state.kind === 'failed' ? 'Not saved · retry' : 'Save'
+  const title = state.kind === 'failed' ? `Not saved: ${state.why}. Your work is still in this browser; try again.`
+    : 'Save your project to the server now (Ctrl+S). It also saves every 5 minutes.'
+  const small = dot && state.kind !== 'failed'
+  return (
+    <button type="button" className={`pt-savebtn ${state.kind === 'failed' ? 'failed' : ''} ${small ? 'dot' : ''}`} data-state={state.kind}
+      disabled={state.kind === 'saving'} title={title} aria-label={small ? `${label}. ${title}` : undefined} onClick={() => void save()}>
+      {small ? <span className="pt-savedot" aria-hidden="true" /> : label}
+    </button>
+  )
+}
 
-const time = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
-export function SaveButton() {
-  const { clan, relay } = useServices()
-  const [state, setState] = useState<State>({ kind: 'idle' })
-  const busy = useRef(false)
-
-  const save = useCallback(async () => {
-    if (!clan || busy.current) return
-    busy.current = true
-    setState({ kind: 'saving' })
-    const start = Date.now()
-    try {
-      await clan.flush() // what was just changed goes too
-      await clan.clan.mirrorNow('manual')
-      setState({ kind: 'saved', at: new Date() })
-      record('save', 'manual', { ok: true, ms: Date.now() - start })
-    } catch (e) {
-      const why = e instanceof Error ? e.message : 'the server did not answer'
-      setState({ kind: 'failed', why })
-      record('save', 'manual', { ok: false, ms: Date.now() - start })
-      errorShown('save', why)
-    } finally {
-      busy.current = false
-    }
-  }, [clan])
-
+/** Ctrl/Cmd+S, registered once (App): never the browser's "save page". */
+export function SaveKeys() {
+  const { save } = useSave()
+  const ref = useRef(save)
+  useEffect(() => { ref.current = save }, [save])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
-        e.preventDefault() // never the browser's "save page"
-        void save()
+        e.preventDefault()
+        void ref.current()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [save])
-
-  // Saving online needs the relay and the .clan store (not the in-browser mock, not the plain-data fallback).
-  if (!clan || relay.kind !== 'http') return null
-  const label = state.kind === 'saving' ? 'Saving…' : state.kind === 'saved' ? `Saved · ${time(state.at)}` : state.kind === 'failed' ? 'Not saved · retry' : 'Save'
-  const title = state.kind === 'failed' ? `Not saved: ${state.why}. Your work is still in this browser; try again.`
-    : 'Save your project to the server now (Ctrl+S). It also saves every 5 minutes.'
-  return (
-    <button className={`pt-savebtn ${state.kind === 'failed' ? 'failed' : ''}`} disabled={state.kind === 'saving'} title={title} onClick={() => void save()}>
-      {label}
-    </button>
-  )
+  }, [])
+  return null
 }
