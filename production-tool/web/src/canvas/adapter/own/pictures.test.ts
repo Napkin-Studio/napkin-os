@@ -16,6 +16,8 @@ import { BOARD_GAP, BOARD_PAD } from '../../../../../canvas-engine/src'
 import { newId } from '../../../lib/ulid'
 import { boardNotices } from '../../boards/fitting'
 import { imageFiles, pictureRow, placePictures, PICTURE_W } from '../../nodes/pictures'
+import { cardOf, seedNodes } from '../../nodes/nodes'
+import type { ProductionDocument } from '../../../contracts/types'
 import { snapshotDoc } from '../../../test/jobFixtures'
 import { OwnAdapter } from './adapter'
 import { ownChrome } from './chrome'
@@ -116,6 +118,20 @@ describe('pictures on the own engine', () => {
       expect(ov(got[i], side)).toBe(false)
       for (let j = i + 1; j < 3; j++) expect(ov(got[i], got[j])).toBe(false)
     }
+  })
+
+  it('a drop over a node moves clear of it; a drop on empty canvas stays where it was let go (2026-10-16)', async () => {
+    const a = new OwnAdapter()
+    a.resize(1200, 800, 0, 0)
+    const doc = snapshotDoc()
+    a.transact((els) => [...els, ...seedNodes(a, doc.get() as unknown as ProductionDocument)], { undoable: false })
+    const cards = a.elements().filter((e) => cardOf(e))
+    const script = cards[0]
+    const onCard = await placePictures(a, doc, [png('on')], { x: script.x + script.width / 2, y: script.y + script.height / 2 })
+    const box = onCard[0]
+    for (const c of cards) expect(box.x < c.x + c.width && c.x < box.x + box.width && box.y < c.y + c.height && c.y < box.y + box.height).toBe(false)
+    const far = await placePictures(a, doc, [png('far')], { x: 5000, y: 5000 })
+    expect(Math.abs(far[0].x + far[0].width / 2 - 5000)).toBeLessThan(2)
   })
 
   it('keeps only image files, and lays a row out centred', () => {
