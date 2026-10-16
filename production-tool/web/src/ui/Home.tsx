@@ -13,16 +13,15 @@ import { homeItems, itemId } from '../projects/homeList'
 import { behindNapkinOs, signOut } from '../relay/access'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
-import { clock, edited, greetName, greeting, refusalNotice, stageChip } from './homeWords'
+import { clock, edited, FIRST_AD, greetName, greeting, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
 import { DataSharing } from './DataSharing'
-import { sayer, type CastKey } from './agents/cast'
+import { sayer } from './agents/cast'
+import { CrewLine, CrewRow } from './HomeCrew'
 import { useBlobUrl } from './hooks'
 import { StudioMark } from './Mark'
 import { Account, MarkTile } from './chrome/Bar'
 import './home.css'
-
-const CREW: CastKey[] = ['dex', 'ellis', 'jude']
 
 export function Home() {
   const shell = useShell()
@@ -101,10 +100,10 @@ export function Home() {
 
           {first ? (
             <div className="hm-empty">
-              <div className="hm-crew">{CREW.map((k) => <AgentFigure key={k} agent={k} size={46} />)}</div>
+              <CrewRow />
               <span className="hm-sayer">{sayer('dex')}</span>
               <b>Let's make your first ad</b>
-              <p>Draw or drop your characters and write a few lines of script. I plan the shots, draw the frames and make the clips; Ellis reads your notes back and Jude checks each result.</p>
+              <p>{FIRST_AD}</p>
               <div className="row" style={{ marginTop: 6 }}>
                 <button className="btn primary" onClick={newProject} disabled={!!state.busy}>＋ New project</button>
                 <button className="btn" onClick={chooseFile} disabled={!!state.busy}>Open a file…</button>
@@ -119,7 +118,7 @@ export function Home() {
                   <p>Draw or drop your characters on the canvas, write the script, and the crew plans the shots, draws the frames and makes the clips.</p>
                   <button className="hm-go" tabIndex={-1} disabled={!!state.busy}>＋ New project</button>
                   <div className="hm-say"><b>{sayer('dex')}</b>Bring a picture or a line of script. I'll take it from there.</div>
-                  <div className="hm-crewline" aria-hidden>{CREW.map((k) => <AgentFigure key={k} agent={k} size={48} decorative />)}</div>
+                  <CrewLine />
                 </div>
                 <div className="hm-open" role="button" tabIndex={0} onClick={chooseFile} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), chooseFile())}>
                   <span className="hm-ico" aria-hidden>⇪</span>
