@@ -888,6 +888,36 @@
       "crew": "wren",
       "model": "gen4_image",
       "provider": "runway"
+    },
+    "frame_01K7A00000000000000000PV01": {
+      "id": "frame_01K7A00000000000000000PV01",
+      "v": 1,
+      "field_v": {},
+      "node": "exA1b2C3d4",
+      "picked_at": "2026-10-14T09:00:00Z",
+      "version": 1,
+      "kind": "original",
+      "asset": "sha256:23211f0a5f6c317fa10454dda640194a9f7291c3cde3c24106604118efce6a0b"
+    },
+    "frame_01K7A00000000000000000PV02": {
+      "id": "frame_01K7A00000000000000000PV02",
+      "v": 1,
+      "field_v": {},
+      "node": "exA1b2C3d4",
+      "picked_at": "2026-10-14T09:05:00Z",
+      "version": 2,
+      "parent_id": "frame_01K7A00000000000000000PV01",
+      "kind": "edited",
+      "asset": "sha256:83281d59fb05b7ce64052f6438b96237677b1e5ceb6dcbdc2931afe4d89ac835",
+      "crew": "rhea",
+      "edits": [
+        {
+          "op": "fill",
+          "params": {
+            "words": "warmer light"
+          }
+        }
+      ]
     }
   },
   "videos": {

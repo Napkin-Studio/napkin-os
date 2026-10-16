@@ -385,14 +385,15 @@ export function removeGen(d: Doc, jobId: string): Removal {
   return r
 }
 
-/** Frames and clips made from `asset` are out of date because the ref `refId` now shows another image. Once each. */
-export function markStale(d: Doc, asset: string, refId: string, reason: string, now = new Date().toISOString()): StaleMark[] {
+/** Frames and clips made from `asset` are out of date because `cause` changed: a ref now shows another image,
+ *  or a canvas picture has a new version (features/edit-canvas-pictures.clan). Once each per cause. */
+export function markStale(d: Doc, asset: string, cause: Target, reason: string, now = new Date().toISOString()): StaleMark[] {
   const added: StaleMark[] = []
   for (const target of usersOf(d, asset)) {
-    const had = Object.values(d.stale).some((s) => s.target.kind === target.kind && s.target.id === target.id && s.caused_by.kind === 'ref' && s.caused_by.id === refId)
+    const had = Object.values(d.stale).some((s) => s.target.kind === target.kind && s.target.id === target.id && s.caused_by.kind === cause.kind && s.caused_by.id === cause.id)
     if (had) continue
     const id = newUlidId('stale')
-    const mark: StaleMark = { id, v: 1, field_v: {}, target, caused_by: { kind: 'ref', id: refId }, reason, marked_at: now }
+    const mark: StaleMark = { id, v: 1, field_v: {}, target, caused_by: { kind: cause.kind, id: cause.id }, reason, marked_at: now }
     d.stale[id] = mark
     added.push(mark)
   }

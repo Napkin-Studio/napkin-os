@@ -570,6 +570,19 @@ In the **Video · Audio view** the table takes the full width. The length strip 
 
 ### 3.12 Image editor (artboard 9; review items 4, 5 local, 10)
 
+**What it opens** (features/edit-canvas-pictures.clan): a storyboard frame ("Open in image editor"
+on a shot), or a picture on the canvas.
+- A canvas picture (dropped, pasted or a result; not a drawing) opens from **Edit** in its own bar,
+  or with a double-click. A picture in no group opens at once. In a group or a key's stack the
+  first double-click picks the picture out and the next one opens it.
+- Over the canvas the bar says "Canvas" to go back, the title is the picture's @name (or
+  "Picture"), and the picture keeps its own shape (no ratio lock, no prev and next).
+- **Apply as new version** puts v(n+1) in the picture's place on the canvas, at the same spot and
+  width. v1 is the picture as it was. A "v2" chip on the picture lists its versions, and any can be
+  picked again. A named picture's name follows the version shown, and the frames and clips made
+  from the old one are marked to check. Undo takes the Apply back, and the canvas shows the
+  earlier version.
+
 **Top bar:**
 - Back, "Frame 3 · Insert" and "16:9 locked · 1920 × 1080".
 - Zoom (−, 100%, +, Fit).

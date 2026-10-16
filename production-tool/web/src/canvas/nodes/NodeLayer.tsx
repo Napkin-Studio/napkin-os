@@ -8,7 +8,8 @@
 // Pictures that share a key are one group (keyGroups.ts; owner 2026-10-15): kept in step with the
 // document, labelled "Samurai · 3 views", linked as the whole key (⌥ links one view), stacked or
 // spread (stack.ts); a click on a stack opens it, a click on empty canvas folds back what a click
-// opened, and a double-click picks one view out of its group.
+// opened, and a double-click picks one view out of its group; on the one picture selected, it opens the
+// picture in the Image editor (dblclick.ts).
 
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { RouterContext, useDoc, useServices } from '../../app/context'
@@ -30,6 +31,7 @@ import { imageFiles, pickPictureFiles, placePictures } from './pictures'
 import { makeVideo, storyboardFor, storyboardFromShots } from './make'
 import { groupLabel, keyGroupFields, keyGroupsOn, type KeyGroup } from './keyGroups'
 import { setStacked } from './stack'
+import { pictureToOpen } from './dblclick'
 import './nodes.css'
 
 type Local = { x: number; y: number }
@@ -289,7 +291,15 @@ export function NodeLayer({ canvas, tick }: { canvas: CanvasAdapter; tick: numbe
       const p = fromClient(e.clientX, e.clientY)
       const el = cardAt(p)
       const c = el && cardOf(el)
-      // A double-click on a picture in a group picks that one view (our own engine; Excalidraw does it itself).
+      // A double-click on a picture opens it in the Image editor, selected alone (edit-canvas-pictures);
+      // on a picture in a group, whose click selects the group, it picks that one view out first.
+      const picture = c ? null : pictureToOpen(canvas.elements(), canvas.view().selectedIds, p)
+      if (picture && canvasActions.editPicture(picture.node)) {
+        e.preventDefault()
+        e.stopPropagation()
+        canvas.select([picture.el])
+        return
+      }
       if (!c) {
         const own = canvas as CanvasAdapter & { pickOne?: (p: Pt) => string | null }
         if (own.pickOne && canvas.elements().some((x) => !x.isDeleted && (x.groupIds ?? []).length > 0 && inside(x, p))) own.pickOne(p)

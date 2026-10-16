@@ -1,5 +1,6 @@
 // The Image editor (ui-behaviour 3.12; mock ImageEditor; features/image-editor.clan): one frame full
-// screen over the storyboard. Eight tools (Select V, Click-select A, Brush mask B, Lasso L, Eraser E,
+// screen over the storyboard, or one picture over the canvas (features/edit-canvas-pictures.clan; what
+// differs between the two is in imageEditor/subject.ts). Eight tools (Select V, Click-select A, Brush mask B, Lasso L, Eraser E,
 // Text T, Crop C, Hand H or Space), the brush strip, a numbered list of edits that changes nothing
 // until Apply as new version, layers, and Rhea's actions: Remove background (on the device, or our
 // server), Fill area and Change whole frame (Ideogram 4.5 on Runway), Upscale (Magnific on Runway).
@@ -7,14 +8,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
-import type { Frame, Mime, RefRole, Shot } from '../contracts/types'
+import type { Frame, Mime, RefRole } from '../contracts/types'
 import { modelChoicesFor, modelWhere } from '../capabilities'
 import { assetRef } from '../jobs/assets'
 import { selectFrame } from '../jobs/frames'
+import type { EditTarget } from '../model/purpose'
 import { isActive } from '../jobs/runner'
 import { nameAsset, ROLE_PILLS, suggestName } from '../jobs/prompt'
 import { getBlob, idbLocation, putBlob } from '../lib/blobs'
-import { currentFrame, framesOf, mainStoryboard, shotsOf } from '../model/selectors'
 import { deleteFrom, removeFrame } from '../doc/remove'
 import { systemUpdate } from '../doc/store'
 import { errorShown } from '../dogfood/recorder'
@@ -28,7 +29,6 @@ import { Presence } from '../ui/chrome/Bar'
 import { AgentFigure } from '../ui/agents/AgentFigure'
 import { Float } from '../ui/Float'
 import { croppedCaption } from '../canvas/core/sketch'
-import { ratioAspect } from '../jobs/select'
 import { PromptStart } from '../ui/prompt/PromptStart'
 import { cutoutWhere, within, type CutoutWhere } from '../ml/process'
 import type { DeviceEnv } from '../ml/runtime'
@@ -40,7 +40,8 @@ import {
 } from './imageEditor/edits'
 import { bounds, painted, rasterize, rle, shrink } from './imageEditor/mask'
 import { compose, maskToPng, sendPlan, toPng, untouched, type Pic } from './imageEditor/compose'
-import { applyEditedStep } from './imageEditor/apply'
+import { applyEditedStep, applyPictureEditedStep, pickPictureVersionStep } from './imageEditor/apply'
+import { subjectOf, type PictureNow } from './imageEditor/subject'
 import { BRUSH_MAX, BRUSH_MIN, MASK_TOOLS, TOOLS, brushStep, toolForKey, zoomStep, type ToolId } from './imageEditor/tools'
 import { Stage, type Brush } from './imageEditor/Stage'
 import { EditTray } from './imageEditor/EditTray'
@@ -53,16 +54,19 @@ const ml = () => import('../ml/runtime')
 const CUT_ON_DEVICE = 'cut-out ready, ran on your device'
 const UNDO_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘Z' : 'Ctrl+Z'
 const capital = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
-const shotTitle = (s: Shot | undefined, n: number) => `Frame ${n} · ${capital(s?.camera.size ?? 'shot')}`
 
 type Action = 'fill' | 'whole' | 'upscale'
 type CutoutEdit = Extract<Edit, { kind: 'cutout' }>
 type MaskEdit = Extract<Edit, { kind: 'mask' }>
 
-export function ImageEditor({ shotId, onBack, onShot, checkId }: {
-  shotId: string
+export function ImageEditor({ target, picture, onBack, onTarget, checkId }: {
+  /** A shot's frame, or a picture on the canvas. */
+  target: EditTarget
+  /** A canvas picture as the canvas shows it now (its picture before the first edit has no version). */
+  picture?: PictureNow
   onBack: () => void
-  onShot: (id: string) => void
+  /** ← → between a storyboard's shots. */
+  onTarget?: (t: EditTarget) => void
   /** Arriving from Jude's brand flag ("Fix in image editor", 3.18): its rule shows at the top of Edits. */
   checkId?: string
 }) {
@@ -71,25 +75,24 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   const ui = useUi()
   useJobsTick()
   const { config, controls } = useConfig()
-  const sbId = doc.shots[shotId]?.storyboard_id
-  const shots = shotsOf(doc, sbId)
-  const index = shots.findIndex((s) => s.id === shotId)
-  const shot: Shot | undefined = shots[index]
-  const frames = shot ? framesOf(doc, shot.id) : []
-  const current: Frame | undefined = shot ? currentFrame(doc, shot) ?? frames.at(-1) : undefined
-  const version = current?.version ?? 0
-  const url = useBlobUrl(current?.asset)
-  const asset = current ? doc.assets[current.asset] : undefined
-  const ratio = (sbId && doc.storyboards[sbId]?.ratio) || mainStoryboard(doc)?.ratio || '16:9'
-  const aspect = ratioAspect(ratio)
-  // The frame's own size: the asset's, else the picture's once it loads (an older asset without w, h).
+  const subject = subjectOf(doc, target, picture)
+  const frames = subject?.versions ?? []
+  const current: Frame | undefined = subject?.current
+  const sha = subject?.sha
+  const version = subject?.version ?? 0
+  const url = useBlobUrl(sha)
+  const asset = sha ? doc.assets[sha] : undefined
+  const ratio = subject?.ratio
+  const aspect = subject?.aspect ?? 16 / 9
+  // The picture's own size: the asset's, else the picture's once it loads (an older asset without w, h).
   const [natural, setNatural] = useState<{ sha: string; w: number; h: number } | null>(null)
-  const own = asset?.w && asset?.h ? { w: asset.w, h: asset.h } : natural?.sha === current?.asset ? natural : undefined
+  const own = asset?.w && asset?.h ? { w: asset.w, h: asset.h } : natural?.sha === sha ? natural : undefined
   const W = own?.w ?? 1344
   const H = own?.h ?? Math.round(W / aspect)
-  const framePic: Pic | undefined = current ? { sha: current.asset, w: W, h: H } : undefined
-  const session: EditSession = (current && ui.imageEdits?.[current.id]) || EMPTY
-  const frameId = current?.id
+  const framePic: Pic | undefined = sha ? { sha, w: W, h: H } : undefined
+  // The edits not applied yet, kept per version (a picture before its first edit: per node).
+  const frameId = subject?.sessionKey
+  const session: EditSession = (frameId && ui.imageEdits?.[frameId]) || EMPTY
   const setSession = (fn: (s: EditSession) => EditSession) => {
     if (!frameId) return
     uiStore.update((u) => {
@@ -132,7 +135,8 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
   // Jude's brand flag (3.12, 3.18): the one "Fix in image editor" came from, else an open flag on this frame.
   const check = checkId ? doc.checks[checkId]
     : Object.values(doc.checks).find((c) => c.target.kind === 'frame' && c.target.id === current?.id && c.result === 'flag' && !c.ignored)
-  useEffect(() => { if (error) errorShown('frame', error, { shot: index + 1 }) }, [error, index])
+  const shotId = target.kind === 'shot' ? target.shotId : undefined
+  useEffect(() => { if (error) errorShown('frame', error, shotId ? { shot: shotId } : {}) }, [error, shotId])
 
   // What this device offers, once (WebGPU, memory): where Remove background runs.
   useEffect(() => {
@@ -181,12 +185,11 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     return p
   }, [])
   useEffect(() => {
-    const sha = current?.asset
     if (!sha || (asset?.w && asset?.h)) return
     let alive = true
     void image(sha).then((b) => { if (alive) setNatural({ sha, w: b.width, h: b.height }) }).catch(() => undefined)
     return () => { alive = false }
-  }, [current?.asset, asset?.w, asset?.h, image])
+  }, [sha, asset?.w, asset?.h, image])
   // Cut-outs' alpha, for Snap to cut-out: loaded once, read at any size.
   const [cutPics, setCutPics] = useState<Record<string, ImageBitmap>>({})
   useEffect(() => {
@@ -298,7 +301,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     }
   })
 
-  if (!shot) return null
+  if (!subject) return null
 
   const attempt = async (what: string, fn: () => Promise<unknown>) => {
     setError(null)
@@ -328,8 +331,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     await registerAsset(sha, blob, c.width, c.height)
     return { sha, w: c.width, h: c.height }
   }
-  const purpose = { for: 'image_edit' as const, shotId: shot.id, ...(current ? { parentFrameId: current.id } : {}) }
-  const parents = current?.job_id ? [current.job_id] : []
+  const { purpose, parents } = subject
 
   // ── the tools ──
   // A fill already sent keeps the mask it was sent with: painting while it runs starts a new mask.
@@ -428,39 +430,46 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
     }
   })
   const apply = () => void attempt('applying', async () => {
-    if (!current || !framePic) return
+    if (!framePic || !frameId) return
     const c = await compose(sendPlan(session, framePic, resultOf, 'apply').plan, image, maskOf)
     const blob = await toPng(c)
-    const sha = await putBlob(blob)
-    const made = await applyEditedStep(docStore, shot.id, current.id, { sha, bytes: blob.size, w: c.width, h: c.height, edits: editsForFrame(session) })
+    const out = { sha: await putBlob(blob), bytes: blob.size, w: c.width, h: c.height, edits: editsForFrame(session) }
+    // A frame: v(n+1) of the shot. A canvas picture: v(n+1) in place, its name following (one undo step each).
+    const made = target.kind === 'shot'
+      ? current && await applyEditedStep(docStore, target.shotId, current.id, out)
+      : await applyPictureEditedStep(docStore, { nodeId: target.nodeId, sha: framePic.sha, w: W, h: H }, out)
     // The applied edits are in v(n+1) now. Hidden ones were left out of it: they stay, hidden, on the new
     // version (owner answer IM3: nothing vanishes).
     const kept = keptAfterApply(session)
     if (made) uiStore.update((u) => {
       const all = { ...(u.imageEdits ?? {}) }
-      delete all[current.id]
+      delete all[frameId]
       if (kept) all[made.id] = kept
       u.imageEdits = all
     }, 'image edits applied')
     setSaid(null)
   })
-  const go = (id: string) => (n + hiddenEdits > 0 ? setLeaving(id) : id === 'back' ? onBack() : onShot(id))
+  const pickVersion = (f: Frame) => {
+    setVersionsOpen(false)
+    if (target.kind === 'shot') void selectFrame(docStore, target.shotId, f.id)
+    else void pickPictureVersionStep(docStore, f.id)
+  }
+  const go = (id: string) => (n + hiddenEdits > 0 ? setLeaving(id) : id === 'back' ? onBack() : onTarget?.({ kind: 'shot', shotId: id }))
   const leave = (to: string, discard: boolean) => {
     setLeaving(null)
-    if (discard) uiStore.update((u) => { if (u.imageEdits && current) delete u.imageEdits[current.id] }, 'image edits discarded')
+    if (discard) uiStore.update((u) => { if (u.imageEdits && frameId) delete u.imageEdits[frameId] }, 'image edits discarded')
     if (to === 'back') onBack()
-    else onShot(to)
+    else onTarget?.({ kind: 'shot', shotId: to })
   }
   const deleteVersion = () => void attempt('deleting', async () => { if (current) await deleteFrom(docStore, (d) => removeFrame(d, current.id)) })
 
-  const prev = shots[index - 1]
-  const next = shots[index + 1]
-  const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
+  const { prev, next } = subject
+  const shown = sha ? mediaItem(doc, project, sha, target.kind === 'shot' ? 'frame' : undefined) : undefined
   const maskTool = MASK_TOOLS.includes(activeTool)
   const tip = TOOLS.find((t) => t.id === activeTool)!
   const applyWords = `${applyLine(n, version)}${applyLeftOut ? ` ${capital(leftOutLine(applyLeftOut))}.` : ''}`
   const trayItems = (a: Action) => [
-    { what: `Frame ${index + 1}`, detail: `v${version}${n ? ', with your edits' : ''}` },
+    { what: subject.label, detail: `v${version}${n ? ', with your edits' : ''}` },
     ...(a === 'fill' && activeMask ? [{ what: activeMask.name, detail: keepOutside ? 'only the blue area changes' : 'the whole result is kept' }] : []),
     ...(a === 'fill' ? [{ what: `"${fill.trim()}"` }] : a === 'whole' ? [{ what: `"${whole.trim()}"`, detail: 'the composition and size stay' }] : [{ what: `${scale}× larger`, detail: upscaleSize(W, H, scale) }]),
     ...(sent?.leftOut ? [{ what: capital(leftOutLine(sent.leftOut)), detail: 'Rhea sends what you see' }] : []),
@@ -469,8 +478,8 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
 
   return (
     <div className="editor image-editor" data-image-editor="">
-      <EditorBar back="Storyboard" onBack={() => go('back')} icon="frame" title={shotTitle(shot, index + 1)}
-        meta={<span className="pt-mono ie-meta">{ratio} locked{own ? ` · ${own.w} × ${own.h}` : ''}</span>}
+      <EditorBar back={subject.back} onBack={() => go('back')} icon="frame" title={subject.title}
+        meta={<span className="pt-mono ie-meta">{ratio ? `${ratio} locked` : 'Picture'}{own ? ` · ${own.w} × ${own.h}` : ''}</span>}
         right={(
           <>
             <div className="ie-zoom" role="group" aria-label="Zoom">
@@ -488,15 +497,15 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
             )}
           </>
         )}
-        primary={<button type="button" className="btn primary" disabled={running || !n || !current} onClick={apply}
+        primary={<button type="button" className="btn primary" disabled={running || !n || !framePic} onClick={apply}
           title={n ? applyWords : 'Make an edit first'}>Apply as new version</button>} />
-      <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of frame ${index + 1}`} className="ie-versions">
-        {frames.map((f) => <VersionRow key={f.id} f={f} open={f.id === current?.id} onPick={() => { setVersionsOpen(false); void selectFrame(docStore, shot.id, f.id) }} />)}
+      <Float anchor={versionsBtn} open={versionsOpen} onClose={() => setVersionsOpen(false)} align="end" label={`Versions of ${subject.label}`} className="ie-versions">
+        {frames.map((f) => <VersionRow key={f.id} f={f} open={f.id === current?.id} onPick={() => pickVersion(f)} />)}
         <div className="ie-vfoot">
           <span>{n ? applyWords : `Apply saves your edits as v${version + 1}. v${version} stays.`}</span>
           <span className="ie-vacts">
             {shown && <DownloadButton items={[shown]} className="btn sm ghost" title={`Download v${version}`} />}
-            <button type="button" className="btn sm ghost" disabled={!current || running} onClick={deleteVersion}>Delete v{version}</button>
+            {target.kind === 'shot' && <button type="button" className="btn sm ghost" disabled={!current || running} onClick={deleteVersion}>Delete v{version}</button>}
           </span>
         </div>
       </Float>
@@ -507,7 +516,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
             <span key={t.id} className="ie-toolslot">
               {i === TOOLS.length - 1 && <span className="ie-tsep" aria-hidden="true" />}
               <button type="button" className={activeTool === t.id ? 'on' : ''} aria-pressed={activeTool === t.id}
-                aria-label={`${t.id === 'crop' ? `Crop, kept at ${ratio}` : t.label} (${t.key})`} onClick={() => setTool(t.id)}><ToolIcon id={t.id} /></button>
+                aria-label={`${t.id === 'crop' ? (ratio ? `Crop, kept at ${ratio}` : 'Crop, kept at its shape') : t.label} (${t.key})`} onClick={() => setTool(t.id)}><ToolIcon id={t.id} /></button>
               {activeTool === t.id && <span role="tooltip" className="ie-tip">{t.label.split(',')[0]} <span className="pt-mono">{t.key}</span></span>}
             </span>
           ))}
@@ -537,7 +546,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
             ) : activeTool === 'text' ? (
               <><b>Text</b><span className="faint">Click the frame to place words, then type on them.</span></>
             ) : activeTool === 'crop' ? (
-              <><b>Crop</b><span className="faint">Drag over the frame. It stays {ratio}.</span>
+              <><b>Crop</b><span className="faint">Drag over the {ratio ? 'frame' : 'picture'}. It stays {ratio ?? 'the same shape'}.</span>
                 <button type="button" className="btn sm ghost" disabled={!session.edits.some((e) => e.kind === 'crop')}
                   onClick={() => setSession((s) => { const c = s.edits.find((e) => e.kind === 'crop'); return c ? undoEdit(s, c.id) : s })}>Reset crop</button></>
             ) : activeTool === 'hand' ? (
@@ -547,7 +556,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
             )}
           </div>
 
-          {current && shownPlan ? (
+          {framePic && shownPlan ? (
             <Stage src={url} plan={shownPlan} image={image} w={W} h={H} session={session} tool={activeTool} brush={brush} zoom={zoom} pan={pan} onPan={setPan}
               before={view === 'before'} motion={motion} alphaOf={alphaOf} alphaKey={alphaKey} onDrawn={setDrawError} onMaskOp={onMaskOp} onClick={onClick} onAddText={onAddText} onText={onText} onCrop={onCrop}
               pending={runningEdit?.kind === 'fill' ? runningEdit.maskId : undefined} progress={!!runningEdit && runningEdit.kind !== 'fill'}>
@@ -555,7 +564,7 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
             </Stage>
           ) : (
             <div className="ie-viewport" style={{ aspectRatio: String(aspect), '--ie-ratio': aspect } as React.CSSProperties}>
-              <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shot.id} place="editor" /></div>
+              {shotId && <div className="pending idle" style={{ position: 'absolute', inset: 0 }}><PromptStart kind="image" nodeId={shotId} place="editor" /></div>}
             </div>
           )}
 
@@ -604,11 +613,11 @@ export function ImageEditor({ shotId, onBack, onShot, checkId }: {
               {!session.edits.length && <li className="ie-next">No edits yet. Pick a tool on the left.</li>}
             </ol>
             <div className="ie-foot">
-              {prev ? <button type="button" className="btn link" onClick={() => go(prev.id)}>← {shotTitle(prev, index)}</button> : <span />}
+              {prev ? <button type="button" className="btn link" onClick={() => go(prev.id)}>← {prev.title}</button> : <span />}
               <span className="pt-grow" />
-              <span className="faint">Applying makes <span className="pt-mono">v{version + 1}</span> and updates shot {index + 1} on the storyboard</span>
+              <span className="faint">Applying makes <span className="pt-mono">v{Math.max(version, frames.at(-1)?.version ?? 0) + 1}</span> and {subject.applyWhere}</span>
               <span className="pt-grow" />
-              {next ? <button type="button" className="btn link" onClick={() => go(next.id)}>{shotTitle(next, index + 2)} →</button> : <span />}
+              {next ? <button type="button" className="btn link" onClick={() => go(next.id)}>{next.title} →</button> : <span />}
             </div>
             {leaving && (
               <div className="ie-ask" role="alertdialog" aria-label="Edits not applied">
@@ -742,16 +751,16 @@ function RheaLine({ busy, said, cutout, state, error, frameShown, drawError }: {
   )
 }
 
-function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPick: () => void }) {
+export function VersionRow({ f, open, onPick }: { f: Frame; open: boolean; onPick: () => void }) {
   const url = useBlobUrl(f.asset)
   const who = f.crew === 'rhea' ? 'Rhea' : f.crew === 'dex' ? 'Dex' : 'Wren'
-  const what = f.kind === 'edited' ? 'edited' : f.version === 1 ? `drawn by ${who}` : `redrawn by ${who}`
+  const what = f.kind === 'edited' ? 'edited' : f.kind === 'original' ? 'as it was on the canvas' : f.version === 1 ? `drawn by ${who}` : `redrawn by ${who}`
   return (
     <button type="button" role="menuitem" className={`ie-vrow ${open ? 'on' : ''}`} aria-current={open || undefined} onClick={onPick}>
       <span className="ie-vthumb">{url && <img src={url} alt="" />}</span>
       <span className="ie-vtext">
         <span><span className="pt-mono">v{f.version}</span> · {what}{open ? ' · open now' : ''}</span>
-        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by Rhea` : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
+        <span className="faint">{f.kind === 'edited' ? `${f.edits?.length ?? 0} edits by Rhea` : f.kind === 'original' ? 'before its first edit' : f.model ?? (f.kind === 'mock' ? 'the mock' : '')}</span>
       </span>
     </button>
   )

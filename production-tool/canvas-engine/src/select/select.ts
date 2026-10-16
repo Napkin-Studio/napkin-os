@@ -294,8 +294,11 @@ export class SelectTool {
     const [[key, ids]] = [...units]
     if (key.startsWith('#')) return { kind: 'one' }
     const members = this.scene.all().filter((r) => r.groupIds.includes(key))
+    // Part of a group, picked alone (a double-click): those things, not the group. One view of a key
+    // picked out of its stack gets its own bar (Name, Delete that one), not the group's (owner, 2026-10-15).
+    if (ids.length < members.length) return ids.length === 1 ? { kind: 'one' } : { kind: 'several', count: ids.length }
     const ink = members.every((r) => r.kind === 'stroke' && r.props.tool !== 'highlighter')
-    return { kind: 'group', group: key, ink, count: Math.max(ids.length, members.length) }
+    return { kind: 'group', group: key, ink, count: members.length }
   }
 
   /** Group the selection (two or more things) under a new outermost group, as one step. Returns its id, or null. */

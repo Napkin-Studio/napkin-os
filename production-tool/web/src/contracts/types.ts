@@ -491,16 +491,23 @@ export interface Beat extends EntityBase {
   last_writer?: ActorRef
 }
 export interface FrameEdit { op: string; params?: Record<string, unknown> }
+/** A still version: a shot's frame, a frame made from a sketch area, a format size, or a version of a canvas
+ *  picture (node; features/edit-canvas-pictures.clan), whose v1 is kind original (no crew made it). */
 export interface Frame extends EntityBase {
   shot_id?: Id
   sketch_id?: Id
   size_id?: Id
+  /** The canvas picture (pic or gen node id) this is a version of. */
+  node?: SceneId
+  /** A canvas picture's version: when it was made or picked; the picture shows the latest. */
+  picked_at?: string
   version: number
   parent_id?: Id
-  kind: 'generated' | 'mock' | 'edited'
+  kind: 'generated' | 'mock' | 'edited' | 'original'
   asset: Sha256
   job_id?: Id
-  crew: CrewId
+  /** Who made it; absent on a canvas picture's original. */
+  crew?: CrewId
   model?: string
   provider?: MadeBy
   edits?: FrameEdit[]
