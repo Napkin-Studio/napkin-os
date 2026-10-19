@@ -14,7 +14,7 @@ but both are inputs beyond the three, so adding them is a rule change, not a fea
 
 Two things in the code make this less clean than the mock suggests:
 
-- The engine already takes `--brand FILE` (`engine/deck/README.md`, the FLINK investor example), so
+- The engine already takes `--brand FILE` (`engine/deck/README.md`, the investor example), so
   the rule is already read as "no extra facts", not "no extra files". The ADR text does not say so.
 - The Production Tool's library (`production-tool/relay/library.py`) holds picture reference keys
   only. There is no brand kit entry, and it is scoped by the Production Tool's workspace sign-in.
