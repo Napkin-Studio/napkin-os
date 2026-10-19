@@ -104,9 +104,9 @@ name the stand-in, its port, or branch on which implementation answered.
   (`name@major`). When the document carries no pipeline, the middleware's
   declared built-in map is used (`extract_ask@1`, `research_lens@1`,
   `synthesise_findings@1`, `start_campaign@1`, `answer_question@1`,
-  `compose_report@1`, `draft_brief@1`, `regenerate_field@1`, and the review
-  tasks `verify_finding@1` and `correct_fact@1`, which resolve from this map
-  even for a pipeline that does not declare them).
+  `compose_report@1`, `draft_brief@1`, `regenerate_field@1`). A person's
+  review calls no middleware task; the view follows each review with
+  `reconsider@2` (Contract 3 §6.4).
   Any other task the pipeline does not declare, an
   unregistered handler, a handler registered for a different task, or a major
   the middleware does not implement is a hard error (M4) — never a

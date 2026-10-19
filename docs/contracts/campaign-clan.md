@@ -277,10 +277,14 @@ facts:
     market: IE                   # ISO 3166; absent = market-independent
     method: measurement          # observation | report | measurement | synthesis
     stale: { detected_at, current_version, current_fact_id, current_value? }
+    review: { verdict, by: human:<id>, at, decision }   # a person's check (§6.4)
+    replaced_by: { fact_id, decision }                  # a person's correction (§6.4)
 ```
 
 Every key of the source example is required except `supersedes` (null on a
-first version). `value` is a scalar — number, string or boolean — because the
+first version), and except `origin` and `version` on a pin a person made in
+this document (a correction, §6.4), which no layer holds: it carries `review`
+instead, and its `sources` is the person's `human:<id>` source record. `value` is a scalar — number, string or boolean — because the
 layer types its value columns (W1-C1). `confidence` is an ordinal,
 `high | medium | low`; never averaged. `status` is the layer row's status at
 pin time, `active` or `contested`, frozen with the value. `sources` holds source
@@ -365,7 +369,7 @@ findings:
     decision: d_01JA0D06SYN
     lens: brands_positioning              # optional
     markets: [IE, GB]                     # optional
-    verification: { decision, by: human:<id>, at, fact_id }   # iff verified
+    verification: { decision, by: human:<id>, at }            # iff verified
     rejection:    { decision, by: human:<id>, at, reason }    # iff rejected
 ```
 
@@ -374,18 +378,22 @@ findings:
 A finding's confidence is the **lowest** confidence among the pins it cites,
 **one level lower** if it cites a single pin or any stale pin (floor `low`).
 The handler computes it; the model is never asked. Ordinal, never averaged.
+It is computed again whenever a review changes a pin it cites (§6.4): a pin a
+person verified counts as `reviewer-verified` (high), and a rejected or
+excluded pin is left out.
 
 ### 6.2 Use and verification
 
 The view labels every finding **derived by the agent**. The brief may use a
-`proposed` finding only visibly labelled. Nothing unverified enters the layers.
+`proposed` finding only visibly labelled, and cites a finding by its id.
 
-`verify` (a human, under the lease) creates a `human:<id>` source at tier
-`reviewer-verified`, writes the finding to the layer as a fact with
-`method: synthesis` whose sources are that human source and the cited facts,
-and pins it like any other fact. `verification.fact_id` names the pin. The
-layer fact inherits the strictest licence among its citations, so a synthesis
-over a client-confidential fact stays at brand scope and never promotes (C3).
+`verify` (a human, under the lease) sets `status: verified` and
+`verification {decision, by, at}`, and records one `verify` decision. It
+writes **only this document**: nothing a person reviews reaches the layers
+until the client accepts the work, when a separate harvest offers the
+document's verified facts and findings to the layers, crediting their
+reviewers (owner, 2026-10-19). Research's own reads still go to the layers
+as they are found (D1).
 
 ### 6.3 Rejection
 
@@ -397,6 +405,23 @@ unresolved item until it is revised to stop citing the finding.
 
 The rejection is a `verdict` decision, polarity `bad`, targeting
 `#findings[<id>]`, rationale required.
+
+### 6.4 Review flows downstream
+
+Every review changes what rests on it, in this document only. A `verdict` on a
+pin writes `review {verdict: verified | rejected, by, at, decision}` on it.
+A correction (`/correct`) makes a new pin in this document — `method: report`,
+`confidence: high`, `review.verdict: verified`, its source the person's
+`human:<id>` record (one per person per licence) — and marks the old pin
+`replaced_by`.
+
+After each review the view runs `reconsider@2` (middleware-api.md) with the
+review events, one job per document at a time; reviews made while it runs go
+in the next run. The job recomputes confidence (§6.1), re-judges the findings
+resting on a rejected or corrected pin and rewrites those that no longer hold,
+re-answers the asks citing a changed item, and recomposes only the report
+sections (§17) that cite a changed item directly or through a finding. A
+section a person edited is never recomposed; it is flagged instead.
 
 ---
 
@@ -504,7 +529,9 @@ and §6; this app uses them as follows.
 | accepts / corrects an extracted or proposed field | `edit`; origin becomes `confirmed` | `#campaign.<field>` |
 | marks something confidential | `classify` `{model, export, corpus}` | the field; on a fact-backed field it supersedes the fact's licence in the layer |
 | resolves a contest | `resolve`, rationale required | `#selection.contested[<id>]` |
-| verifies a finding | `verify` | `#findings[<id>]` |
+| marks a fact right or wrong | `verdict`, good or bad; writes `review` on the pin (§6.4) | `#facts[<id>]` |
+| corrects a fact | `edit`, action `correct_fact`; a new pin, the old one `replaced_by` (§6.4) | `#facts[<id>]` |
+| verifies a finding | `verify`; this document only (§6.2) | `#findings[<id>]` |
 | rejects a finding | `verdict`, polarity bad, rationale required | `#findings[<id>]` |
 | takes the current version of a stale pin | `pin` | `#facts[<id>]` |
 | locks | `approve` | the document |
@@ -538,8 +565,8 @@ Lock = accept = seal, file-wide (Contract 4 §7). This document cannot lock whil
    is brief-ready. (App rule; the OS lock list is 1–5.)
 
 At lock the reviewer is shown the findings list; confirming verifies each
-(`verify`, written to the layer); rejecting one flags its fields and the lock
-waits. Stale pins are listed and accepted as frozen. One `approve` records the
+(`verify`, recorded in this document); rejecting one flags its fields and the
+lock waits. Stale pins are listed and accepted as frozen. One `approve` records the
 version and content hash.
 
 Spin-off to a brief is allowed from an unlocked campaign (Contract 4 §5); the
@@ -805,7 +832,9 @@ Researched-and-empty is not here: that is a `gap` block and `coverage: empty`.
 
 **Who writes it.** The middleware only — the `report` stage of
 `start_campaign` and `compose_report` — replacing it whole on every write,
-with a decision targeting `#report`. It is derived, never edited: the view
+with a decision targeting `#report`; `reconsider@2` after a review (§6.4)
+recomposes only the sections citing what the review changed and keeps the
+rest as they were. It is derived, never edited: the view
 renders it read-only and no human patch writes it; a person changes the
 report by changing the document and refreshing. Merge policy `last-write`:
 the newest composition wins, and `based_on` says what it describes. Never
