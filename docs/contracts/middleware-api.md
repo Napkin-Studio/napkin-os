@@ -226,6 +226,9 @@ Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
                   "selection": {}, "materials": {} },
   "facts_append": [ "entries per facts.schema.json" ],
   "findings_append": [ "entries per findings.schema.json" ],
+  "findings_update": [ { "id": "fi_...", "confidence": "high | medium | low", "cites": [ "f_..." ],
+                         "status": "superseded", "superseded_by": { "finding": "fi_...", "decision": "d_..." },
+                         "recheck": { "decision": "d_...", "note": "..." } } ],
   "sources_append": [ { "id": "src_...", "uri": "https://...", "title": "...", "publisher": "...",
                         "published_at": "YYYY-MM-DD | null", "retrieved_at": "YYYY-MM-DD",
                         "tier": "...", "domain": "...", "licence": "open" } ],
@@ -295,6 +298,16 @@ Every change must leave the document valid against the campaign schemas
   response's `handler`; every `cites` id is a pin in the document; confidence is
   the lowest cited confidence, one lower for a single or any stale citation
   (Contract 3 §6.1).
+- **`findings_update`** (`reconsider@2`, Contract 3 §6.4): changes an existing
+  finding in place. Only `confidence`, `cites`, `status: superseded` with
+  `superseded_by` (the finding that replaces it, appended in this change or
+  already held), and `recheck` (on a `verified` finding a review re-checked
+  and that still holds) may be set; a statement, verification or rejection is
+  never changed. A finding a person rejected takes only `confidence`. Each
+  updated finding must be in `read` as `findings.<id>`, the whole finding as
+  the job read it; one that differs now refuses the change (`409`, rerun).
+  An entry the finding already matches is skipped. Applied after
+  `findings_append`.
 - **`decisions`**: ids `d_…`, kinds from Contract 4, `targets` are
   `<doc-id>#<entity-keyed path>` (never positional), `handler` and `backend`
   equal the response's. Every envelope's and fact's `decision` names one of
@@ -401,6 +414,8 @@ becomes a contested value"):
   contested fields are held inside the contest (`withheld`, cited by id), not
   appended — they describe a write that did not happen;
 - `facts_append` and `findings_append` are append-only and always apply;
+  `findings_update` applies only when every finding it updates is as the
+  job read it, else the whole change is refused;
 - a stale base with a `data_patch` and no `read` is refused:
   `{ "applied": false, "reason": "stale base and no read-set; rerun" }`, and
   so is a `read` that does not cover every path the patch sets.
@@ -417,8 +432,8 @@ The template never writes middleware output. When a `clan://api-proxy` reply for
 1. the host checks `change.doc` equals the open document's `document_id`, else
    refuses;
 2. applies it through the single write funnel as ONE Change: `data_patch` →
-   `shared/data.yaml`, `facts_append` → `shared/facts.yaml`, `findings_append` →
-   `shared/findings.yaml`, `sources_append` → `shared/sources.yaml`, decisions appended with `actor: process:middleware`,
+   `shared/data.yaml`, `facts_append` → `shared/facts.yaml`, `findings_append`
+   then `findings_update` → `shared/findings.yaml`, `sources_append` → `shared/sources.yaml`, decisions appended with `actor: process:middleware`,
    `handler` and `backend` the response's, `scope` the one the host resolved,
    and the decision's own `id`, `kind`, `targets`, `cites`, `rationale` and
    `reasoning` as fields (`claimed_agent` = its `agent` when that is not the
@@ -1297,7 +1312,7 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    leaf) gets one `edit`, action `draft`, `agent draft_brief@1.x/drafter`
    (Dara), flatten `drafted_by: "brief-engine"`. Its cites are the `mat_` ids
    the engine read and, for every `fact_ref` on that leaf, the fact id when
-   `clan.facts` holds it, or the finding whose `verification.fact_id` it is.
+   `clan.facts` holds it, or the research finding by its own id.
    The refs themselves ride as flatten `fact_refs`. A ref the document holds
    neither way is not cited, and the run decision says so. `certainty` is
    `medium`, or `low` with `attention` for a draft the engine's rationale

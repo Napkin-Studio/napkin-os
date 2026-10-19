@@ -177,7 +177,7 @@ Every issue raised, and how it was resolved: Appendix A.
   with `…`; a longer one is rebuilt from sentences and cut only if still over,
   so a compressed rationale can end without `…`. `reasoning` is never touched.
 - **Pins at write.** `edit_field`, `edit_text`, `restore_text` and
-  `correct_fact` are pinned (`review.rs:972, 1086, 1195`). A `/patch-data`
+  `correct_fact` are pinned (`review.rs`). A `/patch-data`
   write carries the pin the app sends (`edit.rs:268-292`), and Brief Maker
   sends `false` (`brief-maker/index.html:659`). Spin-off pins every carried
   entry (`instantiate.rs:465`). Not pinned: verdict, classify, resolve,
@@ -1384,7 +1384,7 @@ it in intake.
 | verdict bad on a field (`mark_bad`, `verdict`) | `marked {Label} as wrong` | `{P} marked {T} as wrong on {date}{ ({reason phrase})}.` Then R4, R1 (reject), `It flags: {flags}.` (sanitised tokens only) and R5 |
 | verdict bad on a finding (`reject_finding`) | `rejected a finding` | `{P} rejected finding {fi} on {date}; {A} proposed it, and it must not be used as evidence.` Then `The finding, as {A} proposed it ({d_syn}):` above its statement, R1 (reject) from `rejection.reason`, and `These fields cite it and must be revised: {labels}.` or `No field cites it any longer.` |
 | edit / `exclude_fact` (legacy) | `excluded a fact` | `{P} left fact {f} ({key} for {entity}{, {value display}, period {period}}) out of this research on {date}.` For a fact the members do not hold: `{P} left fact {f} out of this research on {date}; the document does not keep it.` (AR20). Then R1 (reject) |
-| verify / `verify_finding` | `verified a finding` | `{P} verified {A}'s finding {fi} on {date}; it was written to the layer as fact {f} and pinned.` Then the statement as a quote, and R1 (choose) |
+| verify / `verify_finding` | `verified a finding` | `{P} verified {A}'s finding {fi} on {date}; it is recorded in this document.` Then the statement as a quote, and R1 (choose) |
 | verdict good / `looks_right`, with a reason | `agreed with {A}'s decision` | `{P} agreed on {date} with what {A} decided in {d}.` Then `What {A} decided:` above its `decided`, and R1 (choose). With a default reason it is folded (§3.7) |
 | resolve / `resolve_contest`, `resolve` | `resolved a contest` | `{P} resolved the contest on {key} for {entity}{ in {market}}, period {p}, on {date}, by choosing {value display} (fact {f}, {from phrase}) over {the other values, each with its fact and from phrase}.` A carried contest adds `, carried from the {noun} {src8},` after its key. Then R1 (choose) |
 | classify, `corpus: false` | `marked {Label} confidential` | `{P} marked {T} confidential on {date}: the agency's shared memory may not hold it, and agents may still use it on this document.` Then R1 (classify), shown in both versions, with any exact occurrence of the marked value replaced (§5.4) |
@@ -1703,7 +1703,7 @@ value vanished (AR3). A fact is placed by its links, and `status` is not read:
 | `stale` set | `superseded` |
 | in `selection.excluded` | `superseded`; the decision is in the person's review file |
 | a losing value of a resolved contest | `superseded`, built from the contest's value when the members do not hold it (AR20) |
-| a synthesis fact that is a verified finding's `verification.fact_id` here | none: the finding's record names it (AR17) |
+| a synthesis fact that is a verified finding's `verification.fact_id` here (older documents, verified before 2026-10-19) | none: the finding's record names it (AR17) |
 
 Facts are ordered by `(entity, key, market, id)`, a missing component before
 any present one, in code point order, whether or not their value is marked.
@@ -1829,7 +1829,7 @@ Brand A · campaign research · XA · example · consumer and culture
 Finding fi_01JXF0A1, verified by Alex Doe (planner) on 2026-09-22 (d_01JXA0VER):
 > {statement}
 
-It rests on facts {ids}. Sam derived it ({derived_by}) on {derived_at}; it was written to the layer as fact {fact_id}.
+It rests on facts {ids}. Sam derived it ({derived_by}) on {derived_at}.
 ```
 
 - **A proposed finding** is rendered only in the agent version, with its
@@ -3169,7 +3169,7 @@ superseded, with P7 and P11.
 | the first of the research's categories that maps to one of the engine's (`CATEGORY_MAP`, below) | `upstream.category` | the retrieval category filter; otherwise it is left out, named in `skipped`, and jev chooses one |
 | the research's comparators: `campaign.competitor_set`'s names | `upstream.competitors` | exact retrieval keywords; the first is the rival in the territory check (C2) |
 | the selected pins (§10.2) | `upstream.facts`, one row each (§11.3) | `current()` keeps them; every hero writer reads them as `[F:…]` lines inside a data tag and may cite them; the figure check allows their figures; a row the client brief contradicts is held back as contested (C1d) |
-| the selected verified findings | `upstream.facts`, as the fact the finding became in the layer (`verification.fact_id`) | the same as a pin |
+| the selected verified findings | `upstream.facts`, under the finding's own `fi_` id (an older document's `verification.fact_id` when it has one) | the same as a pin |
 | a stale pin among them | a row with `superseded_by` | `current()` skips it and records why in `meta.research_facts.skipped` |
 | what people decided on the research: rejected and verified findings, resolved and open contests, edits and verdicts with a reason, client answers (§11.3) | `upstream.decisions`, one row each (ADR 0015) | `research_decisions.current()` keeps them; every hero writer that gets the facts reads them as `[D:…]` lines in a `<decisions>` data tag: a rejected finding is not used, an open contest is stated as fact on neither side; a figure taken only from a decision, or a `[D:id]` it was not given, fails the draft |
 | a research `.clan` the person attached to the brief | its selected rows, after the carried research's | the same, read as `extract(X, false)` under its own marks |
@@ -3234,7 +3234,8 @@ carries unread.
 
 - **`id`**: the pin's `f_` id — its id in the research's members, which a
   spun-off brief carries merged, so the engine's cites resolve inside the
-  brief (§11.4). For a verified finding, its `verification.fact_id`.
+  brief (§11.4). For a verified finding, its own `fi_` id (an older
+  document's `verification.fact_id` when it has one).
 - **`version`**: the layer version, the `@<version>` of the pin's `origin`;
   left out when it has none, and the engine then prints `[F:<id>]`.
 - **`status`**: `current` for a pin stored `active`, `contested` (a resolved
@@ -3351,7 +3352,7 @@ Each maps back:
 | `fact_refs` entry | In the `.clan` |
 |---|---|
 | `id`, a pin | `<R>#facts[<id>]`, cite key `<R>:<id>`, which resolves inside the brief (§7.4) |
-| `id`, a finding's fact | the finding whose `verification.fact_id` it is: `<R>#findings[<fi>]` |
+| `id`, a finding | the finding by its id: `<R>#findings[<fi>]` |
 | `version` | the `@<version>` of `fact://<layer>/<entity>/<key>@<version>`; a version other than the pin's resolves `superseded` (§7.4) |
 | `source_ids` | `<R>#sources[<src>]` |
 | `item` | the leaf of the field: a list index, or `think`, `feel`, `do` |
