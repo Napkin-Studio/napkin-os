@@ -95,12 +95,26 @@ h1.sm{font-size:34px}
 .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);margin-bottom:6px}
 .inp{width:100%;height:42px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font-size:15px;background:var(--card)}
+.inp.ta{height:auto;min-height:120px;padding:10px 12px;line-height:1.5;resize:vertical;font-family:inherit}
+.bf{font-size:13px;line-height:1.5;color:var(--ink2);background:var(--soft);border-radius:12px;padding:10px 14px}
+.bf .miss{display:block;color:var(--warn-fg)}
+.q{padding:12px 0;border-top:1px solid var(--line-soft)}
+.q .qt{font-size:14px;font-weight:600;line-height:1.4}
+.q .opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.q .free{display:flex;gap:8px;margin-top:8px}
+.upnote{background:var(--warn-bg);color:var(--warn-fg);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.5}
 .doc{display:flex;align-items:center;gap:12px;background:var(--soft);border-radius:12px;padding:12px}
 .doc .ico{width:36px;height:44px;border-radius:6px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10px;color:var(--tool-ink);flex-shrink:0}
 .pick{text-align:left;border-radius:14px;padding:12px 14px;border:1.5px solid var(--line);background:var(--card);flex:1}
 .pick[aria-pressed="true"]{border-color:var(--tool);background:var(--tool-soft)}
 .pick b{display:block;font-size:14px;font-weight:600} .pick span{display:block;font-size:12px;line-height:1.4;color:var(--ink2);margin-top:3px}
 .row{display:flex;gap:10px}
+.types{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.types .pick{position:relative}
+.types .tag{display:inline-block;margin-top:6px;font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--tool-ink)}
+.hint{margin-top:12px;font-size:13px;line-height:1.5;color:var(--ink2);background:var(--soft);border-radius:12px;padding:10px 14px}
+.hint b{font-weight:600;color:var(--ink)}
+@media (max-width:640px){.types{grid-template-columns:minmax(0,1fr)}}
 .summary{padding:22px}
 .summary .t{margin:12px 0 4px;font-size:22px;font-weight:700;letter-spacing:-.02em}
 .li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;margin-top:10px}
@@ -166,6 +180,12 @@ label.lab{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:
 .mini .t{margin-top:6px;font-size:13px;line-height:1.15;font-weight:800;letter-spacing:-.02em}
 .fmt{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
 .fmt .x{width:36px;height:36px;border-radius:10px;background:var(--soft-2);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10px;font-weight:500}
+.conf{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line-soft)}
+.conf:first-of-type{border-top:0}
+.conf .what{flex:1;min-width:0;font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+.conf .what small{display:block;margin-top:2px;font-size:12px;color:var(--ink3)}
+.conf.done .what{color:var(--ink2)}
+.sup .hint-line{font-size:12px;color:var(--ink3);margin-top:2px}
 .callout{margin-top:16px;background:var(--warn-bg);border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5;color:var(--warn-fg)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);border-radius:999px;padding:10px 18px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s}
 .toast.on{opacity:1}
@@ -275,13 +295,15 @@ var DeckLogic = (function () {
   /** The line under "You will get". Numbers come from the run, never from the screen. */
   function summaryOf(inputs, deck) {
     var kind = inputs.kind === 'investor' ? 'An investor deck' : 'An agency pitch';
+    var known = inputs.type && typeById(inputs.type);
+    if (known) kind = known.article;
     var size = inputs.format === 'full'
       ? 'Every slide in story order'
       : 'At most 18 slides, then a hidden appendix';
     var n = presented(deck).length;
     return {
       title: kind + ' for ' + (inputs.prompt.client || '[Client]'),
-      note: size + '. Every number points to the research or the brief.',
+      note: size + '. Every number points to what you gave: your prompt, a document, the brief or the research.',
       built: n
     };
   }
@@ -291,7 +313,430 @@ var DeckLogic = (function () {
     return (inputs.prompt.agency || '').trim() || '[Agency]';
   }
 
+  // ── deck types: what kind of deck this is (the engine asks q_deck_type first) ──
+  /** The four deck types the engine tailors to. `looks` and `article` are the words the view uses around the label. */
+  var DECK_TYPES = [
+    { id: 'agency_pitch', label: 'Agency pitch', one_line: 'Territories, one idea, executions for a client brief.', looks: 'an agency pitch', article: 'An agency pitch' },
+    { id: 'tender_response', label: 'Tender response', one_line: 'Answers a buyer\'s scored tender, point by point.', looks: 'a tender', article: 'A tender response' },
+    { id: 'investor_seed', label: 'Investor seed deck', one_line: 'Problem, market, traction and the ask, for a seed round.', looks: 'an investor deck', article: 'An investor seed deck' },
+    { id: 'credentials', label: 'Credentials / chemistry meeting', one_line: 'Who we are and what we have done, for a first meeting.', looks: 'a credentials meeting', article: 'A credentials deck' }
+  ];
+  var DEFAULT_TYPE = 'agency_pitch';
+  var TYPE_QID = 'q_deck_type';
+
+  /** One entry of DECK_TYPES by id, or null for an unknown id. */
+  function typeById(id) {
+    for (var i = 0; i < DECK_TYPES.length; i++) if (DECK_TYPES[i].id === id) return DECK_TYPES[i];
+    return null;
+  }
+
+  /** The deck type an option stands for: its value if that names a type, else its id; null when neither does. */
+  function optionType(o) {
+    if (!isObj(o)) return null;
+    var v = typeof o.value === 'string' && typeById(o.value) ? o.value : null;
+    var i = typeof o.id === 'string' && typeById(o.id) ? o.id : null;
+    return v || i;
+  }
+
+  /** The q_deck_type question the engine wrote, or null. */
+  function typeQuestion(data) {
+    var qs = data && isObj(data.intake) && Array.isArray(data.intake.questions) ? data.intake.questions : [];
+    for (var i = 0; i < qs.length; i++) if (isObj(qs[i]) && qs[i].id === TYPE_QID) return qs[i];
+    return null;
+  }
+
+  /** The words an option quotes as its source, as text: a string, or the quote/text of a source object. */
+  function quoteOf(src) {
+    if (typeof src === 'string') return src.trim();
+    if (isObj(src)) return String(src.quote || src.text || '').trim();
+    return '';
+  }
+
+  /**
+   * The deck type for a document: the person's answer, else the one the engine inferred (an option
+   * with origin 'proposed'), else the default. Returns { id, label, one_line, source, quote, skipped,
+   * hasQuestion } where source is 'answered', 'inferred' or 'default'. Never throws.
+   */
+  function deckTypeOf(data) {
+    var q = typeQuestion(data), opts = q && Array.isArray(q.options) ? q.options : [];
+    var answers = data && data.intake && isObj(data.intake.answers) ? data.intake.answers : {};
+    var a = isObj(answers[TYPE_QID]) ? answers[TYPE_QID] : null;
+    var out = function (id, source, quote, skipped) {
+      var t = typeById(id);
+      return { id: t.id, label: t.label, one_line: t.one_line, source: source, quote: quote || '', skipped: !!skipped, hasQuestion: !!q };
+    };
+    var skipped = !!(a && a.skipped);
+    if (!skipped && a && a.option_id != null) {
+      var chosen = null;
+      for (var i = 0; i < opts.length; i++) if (isObj(opts[i]) && String(opts[i].id) === String(a.option_id)) chosen = opts[i];
+      var id = chosen ? optionType(chosen) : (typeById(String(a.option_id)) ? String(a.option_id) : null);
+      if (id) return out(id, 'answered', '', false);
+    }
+    if (!skipped) {
+      for (var j = 0; j < opts.length; j++) {
+        var o = opts[j], t = optionType(o);
+        if (t && isObj(o) && o.origin === 'proposed') return out(t, 'inferred', quoteOf(o.source), false);
+      }
+    }
+    return out(DEFAULT_TYPE, 'default', '', skipped);
+  }
+
+  /** The option id to write for a type: the question's own option for it when there is one, else the type id. */
+  function typeOptionId(data, typeId) {
+    var q = typeQuestion(data), opts = q && Array.isArray(q.options) ? q.options : [];
+    for (var i = 0; i < opts.length; i++) if (optionType(opts[i]) === typeId) return String(opts[i].id);
+    return typeId;
+  }
+
+  /** The legacy inputs.kind a deck type maps to: investor_seed is 'investor', every other type 'agency'. */
+  function kindOfType(typeId) { return typeId === 'investor_seed' ? 'investor' : 'agency'; }
+
+  var HINTS = {
+    agency_pitch: ['the brief', 'the budget'],
+    tender_response: ['the buyer\'s scoring criteria', 'the page limit'],
+    investor_seed: ['traction figures', 'the ask'],
+    credentials: ['the team', 'two examples of past work']
+  };
+
+  /** What to bring to make a deck of this type stronger: { type, items, line }. An unknown type is the default. */
+  function typeHints(typeId) {
+    var id = typeById(typeId) ? typeId : DEFAULT_TYPE, items = HINTS[id].slice();
+    return { type: id, items: items, line: 'To make this one stronger, bring: ' + items.join(' and ') };
+  }
+
+  /** The patch that records a person's deck-type choice, or a skip. Null for an unknown type. Written with put(). */
+  function typePatch(data, typeId, at) {
+    if (typeId === null) return answerPatch(TYPE_QID, { skipped: true }, at);
+    return typeById(typeId) ? answerPatch(TYPE_QID, { option_id: typeOptionId(data, typeId) }, at) : null;
+  }
+
+  // ── intake: what the deck is built from (ADR 0023, amended by 0028) ───────────
+  var BRIEF_KEYS = ['background', 'objectives', 'audience', 'competitor_context', 'insight',
+    'single_minded_proposition', 'reasons_to_believe', 'desired_response', 'tone_and_world',
+    'budget_and_scope', 'mandatories'];
+
+  /** A plain object, not null, not an array. */
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+  /** A brief field is stored bare or as an envelope { value }; give back the value either way. */
+  function envVal(v) { return isObj(v) && 'value' in v ? v.value : v; }
+
+  /** True when a value says something: text with a letter, a non-empty list or object, a number. */
+  function filled(v) {
+    v = envVal(v);
+    if (v == null) return false;
+    if (typeof v === 'string') return v.trim().length > 0;
+    if (Array.isArray(v)) return v.length > 0;
+    if (isObj(v)) return Object.keys(v).length > 0;
+    return true;
+  }
+
+  /** The name an upstream document goes by, as text: its title, else its project name, else the fallback. */
+  function nameOf(doc, fallback) {
+    var c = isObj(doc.campaign) ? doc.campaign : {};
+    var cand = [doc.title, envVal(doc.project_name), envVal(c.name)];
+    for (var i = 0; i < cand.length; i++) {
+      if (typeof cand[i] === 'string' && cand[i].trim()) return cand[i].trim();
+    }
+    return fallback;
+  }
+
+  /**
+   * The findings a research document carries, as { known, findings, rejected }. A spun-off Research
+   * Tool document does not carry its findings (they live in its own shared/findings.yaml, which the
+   * frozen upstream leaves out), so `known` is false and the counts are null: never a made-up 0.
+   */
+  function findingStats(doc) {
+    var src = (isObj(doc.projection) && doc.projection.findings) || doc.findings;
+    var has = Array.isArray(src) || isObj(src);
+    var rows = Array.isArray(src) ? src : isObj(src) ? Object.keys(src).map(function (k) { return src[k]; }) : [];
+    if (!has) return { known: false, findings: null, rejected: null };
+    return {
+      known: true,
+      findings: rows.length,
+      rejected: rows.filter(function (f) { return isObj(f) && f.status === 'rejected'; }).length
+    };
+  }
+
+  /** True when a value holds something a person could use: a non-blank string, a non-empty list, or an object with such a value. */
+  function hasContent(v) {
+    v = envVal(v);
+    if (typeof v === 'string') return v.trim().length > 0;
+    if (typeof v === 'number' || typeof v === 'boolean') return true;
+    if (Array.isArray(v)) return v.some(hasContent);
+    if (isObj(v)) return Object.keys(v).some(function (k) { return hasContent(v[k]); });
+    return false;
+  }
+
+  /**
+   * What one frozen upstream document is: a brief (at least one brief field is filled), research
+   * (usable content: a finding that is not rejected, or, when findings are not carried, a report,
+   * selection or materials with content), or neither. Empty or all-rejected material is not a source.
+   */
+  function classifyUpstream(doc) {
+    if (!isObj(doc)) return { brief: null, research: null };
+    var out = { brief: null, research: null };
+    var stats = findingStats(doc);
+    var usable = stats.known ? stats.findings - stats.rejected > 0
+      : hasContent(doc.report) || hasContent(doc.selection) || hasContent(doc.materials);
+    var filledN = BRIEF_KEYS.filter(function (k) { return filled(doc[k]); }).length;
+    var researchOf = function (fallback) {
+      return { name: nameOf(doc, fallback), findings: stats.findings, rejected: stats.rejected };
+    };
+    if (filledN > 0) {
+      var mand = envVal(doc.mandatories);
+      out.brief = {
+        name: nameOf(doc, 'Brief'),
+        fields_filled: filledN,
+        fields_total: BRIEF_KEYS.length,
+        mandatories: Array.isArray(mand) ? mand.length : (filled(mand) ? 1 : 0)
+      };
+      if (stats.known && usable) out.research = { name: 'Research', findings: stats.findings, rejected: stats.rejected };
+    } else if (usable && !BRIEF_KEYS.some(function (k) { return k in doc; })) {
+      out.research = researchOf('Research');
+    }
+    return out;
+  }
+
+  /**
+   * What the Brief and Research cards show, read from data.upstream (frozen, read-only):
+   * { brief: {name, fields_filled, fields_total, mandatories} | null, research: {name, findings, rejected} | null,
+   * any }. Nothing is ever stored back; both are null when there is no upstream. Never throws.
+   */
+  function upstreamSummary(data) {
+    var up = data && isObj(data.upstream) ? data.upstream : {};
+    var brief = null, research = null;
+    Object.keys(up).forEach(function (id) {
+      var c = classifyUpstream(up[id]);
+      if (c.brief && !brief) brief = c.brief;
+      if (c.research && !research) research = c.research;
+      // A document that carries its own upstream (research hoisted into a brief) counts too.
+      var inner = isObj(up[id]) && isObj(up[id].upstream) ? up[id].upstream : null;
+      if (inner) Object.keys(inner).forEach(function (k) {
+        var ic = classifyUpstream(inner[k]);
+        if (ic.research && !research) research = ic.research;
+      });
+    });
+    return { brief: brief, research: research, any: !!(brief || research) };
+  }
+
+  /** The documents a person attached, as a name list: inputs.documents, else the document's materials. */
+  function documentsOf(data) {
+    var inp = (data && data.inputs) || {};
+    var list = Array.isArray(inp.documents) ? inp.documents : [];
+    var out = list.map(function (x) {
+      return typeof x === 'string' ? { name: x } : (isObj(x) && x.name ? { name: String(x.name), pages: x.pages } : null);
+    }).filter(Boolean);
+    if (!out.length && isObj(data && data.materials)) {
+      Object.keys(data.materials).forEach(function (k) {
+        var m = data.materials[k];
+        if (isObj(m) && m.kind !== 'prompt' && m.name) out.push({ name: String(m.name) });
+      });
+    }
+    return out;
+  }
+
+  /**
+   * meta.built_from for the shared contract: { tier, documents, brief, research }. `upstream` is
+   * data.upstream (or nothing); `documents` the attached list (names or {name}). The tier is the
+   * richest source present: brief+research, brief, research, prompt+documents, else prompt.
+   */
+  function builtFrom(inputs, upstream, documents, type) {
+    var sum = upstreamSummary({ upstream: upstream });
+    var names = (documents || []).map(function (x) { return typeof x === 'string' ? x : x && x.name; }).filter(Boolean);
+    var tier = sum.brief && sum.research ? 'brief+research' : sum.brief ? 'brief' : sum.research ? 'research'
+      : names.length ? 'prompt+documents' : 'prompt';
+    var out = { tier: tier, documents: names, brief: !!sum.brief, research: !!sum.research };
+    if (typeById(type)) out.type = type;
+    return out;
+  }
+
+  /** The line shown as "Built from: ..." and what is missing, from a built_from record. */
+  function describeBuiltFrom(bf, hasPrompt) {
+    bf = bf || { tier: 'prompt', documents: [], brief: false, research: false };
+    var docs = bf.documents || [];
+    var prompt = hasPrompt == null ? (bf.tier === 'prompt' || bf.tier === 'prompt+documents') : !!hasPrompt;
+    var parts = [];
+    if (prompt) parts.push('your prompt');
+    if (docs.length) parts.push(docs.length + (docs.length === 1 ? ' document' : ' documents'));
+    if (bf.brief) parts.push('the brief');
+    if (bf.research) parts.push('the research');
+    var missing = [];
+    if (!bf.brief && !bf.research && !docs.length) missing.push('No sources for figures: numbers stay placeholders');
+    if (!bf.research) missing.push('No research brought in');
+    var t = typeById(bf.type);
+    return { line: 'Built from: ' + (parts.length ? parts.join(', ') : 'nothing yet'), missing: missing, type: t ? t.label : '' };
+  }
+
+  /** Build is refused only with no prompt text, no documents and no upstream. */
+  function canBuild(inputs, upstream, documents) {
+    var text = String((inputs && inputs.prompt && inputs.prompt.text) || '').trim();
+    var has = !!text || (documents || []).length > 0 || upstreamSummary({ upstream: upstream }).any;
+    return has ? { ok: true, message: '' }
+      : { ok: false, message: 'Give the deck something to build from: a line about what you are pitching, a document, or a brief or research.' };
+  }
+
+  /** A question id the app can write an answer under: word characters, dots and dashes only. */
+  function validId(id) {
+    return typeof id === 'string' && /^[\w.-]+$/.test(id) && id !== '__proto__';
+  }
+
+  /** The gap report and questions the runner wrote at data.intake, made safe to render (at most 5 questions). */
+  function gapView(intake) {
+    var it = isObj(intake) ? intake : {};
+    var gaps = isObj(it.gaps) ? it.gaps : {};
+    var rows = function (v, key) {
+      return (Array.isArray(v) ? v : []).filter(isObj).map(function (g) { return { name: String(g[key] == null ? '' : g[key]), why: String(g.why || '') }; })
+        .filter(function (g) { return g.name; });
+    };
+    var answers = isObj(it.answers) ? it.answers : {}, seen = Object.create(null);
+    var questions = (Array.isArray(it.questions) ? it.questions : []).filter(function (q) { return isObj(q) && q.text && validId(q.id) && q.id !== TYPE_QID; })
+      .filter(function (q) { return !seen[q.id] && (seen[q.id] = true); })
+      .slice(0, 5).map(function (q) {
+        return {
+          id: String(q.id), text: String(q.text), address: String(q.address || ''), allow_text: q.allow_text !== false,
+          kind: q.kind === 'supply' ? 'supply' : 'ask', fills: q.kind === 'supply' ? String(q.fills || '') : '',
+          options: (Array.isArray(q.options) ? q.options : []).filter(function (o) { return isObj(o) && (typeof o.id === 'string' || typeof o.id === 'number') && String(o.id).trim(); }).map(function (o) { return { id: String(o.id), label: String(o.label || o.id) }; }),
+          state: questionState(answers[q.id]), answer: isObj(answers[q.id]) ? answers[q.id] : null
+        };
+      });
+    var brief = rows(gaps.brief_fields, 'field'), slides = rows(gaps.slide_types, 'type');
+    return { brief_fields: brief, slide_types: slides, questions: questions, hasGaps: brief.length + slides.length > 0 };
+  }
+
+  /** 'skipped', 'answered' or 'open' for one stored answer. Open and skipped both leave Build enabled. */
+  function questionState(answer) {
+    if (!isObj(answer)) return 'open';
+    if (answer.skipped) return 'skipped';
+    return (String(answer.text || '').trim() || answer.option_id) ? 'answered' : 'open';
+  }
+
+  /**
+   * The patch for one answer: { intake: { answers: { <qid>: { text | option_id, at } } } }, or a skip
+   * { skipped: true, at }. Null for an empty answer or an unsafe id. Pure: the caller writes it with put().
+   */
+  function answerPatch(qid, answer, at) {
+    if (!validId(qid)) return null;
+    var a = isObj(answer) ? answer : {}, row = null;
+    // The store merges patches (RFC 7396), so each row nulls the keys of the other kinds: a later answer
+    // clears an earlier skip, and a skip clears an earlier choice, and the engine reads one coherent row.
+    if (a.skipped) row = { skipped: true, option_id: null, text: null, at: at };
+    else if (String(a.text || '').trim()) row = { text: String(a.text).trim(), skipped: null, option_id: null, at: at };
+    else if (a.option_id) row = { option_id: String(a.option_id), skipped: null, text: null, at: at };
+    if (!row) return null;
+    var answers = {}; answers[qid] = row;
+    return { intake: { answers: answers } };
+  }
+
+  // ── supply cards and the confirm list: what only the person knows (ADR 0023, 0028) ──
+  // The engine never invents a team, a case, a fee split or a decision date. The person supplies them here, as an
+  // attributed human write at intake.answers.<qid>, and verifies what the engine could not source at intake.verified.<ref>.
+  // Nothing below writes the brief, the research or anything under upstream: only intake.answers and intake.verified.
+
+  /** The supply cards the engine wrote (questions of kind 'supply'), safe to render, with the person's answer: { id, text, fills, state, answer, lines }. */
+  function supplyCards(data) {
+    var it = data && isObj(data.intake) ? data.intake : {};
+    return gapView(it).questions.filter(function (q) { return q.kind === 'supply'; }).map(function (q) {
+      var text = q.answer && q.state === 'answered' ? String(q.answer.text || '') : '';
+      return {
+        id: q.id, text: q.text, fills: q.fills, state: q.state, answer: q.answer,
+        lines: text.split(/\r?\n/).map(function (x) { return x.replace(/^\s*(?:[-*\u2022]|\d{1,2}[.)])\s+/, '').trim(); }).filter(Boolean)
+      };
+    });
+  }
+
+  /** The slide types a supply card fills, besides its own: the pitch merges credentials into the team slide, so that slide needs both answers. */
+  var ALSO_NEEDS = { team: ['credentials'] };
+
+  /** The placeholders a slide holds: its human blocks and items (at least 1 for a slide the engine marks needs_human). */
+  function placeholdersOn(slide) {
+    var n = 0;
+    ((slide && slide.blocks) || []).forEach(function (b) {
+      if (isPlaceholder(b)) n++;
+      ((isObj(b) && Array.isArray(b.items)) ? b.items : []).forEach(function (it) { if (isObj(it) && it.human === true) n++; });
+    });
+    return Math.max(1, n);
+  }
+
+  /**
+   * The To supply count: the engine's own (validation.to_supply, else the placeholders on the presented slides that need a
+   * person), less the placeholders on slides a person's answer to a supply card already covers. It falls as cards are
+   * answered and settles at the engine's own count once the deck is rebuilt with the answers. { count, covered, ids }
+   * (covered: placeholders; ids: the slides still open).
+   */
+  function toSupply(data) {
+    var deck = data && isObj(data.deck) ? data.deck : { order: [], slides: {} };
+    var ids = presented(deck).filter(function (id) { return deck.slides[id].status === 'needs_human'; });
+    var cards = supplyCards(data), done = {}, asked = {};
+    cards.forEach(function (c) { if (c.fills) asked[c.fills] = true; if (c.state === 'answered' && c.fills) done[c.fills] = true; });
+    var covered = 0, open = [];
+    ids.forEach(function (id) {
+      var t = deck.slides[id].type, need = [t].concat(ALSO_NEEDS[t] || []).filter(function (x) { return x === t || asked[x]; });
+      if (done[t] && need.every(function (x) { return done[x]; })) covered += placeholdersOn(deck.slides[id]); else open.push(id);
+    });
+    var total = data && data.validation && typeof data.validation.to_supply === 'number' ? data.validation.to_supply
+      : ids.reduce(function (n, id) { return n + placeholdersOn(deck.slides[id]); }, 0);
+    return { count: Math.max(0, total - covered), covered: covered, ids: open };
+  }
+
+  /** A confirm ref the app can write a verify decision under: no control characters, not a prototype key, at most 200 characters. */
+  function validRef(ref) {
+    return typeof ref === 'string' && ref.length > 0 && ref.length <= 200 && !/[\u0000-\u001f]/.test(ref) && ref !== '__proto__' && ref !== 'constructor';
+  }
+
+  /**
+   * The confirm list the engine wrote at deck.meta.confirm (every proposal, every figure only your own statement or a weak
+   * pin supports, every slide still needing a person), with the person's verify decisions from intake.verified laid over it:
+   * { items: [{ ref, kind, text, why, slide, verified: {by, at} | null }], total, verified, open }. A deck with no list has none.
+   */
+  function confirmList(data) {
+    var meta = data && isObj(data.deck) && isObj(data.deck.meta) ? data.deck.meta : {};
+    var done = data && isObj(data.intake) && isObj(data.intake.verified) ? data.intake.verified : {};
+    var seen = Object.create(null);
+    var items = (Array.isArray(meta.confirm) ? meta.confirm : []).filter(function (x) { return isObj(x) && validRef(x.ref) && !seen[x.ref] && (seen[x.ref] = true); }).map(function (x) {
+      var v = isObj(done[x.ref]) ? done[x.ref] : (isObj(x.verified) ? x.verified : null);
+      return {
+        ref: x.ref, kind: ['proposal', 'figure', 'slide'].indexOf(x.kind) >= 0 ? x.kind : 'proposal', text: String(x.text || ''), why: String(x.why || ''),
+        slide: x.slide ? String(x.slide) : '', verified: v ? { by: String(v.by || 'human'), at: String(v.at || '') } : null
+      };
+    });
+    var verified = items.filter(function (x) { return x.verified; }).length;
+    return { items: items, total: items.length, verified: verified, open: items.length - verified };
+  }
+
+  /** The patch that records a verify decision: { intake: { verified: { <ref>: { by: 'human', at } } } }. Null for an unsafe ref. Written with put(). */
+  function verifyPatch(ref, at) {
+    if (!validRef(ref)) return null;
+    var v = {}; v[ref] = { by: 'human', at: at };
+    return { intake: { verified: v } };
+  }
+
+  /**
+   * The counts under the export button: slides' placeholders still to supply, confirm items verified, supplied (supply cards
+   * answered) and sourced: only verified or supplied items count as sourced, nothing else does.
+   */
+  function sourcedCounts(data) {
+    var c = confirmList(data), t = toSupply(data);
+    var supplied = supplyCards(data).filter(function (x) { return x.state === 'answered'; }).length;
+    return { toSupply: t.count, verified: c.verified, total: c.total, open: c.open, supplied: supplied, sourced: c.verified + supplied };
+  }
+
+  /** The strengthen request: recorded only, it launches nothing (launching needs the server feature). */
+  function researchRequest(at) { return { research_request: { status: 'asked', at: at } }; }
+
+  /** The upstream sources the host says have changed since this deck: GET /upstream's `upstream` entries. */
+  function upstreamChanged(res) {
+    var list = isObj(res) && Array.isArray(res.upstream) ? res.upstream : [];
+    return list.filter(function (e) { return isObj(e) && e.status === 'changed'; })
+      .map(function (e) { return { title: String(e.title || (e.direct ? 'the brief' : 'a source')) }; });
+  }
+
   return {
+    upstreamSummary: upstreamSummary, documentsOf: documentsOf, builtFrom: builtFrom, describeBuiltFrom: describeBuiltFrom,
+    canBuild: canBuild, gapView: gapView, questionState: questionState, answerPatch: answerPatch,
+    DECK_TYPES: DECK_TYPES, deckTypeOf: deckTypeOf, typeHints: typeHints, kindOfType: kindOfType, typePatch: typePatch,
+    researchRequest: researchRequest, upstreamChanged: upstreamChanged,
+    supplyCards: supplyCards, toSupply: toSupply, confirmList: confirmList, verifyPatch: verifyPatch, sourcedCounts: sourcedCounts,
     isPlaceholder: isPlaceholder, presented: presented, refsOf: refsOf, evidenceFor: evidenceFor,
     statusOf: statusOf, STATUS: STATUS, checksFor: checksFor, approveGate: approveGate,
     gateHolds: gateHolds, summaryOf: summaryOf, agencyShown: agencyShown
@@ -315,12 +760,17 @@ var DeckLogic = (function () {
 
   // View state only. Anything the document should keep is written with put().
   var view = { screen: null, slide: null, tab: 'evidence', present: 0 };
+  var qdraft = {}; // free-text answers typed but not saved, by question id
   var pending = {}; // inputs picked on the Start screen, written when Build is pressed
+  var upChanged = []; // sources the host says changed since this deck; empty when the call fails or is absent
+  var upLoaded = false;
+  var clanScheme = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
 
   function d() {
     var x = data();
     return {
-      inputs: x.inputs || { prompt: {}, research: {}, brief: {}, kind: 'agency', format: 'pitch', library: { enabled: false } },
+      inputs: Object.assign({ prompt: {}, kind: 'agency', format: 'pitch', library: { enabled: false } }, x.inputs || {}),
+      raw: x, upstream: x.upstream || {}, intake: x.intake || {}, asked: x.research_request || null,
       run: x.run || { state: 'draft', stages: [], gate: null, approvals: {} },
       deck: x.deck || { order: [], slides: {} },
       evidence: x.evidence || {}, validation: x.validation || {}, report: x.report || {}, exports: x.exports || {},
@@ -347,7 +797,7 @@ var DeckLogic = (function () {
     var steps = [['start', 'Start'], ['build', 'Build'], ['review', 'Review'], ['present', 'Present']];
     var v = s.validation;
     var chip = s.run.state === 'done' || scr === 'review'
-      ? '<span class="chip ' + ((v.errors || 0) ? 'warn' : 'ok') + '">' + (v.errors || 0) + ' errors · ' + (v.to_supply || 0) + ' to supply</span>' : '';
+      ? '<span class="chip ' + ((v.errors || 0) ? 'warn' : 'ok') + '">' + (v.errors || 0) + ' errors · ' + L.toSupply(s.raw).count + ' to supply</span>' : '';
     var cost = (s.run.cost_usd != null && scr !== 'start') ? '<span class="chip cost">$' + Number(s.run.cost_usd).toFixed(2) + ' so far</span>' : '';
     return '<header class="bar">' + MARK +
       '<span class="brand">Napkin Studio <span class="tool">Deck</span></span><span class="sep">/</span><span class="crumb">' + title + '</span>' + chip +
@@ -362,38 +812,163 @@ var DeckLogic = (function () {
   }
 
   // ── 1 · Start ─────────────────────────────────────────────────────────
-  function start(s) {
-    var inp = s.inputs;
-    var kind = pending.kind || inp.kind, format = pending.format || inp.format;
-    var sum = L.summaryOf({ prompt: inp.prompt, kind: kind, format: format }, s.deck);
-    var r = inp.research, b = inp.brief;
-    function field(id, lab, val, ph) {
-      return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(val || '') + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
+  /** A draft value typed on Start and not yet written, else the stored one. */
+  function draft(key, stored) { return pending[key] != null ? pending[key] : (stored || ''); }
+
+  /** The "Built from: ..." line and what is missing, for a built_from record. */
+  function builtLine(bf, hasPrompt) {
+    var x = L.describeBuiltFrom(bf, hasPrompt);
+    return '<div class="bf" data-built-from>' + esc(x.line) + (x.type ? '<span>Deck type: ' + esc(x.type) + '</span>' : '') + x.missing.map(function (m) { return '<span class="miss">' + esc(m) + '</span>'; }).join('') + '</div>';
+  }
+
+  /** The "What kind of deck?" selector: the q_deck_type question as four cards, the inferred one highlighted with its quote, skippable. */
+  function typeSelector(s) {
+    var t = L.deckTypeOf(s.raw), on = t.source !== 'default';
+    var cards = L.DECK_TYPES.map(function (x) {
+      var tag = on && x.id === t.id ? '<span class="tag">' + (t.source === 'answered' ? 'Your choice' : 'Suggested') + '</span>' : '';
+      return '<button class="pick" data-dtype="' + esc(x.id) + '" aria-pressed="' + (on && x.id === t.id) + '"><b>' + esc(x.label) + '</b><span>' + esc(x.one_line) + '</span>' + tag + '</button>';
+    }).join('');
+    var looks = L.DECK_TYPES.filter(function (x) { return x.id === t.id; })[0].looks;
+    var say = t.source === 'inferred' && t.quote ? 'Looks like ' + looks + ': you wrote "' + t.quote + '"'
+      : t.source === 'inferred' ? 'Looks like ' + looks
+      : t.source === 'answered' ? 'Building ' + looks.replace(/^an? /, 'a ') + '. You can change this.'
+      : 'Defaults to agency pitch';
+    var hints = L.typeHints(t.id);
+    return '<section class="card sec" id="deck-type"><div class="sec-h"><b>What kind of deck?</b><div class="spacer"></div>' +
+      '<span class="pill ' + (t.source === 'answered' ? 'ok' : 'plain') + '">' + (t.source === 'answered' ? 'Chosen' : t.source === 'inferred' ? 'Suggested' : 'Optional') + '</span></div>' +
+      '<div class="types">' + cards + '</div>' +
+      '<p class="note" style="margin-top:10px" data-type-say>' + esc(say) + '</p>' +
+      '<div class="hint" data-type-hints>' + esc(hints.line) + '</div>' +
+      (on ? '' : '<div style="margin-top:10px"><button class="btn sm" data-dtskip="1"' + (t.skipped ? ' aria-pressed="true"' : '') + '>' + (t.skipped ? 'Skipped' : 'Skip') + '</button></div>') +
+      '</section>';
+  }
+
+  /** The Check panel: the gap report, up to 5 questions, each skippable. Nothing here gates Build. */
+  function checkPanel(s) {
+    var g = L.gapView(s.intake);
+    if (!g.hasGaps && !g.questions.length) return '';
+    function gapList(title, rows) {
+      return rows.length ? '<div style="margin-top:10px"><div class="eyebrow" style="margin-bottom:6px">' + esc(title) + '</div>' + rows.map(function (r) {
+        return '<div class="li" style="margin-top:6px"><span class="dot"></span><span><b style="font-weight:600">' + esc(r.name) + '</b>' + (r.why ? ' <span class="note">' + esc(r.why) + '</span>' : '') + '</span></div>';
+      }).join('') + '</div>' : '';
     }
-    var attached = '<span class="pill ok">Attached</span>';
+    var qs = g.questions.map(function (q) {
+      if (q.kind === 'supply') return supplyCard(q);
+      var head = '<div class="qt">' + esc(q.text) + '</div>' + (q.address ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0;margin-top:2px">' + esc(q.address) + '</div>' : '');
+      if (q.state !== 'open') {
+        var said = q.state === 'skipped' ? 'Skipped' : 'Answered: ' + esc(q.answer.text || ((q.options.filter(function (o) { return o.id === q.answer.option_id; })[0] || {}).label) || q.answer.option_id);
+        return '<div class="q">' + head + '<div style="margin-top:8px"><span class="pill ' + (q.state === 'skipped' ? 'plain' : 'ok') + '">' + said + '</span></div></div>';
+      }
+      return '<div class="q">' + head + '<div class="opts">' + q.options.map(function (o) {
+        return '<button class="btn sm" data-qopt="' + esc(o.id) + '" data-q="' + esc(q.id) + '">' + esc(o.label) + '</button>';
+      }).join('') + '<button class="btn sm" data-qskip="' + esc(q.id) + '">Skip</button></div>' +
+        (q.allow_text ? '<div class="free"><input class="inp" style="height:36px" id="qt_' + esc(q.id) + '" placeholder="Or say it in your own words" /><button class="btn sm" data-qtext="' + esc(q.id) + '">Save</button></div>' : '') + '</div>';
+    }).join('');
+    return '<section class="card sec" id="check"><div class="sec-h"><span class="mono eyebrow">04</span><b>Check</b><div class="spacer"></div>' +
+      '<span class="pill ' + (g.hasGaps ? 'warn' : 'ok') + '">' + (g.hasGaps ? 'Gaps found' : 'No gaps') + '</span></div>' +
+      '<p class="note">What the deck cannot fill from what you gave it. Answer what you can, skip the rest: Build never waits for these.</p>' +
+      gapList('Brief fields nothing supports', g.brief_fields) + gapList('Slide types that would be thin', g.slide_types) +
+      (qs ? '<div style="margin-top:12px">' + qs + '</div>' : '') + strengthen(s, g) + '</section>';
+  }
+
+  /** One supply card: the question, free text (one item per line) and Skip; once answered, the lines the person gave and a skip or answered pill. */
+  function supplyCard(q) {
+    var head = '<div class="qt">' + esc(q.text) + '</div><div class="hint-line">Only you know this. Whatever you write goes on the slide as you wrote it.</div>';
+    if (q.state !== 'open') {
+      var lines = L.supplyCards({ intake: { questions: [{ id: q.id, text: q.text, kind: 'supply', fills: q.fills }], answers: (function () { var a = {}; a[q.id] = q.answer; return a; })() } })[0].lines;
+      return '<div class="q sup" data-supply="' + esc(q.id) + '">' + head + '<div style="margin-top:8px"><span class="pill ' + (q.state === 'skipped' ? 'plain' : 'ok') + '">' + (q.state === 'skipped' ? 'Skipped' : 'Supplied by you') + '</span></div>' +
+        (lines.length ? '<ul class="note" style="margin:8px 0 0 18px">' + lines.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+    }
+    return '<div class="q sup" data-supply="' + esc(q.id) + '">' + head + '<textarea class="inp ta" style="min-height:76px;margin-top:8px" id="qt_' + esc(q.id) + '" placeholder="One per line"></textarea>' +
+      '<div class="opts"><button class="btn sm" data-qtext="' + esc(q.id) + '">Save</button><button class="btn sm" data-qskip="' + esc(q.id) + '">Skip</button></div></div>';
+  }
+
+  /** The supply cards on Review: what only you know, one card each, while any is open or answered. Empty when the engine asked none. */
+  function supplyPanel(s) {
+    var cards = L.gapView(s.intake).questions.filter(function (q) { return q.kind === 'supply'; });
+    if (!cards.length) return '';
+    var t = L.toSupply(s.raw);
+    return '<div class="card" style="padding:16px" id="supply"><div style="display:flex;align-items:center;gap:8px"><b style="font-size:13px;font-weight:600">To supply</b><div class="spacer"></div>' +
+      '<span class="pill ' + (t.count ? 'warn' : 'ok') + '" data-to-supply>' + t.count + ' to supply</span></div>' +
+      '<p class="note" style="margin-top:4px;font-size:12px">The deck never invents these. Give them here and the slide fills when the deck is built again.</p>' + cards.map(supplyCard).join('') + '</div>';
+  }
+
+  /** The Confirm list: every proposal, every figure only your own words support and every slide still needing a person, each with a Verify button. Empty when the deck has none. */
+  function confirmPanel(s) {
+    var c = L.confirmList(s.raw);
+    if (!c.total) return '';
+    var kinds = { proposal: 'Proposal', figure: 'Figure', slide: 'Needs you' };
+    var rows = c.items.map(function (x) {
+      return '<div class="conf' + (x.verified ? ' done' : '') + '" data-confirm="' + esc(x.ref) + '"><span class="pill ' + (x.verified ? 'ok' : x.kind === 'slide' ? 'warn' : 'plain') + '">' + (x.verified ? 'Verified' : kinds[x.kind]) + '</span>' +
+        '<span class="what">' + esc(x.text) + '<small>' + esc(x.why) + '</small></span>' +
+        (x.verified ? '' : '<button class="btn sm" data-verify="' + esc(x.ref) + '">Verify</button>') + '</div>';
+    }).join('');
+    return '<div class="card" style="padding:16px" id="confirm"><div style="display:flex;align-items:center;gap:8px"><b style="font-size:13px;font-weight:600">Confirm list</b><div class="spacer"></div>' +
+      '<span class="pill ' + (c.open ? 'warn' : 'ok') + '" data-confirm-count>' + c.verified + ' of ' + c.total + ' verified</span></div>' +
+      '<p class="note" style="margin:4px 0 6px;font-size:12px">Only what you verify or supply counts as sourced. Verifying records your decision; it changes no slide.</p>' + rows + '</div>';
+  }
+
+  /** The Strengthen offer, shown when there are gaps. Pressing it records a request and launches nothing. */
+  function strengthen(s, g) {
+    if (!g.hasGaps) return '';
+    var asked = s.asked && s.asked.status === 'asked';
+    return '<div class="rule"></div><div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b style="font-size:14px;font-weight:600">Strengthen with research</b>' +
+      '<p class="note" style="margin-top:4px">The Research Tool can look for facts to fill these gaps. It only runs when you say yes, and nothing from outside your own material reaches a slide without it. A research run takes minutes and counts against your quota.</p></div>' +
+      '<button class="btn" id="strengthen"' + (asked ? ' aria-pressed="true"' : '') + '>' + (asked ? 'Asked' : 'Strengthen with research') + '</button></div>';
+  }
+
+  /** The Brief and Research cards: derived from data.upstream, never stored, Optional when absent. */
+  function upstreamCards(s) {
+    var u = L.upstreamSummary({ upstream: s.upstream });
+    var attached = '<span class="pill ok">Brought in</span>', opt = '<span class="pill plain">Optional</span>';
+    var r = u.research, b = u.brief;
+    var changed = upChanged.length ? '<div class="upnote" role="status" data-up-changed><b>' + esc(upChanged.map(function (c) { return c.title; }).join(', ')) + ' changed since this deck.</b> This deck keeps it as it was; it does not take the newer one on its own.</div>' : '';
+    return '<div class="eyebrow dark">Bring in a brief or research (optional)</div>' + changed + '<div class="two">' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Research</b><div class="spacer"></div>' + (r ? attached : opt) + '</div>' +
+        (r ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (r.findings == null ? 'report brought in' : esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected') + '</div></div></div>' +
+          '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.' + (r.findings == null ? ' Finding counts show once the Research Tool shares them.' : '') + '</p>' : '<p class="note">No research brought in. Start one from a Research Tool document with Spin off.</p>') + '</section>' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Brief</b><div class="spacer"></div>' + (b ? attached : opt) + '</div>' +
+        (b ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(b.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(b.fields_filled) + ' of ' + esc(b.fields_total) + ' fields · ' + esc(b.mandatories) + ' mandatories</div></div></div>' +
+          '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">No brief brought in. The deck builds from your prompt and documents.</p>') + '</section></div>';
+  }
+
+  function start(s) {
+    var inp = s.inputs, p = inp.prompt || {};
+    var dt = L.deckTypeOf(s.raw), typed = dt.source === 'answered';
+    var kind = typed ? L.kindOfType(dt.id) : (pending.kind || inp.kind), format = pending.format || inp.format;
+    var docs = L.documentsOf(s.raw);
+    var sum = L.summaryOf({ prompt: p, kind: kind, format: format, type: typed ? dt.id : null }, s.deck);
+    var text = draft('text', p.text);
+    var bf = L.builtFrom(inp, s.upstream, docs, typed ? dt.id : null);
+    function field(id, lab, val, ph) {
+      return '<div><label class="lab" for="' + id + '">' + lab + '</label><input class="inp" id="' + id + '" value="' + esc(draft(id, val)) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + ' /></div>';
+    }
+    var hasText = !!String(text).trim();
+    var docList = docs.length ? docs.map(function (x) {
+      return '<div class="doc" style="margin-bottom:8px"><span class="ico">DOC</span><div><div style="font-size:14px;font-weight:600">' + esc(x.name) + '</div>' + (x.pages ? '<div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(x.pages) + ' pages</div>' : '') + '</div></div>';
+    }).join('') : '<p class="note">No documents attached. Attach a client brief, a deck or notes and every figure on a slide can point back to it.</p>';
     return '<main class="start"><div>' +
       '<div class="eyebrow">New deck</div>' +
       '<h1 style="margin:10px 0 6px">What are we pitching?</h1>' +
-      '<p class="lede" style="margin-bottom:28px">Three things go in: your prompt, the research and the brief. Nothing else is used, so every line on a slide can be traced back to one of them.</p>' +
-      '<div class="stack">' +
+      '<p class="lede" style="margin-bottom:28px">Tell us in a line or paste everything you have, and attach any documents. A brief or research is optional. Nothing else is used, so every line on a slide traces back to what you gave.</p>' +
+      '<div class="stack">' + typeSelector(s) +
       '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">01</span><b>Your prompt</b><div class="spacer"></div>' +
-        '<span class="pill ' + (inp.prompt.client && inp.prompt.project ? 'ok' : 'warn') + '">' + (inp.prompt.client && inp.prompt.project ? 'Ready' : 'Needs a client and a project') + '</span></div>' +
-        '<div class="three">' + field('client', 'Client', inp.prompt.client) + field('project', 'Project', inp.prompt.project) + field('agency', 'Agency (optional)', inp.prompt.agency, 'Shows as [Agency]') + '</div></section>' +
-      '<div class="two">' +
-        '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Research</b><div class="spacer"></div>' + (r.name ? attached : '<span class="pill plain">Optional</span>') + '</div>' +
-          (r.name ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(r.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(r.findings) + ' findings · ' + esc(r.rejected) + ' rejected</div></div></div>' +
-            '<p class="note" style="margin-top:10px">Rejected findings are never used on a slide.</p>' : '<p class="note">No research attached. The deck then rests on the brief alone.</p>') + '</section>' +
-        '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">03</span><b>Brief</b><div class="spacer"></div>' + (b.name ? attached : '<span class="pill warn">Needed</span>') + '</div>' +
-          (b.name ? '<div class="doc"><span class="ico">.clan</span><div><div style="font-size:14px;font-weight:600">' + esc(b.name) + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + esc(b.fields_filled) + ' of ' + esc(b.fields_total) + ' fields · ' + esc(b.mandatories) + ' mandatories</div></div></div>' +
-            '<p class="note" style="margin-top:10px">Mandatories become requirements the deck must answer.</p>' : '<p class="note">A deck cannot start without a brief.</p>') + '</section>' +
-      '</div>' +
-      '<div class="two"><div><div class="eyebrow dark" style="margin-bottom:8px">Kind of deck</div><div class="row">' +
+        '<span class="pill ' + (hasText ? 'ok' : 'plain') + '">' + (hasText ? 'Ready' : 'A line is enough') + '</span></div>' +
+        '<div class="three">' + field('client', 'Client', p.client) + field('project', 'Project', p.project) + field('agency', 'Agency (optional)', p.agency, 'Shows as [Agency]') + '</div>' +
+        '<div style="margin-top:14px"><label class="lab" for="ptext">What are we pitching? (a line is enough; paste everything you have)</label><textarea class="inp ta" id="ptext">' + esc(text) + '</textarea></div></section>' +
+      '<section class="card sec"><div class="sec-h"><span class="mono eyebrow">02</span><b>Documents</b><div class="spacer"></div><span class="pill ' + (docs.length ? 'ok' : 'plain') + '">' + (docs.length ? docs.length + ' attached' : 'Optional') + '</span></div>' +
+        docList + '<div style="margin-top:10px"><label class="btn sm" style="display:inline-flex;align-items:center" for="attach">Attach files</label><input type="file" id="attach" multiple style="position:absolute;left:-9999px" aria-label="Attach documents" />' +
+        '<p class="note" style="margin-top:8px">Attaching needs the host. Files stay in this document.</p></div></section>' +
+      upstreamCards(s) +
+      checkPanel(s) +
+      '<div class="two">' + (typed ? '' : '<div><div class="eyebrow dark" style="margin-bottom:8px">Kind of deck</div><div class="row">' +
         pick('kind', 'agency', kind, 'Agency pitch', 'Territories, one idea, executions') + pick('kind', 'investor', kind, 'Investor deck', 'Problem, market, traction, ask') +
-      '</div></div><div><div class="eyebrow dark" style="margin-bottom:8px">Length</div><div class="row">' +
+      '</div></div>') + '<div><div class="eyebrow dark" style="margin-bottom:8px">Length</div><div class="row">' +
         pick('format', 'pitch', format, 'Pitch · 18 slides', 'Then an appendix of backup') + pick('format', 'full', format, 'Full story', 'Every slide in story order') +
       '</div></div></div></div></div>' +
       '<aside class="stack">' +
       '<div class="frost summary"><div class="eyebrow">You will get</div><div class="t">' + esc(sum.title) + '</div><div class="note">' + esc(sum.note) + '</div><div class="rule"></div>' +
+        builtLine(bf, hasText) + '<div class="rule"></div>' +
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Web deck</b> to present in a browser, with a presenter view</span></div>' +
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">PowerPoint</b> with notes and the appendix hidden</span></div>' +
         '<div class="li"><span class="dot"></span><span><b style="font-weight:600">Animated deck</b> you can present from HyperFrames</span></div>' +
@@ -411,6 +986,12 @@ var DeckLogic = (function () {
     }
     return '<div class="lib"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:14px;font-weight:600">From the team library</b><span class="note">optional</span></div>' +
       '<p class="note" style="margin-top:10px">Pictures replace the "illustrative" placeholders. Font files are never taken from a PDF.</p></div>';
+  }
+
+  /** The built_from the engine recorded on the deck, else what Start would compute from the document. */
+  function builtOf(s) {
+    var m = s.deck && s.deck.meta && s.deck.meta.built_from;
+    return m && m.tier ? m : L.builtFrom(s.inputs, s.upstream, L.documentsOf(s.raw), L.deckTypeOf(s.raw).source !== 'default' ? L.deckTypeOf(s.raw).id : null);
   }
 
   // ── 2 · Build, with gates ─────────────────────────────────────────────
@@ -448,7 +1029,7 @@ var DeckLogic = (function () {
       '<div class="card" style="padding:20px"><div style="display:flex;align-items:center;gap:12px">' + (gate ? MARK_SPIN.replace('class="spin"', '') : MARK_SPIN) +
         '<div><div style="font-size:14px;font-weight:600">' + (gate ? 'Waiting for you' : 'Waiting for the engine') + '</div><div class="mono eyebrow" style="text-transform:none;letter-spacing:0">' + (gate ? 'Nothing runs until you approve' : 'Not connected to this document yet') + '</div></div></div><div class="rule"></div>' +
         '<p class="note">' + (gate ? 'Next, three territories are written and a second model judges them without seeing who wrote them. You pick one.' : 'Once the engine is connected it runs to the next gate and stops there.') + '</p></div>' +
-      checks + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
+      builtLine(builtOf(s)) + checks + '<div class="note" style="background:var(--soft);border-radius:18px;padding:16px 20px">Things you must supply, like the presenter or the budget split, show as labelled placeholders. They are never made up.</div></aside></main>';
   }
 
   // ── 3 · Review ────────────────────────────────────────────────────────
@@ -496,10 +1077,11 @@ var DeckLogic = (function () {
     return '<main class="review"><nav class="frost rail" aria-label="Slides"><div style="display:flex;margin-bottom:10px;padding:0 4px"><span class="eyebrow">' + esc(s.inputs.format === 'full' ? 'Full' : 'Pitch') + ' · ' + ids.length + '</span><div class="spacer"></div><span class="mono eyebrow" style="text-transform:none;letter-spacing:0">+ ' + esc((s.deck.appendix_count || 0)) + ' appendix</span></div>' + rail + '</nav>' +
       '<section><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span class="mono" style="font-size:12px;color:var(--ink3)">Slide ' + String(n).padStart(2, '0') + '</span><span class="pill ' + st.tone + '">' + st.label + '</span><div class="spacer"></div>' +
         '<button class="btn sm" data-act="appendix">Move to appendix</button><button class="btn sm" data-tab="evidence">Why this slide</button></div>' +
+      '<div style="margin-bottom:12px">' + builtLine(builtOf(s)) + '</div>' +
       '<div class="slide"><div class="kick">' + esc(sl.section) + '</div><h2>' + esc(sl.title) + '</h2><ul>' + s1.items + '</ul>' +
         '<div class="foot"><span>' + esc(agency) + ' · ' + esc(s.deck.meta && s.deck.meta.client) + '</span><div class="spacer"></div><span>' + String(n).padStart(2, '0') + '</span></div></div>' +
       '<div class="card" style="margin-top:14px;padding:14px 18px;border-radius:16px;box-shadow:none"><div class="eyebrow" style="margin-bottom:6px">Speaker notes</div><div style="font-size:14px;line-height:1.5;color:var(--ink2)">' + esc(sl.notes || 'No notes for this slide.') + '</div></div></section>' +
-      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' +
+      '<aside class="side"><div class="frost" style="padding:16px"><div class="tabs" role="tablist">' + tabs + '</div>' + panel + '</div>' + supplyPanel(s) + confirmPanel(s) +
       '<div class="card" style="padding:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Ask for a change</div><div style="display:flex;gap:8px;flex-wrap:wrap">' +
         [['shorter', 'Shorter'], ['add_figure', 'Add the figure'], ['rephrase', 'Say it another way']].map(function (c) { return '<button class="btn sm" data-change="' + c[0] + '">' + c[1] + '</button>'; }).join('') +
       '</div><p class="note" style="margin-top:10px;font-size:12px;color:var(--ink3)">Only the words on this slide change. Its sources stay.</p></div></aside></main>';
@@ -511,7 +1093,7 @@ var DeckLogic = (function () {
     if (!ids.length) return '<main class="review" style="display:block;max-width:640px"><h1 class="sm" style="margin-top:40px">Nothing to present yet</h1></main>';
     var i = Math.max(0, Math.min(view.present, ids.length - 1)), sl = s.deck.slides[ids[i]], nx = s.deck.slides[ids[i + 1]];
     var agency = L.agencyShown({ prompt: { agency: s.deck.meta && s.deck.meta.agency } });
-    var supply = ids.filter(function (x) { return s.deck.slides[x].status === 'needs_human'; }).length;
+    var supply = L.toSupply(s.raw).ids.length, counts = L.sourcedCounts(s.raw);
     var refs = L.refsOf(sl).map(function (r) { return '<span class="mono" style="font-size:11px;color:var(--tool-ink);background:var(--tool-soft);border-radius:999px;padding:4px 10px">' + esc(r) + '</span>'; }).join('');
     var fmts = [['web', 'WEB', 'Web deck', 'One file, animated, works offline', 'Open'], ['pptx', 'PPTX', 'PowerPoint', 'Notes kept, appendix hidden', 'Download'],
       ['anim', 'ANIM', 'Animated deck', 'Present it from HyperFrames', 'Get project'], ['pdf', 'PDF', 'PDF', 'Presented slides only', 'Download']];
@@ -523,23 +1105,68 @@ var DeckLogic = (function () {
       (refs ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + refs + '</div>' : '') + '</div></section>' +
       '<aside class="stack"><div class="eyebrow">Next</div>' + (nx ? '<div class="mini"><div class="k">' + esc(nx.section) + '</div><div class="t">' + esc(nx.title) + '</div></div>' : '<div class="note">That is the last presented slide.</div>') +
       '<div class="eyebrow" style="margin-top:6px">Appendix</div><div class="note" style="background:var(--soft);border-radius:12px;padding:12px">' + esc(s.deck.appendix_count || 0) + ' backup slides are hidden. They keep their sources.</div></aside>' +
-      '<aside class="frost" style="padding:22px"><div style="display:flex;align-items:center"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div><span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span></div>' +
+      '<aside class="stack">' + confirmPanel(s) + '<div class="frost" style="padding:22px"><div style="display:flex;align-items:center"><span style="font-weight:700;font-size:18px;letter-spacing:-.02em">Export</span><div class="spacer"></div><span class="chip ' + ((s.validation.errors || 0) ? 'warn' : 'ok') + '">' + ((s.validation.errors || 0) ? 'Has errors' : 'Checked') + '</span></div>' +
       '<p class="note" style="margin:4px 0 16px">Same deck, three ways, plus a PDF. A file shows here once the engine has written it.</p>' +
       fmts.map(function (f) {
         var ready = !!s.exports[f[0]];
         return '<div class="fmt"><span class="x" aria-hidden="true">' + f[1] + '</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + f[2] + '</div><div class="note" style="font-size:12px">' + (ready ? f[3] : 'Not built yet') + '</div></div>' +
           '<button class="btn sm" data-export="' + f[0] + '"' + (ready ? '' : ' disabled') + ' style="font-weight:600">' + f[4] + '</button></div>';
       }).join('') +
-      (supply ? '<div class="callout">' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
-      '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></aside></main>';
+      (supply ? '<div class="callout" data-to-supply>' + supply + (supply > 1 ? ' slides still hold' : ' slide still holds') + ' placeholders. They export as marked text.</div>' : '') +
+      (counts.total || counts.supplied ? '<p class="note" style="margin-top:10px;font-size:12px" data-sourced>' + counts.verified + ' of ' + counts.total + ' to confirm verified · ' + counts.supplied + ' supplied by you · ' + counts.sourced + ' counted as sourced</p>' : '') +
+      '<p class="mono" style="margin-top:12px;font-size:11px;color:var(--ink3)">Cost to build this deck: $' + Number(s.report.cost_usd != null ? s.report.cost_usd : s.run.cost_usd || 0).toFixed(2) + '</p></div></aside></main>';
   }
 
   // ── render and events ─────────────────────────────────────────────────
   function render() {
     var s = d(), scr = screenOf(s);
+    var ae = document.activeElement, focusId = ae && ae.id && /^(qt_|ptext$|client$|project$|agency$)/.test(ae.id) ? ae.id : '';
+    var selS = focusId ? ae.selectionStart : null, selE = focusId ? ae.selectionEnd : null;
+    stashDraft();
     var body = scr === 'start' ? start(s) : scr === 'build' ? build(s) : scr === 'review' ? review(s) : presentScreen(s);
     document.getElementById('app').innerHTML = bar(s, scr) + body;
     document.title = 'Deck Maker';
+    restoreDrafts(s);
+    if (focusId) {
+      var fe = document.getElementById(focusId);
+      if (fe && fe.focus) {
+        fe.focus();
+        try { if (selS != null && fe.setSelectionRange) fe.setSelectionRange(selS, selE); } catch (e) { /* not a text field */ }
+      }
+    }
+    loadUpstream(s);
+  }
+
+  /** Ask the host whether the brief or research changed since this deck. Any failure shows nothing. */
+  function loadUpstream(s) {
+    if (upLoaded || !Object.keys(s.upstream || {}).length) return;
+    upLoaded = true;
+    try {
+      if (typeof fetch !== 'function') return;
+      Promise.resolve(fetch(clanScheme + '/upstream')).then(function (r) { return r && r.ok ? r.json() : null; })
+        .then(function (v) {
+          var next = L.upstreamChanged(v);
+          if (next.length) { upChanged = next; render(); }
+        }, function () { /* no host: no notice */ }).catch(function () { /* never throw */ });
+    } catch (e) { /* no host: no notice */ }
+  }
+
+  /** Put typed-but-unsaved free-text answers back into the freshly drawn question inputs. */
+  function restoreDrafts(s) {
+    L.gapView(s.intake).questions.forEach(function (q) {
+      var el = document.getElementById('qt_' + q.id);
+      if (el && qdraft[q.id] != null && !el.value) el.value = qdraft[q.id];
+    });
+  }
+
+  /** Keep what was typed on Start, and any unsaved free-text answer, across a re-render. */
+  function stashDraft() {
+    L.gapView(d().intake).questions.forEach(function (q) {
+      var qe = document.getElementById('qt_' + q.id);
+      if (qe && typeof qe.value === 'string') qdraft[q.id] = qe.value;
+    });
+    ['client', 'project', 'agency'].forEach(function (id) { var el = document.getElementById(id); if (el) pending[id] = el.value; });
+    var t = document.getElementById('ptext'); if (t) pending.text = t.value;
   }
 
   function now() { return new Date().toISOString(); }
@@ -548,19 +1175,52 @@ var DeckLogic = (function () {
     var t = e.target.closest('button'); if (!t) return;
     var s = d(), a = t.dataset;
     if (a.go) { view.screen = a.go; return render(); }
+    if (a.dtype || a.dtskip) {
+      stashDraft();
+      var tp = L.typePatch(s.raw, a.dtype || null, now());
+      if (tp) put(tp, (a.dtskip ? 'skip' : 'answer') + ' question q_deck_type', 'intake');
+      return render();
+    }
+    if (a.kind || a.format) stashDraft();
     if (a.kind) { pending.kind = a.kind; return render(); }
     if (a.format) { pending.format = a.format; return render(); }
     if (a.slide) { view.slide = a.slide; return render(); }
     if (a.tab) { view.tab = a.tab; return render(); }
     if (a.pres) { view.present += Number(a.pres); return render(); }
     if (t.id === 'build') {
-      var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
-      var prompt = { client: val('client'), project: val('project'), agency: val('agency') };
-      if (!prompt.client || !prompt.project || !s.inputs.brief.name) { toast('A deck needs a client, a project and a brief.'); return; }
-      var inputs = Object.assign({}, s.inputs, { prompt: prompt, kind: pending.kind || s.inputs.kind, format: pending.format || s.inputs.format });
-      put({ inputs: inputs }, 'start deck', 'inputs: prompt, research, brief');
+      stashDraft();
+      var prompt = { client: draft('client', ''), project: draft('project', ''), agency: draft('agency', ''), text: draft('text', '') };
+      Object.keys(prompt).forEach(function (k) { prompt[k] = String(prompt[k]).trim(); });
+      var guard = L.canBuild({ prompt: prompt }, s.upstream, L.documentsOf(s.raw));
+      if (!guard.ok) { toast(guard.message); return; }
+      // Only the person's own inputs are written. The brief and research are read from upstream, never stored.
+      var dtb = L.deckTypeOf(s.raw), kindOut = dtb.source === 'answered' ? L.kindOfType(dtb.id) : (pending.kind || s.inputs.kind);
+      put({ inputs: { prompt: prompt, kind: kindOut, format: pending.format || s.inputs.format } }, 'start deck', 'inputs: prompt and documents');
       view.screen = 'build'; render();
       toast(s.run.stages.length ? 'Showing the recorded run. Live building needs the engine server.' : 'Saved. Live building needs the engine server.');
+      return;
+    }
+    if (a.verify) {
+      var vp = L.verifyPatch(a.verify, now());
+      if (!vp) return;
+      put(vp, 'verify ' + a.verify, 'confirm list');
+      return;
+    }
+    if (a.qopt || a.qskip || a.qtext) {
+      var qid = a.qopt ? a.q : (a.qskip || a.qtext), ans;
+      if (a.qskip) ans = { skipped: true };
+      else if (a.qopt) ans = { option_id: a.qopt };
+      else { var qi = document.getElementById('qt_' + qid); ans = { text: qi ? qi.value : '' }; }
+      var patch = L.answerPatch(qid, ans, now());
+      if (!patch) { toast('Write an answer first, or skip.'); return; }
+      delete qdraft[qid];
+      put(patch, (a.qskip ? 'skip' : (qid.indexOf('q_supply_') === 0 ? 'supply' : 'answer')) + ' question ' + qid, qid.indexOf('q_supply_') === 0 ? 'supplied by the person' : 'intake');
+      return;
+    }
+    if (t.id === 'strengthen') {
+      // A request only: launching research needs the server feature, so nothing is called here.
+      put(L.researchRequest(now()), 'ask to strengthen with research', 'recorded, not launched');
+      toast('Recorded. Launching research needs the server, which is not connected yet.');
       return;
     }
     if (t.id === 'approve') {
@@ -578,6 +1238,32 @@ var DeckLogic = (function () {
       return;
     }
     if (a.export) { toast('Open the file from the document export.'); return; }
+  });
+
+  document.addEventListener('input', function () { stashDraft(); });
+
+  // Attach files: the host stores each one as an asset; the list is written to inputs.documents.
+  document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || el.id !== 'attach') return;
+    var files = Array.prototype.slice.call(el.files || []);
+    if (!files.length) return;
+    if (!(window.clan && window.clan.uploadAsset && window.clan.patchData)) { toast('Attaching files needs the host.'); return; }
+    var have = L.documentsOf(d().raw), added = [], failed = [];
+    // Each file is tried on its own: one that fails does not drop the ones that went in.
+    files.reduce(function (p, f) {
+      return p.then(function () { return f.arrayBuffer(); }).then(function (buf) { return window.clan.uploadAsset(f.name, buf, 'human'); })
+        .then(function (res) {
+          if (res && (res.ok === false || res.error)) throw new Error('refused');
+          added.push({ name: f.name });
+        }).catch(function () { failed.push(f.name); });
+    }, Promise.resolve()).then(function () {
+      var done = added.length ? put({ inputs: { documents: have.map(function (x) { return { name: x.name, pages: x.pages }; }).concat(added) } }, 'attach documents', added.length + ' file(s)') : null;
+      // Clear the input so choosing the failed files again does not re-upload the ones that went in.
+      try { el.value = ''; } catch (e) { /* read-only in some hosts */ }
+      if (failed.length) toast((added.length ? added.length + ' attached. ' : '') + 'Could not attach: ' + failed.join(', ') + '.');
+      return done;
+    }).catch(function () { toast('The attached files could not be saved.'); });
   });
 
   document.addEventListener('keydown', function (e) {

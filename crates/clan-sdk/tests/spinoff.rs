@@ -699,3 +699,121 @@ fn the_spun_off_brief_validates_and_keeps_carried_on_its_next_write() {
     assert_eq!(next.manifest().carried().cloned(), before);
     assert!(yaml(&next, DATA)["upstream"].get(RESEARCH_DOC).is_some());
 }
+
+/// The Deck template's contract: accepts a brief or a research document and
+/// carries the source whole, with no map and no lift.
+fn deck_template() -> ClanFile {
+    let spec = SpinoffSpec {
+        accepts: vec![BRIEF_APP.into(), RESEARCH_APP.into()],
+        upstream: true,
+        ..Default::default()
+    };
+    template("Deck Maker", "ie.napkin.deck-maker", spec, &[])
+}
+
+/// The id of the finding the example's research rejected.
+const REJECTED_FINDING: &str = "fi_01JA0F5E";
+
+#[test]
+fn research_to_brief_to_deck_holds_both_as_siblings_and_keeps_the_rejection() {
+    let research = research();
+    let brief = spin(&brief_maker(), &research);
+    let brief_doc = brief.manifest().document_id().to_string();
+    let deck = spin(&deck_template(), &brief);
+
+    let data = yaml(&deck, DATA);
+    let up = data["upstream"].as_mapping().unwrap();
+    assert_eq!(up.len(), 2, "research and brief, side by side");
+    assert_eq!(data["upstream"][RESEARCH_DOC], frozen(&research));
+    assert_eq!(data["upstream"][brief_doc.as_str()], frozen(&brief));
+    assert!(
+        data["upstream"][brief_doc.as_str()]
+            .get("upstream")
+            .is_none(),
+        "the brief copy holds no upstream of its own"
+    );
+
+    // lineage.carried names the brief, the direct parent.
+    let carried = deck.manifest().carried().expect("lineage.carried");
+    assert_eq!(carried.document_id, brief_doc);
+    assert_eq!(
+        carried.data_sha256,
+        sha256_prefixed(&brief.read_entry(DATA).unwrap())
+    );
+
+    // A finding the person rejected is still rejected, in the findings member
+    // and in the carried chain.
+    let findings = yaml(&deck, FINDINGS);
+    let rejected = findings["findings"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .find(|f| f["id"].as_str() == Some(REJECTED_FINDING))
+        .expect("the rejected finding travels");
+    assert_eq!(rejected["status"], Value::from("rejected"));
+    let verdict = raw_decisions(&deck)
+        .into_iter()
+        .find(|d| d["action"].as_str() == Some("reject_finding"))
+        .expect("the rejection stays in the chain");
+    assert_eq!(verdict["polarity"], Value::from("bad"));
+    assert!(verdict["cites"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .any(|c| c.as_str() == Some(REJECTED_FINDING)));
+    assert!(validate(&deck).is_valid(), "{}", validate(&deck).display());
+}
+
+#[test]
+fn research_to_deck_directly_holds_the_research_alone() {
+    let research = research();
+    let deck = spin(&deck_template(), &research);
+
+    let data = yaml(&deck, DATA);
+    let up = data["upstream"].as_mapping().unwrap();
+    assert_eq!(up.len(), 1);
+    assert_eq!(data["upstream"][RESEARCH_DOC], frozen(&research));
+    let carried = deck.manifest().carried().expect("lineage.carried");
+    assert_eq!(carried.document_id, RESEARCH_DOC);
+    assert!(validate(&deck).is_valid(), "{}", validate(&deck).display());
+}
+
+/// Runs the real packer (`examples/make_deck_maker.rs`, built by `cargo test`)
+/// and checks the packed template's spin-off contract and version, so a
+/// regression in the packer is caught here and not only in a hand-built twin.
+#[test]
+fn the_packed_deck_maker_declares_its_spinoff_contract() {
+    let exe = std::env::current_exe().unwrap();
+    let bin = exe
+        .parent()
+        .and_then(|d| d.parent())
+        .unwrap()
+        .join("examples")
+        .join(format!("make_deck_maker{}", std::env::consts::EXE_SUFFIX));
+    assert!(bin.exists(), "example not built: {}", bin.display());
+    let out = std::env::temp_dir().join(format!("deck-maker-pack-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    let app_path = out.join("deck-maker.app.clan");
+    let example_path = out.join("deck-maker.example.clan");
+    let run = std::process::Command::new(&bin)
+        .arg(&app_path)
+        .arg(&example_path)
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "packer failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let packed = open(std::fs::read(&app_path).unwrap());
+    let _ = std::fs::remove_dir_all(&out);
+    let app = packed.manifest().app.as_ref().expect("app block");
+    assert_eq!(app.app_id, "ie.napkin.deck-maker");
+    assert_eq!(app.version, "0.2.0");
+    let spec = app.spinoff.as_ref().expect("app.spinoff");
+    assert_eq!(
+        spec.accepts,
+        vec![BRIEF_APP.to_string(), RESEARCH_APP.to_string()]
+    );
+    assert!(spec.upstream);
+}
