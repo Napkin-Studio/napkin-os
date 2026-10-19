@@ -717,10 +717,14 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
 
   const addNote = () => {
     if (!cur || !note.trim()) return
-    const atS = Math.round((video.current?.currentTime ?? t) * 100) / 100
-    const by = `human:${personOf(ui.me).id}`
     const take = cur.take
-    const shotS = take.duration_s || cur.shot.duration_s
+    // A shot made inside one video plays its window of the whole take: its moment is from the window's start
+    // and its length is the window's (the player's clock runs over the whole take).
+    const seg = take.segments?.[0]
+    const raw = video.current?.currentTime ?? t
+    const atS = Math.round(Math.max(0, seg ? raw - seg.in_s : raw) * 100) / 100
+    const by = `human:${personOf(ui.me).id}`
+    const shotS = seg ? seg.out_s - seg.in_s : (take.duration_s || cur.shot.duration_s)
     void updateDoc(docStore, (d) => {
       addTakeNote(d, { takeId: take.id, shotId: cur.shot.id, shotS, atS, text: clipText(note.trim(), 1000), region, by, videoId })
     }, 'comment')
