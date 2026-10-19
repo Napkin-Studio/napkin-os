@@ -21,7 +21,8 @@
 # the roster name printed at start (default dev@napkin).
 #
 # Settings (environment): PRODUCTION_WEB_PORT (8091), PRODUCTION_RELAY_PORT (8788),
-# PRODUCTION_SPEND_CAP (50), PRODUCTION_SIGN_IN (dev@napkin), PRODUCTION_STATE (state dir,
+# PRODUCTION_SPEND_CAP (50), PRODUCTION_FLAGS (--live: config flags to turn on, comma-separated,
+# e.g. connectedVideo), PRODUCTION_SIGN_IN (dev@napkin), PRODUCTION_STATE (state dir,
 # default ${XDG_STATE_HOME:-~/.local/state}/napkin-production). Projects, sign-ins, secrets,
 # logs and pids live in the state dir, outside the repo.
 #
@@ -85,11 +86,13 @@ build() { # build only what is missing or wrong; --build forces the Production T
 
 live_config() { # the relay's config for --live: real routing, the spend stop
   local cap="${PRODUCTION_SPEND_CAP:-50}"
-  python3 - "$root/production-tool/contracts/examples/config.testing.json" "$state/live-config.json" "$cap" <<'EOF'
+  python3 - "$root/production-tool/contracts/examples/config.testing.json" "$state/live-config.json" "$cap" "${PRODUCTION_FLAGS:-}" <<'EOF'
 import json, sys
-src, out, cap = sys.argv[1], sys.argv[2], float(sys.argv[3])
+src, out, cap, flags = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
 c = json.load(open(src))
 c["spend"] = {"capUsd": cap, "warnUsd": round(cap * 0.8, 2)}
+for f in filter(None, flags.split(",")):
+    c["flags"][f.strip()] = True
 c.setdefault("routing", {}).setdefault("upscale", ["runway"])
 json.dump(c, open(out, "w"), indent=2)
 EOF
