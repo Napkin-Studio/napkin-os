@@ -28,18 +28,18 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .. import reasoning as rsn
 from .. import runlog
-from ..doc import ISO_3166, LENSES, ctx_data, ctx_facts, ctx_findings, ctx_sources, lens_of_key
+from ..doc import ISO_3166, LENSES, ctx_facts, lens_of_key
 from ..jev import JevError, noul
 from ..rules import merge as merge_rules
 from ..util import iso
 from . import capture as cap_stage
-from . import fill as fill_stage
+from . import provenance as prov
 from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, clean, filled, get, put
 from .job import BriefJob, log
 
 # The facts the plan, the draft and the judge read (every fact the brief holds, up to this many).
-FACTS_MAX = 400
+FACTS_MAX = prov.FACTS_MAX
 # jev's "the facts held already answer the need" at or above this: the planned search is skipped.
 HELD = 0.6
 
@@ -143,9 +143,10 @@ its value, the quote it was read from and its source), the findings, the researc
 and planning library passages (ids psg_...).
 
 For each part give value, basis, cites, builds_on_client and why:
-- basis "client": the client said it. Keep their meaning; you may write it out more fully. Cite nothing.
+- basis "client": the client said it. Keep their meaning; you may write it out more fully. Cite the cap_ ids
+  of the client's words (client_words) it rests on.
 - basis "research": it rests on facts or findings given to you. Cite every id it rests on. Use their
-  numbers exactly as given; never a number that is not in a cited fact.
+  numbers exactly as given.
 - basis "library": it rests on a planning passage; cite the psg_ id.
 - basis "assumption": your professional proposal from what is generally known; it is marked for the agency
   to confirm. Name real competitors and a concrete audience where you can. No figures at all.
@@ -156,6 +157,14 @@ believe you cannot prove from a fact starts with "To confirm:". Budget and scope
 timing only, no budget figure the client did not give. Open questions: what only the client can answer.
 Return null for a part only when nothing sensible can be said. Never restate the person's request as content.
 Write in plain British English, specific and vivid, no category jargon."""
+
+
+# Every rewrite (Jude's revise, the check loop's, fix_parts') carries each part's claims as they stand.
+REWRITE_NOTE = """
+
+Rewrite ONLY the parts in `rewrite`, following each instruction, keeping the rest of the brief in mind.
+`prior_claims` says what each part rests on now: keep its worked-out conclusions (kind "derived") and the
+facts they rest on unless the instruction says they are wrong."""
 
 
 def draft_schema(keys):
@@ -180,12 +189,15 @@ receive it, against the BetterBriefs rubric (the global study on briefing) and a
 2. chain: does objective -> audience -> insight -> proposition -> reasons to believe hold as one argument?
    {verdict pass|fail, note}.
 3. claims: for every part whose basis is research, each claim against the fact it cites: supported (the
-   fact says it), partly, or unsupported. {part, claim, cite, verdict, note}.
+   fact says it), partly, or unsupported. {part, claim, cite, verdict, note}. A claim of kind "derived" is
+   worked out from several facts: grade it on its working and its inputs (supported when the inputs say
+   what the working uses and the arithmetic holds), never as unsupported because no one fact states it.
 4. notes: what should change, ONE note per issue, naming every part it touches (never the same note per part).
    severity "fix" (the brief is wrong or weaker without it) or "consider". Something only the client can
    supply (a budget, success measures) is a question, not a fix.
 5. revise: the parts Dara should rewrite, each with one clear instruction. Only parts a rewrite can improve
-   from what the brief already holds; never ask her to invent client facts.
+   from what the brief already holds; never ask her to invent client facts. Never name a part only because a
+   claim in it is worked out or marked to confirm.
 6. questions: what only the client can answer.
 7. single_mindedness {verdict single|multiple, split_into}, and a one-sentence summary."""
 
@@ -232,6 +244,7 @@ class PlannedBriefJob(BriefJob):
         self.plan_out, self.plan_dec = None, None
         self.lib = {}           # psg id -> passage record (the library's)
         self.new_pins, self.new_sources = [], []
+        self.unpinned = []      # facts outside the measure list an older brief cannot keep: suggestions only
         self.whole = {}         # key -> {value, basis, cites, builds_on_client, why}
         self.review_out = None
         self.scores = []
@@ -247,40 +260,36 @@ class PlannedBriefJob(BriefJob):
         return {k: v for k, v in self._values().items() if self.fm[k]["class"] == "captured" and filled(v)}
 
     def _held(self):
-        """Every fact the brief holds and may use: its pins (those carried from the research
-        included) and those pinned in this job; never one a person marked wrong."""
-        excluded = {e.get("fact_id") for e in ((ctx_data(self.clan).get("selection") or {}).get("excluded") or [])
-                    if isinstance(e, dict)}
-        seen, out = set(), []
-        for f in list(ctx_facts(self.clan)) + list(self.new_pins):
-            fid = f.get("id")
-            if isinstance(fid, str) and fid not in seen and fid not in excluded and f.get("status") != "superseded":
-                seen.add(fid)
-                out.append(f)
-        return out
+        """Every fact the brief holds and may use (provenance.held): this job's new and kept pins first."""
+        return prov.held(self.clan, self.new_pins)
 
     def _evidence(self):
-        """Every fact the brief holds, each with the quote and the source it was read from (the
-        document's own source records, and those of this job's research), the findings, and the
-        research the brief was made from. All of them: what the plan cannot see, it researches
-        again, and what the draft cannot see, it cannot cite (2026-10-03: 80 of 331 were sent,
-        and the 89 facts this job researched were never seen)."""
-        view = fill_stage.research_view(self.clan, self.data0)
-        srcs = {**ctx_sources(self.clan), **{s["id"]: s for s in self.new_sources}}
-        facts = []
-        for f in self._held()[:FACTS_MAX]:
-            sid = next((s for s in f.get("sources") or [] if s in srcs), next(iter(f.get("sources") or []), None))
-            s = srcs.get(sid) or {}
-            q = next(iter((f.get("quotes") or {}).values()), None)
-            facts.append({"id": f["id"], "entity": f.get("entity"), "key": f.get("key"), "value": f.get("value"),
-                          "unit": f.get("unit"), "market": f.get("market"), "as_of": f.get("as_of"),
-                          "quote": q[:240] if isinstance(q, str) else None,
-                          "source": {k: s.get(k) for k in ("publisher", "title", "uri", "published_at") if s.get(k)}
-                          or None})
-        findings = [{"id": x["id"], "statement": x.get("statement"), "status": x.get("status")}
-                    for x in ctx_findings(self.clan)
-                    if isinstance(x.get("id"), str) and x.get("status") not in ("rejected", "superseded")]
-        return {"facts": facts, "findings": findings[:60], "research": view["research"]}
+        """Every fact the brief holds, each with the quote and the source it was read from, the findings,
+        and the research the brief was made from (provenance.evidence). All of them: what the plan cannot
+        see, it researches again, and what the draft cannot see, it cannot cite (2026-10-03: 80 of 331
+        were sent, and the 89 facts this job researched were never seen)."""
+        return prov.evidence(self.clan, self.data0, self.new_pins, self.new_sources, self.unpinned)
+
+    def _client(self):
+        return prov.client_words(self.W, self.capture, self.mats)
+
+    def _prov(self, ev):
+        plan = self.plan_out or {}
+        return prov.Ctx(ev, self._client(), self.lib, plan.get("brand"), plan.get("competitors"), self.caps.model,
+                        self.caps.runlog)
+
+    def _clean(self, out, ev, stage, keys=None, prior=None):
+        """Dara's parts with what each rests on (provenance.clean_parts): the one cleaner of every path."""
+        return prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
+
+    def _prior(self, keys):
+        """Each part's claims as it stands: this job's draft, else the decision that wrote it."""
+        out = prov.prior_claims(self.chain, self.doc, [k for k in keys if k not in self.whole])
+        out.update({k: self.whole[k].get("claims") or [] for k in keys if k in self.whole})
+        return out
+
+    def _library(self, n=12):
+        return [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in list(self.lib.items())[:n]]
 
     def _already_held(self, asks):
         """The planned research the brief's facts already answer: jev reads the facts held for each
@@ -308,9 +317,6 @@ class PlannedBriefJob(BriefJob):
                 continue
             (skipped if p >= HELD else run).append({**a, "held_p": p, "held_facts": len(mine)} if p >= HELD else a)
         return run, skipped
-
-    def _ids(self, ev):
-        return {f["id"] for f in ev["facts"]} | {x["id"] for x in ev["findings"]} | set(self.lib)
 
     # =========================================================================================
     # context: Sam plans, then the research the plan asks for
@@ -430,12 +436,7 @@ class PlannedBriefJob(BriefJob):
         for u in units:
             rl.note("research_unit", lens=u["lens"], market=u["market"], sources=len(u["sources"]),
                     facts=len(u["cands"]), reused=u["reused"], gaps=len(u["gaps"]), error=u["error"])
-        # a fact outside the measure list is never written to the layers: its measure is proposed and the
-        # fact kept on record (a brief has no gaps list; the run log holds it)
         cands, unlisted = r.split_listed(units)
-        if unlisted:
-            rl.note("unlisted_measures", notes=[{"key": n["key"], "note": n["note"]}
-                                                for n in r.propose_unlisted(unlisted)])
         existing = ctx_facts(self.clan)
         pinned = {(f.get("entity"), f.get("key"), f.get("market")): f for f in existing}
         held = {f.get("id") for f in existing}
@@ -461,9 +462,10 @@ class PlannedBriefJob(BriefJob):
             pins.append(r._pin(row, c, dec["id"], t))
         if merged["contests"]:
             rl.note("research_contests", left_out=[ct["key"] for ct in merged["contests"]])
+        kept = self._keep_unlisted(r, unlisted, dec["id"], t, pinned, held, pins) if unlisted else []
         srcs = {s["sid"]: s for u in units for s in u["sources"]}
-        self.new_pins = pins
-        self.new_sources = r._source_records(pins, [], srcs, cands)
+        self.new_pins = pins + kept
+        self.new_sources = r._source_records(pins + kept, [], srcs, cands + unlisted)
         self.hits += r.hits
         unit_pts = [rsn.point(f"{u['lens'].replace('_', ' ')} in {u['market']}: "
                               + (f"{len(u['cands'])} fact(s) from {len(u['sources'])} source(s)" if not u["error"]
@@ -471,8 +473,11 @@ class PlannedBriefJob(BriefJob):
                               [s["sid"] for s in u["sources"]] or [self.plan_dec["id"]]) for u in units]
         if pins:
             unit_pts.append(rsn.point(f"{len(pins)} fact(s) passed the quote check and are pinned", [p["id"] for p in pins]))
-        dec["targets"] = [f"{self.doc}#facts[{p['id']}]" for p in pins]
-        dec["cites"] = [p["id"] for p in pins] + [s for p in pins for s in p["sources"]]
+        if kept:
+            unit_pts.append(rsn.point(f"{len(kept)} fact(s) outside the measure list are kept in this brief only, "
+                                      "never written to the layers; their measures are proposed", [p["id"] for p in kept]))
+        dec["targets"] = [f"{self.doc}#facts[{p['id']}]" for p in pins + kept]
+        dec["cites"] = [p["id"] for p in pins + kept] + [s for p in pins + kept for s in p["sources"]]
         rsn.give(dec, rsn.make(f"Researched what the plan asked for: {len(units)} run(s), {len(pins)} fact(s) pinned.",
                                     unit_pts, rsn.certainty("medium" if pins else "low",
                                                             "each fact's words match its source" if pins else
@@ -482,6 +487,40 @@ class PlannedBriefJob(BriefJob):
                                     attention=None if pins else "The research found nothing the brief could pin."))
         return [dec]
 
+    def _keep_unlisted(self, r, unlisted, did, t, pinned, held, pins):
+        """Facts outside the measure list (owner rule 3: never written to the layers). Each measure is
+        proposed, as before. In a brief whose schema takes them, each fact is kept as a document-only pin
+        (kept_in_document), merged against the pins held so one identity holds one pin: a held identity
+        with the same value is not pinned again, one with another value is a contest note. An older brief
+        keeps them as run-log notes, and as suggestions for the claims they would support."""
+        rl = self.caps.runlog
+        keep = prov.doc_allows(self.clan, "kept_pins")
+        proposed = {}
+        for c in unlisted:
+            proposed[id(c)] = r.propose(c)
+        ident = dict(pinned)
+        for p in pins:
+            ident.setdefault((p.get("entity"), p.get("key"), p.get("market")), p)
+        merged = merge_rules.merge(unlisted, ident, set())
+        kept, out_notes = [], []
+        for c in merged["pins"]:
+            ok, why = next((proposed[id(x)] for x in unlisted if x["key"] == c["key"] and x["entity"] == c["entity"]),
+                           (False, "outside the measure list"))
+            kp = r.doc_pin(c, did, t, why, ok)
+            out_notes.append({"key": c["key"], "fact_id": kp["id"]})
+            if not keep:
+                self.unpinned.append(kp)
+                continue
+            if kp["id"] in held or (kp["entity"], kp["key"], kp.get("market")) in pinned:
+                continue
+            held.add(kp["id"])
+            kept.append(kp)
+        rl.note("unlisted_measures", notes=out_notes, kept=len(kept), kept_allowed=keep)
+        if merged["contests"]:
+            rl.note("unlisted_contests", left_out=[ct["key"] for ct in merged["contests"]],
+                    held=[(ct.get("pinned") or {}).get("id") for ct in merged["contests"] if ct.get("pinned")])
+        return kept
+
     # =========================================================================================
     # draft: Dara writes the whole brief
     # =========================================================================================
@@ -490,53 +529,38 @@ class PlannedBriefJob(BriefJob):
         self.set_state(keys, "drafting", "drafter")
         ev = self._evidence()
         payload = {"client_said": self._said(), "captured": self._captured(),
+                   "client_words": self._client().payload(),
                    "plan": self.plan_out or {"strategy": None},
                    "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
-                   "library": [{"id": pid, "citation": p["citation"], "text": p["text"][:900]}
-                               for pid, p in list(self.lib.items())[:12]],
+                   "library": self._library(12),
                    "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys},
                    "who_handles": {k: who for k, (_, who) in getattr(self, "routing", {}).items()}}
         out = self.caps.model.structured("draft_brief_whole", DRAFT_SYSTEM, payload, draft_schema(keys),
                                          max_tokens=16000)
-        self.whole = self._clean_whole(out, ev)
+        self.whole = self._clean(out, ev, "draft", keys=keys)
         self.set_state([k for k in keys if k in self.whole], "waiting", "drafter")
         self.set_state([k for k in keys if k not in self.whole], "absent", "drafter")
         self.caps.runlog.note("draft", written=sorted(self.whole), empty=[k for k in keys if k not in self.whole],
                               basis={k: v["basis"] for k, v in self.whole.items()},
                               uncited_research=[k for k, v in self.whole.items() if v.get("downgraded")])
 
-    def _clean_whole(self, out, ev):
-        ids = self._ids(ev)
-        res = {}
-        for k, r in (out or {}).items():
-            if k not in KEYS or not isinstance(r, dict):
-                continue
-            v = clean(k, r.get("value"))
-            if v is None:
-                continue
-            cites = [c for c in dict.fromkeys(r.get("cites") or []) if c in ids]
-            basis = r.get("basis") if r.get("basis") in BASES else "assumption"
-            if basis == "client" and not filled(self._captured().get(k)):
-                basis = "assumption"  # the client did not say it: Ellis captured nothing for this part
-                self.caps.runlog.note("basis_corrected", part=k, said="client", now="assumption")
-            down = basis in ("research", "library") and not cites
-            if down:
-                basis = "assumption"  # a research claim that cites nothing it was given is an assumption
-            res[k] = {"value": v, "basis": basis, "cites": cites, "builds_on_client": bool(r.get("builds_on_client")),
-                      "why": _short(r.get("why"), 300), "downgraded": down}
-        return res
-
     # =========================================================================================
     # judge: Jude reviews the whole brief, Dara revises once, Jude scores again
     # =========================================================================================
     def _review(self, ev, purpose):
-        brief = {k: {"value": v["value"], "basis": v["basis"], "cites": v["cites"]} for k, v in self.whole.items()}
+        brief = {k: prov.brief_entry(v) for k, v in self.whole.items()}
+        earlier = prov.prior_claims(self.chain, self.doc, [k for k in KEYS if k not in brief])
         for k in KEYS:
             if k not in brief and filled(get(self.W, k)):
-                brief[k] = {"value": get(self.W, k), "basis": "client", "cites": []}
+                # not written by this job: what wrote it stands (a person's words stay theirs)
+                brief[k] = {"value": get(self.W, k), "basis": "person" if self.held.get(k) else "earlier",
+                            "cites": [], "claims": earlier.get(k) or []}
         payload = {"brief": brief, "strategy": (self.plan_out or {}).get("strategy"), "facts": ev["facts"],
                    "findings": ev["findings"], "client_said": self._said()}
         rv = self.caps.model.structured(purpose, REVIEW_SYSTEM, payload, review_schema(list(KEYS)), max_tokens=8000)
+        # Jude grades a worked-out claim on its working: one that recomputes is supported whatever he says;
+        # code's own verdicts join his. None of them is a reason to rewrite.
+        rv["claims"] = prov.judge_claims(self.whole, rv.get("claims") or [])
         dims = {d["dimension"]: d for d in rv.get("dimensions") or []}
         rv["dimensions"] = [dims.get(d) or {"dimension": d, "verdict": "missing", "evidence": "-", "fix": "-"}
                             for d in DIMS]
@@ -546,6 +570,7 @@ class PlannedBriefJob(BriefJob):
                               chain=rv["chain"]["verdict"],
                               claims={c["verdict"]: sum(1 for x in rv["claims"] if x["verdict"] == c["verdict"])
                                       for c in rv["claims"]},
+                              code_claims=sum(1 for c in rv["claims"] if c.get("by") == "code"),
                               notes=len(rv["notes"]), fixes=sum(1 for n in rv["notes"] if n["severity"] == "fix"),
                               revise=[x["part"] for x in rv["revise"]])
         return rv
@@ -564,18 +589,19 @@ class PlannedBriefJob(BriefJob):
         if revise:
             parts = [x["part"] for x in revise]
             self.set_state(parts, "revising", "drafter")
-            payload = {"client_said": self._said(), "captured": self._captured(), "plan": self.plan_out,
+            prior = self._prior(parts)
+            payload = {"client_said": self._said(), "captured": self._captured(),
+                       "client_words": self._client().payload(), "plan": self.plan_out,
                        "brief": {k: v["value"] for k, v in self.whole.items()},
                        "rewrite": {x["part"]: x["instruction"] for x in revise},
-                       "facts": ev["facts"], "findings": ev["findings"],
-                       "library": [{"id": pid, "citation": p["citation"], "text": p["text"][:900]}
-                                   for pid, p in list(self.lib.items())[:8]],
+                       "prior_claims": {k: prior.get(k) or [] for k in parts},
+                       "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
+                       "library": self._library(12),
                        "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in parts}}
             try:
-                out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + "\n\nRewrite ONLY the parts in "
-                                                 "`rewrite`, following each instruction, keeping the rest of the brief "
-                                                 "in mind.", payload, draft_schema(parts), max_tokens=8000)
-                got = self._clean_whole(out, ev)
+                out = self.caps.model.structured("rewrite_brief_parts", DRAFT_SYSTEM + REWRITE_NOTE, payload,
+                                                 draft_schema(parts), max_tokens=8000)
+                got = self._clean(out, ev, "revise", keys=parts, prior=prior)
                 for k, v in got.items():
                     v["revised"] = True
                     self.whole[k] = v
@@ -595,8 +621,10 @@ class PlannedBriefJob(BriefJob):
         for k in KEYS:
             if k not in values and filled(get(self.W, k)):
                 values[k] = get(self.W, k)
-        lib = [{"id": pid, "citation": p["citation"], "text": p["text"][:900]} for pid, p in list(self.lib.items())[:8]]
-        res = checkloop.run(self, values, self._said(), self._open_keys(), ev, lib, self.plan_out)
+        keys = self._open_keys()
+        res = checkloop.run(self, values, self._said(), keys, ev, self._library(12), self.plan_out,
+                            clean=lambda out, ks: self._clean(out, ev, "check", keys=ks, prior=self._prior(ks)),
+                            claims={k: v.get("claims") or [] for k, v in self.whole.items()})
         if res["rewritten"]:
             self.set_state(list(res["rewritten"]), "revising", "drafter")
         for k, v in res["rewritten"].items():
@@ -612,7 +640,8 @@ class PlannedBriefJob(BriefJob):
               "chain": {"verdict": "pass" if read["chain"] >= 0.5 else "fail",
                         "note": chain.get("issue") or ("jev reads it as one argument" if read["chain"] >= 0.5
                                                        else "jev doubts the argument holds")},
-              "claims": [], "notes": notes, "revise": [], "questions": res["questions"],
+              "claims": prov.code_verdicts(self.whole), "notes": notes, "revise": [],
+              "questions": res["questions"],
               "single_mindedness": {"verdict": "single", "split_into": []},
               "summary": (f"jev checked every part and flagged {sum(1 for x in res['before']['p'].values() if x >= 0.5)}"
                           f"; Jude sent {len(res['todo'])} back to Dara, who rewrote {len(res['rewritten'])}.")
@@ -644,46 +673,37 @@ class PlannedBriefJob(BriefJob):
         passages_out = {}
         claim_bad = {}
         for c in rv.get("claims") or []:
-            if c["verdict"] != "supported":
+            # Jude's verdicts that a claim is not fully supported; code's own are in the claims already
+            if c["verdict"] != "supported" and c.get("by") != "code":
                 claim_bad.setdefault(c["part"], []).append(c)
         assumed = []
+        client = self._client()
         for k, v in self.whole.items():
             if k == "open_questions":
                 continue
-            cites = list(v["cites"])
-            if v["basis"] == "client":
-                pts = [rsn.point(f"The client's words, written out: {_short(v['why'], 240)}", mat_ids)]
-                lvl, why = "high", "the client said it"
-            elif v["basis"] in ("research", "library"):
-                pts = [rsn.point(_short(v["why"], 260) or "Rests on what it cites", cites)]
-                bad = claim_bad.get(k)
-                lvl = "low" if bad else "medium"
-                why = ("Jude found a claim its fact does not fully support" if bad
-                       else "rests on the facts and passages it cites")
-            else:
+            if v["basis"] == "assumption":
                 assumed.append(k)
-                pts = [rsn.point(_short(v["why"], 260) or "A planner's proposal", [plan_id] if plan_id else mat_ids)]
-                lvl, why = "low", "a planner's assumption, for the agency to confirm with the client"
-            if v.get("builds_on_client"):
-                pts.append(rsn.point("It builds on what the client wrote", mat_ids))
-            pts = [p if p.get("cites") or not rsn.states_figure(p["point"]) else
-                   {**p, "cites": [plan_id] if plan_id else mat_ids} for p in pts]
-            attn = None
-            if claim_bad.get(k):
-                attn = "Check: " + " ".join(_short(f"{c['claim']} — {c['note']}", 200) for c in claim_bad[k][:2])
+            bad = claim_bad.get(k)
+            extra = ["Check: " + " ".join(_short(f"{c['claim']} — {c['note']}", 200) for c in bad[:2])] if bad else []
+            pts, cert, attn = prov.because(v, client, extra_attention=extra)
+            if bad and v["basis"] in ("research", "library"):
+                cert = rsn.certainty("low", "Jude found a claim its fact does not fully support")
+            cites = list(v["cites"])
             r = rsn.make(f"Wrote the {LABELS.get(k, k)}" + (" after Jude's note." if v.get("revised") else "."), pts,
-                         rsn.certainty(lvl, why), "the client says otherwise, the research changes, or a person edits it",
+                         cert, "the client says otherwise, the research changes, or a person edits it",
                          only_option="one brief, written as a whole", attention=attn)
             psg = [c for c in cites if c in self.lib]
             for c in psg:
                 passages_out[c] = self.lib[c]
+            claims = {"claims": v["claims"]} if v.get("claims") else {}
             if self.held.get(k):
                 d = self.dec(("propose", k, "whole"), "edit", "propose", [k], cites, r, "drafter",
-                             proposed_value=v["value"], basis=v["basis"])
+                             proposed_value=v["value"], basis=v["basis"], **claims)
                 self.proposals.append({"field": k, "value": v["value"], "decision": d["id"]})
                 self.set_state([k], "proposed", "judge")
             else:
-                d = self.dec(("draft", k, "whole"), "edit", "draft", [k], cites, r, "drafter", basis=v["basis"])
+                d = self.dec(("draft", k, "whole"), "edit", "draft", [k], cites, r, "drafter", basis=v["basis"],
+                             **claims)
                 put(patch, k, v["value"])
                 self.set_state([k], "done", "judge")
             self.writer[k] = d["id"]
@@ -755,7 +775,7 @@ class PlannedBriefJob(BriefJob):
                              "checks": [{"check": "whole_brief_review", "method": "llm",
                                          "status": "review" if n["severity"] == "fix" else "pass",
                                          "note": _short(n["note"], 300)} for n in ns[:3]]
-                             + [{"check": "claim_supported", "method": "llm",
+                             + [{"check": "claim_supported", "method": "auto" if c.get("by") == "code" else "llm",
                                  "status": "pass" if c["verdict"] == "supported" else "review",
                                  "note": _short(f"{c['claim']}: {c['note']}", 300)}
                                 for c in (rv.get("claims") or []) if c["part"] == k][:3]}

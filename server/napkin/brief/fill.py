@@ -66,7 +66,7 @@ def schema(keys: list[str]) -> dict:
 
 def research_view(clan: dict, data: dict) -> dict:
     """What the brief knows from research: pins, findings, and a research spin-off's
-    own audience, headline, brand and markets (frozen under `upstream`)."""
+    own audience, headline (with the ids it cites), brand and markets (frozen under `upstream`)."""
     pins = [{"id": f["id"], "key": f.get("key"), "value": f.get("value"), "unit": f.get("unit"),
              "market": f.get("market"), "as_of": f.get("as_of"), "entity": f.get("entity")}
             for f in ctx_facts(clan) if isinstance(f.get("id"), str)][:60]
@@ -86,6 +86,9 @@ def research_view(clan: dict, data: dict) -> dict:
             else None,
             "audience": aud,
             "headline": (rep.get("headline") or {}).get("text") if isinstance(rep.get("headline"), dict) else None,
+            # the ids the headline rests on, so a part built on it can cite them
+            "headline_cites": [c for c in (rep.get("headline") or {}).get("cites") or [] if isinstance(c, str)]
+            if isinstance(rep.get("headline"), dict) else None,
         }.items() if v})
     return {"facts": pins, "findings": findings, "research": up}
 

@@ -277,13 +277,16 @@ module "services" {
   # included, until the dogfood ends and it is purged (owner, 2026-10-05;
   # features/dogfood-telemetry.clan). Staging only.
   web_dogfood = true
-  # The middleware's run log beside the record, sizes and costs only
-  # (features/dogfood-log-quality.clan). Staging only.
-  middleware_runlog     = true
-  github_repository     = var.github_repository
-  github_repository_ids = var.github_repository_ids
-  certificate_arn       = var.certificate_arn
-  middleware_count      = var.middleware_count
+  # The middleware's run log beside the record (features/dogfood-log-quality.clan),
+  # with what every model call and search saw, so a brief can be traced claim
+  # by claim (owner, 2026-10-19; features/brief-fact-provenance.clan). Napkin
+  # accounts only read it, and the dogfood purge empties it. Staging only.
+  middleware_runlog        = true
+  middleware_runlog_bodies = true
+  github_repository        = var.github_repository
+  github_repository_ids    = var.github_repository_ids
+  certificate_arn          = var.certificate_arn
+  middleware_count         = var.middleware_count
   middleware_env = {
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
     # Until the middleware takes its scope from the signed-in person's agency,

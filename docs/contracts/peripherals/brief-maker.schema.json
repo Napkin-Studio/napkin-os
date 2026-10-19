@@ -23,6 +23,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["kind", "name", "sha256", "received_at", "licence"],
+        "if": { "required": ["text"] },
+        "then": { "properties": { "kind": { "const": "prompt" } } },
         "properties": {
           "kind": { "type": "string", "enum": ["prompt", "client_brief", "email", "deck", "image", "other"] },
           "name": { "type": "string" },
@@ -32,6 +34,11 @@
           "received_at": { "$ref": "#/definitions/datetime" },
           "licence": { "$ref": "#/definitions/licence" },
           "unread": { "type": "boolean", "enum": [true] },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "The prompt's own words (kind prompt only), at most 4000 characters, client-confidential like the material: so Sources can quote what was asked. Written by the middleware only when the document's schema takes it."
+          },
           "transcribed": {
             "type": "object", "additionalProperties": false, "required": ["model", "backend"],
             "properties": { "model": { "type": "string" }, "backend": { "type": "string" } }

@@ -479,9 +479,11 @@ class ModelPort:
                 usage.add(0, 0, model)
             else:
                 usage.add(*reply.usage, model, breakdown=reply.breakdown)
-            log.info("model %s wire=%s model=%s effort=%s schema=%s attempt=%d stop=%s %.1fs [%s]", purpose,
-                     self.wire.api, model, effort or "-", mode, attempt, reply.stop, time.monotonic() - t0,
-                     attribution)
+            bd = reply.breakdown or {}
+            log.info("model %s wire=%s model=%s effort=%s schema=%s attempt=%d stop=%s %.1fs in=%s out=%s "
+                     "cache_read=%d cache_write=%d [%s]", purpose, self.wire.api, model, effort or "-", mode, attempt,
+                     reply.stop, time.monotonic() - t0, (reply.usage or ("-", "-"))[0], (reply.usage or ("-", "-"))[1],
+                     int(bd.get("cache_read") or 0), int(bd.get("cache_write") or 0), attribution)
             emit("model", purpose=purpose, model=model, wire=self.wire.api, attempt=attempt, stop=reply.stop,
                  secs=round(time.monotonic() - t0, 2), input_tokens=(reply.usage or (None, None))[0],
                  output_tokens=(reply.usage or (None, None))[1], max_tokens=max_tokens or self.max_tokens,

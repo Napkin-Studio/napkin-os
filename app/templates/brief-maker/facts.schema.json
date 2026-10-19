@@ -215,6 +215,26 @@
               }
             }
           },
+          "kept_in_document": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "why",
+              "measure_proposed"
+            ],
+            "description": "A fact outside the measure list, kept in this document only: never written to the knowledge layers, so it has no origin or version. Harvest never files it; it may only resubmit it as a measure proposal.",
+            "properties": {
+              "why": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why it is not a layer row (the measure-list reason)."
+              },
+              "measure_proposed": {
+                "type": "boolean",
+                "description": "Whether its measure was proposed to the layers for a planner."
+              }
+            }
+          },
           "review": {
             "type": "object",
             "additionalProperties": false,
@@ -262,6 +282,18 @@
               "review"
             ],
             "description": "A value a person gave in this document (a correction): in no layer yet, so no origin or version; its review says who."
+          },
+          {
+            "required": [
+              "kept_in_document",
+              "layer"
+            ],
+            "not": {
+              "required": [
+                "origin"
+              ]
+            },
+            "description": "A fact the research found outside the measure list, kept in this document only (a document pin): no origin or version, the layer it would belong to, its sources with their quotes."
           }
         ]
       }

@@ -287,6 +287,22 @@ Every change must leave the document valid against the campaign schemas
   and the `decision` that pinned it. No two pins share entity + key + market
   with different values. A pin carries `quotes`: for each of its `src_`
   sources, the verbatim passage that source gave for the value.
+  *Changed 2026-10-19* (brief-fact-provenance): an entry is one of two kinds.
+  A **layer copy** carries `origin` and `version`, as above. A **document
+  pin** carries `kept_in_document: {why, measure_proposed}` instead, and no
+  `origin` or `version`: a fact research found outside the measure list,
+  kept so a brief can cite it, and never written to the layers. It still
+  names the `layer` it would belong to, its `src_` sources with their
+  `quotes`, its derived confidence, licence, `as_of`, `retrieved_at` and
+  `decision`. Its id is deterministic (`f_` + a seeded base32 of the
+  document, entity, key, market, value and `as_of`), so a rerun names the
+  same pin. One pin per entity + key + market still holds across both
+  kinds: an identity the document already pins is not pinned again, and a
+  different value for it is a contest note, never a second pin. Only Brief
+  Maker writes document pins (the Research Tool does not yet), and only when
+  the document's own embedded `facts.schema.json` allows the
+  `kept_in_document` branch; on an older brief the fact stays a run-log
+  note (§10.13 item 9, §10.16).
 - **`sources_append`** (optional): a record for every `src_` source a new pin
   or contest value cites — `id` and `uri` required, with its title, publisher,
   dates, tier, domain and licence — so a citation in the document leads to
@@ -871,6 +887,45 @@ own or carried — is fed to Loop 1, and no captured field cites a passage, a
 pin or a finding. The no-loss ledger measures
 fidelity to the client's own words, and injected text craters it.
 
+**The planned engine** (*added 2026-10-19*, brief-fact-provenance). The
+default flow (`NAPKIN_BRIEF_FLOW=planned`) runs `extract → context → draft →
+judge`: Sam plans the brief and runs the research it lacks, Dara drafts every
+part at once, and Jude (or jev's check loop) has the parts that need it
+rewritten. Capture stays RAG-free and research-free as above. What changes is
+where a part's value may come from: in the planned engine every part,
+captured-class parts included, may rest on the client, the research (`f_`,
+`fi_`), the library (`psg_`) or an assumption, and its decision says which.
+
+- **Basis** is `client | research | library | assumption`, and it is
+  derived from the part's claims (§10.7), never taken from the model's
+  label. A part is `client` only when a capture item mapped to its key
+  supports it: an item in `data.capture.items` (or this job's capture) whose
+  quote holds the part's figures (for an `assumption`-status item, which has
+  no quote, its value). The mapping is `working_brief()`'s for background,
+  audience, competitor context, the objectives, tone and world, mandatories
+  and budget and scope; the item's own name for `client` and
+  `project_name`; `key_message` for the SMP; `proof_points` for reasons to
+  believe; `strategic_angle` and `business_problem` for insight; `objective`
+  (same type) and `success_metrics` for desired response. A value the
+  working brief already holds is not, by itself, the client's words. A
+  `builds_on_client` point takes the same gate.
+- **Provenance is added after drafting, never by restricting it.** Dara's
+  draft call, its inputs and its schema are unchanged, and she is never asked
+  for claim bookkeeping. One cleaner (`server/napkin/brief/provenance.py`,
+  `clean_parts`) runs after every draft and every rewrite on every path:
+  draft, review revise, the jev check-loop rewrite, `fix_parts`
+  (§10.15) and the brief engine's rewrites (§10.14). It splits each value
+  into claims, ties each one to the facts, capture items and passages that
+  support it, recomputes every worked-out figure, and derives the basis and
+  certainty. **It never edits a value.** A claim nothing supports is kept,
+  marked `to_confirm`, and said in `attention`; it is never dropped or
+  reworded, and neither the literal-number rule (`rules/cite.clean_claim`)
+  nor any judge applies to a brief value.
+- **Facts outside the measure list** that the context stage's research
+  finds are kept as document pins (§3 `facts_append`, `kept_in_document`) in
+  this job's change, before the draft, so Dara can cite them and the cleaner
+  can tie to them. They are never written to the layers.
+
 **Omitted, not blank.** No patch sets a brief field to `""`, `[]`, `{}` or
 `null`, and no patch removes one. A field nothing supports is absent from the
 patch and named in its stage decision's `abstained`. A second draft never
@@ -907,6 +962,7 @@ materials:                        # as Contract 3 §1, plus two optional keys; m
     licence: client-confidential  # the strictest class until a human reclassifies it
     unread: true                  # optional: nothing readable arrived
     transcribed: { model: claude-opus-5, backend: "…" }   # optional: its text is a vision transcription
+    text: "…"                     # optional, kind prompt only: the prompt's words, at most 4000 chars
 capture:                          # Loop 1; replaced whole by each extract stage
   built_at: …
   handler: draft_brief@1.0
@@ -944,6 +1000,16 @@ passages:                         # every passage a decision cites; merges key-w
 scorecard `evidence` is a verbatim quote from a material (checked; one not
 found is dropped), absent for `missing`. The view renders `review` in place of
 the old context panel; the middleware no longer returns a `context`.
+
+*Changed 2026-10-19* (brief-fact-provenance; owner: store the prompt's words
+so Sources can quote them). A material of `kind: prompt` may carry `text`:
+the planner's typed ask, verbatim, at most 4000 characters. It is the
+client's words, so its licence is `client-confidential` like any material.
+An attachment's text is never stored here; it stays in the host's
+`.extracted/` sidecar. The middleware writes `text` only when the brief's
+embedded `schema.json` allows it (an older brief's `materials` refuse
+unknown keys, and pack would refuse the document); otherwise the prompt is
+indexed as before and Sources names it without quoting it.
 
 ### 10.5 Fields the middleware never writes
 
@@ -1026,7 +1092,7 @@ reply's.
 | one per captured field written | `edit`, action `extract` | `#K` | the `cap_` items and `mat_` it rests on |
 | the capture | `edit`, action `capture` | `#capture`, each new `#materials[mat_…]` | the `mat_` ids; flatten tail `material_read`, `unread`, `abstained` (keys not written) |
 | the scorecard, the review | `edit`, action `score` / `review` | `#review` | `mat_` ids / the verdict decision ids |
-| one per drafted field written | `edit`, action `draft` (`regenerate` for §10.10) | `#K` | its `psg_`, `cap_`, `f_`, `fi_` grounds |
+| one per drafted field written | `edit`, action `draft` (`regenerate` for §10.10) | `#K` | its `psg_`, `cap_`, `f_`, `fi_` grounds; in the planned engine every claim cite too, flatten `claims` |
 | one per judged field | `verdict`, `polarity: good \| bad`, `reason_code` when bad, `taxonomy_version: "reason-codes/1"` | `#K` | the edit decision it judges; loop-7 `psg_` |
 | a coherence failure | `verdict`, polarity `bad` | every field it names | their edit decisions |
 | a proposal | `edit`, action `propose`, flatten `proposed_value` | `#K` | as a draft or an extraction |
@@ -1072,6 +1138,67 @@ tasks: a `psg_` resolves when `data.passages` holds it, a `cap_` when
 status `proposed` or `verified` — a rejected finding never resolves, and a
 point citing one is dropped. Every passage a decision cites is therefore written
 into `passages` by the same change.
+
+**Claims** (*added 2026-10-19*, brief-fact-provenance). In the planned
+engine (§10.3), each part's writing decision (action `draft`, `propose`, or
+`regenerate`) carries a flatten-tail key `claims`: what each sentence-sized
+claim in the value rests on. The cleaner writes it; the model never does.
+
+```yaml
+claims:
+  - text: "The €8.99 'for life' offer was over in 10 days"   # verbatim in the value
+    kind: derived            # fact | derived | client | to_confirm
+    cites: [f_A, f_B]        # the pins, findings, passages or capture items it rests on
+    working: "15 Oct 2026 - 5 Oct 2026 = 10 days"   # derived only: how it was worked out
+    calc: { op: days_between, inputs: [...] }       # derived only, when one was parsed
+    check: recomputed        # derived and fact: recomputed | stated | false
+    by: match                # match (code, through the part's own cites) | model (tie_claims, checked in code) | net (code)
+    suggest: [f_C]           # to_confirm only: ids that may support it, never cited
+```
+
+- **`fact`**: the claim's figures are in a cited pin's quote (or a finding's
+  pins, or a passage). `check: false` when a figure is not (a stated €9.99
+  against a pin saying €8.99).
+- **`derived`**: the claim is worked out from its inputs, which may mix
+  `f_` and `cap_`. `working` shows how. The cleaner recomputes each `calc`
+  (`days_between`, `difference`, `sum`, `ratio`, `percent_change`,
+  `product`) from the full quotes of every source of each input, anchoring a
+  relative date ("from today") to the source's `published_at` when the
+  source dated the page itself. `recomputed`: the working holds. `stated`:
+  no calc could be parsed, or a date could not be anchored. `false`: it
+  recomputes to something else; the value is kept and `attention` says
+  "Check the working".
+- **`client`**: the claim is in a capture item's quote, citing its `cap_`
+  and `mat_`. Certainty comes from the capture (`capture_certainty`), never
+  a fixed `high`.
+- **`to_confirm`**: nothing the document holds supports it. The value is
+  unchanged; `attention` reads "To confirm: <claim>", certainty is `low`,
+  and `cites` is empty. A coincidental match (a pin pair whose sum is right
+  but whose entities the sentence does not name, or that the part did not
+  cite and `tie_claims` did not name) goes only in `suggest`.
+
+Rules:
+
+- Every claim cite is in the decision's `cites` and resolves in the document
+  after the change, so a pin marked wrong or replaced later reaches every
+  conclusion resting on it (the view flags them, and the next clean reties
+  them or marks them `to_confirm`).
+- A model-named tie (`by: model`) stands only when code confirms it: each
+  figure is in the named inputs, the calc recomputes, every named pin is
+  used in the calc, and each input's entity (or a brand its quote names) is
+  named in the sentence or is the brief's brand. Otherwise it is a
+  `suggest`.
+- Certainty for `fact` and `derived` claims is Contract 3 §6.1's: the
+  lowest confidence among the cited pins, one lower for a single pin or a
+  stale one. A recomputed working costs nothing more; `stated` is one step
+  lower; `false` is `low`. The part's certainty is its lowest claim's.
+- **Because and attention.** A client claim's point cites its `cap_` and
+  `mat_`. A fact or derived claim's point cites its pins; a derived one reads
+  "Worked out: <working>". An assumption's why and every `to_confirm`
+  sentence go to `attention`, never into an uncited point. No point borrows
+  the plan's or the materials' ids so that a figure seems cited.
+- `cites` stays flat and `basis` stays one word, so readers that know
+  neither claims nor kinds keep working.
 
 **What the host keeps.** The host reads a middleware decision whole into
 the chain: `id`, `kind` (`verdict` included), `agent`, `action`, `targets`,
@@ -1165,6 +1292,16 @@ field whose decisions are all in the chain.
   a draft, and the planner decides whether it replaces their words. A field
   that fails twice is not written; `result.summary` says why and the bad
   verdict is recorded.
+- *Changed 2026-10-19* (brief-fact-provenance; owner: no orphan route left).
+  On a brief drafted by the planned engine (§10.3), `regenerate_field` runs
+  as a one-part `fix_parts` (§10.15) with no verdict: the field is the only
+  part, `guidance` is the planner's steer, and the rewrite passes through
+  the provenance cleaner like every other path, so its decision carries
+  `claims` (§10.7) and its basis is derived from them. The task name, its
+  input and its `409` rules (§10.11) are unchanged; its replies carry
+  `fix_parts`' stages. The
+  field-by-field flow above still applies to a brief the planned engine did
+  not draft.
 
 ### 10.11 Errors and concurrency
 
@@ -1192,8 +1329,17 @@ field whose decisions are all in the chain.
   `{}` or `null`; every written field is named by a decision's `targets`;
   every decision carries well-formed reasoning; every `cap_` and `psg_` cite
   resolves in the data after the change.
-- Every captured field's decision cites only `cap_` and `mat_` ids; every
-  `fact` capture item's quote is a substring of its material's text.
+- In the field-by-field engine, every captured field's decision cites only
+  `cap_` and `mat_` ids. In the planned engine (§10.3) a captured-class part
+  may also cite `f_`, `fi_` and `psg_`; one whose basis is `client` cites a
+  capture item mapped to its key. Every `fact` capture item's quote is a
+  substring of its material's text.
+- *Added 2026-10-19.* In the planned engine: every claim cite (§10.7)
+  resolves in the document after the change and is in its decision's
+  `cites`; every figure, date, duration and price in a written value lies in
+  a claim (none is left untied and unmarked); no `because` point that states
+  a figure cites nothing; and every value equals what the drafter wrote (the
+  cleaner never edits one).
 - A key in `locked_fields` is in no patch; a field last written by a human
   decision is in no patch and is in `result.proposals`.
 - `regenerate_field` for an unknown or a locked field → `400`; a second
@@ -1275,6 +1421,33 @@ client's words, and each call carries only what it needs.
    (§10.14). The research's campaign fields and report reach no drafter
    (`docs/contracts/clan-extract.md` §11.5). The middleware's own drafters
    still get findings and pins only, as above.
+9. **Facts outside the measure list** (*added 2026-10-19*,
+   brief-fact-provenance). Research the context stage runs for a brief may
+   find facts the measure list does not name. They are kept as document pins
+   (§3 `facts_append`, `kept_in_document`, carrying the candidate's layer and
+   sources) in the brief only, after `merge_rules.merge` against the pins it
+   holds, so one identity holds one pin. They are listed first among the
+   held facts Dara sees, so the 400-fact cap never cuts them. They are never
+   written to the layers; the measure is still proposed. On a brief whose
+   embedded facts schema predates `kept_in_document` the fact stays a run-log
+   note, and a claim resting on it is `to_confirm` with the fact id in
+   `suggest`. The Research Tool keeps its gap notes as before.
+10. **Rewrites keep what was worked out** (*added 2026-10-19*). Every
+    rewrite (review revise, the jev check loop, `fix_parts`, the brief
+    engine's) carries the part's prior claims, `research_upstream` and the
+    draft's library, and asks Dara to keep a worked-out conclusion unless the
+    instruction says it is wrong. The rewrite passes through the cleaner like
+    the draft. A conclusion a rewrite lost is counted in the run log
+    (`derived_lost`), never restored by code.
+11. **Judges never strip a conclusion** (*added 2026-10-19*). Jude grades a
+    `derived` claim on its working and inputs, not on whether its number is
+    literally in a fact, and code sets a recomputed derived claim to
+    `supported` whatever Jude says. In jev mode the cleaner's `to_confirm`
+    and `check: false` claims are added to `rv.claims` as code-derived
+    `unsupported` verdicts, and `explain_flags` sees each claim with its
+    working. In both modes **no claim verdict adds a part to the revise list
+    or the check loop's todo** by itself, and a failed `tie_claims` call
+    rewrites nothing.
 
 When built, §10.12 gains, for a research-fed brief: no captured field's
 decision cites an `f_` or `fi_`; a drafted decision citing a `proposed`
@@ -1355,6 +1528,13 @@ applies. `regenerate_field` is unchanged either way. The adapter is
    what it has lands, and the rest is `absent` and named in `abstained`.
    The engine call runs inside the `extract` stage, so that stage's time
    limit (60 minutes) covers the engine's 900 s plus the fallback capture.
+7. **Rewrites are cleaned; the engine's draft is not** (*added
+   2026-10-19*, brief-fact-provenance). When the engine's draft is checked
+   and parts are rewritten (`EngineCheckedBriefJob`), each rewrite reads
+   `provenance.evidence` (the same facts the planned engine's Dara sees,
+   upstream headline cites included) and passes through `clean_parts`
+   (§10.3), so it carries `claims` (§10.7) and a derived basis. The engine's
+   own draft keeps item 2's cites and is not cleaned.
 
 ---
 
@@ -1392,6 +1572,60 @@ together, Jude checks them).
   jev, Jude's argument note is placed as a new bad verdict only while jev
   still reads the argument as broken.
 - `result.summary`: how many parts were fixed, proposed, and the new facts.
+- *Changed 2026-10-19* (brief-fact-provenance). Dara's rewrite passes
+  through `clean_parts` (§10.3), so each part's decision carries `claims`
+  (§10.7). The client's words come from `data.capture.items`, the capture
+  the document holds, so the client guard holds here as on the draft. The
+  fix note no longer asks for an unsupported claim to be left out, nor bans
+  a figure that is not literally in a cited fact: a worked-out figure is
+  tied by the cleaner, and one nothing supports is kept as `to_confirm`.
+
+### 10.16 The run log
+
+*Added 2026-10-19* (brief-fact-provenance). The dogfood run log
+(`server/napkin/runlog.py`, one JSON-lines file per job under
+`NAPKIN_RUNLOG_DIR`) is not part of the change, but what it may hold is a
+contract, because client material is confidential.
+
+- **Bodies.** With `NAPKIN_RUNLOG_BODIES` unset, a model call is logged by
+  its sizes only, a search by its ids and sizes, and every note this feature
+  adds or changes holds only ids, kinds and counts. A decision line carries
+  its agent, action, targets, certainty level, cite counts and claim kinds,
+  and its `decided`, `why_certain`, `because` and `attention` text only when
+  bodies are on. With `NAPKIN_RUNLOG_BODIES=1`, every model call's payload
+  and reply and every search's queries, URLs and returned page text (title,
+  `published_at` and text, capped per result) are logged too.
+- **Where bodies are on.** On staging, always (owner, 2026-10-19: staging
+  logs what the models and searches saw, so a brief can be traced claim by
+  claim). Staging's roster holds only Napkin accounts, its run log is read
+  only by them through `/api/dogfood/runlog`, and the dogfood purge empties
+  it. Production never sets it. Terraform holds both
+  (`infra/modules/services` variable `middleware_runlog_bodies`, `true` only
+  in `infra/envs/staging`; `stack.tftest.hcl` asserts it). Locally, set it
+  for test prompts only.
+- **`provenance`**, one note per clean (§10.3):
+
+  ```yaml
+  stage: draft | revise | check | fix | engine_checked
+  parts:
+    background:
+      basis_said: client          # what the model labelled it
+      basis: research             # what the claims derive
+      claims: [{ n: 1, kind: derived, rests_on: [f_A, f_B], by: match, check: recomputed, suggest: [] }]
+      dropped_cites: 0            # cites that did not resolve
+      to_confirm: 0
+      missed: 0                   # sentences the code net marked that tie_claims did not name
+      derived_lost: 0             # worked-out claims a rewrite lost
+  tie_call: ok | failed | skipped
+  ```
+
+  `rests_on` is `none` for a claim nothing supports. No claim text, value,
+  quote or working is written with bodies off.
+- **`unlisted_measures`** is `[{key, fact_id}]`: the measure research found
+  outside the list, and the id of the fact (the document pin that keeps it,
+  §10.13 item 9). Never its quote or URI with bodies off.
+- A research unit's model calls name their job in the CloudWatch line, and
+  the `napkin.model` line carries `cache_read` and `cache_write` tokens.
 
 ## 11. Client review — no middleware task
 

@@ -24,19 +24,28 @@ tasks:
       - shared/facts.yaml and shared/findings.yaml, per drafter, the selection of §10.13 only
       - "the context stage (Sam): the brief's pins and findings, a research spin-off's audience and headline,
         and the library, to plan the whole brief part by part; then the research the plan asks for, pinned
-        with its sources"
+        with its sources, and facts outside the measure list kept as document pins (kept_in_document), never
+        written to the layers"
       - "the draft stage (Dara): every part at once, from the plan, the client's words, the facts and the
         library, each part saying what it rests on (the client, the research, the library or an assumption)"
+      - "after every draft and rewrite, the provenance cleaner: each part's claims tied to the facts, capture
+        items and passages that support them, worked-out figures recomputed, the basis derived from the claims
+        (§10.3, §10.7)"
       - "the judge stage (Jude): jev flags the parts that need rewriting, Jude says why, Dara rewrites them"
     never:
-      - feeds a pin, finding, contest, report or upstream value to capture, or cites one from a captured field
+      - feeds a pin, finding, contest, report or upstream value to capture
+      - "labels a part the client's words without a capture item mapped to it, or cites a pin, finding or
+        passage from a captured field in the field-by-field engine (the planned engine may, §10.12)"
+      - edits, drops or rewords a value to make it fit its provenance (an unsupported claim is kept, to confirm)
+      - sends a part to rewrite only because a claim is worked out or to confirm
       - sends an item whose newest classify mark has model false to any model call (§10.13 item 6)
       - writes upstream or projection (host-written, read-only)
   regenerate_field:
     handler: regenerate_field@1
     job: long
     stages: [draft, judge]
-    reads: as draft_brief's draft stage, for the one field
+    reads: "as draft_brief's draft stage, for the one field; on a brief the planned engine drafted, as a
+      one-part fix_parts, through the provenance cleaner (§10.10)"
   fix_parts:
     handler: fix_parts@1
     job: long
@@ -46,11 +55,13 @@ tasks:
         words of people's bad verdicts on the same parts"
       - "the context stage (Sam): the brief as it stands, every fact it holds, and the research the fix
         lacks, as draft_brief's (capped at two runs), pinned with its sources"
-      - "the draft stage (Dara): the named parts together, from the problem and Sam's instructions"
+      - "the draft stage (Dara): the named parts together, from the problem and Sam's instructions, each part's
+        prior claims, then the provenance cleaner, with the client's words from data.capture.items"
       - "the judge stage (Jude): draft_brief's check, on the named parts only"
     never:
       - writes a part the verdict does not name (the open questions only gain the client's new ones)
       - writes a part a person wrote last (it proposes), or uses a fact a person marked wrong
+      - edits, drops or rewords a value to make it fit its provenance
       - writes upstream or projection (host-written, read-only)
 
 fields:                      # app key -> how it is filled; the handler reads this map

@@ -225,12 +225,13 @@ class Researcher:
         self.pairs = [(l, m) for l in lenses for m in markets if pairs is None or (l, m) in pairs]
         self.reuse_days, self.concurrency = reuse_days, concurrency
         self.seed = seed if seed is not None else base
-        subject = field_value(self.data, "brand")
-        self.subject = subject if isinstance(subject, dict) and subject.get("ref") else None
+        held_brand = field_value(self.data, "brand")
+        self.subject = held_brand if isinstance(held_brand, dict) and held_brand.get("ref") else None
         self.comps = [c for c in (field_value(self.data, "competitor_set") or [])
                       if isinstance(c, dict) and c.get("ref")]
-        # a caller without a campaign (Brief Maker's plan) names the brand and its competitors itself
-        if subject and not self.subject:
+        # a caller without a campaign (Brief Maker's plan) names the brand and its competitors itself (until
+        # 2026-10-19 the campaign's brand shadowed this argument, so a brief's own brand was never the subject)
+        if isinstance(subject, dict) and subject.get("ref") and not self.subject:
             self.subject = subject
         for c in competitors or []:
             if isinstance(c, dict) and c.get("ref") and c["ref"] not in {x["ref"] for x in self.comps}:
@@ -709,27 +710,51 @@ class Researcher:
         cands = [c for u in units for c in u["cands"]]
         return [c for c in cands if c.get("listed", True)], [c for c in cands if not c.get("listed", True)]
 
+    def propose(self, c: dict) -> tuple[bool, str]:
+        """Propose the measure of a fact outside the list, for a planner: (proposed, why it is not filed).
+        A proposal that fails is said in the reason; it never stops the job."""
+        try:
+            done = self.caps.layers.propose_measure(self._fact_body(c))
+            reason = c.get("unlisted_why") or UNLISTED
+            if not done:
+                reason = reason.replace(": proposed", ": kept here for a planner (these layers take no "
+                                                      "proposals)")
+            return bool(done), reason
+        except Exception as e:  # noqa: BLE001 - a proposal is a courtesy to the planner, never a halt
+            log.warning("research: proposing %s failed: %s", c["key"], e)
+            return False, (c.get("unlisted_why") or UNLISTED).replace(
+                ": proposed", f": kept here; the proposal failed ({str(e)[:120]})")
+
     def propose_unlisted(self, unlisted: list[dict]) -> list[dict]:
         """Each fact outside the measure list, kept as a note in the document (selection.gaps' shape, the fact
-        in its words), its measure proposed to the layers for a planner. A proposal that fails is said in the
-        note; it never stops the job."""
+        in its words), its measure proposed to the layers for a planner."""
         notes, seen = [], set()
         for c in unlisted:
-            try:
-                done = self.caps.layers.propose_measure(self._fact_body(c))
-                reason = c.get("unlisted_why") or UNLISTED
-                if not done:
-                    reason = reason.replace(": proposed", ": kept here for a planner (these layers take no "
-                                                          "proposals)")
-            except Exception as e:  # noqa: BLE001 - a proposal is a courtesy to the planner, never a halt
-                log.warning("research: proposing %s failed: %s", c["key"], e)
-                reason = (c.get("unlisted_why") or UNLISTED).replace(
-                    ": proposed", f": kept here; the proposal failed ({str(e)[:120]})")
-            n = self._fact_note(c, reason)
+            n = self._fact_note(c, self.propose(c)[1])
             if n["id"] not in seen:
                 seen.add(n["id"])
                 notes.append(n)
         return notes
+
+    def doc_pin(self, c: dict, did: str, t_now: str, why: str, proposed: bool) -> dict:
+        """A fact outside the measure list, kept as a pin in this document only (Brief Maker): never a layer
+        row, so no origin and no version; the layer it would belong to, its sources and their quotes. Its id
+        is seeded by the document and the fact, so a rerun finds the pin it already holds."""
+        recs = c.get("records") or []
+        lic = max((r.get("licence", "open") for r in recs), key=LICENCE_RANK.index, default="open")
+        f = {"id": uid("f_", self.doc, c["entity"], c["key"], c.get("market"), repr(c["value"]), c["as_of"]),
+             "entity": c["entity"], "key": c["key"], "value": c["value"], "unit": c["unit"], "as_of": c["as_of"],
+             "retrieved_at": c["retrieved_at"], "sources": list(c["sources"]), "confidence": fact_confidence(recs),
+             "licence": lic, "status": "active", "decision": did, "pinned_at": t_now,
+             "pin_reason": "kept in this brief only", "layer": c["layer"], "method": c.get("method") or "report",
+             "kept_in_document": {"why": why, "measure_proposed": bool(proposed)}}
+        quotes = {s: q for s, q in (c.get("quotes") or {}).items()
+                  if s in f["sources"] and isinstance(q, str) and q.strip()}
+        if quotes:
+            f["quotes"] = quotes
+        if c.get("market"):
+            f["market"] = c["market"]
+        return f
 
     def _write_or_note(self, c: dict, dec: dict, status: str, notes: list) -> dict | None:
         """`_write`, or None with the fact kept as a note when the layers refuse it."""

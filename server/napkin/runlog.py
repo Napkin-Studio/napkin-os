@@ -6,9 +6,11 @@ One JSON-lines file per job, under NAPKIN_RUNLOG_DIR/<yyyy-mm-dd>/<task>-<job>.j
   job_start   task, handler, doc, the stages it will run, the model configured
   stage_start / stage_end   a stage, its time, and what it spent (calls, tokens, cost, searches)
   model       one structured call: stage, purpose, model, attempts, seconds, tokens, cost, ok or the error
-  research    one web search: stage, lens, market, query, sources found, seconds, cost (as reported)
+  research    one web search: stage, lens, market, query, sources found, their urls, seconds, cost (as
+              reported); with bodies on, each result's url, title, published date and text (capped)
   retrieval   one library lookup: stage, purpose, k, passages found, seconds
-  decision    one decision the job wrote: agent, action, targets, what was decided, certainty, attention
+  decision    one decision the job wrote: agent, action, targets, certainty level, cite count, basis and its
+              claims' kinds; with bodies on, what was decided, why that certainty, its reasons and attention
   gap         a stage the job went on without, and why
   question / answer   what the job asked a person, and what came back
   note        anything else a stage wants on record (a plan, a research ask, a check's outcome)
@@ -19,8 +21,12 @@ Costs: a model call's cost is estimated from its tokens and the price table belo
 it); `cost_src` says "est". A web search's cost is the research service's own report when it
 gives one ("reported"), else unknown (null).
 
-What a call sent and got back is NOT written unless NAPKIN_RUNLOG_BODIES=1: client material is
-confidential, so by default a call is logged by its sizes only. Turn bodies on for test prompts.
+What a call sent and got back, what a search returned and a decision's words are NOT written unless
+NAPKIN_RUNLOG_BODIES=1: client material is confidential, so by default a call is logged by its sizes,
+a search by its urls and counts, a decision by its ids, kinds and counts. The policy (owner, 2026-10-19):
+bodies are on for staging only, where NAPKIN_RUNLOG_BODIES=1 is set on the middleware's task, the run
+log is readable only by Napkin accounts (/api/dogfood/runlog) and the dogfood purge empties it; never in
+production. Locally, turn bodies on for test prompts.
 
 `python -m napkin.runlog [file | dir | --latest]` prints a run as tables.
 """
@@ -43,6 +49,7 @@ PRICES = {"claude-opus-4-1": (15.0, 75.0), "claude-opus-4-0": (15.0, 75.0), "cla
 CACHE_READ, CACHE_WRITE = 0.1, 1.25
 
 _cfg = {"dir": None, "bodies": False}
+RESULT_CHARS = 4000  # of each search result's text, with bodies on
 
 
 def configure(directory: str | None, bodies: bool = False, prices: str | None = None):
@@ -182,7 +189,9 @@ class RunLog:
                     payload=payload if _cfg["bodies"] else None, reply=reply if _cfg["bodies"] else None)
 
     def research(self, *, lens, market, query, secs, sources=None, cost=None, cached=None, error=None,
-                 queries=None, urls=None):
+                 queries=None, urls=None, results=None):
+        """`results`: what the search returned, [{url, title, published_at, text}]; with bodies off only
+        each result's size is written (its url is in `urls`)."""
         with self._lock:
             t = self._tot()
             t["searches"] += 1
@@ -191,7 +200,11 @@ class RunLog:
             t["errors"] += 1 if error else 0
         self._write("research", stage=self.stage_name, lens=lens, market=market, query=query, secs=round(secs, 2),
                     sources=sources, urls=urls, cost=cost, cost_src="reported" if cost is not None else None,
-                    cached=cached, error=error, queries=queries)
+                    cached=cached, error=error, queries=queries,
+                    results=[{**{k: r.get(k) for k in ("url", "title", "published_at")},
+                              "text": str(r.get("text") or "")[:RESULT_CHARS]} for r in results or []]
+                    if _cfg["bodies"] and results else None,
+                    result_chars=[len(str(r.get("text") or "")) for r in results] if results is not None else None)
 
     def jev(self, *, check, questions, secs, state_chars, cost, error=None):
         with self._lock:
@@ -216,13 +229,17 @@ class RunLog:
             cert = r.get("certainty") or {}
             with self._lock:
                 self._tot(stage)["decisions"] += 1
+            body = _cfg["bodies"]
             self._write("decision", stage=stage or self.stage_name, id=d.get("id"), agent=d.get("agent"),
                         kind=d.get("kind"), action=d.get("action"),
                         targets=[str(t).split("#", 1)[-1] for t in d.get("targets") or []],
-                        decided=r.get("decided"), certainty=cert.get("level"), why_certain=cert.get("why"),
-                        because=[p.get("point") for p in r.get("because") or [] if isinstance(p, dict)][:8],
-                        attention=r.get("attention"), polarity=d.get("polarity"), basis=d.get("basis"),
-                        cites=len(d.get("cites") or []))
+                        decided=r.get("decided") if body else None, certainty=cert.get("level"),
+                        why_certain=cert.get("why") if body else None,
+                        because=[p.get("point") for p in r.get("because") or [] if isinstance(p, dict)][:8]
+                        if body else None, points=len(r.get("because") or []),
+                        attention=r.get("attention") if body else None, flagged=bool(r.get("attention")) or None,
+                        polarity=d.get("polarity"), basis=d.get("basis"), cites=len(d.get("cites") or []),
+                        claims=[c.get("kind") for c in d.get("claims") or [] if isinstance(c, dict)] or None)
 
     def gap(self, stage, reason, detail):
         self._write("gap", stage=stage, reason=reason, detail=detail)
@@ -234,7 +251,7 @@ class RunLog:
         self._write("answer", stage=stage, answer=answer if _cfg["bodies"] else "(answered)")
 
     def note(self, what, **kw):
-        self._write("note", stage=self.stage_name, what=what, **kw)
+        self._write("note", **{"stage": self.stage_name, "what": what, **kw})  # a note may name its own stage
 
 
 NULL = RunLog(None, "-", "-")
