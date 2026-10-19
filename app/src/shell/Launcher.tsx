@@ -11,6 +11,8 @@ import { AgentFigure } from '../studio/AgentFigure'
 import { AGENTS, type AgentKey } from '../studio/model'
 import type { InstalledApp } from './types'
 import { docTitle } from './docTitle'
+import { upcoming } from './comingSoon'
+import { SoonCard } from './SoonCard'
 import { signedInUser } from '../host/http'
 import { signOut } from './signOut'
 import '../components/chrome.css'
@@ -279,6 +281,7 @@ export default function Launcher({ installed, loading, onLaunchApp, onOpenFile, 
               </button>
             )
           })}
+          {installed.length > 0 && upcoming(installed).map(t => <SoonCard key={t.app_id} teaser={t} />)}
         </div>
       )}
 

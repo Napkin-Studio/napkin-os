@@ -89,6 +89,11 @@
 .ln-app-go span { display: inline-block; transition: transform var(--dur) var(--ease); }
 .ln-app:hover .ln-app-go span { transform: translateX(3px); }
 
+/* A tool on its way (comingSoon.tsx): the same card, opening nothing. */
+.ln-app-soon { cursor: default; }
+.ln-app-soon:hover { border-color: var(--line); box-shadow: none; transform: none; }
+.ln-app-soon .ln-app-go { color: var(--ink3); }
+
 /* A tool Napkin has just added, until it is first opened here. */
 .ln-app-new::after {
   content: 'New';
