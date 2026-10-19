@@ -90,7 +90,7 @@
       "kind": "verified_finding",
       "reason": "Matches what we heard in both Dublin groups. Written to the brand layer as a synthesis fact and pinned.",
       "role": "person",
-      "statement": "verified the finding fi_01JA0F1A (\"For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.\"), now fact f_01JA0C9V4X",
+      "statement": "verified the finding fi_01JA0F1A (\"For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.\")",
       "status": "current",
       "who": "Aoife"
     },
@@ -108,14 +108,12 @@
   ],
   "facts": [
     {
-      "entity": "brand/lunasa (IE)",
-      "id": "f_01JA0C9V4X",
-      "key": "insight.nolo_occasion_is_social",
-      "market": "IE",
-      "scope": "brand",
+      "entity": "category/drinks.no_low_alcohol",
+      "id": "fi_01JA0F1A",
+      "key": "finding.consumer_culture",
+      "scope": "research",
       "status": "current",
-      "value": "For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.",
-      "version": 1
+      "value": "For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters."
     },
     {
       "as_of": "2026-05-31",
@@ -219,6 +217,17 @@
       ],
       "status": "current",
       "value": "drinks.cider",
+      "version": 1
+    },
+    {
+      "as_of": "2026-09-22",
+      "entity": "brand/lunasa (IE)",
+      "id": "f_01JA0C9V4X",
+      "key": "insight.nolo_occasion_is_social",
+      "market": "IE",
+      "scope": "brand",
+      "status": "current",
+      "value": "For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.",
       "version": 1
     },
     {
