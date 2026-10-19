@@ -778,24 +778,28 @@ fn research_to_deck_directly_holds_the_research_alone() {
     assert!(validate(&deck).is_valid(), "{}", validate(&deck).display());
 }
 
-/// Runs the real packer (`examples/make_deck_maker.rs`, built by `cargo test`)
+/// Runs the real packer (`examples/make_deck_maker.rs`, through `cargo run`, which
+/// builds it when it is not built yet: CI starts from an empty target directory)
 /// and checks the packed template's spin-off contract and version, so a
 /// regression in the packer is caught here and not only in a hand-built twin.
 #[test]
 fn the_packed_deck_maker_declares_its_spinoff_contract() {
-    let exe = std::env::current_exe().unwrap();
-    let bin = exe
-        .parent()
-        .and_then(|d| d.parent())
-        .unwrap()
-        .join("examples")
-        .join(format!("make_deck_maker{}", std::env::consts::EXE_SUFFIX));
-    assert!(bin.exists(), "example not built: {}", bin.display());
     let out = std::env::temp_dir().join(format!("deck-maker-pack-{}", std::process::id()));
     std::fs::create_dir_all(&out).unwrap();
     let app_path = out.join("deck-maker.app.clan");
     let example_path = out.join("deck-maker.example.clan");
-    let run = std::process::Command::new(&bin)
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let run = std::process::Command::new(cargo)
+        .args([
+            "run",
+            "-q",
+            "--locked",
+            "-p",
+            "clan-sdk",
+            "--example",
+            "make_deck_maker",
+            "--",
+        ])
         .arg(&app_path)
         .arg(&example_path)
         .output()
