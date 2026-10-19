@@ -1165,9 +1165,11 @@ fn update_findings(
 
         let key = finding_read_key(id);
         match read.and_then(|r| r.get(&key)) {
-            None => return Err(HostError::bad_request(format!(
+            None => {
+                return Err(HostError::bad_request(format!(
                 "findings_update changes {id}, but `read` does not say what the job read of {key}"
-            ))),
+            )))
+            }
             Some(was) if *was != current => {
                 return Err(HostError::conflict(format!(
                     "finding {id} changed since the job read it; rerun"
