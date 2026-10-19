@@ -53,8 +53,8 @@ import { PromptStart } from '../ui/prompt/PromptStart'
 import { moveOnStoryboard, useShotSort } from './shotDrag'
 import { ShotSort } from './ShotSort'
 import { lastWorkedModel } from '../jobs/follow'
-import { frameMarks, joinBefore, joinChoices, missedGuide, setJoin, videoJoin, videoModel, videoPlan, type FrameMark } from '../jobs/runView'
-import type { PlanModel } from '../jobs/runs'
+import { frameMarks, joinHere, missedGuide, splitHere, videoJoin, videoModel, videoPlan, videoShots, videoUnits, type FrameMark } from '../jobs/runView'
+import { canJoin } from '../jobs/runs'
 import { videoOfStoryboard } from '../model/selectors'
 
 const RATIOS: Ratio[] = ['9:16', '1:1', '16:9']
@@ -90,7 +90,24 @@ export function Storyboard() {
   const linked = videoOfStoryboard(doc, sb?.id)
   const film = videoJoin(doc, linked?.id, config) === 'film'
   const vModel = film ? videoModel(doc, linked?.id, config, lastWorkedModel(doc, 'clip', config)) : null
-  const marks = vModel ? frameMarks(doc, linked?.id, videoPlan(doc, linked?.id, vModel)) : {}
+  const vPlan = vModel ? videoPlan(doc, linked?.id, vModel) : undefined
+  const marks = vPlan ? frameMarks(doc, linked?.id, vPlan) : {}
+  // The same strips as the Video timeline, as a light bracket under the cards that will be one video.
+  const units = vPlan && linked ? videoUnits(doc, ui, linked.id, vPlan) : []
+  const facts = vPlan && linked ? videoShots(doc, linked.id) : []
+  const stripPlace = (i: number): StripPlace | undefined => {
+    const u = units.find((x) => x.kind === 'strip' && x.shotIds.includes(shots[i]?.id))
+    if (!u || u.kind !== 'strip') return undefined
+    const k = u.shotIds.indexOf(shots[i].id)
+    return k === 0 ? 'first' : k === u.shotIds.length - 1 ? 'last' : 'mid'
+  }
+  // The handle before card i: ✂ inside a strip, 🔗 where two neighbours may be one video.
+  const handleAt = (i: number): 'split' | 'join' | undefined => {
+    if (!vPlan || i <= 0) return undefined
+    const here = stripPlace(i)
+    if (here === 'mid' || here === 'last') return 'split'
+    return facts[i - 1] && facts[i] && canJoin(facts[i - 1], facts[i]) ? 'join' : undefined
+  }
   const mainSb = mainStoryboard(doc)?.id
   const planJob = jobAt(doc, ui, (c) => c.for === 'shot_list' && (c.storyboardId ?? mainSb) === sb?.id)
   const planning = isRunning(doc, planJob)
@@ -233,7 +250,7 @@ export function Storyboard() {
                 if (yes) void removeNow(s.id) // Undo puts it back
               }}
               ask={shotAsks.get(s.id)} onAsk={(a, option) => void answerAsk(a, s.id, option)}
-              mark={marks[s.id]} film={film && linked ? { videoId: linked.id, model: vModel } : undefined} />
+              mark={marks[s.id]} film={film && linked ? { videoId: linked.id, strip: stripPlace(i), handle: handleAt(i) } : undefined} />
           ))}
           {shots.length > 0 && (
             <button className="sb-addtile" disabled={shots.length >= MAX_SHOTS} onClick={() => void attempt(() => updateDoc(docStore, (d) => { addShot(d) }, 'add shot'))}>+ Add a shot at the end</button>
@@ -326,7 +343,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   confirming: boolean; onConfirm: (yes: boolean) => void
   ask?: Ask; onAsk: (a: Ask, option: 'keep' | 'remove') => void
   /** Connected video: the frame's pin or guide, and the video whose joins the gap sets. */
-  mark?: FrameMark; film?: { videoId: string; model: PlanModel | null }
+  mark?: FrameMark; film?: { videoId: string; strip?: StripPlace; handle?: 'split' | 'join' }
 }) {
   const doc = useDoc()
   const ui = useUi()
@@ -357,9 +374,6 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
   const menuRef = useRef<HTMLButtonElement>(null)
   const [gap, setGap] = useState(false)
   const gapRef = useRef<HTMLButtonElement>(null)
-  // The join that carries this shot on from the one before, where the model allows one.
-  const flows = film ? joinChoices(film.model).find((c) => c.kind === 'continue') : undefined
-  const flowsNow = !!film && joinBefore(doc, film.videoId, shot.id)?.kind === 'continue'
   const [keepVideo, setKeepVideo] = useState(false)
   const project = useProjectName()
   const shown = current ? mediaItem(doc, project, current.asset, 'frame') : undefined
@@ -389,7 +403,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
     )
   }
   return (
-    <article ref={setNodeRef} className={`sb-card ${showChange || changing ? 'on' : ''} ${lifted ? 'slot' : ''} ${line ? `drop-${line}` : ''} ${dragging ? 'sorting' : ''}`}
+    <article ref={setNodeRef} className={`sb-card ${showChange || changing ? 'on' : ''} ${lifted ? 'slot' : ''} ${line ? `drop-${line}` : ''} ${dragging ? 'sorting' : ''} ${film?.strip ? `instrip ${film.strip}` : ''}`}
       data-shot-card={shot.id} aria-label={`Shot ${index + 1}`} tabIndex={0}
       onKeyDown={(e) => {
         // Delete or Backspace on the focused card (not in its fields) deletes the shot.
@@ -399,6 +413,14 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
         }
       }}>
       {line && <span className={`sb-dropline ${line}`} aria-hidden="true"><span>Shot {moving} moves here</span></span>}
+      {film?.strip && <span className="sb-bracket" aria-hidden="true">{film.strip === 'first' && <span>One video</span>}</span>}
+      {film?.handle && (
+        <button type="button" className={`sb-joinh ${film.handle}`} aria-label={film.handle === 'split' ? `Split here, between shot ${index} and shot ${index + 1}` : `Join shot ${index} and shot ${index + 1} into one video`}
+          title={film.handle === 'split' ? 'Split here' : 'Join into one video'}
+          onClick={() => void attempt(() => (film.handle === 'split' ? splitHere : joinHere)(docStore, film.videoId, shot.id))}>
+          <span aria-hidden="true">{film.handle === 'split' ? '✂' : '🔗'}</span>
+        </button>
+      )}
       {index > 0 && (
         <>
           <button ref={gapRef} type="button" className="sb-gap" aria-label={`Insert between ${index} and ${index + 1}`} aria-haspopup="menu" aria-expanded={gap} onClick={() => setGap(!gap)}>+</button>
@@ -407,17 +429,9 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
             <button type="button" role="menuitem" className="pt-menurow" disabled={!store || !prev} onClick={() => { setGap(false); if (store && prev) void attempt(() => insertShot(store, { afterShotId: prev.id })) }}>
               <span className="sb-ins-blank" aria-hidden="true" /><span><b>Empty shot</b><br /><span className="faint">A blank card you fill in</span></span>
             </button>
-            {flows ? (
-              // Connected video: the Bridge became the join itself (features/connected-video.clan).
-              <button type="button" role="menuitemcheckbox" aria-checked={flowsNow} className="pt-menurow" disabled={!film}
-                onClick={() => { setGap(false); if (film) void attempt(() => setJoin(docStore, film.videoId, shot.id, flowsNow ? 'cut' : 'continue', flowsNow ? 'Cut' : flows.label)) }}>
-                <AgentFigure agent="dex" size={22} decorative /><span><b>{flows.label}</b><br /><span className="faint">{flowsNow ? `On: ${index} carries on into ${index + 1}. Tap for a cut.` : `${index} carries on into ${index + 1}`}</span></span>
-              </button>
-            ) : (
-              <button type="button" role="menuitem" className="pt-menurow" disabled title="Not in this version yet">
-                <AgentFigure agent="dex" size={22} decorative /><span><b>Bridge</b><br /><span className="faint">Dex draws a shot that links {index} and {index + 1} · not in this version yet</span></span>
-              </button>
-            )}
+            <button type="button" role="menuitem" className="pt-menurow" disabled title="Not in this version yet">
+              <AgentFigure agent="dex" size={22} decorative /><span><b>Bridge</b><br /><span className="faint">Dex draws a shot that links {index} and {index + 1} · not in this version yet</span></span>
+            </button>
           </Float>
         </>
       )}
@@ -468,7 +482,7 @@ function ShotCard({ shot, index, prev, store, mentions, onOpen, onDraw, onScript
           <span>The video went its own way here.</span>
           <span className="spacer" />
           <button className="btn xs" onClick={() => setKeepVideo(true)}>Keep the video</button>
-          <button className="btn xs ghost" onClick={() => void attempt(() => setJoin(docStore, film.videoId, shot.id, 'cut', 'Cut'))}>Make it match</button>
+          <button className="btn xs ghost" onClick={() => void attempt(() => splitHere(docStore, film.videoId, shot.id))}>Make it match</button>
           <button className="btn xs ghost" disabled title="Not in this version yet">Use the video's frame</button>
         </div>
       )}
@@ -567,3 +581,6 @@ function FrameMarkTag({ mark }: { mark: FrameMark }) {
     )
     : <span className="sb-mark guide" title="Inside one take: the video follows this frame as a guide">guide</span>
 }
+
+/** Where a card sits in the bracket of shots that will be one video. */
+type StripPlace = 'first' | 'mid' | 'last'

@@ -1,7 +1,8 @@
-// What the editors show of runs and joins (features/connected-video.clan, design 4.5 and 4.8): the join
-// between two shots in words, the joins a model allows, the run bands on the Video timeline, a run's
-// progress, and the pin or "guide" on each storyboard frame. Pure reads, except setJoin and setVideoJoin
-// (a person's change, one History entry each). No mode name and no price is ever shown.
+// What the editors show of runs (features/connected-video.clan; the owner's "Strips + select", 2026-10-19):
+// the shots that will be one video sit together as a strip, the others as their own cards. A person splits
+// a strip (✂), joins neighbours (🔗) or selects shots and makes them one video or separate; each writes the
+// joins (seam cut or continue, by human) and one History entry. Also each run's progress and the pin or
+// "guide" on each storyboard frame. No mode name and no price is ever shown.
 
 import { newUlidId, rankBetween } from '../../../clan-store/src'
 import type { Config, Id, ModelChoice, ProductionDocument, RunMode, Seam, SeamKind, VideoJoin } from '../contracts/types'
@@ -9,12 +10,11 @@ import type { UiState } from '../doc/ui'
 import { updateDoc } from '../doc/store'
 import type { DocumentStore } from '../doc/types'
 import { currentTake, edlItemFor, edlOf, shotNumber, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
-import { purposeOf } from '../model/purpose'
 import { videoQuality } from './clips'
 import { selectedFrame } from './frames'
-import { joinKind, planShot } from './joins'
-import { canLand, canTake, planModel, planRuns, runOf, shotsWords, type PlanModel, type RunPlan } from './runs'
-import { isMoving, isRunning, jobAt } from './select'
+import { joinKind, planShot, type PlanShot } from './joins'
+import { isOneTake, isTakeRun, joinBlock, planModel, planRuns, shotsWords, speakerModel, takeModelFor, type PlannedRun, type PlanModel, type RunPlan } from './runs'
+import { isMoving, jobAt } from './select'
 
 /** How a video's shots join, when connected video is on (null: off, today's per-shot path). */
 export function videoJoin(d: ProductionDocument, videoId: Id | undefined, config: Pick<Config, 'flags'>): VideoJoin | null {
@@ -22,24 +22,20 @@ export function videoJoin(d: ProductionDocument, videoId: Id | undefined, config
   return (videoId && d.videos[videoId]?.join) || 'film'
 }
 
-/** The words for "How shots join". */
-export const JOIN_NAMES: Record<VideoJoin, string> = { film: 'As one film', shots: 'Shot by shot' }
-
-/** A person picks how the video's shots join (one History entry). */
-export function setVideoJoin(store: DocumentStore, videoId: Id, join: VideoJoin) {
-  return updateDoc(store, (d) => { const v = d.videos[videoId]; if (v) v.join = join }, `set how shots join to ${JOIN_NAMES[join]}`)
-}
-
 /** The model the video's clips would be made on now, as the planner reads it. */
 export function videoModel(d: ProductionDocument, videoId: Id | undefined, config: Config, choice?: ModelChoice): PlanModel | null {
   return planModel(config, choice, videoQuality(d, videoId))
 }
 
-/** The live plan for all of a video's shots (as if none were made yet): what Make clips would do. */
-export function videoPlan(d: ProductionDocument, videoId: Id | undefined, model: PlanModel): RunPlan {
+/** The planner's view of a video's shots, in order. */
+export function videoShots(d: ProductionDocument, videoId: Id | undefined): PlanShot[] {
   const sb = storyboardOfVideo(d, videoId)
-  const shots = sb ? shotsOf(d, sb.id) : []
-  return planRuns(shots.map((s) => planShot(d, s, { hasFrame: !!selectedFrame(d, s.id), videoId })), model, { join: 'film' })
+  return (sb ? shotsOf(d, sb.id) : []).map((s) => planShot(d, s, { hasFrame: !!selectedFrame(d, s.id), videoId }))
+}
+
+/** The live plan for all of a video's shots (as if none were made yet): what Make all would do. */
+export function videoPlan(d: ProductionDocument, videoId: Id | undefined, model: PlanModel): RunPlan {
+  return planRuns(videoShots(d, videoId), model, { join: 'film', speaker: speakerModel(model), takeModel: takeModelFor(model) })
 }
 
 /** The join into a shot now: the stored person's join, else Dex's from the shots as they are now. */
@@ -53,51 +49,12 @@ export function joinBefore(d: ProductionDocument, videoId: Id | undefined, shotI
   return joinKind(fact(shots[i - 1].id), fact(shotId))
 }
 
-/** The two shots sit in one take: landed from the same take job, or planned into one take. */
-export function sameTake(d: ProductionDocument, videoId: Id | undefined, a: Id, b: Id, plan?: RunPlan): boolean {
-  const ta = currentTake(d, a, videoId)
-  const tb = currentTake(d, b, videoId)
-  if (ta?.segments[0] && tb?.segments[0]) return ta.job_id === tb.job_id
-  if (ta || tb) return false
-  const run = plan?.runs.find((r) => r.shotIds.includes(a))
-  return !!run && (run.mode === 'take' || run.mode === 'take_refs') && run.shotIds.includes(b)
-}
-
-/** A join in words, as the gap chip says it. */
-export function joinLabel(kind: SeamKind, opts: { inTake: boolean; model: PlanModel | null }): string {
-  if (opts.inTake) return 'One take'
-  switch (kind) {
-    case 'continue':
-      return opts.model && canLand(opts.model) ? 'Lands on the next frame' : 'Cut'
-    case 'dissolve':
-      return 'Dissolve'
-    case 'dip':
-      return 'Dip'
-    default:
-      // A match is a plain cut for now (design open question 6).
-      return 'Cut'
-  }
-}
-
-/** The joins a person may pick on this model, in words: carrying on only where the model can make a take
- *  or land on a frame. */
-export function joinChoices(model: PlanModel | null): { kind: SeamKind; label: string; hint: string }[] {
-  const out: { kind: SeamKind; label: string; hint: string }[] = []
-  if (model && canTake(model)) out.push({ kind: 'continue', label: 'One take', hint: 'Made together in one go' })
-  else if (model && canLand(model)) out.push({ kind: 'continue', label: 'Lands on the next frame', hint: 'The clip ends on the next frame' })
-  out.push({ kind: 'cut', label: 'Cut', hint: 'A clean cut to the next shot' })
-  out.push({ kind: 'dissolve', label: 'Dissolve', hint: 'One shot fades into the next' })
-  out.push({ kind: 'dip', label: 'Dip', hint: 'Out to black, then in' })
-  return out
-}
-
-/** A person sets the join into `shotId` (seam.by human; one History entry, one undo step). The shot's cut
- *  item is made when it has none yet. */
-export function setJoin(store: DocumentStore, videoId: Id, shotId: Id, kind: SeamKind, label: string) {
-  const d = store.get()
-  return updateDoc(store, (x) => {
-    const v = x.videos[videoId]
-    if (!v || !x.shots[shotId]) return
+/** Write a person's join into each shot of `joins` (the shot's cut item is made when it has none yet). */
+function writeJoins(x: ProductionDocument, videoId: Id, joins: [Id, SeamKind][]) {
+  const v = x.videos[videoId]
+  if (!v) return
+  for (const [shotId, kind] of joins) {
+    if (!x.shots[shotId]) continue
     const seam: Seam = { kind, by: 'human' }
     const item = edlItemFor(x, shotId, videoId)
     if (item) v.edl[item.id].seam = seam
@@ -105,35 +62,95 @@ export function setJoin(store: DocumentStore, videoId: Id, shotId: Id, kind: Sea
       const last = edlOf(x, videoId).at(-1)
       v.edl[newUlidId('edl')] = { rank: rankBetween(last?.rank ?? null, null), kind: 'shot', shot_id: shotId, seam }
     }
-  }, `set the join into shot ${shotNumber(d, shotId)} to ${label}`)
+  }
 }
 
-export interface Band { shotIds: Id[]; planned: boolean; jobId?: Id }
+/** ✂ Split here: the video before `shotId` ends there (a cut, by a person; one History entry, one undo step). */
+export function splitHere(store: DocumentStore, videoId: Id, shotId: Id) {
+  const n = shotNumber(store.get(), shotId)
+  return updateDoc(store, (x) => writeJoins(x, videoId, [[shotId, 'cut']]), `split the video between shot ${n - 1} and shot ${n}`)
+}
 
-/**
- * The One take bands on the timeline: shots whose clips are windows of one take (landed), and shots not
- * made yet that Make clips would make as one take (planned). A frames run has no band: its gaps say
- * "Lands on the next frame".
- */
-export function takeBands(d: ProductionDocument, videoId: Id | undefined, plan?: RunPlan): Band[] {
-  const sb = storyboardOfVideo(d, videoId)
-  const shots = sb ? shotsOf(d, sb.id) : []
-  const bands: Band[] = []
-  for (const s of shots) {
-    const t = currentTake(d, s.id, videoId)
-    const last = bands.at(-1)
-    if (t?.segments[0]) {
-      if (last && !last.planned && last.jobId === t.job_id) last.shotIds.push(s.id)
-      else bands.push({ shotIds: [s.id], planned: false, jobId: t.job_id })
+/** 🔗 Join into one video: `shotId` carries on from the shot before it (a continue, by a person). */
+export function joinHere(store: DocumentStore, videoId: Id, shotId: Id) {
+  const n = shotNumber(store.get(), shotId)
+  return updateDoc(store, (x) => writeJoins(x, videoId, [[shotId, 'continue']]), `join shot ${n - 1} and shot ${n} into one video`)
+}
+
+/** Whether the selected shots can be one video; why not, in words. */
+export function selectionBlock(d: ProductionDocument, videoId: Id | undefined, ids: Id[]): string | undefined {
+  const shots = videoShots(d, videoId)
+  const at = ids.map((id) => shots.findIndex((s) => s.id === id)).filter((i) => i >= 0).sort((a, b) => a - b)
+  if (at.length < 2) return 'Pick two shots or more'
+  if (at.some((i, k) => k > 0 && i !== at[k - 1] + 1)) return 'Pick shots that sit next to each other'
+  for (let k = 1; k < at.length; k++) {
+    const why = joinBlock(shots[at[k] - 1], shots[at[k]], at[k])
+    if (why) return why
+  }
+  return undefined
+}
+
+/** One video: the selected shots become one strip (continue between them, a cut at each end). */
+export function joinSelection(store: DocumentStore, videoId: Id, ids: Id[]) {
+  const d = store.get()
+  const shots = videoShots(d, videoId)
+  const at = ids.map((id) => shots.findIndex((s) => s.id === id)).filter((i) => i >= 0).sort((a, b) => a - b)
+  const joins: [Id, SeamKind][] = at.slice(1).map((i) => [shots[i].id, 'continue'])
+  if (at[0] > 0) joins.push([shots[at[0]].id, 'cut'])
+  const after = shots[at.at(-1)! + 1]
+  if (after) joins.push([after.id, 'cut'])
+  return updateDoc(store, (x) => writeJoins(x, videoId, joins), `join ${shotsWords(d, at.map((i) => shots[i].id))} into one video`)
+}
+
+/** Separately: each selected shot is made on its own (a cut into it and after it). */
+export function separateSelection(store: DocumentStore, videoId: Id, ids: Id[]) {
+  const d = store.get()
+  const shots = videoShots(d, videoId)
+  const at = new Set(ids.map((id) => shots.findIndex((s) => s.id === id)).filter((i) => i >= 0))
+  const joins: [Id, SeamKind][] = []
+  for (const i of at) {
+    if (i > 0) joins.push([shots[i].id, 'cut'])
+    if (shots[i + 1] && !at.has(i + 1)) joins.push([shots[i + 1].id, 'cut'])
+  }
+  return updateDoc(store, (x) => writeJoins(x, videoId, joins), `make ${shotsWords(d, [...at].map((i) => shots[i].id))} separately`)
+}
+
+/** Every shot on its own ("Make every shot separately"): a cut at every gap. */
+export function separateAll(store: DocumentStore, videoId: Id) {
+  const shots = videoShots(store.get(), videoId)
+  return updateDoc(store, (x) => writeJoins(x, videoId, shots.slice(1).map((s) => [s.id, 'cut'])), 'make every shot separately')
+}
+
+/** A unit of the timeline: shots that will be one video (a strip), or a shot on its own. */
+export type Unit =
+  | { kind: 'strip'; run: PlannedRun; shotIds: Id[]; lengthS: number; state: 'new' | 'separate' | 'making' | 'made'; jobId?: Id }
+  | { kind: 'shot'; shotId: Id }
+
+/** The video's shots as strips and separate shots, from the plan. A strip's state: not made, made before
+ *  as separate clips, being made as one video, or made as one. */
+export function videoUnits(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, videoId: Id | undefined, plan: RunPlan | undefined): Unit[] {
+  const out: Unit[] = []
+  for (const s of videoShots(d, videoId)) {
+    const r = plan?.runs.find((x) => x.shotIds.includes(s.id))
+    if (!r || !isTakeRun(r)) {
+      out.push({ kind: 'shot', shotId: s.id })
       continue
     }
-    if (t || takesOf(d, s.id).length) continue
-    const run = plan?.runs.find((r) => r.shotIds.includes(s.id) && (r.mode === 'take' || r.mode === 'take_refs'))
-    if (!run) continue
-    if (last?.planned && run.shotIds.includes(last.shotIds[0])) last.shotIds.push(s.id)
-    else bands.push({ shotIds: [s.id], planned: true })
+    if (r.shotIds[0] !== s.id) continue
+    const lengthS = r.shotIds.reduce((a, id) => a + (d.shots[id]?.duration_s ?? 0), 0)
+    const jobId = runJobFor(d, ui, s.id)
+    const state = isMoving(d, jobId) ? 'making' : isOneTake(d, videoId, r.shotIds) ? 'made' : r.shotIds.some((id) => takesOf(d, id).length) ? 'separate' : 'new'
+    out.push({ kind: 'strip', run: r, shotIds: r.shotIds, lengthS, state, ...(jobId ? { jobId } : {}) })
   }
-  return bands.filter((b) => b.shotIds.length > 1)
+  return out
+}
+
+/** About how long a video takes to make, said quietly beside its model ("~5 min"; phase 0 T4 and T7). */
+export function waitWords(model: Pick<PlanModel, 'model' | 'provider'>, lengthS: number): string {
+  if (model.provider === 'mock') return '~1 min'
+  const perFifteen: Record<string, number> = { wan3: 5.5, seedance2_5: 9, 'gemini_omni_flash_1.1': 1 }
+  const m = Math.max(1, Math.round((perFifteen[model.model] ?? 1) * Math.max(lengthS, 5) / 15))
+  return ['~', m, ' min'].join('') // a wait, not money
 }
 
 /** Each run being made now, in words: "Making shots 2-5 together", "Making shot 6". */
@@ -159,29 +176,6 @@ export function runJobFor(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, shot
 /** A shot's clip in the cut is a window of a take (Remake just this shot applies). */
 export function inTake(d: ProductionDocument, shotId: Id, videoId?: Id): boolean {
   return !!currentTake(d, shotId, videoId)?.segments[0]
-}
-
-/** The run a shot's clip in the cut came from, when it was a take (for Make the whole run again). */
-export function takeRunOf(d: ProductionDocument, shotId: Id, videoId: Id | undefined): (ReturnType<typeof runOf>) {
-  const t = currentTake(d, shotId, videoId)
-  if (!t?.segments[0]) return undefined
-  const p = purposeOf(d.jobs[t.job_id] ?? { purpose: '', node: { kind: 'video', id: '' } })
-  if (p?.for === 'run') {
-    const r = d.videos[p.videoId]?.runs?.[p.runId]
-    if (r) return { ...r, id: p.runId }
-  }
-  return runOf(d, videoId, shotId)
-}
-
-/** The run of a take is being made again. */
-export function runBusy(d: ProductionDocument, run: { job_id?: Id } | undefined): boolean {
-  return !!run?.job_id && isRunning(d, run.job_id)
-}
-
-/** The frame a shot's clip lands on now (a frames clip on a continue join): the next shot, if any. */
-export function landingShot(plan: RunPlan | undefined, shotId: Id): Id | undefined {
-  for (const r of plan?.runs ?? []) if (r.lands[shotId]) return r.lands[shotId]
-  return undefined
 }
 
 export type FrameMark = 'pin' | 'guide'
@@ -218,4 +212,12 @@ export function isTakeMode(mode: RunMode | undefined): boolean {
  */
 export function missedGuide(_d: ProductionDocument, _shotId: Id): boolean {
   return false
+}
+
+/** The shots between two cards (inclusive), in order. */
+export function shotRange(order: Id[], a: Id, b: Id): Id[] {
+  const i = order.indexOf(a)
+  const j = order.indexOf(b)
+  if (i < 0 || j < 0) return [b]
+  return order.slice(Math.min(i, j), Math.max(i, j) + 1)
 }

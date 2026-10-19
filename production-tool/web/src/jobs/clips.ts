@@ -118,7 +118,7 @@ export async function makeTake(
   deps: FrameDeps,
   videoId: Id,
   runId: Id,
-  opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number } = {},
+  opts: { modelChoice?: ModelChoice; quality?: ClipQuality; refsMax?: number; texts?: Record<Id, string> } = {},
 ): Promise<string> {
   const d = deps.doc.get()
   const run = d.videos[videoId]?.runs?.[runId]
@@ -136,7 +136,9 @@ export async function makeTake(
     for (const s of shots) for (const r of await refsFor(deps.relay, d, s)) if (!refs.some((x) => x.id === r.id)) refs.push(r)
   }
   const { starts } = takeTiming(shots.map((s) => s.duration_s))
-  const cuts = shots.map((s, i) => ({ atS: starts[i], text: clipText(s.action?.trim() || s.direction?.trim() || `Shot ${i + 1}`, 600) }))
+  // Each shot's line: its action, then any words given for it only (Make clip's box).
+  const line = (s: Shot, i: number) => [s.action?.trim() || s.direction?.trim() || `Shot ${i + 1}`, opts.texts?.[s.id]?.trim()].filter(Boolean).join(' ')
+  const cuts = shots.map((s, i) => ({ atS: starts[i], text: clipText(line(s, i), 600) }))
   const ratio = ratioOf(d, videoId, shots[0].storyboard_id)
   const max = opts.refsMax ?? 10
   const input: JobInput = {

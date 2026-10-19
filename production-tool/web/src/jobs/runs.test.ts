@@ -8,14 +8,14 @@ import type { Config, Job, JobInput, ProductionDocument, Shot } from '../contrac
 import { SnapshotDocumentStore } from '../doc/store'
 import { mainVideo, shotsOf, takesOf } from '../model/selectors'
 import { purposeOf, purposeInputs } from '../model/purpose'
-import { MAYA, snapshotDoc } from '../test/jobFixtures'
-import { SHA, addFrame, addShots, job, plain } from '../test/model'
+import { MAYA, addRef, snapshotDoc } from '../test/jobFixtures'
+import { SHA, addFrame, addShots, addTake, job, plain } from '../test/model'
 import { endFramed, makeClip, redoInTake, stitchInput } from './clips'
 import { applyRunTake, applyTake } from './handlers'
 import type { PlanShot } from './joins'
 import { joinKind } from './joins'
-import { billedS, makeClips, modelEntry, planRuns, segmentRun, takeTiming, takeWindows, type PlanModel } from './runs'
-import { frameMarks, joinChoices, joinLabel, takeBands, videoJoin, videoPlan } from './runView'
+import { billedS, makeClips, makeRuns, modelEntry, planRuns, segmentRun, takeModelFor, takeTiming, takeWindows, type PlanModel } from './runs'
+import { frameMarks, joinHere, joinSelection, selectionBlock, separateAll, separateSelection, splitHere, videoJoin, videoPlan, videoShots, videoUnits } from './runView'
 import { END_FRAME_CHANGED, endFrameDrift, refreshClipStale } from './stale'
 import { mockCuts } from '../relay/mock'
 import { speedFor, stitchTimeline } from '../relay/mockRender'
@@ -154,11 +154,12 @@ const on: Config = { ...CONFIGS.live, flags: { ...CONFIGS.live.flags, connectedV
 const off: Config = CONFIGS.live
 
 /** Shots of `lengths` on the main storyboard, each with a picked frame, in one scene, same setup. */
-function film(lengths: number[], extra: (i: number) => Partial<Shot> = () => ({})) {
+function film(lengths: number[], extra: (i: number) => Partial<Shot> = () => ({}), prep?: (d: ProductionDocument, shots: Shot[]) => void) {
   const d = structuredClone(snapshotDoc(MAYA).get()) as ProductionDocument
   const shots = addShots(d, lengths.length)
   shots.forEach((s, i) => Object.assign(s, { duration_s: lengths[i], action: `Action ${i + 1}.`, ...extra(i) }))
   shots.forEach((s, i) => addFrame(d, s, SHA('0123456789'[i]), { pick: true }))
+  prep?.(d, shots)
   const store = new SnapshotDocumentStore(d, null, 0)
   const submits: { op: string; input: JobInput; purpose: unknown; modelChoice?: unknown; extras?: unknown }[] = []
   let k = 0
@@ -177,7 +178,7 @@ const skipNone = () => false
 describe('Make clips', () => {
   it('with the flag absent sends exactly the per-shot requests it always did', async () => {
     const a = film([3, 3, 3])
-    const failed = await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: off, join: videoJoin(a.store.get(), a.videoId, off), modelChoice: wan3, skip: skipNone })
+    const failed = await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: off, join: videoJoin(a.store.get(), a.videoId, off), modelChoice: wan3, busy: skipNone })
     expect(failed).toEqual([])
     const b = film([3, 3, 3])
     for (const s of b.shots) await makeClip(b.deps, s.id, { modelChoice: wan3, videoId: b.videoId })
@@ -189,7 +190,7 @@ describe('Make clips', () => {
 
   it('as one film on wan3 sends one take for the run, timed by its cuts, and records the run', async () => {
     const a = film([3, 3, 4])
-    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, quality: 'draft', skip: skipNone })
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, quality: 'draft', busy: skipNone })
     expect(a.submits).toHaveLength(1)
     const [t] = a.submits
     expect(t.op).toBe('clip')
@@ -206,11 +207,17 @@ describe('Make clips', () => {
     expect(t.purpose).toEqual({ for: 'run', videoId: a.videoId, runId: runs[0][0] })
   })
 
-  it('as one film on Veo sends a clip per shot, ending on the next frame only where the action carries on', async () => {
-    const a = film([4, 4, 4], (i) => (i === 2 ? { camera: { size: 'close' } } : {}))
-    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: veoFast, skip: skipNone })
-    expect(a.submits.map((s) => [s.input.mode, (s.input.lastFrame && 'sha256' in s.input.lastFrame ? s.input.lastFrame.sha256 : null)])).toEqual([['frames', SHA('1')], [undefined, null], [undefined, null]])
+  it('on Veo, a separate shot ends on the next frame where the action carries on; the strip switches to WAN 3', async () => {
+    const a = film([4, 4, 4], (i) => (i === 2 ? { camera: { size: 'close' } } : {}), (d, shots) => { shots[1].refs = [addRef(d, 'bottle', 'front', SHA('f'), 'product').id] })
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: veoFast, busy: skipNone })
+    // Shot 1 is on its own (the product shot starts a video), lands on shot 2's frame, and keeps the pick.
+    expect(a.submits[0].input).toMatchObject({ mode: 'frames', lastFrame: { sha256: SHA('1') } })
+    expect(a.submits[0].modelChoice).toEqual(veoFast)
     expect(a.submits[0].purpose).toMatchObject({ for: 'clip', endFrameId: a.store.get().shots[a.shots[1].id].pick!.current })
+    // Shots 2-3 are one video: Veo makes none, so WAN 3 makes it.
+    expect(a.submits[1].input).toMatchObject({ mode: 'take' })
+    expect(a.submits[1].modelChoice).toEqual(wan3)
+    expect(a.submits).toHaveLength(2)
     // The crew's joins are on the cut's items.
     const seams = shotsOf(a.store.get()).map((s) => Object.values(a.store.get().videos[a.videoId].edl).find((x) => x.shot_id === s.id)?.seam?.kind)
     expect(seams).toEqual([undefined, 'continue', 'cut'])
@@ -221,8 +228,8 @@ describe('Make clips', () => {
     const chain: string[] = []
     const change = a.store.change.bind(a.store)
     a.store.change = ((fn, why) => { if (why && !why.quiet) chain.push(why.action); return change(fn, why) }) as typeof a.store.change
-    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, skip: skipNone })
-    expect(chain).toContain('plan shots 1-2 as one take on WAN 3')
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, busy: skipNone })
+    expect(chain).toContain('plan shots 1–2 as one video on WAN 3')
     expect(chain.join(' ')).not.toMatch(/take_refs|frames|\$|credit/)
   })
 })
@@ -230,7 +237,7 @@ describe('Make clips', () => {
 describe('a take landing', () => {
   it('writes each shot a window of the one file, from the cuts the relay found', async () => {
     const a = film([3, 3, 4])
-    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, skip: skipNone })
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, busy: skipNone })
     const d = structuredClone(a.store.get())
     const runId = Object.keys(d.videos[a.videoId].runs!)[0]
     const j = { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'wan3', kind: 'generated', outputs: [{ sha256: SHA('v'), durationS: 10 }], cuts: [{ planned_s: 3, found_s: 3.05 }, { planned_s: 6, found_s: null }] } as unknown as Job
@@ -250,13 +257,13 @@ describe('a take landing', () => {
     const { input } = await stitchInput({ relay: {} as never, doc: { get: () => d } as never }, a.videoId)
     expect(input.clips!.map((c) => [c.inS, c.outS, c.trimS, c.fit])).toEqual([[undefined, 3.05, 3, undefined], [3.05, 6, 3, undefined], [6, 10, 4, undefined]])
     // Bands and marks: one take over the three shots, its first frame pinned and the others guides.
-    expect(takeBands(d, a.videoId).map((b) => b.shotIds.length)).toEqual([3])
+    expect(videoUnits(d, { jobs: {} }, a.videoId, videoPlan(d, a.videoId, WAN3)).map((u) => (u.kind === 'strip' ? `${u.state}:${u.shotIds.length}` : 'shot'))).toEqual(['made:3'])
     expect(Object.values(frameMarks(d, a.videoId, undefined))).toEqual(['pin', 'guide', 'guide'])
   })
 
   it('Remake just this shot sends the window alone, and its neighbours stay byte for byte', async () => {
     const a = film([3, 3, 3])
-    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, skip: skipNone })
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: wan3, busy: skipNone })
     const d = structuredClone(a.store.get())
     const runId = Object.keys(d.videos[a.videoId].runs!)[0]
     applyRunTake(d, { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'wan3', kind: 'generated', outputs: [{ sha256: SHA('v'), durationS: 9 }] } as unknown as Job, { videoId: a.videoId, runId })
@@ -307,15 +314,6 @@ describe('end frames', () => {
 })
 
 describe('what the editors say', () => {
-  it('offers only the joins the model allows, in words', () => {
-    expect(joinChoices(WAN3).map((c) => c.label)).toEqual(['One take', 'Cut', 'Dissolve', 'Dip'])
-    expect(joinChoices(VEO_FAST).map((c) => c.label)).toEqual(['Lands on the next frame', 'Cut', 'Dissolve', 'Dip'])
-    expect(joinChoices(LOOSE_NO_TAKE).map((c) => c.label)).toEqual(['Cut', 'Dissolve', 'Dip'])
-    expect(joinLabel('continue', { inTake: false, model: VEO_FAST })).toBe('Lands on the next frame')
-    expect(joinLabel('match', { inTake: false, model: VEO_FAST })).toBe('Cut')
-    expect(joinLabel('continue', { inTake: true, model: WAN3 })).toBe('One take')
-  })
-
   it('is off with the flag absent, and As one film by default with it on', () => {
     const a = film([3])
     expect(videoJoin(a.store.get(), a.videoId, off)).toBeNull()
@@ -326,7 +324,7 @@ describe('what the editors say', () => {
     const a = film([3, 3, 3])
     const d = a.store.get()
     expect(Object.values(frameMarks(d, a.videoId, videoPlan(d, a.videoId, WAN3)))).toEqual(['pin', 'guide', 'guide'])
-    expect(Object.values(frameMarks(d, a.videoId, videoPlan(d, a.videoId, VEO)))).toEqual(['pin', 'pin', 'pin'])
+    expect(Object.values(frameMarks(d, a.videoId, planRuns(videoShots(d, a.videoId), VEO)))).toEqual(['pin', 'pin', 'pin'])
   })
 })
 
@@ -340,5 +338,128 @@ describe('the browser mock', () => {
     expect(speedFor(4, 3.2)).toBeCloseTo(1.25, 3)
     expect(speedFor(4, 2.5)).toBe(1) // 1.6x: the stitch trims it instead
     expect(stitchTimeline([{ dur: 3 }, { dur: 3, transition: { kind: 'continue' } }]).map((x) => x.kind)).toEqual(['cut', 'cut'])
+  })
+})
+
+// ── Strips + select (the owner's redesign, 2026-10-19) ─────────────────────
+
+const OMNI = modelEntry('runway', 'gemini_omni_flash_1.1')!
+const omni = { provider: 'runway' as const, model: 'gemini_omni_flash_1.1' }
+const unitsOf = (a: ReturnType<typeof film>, m: PlanModel = WAN3) => {
+  const d = a.store.get()
+  return videoUnits(d, { jobs: {} }, a.videoId, videoPlan(d, a.videoId, m))
+    .map((u) => (u.kind === 'strip' ? `${u.state}:${u.shotIds.map((id) => a.shots.findIndex((s) => s.id === id) + 1).join('')}` : `shot:${a.shots.findIndex((s) => s.id === u.shotId) + 1}`))
+}
+
+describe('strips', () => {
+  it('groups as the planner does: a scene, no spoken line, no end card', () => {
+    const a = film([3, 3, 3, 3, 2.5], (i) => ({ ...(i >= 2 ? { scene_id: 'scene_b' } : {}), ...(i === 4 ? { kind: 'end_card' as const } : {}) }))
+    expect(unitsOf(a)).toEqual(['new:12', 'new:34', 'shot:5'])
+  })
+
+  it('✂ splits a strip and 🔗 joins it again, each one History entry', async () => {
+    const a = film([3, 3, 3])
+    const chain: string[] = []
+    const change = a.store.change.bind(a.store)
+    a.store.change = ((fn, why) => { if (why && !why.quiet) chain.push(why.action); return change(fn, why) }) as typeof a.store.change
+    await splitHere(a.store, a.videoId, a.shots[1].id)
+    expect(unitsOf(a)).toEqual(['shot:1', 'new:23'])
+    expect(Object.values(a.store.get().videos[a.videoId].edl).find((x) => x.shot_id === a.shots[1].id)?.seam).toEqual({ kind: 'cut', by: 'human' })
+    await joinHere(a.store, a.videoId, a.shots[1].id)
+    expect(unitsOf(a)).toEqual(['new:123'])
+    expect(chain).toEqual(['split the video between shot 1 and shot 2', 'join shot 1 and shot 2 into one video'])
+  })
+
+  it('a selection becomes one video, or separate shots', async () => {
+    const a = film([3, 3, 3, 3])
+    await joinSelection(a.store, a.videoId, [a.shots[2].id, a.shots[1].id])
+    expect(unitsOf(a)).toEqual(['shot:1', 'new:23', 'shot:4'])
+    await separateSelection(a.store, a.videoId, [a.shots[1].id, a.shots[2].id])
+    expect(unitsOf(a)).toEqual(['shot:1', 'shot:2', 'shot:3', 'shot:4'])
+    await separateAll(a.store, a.videoId)
+    expect(unitsOf(a)).toEqual(['shot:1', 'shot:2', 'shot:3', 'shot:4'])
+    expect(selectionBlock(a.store.get(), a.videoId, [a.shots[0].id, a.shots[2].id])).toBe('Pick shots that sit next to each other')
+    expect(selectionBlock(a.store.get(), a.videoId, [a.shots[0].id])).toBe('Pick two shots or more')
+  })
+
+  it('says why shots cannot be one video', () => {
+    const a = film([3, 3], () => ({}), (d, shots) => { shots[1].refs = [addRef(d, 'bottle', 'front', SHA('f'), 'product').id] })
+    expect(selectionBlock(a.store.get(), a.videoId, a.shots.map((s) => s.id))).toBe('Shot 2 shows the product: it starts its own video')
+  })
+
+  it('switches a strip to a model that can make it as one video, and says why; separate shots keep the pick', () => {
+    const shots = [ps(), ps(), ps(), ps({ sceneId: 's2' })] // 9 s strip, then a lone shot
+    const veo = planRuns(shots, VEO_FAST, { takeModel: takeModelFor(VEO_FAST) })
+    expect(veo.runs.map((r) => [r.mode, r.model.model, r.switched])).toEqual([['take', 'wan3', 'Veo 3.1 Fast cannot make one video'], ['frames', 'veo3.1_fast', undefined]])
+    const long = planRuns([ps(), ps(), ps(), ps()], OMNI, { takeModel: takeModelFor(OMNI) }) // 12 s
+    expect(long.runs.map((r) => [r.model.model, r.switched])).toEqual([['wan3', '12 s is longer than Gemini Omni Flash 1.1 makes in one go (10 s)']])
+    const short = planRuns([ps({ durationS: 5 }), ps({ durationS: 5 })], OMNI, { takeModel: takeModelFor(OMNI) }) // 10 s: Omni
+    expect(short.runs.map((r) => [r.model.model, r.switched])).toEqual([['gemini_omni_flash_1.1', undefined]])
+    // Longer than any model's one video: two strips, the first noting it.
+    const twenty = planRuns(Array.from({ length: 4 }, () => ps({ durationS: 5 })), OMNI, { takeModel: takeModelFor(OMNI) })
+    expect(twenty.runs.map((r) => [r.shotIds.length, !!r.splitAfter])).toEqual([[3, true], [1, false]])
+  })
+})
+
+describe('the live case (2026-10-19): one shot made alone, then every gap set to One take, on Omni', () => {
+  // 6 shots in one scene, shot 6 the end card; shot 1 (and the end card) made alone first.
+  async function replay() {
+    const a = film([2, 2, 2, 2, 2, 2.5], (i) => (i === 5 ? { kind: 'end_card' as const } : {}), (d, shots) => {
+      for (const i of [0, 5]) addTake(d, shots[i], SHA(`${i}`), job(d, 'clip', [], SHA(`${i}`)), { pick: true })
+    })
+    for (const s of a.shots.slice(1)) await joinHere(a.store, a.videoId, s.id)
+    return a
+  }
+
+  it('shows shots 1–5 as one strip made as separate clips, the end card on its own', async () => {
+    const a = await replay()
+    expect(unitsOf(a, OMNI)).toEqual(['separate:12345', 'shot:6'])
+  })
+
+  it("the strip's Make as one video sends one take of shots 1–5 on Omni, and nothing for the end card", async () => {
+    const a = await replay()
+    const strip = videoUnits(a.store.get(), { jobs: {} }, a.videoId, videoPlan(a.store.get(), a.videoId, OMNI))[0]
+    expect(strip.kind).toBe('strip')
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: strip.kind === 'strip' ? strip.shotIds : [], config: on, join: 'film', modelChoice: omni, busy: skipNone })
+    expect(a.submits).toHaveLength(1)
+    const [t] = a.submits
+    expect(t.input.mode).toBe('take')
+    expect(t.input.shots).toHaveLength(5)
+    expect(t.input.cuts!.map((c) => c.atS)).toEqual([0, 2, 4, 6, 8])
+    expect(t.modelChoice).toEqual(omni)
+    expect(Object.values(a.store.get().videos[a.videoId].runs!)[0].shot_ids).toEqual(a.shots.slice(0, 5).map((s) => s.id))
+  })
+
+  it('Make all does the same: the end card already has its clip', async () => {
+    const a = await replay()
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: omni, busy: skipNone })
+    expect(a.submits.map((x) => [x.input.mode, x.input.shots?.length])).toEqual([['take', 5]])
+  })
+
+  it("a card's Make on shot 3 makes the whole video, never a clip of its own", async () => {
+    const a = await replay()
+    await makeRuns(a.deps, { videoId: a.videoId, shotIds: [a.shots[2].id], config: on, modelChoice: omni })
+    expect(a.submits).toHaveLength(1)
+    expect(a.submits[0].input).toMatchObject({ mode: 'take' })
+    expect(a.submits[0].input.shots).toHaveLength(5)
+    expect(a.submits[0].purpose).toMatchObject({ for: 'run' })
+  })
+
+  it('once landed it is one video; the separate clip stays as a version', async () => {
+    const a = await replay()
+    await makeClips(a.deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: omni, busy: skipNone })
+    const d = structuredClone(a.store.get())
+    const runId = Object.keys(d.videos[a.videoId].runs!)[0]
+    applyRunTake(d, { jobId: 'job_1', op: 'clip', provider: 'runway', model: 'gemini_omni_flash_1.1', kind: 'generated', outputs: [{ sha256: SHA('v'), durationS: 10 }] } as unknown as Job, { videoId: a.videoId, runId })
+    expect(takesOf(d, a.shots[0].id)).toHaveLength(2)
+    expect(videoUnits(d, { jobs: {} }, a.videoId, videoPlan(d, a.videoId, OMNI))[0]).toMatchObject({ kind: 'strip', state: 'made' })
+    // A New take now makes the whole video again; Make all leaves it alone.
+    const store = new SnapshotDocumentStore(d, null, 0)
+    const deps = { ...a.deps, doc: store as never }
+    const before = a.submits.length
+    await makeClips(deps, { videoId: a.videoId, shots: a.shots, ids: a.shots.map((s) => s.id), config: on, join: 'film', modelChoice: omni, busy: skipNone })
+    expect(a.submits.length).toBe(before)
+    await makeRuns(deps, { videoId: a.videoId, shotIds: [a.shots[1].id], config: on, modelChoice: omni, again: true })
+    expect(a.submits.at(-1)!.input.shots).toHaveLength(5)
   })
 })

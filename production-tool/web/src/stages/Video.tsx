@@ -8,12 +8,13 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useShowMock, useUi } from '../app/context'
-import type { ClipQuality, ModelChoice, Region, Review, SeamKind, Shot, Strength, Take, VideoJoin } from '../contracts/types'
+import type { ClipQuality, ModelChoice, Region, Review, Shot, Strength, Take } from '../contracts/types'
 import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
-import { changeFeel, editQuality, makeClip as submitClip, makeTake, redoInTake, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
-import { makeClips, modelEntry, canLand, type PlanModel, type RunPlan } from '../jobs/runs'
-import { inTake, joinBefore, joinChoices, joinLabel, JOIN_NAMES, landingShot, runBusy, runJobFor, runProgress, sameTake, setJoin, setVideoJoin, takeBands, takeRunOf, videoJoin, videoModel, videoPlan } from '../jobs/runView'
+import { changeFeel, editQuality, makeClip as submitClip, redoInTake, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
+import { isOneTake, isTakeRun, makeClips, makeRuns, modelEntry, canLand, planRunOf } from '../jobs/runs'
+import { inTake, joinBefore, runJobFor, separateAll, shotRange, videoJoin, videoModel, videoPlan, videoUnits } from '../jobs/runView'
+import { SelectionBar, StripTrack } from './VideoStrips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, endFrameDrift, takeStale } from '../jobs/stale'
@@ -90,10 +91,25 @@ export function Video() {
   const take = shot ? currentTake(doc, shot.id, video?.id) : undefined
   // Connected video (features/connected-video.clan): null when the flag is off, and everything is as before.
   const join = videoJoin(doc, video?.id, config)
-  const vModel = join ? videoModel(doc, video?.id, config, lastWorkedModel(doc, 'clip', config)) : null
-  const plan = join === 'film' && vModel ? videoPlan(doc, video?.id, vModel) : undefined
-  // A shot being made in a take has its run's job.
-  const clipJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id) ?? (join ? runJobFor(doc, ui, id) : undefined)
+  const film = useFilm(video?.id)
+  // The shots as strips (one video each) and separate shots, from the plan.
+  const units = film && video ? videoUnits(doc, ui, video.id, film.plan) : null
+  const stripOf = (id: string) => units?.find((u) => u.kind === 'strip' && u.shotIds.includes(id))
+  // A shot's own clip job; a shot being made in a take has its run's job too.
+  const cardJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id)
+  const clipJob = (id: string) => cardJob(id) ?? (join ? runJobFor(doc, ui, id) : undefined)
+  // Selecting cards (click, shift-click, drag; a long press on touch) for One video or Separately.
+  const [picked, setPicked] = useState<string[]>([])
+  const pickFrom = useRef<string | null>(null)
+  const dragFrom = useRef<string | null>(null)
+  const pressTimer = useRef<number | null>(null)
+  const longPressed = useRef(false)
+  const clearPicked = useCallback(() => setPicked([]), [])
+  useEffect(() => {
+    const up = () => { dragFrom.current = null; if (pressTimer.current) window.clearTimeout(pressTimer.current) }
+    window.addEventListener('pointerup', up)
+    return () => window.removeEventListener('pointerup', up)
+  }, [])
   // An "uncertain" job is waiting on the participant (Stop waiting / Try again on its card), not on
   // the relay: it locks nothing (features/video-stage-findings.clan).
   const anyRunning = shots.some((s) => isMoving(doc, clipJob(s.id)))
@@ -133,11 +149,45 @@ export function Video() {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   })
-  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality } = {}) => submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
+  // In a film every clip goes through the planner: a shot in a take run makes the whole run (useFilm).
+  const makeClip = (s: Shot, opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality } = {}) =>
+    film ? film.make(s.id, opts) : submitClip(deps, s.id, { ...opts, videoId: video?.id, fromWords })
   // Make clips opens the send tray first (3.16): nothing paid starts until its Make clips.
   const [tray, setTray] = useState(false)
   const trayRef = useRef<HTMLButtonElement>(null)
-  const toMake = shots.map((s, i) => ({ shot: s, n: i + 1 })).filter(({ shot: s }) => !takesOf(doc, s.id).length && !isRunning(doc, clipJob(s.id)))
+  const trayWrap = useRef<HTMLSpanElement>(null)
+  // A strip not yet one video (no clips, or separate ones) is made whole; a separate shot when it has no clip.
+  const stripToMake = (id: string) => { const u = stripOf(id); return !!u && u.kind === 'strip' && (u.state === 'new' || u.state === 'separate') }
+  const allToMake = shots.map((s, i) => ({ shot: s, n: i + 1 }))
+    .filter(({ shot: s }) => stripToMake(s.id) || (!stripOf(s.id) && !takesOf(doc, s.id).length && !isRunning(doc, clipJob(s.id))))
+  // A strip's own Make as one video opens the tray for its shots alone.
+  const [trayIds, setTrayIds] = useState<string[] | null>(null)
+  const toMake = trayIds ? allToMake.filter(({ shot: s }) => trayIds.includes(s.id)) : allToMake
+  const openStrip = (ids: string[]) => { setTrayIds(ids); setTray(true) }
+  const pickCard = (id: string, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
+    if (longPressed.current) { longPressed.current = false; return }
+    if (film && e.shiftKey && pickFrom.current) return setPicked(shotRange(shots.map((s) => s.id), pickFrom.current, id))
+    if (film && (e.metaKey || e.ctrlKey || picked.length)) {
+      pickFrom.current = id
+      return setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id])
+    }
+    pickFrom.current = id
+    setShotId(id)
+    setMode('shot')
+  }
+  const pickProps = (id: string): React.HTMLAttributes<HTMLDivElement> => film ? {
+    onPointerDown: (e) => {
+      if ((e.target as HTMLElement).closest('button, input, textarea, select, a')) return
+      if (e.pointerType === 'mouse' && e.button === 0) dragFrom.current = id
+      if (e.pointerType !== 'mouse') {
+        pressTimer.current = window.setTimeout(() => { longPressed.current = true; pickFrom.current = id; setPicked([id]) }, 500)
+      }
+    },
+    onPointerEnter: (e) => {
+      if (dragFrom.current && e.buttons === 1 && dragFrom.current !== id) setPicked(shotRange(shots.map((s) => s.id), dragFrom.current, id))
+    },
+    onPointerMove: () => { if (pressTimer.current && !longPressed.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null } },
+  } : {}
 
   /** A clip for every shot picked in the tray. A shot that cannot be made does not stop the others; each
    *  one that failed is named. */
@@ -150,23 +200,13 @@ export function Video() {
       const failed = await makeClips(deps, {
         videoId: video?.id, shots, ids, config, join, fromWords, ...(quality ? { quality } : {}),
         modelChoice: modelChoice ?? choiceToSend('clip', config, lastWorkedModel(doc, 'clip', config)),
-        skip: (id) => !!takesOf(doc, id).length || isRunning(doc, clipJob(id)),
+        busy: (id) => isRunning(doc, clipJob(id)),
       })
       if (failed.length) setError(failed.join(' '))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
   })
-
-  // The One take bands (features/connected-video.clan): where each shot sits in one, and whether gap i is inside one.
-  const bands = join === 'film' ? takeBands(doc, video?.id, plan) : []
-  const bandOf = (id: string): Banded | undefined => {
-    const b = bands.find((x) => x.shotIds.includes(id))
-    if (!b) return undefined
-    const k = b.shotIds.indexOf(id)
-    return { at: k === 0 ? 'first' : k === b.shotIds.length - 1 ? 'last' : 'mid', planned: b.planned, label: k === 0 ? (b.planned ? 'One take, planned' : 'One take') : undefined }
-  }
-  const bandAt = (i: number) => bands.some((b) => b.shotIds.includes(shots[i].id) && b.shotIds.includes(shots[i - 1].id))
 
   const render = () => sendRender(async () => {
     setError(null)
@@ -191,12 +231,23 @@ export function Video() {
     <EditorBar back="Canvas" onBack={() => uiStore.update((u) => { u.stage = 'character' }, 'stage')} icon="video"
       title={`Video · ${isMain && !own ? nodeTitle(sb?.title, 'Storyboard', projectName) : nodeTitle(video?.title, 'Video', projectName)}`}
       meta={<><span className="pt-ratio">{sb?.ratio ?? video?.ratio ?? '16:9'} · {Math.round(sb?.target_s ?? video?.target_s ?? 15)} s</span>
-        {video && <QualityDefault videoId={video.id} />}
-        {video && join && <JoinDefault videoId={video.id} join={join} />}</>}
+        {video && <QualityDefault videoId={video.id} />}</>}
       view={{ label: 'View', value: view, onPick: (v) => setView(v as typeof view), options: [{ id: 'picture', label: 'Picture' }, { id: 'sound', label: 'Sound' }] }}
       more={() => <CopyLinkLater />}
       right={<>
-        <button ref={trayRef} className="btn" aria-haspopup="dialog" aria-expanded={tray} disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => setTray(!tray)}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
+        {film && video ? (
+          // Make all: every strip as one video, every separate shot alone (the tray first, as before).
+          <span ref={trayWrap} className="ve-makeall">
+            <SplitButton kind="plain" disabled={empty || makingAll || anyRunning || !allToMake.length} menuLabel="More ways to make the clips"
+              title={empty ? 'Plan the shots first' : 'Each strip as one video, each separate shot on its own'}
+              onClick={() => { setTrayIds(null); setTray(!tray) }}
+              items={[{ label: 'Make every shot separately', icon: '⇥', onSelect: () => void separateAll(docStore, video.id).then(() => { setTrayIds(null); setTray(true) }) }]}>
+              {makingAll ? 'Preparing…' : anyRunning ? 'Making…' : allToMake.length ? 'Make all' : 'All made'}
+            </SplitButton>
+          </span>
+        ) : (
+          <button ref={trayRef} className="btn" aria-haspopup="dialog" aria-expanded={tray} disabled={empty || makingAll || anyRunning || allTaken} title={empty ? 'Plan the shots first' : undefined} onClick={() => setTray(!tray)}>{makingAll ? 'Preparing…' : anyRunning ? 'Making clips…' : allTaken ? 'All clips made' : 'Make clips'}</button>
+        )}
         <button className="btn" disabled={!latestAd || !video} title={!latestAd ? 'Render the ad first: its lengths and shapes are cut from it' : 'Shorter lengths and other shapes of this film (features/campaign-formats.clan)'}
           onClick={() => {
             const m = video ? videoMaster(doc, video.id) : null
@@ -204,8 +255,9 @@ export function Video() {
             uiStore.update((u) => { u.stage = 'character' }, 'stage')
             campaignSheet.open({ master: m, node: { kind: 'video', id: video.id } })
           }}>Make all sizes…</button>
-        {tray && <ClipTray anchor={trayRef} open={tray} onClose={() => setTray(false)} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'}
-          quality={videoQuality(doc, video?.id)} onMake={(ids, m, q) => void makeAll(ids, m, q)} />}
+        {tray && <ClipTray anchor={film ? trayWrap : trayRef} open={tray} onClose={() => { setTray(false); setTrayIds(null) }} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'}
+          quality={videoQuality(doc, video?.id)} onMake={(ids, m, q) => void makeAll(ids, m, q)}
+          {...(film && toMake.length && toMake.every(({ shot: s }) => stripToMake(s.id) && stripOf(s.id) === stripOf(toMake[0].shot.id)) ? { makeLabel: 'Make as one video' } : {})} />}
       </>}
       primary={controls.stitch ? (
         <button className="btn primary" disabled={empty || rendering || !!renderBlocked} onClick={() => void render()} title={empty ? 'Plan the shots first' : renderBlocked ?? 'Join the clips into one ad with the end card'}>
@@ -252,22 +304,30 @@ export function Video() {
                 <button className={`btn sm ${mode === 'all' ? 'on' : ''}`} disabled={!allTaken} onClick={() => setMode('all')}
                   title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>▶ All shots</button>
               </div>
-              {join && <RunProgress videoId={video?.id} />}
               <div className="ve-track"><span className="ve-lane"><b>Shots</b><span>main track</span></span>
-                <div className={`strip ${editable ? 'editable' : ''}`}>
-                  {shots.map((s, i) => (
+                <div className={`strip ${editable ? 'editable' : ''} ${units ? 've-units' : ''}`}>
+                  {units && video ? (
+                    <StripTrack videoId={video.id} shots={shots} units={units}
+                      insert={editable ? (i) => i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} /> : undefined}
+                      onMakeStrip={openStrip} onPlayStrip={(id) => { setPicked([]); setShotId(id); setMode('shot') }}
+                      card={(s, i, inStrip) => (
+                        <ShotCard key={s.id} shot={s} index={i} videoId={video.id} selected={mode === 'shot' && s.id === shot?.id} jobId={inStrip ? cardJob(s.id) : clipJob(s.id)}
+                          onSelect={(e) => pickCard(s.id, e)} picked={picked.includes(s.id)} pickProps={pickProps(s.id)} inStrip={inStrip}
+                          onMake={(opts) => makeClip(s, opts)} />
+                      )} />
+                  ) : shots.map((s, i) => (
                     <Fragment key={s.id}>
                       {editable && i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} />}
-                      {join === 'film' && video && i > 0 && <GapChip videoId={video.id} prev={shots[i - 1]} shot={s} n={i} model={vModel} plan={plan} band={bandAt(i)} />}
                       <ShotCard shot={s} index={i} videoId={video?.id} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
                         onSelect={() => { setShotId(s.id); setMode('shot') }}
-                        onMake={(opts) => makeClip(s, opts)} band={join === 'film' ? bandOf(s.id) : undefined} plan={plan} />
+                        onMake={(opts) => makeClip(s, opts)} />
                     </Fragment>
                   ))}
                   {editable && sb && <AddShot storyboardId={sb.id} count={shots.length} onMade={(id) => { setShotId(id); setMode('shot') }} />}
                 </div>
               </div>
-              <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.</div>
+              <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.{units ? ' Select shots (shift-click or drag) to make them one video or separately.' : ''}</div>
+              {units && video && picked.length > 0 && <SelectionBar videoId={video.id} ids={picked} onClear={clearPicked} />}
             </div>
           )}>
           {editable && mode === 'shot' && shot && <ShotPanel key={shot.id} shot={shot} index={shots.indexOf(shot)} count={shots.length} onGone={() => setShotId(null)} />}
@@ -281,7 +341,7 @@ export function Video() {
 }
 
 /** Make clip's box (like the update box): words for this clip only, the model, "Make it". */
-function MakeClipBox({ index, quality: start, onMake }: { index: number; quality: ClipQuality; onMake: (opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality }) => Promise<unknown> }) {
+function MakeClipBox({ index, quality: start, title, onMake }: { index: number; quality: ClipQuality; title?: string; onMake: (opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality }) => Promise<unknown> }) {
   const doc = useDoc()
   const { config } = useConfig()
   const [text, setText] = useState('')
@@ -300,10 +360,10 @@ function MakeClipBox({ index, quality: start, onMake }: { index: number; quality
   })
   return (
     <div className="stack clipbox-body" onClick={(e) => e.stopPropagation()}>
-      <div className="fhead">Shot {index + 1} · clip</div>
+      <div className="fhead">{title ?? `Shot ${index + 1} · clip`}</div>
       <textarea className="textarea" rows={2} maxLength={1000} autoFocus value={text} onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !busy && void make()}
-        placeholder="Add words for this clip only (optional)" />
+        placeholder={title ? `Add words for shot ${index + 1} only (optional)` : 'Add words for this clip only (optional)'} />
       <div className="row wrap" style={{ gap: 6 }}>
         <ModelPick op="clip" value={choice} onChange={setPick} />
         <QualityPick op="clip" choice={choice} value={quality} onChange={setQuality} />
@@ -316,13 +376,12 @@ function MakeClipBox({ index, quality: start, onMake }: { index: number; quality
   )
 }
 
-/** A shot's place in a One take band on the timeline. */
-interface Banded { at: 'first' | 'mid' | 'last'; planned: boolean; label?: string }
-
-function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, band, plan }: {
-  shot: Shot; index: number; videoId?: string; selected: boolean; jobId?: string; onSelect: () => void
+function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, picked, pickProps, inStrip }: {
+  shot: Shot; index: number; videoId?: string; selected: boolean; jobId?: string
+  onSelect: (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => void
   onMake: (opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality }) => Promise<unknown>
-  band?: Banded; plan?: RunPlan
+  /** Connected video: picked for the selection bar, the pointer handlers that pick, and in a strip. */
+  picked?: boolean; pickProps?: React.HTMLAttributes<HTMLDivElement>; inStrip?: boolean
 }) {
   const makeRef = useRef<HTMLButtonElement>(null)
   const [making, setMaking] = useState(false)
@@ -340,6 +399,9 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, ban
   const stale = shotsBeingFixed(doc, ctxReader(doc, ui)).has(shot.id) ? undefined : takeStale(doc, shot.id)
   // Quiet, never "out of date": the frame this clip lands on has changed since (features/connected-video.clan).
   const endDrift = endFrameDrift(doc, shot.id, videoId)
+  // In a film, a shot of a take run is made with its run: "Make shots 1–5 as one take".
+  const film = useFilm(videoId)
+  const runLabel = film?.label(shot.id)
   // Remake: this clip only; ▾ this and the clips after it (features/one-to-one-updates.clan).
   const update = useUpdate()
   const [error, setError] = useState<string | null>(null)
@@ -358,18 +420,18 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, ban
     await deleteFrom(docStore, (d) => removeTake(d, sel.id)) // Undo in the top bar puts it back
   }
   return (
-    <div className={`shotcard ${selected ? 'sel' : ''} ${band ? `inband ${band.at} ${band.planned ? 'planned' : ''}` : ''}`} data-shot-card={shot.id} role="button" tabIndex={0} onClick={onSelect} onKeyDown={(e) => {
+    <div className={`shotcard ${selected ? 'sel' : ''} ${picked ? 'picked' : ''} ${inStrip ? 'instrip' : ''}`} data-shot-card={shot.id} role="button" tabIndex={0}
+      aria-pressed={pickProps ? !!picked : undefined} onClick={(e) => onSelect(e)} {...pickProps} onKeyDown={(e) => {
       if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
         e.preventDefault() // Space would scroll the page
-        onSelect()
+        onSelect(e)
       }
     }}>
-      {band && <span className="ve-band" aria-hidden="true">{band.label && <span>{band.label}</span>}</span>}
       <div className="thumb">
         {thumb ? <img src={thumb} alt="" /> : shot.action ? <span className="ve-thumbwords">{shot.action}</span> : null}
         {jobId && <div style={{ position: 'absolute', inset: 0 }}><JobSlot jobId={jobId} compact /></div>}
       </div>
-      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} videoId={videoId} plan={plan} />}
+      {sel && <ShotMenu shot={shot} take={sel} n={selIdx + 1} only={takes.length <= 1} busy={isRunning(doc, jobId)} onDelete={remove} onError={setError} videoId={videoId} />}
       <div className="meta">
         <div className="row"><b>Shot {index + 1}</b><span className="faint">{shot.duration_s}s</span></div>
         <div className="row wrap" style={{ gap: 4 }}>
@@ -380,9 +442,9 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, ban
                 void updateDoc(docStore, (d) => pickTake(d, shot.id, t.id, videoId), 'pick take')
               }}>v{i + 1}</button>
           ))}
-          {!takes.length && !jobId && <button ref={makeRef} className="btn xs" aria-haspopup="dialog" aria-expanded={making} onClick={(e) => { e.stopPropagation(); setMaking(!making) }}>Make clip</button>}
+          {!takes.length && !jobId && !inStrip && <button ref={makeRef} className="btn xs" aria-haspopup="dialog" aria-expanded={making} onClick={(e) => { e.stopPropagation(); setMaking(!making) }}>{runLabel ?? 'Make'}</button>}
           <Float anchor={makeRef} open={making} onClose={() => setMaking(false)} role="dialog" label={`Make the clip for shot ${index + 1}`} className="clipbox">
-            {making && <MakeClipBox index={index} quality={shotQuality(doc, shot.id, videoId)} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
+            {making && <MakeClipBox index={index} quality={shotQuality(doc, shot.id, videoId)} title={runLabel} onMake={async (opts) => { await onMake(opts); setMaking(false) }} />}
           </Float>
           {sel?.quality && <TakeQuality take={sel} />}
           {showMock && sel?.kind === 'mock' && <span className="mockbadge">MOCK</span>}
@@ -415,9 +477,9 @@ function ShotCard({ shot, index, videoId, selected, jobId, onSelect, onMake, ban
 }
 
 /** A shot card's ⋯ menu: a new take (on the model that made this one, or another), and delete. */
-function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId, plan }: {
+function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId }: {
   shot: Shot; take: Take; n: number; only: boolean; busy: boolean; onDelete: () => void; onError: (message: string | null) => void
-  videoId?: string; plan?: RunPlan
+  videoId?: string
 }) {
   const { doc: docStore, ui: uiStore, runner, relay } = useServices()
   const doc = useDoc()
@@ -433,23 +495,25 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId, plan 
   const clip = mediaItem(doc, project, take.asset, 'clip')
   const [saving, save] = useDownload()
   // Its error shows under the card, like Make clip's (it failed silently before, 2026-10-09).
+  // In a film a New take goes through the planner: a shot in a take run makes the whole run again.
+  const film = useFilm(videoId)
+  const runWords = film?.label(shot.id)
   const newTake = (choice: ModelChoice | undefined) => {
     close()
     void send(async () => {
       onError(null)
       try {
-        // In a film, a clip that lands on the next frame lands on it again (the same first and last frames).
-        const end = plan ? landingShot(plan, shot.id) : undefined
-        await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice), quality: take.quality ?? shotQuality(doc, shot.id), ...(end ? { endShotId: end } : {}) })
+        const quality = take.quality ?? shotQuality(doc, shot.id)
+        if (film) await film.make(shot.id, { modelChoice: choiceToSend('clip', config, choice), quality, again: true })
+        else await submitClip({ relay, doc: docStore, ui: uiStore, runner }, shot.id, { parentTake: take, modelChoice: choiceToSend('clip', config, choice), quality })
       } catch (e) {
         onError(e instanceof Error ? e.message : 'That did not work.')
       }
     })
   }
-  // One take (features/connected-video.clan): remake this shot's window alone, or the whole run.
+  // One video (features/connected-video.clan): redo this shot's part alone; New take makes the whole video.
   const deps = { relay, doc: docStore, ui: uiStore, runner }
-  const windowed = !!plan && inTake(doc, shot.id, videoId)
-  const run = windowed ? takeRunOf(doc, shot.id, videoId) : undefined
+  const windowed = !!film && inTake(doc, shot.id, videoId)
   const redo = () => {
     close()
     void send(async () => {
@@ -465,18 +529,6 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId, plan 
       }
     })
   }
-  const remakeRun = () => {
-    close()
-    void send(async () => {
-      onError(null)
-      try {
-        if (!run || !videoId) throw new Error('That run is gone.')
-        await makeTake(deps, videoId, run.id, { modelChoice: choiceToSend('clip', config, { provider: take.provider as ModelChoice['provider'], model: take.model }), quality: take.quality ?? shotQuality(doc, shot.id) })
-      } catch (e) {
-        onError(e instanceof Error ? e.message : 'That did not work.')
-      }
-    })
-  }
   return (
     <>
       <button ref={ref} className={`shotmore ${open ? 'open' : ''}`} aria-label={`Shot ${shotNumber(doc, shot.id)} options`} aria-haspopup="menu" aria-expanded={!!open}
@@ -484,17 +536,15 @@ function ShotMenu({ shot, take, n, only, busy, onDelete, onError, videoId, plan 
       <Float anchor={ref} open={!!open} onClose={close} align="end" label={`Shot ${shotNumber(doc, shot.id)}, clip v${n}`} className={open === 'models' ? 'modelmenu' : ''}>
         {open === 'models' ? (
           <>
-            <div className="fhead">New take of shot {shotNumber(doc, shot.id)} with</div>
+            <div className="fhead">{runWords ? `${runWords} with` : `New take of shot ${shotNumber(doc, shot.id)} with`}</div>
             <ModelItems options={options} current={start} onPick={(o) => newTake(o)} />
           </>
         ) : (
           <>
             <div className="fhead">Shot {shotNumber(doc, shot.id)} · clip v{n}</div>
-            {windowed && <MenuItem icon="▶" disabled={busy || sending} hint="the shots around it stay" onSelect={redo}>{sending ? 'Sending…' : 'Remake just this shot'}</MenuItem>}
-            {windowed && run && <MenuItem icon="⟳" disabled={busy || sending || runBusy(doc, run)} onSelect={remakeRun}>Make the whole run again</MenuItem>}
-            {windowed && <div className="fsep" />}
-            <MenuItem icon="▶" disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : 'New take'}</MenuItem>
-            {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>New take on another model</MenuItem>}
+            {windowed && <MenuItem icon="▶" disabled={busy || sending} hint="the rest stays" onSelect={redo}>{sending ? 'Sending…' : 'Redo just this part'}</MenuItem>}
+            <MenuItem icon={runWords ? '⟳' : '▶'} disabled={busy || sending} onSelect={() => newTake(start)}>{sending ? 'Sending…' : runWords ?? 'New take'}</MenuItem>
+            {options.length > 1 && <MenuItem icon="⇄" disabled={busy || sending} hint="▸" onSelect={() => setOpen('models')}>{runWords ? 'Make it on another model' : 'New take on another model'}</MenuItem>}
             {take.quality === 'draft' && (
               <MenuItem icon="★" disabled={busy || sending} hint={finalHint(doc, take)} onSelect={() => { close(); void send(async () => {
                 onError(null)
@@ -534,6 +584,20 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
   // Not in this browser (another device, cleared storage): the relay's copy (2026-10-09).
   const url = useBlobUrl(cur?.take.asset) ?? remoteUrl(doc, cur?.take.asset)
   const window_ = cur?.take.segments?.[0]
+  // One video (features/connected-video.clan): its shots' windows of the one file. In shot view the player
+  // spans them all, with a tick at each beat; picking a shot seeks to its window.
+  const beats = !cur?.take.segments?.[0] ? [] : shots
+    .map((s) => ({ shotId: s.id, take: currentTake(doc, s.id, videoId) }))
+    .filter((x) => x.take?.job_id === cur.take.job_id && x.take.segments[0])
+    .map((x) => ({ shotId: x.shotId, in: x.take!.segments[0].in_s, out: x.take!.segments[0].out_s }))
+  const spans = mode === 'shot' && beats.length > 1
+  const autoPick = useRef(false)
+  const windowIn = window_?.in_s
+  useEffect(() => {
+    if (!spans || windowIn === undefined || !video.current) return
+    if (autoPick.current) { autoPick.current = false; return }
+    video.current.currentTime = windowIn
+  }, [spans, windowIn])
   // The relay's mock makes a still for a clip, not a video: it shows as the picture it is.
   const still = !!(cur && doc.assets[cur.take.asset]?.mime.startsWith('image/'))
   const stillS = cur ? cur.take.duration_s ?? cur.shot.duration_s : 0
@@ -586,12 +650,16 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
   const services = useServices()
   const deps = { relay, doc: docStore, ui: services.ui, runner }
 
+  // In a film a New take goes through the planner: a shot in a take run makes the whole run again.
+  const film = useFilm(videoId)
+  const againWords = cur ? film?.label(cur.shot.id) : undefined
   /** Make the shot again from its frame, as a new take of this one. */
   const again = () => send(async () => {
     if (!cur) return
     setError(null)
     try {
-      await submitClip(deps, cur.shot.id, { parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice), quality })
+      if (film) await film.make(cur.shot.id, { modelChoice: choiceToSend('clip', config, choice), quality, again: true })
+      else await submitClip(deps, cur.shot.id, { parentTake: cur.take, modelChoice: choiceToSend('clip', config, choice), quality })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work.')
     }
@@ -708,7 +776,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
         ) : cur && url ? (
           <div className="stagebox" ref={stageBox} style={{ height: '100%' }}>
             <video
-              key={cur.take.id}
+              key={spans ? cur.take.asset : cur.take.id}
               ref={video}
               src={url}
               controls={!drawing}
@@ -726,6 +794,14 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
               }}
               onTimeUpdate={(e) => {
                 setT(e.currentTarget.currentTime)
+                // Across one video, the shot playing follows the time; it stops at the end of the last window.
+                if (spans) {
+                  const now = e.currentTarget.currentTime
+                  const at = beats.find((w) => now >= w.in && now < w.out)
+                  if (at && at.shotId !== cur.shot.id) { autoPick.current = true; onPickShot(at.shotId) }
+                  if (now >= beats.at(-1)!.out) e.currentTarget.pause()
+                  return
+                }
                 // A window of one take ends at the next cut (features/connected-video.clan).
                 if (window_ && e.currentTarget.currentTime >= window_.out_s) {
                   if (mode === 'all') setIdx((i) => (i + 1 < playlist.length ? i + 1 : 0))
@@ -769,6 +845,12 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
           if (video.current) video.current.currentTime = ((e.clientX - b.left) / b.width) * dur
         }}>
           <div className="head" style={{ left: `${(t / dur) * 100}%` }} />
+          {spans && beats.map((w) => (
+            <button key={w.shotId} type="button" className={`ve-beat ${w.shotId === cur.shot.id ? 'cur' : ''}`} style={{ left: `${(w.in / dur) * 100}%`, width: `${((w.out - w.in) / dur) * 100}%` }}
+              aria-label={`Shot ${shotNumber(doc, w.shotId)}`} title={`Shot ${shotNumber(doc, w.shotId)}`} onClick={(e) => { e.stopPropagation(); onPickShot(w.shotId) }}>
+              <span>{shotNumber(doc, w.shotId)}</span>
+            </button>
+          ))}
           {reviews.filter((r) => r.target.id === cur.take.id).map((r) => (
             <span key={r.id} className={`mark ${r.state === 'resolved' ? 'done' : ''}`} style={{ left: `${Math.min(100, ((r.at_s ?? 0) / dur) * 100)}%` }} title={r.text} onClick={(e) => { e.stopPropagation(); jump(r) }} />
           ))}
@@ -863,7 +945,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
             {cur.take.quality === 'draft' && (
               <button className="btn sm" disabled={fixing || sending} onClick={() => void toFinal()} title={finalHint(doc, cur.take)}>Remake as Final</button>
             )}
-            <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title={selectedFrame(doc, cur.shot.id) ? 'Make this shot again from its frame' : 'Make this shot again from its words'}>{sending ? 'Sending…' : 'New take'}</button>
+            <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title={againWords ? 'These shots are one video: they are made together' : selectedFrame(doc, cur.shot.id) ? 'Make this shot again from its frame' : 'Make this shot again from its words'}>{sending ? 'Sending…' : againWords ?? 'New take'}</button>
           </div>
           </div>
         </div>
@@ -991,60 +1073,6 @@ function QualityDefault({ videoId }: { videoId: string }) {
   )
 }
 
-/** How shots join (features/connected-video.clan), beside the quality in the editor's bar: As one film (Make
- *  clips plans runs that join) or Shot by shot (each clip alone, as before). */
-function JoinDefault({ videoId, join }: { videoId: string; join: VideoJoin }) {
-  const { doc: docStore } = useServices()
-  return (
-    <label className="qdefault" title="As one film: shots that carry on are made together or land on the next frame. Shot by shot: each clip on its own.">
-      How shots join
-      <select aria-label="How shots join" value={join} onChange={(e) => void setVideoJoin(docStore, videoId, e.target.value as VideoJoin)}>
-        {(['film', 'shots'] as const).map((j) => <option key={j} value={j}>{JOIN_NAMES[j]}</option>)}
-      </select>
-    </label>
-  )
-}
-
-/** Each run being made now: "Making shots 2-5 together". */
-function RunProgress({ videoId }: { videoId?: string }) {
-  const doc = useDoc()
-  const ui = useUi()
-  const lines = runProgress(doc, ui, videoId)
-  if (!lines.length) return null
-  return <div className="ve-runs" role="status">{lines.map((l) => <span key={l} className="pt-pill">{l}</span>)}</div>
-}
-
-const JOIN_GLYPH: Record<string, string> = { 'One take': '∿', 'Lands on the next frame': '⇥', Cut: '│', Dissolve: '◐', Dip: '◑' }
-
-/** The chip between two shots: the join in words on a tap, and the joins this model allows. A change is a
- *  person's join (seam by human) and a History entry. */
-function GapChip({ videoId, prev, shot, n, model, plan, band }: { videoId: string; prev: Shot; shot: Shot; n: number; model: PlanModel | null; plan?: RunPlan; band: boolean }) {
-  const { doc: docStore } = useServices()
-  const doc = useDoc()
-  const ref = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
-  const seam = joinBefore(doc, videoId, shot.id)
-  const kind: SeamKind = seam?.kind ?? 'cut'
-  const label = joinLabel(kind, { inTake: sameTake(doc, videoId, prev.id, shot.id, plan) && kind !== 'cut' && kind !== 'dissolve' && kind !== 'dip', model })
-  const choices = joinChoices(model)
-  return (
-    <span className={`ve-gap ${band ? 'inband' : ''}`}>
-      <button ref={ref} type="button" className={`ve-gapchip ${seam?.by === 'human' ? 'human' : ''}`} aria-haspopup="menu" aria-expanded={open}
-        aria-label={`Join between shots ${n} and ${n + 1}: ${label}`} title={label} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
-        <span aria-hidden="true">{JOIN_GLYPH[label] ?? '│'}</span>
-      </button>
-      <Float anchor={ref} open={open} onClose={() => setOpen(false)} label={`Join between shots ${n} and ${n + 1}`}>
-        <div className="fhead">{label}</div>
-        <div className="ve-gapwhy faint">{seam?.by === 'human' ? 'You chose this join.' : 'Dex chose this from the shots.'}</div>
-        {choices.map((c) => (
-          <MenuItem key={c.kind} icon={c.kind === kind ? '✓' : JOIN_GLYPH[c.label] ?? ''} hint={c.hint}
-            onSelect={() => { setOpen(false); if (c.kind !== kind || seam?.by !== 'human') void setJoin(docStore, videoId, shot.id, c.kind, c.label) }}>{c.label}</MenuItem>
-        ))}
-      </Float>
-    </span>
-  )
-}
-
 /** Remake just this shot runs on the take's model when it lands on frames closely (wan3), else on Veo 3.1
  *  Fast, retimed (design 4.6). */
 function redoModel(take: Take): ModelChoice | undefined {
@@ -1052,4 +1080,36 @@ function redoModel(take: Take): ModelChoice | undefined {
   if (own && canLand(own)) return { provider: own.provider, model: own.model }
   const veo = modelEntry(take.provider as ModelChoice['provider'], 'veo3.1_fast')
   return veo ? { provider: veo.provider, model: veo.model } : own ? { provider: own.provider, model: own.model } : undefined
+}
+
+/**
+ * In a film (features/connected-video.clan), every clip a shot asks for goes through the planner: a shot in
+ * a take run makes the whole run, "Make shots 1–5 as one take". null when the video makes its clips shot by
+ * shot, or with the flag off (each entry point then makes its lone clip, as before).
+ */
+function useFilm(videoId?: string) {
+  const { doc: docStore, ui: uiStore, runner, relay } = useServices()
+  const doc = useDoc()
+  const ui = useUi()
+  const { config } = useConfig()
+  if (!videoId || videoJoin(doc, videoId, config) !== 'film') return null
+  const last = lastWorkedModel(doc, 'clip', config)
+  const model = videoModel(doc, videoId, config, last)
+  const plan = model ? videoPlan(doc, videoId, model) : undefined
+  const busy = (id: string) => isRunning(doc, jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id) ?? runJobFor(doc, ui, id))
+  const takeRun = (shotId: string) => { const r = planRunOf(plan, shotId); return r && isTakeRun(r) ? r : undefined }
+  return {
+    plan,
+    takeRun,
+    /** For a shot of a strip: "Make as one video", or once it is, "Make the whole video again". */
+    label: (shotId: string) => { const r = takeRun(shotId); return r ? (isOneTake(doc, videoId, r.shotIds) ? 'Make the whole video again' : 'Make as one video') : undefined },
+    make: async (shotId: string, opts: { text?: string; modelChoice?: ModelChoice; quality?: ClipQuality; again?: boolean }) => {
+      const failed = await makeRuns({ relay, doc: docStore, ui: uiStore, runner }, {
+        videoId, shotIds: [shotId], config, busy, fromWords: clipMode(doc, videoId) === 'straight',
+        modelChoice: opts.modelChoice ?? choiceToSend('clip', config, last),
+        ...(opts.quality ? { quality: opts.quality } : {}), ...(opts.again ? { again: true } : {}), ...(opts.text ? { texts: { [shotId]: opts.text } } : {}),
+      })
+      if (failed.length) throw new Error(failed.join(' '))
+    },
+  }
 }

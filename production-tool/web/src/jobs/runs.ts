@@ -18,7 +18,7 @@ import { choiceToSend, modelChoicesFor, modelLabel, resolveQuality, type Sheets 
 import { SHEETS } from '../contracts/load'
 import type { CapabilitySheet, ClipQuality, Config, Id, ModelChoice, ProductionDocument, Provider, RunMode, Seam, SeamKind, Shot, VideoJoin, VideoRun } from '../contracts/types'
 import { landUpdate, systemUpdate } from '../doc/store'
-import { edlItemFor, edlOf, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
+import { currentTake, edlItemFor, edlOf, shotsOf, storyboardOfVideo, takesOf } from '../model/selectors'
 import { rankBetween } from '../../../clan-store/src'
 import { makeClip, makeTake, videoQuality } from './clips'
 import type { FrameDeps } from './frames'
@@ -51,6 +51,10 @@ export interface PlannedRun {
   model: PlanModel
   /** frames: a shot whose clip ends on the next shot's frame → that shot. */
   lands: Record<Id, Id>
+  /** A take on another model than the pick, and why ("Veo 3.1 Fast cannot make one video"). */
+  switched?: string
+  /** The shots after it carry on in the same scene but were too many or too long for one video. */
+  splitAfter?: boolean
 }
 
 export interface RunPlan {
@@ -133,6 +137,29 @@ export function segmentRun<T extends { durationS: number }>(shots: T[], maxS = T
 }
 
 const BREAKS: SeamKind[] = ['cut', 'dissolve', 'dip']
+const round1 = (s: number) => Math.round(s * 10) / 10
+
+/** The model a run switches to when the pick cannot make it as one video: wan3 on the pick's provider. */
+export function takeModelFor(model: PlanModel, sheets: Sheets = SHEETS): PlanModel | undefined {
+  const m = modelEntry(model.provider, 'wan3', sheets)
+  return m && m.model !== model.model ? m : undefined
+}
+
+/** Two neighbouring shots may be joined into one video: nothing but a cut keeps them apart (not a product,
+ *  type or end card shot, a spoken line, a refused clip). */
+export function canJoin(prev: PlanShot, next: PlanShot): boolean {
+  return !hardBreak({ ...prev, made: false }, { ...next, made: false }, { kind: 'continue', by: 'human' })
+}
+
+/** Why two shots cannot be one video, in words. */
+export function joinBlock(prev: PlanShot, next: PlanShot, n: number): string | undefined {
+  if (canJoin(prev, next)) return undefined
+  if (next.product) return `Shot ${n + 1} shows the product: it starts its own video`
+  if (prev.kind === 'end_card' || next.kind === 'end_card') return 'The end card stays on its own'
+  if (prev.text || next.text) return 'A shot with type on screen stays on its own'
+  if (prev.spoken || next.spoken) return 'A shot where someone speaks is made on its own, with sound'
+  return 'These shots are made on their own'
+}
 
 /** A run never crosses from `prev` into `next` (design 4.3 rule 1 and the audio break, rule 2). */
 function hardBreak(prev: PlanShot, next: PlanShot, join: Seam): boolean {
@@ -150,7 +177,7 @@ function hardBreak(prev: PlanShot, next: PlanShot, join: Seam): boolean {
  * The runs for `shots` (in order) on `model`. join "shots" makes every shot alone, as before. Shots marked
  * made are in no run but stay as frames to land on. Pure.
  */
-export function planRuns(shots: PlanShot[], model: PlanModel, opts: { join?: 'film' | 'shots'; speaker?: PlanModel } = {}): RunPlan {
+export function planRuns(shots: PlanShot[], model: PlanModel, opts: { join?: 'film' | 'shots'; speaker?: PlanModel; takeModel?: PlanModel } = {}): RunPlan {
   const joins: Record<Id, Seam> = {}
   for (let i = 1; i < shots.length; i++) joins[shots[i].id] = joinKind(shots[i - 1], shots[i])
   const runs: PlannedRun[] = []
@@ -178,12 +205,26 @@ export function planRuns(shots: PlanShot[], model: PlanModel, opts: { join?: 'fi
       continue
     }
     const take = model.video.take
-    if (take?.ok) {
+    // A run the pick cannot make as one video (no takes, or longer than its takes) switches to a model that
+    // can (opts.takeModel: wan3), for that run only; separate shots keep the pick.
+    const other = opts.takeModel && opts.takeModel.model !== model.model && canTake(opts.takeModel) ? opts.takeModel : undefined
+    if (take?.ok || other) {
+      const lim = (m: PlanModel | undefined) => ({ s: m?.video.take?.ok ? m.video.take.maxS ?? TAKE_MAX_S : 0, n: m?.video.take?.ok ? m.video.take.maxShots ?? TAKE_MAX_SHOTS : 0 })
+      const maxS = Math.max(lim(model).s, lim(other).s)
+      const maxShots = Math.max(lim(model).n, lim(other).n)
       // Segments meet on a cut until take.withLast is proven (P1); phase C would carry the join instead.
-      for (const seg of segmentRun(g, take.maxS ?? TAKE_MAX_S, take.maxShots ?? TAKE_MAX_SHOTS)) {
+      const segs = segmentRun(g, maxS, maxShots)
+      for (const [k, seg] of segs.entries()) {
         if (seg.length === 1) runs.push(single(seg[0]))
-        // The run's first frame pins the take; with none, its frames and named pictures go as references.
-        else runs.push({ shotIds: seg.map((s) => s.id), mode: seg[0].hasFrame ? 'take' : 'take_refs', model, lands: {} })
+        else {
+          const len = seg.reduce((a, s) => a + s.durationS, 0)
+          const fits = !!take?.ok && len <= lim(model).s + 1e-6 && seg.length <= lim(model).n
+          const m = fits || !other ? model : other
+          const why = m === model ? undefined : !take?.ok ? `${model.label} cannot make one video` : `${round1(len)} s is longer than ${model.label} makes in one go (${lim(model).s} s)`
+          // The run's first frame pins the take; with none, its frames and named pictures go as references.
+          runs.push({ shotIds: seg.map((s) => s.id), mode: seg[0].hasFrame ? 'take' : 'take_refs', model: m, lands: {}, ...(why ? { switched: why } : {}) })
+        }
+        if (k < segs.length - 1) runs.at(-1)!.splitAfter = true
       }
     } else if (canLand(model)) {
       runs.push({ shotIds: g.map((s) => s.id), mode: 'frames', model, lands: {} })
@@ -224,36 +265,73 @@ export function shotsWords(d: ProductionDocument, shotIds: Id[]): string {
   if (!n.length) return 'no shots'
   if (n.length === 1) return `shot ${n[0]}`
   const runOn = n.every((x, i) => i === 0 || x === n[i - 1] + 1)
-  return runOn ? `shots ${n[0]}-${n.at(-1)}` : `shots ${n.join(', ')}`
+  return runOn ? `shots ${n[0]}–${n.at(-1)}` : `shots ${n.join(', ')}`
 }
 
 /** How a run is made, in words for History ("as one take"). */
-export function modeWords(mode: RunMode, lands = 0): string {
-  switch (mode) {
-    case 'take': return 'as one take'
-    case 'take_refs': return 'as one take, from the pictures'
-    case 'frames': return lands ? 'each landing on the next frame' : 'one at a time'
-    default: return 'one at a time'
-  }
+export function modeWords(mode: RunMode): string {
+  return mode === 'take' || mode === 'take_refs' ? 'as one video' : 'one at a time'
 }
 
 // ── The driver ──────────────────────────────────────────────────────────────
 
+/** The run the live plan puts a shot in. */
+export function planRunOf(plan: RunPlan | undefined, shotId: Id): PlannedRun | undefined {
+  return plan?.runs.find((r) => r.shotIds.includes(shotId))
+}
+
+/** A take run of the plan: one generation over its shots. */
+export function isTakeRun(r: PlannedRun | undefined): boolean {
+  return !!r && (r.mode === 'take' || r.mode === 'take_refs') && r.shotIds.length > 1
+}
+
+/** These shots' clips in the cut are already exactly one take: windows of one job, and no other shot's. A
+ *  shot with a separate clip (or none) does not count, so a take is made over it. */
+export function isOneTake(d: ProductionDocument, videoId: Id | undefined, shotIds: Id[]): boolean {
+  const takes = shotIds.map((id) => currentTake(d, id, videoId))
+  const jobId = takes[0]?.job_id
+  if (!jobId || !takes.every((t) => t?.segments[0] && t.job_id === jobId)) return false
+  const sb = storyboardOfVideo(d, videoId)
+  const all = sb ? shotsOf(d, sb.id).filter((s) => currentTake(d, s.id, videoId)?.job_id === jobId).map((s) => s.id) : []
+  return all.length === shotIds.length
+}
+
+/** The plan's take runs whose shots are not one take yet: what "Make shots 1–5 as one take" makes. */
+export function pendingTakes(d: ProductionDocument, videoId: Id | undefined, plan: RunPlan | undefined): PlannedRun[] {
+  return (plan?.runs ?? []).filter((r) => isTakeRun(r) && !isOneTake(d, videoId, r.shotIds))
+}
+
+/** "Make shots 1–5 as one take" (again, when they already are one). */
+export function takeActionLabel(d: ProductionDocument, run: PlannedRun, again = false): string {
+  return `Make ${shotsWords(d, run.shotIds)} as one take${again ? ' again' : ''}`
+}
+
 export interface MakeRunsOpts {
   videoId: Id
-  /** The shots picked in the send tray. */
+  /** The shots asked for: the send tray's picks, or the one shot a card or the player makes. */
   shotIds: Id[]
   config: Config
   modelChoice?: ModelChoice
   quality?: ClipQuality
   fromWords?: boolean
   sheets?: Sheets
+  /** A new take of shots that have clips (a card's or the player's New take): a take run is made again, a
+   *  lone shot gets a new version of its clip. Absent: only what is not made yet. */
+  again?: boolean
+  /** A shot being made now: it is left alone, and so is any take run it is in. */
+  busy?: (shotId: Id) => boolean
+  /** Words for one shot's clip only (Make clip's box). In a take, they go on that shot's line. */
+  texts?: Record<Id, string>
 }
 
 /**
- * Make clips "As one film": plan the picked shots into runs, record them (one History entry per run) with
- * the joins Dex chose, and send each run. A run that cannot be sent does not stop the others; each failure
- * comes back as "Shot 3: …" or "Shots 2-5: …".
+ * Make clips "As one film": plan every shot of the video into runs, then make the runs the asked shots are
+ * in. A take run is made whole whenever its shots are not one take yet, over separate clips too (its windows
+ * become each shot's new take; the old clips stay as versions): a shot in a take run never gets a clip of its
+ * own. A shot alone (a cut, dissolve or dip join, a spoken line, an end card, a product or type shot, or a
+ * model that makes no takes) is made only when it has no clip, or `again`. Records each run made (one History
+ * entry each) and the joins Dex chose. A run that cannot be sent does not stop the others; each failure comes
+ * back as "Shot 3: …" or "Shots 2–5: …".
  */
 export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<string[]> {
   const sheets = opts.sheets ?? SHEETS
@@ -264,13 +342,25 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
   const quality = opts.quality ?? videoQuality(d, opts.videoId)
   const model = planModel(opts.config, opts.modelChoice, quality, sheets)
   if (!model) throw new Error('No model can make clips right now.')
+  const busy = opts.busy ?? (() => false)
   const shots = shotsOf(d, sb.id)
-  const facts = shots.map((s) => planShot(d, s, {
-    hasFrame: !!selectedFrame(d, s.id), videoId: opts.videoId,
-    made: !opts.shotIds.includes(s.id) || takesOf(d, s.id).length > 0,
-  }))
-  const plan = planRuns(facts, model, { join: 'film', speaker: speakerModel(model, sheets) })
-  const ids = plan.runs.map(() => newUlidId('run'))
+  const facts = shots.map((s) => planShot(d, s, { hasFrame: !!selectedFrame(d, s.id), videoId: opts.videoId }))
+  const plan = planRuns(facts, model, { join: 'film', speaker: speakerModel(model, sheets), takeModel: takeModelFor(model, sheets) })
+  const asked = new Set(opts.shotIds)
+  // What is made: each take run an asked shot is in, unless it is one take already (or being made); each asked
+  // lone shot with no clip yet (any, with again).
+  const work: { run: PlannedRun; shotIds: Id[] }[] = []
+  for (const r of plan.runs) {
+    if (!r.shotIds.some((id) => asked.has(id))) continue
+    if (isTakeRun(r)) {
+      if (r.shotIds.some(busy) || (!opts.again && isOneTake(d, opts.videoId, r.shotIds))) continue
+      work.push({ run: r, shotIds: r.shotIds })
+      continue
+    }
+    const ids = r.shotIds.filter((id) => asked.has(id) && !busy(id) && (opts.again || !takesOf(d, id).length))
+    if (ids.length) work.push({ run: r, shotIds: ids })
+  }
+  const ids = work.map(() => newUlidId('run'))
   // Dex's joins on the cut's items (made now, in shot order, for shots with no clip yet); a person's stay.
   await systemUpdate(deps.doc, (x) => {
     const v = x.videos[opts.videoId]
@@ -287,37 +377,40 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
     }
   }, 'sync')
   // One entry per run: Dex's plan of it, the model and how (the credits are on each job's landing).
-  for (const [i, r] of plan.runs.entries()) {
-    const lands = Object.keys(r.lands).length
+  for (const [i, { run: r, shotIds }] of work.entries()) {
+    const lands = shotIds.filter((id) => r.lands[id]).length
     await landUpdate(deps.doc, (x) => {
       const v = x.videos[opts.videoId]
       if (!v) return
       v.runs ??= {}
-      v.runs[ids[i]] = { shot_ids: r.shotIds, mode: r.mode, model: r.model.model, state: 'planned', planned_by: 'crew' }
+      v.runs[ids[i]] = { shot_ids: shotIds, mode: r.mode, model: r.model.model, state: 'planned', planned_by: r.shotIds.some((id) => plan.joins[id]?.by === 'human') ? 'human' : 'crew' }
     }, {
-      action: `plan ${shotsWords(d, r.shotIds)} ${modeWords(r.mode, lands)} on ${r.model.label}`,
+      action: `plan ${shotsWords(d, shotIds)} ${modeWords(r.mode)} on ${r.model.label}`,
       agent: 'dex',
-      rationale: lands ? `${lands} of ${r.shotIds.length} end on the next shot's frame: the action carries on in the same setup.` : undefined,
+      rationale: [r.switched && `${r.switched}, so ${r.model.label} makes it.`, lands && `${lands} of ${shotIds.length} end on the next shot's frame: the action carries on in the same setup.`].filter(Boolean).join(' ') || undefined,
     })
   }
   const failed: string[] = []
   const name = (shotIds: Id[]) => { const w = shotsWords(d, shotIds); return w[0].toUpperCase() + w.slice(1) }
-  for (const [i, r] of plan.runs.entries()) {
+  for (const [i, { run: r, shotIds }] of work.entries()) {
     const pick = r.model.model === model.model && r.model.provider === model.provider ? opts.modelChoice
       : choiceToSend('clip', opts.config, { provider: r.model.provider, model: r.model.model }, sheets)
-    if (r.mode === 'take' || r.mode === 'take_refs') {
+    if (isTakeRun(r)) {
       try {
-        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality })
+        await makeTake(deps, opts.videoId, ids[i], { modelChoice: pick, quality, ...(opts.texts ? { texts: opts.texts } : {}) })
       } catch (e) {
-        failed.push(`${name(r.shotIds)}: ${e instanceof Error ? e.message : 'that did not work.'}`)
+        failed.push(`${name(shotIds)}: ${e instanceof Error ? e.message : 'that did not work.'}`)
       }
       continue
     }
-    for (const id of r.shotIds) {
+    for (const id of shotIds) {
+      const parent = opts.again ? currentTake(d, id, opts.videoId) : undefined
       try {
         await makeClip(deps, id, {
           modelChoice: pick, quality, videoId: opts.videoId, fromWords: opts.fromWords,
           ...(r.lands[id] ? { endShotId: r.lands[id] } : {}),
+          ...(parent ? { parentTake: parent } : {}),
+          ...(opts.texts?.[id] ? { text: opts.texts[id] } : {}),
         })
       } catch (e) {
         failed.push(`${name([id])}: ${e instanceof Error ? e.message : 'that did not work.'}`)
@@ -329,22 +422,23 @@ export async function makeRuns(deps: FrameDeps, opts: MakeRunsOpts): Promise<str
 }
 
 /**
- * Make clips for the shots picked in the send tray (`ids`, in `shots` order; `skip`: one already made or
- * being made). As one film when connected video is on and the video joins as a film (makeRuns); otherwise,
- * and always with the flag off, each shot alone, exactly as before. A shot that cannot be made does not stop
- * the others; each failure is named.
+ * Make clips for the shots asked for (`ids`, in `shots` order). As one film when connected video is on and
+ * the video joins as a film (makeRuns, which may make a whole take for one asked shot); otherwise, and always
+ * with the flag off, each shot alone, exactly as before: skipping one that has a clip or is `busy`. A shot
+ * that cannot be made does not stop the others; each failure is named.
  */
 export async function makeClips(deps: FrameDeps, opts: {
   videoId?: Id; shots: Shot[]; ids: Id[]; config: Config; join: VideoJoin | null; modelChoice?: ModelChoice; quality?: ClipQuality; fromWords?: boolean
-  skip: (shotId: Id) => boolean
+  busy: (shotId: Id) => boolean
 }): Promise<string[]> {
   if (opts.join === 'film' && opts.videoId) {
-    return makeRuns(deps, { videoId: opts.videoId, shotIds: opts.ids.filter((id) => !opts.skip(id)), config: opts.config, modelChoice: opts.modelChoice,
-      ...(opts.quality ? { quality: opts.quality } : {}), fromWords: opts.fromWords })
+    return makeRuns(deps, { videoId: opts.videoId, shotIds: opts.ids, config: opts.config, modelChoice: opts.modelChoice,
+      ...(opts.quality ? { quality: opts.quality } : {}), fromWords: opts.fromWords, busy: opts.busy })
   }
+  const d = deps.doc.get()
   const failed: string[] = []
   for (const [i, s] of opts.shots.entries()) {
-    if (!opts.ids.includes(s.id) || opts.skip(s.id)) continue
+    if (!opts.ids.includes(s.id) || takesOf(d, s.id).length || opts.busy(s.id)) continue
     try {
       await makeClip(deps, s.id, { modelChoice: opts.modelChoice, ...(opts.quality ? { quality: opts.quality } : {}), videoId: opts.videoId, fromWords: opts.fromWords })
     } catch (e) {

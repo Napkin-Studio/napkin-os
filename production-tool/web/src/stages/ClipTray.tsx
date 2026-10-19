@@ -25,7 +25,7 @@ export interface TrayShot { shot: Shot; n: number }
 
 const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : s)
 
-export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, quality: start, onMake }: {
+export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, quality: start, onMake, makeLabel }: {
   anchor: RefObject<HTMLElement | null>
   open: boolean
   onClose: () => void
@@ -37,6 +37,8 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, quali
   /** The video's default quality (features/clip-quality.clan); the tray may pick another for this batch. */
   quality: ClipQuality
   onMake: (shotIds: string[], modelChoice?: ModelChoice, quality?: ClipQuality) => void
+  /** The send's name when it makes one take of these shots (features/connected-video.clan). */
+  makeLabel?: string
 }) {
   const doc = useDoc()
   const ui = useUi()
@@ -104,7 +106,7 @@ export function ClipTray({ anchor, open, onClose, shots, fromWords, ratio, quali
         <button type="button" className="btn sm" onClick={onClose}>Cancel</button>
         <button type="button" className="btn sm primary" disabled={!picked.length}
           onClick={() => onMake(picked.map((r) => r.shot.id), choiceToSend('clip', config, choice), quality)}>
-          {picked.length > 1 ? `Make ${picked.length} clips` : 'Make clips'}
+          {makeLabel ?? (picked.length > 1 ? `Make ${picked.length} clips` : 'Make clips')}
         </button>
       </div>
     </Float>
