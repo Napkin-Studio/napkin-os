@@ -586,6 +586,27 @@ pub fn dispatch(
             })
         }
 
+        // Harvest (Contract 6 §6): what an accepted document offers the Brand
+        // Clan attached to it, and taking what a person ticks.
+        "/harvest" => {
+            let app = req.body_json().get("app_id").and_then(|x| x.as_str()).map(String::from);
+            match session.read(|d| crate::harvest::offer(&**session.store(), ctx, d, app.as_deref())) {
+                Ok(v) => HostResponse::json(200, &v),
+                Err(e) => e.into(),
+            }
+        }
+        "/harvest/apply" => {
+            let body = req.body_json();
+            let applied = session.read(|d| crate::harvest::apply(&**session.store(), ctx, d, &body));
+            match applied {
+                Ok((change, reply)) => match session.store().apply(&change) {
+                    Ok(_) => HostResponse::json(200, &reply),
+                    Err(e) => e.into(),
+                },
+                Err(e) => e.into(),
+            }
+        }
+
         // The host owns the file dialog; ask the shell to run it.
         "/open-file" => HostResponse::ok_json().with_event(HostEvent::OpenFileRequest),
 

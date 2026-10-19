@@ -574,8 +574,8 @@ pub fn detach(target: &ClanFile, app_id: &str) -> Result<DetachOutcome>;
 
 Routes (§8): `GET /attach-targets`, `POST /attach {document_id}`,
 `POST /attach/update {document_id}`, `POST /attach/detach {app_id}`;
-`GET /upstream` gains `attached[]`. Harvest (`GET /harvest`, `POST /harvest`)
-is specified in `brand-clan.md` §6 and is not built yet.
+`GET /upstream` gains `attached[]`. Harvest (`GET /harvest`, `POST /harvest/apply`)
+is specified in `brand-clan.md` §6.
 
 ---
 

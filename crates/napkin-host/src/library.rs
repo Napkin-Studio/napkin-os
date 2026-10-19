@@ -620,14 +620,14 @@ fn tenant_of(clan: &ClanFile) -> Option<String> {
 /// `clan` belongs to another tenant than the one `ctx` acts for. A context
 /// with no tenant (the desktop, the browser) and a document that names none
 /// are never foreign.
-fn foreign(ctx: &Ctx, clan: &ClanFile) -> bool {
+pub(crate) fn foreign(ctx: &Ctx, clan: &ClanFile) -> bool {
     match (&ctx.scope.org, tenant_of(clan)) {
         (Some(ours), Some(theirs)) => *ours != theirs,
         _ => false,
     }
 }
 
-fn chain_of(clan: &ClanFile) -> DecisionChain {
+pub(crate) fn chain_of(clan: &ClanFile) -> DecisionChain {
     clan.read_entry(CHAIN)
         .ok()
         .and_then(|b| DecisionChain::from_yaml(&b).ok())
@@ -889,7 +889,7 @@ pub struct AttachTarget {
     pub attached: bool,
 }
 
-fn kit_version(clan: &ClanFile) -> Option<u64> {
+pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
     let data: serde_yaml::Value = serde_yaml::from_slice(&clan.read_entry(DATA).ok()?).ok()?;
     data.get("kit")?.get("version")?.as_u64()
 }
@@ -958,7 +958,7 @@ pub enum AttachMode {
     Update,
 }
 
-fn locked_error(clan: &ClanFile) -> Option<HostError> {
+pub(crate) fn locked_error(clan: &ClanFile) -> Option<HostError> {
     crate::ops::review::lock_of(&chain_of(clan), clan.document_id()).map(|d| {
         HostError::conflict(format!(
             "the document was locked by {} at {}; changes make a new version",
@@ -1020,7 +1020,7 @@ fn new_decisions(before: &ClanFile, after: &ClanFile) -> Vec<Decision> {
         .collect()
 }
 
-fn find_source(
+pub(crate) fn find_source(
     store: &dyn DocStore,
     ctx: &Ctx,
     doc: &Document,

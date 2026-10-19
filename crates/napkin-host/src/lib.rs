@@ -27,6 +27,7 @@ pub mod error;
 pub mod event;
 #[cfg(feature = "native")]
 pub mod export;
+pub mod harvest;
 pub mod html;
 pub mod library;
 pub mod log;

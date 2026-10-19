@@ -339,28 +339,35 @@ Brand Clan"**. Nothing happens until a person opens it and confirms. On
 marked for change is listed with "the client asked for a change here" and
 is unticked by default; the exemplar's `version` is the reviewed one.
 
-`GET /harvest` (host) computes the candidates, no model (`409` unless the
-newest `client_review` is `accepted` or `accepted_with_changes`):
+`GET /harvest` (host; optional body `{app_id}`) computes the offer, no model
+(`409` unless a Brand Clan is attached and the newest document-level
+`client_review` is `accepted` or `accepted_with_changes`):
 
-1. **The document itself** as `work.<id>`: `document_id`, `app_id`, title,
-   kind by app, `version` = the review's `seen.version`, the review's
-   decision id, `accepted_at`, the app's cover assets by hash.
-2. **Declared fields** from the app's `attach.harvest` map, each with its
-   current value and the kit's current value side by side (new, changed,
-   same).
-3. **Production Tool only:** the project's Brand board items that differ
-   from `upstream.<brand>` (a new logo variant, a corrected colour, a rule
-   added, a pronunciation confirmed, a voice designed on the project), and
-   the final renders as `work[].assets`.
+1. **The document itself** as `work.<id>` (`work_<first 8 hex of its
+   document id>`): `document_id`, `app_id`, title, kind by app, `version` =
+   the review's `seen.version`, the review's decision id, `accepted_at`. Status
+   `new`, `changed` (the kit holds an older version) or `same`.
+2. **Each field in the app's `attach.harvest`**, with the document's value and
+   the kit's current value side by side: `new`, `changed` or `same`. On
+   `accepted_with_changes`, a field inside a part the client marked for change
+   or rejected is `flagged` ("the client asked for a change here") and not
+   selected by default; every `new` or `changed` field that is not flagged is.
+3. *(Production Tool only, after contract-v3)* the Brand board items that
+   differ from `upstream.<brand>`.
 
-The person ticks. `POST /harvest {items}` writes, in one change on the
-**brand** document: the items (`origin: confirmed`, `by`, `cites` the
-approved document's addresses and the review decision), a `publish` (§7),
-and on the **approved** document a `backref used` (os-layer §7.4: "Used in
-Lumen Water Brand Clan v6"). Harvest needs the brand's lease and refuses on
-a locked kit (`409`). A rejected review offers nothing (owner, 2026-10-19).
-
----
+`POST /harvest/apply {work?: bool, fields?: [<from>...], summary?, app_id?}`
+takes what a person ticked. The offer is computed again; nothing but the ticks
+is read from the body. It writes **one validated patch to the kit** (the
+approved document is sealed and is not written): each ticked field's value at
+its `to` path, with its envelope set to `origin: confirmed`, `by` the person,
+`confirmed_from` the earlier origin, and the old `source` or `fact_ids`
+cleared (they no longer describe the value); `work.<id>` when the document is
+ticked (`origin: confirmed`, `summary` optional); and the publish of §7. It is
+recorded as one pinned decision by the person, action `publish v<N>: took
+...`, whose rationale names the approved document and the client review.
+Refused: a context that is not a person (`403`), a locked kit (`409`), nothing
+ticked, an item that is not on offer or already the kit's (`400`). A rejected
+review offers nothing (owner, 2026-10-19).
 
 ## 7. Publish and versions
 
