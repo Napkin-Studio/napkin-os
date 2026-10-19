@@ -1,0 +1,96 @@
+# A recorded sample run, written against engine/deck/deck.schema.json. The client is
+# invented: Lumen Water is a stand-in, not a real client, and nothing here is research.
+inputs:
+  prompt: { client: Lumen Water, project: First Light, agency: "" }
+  research: { name: Lumen Water research, findings: 34, rejected: 6 }
+  brief: { name: First Light brief, fields_filled: 11, fields_total: 11, mandatories: 5 }
+  kind: agency
+  format: pitch
+  library: { enabled: false }
+run:
+  state: gate
+  stage: storyline
+  cost_usd: 1.14
+  stages:
+    - { id: inputs, name: Read the inputs, sub: "Brief, research, requirements", status: done }
+    - { id: scans, name: Read image-only pages, sub: Figures pulled from scans, status: done }
+    - { id: storyline, name: Storyline, sub: You approve it, status: now }
+    - { id: territories, name: Territories, sub: "Judged blind, you pick", status: next }
+    - { id: idea, name: One idea and its work, sub: "Executions, channels", status: next }
+    - { id: copy, name: Slide copy, sub: Every claim gets a source, status: next }
+    - { id: check, name: Check, sub: "Numbers, rules, length", status: next }
+    - { id: review, name: You review the deck, sub: Then present or export, status: next }
+  gate:
+    id: storyline
+    n: 1
+    of: 3
+    dex: I put the answer to the brief first and the money last.
+    beats:
+      - { n: "01", title: "This summer, Lumen needs to be the first drink people reach for.", src: "Brief · objective", basis: brief }
+      - { n: "02", title: "People choose their drink in the first hour of the day, before the shop.", src: "Research · finding f_12", basis: research }
+      - { n: "03", title: "Water brands talk about purity, and nobody owns the morning.", src: "Research · competitors", basis: research }
+      - { n: "04", title: "Our idea: Lumen is what the day starts with.", src: "Creative · opinion", basis: proposal }
+      - { n: "05", title: "It shows up where the morning happens, on film, outdoors and audio.", src: "Brief · channels", basis: brief }
+      - { n: "06", title: "Here is who presents and what it costs.", src: Needs you, basis: placeholder }
+    more_beats: 4
+    checks:
+      - { ok: true, text: Every number traces to a source }
+      - { ok: true, text: No rejected finding used }
+      - { ok: true, text: All 5 mandatories have a beat }
+      - { ok: false, text: 2 beats need details only you have }
+  approvals: {}
+deck:
+  meta: { client: Lumen Water, project: First Light, agency: "", kind: pitch, audience: review }
+  order: [s01, s02, s03, s04, s05, s06, s07]
+  requirements:
+    R1: { id: R1, kind: objective, text: First drink people reach for this summer, ref: "brief:objectives" }
+    R3: { id: R3, kind: message, text: "Work on film, outdoor and audio", ref: "brief:desired_response" }
+  slides:
+    s01:
+      { type: title, section: Opening, title: "First Light, for Lumen Water", status: from_source, requirements: [],
+        blocks: [{ kind: text, text: A response to the brief., basis: sourced, refs: ["brief:objectives"] }],
+        claims: [{ text: A response to the brief., refs: ["brief:objectives"], basis: sourced }],
+        visual: { kind: layout }, notes: "Open with the client name and the project. The agency name shows as [Agency] until you give one." }
+    s02:
+      { type: brief_restated, section: Your brief, title: "This summer, Lumen needs to be the first drink people reach for.", status: from_source, requirements: [R1],
+        blocks: [{ kind: bullets, text: "The brief asks for awareness and trial.", basis: sourced, refs: ["brief:objectives"] }, { kind: bullets, text: "It names the morning as the moment.", basis: sourced, refs: ["brief:desired_response"] }],
+        claims: [{ text: The brief asks for awareness and trial., refs: ["brief:objectives"], basis: sourced }],
+        visual: { kind: layout }, notes: "Say the objective in the client's own words before anything else." }
+    s03:
+      { type: insight, section: Insight, title: "People choose their drink in the first hour of the day, before the shop.", status: from_source, requirements: [],
+        blocks: [{ kind: bullets, text: "The choice is made at home, not on the shelf.", basis: sourced, refs: [f_12] }, { kind: bullets, text: "So the morning is where we have to be.", basis: sourced, refs: [f_12] }],
+        claims: [{ text: The choice is made at home., refs: [f_12], basis: sourced }],
+        visual: { kind: layout }, notes: "This is the research finding the whole idea rests on. If asked, point to f_12." }
+    s04:
+      { type: idea, section: The idea, title: "Lumen is what the day starts with.", status: drafted, requirements: [R3],
+        blocks: [{ kind: bullets, text: "A first glass before the first screen.", basis: opinion, refs: [] }, { kind: bullets, text: "One line that works on film, outdoors and audio.", basis: sourced, refs: ["brief:channels"] }, { kind: bullets, text: "Built from the morning, not from the bottle.", basis: sourced, refs: [f_12] }],
+        claims: [{ text: Built from the morning., refs: [f_12], basis: sourced }, { text: A first glass before the first screen., refs: [], basis: opinion }],
+        visual: { kind: layout }, notes: "This is our proposal, so it is labelled as an opinion. Let the room react before you show the work." }
+    s05:
+      { type: channel_roles, section: How it runs, title: "It shows up where the morning happens: on film, outdoors and in audio.", status: from_source, requirements: [R3],
+        blocks: [{ kind: bullets, text: "Three channels, each with one job.", basis: sourced, refs: ["brief:channels"] }],
+        claims: [{ text: Three channels., refs: ["brief:channels"], basis: sourced }],
+        visual: { kind: layout }, notes: "Keep this to the channels in the brief. Add nothing the client did not ask for." }
+    s06:
+      { type: team, section: Team and work, title: "Here is who presents and what it costs.", status: needs_human, requirements: [],
+        blocks: [{ kind: text, text: "[Presenter name and role]", human: true }, { kind: text, text: "[Budget split by channel]", human: true }],
+        claims: [],
+        visual: { kind: layout }, notes: "Nothing in your inputs gives the team or the split, so these stay as placeholders for you to fill." }
+    s07:
+      { type: next_step, section: Next step, title: "Agree the first film, and we start the morning after.", status: drafted, requirements: [],
+        blocks: [{ kind: text, text: "One decision from you: which territory to take to film.", basis: proposal, refs: [] }],
+        claims: [{ text: One decision from you., refs: [], basis: proposal }],
+        visual: { kind: layout }, notes: "End on the single ask." }
+  appendix_count: 9
+evidence:
+  "brief:objectives": { kind: brief, text: Objective as written in the First Light brief. }
+  "brief:desired_response": { kind: brief, text: Desired response as written in the brief. }
+  "brief:channels": { kind: brief, text: "Film, outdoor and audio are the channels named in the brief." }
+  "f_12": { kind: research finding, text: "Shoppers describe deciding what to drink at home, early in the day. High confidence." }
+validation:
+  errors: 0
+  to_supply: 2
+  findings:
+    s04: [{ level: warn, message: "The idea itself is an opinion, so it has no source" }]
+    s06: [{ level: warn, message: "Presenter missing: add it" }, { level: warn, message: "Budget split missing: add it" }]
+report: { seconds: 0, tokens: 0, cost_usd: 1.14 }

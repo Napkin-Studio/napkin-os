@@ -1,0 +1,10 @@
+# Capability requirements (CLAN spec §22) for the Deck Maker.
+requires:
+  tools:
+    - name: llm_inference
+      why: "requirements, storyline, territories, idea, the fit check and slide copy"
+    - name: durable_jobs
+      optional: true
+      why: "a deck run takes minutes and outlives a browser session"
+  model_hints:
+    min_context_tokens: 64000
