@@ -567,6 +567,7 @@ test("a person's verdict on a part is theirs, not the Judge's", () => {
     isHuman: (d: { agent?: string }) => /^human:/.test(String(d && d.agent)),
     whoName: (d: { agent?: string }) => (/^human:/.test(String(d.agent)) ? 'You' : 'Jude'),
     whoMark: (d: { agent?: string }) => (/^human:/.test(String(d.agent)) ? '<you>' : '<fig judge>'),
+    fixBtn: (d: { id: string }) => `<fix ${d.id}>`,
   })
   const p = make(person), j = make(judge)
   assert.match(p.provHtml({ key: 'mandatories' }), /<you>You/)
@@ -574,9 +575,71 @@ test("a person's verdict on a part is theirs, not the Judge's", () => {
   assert.doesNotMatch(p.notesHtml({ key: 'mandatories' }), /Jude: this part/)
   assert.match(j.provHtml({ key: 'mandatories' }), /<fig judge>Jude/)
   assert.match(j.notesHtml({ key: 'mandatories' }), /Jude: this part needs another look/)
+  // either way, the crew can be asked to fix it
+  assert.match(p.notesHtml({ key: 'mandatories' }), /<fix d_p>/)
+  assert.match(j.notesHtml({ key: 'mandatories' }), /<fix d_j>/)
 })
 
 test('a part judged after the page drew it gets its mark when the chain comes', () => {
   const src = fn(BM, 'refreshWhy')
   assert.match(src, /if\(p\) p\.outerHTML=ph; else if\(ph&&lab\) lab\.insertAdjacentHTML\('afterend',ph\)/)
+})
+
+// A note on a brief, fixed by the crew: one fix_parts job, the page left where
+// it is, and whoever is working walks the bottom edge meanwhile.
+test('a note on a brief can be fixed by the crew, and the worker walks the bottom edge', () => {
+  const FIX_SAY = new Function('SAM', 'DARA', 'JUDE', `${obj(BM, 'FIX_SAY')} return FIX_SAY;`)('Sam', 'Dara', 'Jude')
+  const classes = new Set<string>()
+  const attrs: Record<string, string> = {}
+  const walker = {
+    innerHTML: '',
+    classList: { contains: (c: string) => classes.has(c), toggle: (c: string, on: boolean) => { if (on) classes.add(c); else classes.delete(c) } },
+    getAttribute: (k: string) => attrs[k] ?? null, setAttribute: (k: string, v: string) => { attrs[k] = v }, removeAttribute: (k: string) => { delete attrs[k] },
+  }
+  type J = { task: string; verdict: string; stage?: string; summary?: string; error?: string | null; onUpdate(j: J): void; onEnd(j: J): void }
+  const runs: { j: J; input: unknown }[] = []
+  const said: string[] = []
+  let locked = false
+  const env = {
+    FIX: null, DRAFT: null, FIX_SAY, walker, SAM: 'Sam', DARA: 'Dara', JUDE: 'Jude', NO_MW: 'no middleware', phase: 'doc', reduce: false,
+    $: (id: string) => (id === 'walker' ? walker : null),
+    esc: (s: string) => String(s), docLocked: () => locked, noMiddleware: () => false,
+    window: { clan: { apiProxy: () => Promise.resolve() } },
+    fig: (k: string, o: { walking?: boolean }) => `<svg data-agent="${k}"${o.walking ? ' data-walking="true"' : ''}></svg>`,
+    setStatus: (h: string) => { said.push(h) }, renderStructured: () => {}, pollJob: () => {},
+    runJob: (j: J, input: unknown) => { runs.push({ j, input }) },
+    setTimeout: () => 0, clearTimeout: () => {},
+  }
+  type F = { fixBtn(d: { id: string } | null): string; fixParts(vid: string, resumeId?: string): void; walk(): void }
+  const f = lift<F>(BM, ['fixBtn', 'fixParts', 'walk'], env)
+  assert.match(f.fixBtn({ id: 'd_note' }), /<button type="button" class="save act-fix" data-v="d_note" title="Sam looks up what it needs, Dara rewrites the parts, Jude checks them">Fix this with the crew<\/button>/)
+  locked = true
+  assert.equal(f.fixBtn({ id: 'd_note' }), '', 'a locked brief has nothing to fix')
+  locked = false
+  f.fixParts('d_note')
+  assert.equal(runs.length, 1)
+  assert.deepEqual(runs[0].input, { verdict: 'd_note' })
+  assert.equal(runs[0].j.task, 'fix_parts')
+  assert.ok(classes.has('on'))
+  assert.match(walker.innerHTML, /data-agent="synthesis" data-walking="true"/)
+  assert.match(walker.innerHTML, /Sam is looking up what the fix needs/)
+  assert.match(f.fixBtn({ id: 'd_note' }), / disabled /, 'one fix at a time')
+  f.fixParts('d_other')
+  assert.equal(runs.length, 1, 'a second fix waits for the first')
+  runs[0].j.stage = 'draft'; runs[0].j.onUpdate(runs[0].j)
+  assert.match(walker.innerHTML, /data-agent="drafter"[^>]*>.*Dara is rewriting the parts together/)
+  runs[0].j.stage = 'judge'; runs[0].j.onUpdate(runs[0].j)
+  assert.match(walker.innerHTML, /Jude is checking the fix/)
+  runs[0].j.summary = 'Fixed 3 of 3 part(s), 0 proposed, 4 new fact(s) found.'
+  runs[0].j.onEnd(runs[0].j)
+  assert.ok(!classes.has('on'))
+  assert.equal(said[said.length - 1], 'Fixed 3 of 3 part(s), 0 proposed, 4 new fact(s) found.')
+  // The page does not move, both notes offer it, and a reload picks the job up.
+  assert.doesNotMatch(fn(BM, 'fixParts'), /scrollIntoView/)
+  assert.match(fn(BM, 'crossNoteHtml'), /\+fixBtn\(d\)\+/)
+  assert.match(fn(BM, 'notesHtml'), /\(v\.bad&&!locked\?fixBtn\(v\.d\):''\)/)
+  assert.match(fn(BM, 'bindNotes'), /\.act-fix'\)\.forEach\(function\(b\)\{ b\.addEventListener\('click',function\(\)\{ fixParts\(b\.getAttribute\('data-v'\)\); \}\); \}\);/)
+  assert.match(fn(BM, 'resumeJobs'), /stored\(jobKey\('fix_parts'\)\); if\(fid\) fixParts\('', fid\);/)
+  assert.match(BM, /<div class="walker" id="walker" role="status" aria-live="polite"><\/div>/)
+  assert.match(BM, /@media \(prefers-reduced-motion: reduce\)\{\.walker \.wk-who,\.walker \.wk-fig\{animation:none\}\}/)
 })
