@@ -1,12 +1,81 @@
 # A recorded sample run, written against engine/deck/deck.schema.json. The client is
 # invented: Lumen Water is a stand-in, not a real client, and nothing here is research.
 inputs:
-  prompt: { client: Lumen Water, project: First Light, agency: "" }
-  research: { name: Lumen Water research, findings: 34, rejected: 6 }
-  brief: { name: First Light brief, fields_filled: 11, fields_total: 11, mandatories: 5 }
+  prompt:
+    client: Lumen Water
+    project: First Light
+    agency: ""
+    text: "Lumen Water wants to be the first drink people reach for this summer. We think the morning is the moment. Pitch them a campaign on film, outdoor and audio."
+  documents:
+    - { name: lumen-water-notes.txt }
   kind: agency
   format: pitch
   library: { enabled: false }
+# Frozen sources, as the spin-off would write them (invented: Lumen Water is a stand-in).
+upstream:
+  doc_brief_first_light:
+    title: First Light brief
+    background: "Lumen Water is a still-water brand entering its second summer."
+    objectives: "Be the first drink people reach for this summer."
+    audience: "Adults 25 to 40 who start the day at home."
+    competitor_context: "Water brands talk about purity."
+    insight: "People choose their drink at home, early in the day."
+    single_minded_proposition: "Lumen is what the day starts with."
+    reasons_to_believe: ["Cold-filtered at source"]
+    desired_response: "Work on film, outdoor and audio."
+    mandatories: ["Film", "Outdoor", "Audio", "Morning moment", "Lumen name first"]
+  doc_research_lumen:
+    title: Lumen Water research
+    report: { headline: "The choice is made at home, early in the day." }
+    campaign: { name: "Lumen Water" }
+    selection: { themes: ["Morning at home"] }
+    materials: {}
+intake:
+  gaps:
+    brief_fields:
+      - { field: budget_and_scope, why: "Nothing you gave names a budget or a scope." }
+      - { field: tone_and_world, why: "No tone or world was described." }
+    slide_types:
+      - { type: team, why: "No presenter or team details to put on it." }
+      - { type: budget, why: "No figures to base a budget split on." }
+  questions:
+    - id: q_deck_type
+      text: "What kind of deck is this?"
+      address: inputs.type
+      allow_text: false
+      options:
+        - { id: agency_pitch, label: "Agency pitch", value: agency_pitch, origin: proposed, source: "Pitch them a campaign on film, outdoor and audio." }
+        - { id: tender_response, label: "Tender response", value: tender_response, origin: asked }
+        - { id: investor_seed, label: "Investor seed deck", value: investor_seed, origin: asked }
+        - { id: credentials, label: "Credentials / chemistry meeting", value: credentials, origin: asked }
+    - id: q_budget
+      text: "Is there a budget range for First Light?"
+      address: brief.budget_and_scope
+      allow_text: true
+      options:
+        - { id: unknown, label: "Not decided yet", value: null }
+        - { id: stated, label: "I will add it myself", value: null }
+    - id: q_tone
+      text: "How should the work feel?"
+      address: brief.tone_and_world
+      allow_text: true
+      options:
+        - { id: warm, label: "Warm and morning-lit", value: "warm, morning light" }
+    - id: q_scoring
+      text: "Does the buyer score the response, and is there a page limit?"
+      address: brief.mandatories
+      allow_text: true
+      options:
+        - { id: scored, label: "Yes, scored, and I will add the criteria", value: null }
+        - { id: unscored, label: "No scoring or page limit", value: null }
+    - id: q_supply_team
+      text: "Who would work on this, and in what role? One person per line, for example: name, role."
+      address: slide.team
+      kind: supply
+      fills: team
+      allow_text: true
+      skippable: true
+      options: []
 run:
   state: gate
   stage: storyline
@@ -40,7 +109,11 @@ run:
       - { ok: false, text: 2 beats need details only you have }
   approvals: {}
 deck:
-  meta: { client: Lumen Water, project: First Light, agency: "", kind: pitch, audience: review }
+  meta: { client: Lumen Water, project: First Light, agency: "", kind: pitch, audience: review, built_from: { type: agency_pitch, tier: brief+research, documents: [lumen-water-notes.txt], brief: true, research: true },
+    confirm: [
+      { ref: "slide:team", kind: slide, text: "Here is who presents and what it costs.", why: "still needs a person: nothing supplies it yet", slide: s06, verified: null },
+      { ref: "proposal:3f9a1c2e", kind: proposal, text: "A first glass before the first screen.", why: "a proposal: nothing you gave supports it", slide: s04, verified: null } ],
+    confirm_summary: { total: 2, verified: 0, supplied: 0, sourced: 0, open: 2, needs_person: 1 } }
   order: [s01, s02, s03, s04, s05, s06, s07]
   requirements:
     R1: { id: R1, kind: objective, text: First drink people reach for this summer, ref: "brief:objectives" }

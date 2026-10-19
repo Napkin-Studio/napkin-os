@@ -5,9 +5,11 @@
 //!
 //! Defaults: `deck-maker.app.clan` and `deck-maker.example.clan`.
 //!
-//! Same shape as `make_advertising_studio`, without a spin-off contract: a deck
-//! is started from the app's own Start screen, which takes the prompt, the
-//! research and the brief (ADR 0023). Two things this packer guards:
+//! Same shape as `make_advertising_studio`, plus a spin-off contract: a deck
+//! is started from the app's own Start screen (a prompt of any length and any
+//! documents), or spun off from a Brief Maker or Research Tool document, whose
+//! data is carried whole under `data.upstream` (ADR 0023, 0028). The contract
+//! takes no map and no lift: the deck's fields are never seeded from upstream. Two things this packer guards:
 //!
 //! 1. `make_template` replaces `agent/context.md` with boilerplate, so the
 //!    app's own context (the input rule, placeholders, gates) is reinstalled
@@ -18,12 +20,15 @@
 use clan_sdk::{
     create, instantiate, make_template, pack_html, patch_context, patch_requirements, validate,
     AppInfo, ClanBuilder, ClanFile, CreateOptions, FileEntry, InstantiateOptions,
-    MakeTemplateOptions,
+    MakeTemplateOptions, SpinoffSpec,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
 
 const APP_ID: &str = "ie.napkin.deck-maker";
+/// The apps a deck is spun off from, whole, under `upstream`.
+const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
+const RESEARCH_APP_ID: &str = "ie.napkin.campaign-research";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const ICON_PATH: &str = "app/icon.svg";
 const DATA_PATH: &str = "shared/data.yaml";
@@ -115,13 +120,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             home: None,
             name: "Deck Maker".into(),
             app_id: APP_ID.into(),
-            version: "0.1.0".into(),
+            version: "0.2.0".into(),
             icon: Some(ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some("agent/output-schema.json".into()),
             prompt_templates: vec![],
             data_seed: None,
-            spinoff: None,
+            spinoff: Some(SpinoffSpec {
+                accepts: vec![BRIEF_APP_ID.into(), RESEARCH_APP_ID.into()],
+                upstream: true,
+                ..Default::default()
+            }),
         },
         MakeTemplateOptions::default(),
     )?;
@@ -130,6 +139,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let template = ClanFile::from_bytes(template_bytes)?;
     let template_bytes = patch_context(&template, &context, false)?;
     let template = ClanFile::from_bytes(template_bytes.clone())?;
+
+    // The spin-off contract and version are asserted, not assumed: a regression
+    // here must fail the packer (and the spinoff.rs test that runs it).
+    let app_block = template.manifest().app.as_ref().expect("app block");
+    assert_eq!(app_block.version, "0.2.0", "the Deck template version");
+    let spin = app_block.spinoff.as_ref().expect("app.spinoff is declared");
+    assert_eq!(
+        spin.accepts,
+        vec![BRIEF_APP_ID.to_string(), RESEARCH_APP_ID.to_string()],
+        "the Deck accepts the Brief Maker and the Research Tool"
+    );
+    assert!(spin.upstream, "app.spinoff.upstream must be true");
 
     // 7. Self-checks: the contracts travel into an instance, and the input rule survived.
     let instance = ClanFile::from_bytes(instantiate(
