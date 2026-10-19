@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
-// One row per video (features/connected-video.clan, the owner's choice 2026-10-19): the ad as the videos it
-// is made of, each row titled and with one Make; Cut here splits a row and Join merges two; a refusal shows
-// only on the row whose shots are exactly the refused take's (a split or a join starts clean); the right
+// One track (features/connected-video.clan, the owner's choice 2026-10-20): every shot in order on one track,
+// joined shots boxed as one video with one Make; Cut here splits a box and Join between separate shots boxes
+// them; a refusal shows only in the box whose shots are exactly the refused take's (a split or a join starts
+// clean); the right
 // panel has no make action of its own. Split and join also go through the real CLAN store, which refused
 // every seam until clan-store's leaf rules listed it (2026-10-19).
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -82,19 +85,41 @@ const rowsEl = (store: SnapshotDocumentStore, shots: Shot[], videoId: string, ha
   })
 const buttonsIn = (el: Element) => [...el.querySelectorAll('button')].map((b) => b.textContent)
 
-describe('the rows', () => {
-  it('are the videos of the ad, numbered and titled, each with one Make', () => {
+describe('the track', () => {
+  it('lays every shot on one track: the proposed video as ONE box, the end card a separate card, each with one Make', () => {
     const { store, shots, videoId } = ad()
     expect(titles(store.get(), videoId)).toEqual(['One video · shots 1–5 · 8.5 s', 'End card · shot 6 · 1.5 s'])
     const el = mount(store, rowsEl(store, shots, videoId))
     expect(el.querySelector('.ve-rowsum')!.textContent).toBe('Your ad · 2 videos · 10 s')
-    const rows = [...el.querySelectorAll('.ve-row')]
-    expect(rows.map((r) => r.querySelector('.ve-rownum')!.textContent)).toEqual(['1', '2'])
-    expect(rows.map((r) => [...r.querySelectorAll('.ve-rowhead button.btn')].map((b) => b.textContent))).toEqual([['Make'], ['Make']])
-    expect(rows[0].querySelectorAll('.ve-cuthere')).toHaveLength(4)
-    // No Join next to an end card: the reason instead.
-    expect(el.querySelector('.ve-join')).toBeNull()
-    expect(el.querySelector('.ve-joinwhy')!.textContent).toBe('An end card is always its own video')
+    const track = el.querySelector('.ve-track1')!
+    // In storyboard order, one track: a box of five, then the end card on its own.
+    expect([...track.querySelectorAll('.card')].map((c) => c.textContent)).toEqual(shots.map((s) => s.action))
+    const boxes = [...track.querySelectorAll('.ve-box')]
+    expect(boxes).toHaveLength(1)
+    expect(boxes[0].querySelectorAll('.card')).toHaveLength(5)
+    expect(boxes[0].querySelector('.ve-boxtitle')!.textContent).toBe('One video · shots 1–5 · 8.5 s')
+    expect(buttonsIn(boxes[0].querySelector('.ve-boxhead')!)).toEqual(['One video · shots 1–5 · 8.5 s', 'Make'])
+    expect(boxes[0].querySelectorAll('.ve-cuthere')).toHaveLength(4)
+    const solo = track.querySelector('.ve-solo')!
+    expect(solo.querySelectorAll('.card')).toHaveLength(1)
+    expect(buttonsIn(solo.querySelector('.ve-solofoot')!)).toEqual(['Make'])
+  })
+
+  it('shows nothing in a gap where joining is not allowed but a dot whose title says why', () => {
+    const { store, shots, videoId } = ad()
+    const el = mount(store, rowsEl(store, shots, videoId))
+    expect(el.querySelector('.ve-joingap')).toBeNull()
+    const dot = el.querySelector('.ve-nogap')!
+    expect(dot.textContent).toBe('·')
+    expect(dot.getAttribute('title')).toBe('An end card is always its own video')
+  })
+
+  it('scrolls sideways rather than wrapping', () => {
+    const css = readFileSync(join(process.cwd(), 'src/stages/video.css'), 'utf8')
+    const rule = (sel: string) => css.match(new RegExp(`${sel.replace('.', '\\.')} \\{([^}]*)\\}`))?.[1] ?? ''
+    expect(rule('.ve-track1')).toMatch(/flex-wrap: nowrap/)
+    expect(rule('.ve-track1')).toMatch(/overflow-x: auto/)
+    expect(rule('.ve-boxcards')).toMatch(/flex-wrap: nowrap/)
   })
 
   it('say their state on Make: as one video after separate clips, again once made', () => {
@@ -105,38 +130,54 @@ describe('the rows', () => {
     expect(titles(single.store.get(), single.videoId)).toEqual(['One video · shots 1–2 · 3.4 s', 'One video · shots 3–5 · 5.1 s', 'End card · shot 6 · 1.5 s'])
   })
 
-  it('Cut here splits a row in two, and Join puts them back', async () => {
+  it('Cut here splits the box; Join between separate neighbours makes one box again', async () => {
     const { store, shots, videoId } = ad()
     let el = mount(store, rowsEl(store, shots, videoId))
-    const cut = el.querySelectorAll<HTMLButtonElement>('.ve-cuthere')[1] // between shots 2 and 3
-    expect(cut.getAttribute('aria-label')).toBe('Cut here, between shot 2 and shot 3')
+    const cut = el.querySelectorAll<HTMLButtonElement>('.ve-cuthere')[0] // between shots 1 and 2
+    expect(cut.getAttribute('aria-label')).toBe('Cut here, between shot 1 and shot 2')
     expect(cut.textContent).toBe('Cut here')
     await act(async () => { cut.click() })
-    expect(titles(store.get(), videoId)).toEqual(['One video · shots 1–2 · 3.4 s', 'One video · shots 3–5 · 5.1 s', 'End card · shot 6 · 1.5 s'])
+    expect(titles(store.get(), videoId)).toEqual(['Shot 1 · 1.7 s', 'One video · shots 2–5 · 6.8 s', 'End card · shot 6 · 1.5 s'])
     act(() => root?.unmount())
     el = mount(store, rowsEl(store, shots, videoId))
-    const join = el.querySelector<HTMLButtonElement>('.ve-join')!
+    // Shot 1 is now a separate card, with Join in the gap to the box.
+    expect(el.querySelectorAll('.ve-box')).toHaveLength(1)
+    expect(el.querySelectorAll('.ve-solo')).toHaveLength(2)
+    const join = el.querySelector<HTMLButtonElement>('.ve-joingap')!
     expect(join.textContent).toBe('Join')
+    expect(join.getAttribute('aria-label')).toBe('Join shot 1 and shot 2 into one video')
     await act(async () => { join.click() })
     expect(titles(store.get(), videoId)).toEqual(['One video · shots 1–5 · 8.5 s', 'End card · shot 6 · 1.5 s'])
+  })
+
+  it('Join between two separate shots makes a box of them', async () => {
+    const { store, shots, videoId } = ad()
+    // Shots 1 and 2 each on their own: a person's cuts.
+    await splitHere(store, videoId, shots[1].id)
+    await splitHere(store, videoId, shots[2].id)
+    expect(titles(store.get(), videoId).slice(0, 2)).toEqual(['Shot 1 · 1.7 s', 'Shot 2 · 1.7 s'])
+    const el = mount(store, rowsEl(store, shots, videoId))
+    await act(async () => { el.querySelector<HTMLButtonElement>('.ve-joingap')!.click() })
+    expect(titles(store.get(), videoId).slice(0, 2)).toEqual(['One video · shots 1–2 · 3.4 s', 'One video · shots 3–5 · 5.1 s'])
   })
 })
 
 describe('a refusal', () => {
-  it('shows only on the row whose shots are exactly the refused take, with Try again and Make separately', () => {
+  it('shows only in the box whose shots are exactly the refused take, under its cards, with Try again and Make separately', () => {
     const { store, shots, videoId } = ad((d, s) => refuse(d, s.slice(0, 5).map((x) => x.id)))
     const make = vi.fn()
     const separately = vi.fn()
     const el = mount(store, rowsEl(store, shots, videoId, { onMake: make, onMakeSeparately: separately }))
-    const rows = [...el.querySelectorAll('.ve-row')]
-    expect(rows[0].querySelector('.ve-rowwarn')!.textContent).toContain('Runway refused the words.')
-    expect(buttonsIn(rows[0].querySelector('.ve-rowwarn')!)).toEqual(['Try again', 'Make separately'])
-    expect(rows[0].querySelector('.ve-rowhead button.btn')).toBeNull() // one action place: the warning
-    expect(rows[1].querySelector('.ve-rowwarn')).toBeNull()
-    act(() => rows[0].querySelectorAll<HTMLButtonElement>('.ve-rowwarn button')[0].click())
+    const box = el.querySelector('.ve-box')!
+    const line = box.querySelector('.ve-refusal')!
+    expect(line.textContent).toContain('Runway refused the words.')
+    expect(buttonsIn(line)).toEqual(['Try again', 'Make separately'])
+    expect(box.querySelector('.ve-boxhead .ve-make')).toBeNull() // one action place: the refusal line
+    expect(el.querySelector('.ve-solo .ve-refusal')).toBeNull()
+    act(() => line.querySelectorAll<HTMLButtonElement>('button')[0].click())
     expect(make).toHaveBeenCalled()
-    // No job bar inside a row.
-    expect(el.querySelector('.ve-stripjob, .jobslot')).toBeNull()
+    // No job bar inside the track.
+    expect(el.querySelector('.jobslot')).toBeNull()
   })
 
   it('is gone from both halves after a split, and from the merged row after a join', async () => {
@@ -158,7 +199,7 @@ describe('the right panel', () => {
     const panel = el.querySelector('.notes-panel')
     expect(panel).not.toBeNull()
     expect(buttonsIn(panel!).filter((t) => /make|new take/i.test(t ?? ''))).toEqual([])
-    expect(el.querySelectorAll('.ve-row')).toHaveLength(2)
+    expect(el.querySelectorAll('.ve-box, .ve-solo')).toHaveLength(2)
   })
 })
 

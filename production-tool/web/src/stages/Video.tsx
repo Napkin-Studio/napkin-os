@@ -848,7 +848,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
           </div>
         ) : (
           <div className="empty">
-            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobSlot jobId={(fixJob ?? firstJob)!} /></div> : (film ? 'No clip for this shot yet. Press Make on its row.' : 'No clip for this shot yet. Press Make clip.')}
+            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobSlot jobId={(fixJob ?? firstJob)!} /></div> : (film ? 'No clip for this shot yet. Press its Make on the timeline.' : 'No clip for this shot yet. Press Make clip.')}
           </div>
         )}
         {/* The clip on show, as one file (in All shots: the one playing). */}
