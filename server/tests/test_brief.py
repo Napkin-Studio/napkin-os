@@ -137,7 +137,7 @@ def check_change_rules(host):
                      (c.startswith("f_") and c in {f["id"] for f in host.facts}) or \
                      (c.startswith("src_") and c in {x["id"] for x in getattr(host, "sources", [])})
                 assert ok, f"{d['id']} cites {c}, which does not resolve"
-        assert d["handler"].startswith(("draft_brief@1", "regenerate_field@1"))
+        assert d["handler"].startswith(("draft_brief@1", "regenerate_field@1", "fix_parts@1"))
         assert d["agent"].rsplit("/", 1)[-1] in ("extract", "synthesise", "drafter", "judge")
     # the document validates against Brief Maker's schema, the §10.4 blocks included
     jsonschema.Draft7Validator(BRIEF_SCHEMA).validate(data)
@@ -625,9 +625,10 @@ def test_the_pipeline_declaration_resolves():
     from napkin import registry
     path = REPO / "app/templates/brief-maker/app/pipeline.yaml"
     assert registry.parse_pipeline(path.read_text()) == {"draft_brief": "draft_brief@1",
-                                                         "regenerate_field": "regenerate_field@1"}
+                                                         "regenerate_field": "regenerate_field@1",
+                                                         "fix_parts": "fix_parts@1"}
     resolved = registry.resolve_at_startup([str(path)])
-    assert set(resolved.values()) == {"draft_brief@1.0", "regenerate_field@1.0"}
+    assert set(resolved.values()) == {"draft_brief@1.0", "regenerate_field@1.0", "fix_parts@1.0"}
 
 
 def test_what_the_client_leaves_empty_is_filled_from_the_research_or_assumed(tmp_path):

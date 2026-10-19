@@ -120,10 +120,12 @@ class Middleware:
                              job.hits if job.state in ("done", "failed", "cancelled") else [])
 
     def brief_conflict(self, task, inp, scope, doc):
-        """§10.11: one draft_brief at a time per document; a regenerate_field
-        waits for a draft_brief, or for a regenerate_field of the same field."""
-        for j in self.jobs.unfinished(scope, doc, ("draft_brief", "regenerate_field")):
-            if task == "draft_brief" or j.task == "draft_brief" or j.field == inp.get("field"):
+        """§10.11: one draft_brief or fix_parts at a time per document, and
+        neither beside another brief job; a regenerate_field waits for them,
+        or for a regenerate_field of the same field."""
+        whole = ("draft_brief", "fix_parts")
+        for j in self.jobs.unfinished(scope, doc, ("draft_brief", "regenerate_field", "fix_parts")):
+            if task in whole or j.task in whole or j.field == inp.get("field"):
                 raise TaskError(409, "job_state", f"a {j.task} job on this document is still running")
 
     def campaign_envelope(self, job, change):

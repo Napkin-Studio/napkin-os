@@ -372,8 +372,13 @@ class PlannedBriefJob(BriefJob):
                      "the client's words, the research or a person's edit change the strategy",
                      only_option="one plan steers every part")
         self.plan_dec = self.dec(("plan",), "edit", "plan", [], mat_ids, r, "synthesise")
-        decisions = [self.plan_dec]
-        # the research the plan asks for
+        decisions = [self.plan_dec] + self._research_asked(plan)
+        self.add_chunk("context", {}, decisions, facts=self.new_pins, sources=self.new_sources)
+
+    def _research_asked(self, plan):
+        """The research `plan` asks for, less what the brief already holds, capped: its decisions."""
+        rl = self.caps.runlog
+        decisions = []
         asks, seen = [], set()
         for a in plan.get("research") or []:
             m = str(a.get("market") or "").upper()
@@ -403,7 +408,7 @@ class PlannedBriefJob(BriefJob):
             rl.note("research_capped", dropped=[f"{a['lens']}/{a['market']}" for a in dropped], cap=self.research_max)
         if asks:
             decisions += self._research(asks, cat)
-        self.add_chunk("context", {}, decisions, facts=self.new_pins, sources=self.new_sources)
+        return decisions
 
     def _research(self, asks, cat):
         """The Research Tool's own units for the pairs the plan asked for: searched (or reused from the
@@ -602,7 +607,7 @@ class PlannedBriefJob(BriefJob):
             return self._place(self._review(ev, "review_brief"), ev)
         chain = (res["jude"] or {}).get("chain") or {}
         notes = [{"parts": [p for p in chain.get("parts") or [] if p in KEYS], "severity": "fix",
-                  "note": chain["issue"]}] if chain.get("issue") and chain.get("parts") else []
+                  "note": chain["issue"]}] if chain.get("issue") and chain.get("parts") and self._note_stands(res) else []
         rv = {"dimensions": [{"dimension": d, "verdict": read["dims"][d], "evidence": "", "fix": ""} for d in DIMS],
               "chain": {"verdict": "pass" if read["chain"] >= 0.5 else "fail",
                         "note": chain.get("issue") or ("jev reads it as one argument" if read["chain"] >= 0.5
@@ -616,6 +621,22 @@ class PlannedBriefJob(BriefJob):
         self._place(rv, ev)
 
     # -- placing ---------------------------------------------------------------------------------
+    def _question_seed(self):
+        """The client questions placing starts from: the plan's."""
+        return [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
+
+    def _unwritten_outcome(self, k):
+        """The review's entry for a part this job did not write."""
+        return {"outcome": "absent", "checks": []}
+
+    def _passed(self, decisions):
+        """Verdicts placing adds once Jude's notes are placed: none here."""
+        return []
+
+    def _note_stands(self, res):
+        """Whether Jude's chain issue from the check loop is placed as a note."""
+        return True
+
     def _place(self, rv, ev):
         patch, decisions = {}, []
         mat_ids = [m.id for m in self.mats if m.readable]
@@ -682,8 +703,9 @@ class PlannedBriefJob(BriefJob):
             decisions.append(self.dec(("note", i), "verdict", "judge", parts, cites, r, "judge",
                                       polarity="bad" if fix else "good", taxonomy_version="reason-codes/1",
                                       **({"reason_code": "brief_review"} if fix else {})))
+        decisions += self._passed(decisions)
         # the open questions: the plan's, the draft's and Jude's, once each
-        qs = [q["question"] for q in (self.plan_out or {}).get("ask_client") or []]
+        qs = self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
         seen, oq = set(), []
@@ -693,7 +715,7 @@ class PlannedBriefJob(BriefJob):
                 seen.add(key)
                 oq.append(q.strip())
         oq = clean("open_questions", oq[:12])
-        if oq and "open_questions" not in self.locked:
+        if oq and oq != clean("open_questions", get(self.W, "open_questions")) and "open_questions" not in self.locked:
             r = rsn.make(f"Gathered {len(oq)} question(s) only the client can answer.",
                          [rsn.point("From the plan, the draft and Jude's review", [plan_id] if plan_id else mat_ids)],
                          rsn.certainty("high", "each is something the brief cannot settle without the client"),
@@ -725,7 +747,7 @@ class PlannedBriefJob(BriefJob):
             if k in self.locked:
                 fields[k] = {"outcome": "kept", "checks": []}
             elif k not in self.whole:
-                fields[k] = {"outcome": "absent", "checks": []}
+                fields[k] = self._unwritten_outcome(k)
             else:
                 ns = notes_by.get(k, [])
                 fields[k] = {"outcome": "revised" if self.whole[k].get("revised") else

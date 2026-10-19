@@ -480,6 +480,16 @@
 
   .foot{margin-top:auto;padding:28px 0 8px;display:flex;align-items:center;justify-content:center;gap:9px;font-size:11px;color:var(--faint);font-family:var(--mono);letter-spacing:.04em;flex-wrap:wrap;text-align:center}
   .foot .dot{width:4px;height:4px;border-radius:50%;background:var(--faint)}
+  /* While the crew fixes a note, one of them walks the bottom edge of the window. */
+  .walker{position:fixed;left:0;right:0;bottom:var(--clan-bottom,0px);height:72px;pointer-events:none;z-index:80;overflow:hidden;opacity:0;transition:opacity .3s var(--ease)}
+  .walker.on{opacity:1}
+  .walker .wk-who{position:absolute;bottom:0;left:0;display:flex;align-items:flex-end;gap:8px;animation:wk-pace 16s linear infinite}
+  .walker .wk-fig{display:block;width:44px;animation:wk-turn 16s steps(1,end) infinite}
+  .walker .wk-fig .agent-figure{width:44px;height:auto;display:block}
+  .walker .wk-say{margin-bottom:26px;background:var(--text);color:var(--bg);font-size:12px;padding:5px 11px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadow)}
+  @keyframes wk-pace{0%{transform:translateX(16px)}50%{transform:translateX(calc(100vw - 100% - 16px))}100%{transform:translateX(16px)}}
+  @keyframes wk-turn{0%{transform:none}50%{transform:scaleX(-1)}}
+  @media (prefers-reduced-motion: reduce){.walker .wk-who,.walker .wk-fig{animation:none}}
   .toast{position:fixed;bottom:calc(22px + var(--clan-bottom,0px));left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:var(--r-pill);font-size:13px;font-weight:500;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .25s var(--ease),transform .25s var(--ease);z-index:50;max-width:calc(100vw - 32px)}
   .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -1048,6 +1058,7 @@
         +(say?'<p>'+esc(say)+'</p>':'')
         +(r&&arr(r.because).length?'<ul>'+arr(r.because).slice(0,3).map(function(b){ return '<li>'+esc(plainJudge(b.point))+'</li>'; }).join('')+'</ul>':'')
         +'<span class="muted">Change it, or ask '+esc(DARA)+' to write it again.</span>'
+        +(v.bad&&!locked?fixBtn(v.d):'')
         // Or answer it with a reason, empty or not: the OS's drawer holds the
         // override (a reasoned good verdict on the part).
         +(!locked&&OSF()?'<div class="editrow"><button type="button" class="cancel act-override">'+(hasVal(get(f.key))?'Keep it as it is, and say why':'Leave it empty, and say why')+'</button></div>':'')
@@ -1077,7 +1088,8 @@
       +'<p>'+esc(rf.reason)+'</p>'
       +(rf.fix?'<p class="fix"><b>Fix:</b> '+esc(rf.fix)+'</p>':'')
       +(rf.rule?'<p class="muted">The rule: '+esc(rf.rule)+'</p>':'')
-      +'<span class="muted">Change any of these parts, or ask '+esc(DARA)+' to write them again. Someone answers this before the brief is locked.</span></div></div>';
+      +'<span class="muted">Change any of these parts, or ask the crew to fix them. Someone answers this before the brief is locked.</span>'
+      +fixBtn(d)+'</div></div>';
   }
   function gotoField(key){
     var i=-1; FIELDS.forEach(function(x,j){ if(x.key===key) i=j; });
@@ -1089,6 +1101,7 @@
   function bindNotes(el,f){
     el.querySelectorAll('.act-goto').forEach(function(g){ g.addEventListener('click',function(e){ e.preventDefault(); gotoField(g.getAttribute('data-k')); }); });
     var o=el.querySelector('.act-override'); if(o) o.addEventListener('click',function(){ var F=OSF(); if(F) F.open(f.key); });
+    el.querySelectorAll('.act-fix').forEach(function(b){ b.addEventListener('click',function(){ fixParts(b.getAttribute('data-v')); }); });
     var a=el.querySelector('.act-accept'), x=el.querySelector('.act-dismiss');
     if(a) a.addEventListener('click',function(){ acceptProposal(f); });
     if(x) x.addEventListener('click',function(){ dismissProposal(f); });
@@ -1657,6 +1670,7 @@
     var id=stored(jobKey('draft_brief'));
     if(id) startDraft('', [], id);
     FIELDS.forEach(function(f){ var rid=stored(jobKey('regenerate_field', f.key)); if(rid) regenField(f, '', rid); });
+    var fid=stored(jobKey('fix_parts')); if(fid) fixParts('', fid);
   }
 
   // A working title while project_name is empty: the product and the move the
@@ -1876,7 +1890,7 @@
     var ctrls=!approveLocked()
       ? '<button class="iconbtn act-edit" title="Change this" aria-label="Change '+esc(f.label)+'">'+IC.edit+'</button>'+
 
-        '<button class="iconbtn act-regen" title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again')+'" aria-label="Write again: '+esc(f.label)+'"'+(REGEN[f.key]||noMiddleware()?' disabled':'')+'>'+IC.regen+'</button>'+
+        '<button class="iconbtn act-regen" title="'+(noMiddleware()?'Writing it again needs the middleware':'Ask '+esc(DARA)+' to write this again')+'" aria-label="Write again: '+esc(f.label)+'"'+(REGEN[f.key]||FIX||noMiddleware()?' disabled':'')+'>'+IC.regen+'</button>'+
         '<button class="iconbtn act-lock'+(locked?' on':'')+'" title="'+(locked?'Let the crew change this again':'Keep this as it is')+'" aria-label="'+(locked?'Unlock ':'Lock ')+esc(f.label)+'">'+(locked?IC.lock:IC.unlock)+'</button>'
       : reo ? '<button class="iconbtn act-edit" title="Make the change the client asked for" aria-label="Make the change the client asked for: '+esc(f.label)+'">'+IC.edit+'</button>' : '';
     row.innerHTML='<div class="lab"><span>'+esc(f.label)+'</span>'+
@@ -2055,6 +2069,48 @@
     var i=FIELDS.indexOf(f), row=document.querySelector('#fields .row[data-i="'+i+'"]'); if(!row) return;
     var old=row.querySelector('.regen-now'), h=regenLine(f);
     if(old) old.outerHTML=h; else if(h){ var v=row.querySelector('.val'); if(v) v.insertAdjacentHTML('afterend', h); }
+  }
+
+  // ---------- a note fixed by the crew: a fix_parts job (middleware-api §10.15) ----------
+  // Sam looks up what the fix needs, Dara rewrites the parts the note names
+  // together, Jude checks them. One at a time per brief; the page stays where
+  // the person is, and whoever is working walks the bottom edge meanwhile.
+  var FIX=null;
+  function fixBtn(d){
+    if(!d||!d.id||docLocked()||noMiddleware()||!(window.clan&&window.clan.apiProxy)) return '';
+    return '<div class="editrow"><button type="button" class="save act-fix" data-v="'+esc(d.id)+'"'+(FIX||DRAFT?' disabled':'')
+      +' title="'+esc(SAM)+' looks up what it needs, '+esc(DARA)+' rewrites the parts, '+esc(JUDE)+' checks them">Fix this with the crew</button></div>';
+  }
+  function fixParts(vid, resumeId){
+    if(!window.clan||FIX) return;
+    if(noMiddleware()){ setStatus(esc(NO_MW)); return; }
+    var j=FIX={task:'fix_parts', verdict:vid, fields:{}, onUpdate:function(){ walk(); },
+      onEnd:function(j){
+        FIX=null; walk();
+        setStatus(j.error?esc(j.error):j.summary?esc(j.summary):'');
+        if(phase==='doc') renderStructured();
+      }};
+    setStatus(''); walk();
+    if(phase==='doc') renderStructured();
+    if(resumeId){ j.id=resumeId; j.state='checking'; j.delay=900; pollJob(j); return; }
+    runJob(j, {verdict:vid});
+  }
+  var FIX_SAY={context:['synthesis', function(){ return SAM+' is looking up what the fix needs…'; }],
+    draft:['drafter', function(){ return DARA+' is rewriting the parts together…'; }],
+    judge:['judge', function(){ return JUDE+' is checking the fix…'; }]};
+  function walk(){
+    var w=$('walker'); if(!w) return;
+    var on=!!FIX, was=w.classList.contains('on');
+    if(on){
+      var at=FIX_SAY[FIX.stage]||FIX_SAY.context;
+      if(w.getAttribute('data-k')!==at[0]){
+        w.setAttribute('data-k', at[0]);
+        w.innerHTML='<div class="wk-who"><span class="wk-fig">'+fig(at[0],{state:'working', walking:!reduce, decorative:true})+'</span>'
+          +'<span class="wk-say">'+esc(at[1]())+'</span></div>';
+      }
+    }
+    w.classList.toggle('on', on);
+    if(!on&&was){ w.removeAttribute('data-k'); clearTimeout(walk._t); walk._t=setTimeout(function(){ if(!w.classList.contains('on')) w.innerHTML=''; }, 400); }
   }
 
   // lock toggle
@@ -2373,5 +2429,6 @@
   askGlass();
   window.addEventListener('clan:colorscheme', function(){ setTimeout(askGlass, 0); });
 </script>
+<div class="walker" id="walker" role="status" aria-live="polite"></div>
 </body>
 </html>
