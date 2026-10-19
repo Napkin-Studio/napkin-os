@@ -264,7 +264,7 @@ class Resolver:
     def __init__(self, clan: dict):
         self.pins = {f["id"]: f for f in ctx_facts(clan) if isinstance(f.get("id"), str)}
         self.findings = {fi["id"]: fi for fi in ctx_findings(clan)
-                         if isinstance(fi.get("id"), str) and fi.get("status") != "rejected"}
+                         if isinstance(fi.get("id"), str) and fi.get("status") not in ("rejected", "superseded")}
 
     def cites(self, fid: str) -> list:
         """The ids a decision cites for `fid`: the pin or the finding; [] when the

@@ -145,7 +145,7 @@ def check(html: str, pins: dict, findings: dict, contests: dict, gaps: dict, nam
     tree.feed(str(html or ""))
     tree.close()
     dropped = [f"<{t}> is not in the vocabulary" for t in sorted(tree.dropped_tags)]
-    live_findings = {k: v for k, v in findings.items() if v.get("status") != "rejected"}
+    live_findings = {k: v for k, v in findings.items() if v.get("status") not in ("rejected", "superseded")}
 
     paths = set(paths)
 

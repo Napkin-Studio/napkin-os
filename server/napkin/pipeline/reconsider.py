@@ -15,17 +15,19 @@ queued since the last, together:
   finding_verified  nothing is written again: a finding's confidence comes from its pins, and the page renders
                     its status from the record. No model call.
 
-A finding that still stands is carried forward as a new proposal citing what now holds it up, with the same
-statement; one that falls is written again from what remains (ONE call for all of them, cite-checked, a new
-proposal for a person to verify), or is said no longer to stand. The old finding is left as it was: findings are
-append-only, and rejecting one is a person's (os-layer). It is out of the report from here on, because nothing
-cites a finding resting on a pin out of use (doc.out_of_use); the host flags it until a person settles it.
+A finding is changed in place through the change's `findings_update` (the host applies it, N2-checked against
+`read`): its statement, verification and rejection never change. One that still stands cites what now holds it up
+(a corrected pin's replacement, without a pin marked wrong) and keeps its status; a verified one stays verified
+and says it was re-checked (`recheck`). One that falls is written again from what remains (ONE call for all of
+them, cite-checked, a new proposal for a person to verify) and is marked `superseded` by it; or it is said no
+longer to stand, and the host flags it until a person settles it. A superseded finding is out of use: the report
+and answers cite its replacement.
 
 Then every answer to a question citing a changed item, directly or through a finding, is answered again, and only
 the report sections and page parts citing one are written again (report.compose(part=...)). A page part holding a
 person's wording (shared/edits.yaml) is never rewritten: it is held, and the decision says so. Confidence is
-recomputed (rules/confidence.py) for every finding citing a reviewed fact. No model call when nothing cites what
-was reviewed.
+recomputed (rules/confidence.py) for every finding citing a reviewed fact, and written where it changed. No model
+call when nothing cites what was reviewed.
 """
 
 from __future__ import annotations
@@ -66,6 +68,10 @@ def schema(ids: list[str], pins: list[str]) -> dict:
         "statement": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "cites": {"type": "array", "items": {"type": "string", "enum": pins or ["(none)"]}},
         "why": {"type": "string"}})}})
+
+
+def _and(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
 
 
 def _line(p) -> str:
@@ -220,15 +226,21 @@ class Reconsider:
         brand = field_value(self.data, "brand") or {}
         names = [brand.get("name", "")] + [c.get("name", "") for c in field_value(self.data, "competitor_set") or []
                                            if isinstance(c, dict)]
-        existing = {tuple(sorted(x.get("cites") or [])) for x in ctx_findings(self.clan)}
+        # a finding already standing on these cites (one a fallen finding may be superseded by)
+        existing = {tuple(sorted(x.get("cites") or [])): x["id"] for x in live}
+        taken = {tuple(sorted(x.get("cites") or [])) for x in ctx_findings(self.clan)}
         new_findings, new_decs, reworked = [], [], {}
+        updates: dict[str, dict] = {}  # finding id -> the fields findings_update changes
 
-        def propose(old, statement, cites, why, rework: bool):
+        def supersede(old, nid, ndid):
+            updates[old["id"]] = {"status": "superseded", "superseded_by": {"finding": nid, "decision": ndid}}
+
+        def propose(old, statement, cites, why):
             cites = sorted(cites)
             cited = [pin_by[x] for x in cites]
             lens = old.get("lens") or lens_of_key(cited[0].get("key"))
             nid = uid("fi_", doc, lens, cites)
-            ndid = uid("d_", doc, self.base, "rework" if rework else "carry", old["id"], nid)
+            ndid = uid("d_", doc, self.base, "rework", old["id"], nid)
             fi = {"id": nid, "statement": statement, "cites": cites, "method": "synthesis", "status": "proposed",
                   "derived_by": handler, "confidence": finding_confidence(cited), "derived_at": t, "decision": ndid}
             if lens in LENSES:
@@ -237,36 +249,46 @@ class Reconsider:
             if mk:
                 fi["markets"] = mk
             new_findings.append(fi)
-            existing.add(tuple(cites))
-            reworked[old["id"]] = {"new": nid, "statement": statement, "carried": not rework}
+            existing[tuple(cites)] = nid
+            taken.add(tuple(cites))
+            reworked[old["id"]] = {"new": nid, "statement": statement}
+            supersede(old, nid, ndid)
             dropped = [c for c in old.get("cites") or [] if c not in cites]
-            new_decs.append(decision(doc, ndid, "finding", handler, "synthesise_finding", "", [f"findings[{nid}]"],
-                                     cites, timestamp=t, reasoning=rsn.make(
-                                         (f"Worked out again in place of {old['id']}, after a person's review of what "
-                                          f"it rested on." if rework else
-                                          f"Carried {old['id']} forward: it still stands on what a person's review "
-                                          f"left."),
+            new_decs.append(decision(doc, ndid, "finding", handler, "synthesise_finding", "",
+                                     [f"findings[{nid}]", f"findings[{old['id']}]"], cites, timestamp=t,
+                                     reasoning=rsn.make(
+                                         f"Worked out again in place of {old['id']}, after a person's review of what "
+                                         f"it rested on; {old['id']} is superseded by it.",
                                          [rsn.point(f"The old finding said: {old.get('statement')}", old["id"]),
                                           rsn.point(why, cites)],
                                          rsn.certainty(fi["confidence"], "the lowest derived confidence of what it cites"),
                                          "a cited fact is revised or excluded, or a person rejects it",
                                          rejected=[rsn.rej(f"keep citing {', '.join(dropped)}",
                                                            "a person marked it wrong or corrected it")],
-                                         attention=f"A new finding in place of {old['id']}: verify this one, and "
-                                                   f"reject the old one.")))
+                                         attention=f"A new finding in place of {old['id']}: verify this one.")))
 
-        # 3a. what still stands is carried forward on what now holds it up
+        def recheck(f) -> dict:
+            hit = [f"the correction {corrected[c]['decision']}" for c in f.get("cites") or [] if c in corrected] + \
+                [f"the rejection {rejected[c]['decision']}" for c in f.get("cites") or [] if c in rejected]
+            return {"decision": did, "note": f"re-checked against {_and(list(dict.fromkeys(hit)))}; still holds"}
+
+        # 3a. what still stands is changed in place: it cites what now holds it up, and a verified one stays
+        # verified, re-checked
         for f, remaining in standing:
             c, why = clean_claim(f.get("statement"), remaining, pin_by, {}, names)
-            if c and tuple(sorted(c["cites"])) in existing:
-                reworked[f["id"]] = {"why": "a finding on those facts is already in the document"}
-            elif c:
-                propose(f, c["text"], c["cites"], "It still stands on the facts that remain", rework=False)
-            else:  # it states what the facts that stand no longer hold (a corrected figure): written again
+            if not c:  # it states what the facts that stand no longer hold (a corrected figure): written again
                 fallen.append((f, remaining))
                 next(x for x in checked if x["id"] == f["id"]).update(stands=False, how=f"{why}: reworked")
+                continue
+            u = {"cites": c["cites"]}
+            if f.get("status") == "verified":
+                u["recheck"] = recheck(f)
+            updates[f["id"]] = u
+            reworked[f["id"]] = {"kept": True, "cites": c["cites"]}
+            existing[tuple(sorted(c["cites"]))] = f["id"]
+            taken.add(tuple(sorted(c["cites"])))
 
-        # 3b. what fell is written again, in one call
+        # 3b. what fell is written again, in one call, and superseded by what it is written as
         if fallen:
             lenses = {f.get("lens") or next((lens_of_key(pin_by[c]["key"]) for c in rem), None) for f, rem in fallen}
             pool = [p for p in pin_by.values() if lens_of_key(p.get("key")) in lenses] or list(pin_by.values())
@@ -294,32 +316,39 @@ class Reconsider:
                     reworked[old["id"]] = {"why": item.get("why") or "the facts that stand do not support it"}
                     continue
                 c, why = clean_claim(item.get("statement"), item.get("cites"), pin_by, {}, names)
-                if not c or tuple(sorted(c["cites"])) in existing:
+                same = existing.get(tuple(sorted(c["cites"]))) if c else None
+                if same and same != old["id"]:  # a finding on those facts already stands: it is the replacement
+                    reworked[old["id"]] = {"new": same, "statement": None}
+                    supersede(old, same, did)
+                    continue
+                if not c or tuple(sorted(c["cites"])) in taken:
                     reworked[old["id"]] = {"why": why or "a finding on those facts is already in the document"}
                     continue
-                propose(old, c["text"], c["cites"], item.get("why") or "It now rests only on the facts that stand",
-                        rework=True)
+                propose(old, c["text"], c["cites"], item.get("why") or "It now rests only on the facts that stand")
             for f, _ in fallen:
                 reworked.setdefault(f["id"], {"why": "the agent did not write it again"})
         if progress:
             progress(2)
 
-        # 4. confidence, for every finding citing a reviewed fact
+        # 4. confidence, for every finding still standing that cites a reviewed fact
         reviewed = verified | set(rejected) | set(corrected)
         confidence = {}
         for f in live:
-            if not set(f.get("cites") or []) & reviewed or f["id"] in reworked:
+            r = reworked.get(f["id"])
+            if not set(f.get("cites") or []) & reviewed or (r and not r.get("kept")):
                 continue
-            cited = [pin_by[c] for c in f.get("cites") or [] if c in pin_by]
+            cited = [pin_by[c] for c in updates.get(f["id"], {}).get("cites", f.get("cites") or []) if c in pin_by]
             now = finding_confidence(cited) if cited else None
-            if now != f.get("confidence"):
+            if now and now != f.get("confidence"):
                 confidence[f["id"]] = {"was": f.get("confidence"), "now": now}
+                updates.setdefault(f["id"], {})["confidence"] = now
 
         # what changed, directly or through a finding
         changed = set(rejected) | set(corrected) | {e["replaced_by"] for e in corrected.values()} | fi_rejected | \
             set(reworked) | {x["id"] for x in new_findings}
         touched = changed | {f["id"] for f in ctx_findings(self.clan) if set(f.get("cites") or []) & changed}
-        clan3 = dict(clan2, findings=list(ctx_findings(self.clan)) + new_findings)
+        clan3 = dict(clan2, findings=[dict(f, **updates.get(f.get("id"), {})) for f in ctx_findings(self.clan)]
+                     + new_findings)
 
         # 5. answers that cite a changed item
         asks_patch, ask_decs, answers = {}, [], []
@@ -400,9 +429,11 @@ class Reconsider:
         for c in checked:
             r = reworked.get(c["id"], {})
             because.append(rsn.point(
-                f"“{(c['statement'] or '')[:140]}” " + (("still stands, carried forward as " + r["new"]) if r.get("carried")
-                                                        else ("worked out again as " + r["new"]) if r.get("new") else
-                                                        ("no longer stands: " + r.get("why", ""))) + f" ({c['how']})",
+                f"“{(c['statement'] or '')[:140]}” " + (
+                    f"still stands on {', '.join(r['cites'])}, changed in place"
+                    + ("; still verified, re-checked" if "recheck" in updates.get(c["id"], {}) else "") if r.get("kept")
+                    else f"is superseded by {r['new']}" if r.get("new") else
+                    "no longer stands: " + r.get("why", "")) + f" ({c['how']})",
                 [c["id"]] + ([r["new"]] if r.get("new") else [])))
         for fid, cf in confidence.items():
             because.append(rsn.point(f"{fid}'s confidence is now {cf['now'] or 'none'} (was {cf['was']})", fid))
@@ -418,18 +449,18 @@ class Reconsider:
                                      f"kept as they are", [f"{doc}#report"]))
         if len(because) == len(self.events):
             because.append(rsn.point("Nothing the crew wrote needs writing again", [e["id"] for e in self.events]))
-        fell = sum(1 for v in reworked.values() if not v.get("new"))
+        fell = sum(1 for v in reworked.values() if not v.get("new") and not v.get("kept"))
         summary = (f"{len(self.events)} review(s): {len(checked)} finding(s) checked, "
-                   f"{sum(1 for v in reworked.values() if v.get('carried'))} carried forward, "
-                   f"{sum(1 for v in reworked.values() if v.get('new') and not v.get('carried'))} worked out again, "
-                   f"{fell} no longer stand"
+                   f"{sum(1 for v in reworked.values() if v.get('kept'))} still stand, "
+                   f"{sum(1 for v in reworked.values() if v.get('new'))} superseded by what they were worked out "
+                   f"again as, {fell} no longer stand"
                    + (f"; {len(confidence)} confidence(s) changed" if confidence else "")
                    + (f"; {len(asks_patch)} answer(s) redone" if asks_patch else "")
                    + ("; the report parts resting on it were written again" if report_patch is not None else "")
                    + (f"; {len(held)} page part(s) held for a person's wording" if held else "") + ".")
         attention = []
         if new_findings:
-            attention.append("Verify the new finding(s), and reject the old one(s) they replace.")
+            attention.append("Verify the new finding(s); the one(s) they replace are superseded.")
         if held:
             attention.append(f"{len(held)} part(s) of the report hold your own wording and rest on something the "
                              f"review changed: they were not rewritten; check them.")
@@ -443,6 +474,7 @@ class Reconsider:
                      attention=" ".join(attention) or None)
         targets = [f"facts[{e['id']}]" if e["kind"] in FACT_EVENTS else f"findings[{e['id']}]" for e in self.events]
         targets += [f"selection.excluded[{fid}]" for fid in rejected]
+        targets += [f"findings[{fid}]" for fid in updates]
         rd = decision(doc, did, "edit", handler, "reconsider", "", list(dict.fromkeys(targets)),
                       [e["id"] for e in self.events], fields_changed=["selection.excluded"] if rejected else [],
                       reasoning=r)
@@ -453,8 +485,13 @@ class Reconsider:
             patch["asks"] = asks_patch
         if report_patch is not None:
             patch["report"] = report_patch
-        change = {"doc": doc, "base_version": self.base, "read": read_of(self.data, patch), "data_patch": patch,
-                  "facts_append": [], "findings_append": new_findings, "decisions": [rd] + new_decs + ask_decs + rep_decs}
+        # each finding updated in place, as the job read it (N2)
+        read = dict(read_of(self.data, patch), **{f"findings.{f['id']}": f for f in ctx_findings(self.clan)
+                                                  if f.get("id") in updates})
+        change = {"doc": doc, "base_version": self.base, "read": read, "data_patch": patch, "facts_append": [],
+                  "findings_append": new_findings,
+                  "findings_update": [dict(id=fid, **u) for fid, u in updates.items()],
+                  "decisions": [rd] + new_decs + ask_decs + rep_decs}
         result = {"summary": summary, "events": self.events, "checked": checked, "reworked": reworked,
                   "confidence": confidence, "answers": answers, "report": redone or None,
                   "held": [{"part": i, "edits": keys} for i, keys in sorted(held.items())]}

@@ -114,6 +114,15 @@ def ev(kind, iid, **kw):
     return {"kind": kind, "id": iid, "decision": "d_REVIEW0001", **kw}
 
 
+def updates(change):
+    """findings_update by finding id, each also in `read` as the job read it (N2)."""
+    out = {u["id"]: {k: v for k, v in u.items() if k != "id"} for u in change["findings_update"]}
+    assert len(out) == len(change["findings_update"])
+    for fid in out:
+        assert change["read"][f"findings.{fid}"]["id"] == fid
+    return out
+
+
 # -- one test per event kind ----------------------------------------------------------------------------------------
 
 def test_a_fact_marked_wrong(store):
@@ -127,16 +136,24 @@ def test_a_fact_marked_wrong(store):
     # the fact is excluded with the person's reason
     assert patch["selection"]["excluded"] == [{"fact_id": media, "reason": "The source is a press release.",
                                                "decision": change["decisions"][0]["id"]}]
-    # findings: the one with nothing left fell and was worked out again; the one still standing is carried forward
-    # on what holds it up; the market finding is untouched
+    # findings: the one with nothing left fell, was worked out again and is superseded by its replacement; the one
+    # still standing is changed in place to cite what holds it up (no duplicate); the market finding is untouched
     checked = {c["id"]: c["stands"] for c in result["checked"]}
     assert checked == {"fi_ONMEDIA01": False, "fi_BOTHPINS01": True}
-    new = {f["statement"]: f for f in change["findings_append"]}
-    assert new["The market and its spend move together."]["cites"] == [m0]
-    assert new["The category's own measure is what remains."]["cites"] == [m1]
-    assert all(f["status"] == "proposed" for f in new.values()) and len(new) == 2
-    assert result["reworked"]["fi_BOTHPINS01"]["carried"] and not result["reworked"]["fi_ONMEDIA01"]["carried"]
-    assert result["confidence"] == {}
+    [new] = change["findings_append"]
+    assert new["statement"] == "The category's own measure is what remains." and new["cites"] == [m1]
+    assert new["status"] == "proposed"
+    up = updates(change)
+    assert set(up) == {"fi_ONMEDIA01", "fi_BOTHPINS01"}
+    assert up["fi_ONMEDIA01"] == {"status": "superseded",
+                                  "superseded_by": {"finding": new["id"], "decision": new["decision"]}}
+    assert up["fi_BOTHPINS01"]["cites"] == [m0] and "recheck" not in up["fi_BOTHPINS01"]  # proposed stays proposed
+    assert "status" not in up["fi_BOTHPINS01"] and "statement" not in up["fi_BOTHPINS01"]
+    # its confidence now comes from the one pin left, and is written
+    pins = {p["id"]: p for p in clan["facts"]}
+    assert up["fi_BOTHPINS01"].get("confidence") == result["confidence"].get("fi_BOTHPINS01", {}).get("now")
+    assert up["fi_BOTHPINS01"]["confidence"] == finding_confidence([pins[m0]]) != clan["findings"][1]["confidence"]
+    assert result["reworked"]["fi_BOTHPINS01"]["kept"] and result["reworked"]["fi_ONMEDIA01"]["new"] == new["id"]
     # the answer citing it is answered again; the other is not
     assert set(patch["asks"]) == {"ask_A"} and media not in json.dumps(patch["asks"])
     # the report: the media section and the page parts citing the fact are written again, nothing else
@@ -150,7 +167,10 @@ def test_a_fact_marked_wrong(store):
     assert purposes(model) == ["ask_answer", "report_part", "rework_findings"]
     d = change["decisions"][0]
     assert d["action"] == "reconsider" and f"{DOC}#facts[{media}]" in d["targets"]
-    assert [x["action"] for x in change["decisions"]].count("synthesise_finding") == 2
+    assert [x["action"] for x in change["decisions"]].count("synthesise_finding") == 1
+    assert {f"{DOC}#findings[fi_ONMEDIA01]", f"{DOC}#findings[fi_BOTHPINS01]"} <= set(d["targets"])
+    # the report now cites the replacement, never the superseded finding
+    assert "fi_ONMEDIA01" not in json.dumps(rpt)
 
 
 def test_a_fact_corrected(store):
@@ -163,16 +183,26 @@ def test_a_fact_corrected(store):
                                                     "decision": "d_REVIEW0001"})
     old_pin["replaced_by"] = {"fact_id": "f_CORRECTED01", "decision": "d_REVIEW0001"}
     clan["facts"].append(new_pin)
+    clan["findings"][0] = dict(finding("fi_ONMEDIA01", [media], "Spend leans on one channel.", "media_spend",
+                                       status="verified"), confidence="low")
     old = clan["data"]["report"]
     model, jev = model_for(m1), FakeJev(0.85)
     result, change, _ = run(clan, [ev("fact_corrected", media, replaced_by="f_CORRECTED01")], store, model, jev)
-    # every finding citing the old pin still stands: carried forward on the new one, nothing written again
+    # every finding citing the old pin still stands: changed in place to cite the new one, nothing appended
     assert {c["id"] for c in result["checked"] if c["stands"]} == {"fi_ONMEDIA01", "fi_BOTHPINS01"}
-    cites = sorted(tuple(f["cites"]) for f in change["findings_append"])
-    assert cites == sorted([("f_CORRECTED01",), tuple(sorted(["f_CORRECTED01", m0]))])
-    by = {tuple(f["cites"]): f for f in change["findings_append"]}
-    # the person's value counts as reviewer-verified (high); a single cite is one lower
-    assert by[("f_CORRECTED01",)]["confidence"] == "medium"
+    assert change["findings_append"] == []
+    up = updates(change)
+    assert up["fi_ONMEDIA01"]["cites"] == ["f_CORRECTED01"]
+    assert up["fi_BOTHPINS01"]["cites"] == ["f_CORRECTED01", m0]
+    # the verified one stays verified, re-checked against the correction; the proposed one stays proposed
+    assert "status" not in up["fi_ONMEDIA01"] and "status" not in up["fi_BOTHPINS01"]
+    assert up["fi_ONMEDIA01"]["recheck"] == {
+        "decision": change["decisions"][0]["id"],
+        "note": "re-checked against the correction d_REVIEW0001; still holds"}
+    assert "recheck" not in up["fi_BOTHPINS01"]
+    # the person's value counts as reviewer-verified (high); a single cite is one lower, and it is written
+    assert up["fi_ONMEDIA01"]["confidence"] == "medium"
+    assert result["confidence"]["fi_ONMEDIA01"]["now"] == "medium"
     assert "selection" not in change["data_patch"]  # a correction excludes nothing
     assert set(change["data_patch"]["asks"]) == {"ask_A"}
     rpt = change["data_patch"]["report"]
@@ -193,6 +223,7 @@ def test_a_fact_verified(store):
     # the one finding citing it is worth more now (a person verified it: high); nothing else changes
     assert result["confidence"] == {"fi_MARKET0001": {"was": "low", "now": "high"}}
     assert result["checked"] == [] and change["findings_append"] == [] and change["data_patch"] == {}
+    assert updates(change) == {"fi_MARKET0001": {"confidence": "high"}}  # written, in place
     assert [d["action"] for d in change["decisions"]] == ["reconsider"]
     assert "fi_MARKET0001's confidence is now high (was low)" in json.dumps(change["decisions"][0]["reasoning"])
     assert model.calls == []
@@ -206,7 +237,7 @@ def test_a_finding_rejected(store):
     model = FakeModel({"ask_answer": answer_from})
     result, change, _ = run(clan, [ev("finding_rejected", "fi_MARKET0001")], store, model, FakeJev(0.85))
     # no finding is written again; the answer and the report parts resting on it are
-    assert change["findings_append"] == [] and result["checked"] == []
+    assert change["findings_append"] == [] and change["findings_update"] == [] and result["checked"] == []
     assert set(change["data_patch"]["asks"]) == {"ask_B"}
     rpt = change["data_patch"]["report"]
     assert result["report"]["sections"] == ["s_market_structure"]
@@ -228,6 +259,33 @@ def test_a_finding_verified(store):
     assert [d["action"] for d in change["decisions"]] == ["reconsider"]
     assert f"{DOC}#findings[fi_ONMEDIA01]" in change["decisions"][0]["targets"]
     assert model.calls == []
+
+
+def test_a_verified_finding_that_still_stands_stays_verified(store):
+    clan, media, m0, m1 = document(store)
+    clan["findings"][1] = finding("fi_BOTHPINS01", [media, m0], "The market and its spend move together.",
+                                  "media_spend", status="verified")
+    result, change, _ = run(clan, [ev("fact_rejected", media)], store, model_for(m1), FakeJev(0.85))
+    up = updates(change)["fi_BOTHPINS01"]
+    assert up["cites"] == [m0] and "status" not in up
+    assert up["recheck"] == {"decision": change["decisions"][0]["id"],
+                             "note": "re-checked against the rejection d_REVIEW0001; still holds"}
+    assert change["read"]["findings.fi_BOTHPINS01"] == clan["findings"][1]
+    assert len({f["id"] for f in change["findings_append"]}) == len(change["findings_append"]) == 1
+
+
+def test_a_fallen_finding_is_superseded_by_one_already_standing_on_what_remains(store):
+    clan, media, m0, m1 = document(store)
+    model = FakeModel({"ask_answer": answer_from, "rework_findings": lambda p: {"findings": [
+        {"id": x["id"], "statement": "The market is crowded and growing.", "cites": [m0, m1], "why": "the same"}
+        for x in p["findings"]]}})
+    result, change, _ = run(clan, [ev("fact_rejected", media)], store, model, FakeJev(0.1))
+    # both media findings fell; what they are worked out as is the market finding already there: no duplicate
+    assert change["findings_append"] == []
+    up = updates(change)
+    for old in ("fi_ONMEDIA01", "fi_BOTHPINS01"):
+        assert up[old] == {"status": "superseded",
+                           "superseded_by": {"finding": "fi_MARKET0001", "decision": change["decisions"][0]["id"]}}
 
 
 # -- across events --------------------------------------------------------------------------------------------------
