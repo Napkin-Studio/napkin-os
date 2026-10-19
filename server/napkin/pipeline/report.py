@@ -102,7 +102,8 @@ def compose(doc, clan, handler, caps, part=None):
 
     With `part` = {old, sections, headline, summary, page, why}, only part of the report `old` is written again:
     the record sections whose ids are in `sections`, the headline and the summary when true, and the parts of
-    the page (`rule.split(old.layout)`) whose indices are in `page`; `why` says what changed, for the model.
+    the page (`rule.split(old.layout)`) whose indices are in `page` (page None: the page is kept exactly as it
+    is, nothing added); `why` says what changed, for the model.
     Everything else is kept byte for byte, and what is written passes the same checks as a whole report. No model
     call when there is nothing to write."""
     data = ctx_data(clan)
@@ -310,7 +311,9 @@ def compose(doc, clan, handler, caps, part=None):
               "confirm": old.get("confirm", []) if part else confirm_list(doc, camp),
               "not_researched": old.get("not_researched", []) if part else not_researched(sel, markets)}
     if part:
-        if pages:  # the parts of the page not asked for stay byte for byte
+        if pages and part.get("page") is None:
+            report["layout"], report["layout_by"], ldropped = old["layout"], old.get("layout_by") or "agent", []
+        elif pages:  # the parts of the page not asked for stay byte for byte
             report["layout"], ldropped = layout.splice(
                 pages, redo_page, raw.get("page") if isinstance(raw, dict) else None, report, pin_by, all_findings,
                 contested, gap_by, names, {f"campaign.{k}" for k in ask})

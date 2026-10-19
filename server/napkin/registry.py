@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 from .capabilities import CAPABILITY_VERSION
-from .handlers import (answer_question, ask_research, compose_report, draft_brief, extract_ask, reconsider_fact,
+from .handlers import (answer_question, ask_research, compose_report, draft_brief, extract_ask, reconsider,
                        regenerate_field, research_lens, start_campaign, synthesise_findings)
 from .util import bad
 
@@ -28,7 +28,7 @@ REGISTRY = {
     "draft_brief": {1: draft_brief},
     "regenerate_field": {1: regenerate_field},
     "ask_research": {1: ask_research},
-    "reconsider_fact": {1: reconsider_fact},
+    "reconsider": {2: reconsider},
 }
 # Used only when a document carries no pipeline: the declared built-in map.
 BUILTIN_PIPELINE = {
@@ -37,7 +37,7 @@ BUILTIN_PIPELINE = {
     "answer_question": "answer_question@1", "compose_report": "compose_report@1",
     "draft_brief": "draft_brief@1", "regenerate_field": "regenerate_field@1",
     "ask_research": "ask_research@1",
-    "reconsider_fact": "reconsider_fact@1",
+    "reconsider": "reconsider@2",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status", "cancel_job"}
 
@@ -66,7 +66,7 @@ def lookup(declared: str, task: str):
 
 # Tasks added after documents were made: a document whose pipeline predates
 # one may still use it, through the built-in handler, until it declares it.
-LATER_TASKS = {"ask_research", "reconsider_fact"}
+LATER_TASKS = {"ask_research", "reconsider"}
 
 
 def resolve(task: str, clan: dict):

@@ -229,7 +229,11 @@ class Middleware:
         caps = self.caps(handler)
         jid = self.jobs.new_id()
         caps.bind_job(jid)
-        total, work = mod.prepare(req, caps, self.settings)
+        total, work = mod.prepare(req, caps, self.settings)  # validates: a 400 before a 409
+        if task == "reconsider" and self.jobs.unfinished(scope, doc, ("reconsider",)):
+            # one at a time per document: two would write the same parts of it over each other
+            raise TaskError(409, "job_state", "a reconsider job on this document is still running; send these "
+                                              "reviews with the next one")
         job = LongJob(jid, task, handler, doc, scope, caps, total, work)
         self.jobs.add(job)
         job.start()
