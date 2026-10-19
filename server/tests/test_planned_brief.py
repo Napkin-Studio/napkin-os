@@ -199,7 +199,8 @@ def test_the_check_loop_rewrites_what_jev_flags_and_jude_explains(tmp_path):
     assert list(seen["rewrite"]["rewrite"]) == ["tone_and_world"], "Jude kept the background: only one rewrite"
     assert host.data["tone_and_world"] == ["sunny", "quick-witted"]
     d = next(d for d in host.chain if d.get("action") == "draft" and d["targets"][0].endswith("#tone_and_world"))
-    assert "Rewritten on Jude's note: tone_and_world is generic" in d["reasoning"]["because"][0]["point"]
+    # an assumption's why is in attention (brief-fact-provenance): never an uncited reason
+    assert "Rewritten on Jude's note: tone_and_world is generic" in d["reasoning"]["attention"]
     assert not [x for x in host.chain if x["kind"] == "verdict"], "no verdict per part: the reasons sit on the rewrites"
     assert "What is the budget?" in host.data["open_questions"]
     assert host.data["review"]["judge"]["health"] == 100

@@ -68,6 +68,10 @@ class FakeModel:
 
     # -- responders -------------------------------------------------------------
     @staticmethod
+    def r_tie_claims(p):
+        return {"ties": []}  # the tie call names nothing unless a test says otherwise
+
+    @staticmethod
     def r_extract(p):
         out = {"brand": None, "client_org": None, "markets": [], "campaign_type": None, "problem": None,
                "objective": None, "audience_stated": None, "competitor_set": [], "success_measures": [],

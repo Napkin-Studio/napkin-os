@@ -46,7 +46,8 @@ def bserver(tmp_path):
 class Host:
     """Holds one Brief Maker document and applies changes (§5), idempotently."""
 
-    def __init__(self, data=None, chain=None, pipeline=None):
+    def __init__(self, data=None, chain=None, pipeline=None, schema=None):
+        self.schema = BRIEF_SCHEMA if schema is None else schema  # the document's embedded data schema, as the host sends it
         self.data = copy.deepcopy(data or {})
         self.chain = list(chain or [])
         self.version = 1
@@ -56,6 +57,7 @@ class Host:
 
     def clan(self):
         c = {"id": DOC, "version": f"v{self.version}", "revision": "r", "data": copy.deepcopy(self.data),
+             "schema": self.schema,
              "facts": copy.deepcopy(self.facts),
              "findings": [], "decision_chain": {"decisions": copy.deepcopy(self.chain)},
              "sources": copy.deepcopy(getattr(self, "sources", []))}
@@ -137,6 +139,29 @@ def check_change_rules(host):
                      (c.startswith("f_") and c in {f["id"] for f in host.facts}) or \
                      (c.startswith("src_") and c in {x["id"] for x in getattr(host, "sources", [])})
                 assert ok, f"{d['id']} cites {c}, which does not resolve"
+        # what a part rests on (brief-fact-provenance): every claim's cites resolve and are the decision's own
+        for c in d.get("claims") or []:
+            assert c["kind"] in ("fact", "derived", "client", "to_confirm"), c
+            assert (c["kind"] == "to_confirm") == (not c["cites"]), c
+            for x in c["cites"]:
+                assert x in d["cites"], (d["id"], x)
+                assert (x.startswith("cap_") and x in (data.get("capture") or {}).get("items", {})) or \
+                    (x.startswith("mat_") and x in (data.get("materials") or {})) or \
+                    (x.startswith("f_") and x in {f["id"] for f in host.facts}) or \
+                    (x.startswith("fi_") and x in {f["id"] for f in getattr(host, "findings", [])}), (d["id"], x)
+        from napkin.brief.fields import last_writer
+        key = d["targets"][0].split("#", 1)[1] if d.get("targets") else None
+        if d.get("claims") is not None and key in KEYS and (
+                d.get("action") == "propose" or last_writer(DOC, host.chain, key) == d["id"]):
+            from napkin.brief.provenance import sentences
+            from napkin.rules.derive import spans
+            v = d.get("proposed_value")
+            if v is None:
+                top, _, leaf = d["targets"][0].split("#", 1)[1].partition(".")
+                v = (data.get(top) or {}).get(leaf) if leaf else data.get(top)
+            said = {c["text"] for c in d["claims"]}
+            for t in sentences(v):
+                assert not spans(t) or t in said, f"{d['id']}: a must-tie sentence has no claim: {t!r}"
         assert d["handler"].startswith(("draft_brief@1", "regenerate_field@1", "fix_parts@1"))
         assert d["agent"].rsplit("/", 1)[-1] in ("extract", "synthesise", "drafter", "judge")
     # the document validates against Brief Maker's schema, the §10.4 blocks included

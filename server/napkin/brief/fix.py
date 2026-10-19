@@ -47,8 +47,9 @@ FIX_NOTE = """
 
 You are fixing a problem on this brief. Rewrite ONLY the parts in `rewrite`, together, so they make one
 argument with the rest of the brief and the problem in `problem` is gone. Follow each part's instruction.
-Rest every claim on the facts given, citing their ids; a claim no fact supports starts with "To confirm:"
-or is left out. Never use a figure that is not in a cited fact."""
+Rest every claim on the facts given, citing their ids; a claim no fact supports starts with "To confirm:".
+`prior_claims` says what each part rests on now: keep its worked-out conclusions (kind "derived") and the
+facts they rest on unless the problem says they are wrong."""
 
 
 def fix_plan_schema(keys, lens_codes, cat_codes):
@@ -146,16 +147,19 @@ class FixPartsJob(PlannedBriefJob):
         said = " ".join(p["text"] for p in self.problem)
         rewrite = {k: (str(((plan.get("parts") or {}).get(k) or {}).get("instruction") or "").strip()
                        or f"Fix it so this no longer holds: {_short(said, 400)}") for k in keys}
+        prior = self._prior(keys)
         payload = {"client_said": self._said(), "captured": self._captured(),
+                   "client_words": self._client().payload(),
                    "plan": {"strategy": plan.get("strategy")}, "brief": self._brief(),
                    "problem": [{"by": p["by"], "said": p["text"]} for p in self.problem], "rewrite": rewrite,
+                   "prior_claims": {k: prior.get(k) or [] for k in keys},
                    "facts": ev["facts"], "findings": ev["findings"], "research_upstream": ev["research"],
-                   "library": [], "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys}}
+                   "library": self._library(12), "parts": {k: WHAT.get(k, LABELS.get(k, k)) for k in keys}}
         if self.guidance:
             payload["planner_guidance"] = self.guidance
         out = self.caps.model.structured("fix_brief_parts", DRAFT_SYSTEM + FIX_NOTE, payload, draft_schema(keys),
                                          max_tokens=8000)
-        self.whole = {k: {**v, "revised": True} for k, v in self._clean_whole(out, ev).items() if k in keys}
+        self.whole = {k: {**v, "revised": True} for k, v in self._clean(out, ev, "fix", keys=keys, prior=prior).items()}
         self.set_state([k for k in keys if k in self.whole], "waiting", "drafter")
         self.set_state([k for k in keys if k not in self.whole], "failed", "drafter")
         self.caps.runlog.note("fix_draft", written=sorted(self.whole), empty=[k for k in keys if k not in self.whole],
