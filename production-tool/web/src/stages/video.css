@@ -78,6 +78,8 @@
 .ve-timeline .strip.ve-units { gap: 0; align-items: stretch; }
 .ve-strip { display: flex; flex-direction: column; flex: 0 0 auto; border: 2px solid var(--tool); border-radius: 10px; background: var(--tool-soft); overflow: hidden; }
 .ve-strip.separate { border-style: dashed; }
+.ve-strip.refused { border-color: var(--warn); background: var(--warn-bg); }
+.ve-refused { color: var(--warn); font-weight: 600; font-size: 12.5px; }
 .ve-striphead { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
 .ve-striphead b { font-weight: 600; }
 .ve-stripmodel { font-size: 11.5px; }

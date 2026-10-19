@@ -123,11 +123,12 @@ export function separateAll(store: DocumentStore, videoId: Id) {
 
 /** A unit of the timeline: shots that will be one video (a strip), or a shot on its own. */
 export type Unit =
-  | { kind: 'strip'; run: PlannedRun; shotIds: Id[]; lengthS: number; state: 'new' | 'separate' | 'making' | 'made'; jobId?: Id }
+  | { kind: 'strip'; run: PlannedRun; shotIds: Id[]; lengthS: number; state: 'new' | 'separate' | 'making' | 'made' | 'refused'; jobId?: Id }
   | { kind: 'shot'; shotId: Id }
 
 /** The video's shots as strips and separate shots, from the plan. A strip's state: not made, made before
- *  as separate clips, being made as one video, or made as one. */
+ *  as separate clips, being made as one video, made as one, or refused as one: its last try failed on the
+ *  provider's moderation, even once the relay had made the words plainer (features/connected-video.clan). */
 export function videoUnits(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, videoId: Id | undefined, plan: RunPlan | undefined): Unit[] {
   const out: Unit[] = []
   for (const s of videoShots(d, videoId)) {
@@ -139,10 +140,17 @@ export function videoUnits(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, vid
     if (r.shotIds[0] !== s.id) continue
     const lengthS = r.shotIds.reduce((a, id) => a + (d.shots[id]?.duration_s ?? 0), 0)
     const jobId = runJobFor(d, ui, s.id)
-    const state = isMoving(d, jobId) ? 'making' : isOneTake(d, videoId, r.shotIds) ? 'made' : r.shotIds.some((id) => takesOf(d, id).length) ? 'separate' : 'new'
+    const state = isMoving(d, jobId) ? 'making' : isOneTake(d, videoId, r.shotIds) ? 'made' : refusedJob(d, jobId) ? 'refused'
+      : r.shotIds.some((id) => takesOf(d, id).length) ? 'separate' : 'new'
     out.push({ kind: 'strip', run: r, shotIds: r.shotIds, lengthS, state, ...(jobId ? { jobId } : {}) })
   }
   return out
+}
+
+/** A job that failed on the provider's moderation (Runway refused the words twice, or a picture). */
+export function refusedJob(d: ProductionDocument, jobId: Id | undefined): boolean {
+  const j = jobId ? d.jobs[jobId] : undefined
+  return !!j && j.state === 'failed' && j.error?.code === 'moderated'
 }
 
 /** About how long a video takes to make, said quietly beside its model ("~5 min"; phase 0 T4 and T7). */

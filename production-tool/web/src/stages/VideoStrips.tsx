@@ -13,7 +13,7 @@ import { joinHere, joinSelection, selectionBlock, separateSelection, splitHere, 
 import { JobSlot } from '../ui/JobSlot'
 
 /** The timeline's units: strips of cards and separate cards, with ✂ and 🔗 between them. */
-export function StripTrack({ videoId, shots, units, card, insert, onMakeStrip, onPlayStrip }: {
+export function StripTrack({ videoId, shots, units, card, insert, onMakeStrip, onPlayStrip, onMakeSeparately, onEditWords }: {
   videoId: Id
   shots: Shot[]
   units: Unit[]
@@ -23,6 +23,10 @@ export function StripTrack({ videoId, shots, units, card, insert, onMakeStrip, o
   insert?: (i: number) => ReactNode
   onMakeStrip: (shotIds: Id[]) => void
   onPlayStrip: (shotId: Id) => void
+  /** A strip Runway refused as one video: split it and make each shot alone (the tray first). */
+  onMakeSeparately: (shotIds: Id[]) => void
+  /** ...or change its words: the strip's first shot, where its words are. */
+  onEditWords: (shotId: Id) => void
 }) {
   const { doc: docStore } = useServices()
   const doc = useDoc()
@@ -48,14 +52,19 @@ export function StripTrack({ videoId, shots, units, card, insert, onMakeStrip, o
               <header className="ve-striphead">
                 <b>One video · {fmtS(u.lengthS)}</b>
                 {u.state === 'separate' && <span className="faint">Made as separate clips</span>}
+                {u.state === 'refused' && <span className="ve-refused" role="status">Runway refused this as one video</span>}
                 <span className="pt-grow" />
-                {u.state !== 'made' && <span className="faint ve-stripmodel" title={r.switched ? `${r.switched}, so ${r.model.label} makes this one.` : undefined}>{r.model.label} · {waitWords(r.model, u.lengthS)}</span>}
+                {u.state === 'refused' && <>
+                  <button type="button" className="btn sm primary" aria-haspopup="dialog" onClick={() => onMakeSeparately(u.shotIds)}>Make as separate clips</button>
+                  <button type="button" className="btn sm" onClick={() => onEditWords(u.shotIds[0])}>Edit the words</button>
+                </>}
+                {u.state !== 'made' && u.state !== 'refused' && <span className="faint ve-stripmodel" title={r.switched ? `${r.switched}, so ${r.model.label} makes this one.` : undefined}>{r.model.label} · {waitWords(r.model, u.lengthS)}</span>}
                 {(u.state === 'new' || u.state === 'separate') && (
                   <button type="button" className="btn sm primary" aria-haspopup="dialog" onClick={() => onMakeStrip(u.shotIds)}>Make as one video</button>
                 )}
                 {u.state === 'made' && <button type="button" className="btn sm" onClick={() => onPlayStrip(u.shotIds[0])}>▶ Play</button>}
               </header>
-              {u.state === 'making' && u.jobId && <div className="ve-stripjob"><JobSlot jobId={u.jobId} compact /></div>}
+              {(u.state === 'making' || u.state === 'refused') && u.jobId && <div className="ve-stripjob"><JobSlot jobId={u.jobId} compact /></div>}
               <div className="ve-stripcards">
                 {u.shotIds.map((id, k) => {
                   const i = index.get(id)!

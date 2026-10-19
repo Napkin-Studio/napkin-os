@@ -13,7 +13,7 @@ import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
 import { changeFeel, editQuality, makeClip as submitClip, redoInTake, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
 import { isOneTake, isTakeRun, makeClips, makeRuns, modelEntry, canLand, planRunOf } from '../jobs/runs'
-import { inTake, joinBefore, runJobFor, separateAll, shotRange, videoJoin, videoModel, videoPlan, videoUnits } from '../jobs/runView'
+import { inTake, joinBefore, runJobFor, separateAll, separateSelection, shotRange, videoJoin, videoModel, videoPlan, videoUnits } from '../jobs/runView'
 import { SelectionBar, StripTrack } from './VideoStrips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
@@ -310,6 +310,8 @@ export function Video() {
                     <StripTrack videoId={video.id} shots={shots} units={units}
                       insert={editable ? (i) => i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} /> : undefined}
                       onMakeStrip={openStrip} onPlayStrip={(id) => { setPicked([]); setShotId(id); setMode('shot') }}
+                      onMakeSeparately={(ids) => void separateSelection(docStore, video.id, ids).then(() => openStrip(ids))}
+                      onEditWords={(id) => { setPicked([]); setShotId(id); setMode('shot') }}
                       card={(s, i, inStrip) => (
                         <ShotCard key={s.id} shot={s} index={i} videoId={video.id} selected={mode === 'shot' && s.id === shot?.id} jobId={inStrip ? cardJob(s.id) : clipJob(s.id)}
                           onSelect={(e) => pickCard(s.id, e)} picked={picked.includes(s.id)} pickProps={pickProps(s.id)} inStrip={inStrip}

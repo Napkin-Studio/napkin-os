@@ -49,6 +49,7 @@ import names
 import writer as writers
 import connected
 import cutdowns
+import soften
 import projects
 import time_rules
 from blobs import checksum_header
@@ -1431,64 +1432,104 @@ class Relay:
             made += list(job["_frames"].values())
         sized = self._sized(job, provider, model, pjob)
         set_job_context(run_as, asset_refs(job["_req"]["input"]) + made)
-        try:
-            request_id = self._adapter(job, provider).submit(pjob)
-        except Moderated as e:
-            return self._fail(job, "moderated", e.message, provider_code=e.provider_code, paid=False,
-                              director=block)
-        except ProviderError as e:
-            if e.accepted:
-                return self._fall_back(job, cfg, "uncertain", "The provider may have this job; it will not be sent again.",
-                                       provider_code=e.provider_code, director=block, may_charge=True)
-            if job["op"] == "clip_patch" and e.provider_code in ("401", "403"):
-                # Aleph 2 not on our key (an entitlement refusal): nothing was made, so nothing is kept. Choosing
-                # another model is config clipPatch.model, before a job runs (owner, 2026-10-13).
-                return self._fail(job, "provider_failed", PATCH_UNAVAILABLE, provider_code=e.provider_code,
-                                  paid=False, refund=True, director=block)
-            if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
-                # A sheet refusal is about the request; an outage or a full queue is about the provider.
-                sheet = isinstance(e, CapabilityMissing) or e.code == "capability_missing"
-                sheet_only = job.get("_sheetOnly", True) and sheet
-                tried = job["_tried"] + [provider]
-                rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
-                retry_after = getattr(e, "retry_after_s", None)
-                if provider == FLOOR and not rest and not sheet and e.retryable and retry_after is not None:
-                    # Runway, the last of the chain, asked us to wait (a 429 with Retry-After; its adapter reads
-                    # the header only there): wait in the queue and send it there again then. It failed at once
-                    # before (2026-10-09); the queue timeout still bounds the wait. An outage still fails at once.
-                    wait = max(1, int(retry_after))
+        softened_from = None  # the words the provider's text check refused, when the job was sent again plainer
+        while True:
+            try:
+                request_id = self._adapter(job, provider).submit(pjob)
+                break
+            except Moderated as e:
+                if job["op"] == "clip" and not softened_from and soften.text_refusal(e.provider_code, e.message):
+                    # The words were refused (Runway's text check), before any task: once more, plainer, the same job.
+                    softened_from = pjob["prompt"]
+                    pjob = {**pjob, "prompt": self._plainer(job, sheet, pjob)}
+                    log.info(json.dumps({"kind": "softened", "jobId": job["jobId"], "providerCode": e.provider_code}))
+                    continue
+                if softened_from:
+                    return self._fail(job, "moderated", f"{soften.TWICE} ({e.provider_code or 'moderated'}).",
+                                      provider_code=e.provider_code, paid=False, director=self._softened_block(block, pjob),
+                                      softened=True, _softenedFrom=softened_from)
+                return self._fail(job, "moderated", e.message, provider_code=e.provider_code, paid=False,
+                                  director=block)
+            except ProviderError as e:
+                if e.accepted:
+                    return self._fall_back(job, cfg, "uncertain", "The provider may have this job; it will not be sent again.",
+                                           provider_code=e.provider_code, director=block, may_charge=True)
+                if job["op"] == "clip_patch" and e.provider_code in ("401", "403"):
+                    # Aleph 2 not on our key (an entitlement refusal): nothing was made, so nothing is kept. Choosing
+                    # another model is config clipPatch.model, before a job runs (owner, 2026-10-13).
+                    return self._fail(job, "provider_failed", PATCH_UNAVAILABLE, provider_code=e.provider_code,
+                                      paid=False, refund=True, director=block)
+                if isinstance(e, CapabilityMissing) or e.code in ("provider_unavailable", "queue_full", "capability_missing"):
+                    # A sheet refusal is about the request; an outage or a full queue is about the provider.
+                    sheet = isinstance(e, CapabilityMissing) or e.code == "capability_missing"
+                    sheet_only = job.get("_sheetOnly", True) and sheet
+                    tried = job["_tried"] + [provider]
+                    rest = [p for p in self._job_candidates(cfg, job) if p not in tried]
+                    retry_after = getattr(e, "retry_after_s", None)
+                    if provider == FLOOR and not rest and not sheet and e.retryable and retry_after is not None:
+                        # Runway, the last of the chain, asked us to wait (a 429 with Retry-After; its adapter reads
+                        # the header only there): wait in the queue and send it there again then. It failed at once
+                        # before (2026-10-09); the queue timeout still bounds the wait. An outage still fails at once.
+                        wait = max(1, int(retry_after))
+                        back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
+                                          _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
+                        self.store.incr(slot, "n", -1)
+                        if back is None:
+                            return self._reload(job)
+                        return self._with_poll(back)
+                    # Why the job left this provider, for the next one. The floor is the last: no "Runway could not
+                    # make it" in front of "Runway cannot do this step either" (it said Runway twice, 2026-10-09).
+                    reason = job.get("fallbackReason") or (could_not(provider, e.message) if rest else None)
                     back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                      _lastError=f"{provider}: {e.message}"[:300], _notBefore=self.clock() + wait)
+                                      _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
+                                      _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason)
                     self.store.incr(slot, "n", -1)
                     if back is None:
-                        return self._reload(job)
-                    return self._with_poll(back)
-                # Why the job left this provider, for the next one. The floor is the last: no "Runway could not
-                # make it" in front of "Runway cannot do this step either" (it said Runway twice, 2026-10-09).
-                reason = job.get("fallbackReason") or (could_not(provider, e.message) if rest else None)
-                back = self._save(job, state="queued", provider=None, model=None, _slot=None, _queue="q",
-                                  _tried=tried, _lastError=f"{provider}: {e.message}"[:300],
-                                  _sheetOnly=sheet_only, _floorSheet=sheet, fallbackReason=reason)
-                self.store.incr(slot, "n", -1)
-                if back is None:
-                    log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
-                return None
-            return self._fall_back(job, cfg, e.code, e.message, retryable=e.retryable, provider_code=e.provider_code,
-                                   paid=False, refund=True, director=block)
-        except Exception as e:  # timeout, reset: it may have been accepted
-            log.exception("submit to %s raised", provider)
-            return self._fall_back(job, cfg, "uncertain",
-                                   f"The provider may have this job; it will not be sent again ({type(e).__name__}).",
-                                   director=block, may_charge=True)
+                        log.error("job %s: could not requeue after %s refused", job["jobId"], provider)
+                    return None
+                return self._fall_back(job, cfg, e.code, e.message, retryable=e.retryable, provider_code=e.provider_code,
+                                       paid=False, refund=True, director=block)
+            except Exception as e:  # timeout, reset: it may have been accepted
+                log.exception("submit to %s raised", provider)
+                return self._fall_back(job, cfg, "uncertain",
+                                       f"The provider may have this job; it will not be sent again ({type(e).__name__}).",
+                                       director=block, may_charge=True)
         now = self.clock()
         min_poll = (sheet.get("results") or {}).get("minPollS", 1)
-        saved = self._save(job, state="submitted", requestId=str(request_id), director=block,
-                           _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized)
+        plainer = {"softened": True, "_softenedFrom": softened_from} if softened_from else {}
+        saved = self._save(job, state="submitted", requestId=str(request_id),
+                           director=self._softened_block(block, pjob) if softened_from else block,
+                           _submittedAt=now, _nextCheckAt=now + min_poll, quality=sized, **plainer)
         if saved is None:
             log.error("job %s: provider %s accepted request %s but the ledger write lost a race",
                       job["jobId"], provider, request_id)
             return self._reload(job)
         return self._with_poll(saved)
+
+    def _plainer(self, job: dict, sheet: dict, pjob: dict) -> str:
+        """A refused clip's words made plainer (soften.py): Dex rewrites them, keeping every beat and a take's
+        timing lines; a rewrite that loses the take's timing, or the passthrough, uses soften's word map. The word
+        map then goes over whatever was written, so no weapon wording is ever sent twice."""
+        refused = pjob["prompt"]
+        try:
+            out, _ = self._direct(job, sheet, refused=refused)
+            words = ((out.get("providerJob") or {}).get("prompt") or "").strip() or refused
+        except ApiError:
+            words = refused
+        inp = job["_req"]["input"]
+        if connected.mode_of(inp) in connected.TAKE_MODES:
+            _, starts, _ = connected.take_plan(inp, sheet["ops"]["clip"])
+            if connected.timing_problem(words, starts, pjob.get("durationS") or 0):
+                words = refused
+        return soften.plain_words(words)
+
+    @staticmethod
+    def _softened_block(block: dict, pjob: dict) -> dict:
+        """The director block with the words that were sent, and why they changed (the History's reason)."""
+        output = dict(block.get("output") or {})
+        if output.get("providerJob"):
+            output["providerJob"] = {**output["providerJob"], "prompt": pjob["prompt"]}
+        return {**block, "output": output, "rationale": f"{soften.NOTE} {block.get('rationale', '')}".strip()[:300]}
 
     def _sized(self, job: dict, provider: str, model: str, pjob: dict) -> dict | None:
         """The clip's quality on the provider job (features/clip-quality.clan): the level and its size for the
@@ -1552,7 +1593,8 @@ class Relay:
             pool.shutdown(wait=False)
         return [{"media_type": media_type, "data": b64}], None
 
-    def _direct(self, job: dict, sheet: dict | None) -> tuple[dict, dict]:
+    def _direct(self, job: dict, sheet: dict | None, refused: str | None = None) -> tuple[dict, dict]:
+        """`refused`: words the provider's text check refused; the director makes them plainer (soften.py)."""
         start = self.clock()
         # An agency that turned Claude off gets the passthrough director and no cards (features/tenant-limits.clan);
         # a frame_edit Dex cannot look at gets the passthrough too (features/frame-change-edit.clan).
@@ -1579,6 +1621,8 @@ class Relay:
             inp, kinds = self._with_cards(job, inp) if claude else (inp, {})
             # The director sees wire tags (names.py); the ledger keeps the participant's names.
             wired = names.to_wire(req["op"], inp)
+            if refused:
+                wired = {**wired, "refused": refused}
             if wired.get("answer"):  # what was asked, and what the person chose, in words the director reads
                 q = self._asked(job) or {}
                 a = wired["answer"]

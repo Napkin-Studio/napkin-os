@@ -13,7 +13,7 @@ import { crewFor, newUlidId, rankBetween } from '../../../clan-store/src'
 import type { Aspect, CrewId, DirectorCard, Frame, Job, Output, ProductionDocument, Render, Take } from '../contracts/types'
 import { aspectOfRatio, exactRatio, reducedAspect } from '../canvas/core/sketch'
 import { landUpdate } from '../doc/store'
-import type { DocumentStore } from '../doc/types'
+import type { DocumentStore, WriteWhy } from '../doc/types'
 import type { JobCtx } from '../doc/ui'
 import { edlItemFor, edlOf, framesOf, mainVideo, rendersOf, shotName, takesOf, videoOfShot } from '../model/selectors'
 import { modelLabel } from '../capabilities'
@@ -235,6 +235,14 @@ export function applyStitch(d: ProductionDocument, job: Job, ctx?: { videoId?: s
 
 // ── landings ────────────────────────────────────────────────────────────────
 
+/** Dex's History line when Runway refused a clip's first words and the relay sent them plainer
+ *  (features/connected-video.clan): said once, before the rest of the job's account. */
+export const SOFTENED_NOTE = 'Runway refused the first wording; I made it plainer.'
+export function softenedWhy(job: Pick<Job, 'softened'>, why: WriteWhy): WriteWhy {
+  if (!job.softened || why.rationale?.includes(SOFTENED_NOTE)) return why
+  return { ...why, rationale: `${SOFTENED_NOTE} ${why.rationale ?? ''}`.trim() }
+}
+
 /** Fin's (or, for a region edit, Rhea's) frame: "render frame v2 for shot 3". */
 export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'frame' }>) {
   const d = store.get()
@@ -246,7 +254,7 @@ export function landFrame(store: DocumentStore, job: Job, ctx: Extract<JobCtx, {
 export function landTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx, { for: 'clip' }>) {
   const d = store.get()
   const what = `take v${nextVersion(takesOf(d, ctx.shotId))} for ${shotName(d, ctx.shotId)}`
-  return landUpdate(store, (x) => { applyTake(x, job, ctx) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
+  return landUpdate(store, (x) => { applyTake(x, job, ctx) }, softenedWhy(job, landingWhy(store, job.jobId, what, cardsOf(job, ctx))))
 }
 
 /** Wren's take of a run: "render one take of shots 2-5 on WAN 3", citing the job (its credits show in History). */
@@ -255,7 +263,7 @@ export function landRunTake(store: DocumentStore, job: Job, ctx: Extract<JobCtx,
   const run = d.videos[ctx.videoId]?.runs?.[ctx.runId]
   const n = run ? run.shot_ids.map((id) => shotName(d, id)) : []
   const what = `one take of ${n.length ? `${n[0]} to ${n.at(-1)}` : 'a run'}${job.model ? ` on ${modelLabel(job.provider, job.model) ?? job.model}` : ''}`
-  return landUpdate(store, (x) => { applyRunTake(x, job, ctx) }, landingWhy(store, job.jobId, what, cardsOf(job, ctx)))
+  return landUpdate(store, (x) => { applyRunTake(x, job, ctx) }, softenedWhy(job, landingWhy(store, job.jobId, what, cardsOf(job, ctx))))
 }
 
 /** Edie's ad, picked as the video's render: "edit the ad v2". */

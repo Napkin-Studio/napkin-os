@@ -1179,6 +1179,8 @@ export interface Job {
    *  stage; the model reaches it early and carries on past it), and that frame's SSIM. */
   landS?: number
   landScore?: number
+  /** clip: Runway's text check refused the first words, so the relay sent them once more, plainer. */
+  softened?: true
   /** resize only: how the size was made. */
   resize?: { method: SizeMethod; crop: PxBox; previewPx: DeliveryPx; layers?: number; plate?: Output }
   /** cutdown step plan only. */

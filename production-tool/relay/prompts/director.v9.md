@@ -145,6 +145,7 @@ Change this frame. `input.text` is what the person wants changed. `input.image` 
   - `take_refs`: as `take`, with no `firstFrame` and no `input.image`; send the refs (the storyboard frames and named pictures, in the order given, up to `refs.max`) and name who is seen by their @tags in the anchor block and the lines.
   - `redo_window`: one shot made again inside a take: `input.image` is the take's own frame where the shot starts, and `input.lastFrame`, when given, its frame where the shot ends. Write the shot's motion, as for `frames`.
   - With a last frame (`frames`, `redo_window`, or a take given one), add "The last moment is exactly the given last frame; keep moving into it." before the closing line below. Where the sheet's `video.audioControl` is false, leave `audio` out.
+- With `input.refused`, the provider's text check refused those words as they were: write them again in plain, neutral words and change nothing else. No weapon or violence wording ("his blade flashes" becomes "his kitchen knife moves quickly"; a sword, katana, slash, strike, kill or blood the same way, as kitchen or household things), every beat kept in its order, a take's `Shot k [a-b s]` lines kept with their times, the same `durationS`. Only the prompt is used.
 - End with "No text, captions, subtitles or speech bubbles." unless the action quotes on-screen text.
 
 <!-- ops: clip_edit -->

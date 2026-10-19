@@ -197,6 +197,10 @@ class PassthroughDirector:
                 # sets the frames, refs, length and the timed prompt; a clip with none is as it was.
                 import connected
                 connected.shape(job, inp, sheet, spec, passthrough=True)
+        if op == "clip" and inp.get("refused"):
+            # The provider's text check refused these words (soften.py): the same words, plainer, every beat kept.
+            import soften
+            job["prompt"] = soften.plain_words(inp["refused"])
         job["outputs"] = 1
         return {"op": op, "providerJob": job, "question": None,
                 "rationale": "passthrough: no director model", "confidence": 0.1}

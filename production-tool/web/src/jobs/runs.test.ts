@@ -11,7 +11,7 @@ import { purposeOf, purposeInputs } from '../model/purpose'
 import { MAYA, addRef, snapshotDoc } from '../test/jobFixtures'
 import { SHA, addFrame, addShots, addTake, job, plain } from '../test/model'
 import { endFramed, makeClip, redoInTake, stitchInput } from './clips'
-import { applyRunTake, applyTake } from './handlers'
+import { SOFTENED_NOTE, applyRunTake, applyTake, softenedWhy } from './handlers'
 import type { PlanShot } from './joins'
 import { joinKind } from './joins'
 import { billedS, makeClips, makeRuns, modelEntry, planRuns, segmentRun, takeModelFor, takeTiming, takeWindows, type PlanModel } from './runs'
@@ -363,6 +363,20 @@ describe('the browser mock', () => {
 
 // ── Strips + select (the owner's redesign, 2026-10-19) ─────────────────────
 
+/** Three shots as one strip whose take Runway refused twice (the samurai ad, 2026-10-19). */
+function refusedFilm() {
+  const a = film([3, 3, 3])
+  const d = structuredClone(a.store.get())
+  const runId = 'run_01K7A00000000000000000RUN1'
+  d.videos[a.videoId].runs = { [runId]: { shot_ids: a.shots.map((s) => s.id), mode: 'take', model: 'wan3', state: 'failed', planned_by: 'crew' } }
+  d.jobs.job_r = job(d, 'clip', [], null, {
+    id: 'job_r', state: 'failed', purpose: `run ${runId}`, node: { kind: 'video', id: a.videoId },
+    error: { code: 'moderated', message: 'Runway refused the words twice (INPUT_PREPROCESSING.SAFETY.TEXT).', retryable: false },
+  })
+  const store = new SnapshotDocumentStore(d, null, 0)
+  return { ...a, store }
+}
+
 const OMNI = modelEntry('runway', 'gemini_omni_flash_1.1')!
 const omni = { provider: 'runway' as const, model: 'gemini_omni_flash_1.1' }
 const unitsOf = (a: ReturnType<typeof film>, m: PlanModel = WAN3) => {
@@ -400,6 +414,23 @@ describe('strips', () => {
     expect(unitsOf(a)).toEqual(['shot:1', 'shot:2', 'shot:3', 'shot:4'])
     expect(selectionBlock(a.store.get(), a.videoId, [a.shots[0].id, a.shots[2].id])).toBe('Pick shots that sit next to each other')
     expect(selectionBlock(a.store.get(), a.videoId, [a.shots[0].id])).toBe('Pick two shots or more')
+  })
+
+  it('a strip Runway refused as one video says so, and Make as separate clips splits it', async () => {
+    const a = refusedFilm()
+    const d = a.store.get()
+    expect(videoUnits(d, { jobs: {} }, a.videoId, videoPlan(d, a.videoId, WAN3))[0]).toMatchObject({ kind: 'strip', state: 'refused', jobId: 'job_r' })
+    expect(unitsOf(a)).toEqual(['refused:123'])
+    await separateSelection(a.store, a.videoId, a.shots.map((s) => s.id))
+    expect(unitsOf(a)).toEqual(['shot:1', 'shot:2', 'shot:3'])
+  })
+
+  it("Dex's History line says the words were made plainer, once", () => {
+    const why = { action: 'render one take', rationale: 'Dex: one take of three shots.' }
+    expect(softenedWhy({ softened: true }, why).rationale).toBe(`${SOFTENED_NOTE} Dex: one take of three shots.`)
+    expect(softenedWhy({}, why)).toBe(why)
+    const once = softenedWhy({ softened: true }, { ...why, rationale: `Dex: ${SOFTENED_NOTE}` })
+    expect(once.rationale).toBe(`Dex: ${SOFTENED_NOTE}`)
   })
 
   it('says why shots cannot be one video', () => {

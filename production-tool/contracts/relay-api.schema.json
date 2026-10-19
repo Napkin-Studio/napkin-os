@@ -1621,6 +1621,10 @@
             "additionalProperties": false
           }
         },
+        "softened": {
+          "const": true,
+          "description": "clip (features/connected-video.clan): the provider's text check refused the first words at submit (Runway SAFETY.TEXT; nothing was made or billed), so the relay sent the same job once more in plainer words (Dex's rewrite, or a fixed word map: no weapon or violence wording, every beat and a take's timing kept). The director block's prompt and rationale are the plainer words and why; the refused words stay relay-side. A refusal of those too fails the job moderated with 'Runway refused the words twice'. A refused picture is never retried this way."
+        },
         "landS": {
           "type": "number",
           "minimum": 0,
