@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 from .capabilities import CAPABILITY_VERSION
-from .handlers import (answer_question, ask_research, compose_report, draft_brief, extract_ask, reconsider_fact,
+from .handlers import (answer_question, brand_identify, brand_seed, ask_research, compose_report, draft_brief, extract_ask, reconsider_fact,
                        regenerate_field, research_lens, start_campaign, synthesise_findings, verify_finding,
                        correct_fact)
 from .util import bad
@@ -32,6 +32,8 @@ REGISTRY = {
     "correct_fact": {1: correct_fact},
     "ask_research": {1: ask_research},
     "reconsider_fact": {1: reconsider_fact},
+    "brand_identify": {1: brand_identify},
+    "brand_seed": {1: brand_seed},
 }
 # Used only when a document carries no pipeline: the declared built-in map.
 BUILTIN_PIPELINE = {
@@ -43,6 +45,8 @@ BUILTIN_PIPELINE = {
     "correct_fact": "correct_fact@1",
     "ask_research": "ask_research@1",
     "reconsider_fact": "reconsider_fact@1",
+    "brand_identify": "brand_identify@1",
+    "brand_seed": "brand_seed@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status", "cancel_job"}
 
@@ -78,11 +82,16 @@ REVIEW_TASKS = {"verify_finding", "correct_fact"}
 # Tasks added after documents were made: a document whose pipeline predates
 # one may still use it, through the built-in handler, until it declares it.
 LATER_TASKS = {"ask_research", "reconsider_fact"}
+# The Brand Clan's two tasks (brand-clan.md section 5) run on whatever document the
+# shell calls from, and a Brand Clan's own pipeline declares no task: always the built-in map.
+BRAND_TASKS = {"brand_identify", "brand_seed"}
 
 
 def resolve(task: str, clan: dict):
     """The document's pipeline decides; no pipeline -> the built-in map."""
     pipeline = clan.get("pipeline")
+    if task in BRAND_TASKS:
+        return lookup(BUILTIN_PIPELINE[task], task)
     if pipeline and task in REVIEW_TASKS | LATER_TASKS and isinstance(pipeline, dict) \
             and task not in (pipeline.get("tasks") or {}):
         return lookup(BUILTIN_PIPELINE[task], task)

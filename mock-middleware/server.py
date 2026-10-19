@@ -87,6 +87,8 @@ REGISTRY = {
     "start_campaign": {"task": "start_campaign", "versions": {1: "1.0"}},
     "answer_question": {"task": "answer_question", "versions": {1: "1.0"}},
     "compose_report": {"task": "compose_report", "versions": {1: "1.0"}},
+    "brand_identify": {"task": "brand_identify", "versions": {1: "1.0"}},
+    "brand_seed": {"task": "brand_seed", "versions": {1: "1.0"}},
 }
 # Used only when the document carries no pipeline (the declared built-in map).
 BUILTIN_PIPELINE = {
@@ -96,8 +98,13 @@ BUILTIN_PIPELINE = {
     "start_campaign": "start_campaign@1",
     "answer_question": "answer_question@1",
     "compose_report": "compose_report@1",
+    "brand_identify": "brand_identify@1",
+    "brand_seed": "brand_seed@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status"}
+# The Brand Clan's two tasks (brand-clan.md section 5) run on any document, and a Brand
+# Clan's own pipeline declares no task: always the built-in map.
+BRAND_TASKS = {"brand_identify", "brand_seed"}
 LONG_TASKS = {"research_lens", "synthesise_findings", "start_campaign"}
 
 LENSES = [
@@ -228,7 +235,7 @@ def field_value(data: dict, name: str):
 def resolve_handler(task: str, clan: dict) -> str:
     """Task -> implemented handler@version. Hard errors only, never a default."""
     pipeline = clan.get("pipeline")
-    if pipeline:
+    if pipeline and task not in BRAND_TASKS:
         if not isinstance(pipeline, dict) or not isinstance(pipeline.get("tasks"), dict):
             raise bad("clan.pipeline is present but has no tasks map")
         decl = pipeline["tasks"].get(task)
@@ -2507,6 +2514,189 @@ def compose_report_task(doc, base, clan, handler):
                      "messages": [{"id": mid, "text": text, "stage": "report"}]}, change, hits)
 
 
+
+# ---------------------------------------------------------------------------
+# The Brand Clan's two tasks (brand-clan.md section 5; middleware-api.md section 12)
+# ---------------------------------------------------------------------------
+# Deterministic, from the mock brand layer: the fixture ROSTER, two invented Lumen
+# brands (so a typed "Lumen" is ambiguous), and the brands a seed by name noted in
+# this process (note_brand / set_roster). No model, no research, no web.
+
+BRAND_APP = "ie.napkin.brand"
+BRAND_REF = re.compile(r"brand/[a-z0-9][a-z0-9._-]*")
+LEAF_RE = re.compile(r"[a-z0-9_]+\.[a-z0-9_]+")
+LUMEN_ROSTER = {
+    "brand/lumen-water": {"name": "Lumen Water", "categories": ["drinks.water"],
+                          "client_org": ("org/lumen-beverages", "Lumen Beverages")},
+    "brand/lumen-spirits": {"name": "Lumen Spirits", "categories": ["drinks.spirits"],
+                            "client_org": ("org/lumen-distillers", "Lumen Distillers")},
+}
+NOTED: dict = {}  # ref -> row, what a seed by name taught the mock layer
+BRAND_LOCK = threading.Lock()
+
+
+def brand_roster() -> dict:
+    with BRAND_LOCK:
+        return {**ROSTER, **LUMEN_ROSTER, **NOTED}
+
+
+def _brand_text(inp, key, lo, hi) -> str:
+    v = inp.get(key)
+    if not isinstance(v, str) or not (lo <= len(v.strip()) <= hi):
+        raise bad(f"input.{key} must be a string of {lo} to {hi} characters")
+    return v.strip()
+
+
+def _brand_found(text: str) -> list:
+    t = slug(text)
+    if len(t) < 2:
+        return []
+    return [(ref, r["name"]) for ref, r in sorted(brand_roster().items(), key=lambda kv: kv[1]["name"])
+            if slug(r["name"]) == t or (len(t) >= 3 and (t in slug(r["name"]) or slug(r["name"]) in t))]
+
+
+def brand_identify(doc, base, clan, inp, handler):
+    text = _brand_text(inp, "text", 1, 200)
+    t = slug(text)
+
+    def rank(kv):
+        n = slug(kv[1])
+        return (0 if n == t else 1 if n.startswith(t) else 2 if t in n else 3, len(n), n)
+    roster = brand_roster()
+    cands = [{"ref": ref, "name": name, "categories": list(roster[ref]["categories"]),
+              "client_org": (roster[ref].get("client_org") or (None,))[0]}
+             for ref, name in sorted(_brand_found(text), key=rank)[:8]]
+    summary = ("no brand of this agency matches what was typed" if not cands else
+               f"one brand matches: {cands[0]['name']}" if len(cands) == 1 else
+               f"{len(cands)} brands match: {', '.join(c['name'] for c in cands)}")
+    return {"summary": summary, "candidates": cands}, None, []
+
+
+def _brand_reasoning(decided, because, level, why, wci, rejected=None, only=None):
+    r = {"decided": decided, "because": because, "certainty": {"level": level, "why": why}, "would_change_if": wci}
+    if rejected:
+        r["rejected"] = [{"option": rejected[0], "why": rejected[1]}]
+    else:
+        r["rejected"] = []
+        r["only_option"] = only
+    return r
+
+
+def brand_seed(doc, base, clan, inp, handler):
+    app = clan.get("app")
+    if not isinstance(app, dict) or app.get("app_id") != BRAND_APP:
+        raise bad(f"brand_seed runs on a Brand Clan ({BRAND_APP}); this document is another app")
+    data = ctx_data(clan)
+    if isinstance((data.get("brand") or {}).get("ref"), str):
+        raise TaskError(409, "already_seeded",
+                        "this Brand Clan already has a brand; brand_seed writes only an empty one")
+    if ("ref" in inp) == ("name" in inp):
+        raise bad("input takes exactly one of ref or name")
+    seed_did = uid("d_", doc, base, "brand_seed", "seed", inp.get("ref") or inp.get("name"))
+    if "ref" in inp:
+        if set(inp) - {"ref"}:
+            raise bad("input.ref comes alone: categories apply to a typed name")
+        ref = inp["ref"]
+        if not isinstance(ref, str) or not BRAND_REF.fullmatch(ref):
+            raise bad("input.ref must be brand/<slug>")
+        row = brand_roster().get(ref)
+        if not row or not row.get("categories"):
+            raise TaskError(404, "unknown_brand", "the agency's roster has no such brand; identify it first")
+        name = row["name"]
+        pin_did = uid("d_", doc, base, "brand_seed", "pin", ref)
+        today = now().date().isoformat()
+        src = lid("src_", SCOPE["org"], "roster", ref)
+        keys = [("roster.categories.primary", row["categories"][0])]
+        if len(row["categories"]) > 1:
+            keys.append(("roster.categories.secondary", row["categories"][1]))
+        if row.get("client_org"):
+            keys.append(("roster.client_org", row["client_org"][0]))
+        pins = [{"id": uid("f_", SCOPE["org"], ref, key, 1, value), "entity": ref, "key": key, "value": value,
+                 "unit": "code", "as_of": today, "retrieved_at": today, "sources": [src],
+                 "quotes": {src: f"{name}: {key} = {value}"},
+                 "confidence": derive_confidence([{"tier": "mock"}]), "licence": "client-confidential",
+                 "status": "active", "version": 1, "supersedes": None,
+                 "origin": origin_uri("brand", ref, key, 1), "decision": pin_did, "pinned_at": iso(now()),
+                 "pin_reason": f"{key} from the brand layer, to seed the Brand Clan",
+                 "layer": "brand", "method": "report"} for key, value in keys]
+        ids = [p["id"] for p in pins]
+        cat_ids = [p["id"] for p in pins if "categories" in p["key"]]
+        org_ids = [p["id"] for p in pins if p["key"] == "roster.client_org"]
+        brand = {"ref": ref, "name": {"value": name, "origin": "proposed", "fact_ids": ids, "decision": seed_did},
+                 "categories": {"value": list(row["categories"][:2]), "origin": "proposed", "fact_ids": cat_ids,
+                                "decision": seed_did}}
+        if org_ids:
+            brand["client_org"] = {"value": row["client_org"][0], "origin": "proposed", "fact_ids": org_ids,
+                                   "decision": seed_did}
+        patch = {"brand": brand, "kit": {"version": 1}}
+        fields = [f"brand.{k}" for k in brand] + ["kit.version"]
+        conf = pins[0]["confidence"]
+        pin_dec = decision(doc, pin_did, "pin", handler, "lookup",
+                           f"Deterministic lookup of {name}'s roster row and brand facts: {len(pins)} pinned.",
+                           [f"facts[{i}]" for i in ids], ids + [src],
+                           reasoning=_brand_reasoning(
+                               f"Pinned {len(pins)} fact(s) the brand layer holds for {name}.",
+                               [{"point": f"The brand layer holds {p['key']} = {p['value']}", "cites": [p["id"], src]}
+                                for p in pins], conf, f"lowest derived confidence of the pins ({conf})",
+                               "the brand layer's rows for this brand are revised",
+                               rejected=("research the brand on the web", "roster and brand layer only")))
+        seed_dec = decision(doc, seed_did, "edit", handler, "seed",
+                            f"Seeded the Brand Clan for {name} from its roster row and brand-layer pins.",
+                            fields, ids, fields_changed=fields,
+                            reasoning=_brand_reasoning(
+                                f"Wrote {name}'s identity from the roster pins, as proposals.",
+                                [{"point": f"{name} is the roster row's name", "cites": ids}],
+                                conf, f"every written value rests on a pin; the lowest is {conf} (derived)",
+                                "a person edits the brand's identity in the kit",
+                                only="a Brand Clan is seeded from one roster row; nothing else was on offer"))
+        change = {"doc": doc, "base_version": base, "read": read_of(data, patch), "data_patch": patch,
+                  "facts_append": pins, "findings_append": [],
+                  "sources_append": [{"id": src, "uri": f"mock://brand-layer/roster/{ref}",
+                                      "title": f"{name}: roster row (mock brand layer)", "tier": "primary",
+                                      "domain": "mock.invalid", "licence": "client-confidential",
+                                      "retrieved_at": today}],
+                  "decisions": [pin_dec, seed_dec]}
+        hits = [{"id": p["id"], "scope": "brand", "source": p["origin"]} for p in pins]
+        return {"summary": f"Seeded the Brand Clan for {name}: {len(pins)} pin(s) from the roster and the "
+                           f"brand layer.", "ref": ref, "name": name, "pins": len(pins), "fields": fields}, change, hits
+
+    # by name
+    if set(inp) - {"name", "categories", "by"}:
+        raise bad("input takes name, categories? and by?")
+    name = _brand_text(inp, "name", 1, 120)
+    cats = inp.get("categories", [])
+    if not isinstance(cats, list) or len(cats) > 2 or len(set(map(str, cats))) != len(cats) \
+            or any(not isinstance(c, str) or not LEAF_RE.fullmatch(c) for c in cats):
+        raise bad("input.categories is up to two distinct <vertical>.<leaf> codes")
+    by = inp.get("by", "human:unknown")
+    if not isinstance(by, str) or not re.fullmatch(r"human:\S+", by):
+        raise bad("input.by, when given, is human:<id>")
+    ref = "brand/" + slug(name)
+    if ref == "brand/":
+        raise bad("input.name has no letter or digit to make a brand ref from")
+    for r, n in _brand_found(name):
+        if r == ref or n.strip().casefold() == name.casefold():
+            raise bad(f"the agency already has {n} ({r}); seed it with input.ref")
+    seed_did = uid("d_", doc, base, "brand_seed", "seed", ref)
+    with BRAND_LOCK:
+        NOTED[ref] = {"name": name, "categories": list(cats), "client_org": None}
+    patch = {"brand": {"ref": ref, "name": {"value": name, "origin": "stated", "by": by, "decision": seed_did}},
+             "kit": {"version": 1}}
+    fields = ["brand.ref", "brand.name", "kit.version"]
+    dec = decision(doc, seed_did, "edit", handler, "seed",
+                   f"Seeded the Brand Clan for {name}, as typed: the agency's layers have no row for it.",
+                   fields, [], fields_changed=fields,
+                   reasoning=_brand_reasoning(
+                       f"Wrote {name} as typed by {by}; no pin, since the agency's roster had no such brand.",
+                       [{"point": f"{by} named the brand {name}", "cites": [f"{doc}#brand.name"]}],
+                       "high", "the name is what the person typed, verbatim", "a person corrects the name in the kit",
+                       rejected=("look the brand up on the web", "roster and brand layer only")))
+    change = {"doc": doc, "base_version": base, "read": read_of(data, patch), "data_patch": patch,
+              "facts_append": [], "findings_append": [], "sources_append": [], "decisions": [dec]}
+    return {"summary": f"Seeded a Brand Clan for {name} with the typed name; the layers now know the brand"
+                       + (f" and its categories {', '.join(cats)}." if cats else "."),
+            "ref": ref, "name": name, "pins": 0, "fields": fields}, change, []
+
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
@@ -2556,6 +2746,13 @@ def handle(body: dict) -> dict:
         return answer_question(doc, clan, inp)
     if task == "compose_report":
         return compose_report_task(doc, base, clan, handler)
+    if task in BRAND_TASKS:
+        result, change, hits = (brand_identify if task == "brand_identify" else brand_seed)(doc, base, clan, inp,
+                                                                                          handler)
+        job = {"id": "job_" + _digest(SCOPE, doc, base, task, inp, next(_SEQ)).hex()[:20], "state": "done",
+               "progress": {"done": 1, "total": 1}, "started_at": t0,
+               "finished_at": iso(_dt.datetime.now(_dt.timezone.utc)), "error": None}
+        return envelope(task, handler, job, result, change, hits)
     if task == "extract_ask":
         result, change, hits = run_extract(doc, base, clan, inp, handler)
         job = {"id": "job_" + _digest(SCOPE, doc, base, task, inp, next(_SEQ)).hex()[:20], "state": "done",

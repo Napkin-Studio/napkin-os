@@ -246,6 +246,18 @@ class CaptureView:
         self.model, self.jobs, self.handler = model, jobs, handler
 
 
+class LayersView:
+    """What the Brand Clan tasks (`brand_identify`, `brand_seed`) may use: the
+    agency's layers and the job. No `model`, `research`, `retrieval` or `jev`
+    attribute exists, so the seed cannot reach a model or the web (brand-clan.md
+    section 5) rather than being trusted not to."""
+
+    __slots__ = ("layers", "jobs", "handler")
+
+    def __init__(self, layers, jobs: JobCap, handler: str):
+        self.layers, self.jobs, self.handler = layers, jobs, handler
+
+
 def _attr_str(a: dict) -> str:
     return f"{a.get('handler')} job={a.get('job')} org={a.get('org')} brand={a.get('brand')}"
 
@@ -277,6 +289,9 @@ class Capabilities:
         """The job id every later call is attributed to, and the job's run log."""
         self.attribution["job"] = job_id
         self.runlog = runlog.open_log(job_id, self.handler)
+
+    def layers_view(self) -> LayersView:
+        return LayersView(self.layers, self.jobs, self.handler)
 
     def capture_view(self) -> CaptureView:
         return CaptureView(self.model, self.jobs, self.handler)

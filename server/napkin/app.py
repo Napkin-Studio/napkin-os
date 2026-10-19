@@ -219,7 +219,8 @@ class Middleware:
             if task == "compose_report":
                 result, change, hits = mod.run(req, caps, jid)
             else:
-                result, change, hits = mod.run(req, caps)
+                result, change, hits = mod.run(req, caps.layers_view() if getattr(mod, "VIEW", "") == "layers"
+                                               else caps)
             job = {"id": jid, "state": "done", "progress": {"done": 1, "total": 1}, "started_at": t0,
                    "finished_at": iso(), "error": None}
             if task == "compose_report":

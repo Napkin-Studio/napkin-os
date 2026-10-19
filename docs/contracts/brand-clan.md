@@ -308,23 +308,40 @@ library opens on that client's shelf.
 
 Owner: roster and brand layer only; no web.
 
-1. `POST /brand/identify {text}` (middleware): `find_brands(text)` on the
-   agency's layers (`server/napkin/layers`, `peripherals.md` §4). Reply:
-   `{candidates: [{ref, name, client_org?, categories}]}`. None: the kit is
-   created with the typed name only, `note_brand` records the name, and the
-   kit asks "Which category is it in?" (taxonomy `find`) so `set_roster`
-   can write the roster row. Several: an ask with the candidates (the
-   Research tool's Ask shape, `campaign-research/schema.json` `question`).
-2. `POST /brand/seed {ref}`: the roster row and `facts(layer=brand,
-   entity=ref)` as pins with their source records, plus the roster's
-   proposals (`extract.py roster_proposals`): `brand.client_org`,
-   `brand.categories` as `proposed` with `fact_ids`.
-3. The host creates the document from the `ie.napkin.brand` template,
-   writes the pins into `shared/facts.yaml` and `shared/sources.yaml`, patches
-   `brand.*`, and records one `seed` decision citing the pins.
+Two middleware **tasks** on the one `POST /v1/tasks` (`middleware-api.md` §12;
+no new routes), then the document is the shell's:
 
-No model call. One middleware round trip. The mock middleware answers from
-the mock layers (`mock-backend`).
+1. **Identify** (`brand_identify {text}`, read only, from any calling
+   document): `find_brands(text)` on the agency's layers (`server/napkin/layers`,
+   `peripherals.md` §4), each with its roster row. Reply `result.candidates:
+   [{ref, name, categories, client_org|null}]`, best first, at most 8, no
+   change. None: the shell makes the kit with the typed name only (below), and
+   the kit asks "Which category is it in?" (taxonomy `find`). Several: the
+   shell's ask, shown from `candidates` (the Research tool's Ask shape,
+   `campaign-research/schema.json` `question`); the middleware does not ask.
+2. **Create, then seed.** The shell creates the Brand Clan first, empty, from
+   the `ie.napkin.brand` template with the existing document-create route, then
+   calls `brand_seed` on it (`{ref}` for a roster brand, `{name, categories?}`
+   for a typed one). Seed refuses any other app and a document that already has
+   `brand.ref`, and writes nothing.
+   - `{ref}`: the roster row and `facts(layer=brand, entity=ref)` become pins
+     with their source records (`facts_append`, `sources_append`), plus the
+     roster's proposals (`extract.py roster_proposals`): `brand.name`,
+     `brand.client_org`, `brand.categories` as `proposed` envelopes with
+     `fact_ids`; `kit.version: 1`.
+   - `{name, categories?}`: `note_brand` records the name (and `set_roster` the
+     row, when categories are given); `brand.name` is a `stated` envelope `by`
+     the person; no pins. A name that is already a roster brand
+     (case-insensitively) is refused: the shell passes its `ref`.
+3. The host applies the reply's change as one write: pins into
+   `shared/facts.yaml`, sources into `shared/sources.yaml`, `brand.*` into
+   `shared/data.yaml`, a `pin` and a `seed` decision (reasoning citing the
+   pins) into the chain.
+
+No model call, no research, no web: the task handlers are given a view of the
+layers only. The mock middleware answers both tasks from its fixed mock roster
+(`mock-middleware/server.py`: the fixture brands plus Lumen Water and Lumen
+Spirits, so a typed "Lumen" is ambiguous).
 
 ---
 

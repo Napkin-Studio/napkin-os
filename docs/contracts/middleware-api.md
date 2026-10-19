@@ -30,7 +30,7 @@ name the stand-in, its port, or branch on which implementation answered.
 ```json
 {
   "request_kind": "middleware",
-  "payload": { "task": "extract_ask | research_lens | synthesise_findings | start_campaign | answer_question | compose_report | draft_brief | regenerate_field | job_status",
+  "payload": { "task": "extract_ask | research_lens | synthesise_findings | start_campaign | answer_question | compose_report | draft_brief | regenerate_field | brand_identify | brand_seed | job_status",
                "input": { "...": "task-specific, below" } },
   "clan": { "id": "<document_id>", "revision": "<manifest id>",
             "version": "<doc version the host holds>",
@@ -106,7 +106,8 @@ name the stand-in, its port, or branch on which implementation answered.
   `synthesise_findings@1`, `start_campaign@1`, `answer_question@1`,
   `compose_report@1`, `draft_brief@1`, `regenerate_field@1`, and the review
   tasks `verify_finding@1` and `correct_fact@1`, which resolve from this map
-  even for a pipeline that does not declare them).
+  even for a pipeline that does not declare them; so do `brand_identify@1` and
+  `brand_seed@1`, §12).
   Any other task the pipeline does not declare, an
   unregistered handler, a handler registered for a different task, or a major
   the middleware does not implement is a hard error (M4) — never a
@@ -133,6 +134,8 @@ name the stand-in, its port, or branch on which implementation answered.
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
 | `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }] }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
+| `brand_identify` | `{ "text": "<1-200 chars>" }` | Brand Clan (§12). Short, read only, no change |
+| `brand_seed` | `{ "ref": "brand/<slug>" }` or `{ "name": "<1-120 chars>", "categories"?: [<vertical>.<leaf>, up to 2], "by"?: "human:<id>" }` | Brand Clan (§12). Short; runs on a new, empty Brand Clan; no model, no research, no web |
 | `job_status` | `{ "job_id": "..." }` | Free: never charged to quota (§9) |
 
 Lens ids, in taxonomy order: `market_structure`, `brands_positioning`,
@@ -1345,3 +1348,90 @@ stand-in. The host finds the parts itself, deterministically, from the
 client's words and the app's part names (Contract 4 §7.5.2a), and nothing in
 client review calls the middleware. A request for `find_client_parts` is
 `400 unknown_task`.
+
+---
+
+## 12. The Brand Clan — `brand_identify`, `brand_seed`
+
+*Added 2026-10-19* (feature `brand-clan`, `brand-clan.md` §5). Two short tasks
+on the one `POST /v1/tasks`; there are no other routes. Both read the agency's
+layers (`peripherals.md` §4) under the request's tenant scope only (M3: scope
+comes from auth, a brand of another agency is never found, never a duplicate)
+and nothing else: **no model call, no research port, no web.** `trace.model` is
+`null` and `trace.usage` is zeros on every reply. The handler is given a
+capability view with no `model`, `research` or `retrieval` attribute, so it
+cannot reach them. Both resolve from the built-in map (`brand_identify@1`,
+`brand_seed@1`, handler `…@1.0`) whatever the calling document's pipeline
+declares: a Brand Clan's own pipeline declares no task.
+
+### 12.1 `brand_identify`
+
+Input `{ "text": "<what the person typed, 1-200 characters>" }`. Runs on any
+document (the shell asks from a brief, a research document or a Production
+Tool project as well as a Brand Clan). Read only.
+
+Reply `job.state: done`, `change: null`,
+
+```json
+{ "summary": "2 brands match: Lumen Water, Lumen Spirits",
+  "candidates": [ { "ref": "brand/lumen-water", "name": "Lumen Water",
+                    "categories": ["drinks.water"], "client_org": "org/lumen-beverages" } ] }
+```
+
+`candidates` are `find_brands(text)` on the agency's layers, each with its
+`roster(ref)` row (`categories` `[]` and `client_org` `null` when the brand is
+known by name only), best first (an exact name, then a name that starts with
+the text, then one that contains it, then the shorter name), at most 8. No
+match is `candidates: []`. One candidate is not an ask; several are the
+shell's ask, shown from `candidates`.
+
+### 12.2 `brand_seed`
+
+Runs on the calling document, which must be a new, **empty** Brand Clan
+(`clan.app.app_id` `ie.napkin.brand`, no `data.brand.ref`): the shell first
+creates it from the app template with the existing document-create route, then
+calls this. Input is exactly one of
+
+- `{ "ref": "brand/<slug>" }`: the roster row and `facts(layer=brand,
+  entity=ref)`. Reply `done`, with one `change` that writes
+  - `facts_append`: every active brand-layer fact for the brand that has a
+    value and sources, as pins in the pipeline's shape (ids `f_…` are the
+    layer's, frozen value, derived confidence, and `quotes` verbatim from the
+    layer's source records), and `sources_append` for the sources they cite;
+  - `data_patch`: `brand.ref`; `brand.name` as an envelope `{value, origin:
+    "proposed", fact_ids: [the roster pins], decision}`; `brand.client_org`
+    (a string `org/<slug>`) and `brand.categories` as `proposed` with their
+    `fact_ids` where the roster has them; `kit.version: 1`;
+  - `decisions`: a `pin` decision (`action: lookup`) for the pins and an
+    `edit` decision (`action: seed`) for the fields, both
+    `handler: brand_seed@1.0`, both with `reasoning` citing the pins.
+  - `read` is `{brand: null, kit: null}` (an empty kit).
+- `{ "name": "<typed name, 1-120>", "categories"?: ["<vertical>.<leaf>", …up to 2], "by"?: "human:<id>" }`:
+  the brand the layers do not know. The ref is `brand/` plus the lowercase
+  `[a-z0-9]` runs of the name joined by `-`. The layer is told the name
+  (`note_brand`); with `categories` (each a leaf of the taxonomy) the roster
+  row is written too (`set_roster`, decision action `roster_confirmed`, a
+  `reviewer-verified` source for `by`). The change has no pins and patches
+  `brand.ref`, `brand.name` as `{value, origin: "stated", by, decision}` and
+  `kit.version: 1`, with one `edit` decision (`action: seed`).
+
+`by`: the middleware does not know the person (the request carries no actor),
+so the host or shell passes the signed-in person as `input.by` (`human:<id>`),
+as it does for `verify_finding` and `correct_fact`. Without it, `by` is
+`human:unknown`.
+
+A `name` whose lowercase equals that of a brand the agency already has, or
+whose ref collides, is not created twice: `400 invalid_input` whose message
+names the existing ref, to be passed as `input.ref`. Every decision id is
+derived from the document, its version and the ref, so a repeat of the same
+request carries the same ids (§3, staged writes).
+
+### 12.3 Errors
+
+| Status | `error.type` | When |
+|---|---|---|
+| 400 | `invalid_input` | `text` or `name` missing, empty or too long; neither or both of `ref` and `name`; a `ref` that is not `brand/<slug>`; `categories` not up to two distinct taxonomy leaves; `by` not `human:<id>`; `brand_seed` on a document whose `clan.app.app_id` is not `ie.napkin.brand`; a `name` that is already a brand of the agency |
+| 404 | `unknown_brand` | `brand_seed` with a `ref` the agency's roster lacks (or holds nothing pinnable for) |
+| 409 | `already_seeded` | `brand_seed` on a document that already has `data.brand.ref`; nothing is written |
+
+Other errors are §4's. A layers failure is `500 internal`.

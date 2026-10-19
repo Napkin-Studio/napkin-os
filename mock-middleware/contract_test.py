@@ -269,6 +269,8 @@ class Suite:
         self.findings_schema = json.loads((sd / "findings.schema.json").read_text())
         self.pipeline = parse_pipeline((sd / "app" / "pipeline.yaml").read_text())
         self.reason_kinds, self.reason_edits = parse_reasoning((sd / "app" / "pipeline.yaml").read_text())
+        bs = sd.parent / "brand" / "schema.json"  # the Brand Clan's schema, beside the Research Tool's
+        self.brand_schema = json.loads(bs.read_text()) if bs.exists() else None
         self.results = []
 
     # -- envelope checks ----------------------------------------------------
@@ -777,6 +779,7 @@ class Suite:
         e("error: no clan.id -> 400 invalid_input", 400, {"invalid_input"}, no_doc)
 
         intake_cases(self)
+        brand_cases(self)
 
         failed = [r for r in self.results if not r[1]]
         print(f"\n{len(self.results) - len(failed)}/{len(self.results)} passed  (schemas: {VALIDATOR})")
@@ -1395,6 +1398,102 @@ def report_errors(host, rpt):
         if (sk["lens"], sk.get("market")) not in nr:
             errors.append(f"report.not_researched omits skipped {sk['lens']}/{sk.get('market')}")
     return errors
+
+
+BRAND_DOC = "7c1d9e42-0b35-4f6a-8d27-3e5a1b9c0f64"
+
+
+def brand_clan(app="ie.napkin.brand", data=None, version="1", pipeline=None):
+    clan = {"id": BRAND_DOC, "version": version, "app": {"app_id": app, "version": "1"}, "data": data or {},
+            "facts": [], "findings": [], "decision_chain": {"decisions": []}, "context": "", "lineage": None}
+    if pipeline is not None:
+        clan["pipeline"] = pipeline
+    return clan
+
+
+def brand_cases(suite):
+    """brand_identify and brand_seed (middleware-api.md section 12). Only what holds for any layers:
+    the brand names are made up here, so no roster row can exist for them."""
+    c = suite.c
+    token = uuid.uuid4().hex[:8]
+    typed = "Zorbix " + "".join("abcdefghij"[int(ch, 16) % 10] for ch in token)  # letters only: it slugs
+    seeded = {}
+
+    def pure(body):
+        tr = body["trace"]
+        check(tr["model"] is None, "a Brand Clan task ran a model")
+        check(tr["usage"] == {"input_tokens": 0, "output_tokens": 0}, f"usage is not zero: {tr['usage']}")
+
+    def identify_none():
+        st, body = c.task("brand_identify", {"text": typed}, doc_clan())
+        body = suite.envelope(st, body, "brand_identify", states={"done"})
+        check(body["change"] is None, "brand_identify wrote a change")
+        check(body["result"].get("candidates") == [], f"candidates for a brand nobody has: {body['result']}")
+        pure(body)
+    suite.case("brand_identify: no match -> done, change null, candidates [], no model", identify_none)
+
+    def seed_name():
+        clan = brand_clan(pipeline={"tasks": {}})  # a Brand Clan's pipeline declares no task
+        st, body = c.task("brand_seed", {"name": typed, "by": "human:u_test"}, clan)
+        body = suite.envelope(st, body, "brand_seed", states={"done"})
+        pure(body)
+        ch = body["change"]
+        check(isinstance(ch, dict) and ch["doc"] == clan["id"] and ch["base_version"] == clan["version"],
+              "brand_seed change is not for the document it read")
+        check(ch["facts_append"] == [] and not ch.get("sources_append"), "a typed name pins nothing")
+        leaves = patch_leaves(ch["data_patch"])
+        check(isinstance(ch.get("read"), dict) and all(any(l == k or l.startswith(k + ".") for k in ch["read"])
+                                                       for l in leaves), "change.read does not cover the patch")
+        data = merge_patch(clan["data"], ch["data_patch"])
+        if suite.brand_schema:
+            errs = validate(data, suite.brand_schema)
+            check(not errs, "data after brand_seed fails the Brand Clan schema: " + "; ".join(errs[:6]))
+        b = data["brand"]
+        check(re.fullmatch(r"brand/[a-z0-9][a-z0-9._-]*", b["ref"]), f"brand.ref {b['ref']!r}")
+        check(b["name"]["value"] == typed and b["name"]["origin"] == "stated" and b["name"]["by"] == "human:u_test",
+              f"brand.name is not stated by the person: {b['name']}")
+        check(data["kit"] == {"version": 1}, "kit.version is not 1")
+        ids = [d["id"] for d in ch["decisions"]]
+        check(b["name"]["decision"] in ids, "brand.name names a decision not in the change")
+        for d in ch["decisions"]:
+            check(d["handler"] == body["handler"], "decision handler != response handler")
+            check(not reasoning_problems(d.get("reasoning")), f"decision reasoning: {reasoning_problems(d.get('reasoning'))}")
+            check(any(t.endswith("#brand.name") for t in d["targets"]) or d["kind"] != "edit", "no decision targets brand.name")
+        seeded["data"] = data
+    suite.case("brand_seed by name: a stated envelope with the person, kit.version 1, no pins, validates", seed_name)
+
+    def identify_found():
+        check("data" in seeded, "needs the seed case")
+        st, body = c.task("brand_identify", {"text": typed.upper()}, doc_clan())
+        body = suite.envelope(st, body, "brand_identify", states={"done"})
+        found = body["result"]["candidates"]
+        check([x["name"] for x in found] == [typed], f"the brand just named is not identified: {found}")
+        check(set(found[0]) == {"ref", "name", "categories", "client_org"}, f"candidate keys {sorted(found[0])}")
+        check(found[0]["client_org"] is None and found[0]["categories"] == [], "a typed name has no roster row")
+        pure(body)
+    suite.case("brand_identify: a brand named by a seed is found, best first", identify_found)
+
+    def e(name, status, types, fn):
+        suite.case(name, lambda: suite.error(*fn(), status, types))
+
+    e("brand_seed: the same name, another case -> 400 invalid_input (no duplicate)", 400, {"invalid_input"},
+      lambda: c.task("brand_seed", {"name": typed.lower()}, brand_clan()))
+    e("brand_seed: a second seed of a seeded document -> 409", 409, {"already_seeded", "conflict"},
+      lambda: c.task("brand_seed", {"name": typed + " Two"}, brand_clan(data=seeded["data"], version="2")))
+    e("brand_seed: a document of another app -> 400 invalid_input", 400, {"invalid_input"},
+      lambda: c.task("brand_seed", {"name": typed + " Three"}, brand_clan(app="campaign-research")))
+    e("brand_seed: a ref the roster lacks -> 404 unknown_brand", 404, {"unknown_brand"},
+      lambda: c.task("brand_seed", {"ref": "brand/" + "q" * 6 + "-no-such-brand"}, brand_clan()))
+    e("brand_seed: neither ref nor name -> 400 invalid_input", 400, {"invalid_input"},
+      lambda: c.task("brand_seed", {}, brand_clan()))
+    e("brand_seed: both ref and name -> 400 invalid_input", 400, {"invalid_input"},
+      lambda: c.task("brand_seed", {"ref": "brand/a-b", "name": "A B"}, brand_clan()))
+    e("brand_identify: empty text -> 400 invalid_input", 400, {"invalid_input"},
+      lambda: c.task("brand_identify", {"text": "  "}, doc_clan()))
+    e("brand_identify: text over 200 characters -> 400 invalid_input", 400, {"invalid_input"},
+      lambda: c.task("brand_identify", {"text": "x" * 201}, doc_clan()))
+    e("brand_seed: scope in the request (M3) -> 400 invalid_input", 400, {"invalid_input"},
+      lambda: c.task("brand_seed", {"name": typed + " Four", "org": "org/someone-else"}, brand_clan()))
 
 
 def intake_cases(suite):
