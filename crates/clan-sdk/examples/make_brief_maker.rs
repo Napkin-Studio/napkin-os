@@ -259,7 +259,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 0.7: its card on the OS home (app.home).
             // 0.8: how the brief looks is one rolling entry (x-clan-appearance).
             // 0.10: a brief can take a Brand Clan (app.attach): it seeds the client, tone and mandatories.
-            version: "0.10.0".into(),
+            // 0.10.1: the Brand Clan's look is proposed in the brief (Apply / Keep mine), never applied on its own.
+            version: "0.10.1".into(),
             icon: Some(app_ui::ICON_PATH.into()),
             entry: "human/index.html".into(),
             schema: Some(SCHEMA_PATH.into()),

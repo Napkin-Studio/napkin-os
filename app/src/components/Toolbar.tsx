@@ -11,6 +11,7 @@ import ThemeToggle from './ThemeToggle'
 import { DogfoodBadge } from '../dogfood/Dogfood'
 import { signedInUser } from '../host/http'
 import { signOut } from '../shell/signOut'
+import BrandClanChip from '../shell/brandClan/BrandClanChip'
 import './chrome.css'
 
 interface Props {
@@ -49,6 +50,12 @@ interface Props {
    * dropping whatever was not saved. The document's other actions wait.
    */
   clientMode?: { onCancel: () => void; busy?: boolean }
+  /**
+   * The Brand Clan chip: given when the open document's app accepts one
+   * (`app.attach.accepts`). `locked` makes it read-only; `onChanged` is called
+   * after the host wrote to the document.
+   */
+  brandClan?: { accepts: readonly string[]; locked: boolean; onChanged: () => void }
   loading: boolean
   validation?: string
   /**
@@ -215,7 +222,7 @@ function BarBrand({ tool, compact }: { tool?: ToolBrand | null; compact?: boolea
 
 export default function Toolbar({
   title, tool, isTemplate, trusted, onHome, onOpenFile, onToggleSidebar, onWorkspace, onSave, onKeepOffline, onExport, editMode, onToggleEdit,
-  onClientReview, clientAnswered, clientMode, docPath, onSpinoff, sidebarOpen, loading, validation, saved,
+  onClientReview, clientAnswered, clientMode, brandClan, docPath, onSpinoff, sidebarOpen, loading, validation, saved,
 }: Props) {
   const invalid = !!validation && validation !== 'OK'
   const targets = useSpinoffTargets(docPath)
@@ -283,6 +290,9 @@ export default function Toolbar({
         </span>
       )}
       <span className="ch-bar-sep" />
+      {brandClan && brandClan.accepts.length > 0 && !isTemplate && (
+        <BrandClanChip key={docPath} docPath={docPath} accepts={brandClan.accepts} locked={brandClan.locked} onChanged={brandClan.onChanged} />
+      )}
       {onClientReview && !editMode && (
         <button
           className={clientAnswered ? 'ch-btn ch-btn-big' : 'ch-btn ch-btn-primary ch-btn-big'}

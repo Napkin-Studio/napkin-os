@@ -47,6 +47,7 @@ const deviceSync: Partial<Host> = {
   clanOrigin: () => 'clan://localhost',
   prepareAppHtml: prepareFrameHtml,
   frameLoad: 'srcdoc',
+  hasMiddleware: false,
 }
 
 /** The device host, standing in for itself until its module has loaded. */

@@ -62,6 +62,16 @@ pub struct AppMeta {
     pub app_id: String,
     pub version: String,
     pub icon: Option<String>,
+    /// What this app lets be attached (`app.attach`); absent when it takes
+    /// nothing, so the shell shows no Brand Clan chip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach: Option<AttachMeta>,
+}
+
+/// The part of `app.attach` the shell needs: which source apps it accepts.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct AttachMeta {
+    pub accepts: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]

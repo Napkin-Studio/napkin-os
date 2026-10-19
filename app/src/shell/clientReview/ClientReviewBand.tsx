@@ -20,6 +20,10 @@ import type { ClientSuggestionView, DecisionsView } from '../../host'
 import { AgentFigure } from '../../studio/AgentFigure'
 import { AGENTS } from '../../studio/model'
 import { Speak } from './ClientReviewPanel'
+import HarvestPanel from '../brandClan/HarvestPanel'
+import { harvestable, offerButton } from '../brandClan/harvest'
+import { useAttached } from '../brandClan/useAttached'
+import '../brandClan/BrandClan.css'
 import { afterLine, bannerWords, firstName, reasonWords, recordedFrom, settledSuggestions } from './review'
 
 interface Props {
@@ -31,6 +35,8 @@ interface Props {
    * (`none`). For the answer `review` only.
    */
   matched: { review: string; reason: string | null; none: boolean } | null
+  /** Identifies the document, so what is attached is read for this one. */
+  docPath: string
   /** The host wrote something: read the view again, and tell the app. */
   onChanged: () => void
 }
@@ -42,12 +48,16 @@ const PART_WORDS: Record<string, string> = {
   accepted: 'accepted', accepted_with_changes: 'needs a change', rejected: 'rejected',
 }
 
-export default function ClientReviewBand({ view, noun, matched, onChanged }: Props) {
+export default function ClientReviewBand({ view, noun, matched, docPath, onChanged }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [folded, setFolded] = useState(false)
   const c = view.client
   const a = c?.answer ?? null
+  // Harvest (Contract 6 §6): an accepted answer on a document with a Brand Clan attached.
+  const canHarvest = !!a?.current && harvestable(a.answer)
+  const { entries, reload: reloadAttached } = useAttached(docPath, canHarvest)
+  const [harvestOpen, setHarvestOpen] = useState(false)
   const mine = matched && matched.review === a?.decision ? matched : null
   const say = afterLine(view, noun, !!mine?.none)
   // An answer to an earlier lock is history, in "What happened"; the band is
@@ -100,6 +110,21 @@ export default function ClientReviewBand({ view, noun, matched, onChanged }: Pro
           )}
 
           {say && <Speak say={say} />}
+
+          {canHarvest && entries && entries.length > 0 && (
+            <div className="cr-harvest">
+              <button type="button" className="cr-btn" aria-expanded={harvestOpen} onClick={() => setHarvestOpen(o => !o)}>
+                {offerButton(entries[0].title ?? '')}
+              </button>
+              {harvestOpen && (
+                <HarvestPanel
+                  labels={Object.fromEntries(a.seen.parts.map(p => [p.address, p.label]))}
+                  onClose={() => setHarvestOpen(false)}
+                  onAdded={reloadAttached}
+                />
+              )}
+            </div>
+          )}
           {mine?.reason && !suggestions.length && !a.parts_known && a.answer !== 'accepted' && (
             <p className="cr-hint">{AGENTS.extract.given} could not look for the parts this time: {mine.reason}</p>
           )}

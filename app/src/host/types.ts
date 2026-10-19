@@ -15,6 +15,8 @@ export interface AppMeta {
   app_id: string
   version: string
   icon?: string | null
+  /** What the app lets be attached (`app.attach`); absent when it takes nothing. */
+  attach?: { accepts: string[] }
 }
 
 export interface LineageInfo {
@@ -414,10 +416,147 @@ export interface UpstreamEntry {
   contests?: { id: string; change: 'opened' | 'resolved'; key: string; chosen?: string; resolved_here: boolean }[]
 }
 
+/** One document attached to this one (Contract 6 §4.3), as `GET /upstream` reports it. */
+export interface AttachedEntry {
+  document_id: string
+  app_id: string
+  /** The source's version when it was attached. */
+  version?: number | null
+  /** The source's version now. */
+  version_now?: number | null
+  at: string
+  in_store: boolean
+  title?: string
+  path?: string
+  /** `unknown` when the store does not hold it for the caller. */
+  status: 'current' | 'changed' | 'unknown'
+  changed?: { data: boolean; facts: boolean; sources: boolean }
+  decisions_since?: number | null
+}
+
 export interface UpstreamView {
   document_id: string
   carried: UpstreamCarried | null
   upstream: UpstreamEntry[]
+  /** Absent from an older host. */
+  attached?: AttachedEntry[]
+}
+
+// ── Attach and harvest (Contract 6 §4, §6; OS-layer contract §5.7) ───────────
+
+/** A document the open one could attach (`GET /attach-targets`). */
+export interface AttachTarget {
+  app_id: string
+  app_name: string
+  document_id: string
+  title: string
+  /** The Brand Clan's version, when it has one. */
+  version?: number | null
+  /** Where the shell opens it. */
+  path: string
+  updated_at: string
+  /** The open document has this one attached now. */
+  attached: boolean
+}
+
+/** The record `lineage.attached[]` keeps for one hop. */
+export interface AttachedRecord {
+  document_id: string
+  app_id: string
+  version?: number | null
+  at: string
+  [extra: string]: unknown
+}
+
+/** `POST /attach` and `POST /attach/update`. */
+export interface AttachReply {
+  ok: boolean
+  verb: 'attached' | 'updated' | 'replaced'
+  decision?: string | null
+  attached: AttachedRecord
+  /** Addresses the carry filled in. */
+  seeded: string[]
+  /** Fields a person had edited, left as they were. */
+  kept: string[]
+  carried_decisions?: number
+  /** The open document now: the shell refreshes its view from it. */
+  clan?: unknown
+}
+
+/** `POST /attach/detach`. */
+export interface DetachReply {
+  ok: boolean
+  decision?: string | null
+  detached?: AttachedRecord
+  unseeded?: string[]
+  clan?: unknown
+}
+
+export type HarvestStatus = 'new' | 'changed' | 'same'
+
+export interface HarvestField {
+  /** The field in this document. */
+  from: string
+  /** Where it lands in the Brand Clan. */
+  to: string
+  value: unknown
+  kit_value: unknown
+  status: HarvestStatus
+  flagged: boolean
+  /** Why it is flagged: "the client asked for a change here". */
+  reason?: string | null
+  selected: boolean
+}
+
+/** `GET /harvest`: what an approved document offers its Brand Clan. */
+export interface HarvestOffer {
+  ok: boolean
+  brand: { document_id: string; title: string; app_id: string; version?: number | null; path: string }
+  review: { decision?: string | null; answer: ClientAnswerKind; accepted_at: string; version: string }
+  work: {
+    id: string
+    status: HarvestStatus
+    item: { title?: string; [k: string]: unknown }
+    selected: boolean
+  }
+  fields: HarvestField[]
+}
+
+/** `POST /harvest/apply`: only the ticks are read; the offer is computed again. */
+export interface HarvestApplyBody {
+  work?: boolean
+  /** Each ticked field's `from`. */
+  fields?: string[]
+  summary?: string
+  app_id?: string
+}
+
+export interface HarvestApplyReply {
+  ok: boolean
+  /** The Brand Clan's new version. */
+  published: number
+  decision?: string | null
+  /** The Brand Clan's document id. */
+  brand: string
+  work?: string | null
+  fields: string[]
+}
+
+/** The middleware's own reply (`napkin.middleware/1`), as far as the shell reads it. */
+export interface MiddlewareReply {
+  api?: string
+  result?: { summary?: string; candidates?: BrandCandidate[]; [k: string]: unknown }
+  /** On a run: whether the host applied the change (`{applied, reason?}`). */
+  change?: { applied?: boolean; reason?: string } | null
+  [k: string]: unknown
+}
+
+/** What the middleware answered to `brand_identify`: brands of this agency a typed name may mean. */
+export interface BrandCandidate {
+  ref: string
+  name: string
+  categories: string[]
+  client_org?: string | null
 }
 
 /**
@@ -479,6 +618,40 @@ export interface Host {
   acknowledge(decision: string): Promise<void>
   /** What changed upstream since this document was spun off (`GET /upstream`). */
   upstream(): Promise<UpstreamView>
+
+  // ── Attach: a Brand Clan carried into the open document (OS-layer §5.7) ───
+  /** The agency's documents the open one could attach (`GET /attach-targets`). */
+  attachTargets(): Promise<AttachTarget[]>
+  /** Attach a document (or replace the one attached): `POST /attach`. */
+  attach(documentId: string): Promise<AttachReply>
+  /** Take the newer version of what is attached: `POST /attach/update`. */
+  attachUpdate(documentId: string): Promise<AttachReply>
+  /** Take the attached document of `appId` out again: `POST /attach/detach`. */
+  detach(appId: string): Promise<DetachReply>
+
+  // ── Harvest: an approved document back into its Brand Clan (Contract 6 §6) ─
+  /** What the accepted document offers: `GET /harvest`. */
+  harvestOffer(appId?: string): Promise<HarvestOffer>
+  /** Take what a person ticked: `POST /harvest/apply`. */
+  harvestApply(body: HarvestApplyBody): Promise<HarvestApplyReply>
+
+  // ── Middleware work, for making a Brand Clan from a name ──────────────────
+  /** Whether this host reaches a middleware at all (the web build with a server). */
+  readonly hasMiddleware: boolean
+  /**
+   * Ask the middleware a question that changes nothing, from the open document
+   * (`brand_identify`). Resolves with the middleware's own reply (`result`,
+   * `change: null`); rejects in plain words when it cannot be reached.
+   */
+  middlewareRead(task: string, input: Record<string, unknown>): Promise<MiddlewareReply>
+  /** Make a new document of `appId` and leave the open one open. Its store id comes back. */
+  newDocumentQuietly(appId: string, title: string): Promise<{ path: string }>
+  /**
+   * Run a middleware task on the document at `path`, which is not the open
+   * one, and have the host apply its change there (`brand_seed` on a new,
+   * empty Brand Clan). Rejects with the middleware's or the host's own words.
+   */
+  middlewareRunOn(path: string, task: string, input: Record<string, unknown>): Promise<MiddlewareReply>
 
   // ── Client review (OS-layer contract §7.5) ────────────────────────────────
   /**

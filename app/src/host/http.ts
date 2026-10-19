@@ -17,13 +17,19 @@
 import { isMyExport } from './exportEvents'
 import { fetchFile } from './fetchFile'
 import type {
+  AttachReply,
+  AttachTarget,
   ClientConfirmReply,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
+  DetachReply,
+  HarvestApplyReply,
+  HarvestOffer,
   Host,
   HostEvents,
   InstalledApp,
+  MiddlewareReply,
   OpenResult,
   RecentDoc,
   SpinoffTarget,
@@ -130,6 +136,36 @@ async function clanCall<T>(route: string, init?: RequestInit): Promise<T> {
 
 const clanPost = <T,>(route: string, body: unknown) =>
   clanCall<T>(route, { method: 'POST', body: JSON.stringify(body) })
+
+/**
+ * One middleware task through `clan://api-proxy` on the frame at `origin`
+ * (`request_kind: middleware`, as an app frame posts it). The host's envelope
+ * is `{ok, status, data, error}`; the middleware's own reply is `data`. A
+ * refusal, or a change the host did not apply, is thrown as plain words.
+ */
+async function middlewareTask(origin: string, task: string, input: Record<string, unknown>): Promise<MiddlewareReply> {
+  const resp = await fetch(`${origin}/api-proxy`, {
+    method: 'POST',
+    body: JSON.stringify({ request_kind: 'middleware', payload: { task, input } }),
+  })
+  const text = await resp.text()
+  let env: { ok?: boolean; status?: number; data?: MiddlewareReply; error?: unknown } | null = null
+  try { env = JSON.parse(text) } catch { /* not JSON: the body is the message */ }
+  if (!resp.ok || !env) {
+    const err = (env as { error?: unknown } | null)?.error
+    throw new Error((typeof err === 'string' ? err : '') || text || `${task}: ${resp.status}`)
+  }
+  if (env.ok === false || env.error) {
+    const e = env.error
+    const message = typeof e === 'string' ? e : (e as { message?: string } | undefined)?.message
+    throw new Error(message || `${task} did not complete`)
+  }
+  const data = env.data ?? {}
+  if (data.change && data.change.applied === false) {
+    throw new Error(data.change.reason || `${task} could not be applied`)
+  }
+  return data
+}
 
 /** Opens asked for so far. Only the latest one may become the open document. */
 let opens = 0
@@ -270,6 +306,31 @@ export const httpHost: Host = {
   },
 
   upstream: () => clanCall<UpstreamView>('/upstream'),
+
+  // Attach and harvest are clan:// routes: the frame's own token reaches them,
+  // so they act on the document the shell shows.
+  attachTargets: () => clanCall<AttachTarget[]>('/attach-targets'),
+  attach: documentId => clanPost<AttachReply>('/attach', { document_id: documentId }),
+  attachUpdate: documentId => clanPost<AttachReply>('/attach/update', { document_id: documentId }),
+  detach: appId => clanPost<DetachReply>('/attach/detach', { app_id: appId }),
+  harvestOffer: appId => clanPost<HarvestOffer>('/harvest', appId ? { app_id: appId } : {}),
+  harvestApply: body => clanPost<HarvestApplyReply>('/harvest/apply', body),
+
+  // The middleware, for making a Brand Clan from a name.
+  hasMiddleware: true,
+  middlewareRead: (task, input) => middlewareTask(httpHost.clanOrigin(), task, input),
+  // The create route, but not adopted: the open document stays the open one.
+  newDocumentQuietly: async (appId, title) => {
+    const { path } = await json<OpenView>('/documents', postJson({ app_id: appId, title }))
+    return { path }
+  },
+  // `GET /d/{doc}` hands back a frame token for that document without opening
+  // it, so the same `clan://api-proxy` reaches it, and the host applies the
+  // change to that document.
+  middlewareRunOn: async (path, task, input) => {
+    const view = await json<OpenView>(`/d/${encodeURIComponent(path)}`)
+    return middlewareTask(`${view.sandbox_origin ?? window.location.origin}/s/${view.token}`, task, input)
+  },
 
   clientReview: body => clanPost<ClientReviewReply>('/client-review', body),
   clientReviewConfirm: body => clanPost<ClientConfirmReply>('/client-review/confirm', body),

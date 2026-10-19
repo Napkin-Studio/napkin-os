@@ -428,3 +428,49 @@ test('a part judged after the page drew it gets its mark when the chain comes', 
   const src = fn(BM, 'refreshWhy')
   assert.match(src, /if\(p\) p\.outerHTML=ph; else if\(ph&&lab\) lab\.insertAdjacentHTML\('afterend',ph\)/)
 })
+
+// ── the brief's proposal of a Brand Clan's look ────────────────────────────
+
+test('the Brand Clan’s look is proposed only where it differs, and the font only where the brief can show it', () => {
+  type L = {
+    lookProposal(kit: unknown, theme: unknown, offered: string[]): null | { hex: string | null; family: string | null; applyFont: boolean; noFile: boolean }
+    isBrandKit(d: unknown): boolean
+    upKeys(): string[]
+  }
+  const upstream: Record<string, unknown> = {}
+  const get = (p: string) => (p === 'upstream' ? upstream : undefined)
+  const l = lift<L>(BM, ['isBrandKit', 'items', 'sameHex', 'lookProposal', 'upKeys'], { get })
+  const kit = (over: Record<string, unknown> = {}) => ({
+    kit: { version: 5 },
+    visual: {
+      colours: { c1: { name: 'Lumen blue', hex: '#1A5FB4', role: 'primary' }, c2: { name: 'Mist', hex: '#EEF2F7', role: 'background' } },
+      typography: { t1: { family: 'Sora', role: 'heading', weights: [600] }, t2: { family: 'Inter', role: 'body' } },
+      ...over,
+    },
+  })
+  const offered = ['Geist', 'Georgia']
+  // Differs in both; the heading face has no file and is not one the brief offers: colour only, font noted.
+  assert.deepEqual(l.lookProposal(kit(), { accent: '#FF4F2E' }, offered), { hex: '#1A5FB4', family: 'Sora', applyFont: false, noFile: true })
+  // A face the brief already offers can be applied by name.
+  const geist = kit({ typography: { t1: { family: 'Geist', role: 'heading' } } })
+  assert.deepEqual(l.lookProposal(geist, { accent: '#1a5fb4' }, offered), { hex: null, family: 'Geist', applyFont: true, noFile: false })
+  // A face with a file is applied.
+  const filed = kit({ typography: { t1: { family: 'Sora', role: 'display', file: 'assets/sora.woff2' } } })
+  assert.equal(l.lookProposal(filed, { accent: '#1A5FB4' }, offered)?.applyFont, true)
+  // Already the same: nothing to propose (hex compared without case; the font by name).
+  assert.equal(l.lookProposal(kit(), { accent: '#1a5fb4', font: 'Sora, serif' }, offered), null)
+  // No primary colour and no heading or display face: nothing.
+  assert.equal(l.lookProposal(kit({ colours: { c2: { hex: '#EEE', role: 'neutral' } }, typography: { t2: { family: 'Inter', role: 'body' } } }), {}, offered), null)
+  // Not a Brand Clan's data (no kit or no visual): nothing.
+  assert.equal(l.lookProposal({ campaign: {} }, {}, offered), null)
+  // A Brand Clan beside the research is not the research.
+  upstream['r-1'] = { campaign: { brand: 'Lúnasa' } }
+  upstream['b-1'] = kit()
+  assert.deepEqual(l.upKeys(), ['r-1'])
+  // It is never applied by the page on its own: only the Apply button writes the theme.
+  const writes = [...BM.matchAll(/patchData\(\{theme:t\}/g)].length
+  assert.equal(writes, 1)
+  assert.match(fn(BM, 'renderBrandLook'), /\$\('lookApply'\)\.addEventListener\('click'/)
+  assert.match(fn(BM, 'lookKept'), /try\{/)
+  assert.match(fn(BM, 'keepLook'), /try\{/)
+})

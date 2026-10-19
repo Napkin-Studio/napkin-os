@@ -18,10 +18,15 @@
 import init, { NapkinHost } from '../wasm/napkin_wasm'
 import { prepareFrameHtml } from './wasmFrame'
 import type {
+  AttachReply,
+  AttachTarget,
   ClientConfirmReply,
   ClientReopenReply,
   ClientReviewReply,
   DecisionsView,
+  DetachReply,
+  HarvestApplyReply,
+  HarvestOffer,
   Host,
   HostEvents,
   InstalledApp,
@@ -165,6 +170,8 @@ async function route<T>(path: string, query: string, body: Uint8Array): Promise<
 const post = <T,>(path: string, body: unknown) =>
   route<T>(path, '', new TextEncoder().encode(JSON.stringify(body)))
 
+const NO_NAMING = 'Making a Brand Clan from a name is not available in this build yet.'
+
 function download(bytes: Uint8Array, filename: string) {
   const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart]))
   const a = document.createElement('a')
@@ -261,6 +268,19 @@ export const wasmHost: Host = {
   clientReviewConfirm: body => post<ClientConfirmReply>('/client-review/confirm', body),
   clientReviewReopen: answer => post<ClientReopenReply>('/client-review/reopen', { answer }),
   uploadAsset: (name, bytes) => route<UploadedAsset>('/upload-asset', `name=${encodeURIComponent(name)}`, bytes),
+
+  // Attach and harvest are the host's own routes, answered in the page.
+  // Naming a brand needs the middleware, and there is none here.
+  attachTargets: () => route<AttachTarget[]>('/attach-targets', '', new Uint8Array()),
+  attach: documentId => post<AttachReply>('/attach', { document_id: documentId }),
+  attachUpdate: documentId => post<AttachReply>('/attach/update', { document_id: documentId }),
+  detach: appId => post<DetachReply>('/attach/detach', { app_id: appId }),
+  harvestOffer: appId => post<HarvestOffer>('/harvest', appId ? { app_id: appId } : {}),
+  harvestApply: body => post<HarvestApplyReply>('/harvest/apply', body),
+  hasMiddleware: false,
+  middlewareRead: () => Promise.reject(new Error(NO_NAMING)),
+  newDocumentQuietly: () => Promise.reject(new Error(NO_NAMING)),
+  middlewareRunOn: () => Promise.reject(new Error(NO_NAMING)),
 
   setEditMode: async active => { (await boot()).setEditMode(active) },
   // The frame is loaded from srcdoc, so there is no document slot to fill.

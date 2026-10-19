@@ -324,3 +324,7 @@ label.cr-drop { justify-content: center; }
 @media (prefers-reduced-motion: reduce) {
   .cr-answer, .cr-how button, .cr-reasons button, .cr-said summary::before, .cr-mark summary::before { transition: none; }
 }
+
+/* Harvest: the offer to add an approved document to its Brand Clan. */
+.cr-harvest { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 16px 10px; }
+.cr-harvest .bc-harvest { align-self: stretch; margin: 0; }

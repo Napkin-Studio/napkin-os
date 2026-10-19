@@ -20,7 +20,7 @@ use crate::html::{
     apply_patches, auto_inject_adf_ids, inject_clan_data, inject_styles, resolve_bindings,
 };
 use crate::log::log;
-use crate::session::{AppMeta, LineageInfo, ManifestInfo, OpenResult};
+use crate::session::{AppMeta, AttachMeta, LineageInfo, ManifestInfo, OpenResult};
 use crate::view;
 
 use super::edit::UPSTREAM_KEY;
@@ -54,6 +54,13 @@ pub fn describe(doc: &Document) -> OpenResult {
             app_id: a.app_id.clone(),
             version: a.version.clone(),
             icon: a.icon.clone(),
+            attach: a
+                .attach
+                .as_ref()
+                .filter(|s| !s.accepts.is_empty())
+                .map(|s| AttachMeta {
+                    accepts: s.accepts.clone(),
+                }),
         }),
     };
 
@@ -1183,6 +1190,27 @@ mod tests {
             "it does carry the research"
         );
         assert!(ctx.get("upstream_payload").is_none());
+    }
+
+    #[test]
+    fn describe_tells_the_shell_what_an_app_lets_be_attached() {
+        let with = |attach: Option<clan_sdk::AttachSpec>| {
+            let mut a = app("Brief Maker", "ie.napkin.brief-maker", None);
+            a.attach = attach;
+            let f = doc("A brief", a, None, &[]);
+            let d = Document::from_bytes(DocId::new("brief.clan"), f.raw_bytes().to_vec()).unwrap();
+            serde_json::to_value(describe(&d).manifest.app.unwrap()).unwrap()
+        };
+        let yes = with(Some(clan_sdk::AttachSpec {
+            accepts: vec!["ie.napkin.brand".into()],
+            ..Default::default()
+        }));
+        assert_eq!(yes["attach"]["accepts"][0], "ie.napkin.brand");
+        // An app that declares none, or an empty list, says nothing at all.
+        assert!(with(None).get("attach").is_none());
+        assert!(with(Some(clan_sdk::AttachSpec::default()))
+            .get("attach")
+            .is_none());
     }
 
     #[test]

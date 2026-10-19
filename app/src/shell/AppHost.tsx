@@ -256,6 +256,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
         onClientReview={reviewable && !open.is_template ? startReview : undefined}
         clientAnswered={!!decisions.view?.client?.answer?.current}
         clientMode={clientOn ? { onCancel: endReview, busy: saving !== 'no' } : undefined}
+        brandClan={open.manifest.app?.attach?.accepts?.length
+          ? { accepts: open.manifest.app.attach.accepts, locked: !!decisions.view?.lock.locked, onChanged: changed }
+          : undefined}
       />
       {banner}
       </div>
@@ -267,6 +270,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
               view={decisions.view}
               noun={noun}
               matched={matched?.docPath === docPath ? matched : null}
+              docPath={docPath}
               onChanged={changed}
             />
           )}

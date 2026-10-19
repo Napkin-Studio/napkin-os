@@ -53,6 +53,17 @@ export const tauriHost: Host = {
   clientReviewConfirm: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   clientReviewReopen: () => Promise.reject(new Error('client review is not available on the desktop yet')),
   uploadAsset: () => Promise.reject(new Error('client review is not available on the desktop yet')),
+  // Nor the Brand Clan: attaching one and adding to it are read from the same view.
+  attachTargets: () => Promise.reject(new Error('the Brand Clan is not available on the desktop yet')),
+  attach: () => Promise.reject(new Error('the Brand Clan is not available on the desktop yet')),
+  attachUpdate: () => Promise.reject(new Error('the Brand Clan is not available on the desktop yet')),
+  detach: () => Promise.reject(new Error('the Brand Clan is not available on the desktop yet')),
+  harvestOffer: () => Promise.reject(new Error('the Brand Clan is not available on the desktop yet')),
+  harvestApply: () => Promise.reject(new Error('the Brand Clan is not available on the desktop yet')),
+  hasMiddleware: false,
+  middlewareRead: () => Promise.reject(new Error('Making a Brand Clan from a name is not available in this build yet.')),
+  newDocumentQuietly: () => Promise.reject(new Error('Making a Brand Clan from a name is not available in this build yet.')),
+  middlewareRunOn: () => Promise.reject(new Error('Making a Brand Clan from a name is not available in this build yet.')),
 
   setEditMode: active => invoke('set_edit_mode', { active }),
   updatePreviewHtml: html => invoke('update_preview_html', { html }),

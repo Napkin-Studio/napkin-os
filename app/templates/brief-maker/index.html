@@ -564,6 +564,7 @@
 
     <div class="sheet">
       <div class="upnote" id="upNote" role="status" hidden></div>
+      <div class="upnote" id="brandLook" role="status" hidden></div>
       <div id="fields"></div>
       <div class="review" id="review" hidden></div>
 
@@ -1686,7 +1687,9 @@
   // pins, findings and sources were merged into this brief's own, and its
   // open items are on this brief's lock list. GET /upstream says whether the
   // research has moved on since (§8.1, item 6).
-  function upKeys(){ var u=get('upstream'); return u&&typeof u==='object'&&!Array.isArray(u)?Object.keys(u):[]; }
+  // A Brand Clan attached to the brief sits beside the research in data.upstream; it is not research.
+  function isBrandKit(d){ return !!(d&&typeof d==='object'&&d.kit&&typeof d.kit==='object'&&d.visual&&typeof d.visual==='object'); }
+  function upKeys(){ var u=get('upstream'); return u&&typeof u==='object'&&!Array.isArray(u)?Object.keys(u).filter(function(k){ return !isBrandKit(u[k]); }):[]; }
   function isResearchFed(){ return upKeys().length>0; }
   var UP={state:'idle', res:null, t:null};
   function upEntry(){ var r=UP.res; return r?arr(r.upstream).filter(function(e){ return e&&e.direct; })[0]||null:null; }
@@ -1811,6 +1814,61 @@
     }, 300);
   }
 
+
+  // ---------- the Brand Clan's look: proposed, never applied on its own ----------
+  // A Brand Clan attached to the brief is frozen at data.upstream.<its id>. Its
+  // primary colour and heading font are offered here as a look: Apply to this
+  // brief, or Keep mine. Attaching never changes the brief's theme.
+  var BRIEF_FONTS=['Geist','Geist Mono','Georgia'];   // the faces this brief already offers or loads
+  function items(m){ return m&&typeof m==='object'?(Array.isArray(m)?m:Object.keys(m).map(function(k){ return m[k]; })):[]; }
+  function sameHex(a,b){ return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase(); }
+  // What to propose, from the Brand Clan's data, the brief's theme and the faces on offer; null when
+  // there is nothing to propose. Pure: no page state.
+  function lookProposal(kit, theme, offered){
+    if(!isBrandKit(kit)) return null;
+    theme=theme||{}; offered=offered||[];
+    var cols=items(kit.visual.colours).filter(function(c){ return c&&typeof c==='object'&&/^#[0-9a-f]{3,8}$/i.test(String(c.hex||'').trim()); });
+    var col=cols.filter(function(c){ return c.role==='primary'; })[0]||null;
+    var ty=items(kit.visual.typography).filter(function(t){ return t&&typeof t==='object'&&typeof t.family==='string'&&t.family.trim(); });
+    var face=ty.filter(function(t){ return t.role==='heading'; })[0]||ty.filter(function(t){ return t.role==='display'; })[0]||null;
+    var hex=col?String(col.hex).trim():null, family=face?face.family.trim():null;
+    var hexDiffers=!!hex&&!sameHex(hex,theme.accent);
+    var fontDiffers=!!family&&String(theme.font||'').toLowerCase().indexOf(family.toLowerCase())===-1;
+    var hasFile=!!(face&&face.file);
+    var fontOk=fontDiffers&&(hasFile||offered.some(function(f){ return f.toLowerCase()===family.toLowerCase(); }));
+    if(!hexDiffers&&!fontDiffers) return null;
+    return { hex:hexDiffers?hex:null, family:fontDiffers?family:null, applyFont:fontOk, noFile:fontDiffers&&!fontOk };
+  }
+  function brandAttached(){
+    var u=get('upstream'); if(!u||typeof u!=='object') return null;
+    var ids=Object.keys(u).filter(function(k){ return isBrandKit(u[k]); });
+    return ids.length?{ id:ids[0], kit:u[ids[0]] }:null;
+  }
+  function brandName(kit){ var n=kit&&kit.brand&&kit.brand.name; n=envVal(n); return typeof n==='string'&&n.trim()?n.trim():'attached'; }
+  function lookKey(b){ var v=b.kit.kit&&b.kit.kit.version; return 'napkin.brandlook.'+docId()+'.'+b.id+'.'+(v==null?'':v); }
+  function lookKept(b){ try{ return window.localStorage.getItem(lookKey(b))==='1'; }catch(e){ return false; } }
+  function keepLook(b){ try{ window.localStorage.setItem(lookKey(b),'1'); }catch(e){} }
+  function renderBrandLook(){
+    var el=$('brandLook'); if(!el) return;
+    var b=brandAttached(), pr=b&&!approveLocked()&&!lookKept(b)?lookProposal(b.kit,get('theme'),BRIEF_FONTS):null;
+    if(!pr){ el.hidden=true; el.innerHTML=''; return; }
+    var name=brandName(b.kit), bits=[];
+    if(pr.hex) bits.push('<span class="swatch" style="display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;border:1px solid var(--border);background:'+esc(pr.hex)+'"></span> '+esc(pr.hex));
+    if(pr.family) bits.push(pr.noFile?esc('font: '+pr.family+' (no file)'):esc(pr.family));
+    el.hidden=false;
+    el.innerHTML='<div class="ub"><b>'+esc('The '+name+' Brand Clan has a look: ')+'</b><span>'+bits.join(', ')+'.</span>'
+      +'<span class="answers"><button type="button" id="lookApply">Apply to this brief</button> <button type="button" id="lookKeep">Keep mine</button></span></div>';
+    $('lookApply').addEventListener('click',function(){
+      var t=Object.assign({},get('theme')||{});
+      if(pr.hex) t.accent=pr.hex;
+      if(pr.family&&pr.applyFont) t.font=pr.family;
+      // One write of the theme, an appearance key: the host keeps it as the one rolling look entry.
+      if(window.clan) window.clan.patchData({theme:t},{actor:'human',pinned:false,rationale:'Applied the '+name+' Brand Clan look'});
+      toast('Applied the '+name+' Brand Clan look.');
+    });
+    $('lookKeep').addEventListener('click',function(){ keepLook(b); renderBrandLook(); });
+  }
+
   // ---------- structured ----------
   var REGEN={};   // field key → true while its Drafter is redrafting it
   function renderStructured(){
@@ -1841,7 +1899,7 @@
     $('boards').classList.toggle('on',showBoards);
     if(showBoards) renderBoards(false);
     $('newDraft').hidden=approveLocked();
-    renderLock(); renderUpNote($('upNote'));
+    renderLock(); renderUpNote($('upNote')); renderBrandLook();
     renderCrewline(); renderReview();
     LOCK_SIG=lockSig();
     // The clan-fields inside the rows render, and the snippet finds the
