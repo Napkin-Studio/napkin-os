@@ -17,7 +17,6 @@ findings:
       decision: d_01JA0D07VER
       by: human:u_aoife
       at: 2026-09-22T16:05:31Z
-      fact_id: f_01JA0C9V4X
   - id: fi_01JA0F2B
     statement: "Lúnasa arrives in Ireland with permission and in GB as a stranger: the IE launch can lean on the parent brand, the GB launch has to introduce it."
     cites: [f_01JA0B2K7M, f_01JA0B2K8N]

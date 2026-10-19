@@ -919,9 +919,6 @@
                 "items": {
                   "$ref": "#/definitions/fact_id"
                 }
-              },
-              "fact_id": {
-                "$ref": "#/definitions/fact_id"
               }
             }
           }

@@ -137,6 +137,24 @@ fn finding(f: &Fixture) -> Value {
     yaml(f, "shared/findings.yaml")["findings"][0].clone()
 }
 
+/// `member` as the Research Tool's schema for it has it, or why not.
+fn conforms(member: &Value, schema: &str) {
+    let path = format!(
+        "{}/../../app/templates/campaign-research/{schema}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let out = clan_sdk::AgentOutput {
+        mode: "data-update".into(),
+        structured: member.clone(),
+        design: None,
+        human: None,
+        decision: None,
+    };
+    if let Err(e) = out.validate_schema(&std::fs::read_to_string(path).unwrap()) {
+        panic!("{schema}: {e}");
+    }
+}
+
 fn verdict(target: &str, polarity: &str, rationale: &str) -> Verdict {
     Verdict::parse(
         &json!({ "target": target, "polarity": polarity, "rationale": rationale }).to_string(),
@@ -385,6 +403,7 @@ fn verifying_records_who_checked_it_in_the_document_only() {
                 "at": fi["verification"]["at"] }),
         "the decision, who and when; nothing else"
     );
+    conforms(&yaml(&f, "shared/findings.yaml"), "findings.schema.json");
     assert!(fi["verification"]["at"]
         .as_str()
         .is_some_and(|t| t.ends_with('Z')));
@@ -448,6 +467,7 @@ fn a_mark_on_a_fact_is_its_review() {
     assert_eq!(wrong["verdict"], "rejected");
     assert_eq!(wrong["decision"], bad["decision"]);
     assert_eq!(by("f_01JA0B3P5R")["value"], 0.44, "the value is untouched");
+    conforms(&yaml(&f, "shared/facts.yaml"), "facts.schema.json");
     // Taking it out is the reconsider job's, not the verdict's.
     assert!(yaml(&f, "shared/data.yaml")
         .pointer("/selection/excluded")
@@ -742,6 +762,8 @@ fn a_corrected_fact_replaces_the_old_pin_which_stays_on_record() {
     assert_eq!(pin["review"]["decision"], did);
     let src = pin["sources"][0].as_str().unwrap().to_string();
     assert_eq!(pin["quotes"][&src], "The 2026 panel");
+
+    conforms(&yaml(&f, "shared/facts.yaml"), "facts.schema.json");
 
     let sources = yaml(&f, "shared/sources.yaml")["sources"].clone();
     let rec = sources

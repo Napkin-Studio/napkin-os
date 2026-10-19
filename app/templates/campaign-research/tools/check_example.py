@@ -61,8 +61,6 @@ if "--write-projection" in sys.argv:
     fnd = {}
     for f in findings["findings"]:
         e = {"statement": f["statement"], "status": f["status"], "confidence": f["confidence"], "cites": f["cites"]}
-        if "verification" in f:
-            e["fact_id"] = f["verification"]["fact_id"]
         fnd[f["id"]] = e
     proj = {"projection": {"built_from": {"facts_sha256": sha(facts_p), "findings_sha256": sha(findings_p),
                                           "built_at": "2026-09-23T08:02:01Z"},
@@ -144,8 +142,6 @@ for f in findings["findings"]:
     for c in f["cites"]:
         if c not in pin_ids:
             errors.append(f"finding {f['id']} cites unpinned fact {c}")
-    if "verification" in f and f["verification"]["fact_id"] not in pin_ids:
-        errors.append(f"verified finding {f['id']} did not become a pinned fact")
 
 # every decision reference resolves
 def dec_refs(o):
