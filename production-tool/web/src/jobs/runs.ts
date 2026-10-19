@@ -155,9 +155,9 @@ export function canJoin(prev: PlanShot, next: PlanShot): boolean {
 export function joinBlock(prev: PlanShot, next: PlanShot, n: number): string | undefined {
   if (canJoin(prev, next)) return undefined
   if (next.product) return `Shot ${n + 1} shows the product: it starts its own video`
-  if (prev.kind === 'end_card' || next.kind === 'end_card') return 'The end card stays on its own'
-  if (prev.text || next.text) return 'A shot with type on screen stays on its own'
-  if (prev.spoken || next.spoken) return 'A shot where someone speaks is made on its own, with sound'
+  if (prev.kind === 'end_card' || next.kind === 'end_card') return 'An end card is always its own video'
+  if (prev.text || next.text) return 'A shot with type on screen is always its own video'
+  if (prev.spoken || next.spoken) return 'A shot where someone speaks is its own video, with sound'
   return 'These shots are made on their own'
 }
 

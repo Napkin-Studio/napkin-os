@@ -13,8 +13,8 @@ import { assetRef, remoteUrl } from '../jobs/assets'
 import { isMoving, isRunning, jobAt } from '../jobs/select'
 import { changeFeel, editQuality, makeClip as submitClip, redoInTake, remakeAsFinal, renderAd, shotQuality, videoQuality } from '../jobs/clips'
 import { isOneTake, isTakeRun, makeClips, makeRuns, modelEntry, canLand, planRunOf } from '../jobs/runs'
-import { inTake, joinBefore, runJobFor, separateAll, separateSelection, shotRange, videoJoin, videoModel, videoPlan, videoUnits } from '../jobs/runView'
-import { SelectionBar, StripTrack } from './VideoStrips'
+import { inTake, joinBefore, runJobFor, separateAll, separateSelection, shotRange, videoJoin, videoModel, videoPlan, videoRows, type Row } from '../jobs/runView'
+import { SelectionBar, VideoRows } from './VideoStrips'
 import { fixesInFrame, fixFrameLanded, fixInShot, fixProgress, remakeFixClip, shotsBeingFixed } from '../jobs/fix'
 import { lastWorkedModel } from '../jobs/follow'
 import { adStatus, endFrameDrift, takeStale } from '../jobs/stale'
@@ -92,9 +92,11 @@ export function Video() {
   // Connected video (features/connected-video.clan): null when the flag is off, and everything is as before.
   const join = videoJoin(doc, video?.id, config)
   const film = useFilm(video?.id)
-  // The shots as strips (one video each) and separate shots, from the plan.
-  const units = film && video ? videoUnits(doc, ui, video.id, film.plan) : null
-  const stripOf = (id: string) => units?.find((u) => u.kind === 'strip' && u.shotIds.includes(id))
+  // The ad as the videos it is made of, one row each, from the plan.
+  const rows = film && video ? videoRows(doc, ui, video.id, film.plan) : null
+  const rowOf = (id: string) => rows?.find((r) => r.shotIds.includes(id))
+  // The row the player shows (its first shot), when one was picked.
+  const [rowPick, setRowPick] = useState<string | null>(null)
   // A shot's own clip job; a shot being made in a take has its run's job too.
   const cardJob = (id: string) => jobAt(doc, ui, (c) => c.for === 'clip' && c.shotId === id)
   const clipJob = (id: string) => cardJob(id) ?? (join ? runJobFor(doc, ui, id) : undefined)
@@ -156,14 +158,23 @@ export function Video() {
   const [tray, setTray] = useState(false)
   const trayRef = useRef<HTMLButtonElement>(null)
   const trayWrap = useRef<HTMLSpanElement>(null)
-  // A strip not yet one video (no clips, or separate ones) is made whole; a separate shot when it has no clip.
-  const stripToMake = (id: string) => { const u = stripOf(id); return !!u && u.kind === 'strip' && (u.state === 'new' || u.state === 'separate') }
+  // A row not made yet (or made before as separate clips, or refused) is made whole, through the tray.
+  const rowToMake = (id: string) => { const r = rowOf(id); return !!r && (r.state === 'new' || r.state === 'separate' || r.state === 'refused') }
   const allToMake = shots.map((s, i) => ({ shot: s, n: i + 1 }))
-    .filter(({ shot: s }) => stripToMake(s.id) || (!stripOf(s.id) && !takesOf(doc, s.id).length && !isRunning(doc, clipJob(s.id))))
-  // A strip's own Make as one video opens the tray for its shots alone.
+    .filter(({ shot: s }) => (rows ? rowToMake(s.id) : !takesOf(doc, s.id).length && !isRunning(doc, clipJob(s.id))))
+  const rowsToMake = rows?.filter((r) => rowToMake(r.shotIds[0])).length ?? 0
+  // A row's own Make opens the tray for its shots alone.
   const [trayIds, setTrayIds] = useState<string[] | null>(null)
   const toMake = trayIds ? allToMake.filter(({ shot: s }) => trayIds.includes(s.id)) : allToMake
-  const openStrip = (ids: string[]) => { setTrayIds(ids); setTray(true) }
+  const openRow = (ids: string[]) => { setTrayIds(ids); setTray(true) }
+  const trayRow = trayIds ? rowOf(trayIds[0]) : undefined
+  /** Clicking a row's title: the player shows that video (its one take across its beats, or its shots in order). */
+  const selectRow = (row: Row) => {
+    setPicked([])
+    setRowPick(row.shotIds[0])
+    setShotId(row.shotIds[0])
+    setMode(row.kind === 'video' && row.state !== 'made' && row.shotIds.every((id) => currentTake(doc, id, video?.id)) ? 'all' : 'shot')
+  }
   const pickCard = (id: string, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
     if (longPressed.current) { longPressed.current = false; return }
     if (film && e.shiftKey && pickFrom.current) return setPicked(shotRange(shots.map((s) => s.id), pickFrom.current, id))
@@ -172,6 +183,7 @@ export function Video() {
       return setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id])
     }
     pickFrom.current = id
+    setRowPick(null)
     setShotId(id)
     setMode('shot')
   }
@@ -236,13 +248,13 @@ export function Video() {
       more={() => <CopyLinkLater />}
       right={<>
         {film && video ? (
-          // Make all: every strip as one video, every separate shot alone (the tray first, as before).
+          // Make all N: every video of the ad not made yet (the tray first, as before).
           <span ref={trayWrap} className="ve-makeall">
-            <SplitButton kind="plain" disabled={empty || makingAll || anyRunning || !allToMake.length} menuLabel="More ways to make the clips"
-              title={empty ? 'Plan the shots first' : 'Each strip as one video, each separate shot on its own'}
+            <SplitButton kind="plain" disabled={empty || makingAll || !rowsToMake} menuLabel="More ways to make the videos"
+              title={empty ? 'Plan the shots first' : 'Every video of the ad not made yet'}
               onClick={() => { setTrayIds(null); setTray(!tray) }}
               items={[{ label: 'Make every shot separately', icon: '⇥', onSelect: () => void separateAll(docStore, video.id).then(() => { setTrayIds(null); setTray(true) }) }]}>
-              {makingAll ? 'Preparing…' : anyRunning ? 'Making…' : allToMake.length ? 'Make all' : 'All made'}
+              {makingAll ? 'Preparing…' : rowsToMake ? `Make all ${rowsToMake}` : anyRunning ? 'Making…' : 'All made'}
             </SplitButton>
           </span>
         ) : (
@@ -257,7 +269,7 @@ export function Video() {
           }}>Make all sizes…</button>
         {tray && <ClipTray anchor={film ? trayWrap : trayRef} open={tray} onClose={() => { setTray(false); setTrayIds(null) }} shots={toMake} fromWords={fromWords} ratio={sb?.ratio ?? video?.ratio ?? '16:9'}
           quality={videoQuality(doc, video?.id)} onMake={(ids, m, q) => void makeAll(ids, m, q)}
-          {...(film && toMake.length && toMake.every(({ shot: s }) => stripToMake(s.id) && stripOf(s.id) === stripOf(toMake[0].shot.id)) ? { makeLabel: 'Make as one video' } : {})} />}
+          {...(trayRow ? { makeLabel: trayRow.kind === 'video' ? 'Make as one video' : 'Make' } : {})} />}
       </>}
       primary={controls.stitch ? (
         <button className="btn primary" disabled={empty || rendering || !!renderBlocked} onClick={() => void render()} title={empty ? 'Plan the shots first' : renderBlocked ?? 'Join the clips into one ad with the end card'}>
@@ -295,29 +307,40 @@ export function Video() {
       {video && <ClipChoice videoId={video.id} />}
       <div className="panel ve-body pt-grid">
         {error && <div role="alert" className="ve-error">{error}</div>}
-        {view === 'sound' ? <SoundView shots={shots} /> : <Player mode={mode} shot={shot} take={take} shots={shots} videoId={video?.id} onPickShot={setShotId}
+        {view === 'sound' ? <SoundView shots={shots} /> : <Player mode={mode} shot={shot} take={take} shots={rowPick && mode === 'all' ? shots.filter((s) => rowOf(rowPick)?.shotIds.includes(s.id)) : shots} videoId={video?.id} onPickShot={setShotId}
           strip={(
             <div className="ve-timeline pt-card">
               <div className="ve-tlhead"><b>Timeline</b><span className="pt-pill ok">{taken} of {shots.length} clips</span><span className="pt-grow" />
-                <RemakeBar dock="inline" />
+                {/* In a film each row's Make says what is left to make: no second bar of make actions. */}
+                {!rows && <RemakeBar dock="inline" />}
                 {own && <button className="btn sm" disabled={shaping} onClick={() => void showAsStoryboard()} title="Show these shots as a Storyboard node on the canvas, driving this video, to draw and check their frames. Undo on the canvas puts them back here.">Make a storyboard from these shots</button>}
-                <button className={`btn sm ${mode === 'all' ? 'on' : ''}`} disabled={!allTaken} onClick={() => setMode('all')}
+                <button className={`btn sm ${mode === 'all' && !rowPick ? 'on' : ''}`} disabled={!allTaken} onClick={() => { setRowPick(null); setMode('all') }}
                   title={allTaken ? 'Play every shot in order' : `Make a clip for every shot first (${taken} of ${shots.length} done)`}>▶ All shots</button>
               </div>
+              {rows && video ? (
+                // One row per video (features/connected-video.clan, the owner's choice 2026-10-19).
+                <VideoRows videoId={video.id} shots={shots} rows={rows} selected={rowPick ?? undefined}
+                  insert={editable ? (i) => i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} /> : undefined}
+                  onSelectRow={selectRow}
+                  onMake={(row) => openRow(row.shotIds)}
+                  onMakeAgain={(row) => void sendAll(async () => {
+                    setError(null)
+                    try {
+                      await film!.make(row.shotIds[0], { again: true, quality: shotQuality(doc, row.shotIds[0], video.id) })
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : 'That did not work.')
+                    }
+                  })}
+                  onMakeSeparately={(row) => void separateSelection(docStore, video.id, row.shotIds).then(() => openRow(row.shotIds))}
+                  card={(s, i) => (
+                    <ShotCard key={s.id} shot={s} index={i} videoId={video.id} selected={s.id === shot?.id && mode === 'shot'}
+                      onSelect={(e) => pickCard(s.id, e)} picked={picked.includes(s.id)} pickProps={pickProps(s.id)} inStrip
+                      onMake={(opts) => makeClip(s, opts)} />
+                  )} />
+              ) : (
               <div className="ve-track"><span className="ve-lane"><b>Shots</b><span>main track</span></span>
-                <div className={`strip ${editable ? 'editable' : ''} ${units ? 've-units' : ''}`}>
-                  {units && video ? (
-                    <StripTrack videoId={video.id} shots={shots} units={units}
-                      insert={editable ? (i) => i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} /> : undefined}
-                      onMakeStrip={openStrip} onPlayStrip={(id) => { setPicked([]); setShotId(id); setMode('shot') }}
-                      onMakeSeparately={(ids) => void separateSelection(docStore, video.id, ids).then(() => openStrip(ids))}
-                      onEditWords={(id) => { setPicked([]); setShotId(id); setMode('shot') }}
-                      card={(s, i, inStrip) => (
-                        <ShotCard key={s.id} shot={s} index={i} videoId={video.id} selected={mode === 'shot' && s.id === shot?.id} jobId={inStrip ? cardJob(s.id) : clipJob(s.id)}
-                          onSelect={(e) => pickCard(s.id, e)} picked={picked.includes(s.id)} pickProps={pickProps(s.id)} inStrip={inStrip}
-                          onMake={(opts) => makeClip(s, opts)} />
-                      )} />
-                  ) : shots.map((s, i) => (
+                <div className={`strip ${editable ? 'editable' : ''}`}>
+                  {shots.map((s, i) => (
                     <Fragment key={s.id}>
                       {editable && i > 0 && <InsertShot after={shots[i - 1]} n={i} disabled={shots.length >= MAX_SHOTS} onMade={(id) => { setShotId(id); setMode('shot') }} />}
                       <ShotCard shot={s} index={i} videoId={video?.id} selected={mode === 'shot' && s.id === shot?.id} jobId={clipJob(s.id)}
@@ -328,8 +351,10 @@ export function Video() {
                   {editable && sb && <AddShot storyboardId={sb.id} count={shots.length} onMade={(id) => { setShotId(id); setMode('shot') }} />}
                 </div>
               </div>
-              <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.{units ? ' Select shots (shift-click or drag) to make them one video or separately.' : ''}</div>
-              {units && video && picked.length > 0 && <SelectionBar videoId={video.id} ids={picked} onClear={clearPicked} />}
+              )}
+              {rows && editable && sb && <div><AddShot storyboardId={sb.id} count={shots.length} onMade={(id) => { setShotId(id); setMode('shot') }} /></div>}
+              <div className="ve-tlfoot faint">Pause anywhere to leave a note. A note at a moment fixes the shot it is in.{rows ? ' Select shots (shift-click or drag) to make them one video or separately.' : ''}</div>
+              {rows && video && picked.length > 0 && <SelectionBar videoId={video.id} ids={picked} onClear={clearPicked} />}
             </div>
           )}>
           {editable && mode === 'shot' && shot && <ShotPanel key={shot.id} shot={shot} index={shots.indexOf(shot)} count={shots.length} onGone={() => setShotId(null)} />}
@@ -654,7 +679,6 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
 
   // In a film a New take goes through the planner: a shot in a take run makes the whole run again.
   const film = useFilm(videoId)
-  const againWords = cur ? film?.label(cur.shot.id) : undefined
   /** Make the shot again from its frame, as a new take of this one. */
   const again = () => send(async () => {
     if (!cur) return
@@ -824,7 +848,7 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
           </div>
         ) : (
           <div className="empty">
-            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobSlot jobId={(fixJob ?? firstJob)!} /></div> : 'No clip for this shot yet. Press Make clip.'}
+            {mode === 'all' ? 'Make a clip for every shot to preview the whole ad.' : (fixJob ?? firstJob) ? <div style={{ width: 260, height: 160 }}><JobSlot jobId={(fixJob ?? firstJob)!} /></div> : (film ? 'No clip for this shot yet. Press Make on its row.' : 'No clip for this shot yet. Press Make clip.')}
           </div>
         )}
         {/* The clip on show, as one file (in All shots: the one playing). */}
@@ -941,13 +965,17 @@ function Player({ mode, shot, take, shots, videoId, onPickShot, strip, children 
             </button>
           )}
           <div className="row wrap" title={made.label} style={{ gap: 6 }}>
-            <ModelPick op="clip" value={choice} onChange={setPick} />
-            <QualityPick op="clip" choice={choice} value={quality} onChange={setQPick} />
+            {/* The model and quality a note's fix runs on; in a film with no notes there is nothing here to make. */}
+            {(!film || openNotes.length > 0) && <>
+              <ModelPick op="clip" value={choice} onChange={setPick} />
+              <QualityPick op="clip" choice={choice} value={quality} onChange={setQPick} />
+            </>}
             <span className="spacer" />
             {cur.take.quality === 'draft' && (
               <button className="btn sm" disabled={fixing || sending} onClick={() => void toFinal()} title={finalHint(doc, cur.take)}>Remake as Final</button>
             )}
-            <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title={againWords ? 'These shots are one video: they are made together' : selectedFrame(doc, cur.shot.id) ? 'Make this shot again from its frame' : 'Make this shot again from its words'}>{sending ? 'Sending…' : againWords ?? 'New take'}</button>
+            {/* In a film the row's one Make makes it again: no second make action here. */}
+            {!film && <button className="btn sm" disabled={fixing || sending} onClick={() => void again()} title={selectedFrame(doc, cur.shot.id) ? 'Make this shot again from its frame' : 'Make this shot again from its words'}>{sending ? 'Sending…' : 'New take'}</button>}
           </div>
           </div>
         </div>

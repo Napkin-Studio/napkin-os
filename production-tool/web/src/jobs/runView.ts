@@ -139,12 +139,79 @@ export function videoUnits(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, vid
     }
     if (r.shotIds[0] !== s.id) continue
     const lengthS = r.shotIds.reduce((a, id) => a + (d.shots[id]?.duration_s ?? 0), 0)
-    const jobId = runJobFor(d, ui, s.id)
+    // The take job of exactly these shots: a refusal belongs to that set only, so a split or a join starts clean.
+    const jobId = exactRunJob(d, ui, videoId, r.shotIds)
     const state = isMoving(d, jobId) ? 'making' : isOneTake(d, videoId, r.shotIds) ? 'made' : refusedJob(d, jobId) ? 'refused'
       : r.shotIds.some((id) => takesOf(d, id).length) ? 'separate' : 'new'
     out.push({ kind: 'strip', run: r, shotIds: r.shotIds, lengthS, state, ...(jobId ? { jobId } : {}) })
   }
   return out
+}
+
+/** The latest take job made for exactly `shotIds` in the video (its run's shots, the same and in order). */
+export function exactRunJob(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, videoId: Id | undefined, shotIds: Id[]): Id | undefined {
+  return jobAt(d, ui, (c) => c.for === 'run' && c.videoId === videoId && d.videos[c.videoId]?.runs?.[c.runId]?.shot_ids.join() === shotIds.join())
+}
+
+/** One video of the ad, as a row of the timeline: several shots made as one, or one shot alone. */
+export interface Row {
+  shotIds: Id[]
+  /** A take of several shots, a single shot, or the end card. */
+  kind: 'video' | 'shot' | 'end_card'
+  lengthS: number
+  /** The model it runs on (a strip's own, when the pick cannot make it as one video). */
+  model: PlanModel
+  /** Why the model is not the pick. */
+  switched?: string
+  /** Not made; made before as separate clips (a video); being made; made; refused by the provider. */
+  state: 'new' | 'separate' | 'making' | 'made' | 'refused'
+  /** The job making or refused (a video: its take job for exactly these shots; a shot: its clip job). */
+  jobId?: Id
+  /** The shots after it are the same scene, but too long for one video. */
+  splitAfter?: boolean
+}
+
+/** The ad as the videos it is made of, in order (features/connected-video.clan, "One row per video"). */
+export function videoRows(d: ProductionDocument, ui: Pick<UiState, 'jobs'>, videoId: Id | undefined, plan: RunPlan | undefined): Row[] {
+  const out: Row[] = []
+  for (const s of videoShots(d, videoId)) {
+    const r = plan?.runs.find((x) => x.shotIds.includes(s.id))
+    if (!r) continue
+    const len = (ids: Id[]) => ids.reduce((a, id) => a + (d.shots[id]?.duration_s ?? 0), 0)
+    if (isTakeRun(r)) {
+      if (r.shotIds[0] !== s.id) continue
+      const jobId = exactRunJob(d, ui, videoId, r.shotIds)
+      const state = isMoving(d, jobId) ? 'making' : isOneTake(d, videoId, r.shotIds) ? 'made' : refusedJob(d, jobId) ? 'refused'
+        : r.shotIds.some((id) => takesOf(d, id).length) ? 'separate' : 'new'
+      out.push({ shotIds: r.shotIds, kind: 'video', lengthS: len(r.shotIds), model: r.model, ...(r.switched ? { switched: r.switched } : {}), state,
+        ...(jobId ? { jobId } : {}), ...(r.splitAfter ? { splitAfter: true } : {}) })
+      continue
+    }
+    const jobId = jobAt(d, ui, (c) => c.for === 'clip' && c.shotId === s.id)
+    const state = isMoving(d, jobId) ? 'making' : currentTake(d, s.id, videoId) ? 'made' : refusedJob(d, jobId) ? 'refused' : 'new'
+    out.push({ shotIds: [s.id], kind: s.kind === 'end_card' ? 'end_card' : 'shot', lengthS: len([s.id]), model: r.model, state, ...(jobId ? { jobId } : {}) })
+  }
+  return out
+}
+
+/** A row's title: "One video · shots 1–5 · 8.5 s", "Shot 3 · 1.5 s", "End card · shot 6 · 1.5 s". */
+export function rowTitle(d: ProductionDocument, row: Pick<Row, 'shotIds' | 'kind' | 'lengthS'>): string {
+  const s = `${Math.round(row.lengthS * 10) / 10} s`
+  const words = shotsWords(d, row.shotIds)
+  if (row.kind === 'video') return `One video · ${words} · ${s}`
+  if (row.kind === 'end_card') return `End card · ${words} · ${s}`
+  return `${words[0].toUpperCase()}${words.slice(1)} · ${s}`
+}
+
+/** A row's Make in words: "Make", "Make as one video" (made before as separate clips), "Make again". */
+export function rowMakeWords(row: Pick<Row, 'state'>): string {
+  return row.state === 'made' ? 'Make again' : row.state === 'separate' ? 'Make as one video' : 'Make'
+}
+
+/** "0:42": how long a job has run. */
+export function elapsed(createdAt: string | undefined, now = Date.now()): string {
+  const s = createdAt ? Math.max(0, Math.floor((now - Date.parse(createdAt)) / 1000)) : 0
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 /** A job that failed on the provider's moderation (Runway refused the words twice, or a picture). */

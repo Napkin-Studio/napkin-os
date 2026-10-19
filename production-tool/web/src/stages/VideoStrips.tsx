@@ -1,93 +1,114 @@
-// Shots that will be one video, as strips (features/connected-video.clan; the owner's "Strips + select",
-// 2026-10-19). On the Video timeline the shots a run makes as one video sit joined as one strip under a
-// header ("One video · 9 s", the model and a rough wait at the right, one "Make as one video"); separate
-// shots are their own cards. Between two shots of a strip, ✂ splits it; between two neighbours that may be
-// one video, 🔗 joins them. A selection of cards gets a floating bar: One video, or Separately. Each writes
-// the joins (jobs/runView.ts) and one History entry. No mode name and no price.
+// The ad as the videos it is made of, one row each (features/connected-video.clan; the owner's "One row per
+// video", 2026-10-19). A row is one video: several shots made as one, or a single shot. Its header says
+// what it is ("One video · shots 1–5 · 8.5 s"), quietly the model and the wait, and has ONE Make button whose
+// words carry its state (Make, Make as one video, Making… 0:42, Make again). Between two shots of a row a
+// divider offers "Cut here"; between two rows, "Join" where they may be one video, else a muted reason. A
+// row Runway refused (that exact set of shots) says so with Try again and Make separately. Selecting cards
+// gives a floating bar: One video, or Separately. Each split or join writes the joins (jobs/runView.ts) and
+// one History entry. No mode name and no price.
 
-import { Fragment, useEffect, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useDoc, useServices } from '../app/context'
 import type { Id, Shot } from '../contracts/types'
-import { canJoin } from '../jobs/runs'
-import { joinHere, joinSelection, selectionBlock, separateSelection, splitHere, videoShots, waitWords, type Unit } from '../jobs/runView'
-import { JobSlot } from '../ui/JobSlot'
+import { canJoin, joinBlock } from '../jobs/runs'
+import { elapsed, joinHere, joinSelection, rowMakeWords, rowTitle, selectionBlock, separateSelection, splitHere, videoShots, waitWords, type Row } from '../jobs/runView'
 
-/** The timeline's units: strips of cards and separate cards, with ✂ and 🔗 between them. */
-export function StripTrack({ videoId, shots, units, card, insert, onMakeStrip, onPlayStrip, onMakeSeparately, onEditWords }: {
+/** The timeline: the videos of the ad, numbered, one row each. */
+export function VideoRows({ videoId, shots, rows, card, insert, selected, onSelectRow, onMake, onMakeAgain, onMakeSeparately }: {
   videoId: Id
   shots: Shot[]
-  units: Unit[]
-  /** A shot's card; `inStrip`: its strip has the make action and the progress. */
-  card: (s: Shot, i: number, inStrip: boolean) => ReactNode
+  rows: Row[]
+  /** A shot's thumbnail card in its row. */
+  card: (s: Shot, i: number) => ReactNode
   /** What sits before card i (editable shot lists: + Insert). */
   insert?: (i: number) => ReactNode
-  onMakeStrip: (shotIds: Id[]) => void
-  onPlayStrip: (shotId: Id) => void
-  /** A strip Runway refused as one video: split it and make each shot alone (the tray first). */
-  onMakeSeparately: (shotIds: Id[]) => void
-  /** ...or change its words: the strip's first shot, where its words are. */
-  onEditWords: (shotId: Id) => void
+  /** The first shot of the row the player shows. */
+  selected?: Id
+  onSelectRow: (row: Row) => void
+  /** Make, Make as one video and Try again: the send tray for these shots. */
+  onMake: (row: Row) => void
+  onMakeAgain: (row: Row) => void
+  /** A refused video: split into single shots and make each (the tray first). */
+  onMakeSeparately: (row: Row) => void
 }) {
   const { doc: docStore } = useServices()
   const doc = useDoc()
   const facts = videoShots(doc, videoId)
   const index = new Map(shots.map((s, i) => [s.id, i]))
-  const link = (i: number) => i > 0 && facts[i - 1] && facts[i] && canJoin(facts[i - 1], facts[i])
-    ? <button type="button" className="ve-link" aria-label={`Join shot ${i} and shot ${i + 1} into one video`} title="Join into one video"
-      onClick={(e) => { e.stopPropagation(); void joinHere(docStore, videoId, shots[i].id) }}><span aria-hidden="true">🔗</span></button>
-    : i > 0 ? <span className="ve-apart" aria-hidden="true" /> : null
+  const total = rows.reduce((a, r) => a + r.lengthS, 0)
+  // Making… 0:42 ticks while a row is being made.
+  const making = rows.some((r) => r.state === 'making')
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!making) return
+    const t = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [making])
   return (
-    <>
-      {units.map((u) => {
-        if (u.kind === 'shot') {
-          const i = index.get(u.shotId)!
-          return <Fragment key={u.shotId}>{insert?.(i)}{link(i)}{card(shots[i], i, false)}</Fragment>
-        }
-        const first = index.get(u.shotIds[0])!
-        const r = u.run
+    <div className="ve-rows">
+      <div className="ve-rowsum"><b>Your ad</b><span className="faint"> · {rows.length} {rows.length === 1 ? 'video' : 'videos'} · {fmtS(total)}</span></div>
+      {rows.map((row, k) => {
+        const first = index.get(row.shotIds[0])!
+        const prev = rows[k - 1]
+        const a = prev ? index.get(prev.shotIds.at(-1)!)! : -1
+        const joinable = !!prev && !!facts[a] && !!facts[first] && canJoin(facts[a], facts[first])
+        const why = prev && !joinable && facts[a] && facts[first] ? joinBlock(facts[a], facts[first], first) : undefined
+        const job = row.jobId ? doc.jobs[row.jobId] : undefined
         return (
-          <Fragment key={u.shotIds.join()}>
-            {insert?.(first)}{link(first)}
-            <section className={`ve-strip ${u.state}`} aria-label={`One video: shots ${first + 1} to ${first + u.shotIds.length}`}>
-              <header className="ve-striphead">
-                <b>One video · {fmtS(u.lengthS)}</b>
-                {u.state === 'separate' && <span className="faint">Made as separate clips</span>}
-                {u.state === 'refused' && <span className="ve-refused" role="status">Runway refused this as one video</span>}
+          <Fragment key={row.shotIds.join()}>
+            {prev && (
+              <div className="ve-joinrow">
+                {joinable
+                  ? <button type="button" className="ve-join" aria-label={`Join videos ${k} and ${k + 1} into one video`} onClick={() => void joinHere(docStore, videoId, row.shotIds[0])}>Join</button>
+                  : why && <span className="ve-joinwhy">{why}</span>}
+              </div>
+            )}
+            <section className={`ve-row ${row.state} ${selected === row.shotIds[0] ? 'sel' : ''}`} aria-label={`Video ${k + 1}: ${rowTitle(doc, row)}`}>
+              <header className="ve-rowhead">
+                <span className="ve-rownum" aria-hidden="true">{k + 1}</span>
+                <button type="button" className="ve-rowtitle" onClick={() => onSelectRow(row)} title="Play this video">{rowTitle(doc, row)}</button>
                 <span className="pt-grow" />
-                {u.state === 'refused' && <>
-                  <button type="button" className="btn sm primary" aria-haspopup="dialog" onClick={() => onMakeStrip(u.shotIds)} title="Dex rewords anything Runway refuses, once, and tries again">Try again as one video</button>
-                  <button type="button" className="btn sm" aria-haspopup="dialog" onClick={() => onMakeSeparately(u.shotIds)}>Make as separate clips</button>
-                  <button type="button" className="btn sm" onClick={() => onEditWords(u.shotIds[0])}>Edit the words</button>
-                </>}
-                {u.state !== 'made' && u.state !== 'refused' && <span className="faint ve-stripmodel" title={r.switched ? `${r.switched}, so ${r.model.label} makes this one.` : undefined}>{r.model.label} · {waitWords(r.model, u.lengthS)}</span>}
-                {(u.state === 'new' || u.state === 'separate') && (
-                  <button type="button" className="btn sm primary" aria-haspopup="dialog" onClick={() => onMakeStrip(u.shotIds)}>Make as one video</button>
+                {row.state !== 'made' && row.state !== 'refused' && (
+                  <span className="faint ve-rowmodel" title={row.switched ? `${row.switched}, so ${row.model.label} makes this one.` : undefined}>{row.model.label} · {waitWords(row.model, row.lengthS)}</span>
                 )}
-                {u.state === 'made' && <button type="button" className="btn sm" onClick={() => onPlayStrip(u.shotIds[0])}>▶ Play</button>}
+                {row.state === 'making'
+                  ? <button type="button" className="btn sm" disabled>Making… {elapsed(job?.created_at, now)}</button>
+                  : row.state !== 'refused' && (
+                    <button type="button" className={`btn sm ${row.state === 'made' ? '' : 'primary'}`} aria-haspopup={row.state === 'made' ? undefined : 'dialog'}
+                      onClick={() => (row.state === 'made' ? onMakeAgain(row) : onMake(row))}>{rowMakeWords(row)}</button>
+                  )}
               </header>
-              {(u.state === 'making' || u.state === 'refused') && u.jobId && <div className="ve-stripjob"><JobSlot jobId={u.jobId} compact /></div>}
-              <div className="ve-stripcards">
-                {u.shotIds.map((id, k) => {
+              {row.state === 'making' && <div className="ve-rowprogress" role="progressbar" aria-label={`Making video ${k + 1}`} />}
+              <div className="ve-rowshots">
+                {row.shotIds.map((id, j) => {
                   const i = index.get(id)!
                   return (
                     <Fragment key={id}>
-                      {k > 0 && (
-                        <button type="button" className="ve-cut" aria-label={`Split here, between shot ${i} and shot ${i + 1}`} title="Split here"
+                      {insert?.(i)}
+                      {j > 0 && (
+                        <button type="button" className="ve-cuthere" aria-label={`Cut here, between shot ${i} and shot ${i + 1}`}
                           onClick={(e) => { e.stopPropagation(); void splitHere(docStore, videoId, id) }}>
-                          <span aria-hidden="true">✂</span><span className="ve-cont">continues</span>
+                          <span className="ve-cutpill">Cut here</span>
                         </button>
                       )}
-                      {card(shots[i], i, true)}
+                      {card(shots[i], i)}
                     </Fragment>
                   )
                 })}
               </div>
-              {r.splitAfter && <div className="ve-stripnote faint">Longer than one video can be: the next shots make another.</div>}
+              {row.state === 'refused' && (
+                <div className="ve-rowwarn" role="status">
+                  <span><span aria-hidden="true">⚠ </span>Runway refused the words.</span>
+                  <button type="button" className="btn sm primary" aria-haspopup="dialog" title="Dex rewords anything Runway refuses, once, and tries again" onClick={() => onMake(row)}>Try again</button>
+                  {row.shotIds.length > 1 && <button type="button" className="btn sm" aria-haspopup="dialog" onClick={() => onMakeSeparately(row)}>Make separately</button>}
+                </div>
+              )}
+              {row.splitAfter && <div className="ve-rownote faint">Longer than one video can be: the next shots make another.</div>}
             </section>
           </Fragment>
         )
       })}
-    </>
+    </div>
   )
 }
 
